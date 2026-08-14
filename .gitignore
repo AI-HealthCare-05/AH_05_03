@@ -1,1 +1,5 @@
 .DS_Store
+ocr_test.py
+.env
+work/
+/*.jpeg
