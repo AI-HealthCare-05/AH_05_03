@@ -1,0 +1,187 @@
+{
+  "generated_at": "2026-08-14T09:27:10.473312+00:00",
+  "dataset": "hf://datasets/hesscl/quackrfss/data/BRFSS_2024.parquet",
+  "data_year": 2024,
+  "sample_size": null,
+  "model_family": "weighted logistic regression",
+  "preprocessor": "preprocessor.joblib",
+  "features": [
+    "age",
+    "bmi",
+    "sex",
+    "education",
+    "income",
+    "employment",
+    "exercise",
+    "smoking_status",
+    "drank_alcohol"
+  ],
+  "numeric_features": [
+    "age",
+    "bmi"
+  ],
+  "categorical_features": [
+    "sex",
+    "education",
+    "income",
+    "employment",
+    "exercise",
+    "smoking_status",
+    "drank_alcohol"
+  ],
+  "targets": {
+    "heart_attack": {
+      "column": "target_heart_attack",
+      "source": [
+        "CVDINFR4"
+      ],
+      "description": "Reported myocardial infarction diagnosis"
+    },
+    "coronary_heart_disease": {
+      "column": "target_coronary_heart_disease",
+      "source": [
+        "CVDCRHD4"
+      ],
+      "description": "Reported angina or coronary heart disease diagnosis"
+    },
+    "stroke": {
+      "column": "target_stroke",
+      "source": [
+        "CVDSTRK3"
+      ],
+      "description": "Reported stroke diagnosis"
+    },
+    "current_asthma": {
+      "column": "target_current_asthma",
+      "source": [
+        "ASTHMA3",
+        "ASTHNOW"
+      ],
+      "description": "Reported current asthma"
+    },
+    "skin_cancer": {
+      "column": "target_skin_cancer",
+      "source": [
+        "CHCSCNC1"
+      ],
+      "description": "Reported skin-cancer diagnosis"
+    },
+    "other_cancer": {
+      "column": "target_other_cancer",
+      "source": [
+        "CHCOCNC1"
+      ],
+      "description": "Reported non-skin-cancer diagnosis"
+    },
+    "copd": {
+      "column": "target_copd",
+      "source": [
+        "CHCCOPD3"
+      ],
+      "description": "Reported COPD, emphysema, or chronic bronchitis diagnosis"
+    },
+    "depression": {
+      "column": "target_depression",
+      "source": [
+        "ADDEPEV3"
+      ],
+      "description": "Reported depressive-disorder diagnosis"
+    },
+    "kidney_disease": {
+      "column": "target_kidney_disease",
+      "source": [
+        "CHCKDNY2"
+      ],
+      "description": "Reported kidney-disease diagnosis"
+    },
+    "arthritis": {
+      "column": "target_arthritis",
+      "source": [
+        "HAVARTH4"
+      ],
+      "description": "Reported arthritis-related diagnosis"
+    },
+    "diabetes": {
+      "column": "target_diabetes",
+      "source": [
+        "DIABETE4"
+      ],
+      "description": "Reported diabetes diagnosis excluding gestational diabetes and prediabetes"
+    }
+  },
+  "thresholds": {
+    "heart_attack": 0.03222864612025975,
+    "coronary_heart_disease": 0.04583732331965846,
+    "stroke": 0.0322524834882403,
+    "current_asthma": 0.11481035303039198,
+    "skin_cancer": 0.048463225934461056,
+    "other_cancer": 0.08856175164241467,
+    "copd": 0.07023007390763747,
+    "depression": 0.22950945151568236,
+    "kidney_disease": 0.046858135905288985,
+    "arthritis": 0.2713095080916905,
+    "diabetes": 0.12310966619929374
+  },
+  "split": {
+    "train": [
+      1,
+      2,
+      4,
+      6,
+      9,
+      15,
+      18,
+      19,
+      20,
+      22,
+      25,
+      26,
+      27,
+      28,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      38,
+      39,
+      40,
+      41,
+      42,
+      44,
+      48,
+      50,
+      51,
+      53,
+      55,
+      72,
+      78
+    ],
+    "validation": [
+      10,
+      11,
+      12,
+      13,
+      24,
+      29,
+      37,
+      45,
+      56
+    ],
+    "test": [
+      5,
+      8,
+      16,
+      17,
+      21,
+      23,
+      36,
+      46,
+      49,
+      54,
+      66
+    ]
+  },
+  "disclaimer": "Estimates reported diagnosis probability in BRFSS 2024; not future disease onset, diagnosis, or medical advice."
+}
