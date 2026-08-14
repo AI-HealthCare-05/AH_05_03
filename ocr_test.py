@@ -1,7 +1,6 @@
 import json
 import mimetypes
 import os
-import sys
 import time
 import uuid
 from pathlib import Path
@@ -10,37 +9,39 @@ import requests
 from dotenv import load_dotenv
 
 
-# 현재 프로젝트의 .env 불러오기
+# .env
+# NAVER_OCR_URL=받은_Invoke_URL
+# NAVER_OCR_SECRET=받은_Secret_Key
+
 load_dotenv()
 
 OCR_URL = os.getenv("NAVER_OCR_URL")
 OCR_SECRET = os.getenv("NAVER_OCR_SECRET")
 
-if not OCR_URL or not OCR_SECRET:
-    raise RuntimeError(
-        ".env에서 NAVER_OCR_URL 또는 NAVER_OCR_SECRET을 찾지 못했습니다."
-    )
 
+def naver_ocr(image_path: str, lang: str = "ko") -> str:
+    """이미지 파일에서 텍스트를 추출합니다."""
 
-def run_ocr(image_path: str) -> dict:
+    if not OCR_URL or not OCR_SECRET:
+        raise RuntimeError(
+            ".env에 NAVER_OCR_URL과 NAVER_OCR_SECRET을 설정하세요."
+        )
+
     path = Path(image_path)
 
     if not path.is_file():
-        raise FileNotFoundError(f"이미지 파일이 없습니다: {path}")
+        raise FileNotFoundError(f"파일을 찾을 수 없습니다: {path}")
 
     image_format = path.suffix.lower().lstrip(".")
 
     if image_format == "jpeg":
         image_format = "jpg"
 
-    if image_format not in {"jpg", "png", "pdf", "tif", "tiff"}:
-        raise ValueError(f"지원하지 않는 파일 형식입니다: {image_format}")
-
     message = {
         "version": "V2",
         "requestId": str(uuid.uuid4()),
         "timestamp": int(time.time() * 1000),
-        "lang": "ko",
+        "lang": lang,
         "images": [
             {
                 "format": image_format,
@@ -57,12 +58,8 @@ def run_ocr(image_path: str) -> dict:
     with path.open("rb") as image_file:
         response = requests.post(
             OCR_URL,
-            headers={
-                "X-OCR-SECRET": OCR_SECRET,
-            },
-            data={
-                "message": json.dumps(message),
-            },
+            headers={"X-OCR-SECRET": OCR_SECRET},
+            data={"message": json.dumps(message)},
             files={
                 "file": (path.name, image_file, mime_type),
             },
@@ -71,18 +68,16 @@ def run_ocr(image_path: str) -> dict:
 
     if not response.ok:
         raise RuntimeError(
-            f"OCR 호출 실패 ({response.status_code})\n"
+            f"OCR 호출 실패 ({response.status_code}): "
             f"{response.text}"
         )
 
-    return response.json()
-
-
-def extract_text(result: dict) -> str:
+    result = response.json()
     lines = []
-    current_line = []
 
     for image in result.get("images", []):
+        current_line = []
+
         for field in image.get("fields", []):
             text = field.get("inferText", "").strip()
 
@@ -93,15 +88,12 @@ def extract_text(result: dict) -> str:
                 lines.append(" ".join(current_line))
                 current_line = []
 
-    if current_line:
-        lines.append(" ".join(current_line))
+        if current_line:
+            lines.append(" ".join(current_line))
 
     return "\n".join(lines)
 
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        raise SystemExit("사용법: python ocr_test.py 이미지경로")
-
-    result = run_ocr(sys.argv[1])
-    print(extract_text(result))
+# 사용 예시
+text = naver_ocr("sample.jpeg")
+print(text)
