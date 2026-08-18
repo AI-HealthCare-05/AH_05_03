@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-import app.models  # noqa: F401  Base.metadata에 매퍼를 등록한다
+import app.models as _models  # noqa: F401  Base.metadata에 매퍼를 등록한다
 from app.core import config
 from app.core.db.base import Base
 from app.core.db.session import get_session

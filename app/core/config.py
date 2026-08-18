@@ -2,19 +2,11 @@ import os
 import uuid
 import zoneinfo
 from dataclasses import field
-
-try:
-    from enum import StrEnum
-except ImportError:  # Python 3.10 compatibility
-    from enum import Enum
-
-    class StrEnum(str, Enum):
-        pass
-
-
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.utils.enums import StrEnum
 
 
 class Env(StrEnum):

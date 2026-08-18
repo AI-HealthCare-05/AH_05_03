@@ -1,12 +1,13 @@
+import sys
 from calendar import timegm
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
-
-try:
-    from typing import Self
-except ImportError:  # Python 3.10 compatibility
-    from typing_extensions import Self
 from uuid import uuid4
+
+if sys.version_info >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 
 from app.core import config
 from app.core.jwt.exceptions import ExpiredTokenError, TokenBackendError, TokenBackendExpiredError, TokenError

@@ -33,7 +33,7 @@
 
 OZ Coding School의 AI Healthcare Final Project Template을 기반으로 다음 구성을 추가했다.
 
-- `app/`: FastAPI API 서버, 인증/JWT, Tortoise ORM, 테스트
+- `app/`: FastAPI API 서버, 인증/JWT, SQLAlchemy 2.0(async) + Alembic, 테스트
 - `ai_worker/`: AI 모델 추론·학습 워커
 - `envs/`: 로컬·운영 환경 변수 예시
 - `infra/`: Docker Compose와 Nginx 운영 설정
@@ -48,3 +48,15 @@ uv sync --group dev
 ```
 
 로컬 전체 스택은 `docker compose up -d --build`로 실행한다. API 문서는 실행 후 `http://localhost/api/docs`에서 확인할 수 있다.
+
+### DB 마이그레이션
+
+서버 DB는 PostgreSQL 16이고 스키마는 Alembic으로 관리한다.
+
+```bash
+uv run alembic revision --autogenerate -m "변경 내용"
+uv run alembic upgrade head
+uv run alembic check   # 모델과 마이그레이션이 어긋나면 실패한다
+```
+
+테스트는 마이그레이션 대신 모델에서 직접 스키마를 만든다. 그래서 실패 원인이 모델인지 마이그레이션인지 헷갈리지 않는 대신, 둘 사이 드리프트는 CI의 `alembic check`가 잡는다. 마이그레이션을 추가했다면 이 명령을 반드시 로컬에서도 돌려 볼 것.
