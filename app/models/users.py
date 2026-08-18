@@ -1,32 +1,29 @@
-try:
-    from enum import StrEnum
-except ImportError:  # Python 3.10 compatibility
-    from enum import Enum
+from datetime import date, datetime
+from enum import Enum
 
-    class StrEnum(str, Enum):
-        pass
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Integer, String, func
+from sqlalchemy.orm import Mapped, mapped_column
 
-from tortoise import fields, models
+from app.core.db.databases import Base
 
 
-class Gender(StrEnum):
+class Gender(str, Enum):
     MALE = "MALE"
     FEMALE = "FEMALE"
 
 
-class User(models.Model):
-    id = fields.BigIntField(primary_key=True)
-    email = fields.CharField(max_length=40)
-    hashed_password = fields.CharField(max_length=128)
-    name = fields.CharField(max_length=20)
-    gender = fields.CharEnumField(enum_type=Gender)
-    birthday = fields.DateField()
-    phone_number = fields.CharField(max_length=11)
-    is_active = fields.BooleanField(default=True)
-    is_admin = fields.BooleanField(default=False)
-    last_login = fields.DatetimeField(null=True)
-    created_at = fields.DatetimeField(auto_now_add=True)
-    updated_at = fields.DatetimeField(auto_now=True)
+class User(Base):
+    __tablename__ = "users"
 
-    class Meta:
-        table = "users"
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(128))
+    name: Mapped[str] = mapped_column(String(20))
+    gender: Mapped[Gender] = mapped_column(String(10))
+    birthday: Mapped[date] = mapped_column(Date)
+    phone_number: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

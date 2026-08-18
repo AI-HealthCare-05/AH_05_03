@@ -33,7 +33,7 @@
 
 OZ Coding School의 AI Healthcare Final Project Template을 기반으로 다음 구성을 추가했다.
 
-- `app/`: FastAPI API 서버, 인증/JWT, Tortoise ORM, 테스트
+- `app/`: FastAPI API 서버, 인증/JWT, SQLAlchemy 2.x, 테스트
 - `ai_worker/`: AI 모델 추론·학습 워커
 - `envs/`: 로컬·운영 환경 변수 예시
 - `infra/`: Docker Compose와 Nginx 운영 설정

@@ -2,6 +2,7 @@ import os
 import uuid
 import zoneinfo
 from dataclasses import field
+
 try:
     from enum import StrEnum
 except ImportError:  # Python 3.10 compatibility
@@ -29,12 +30,24 @@ class Config(BaseSettings):
     TEMPLATE_DIR: str = os.path.join(Path(__file__).resolve().parent.parent, "templates")
 
     DB_HOST: str = "localhost"
-    DB_PORT: int = 3306
-    DB_USER: str = "root"
+    DB_PORT: int = 5432
+    DB_USER: str = "postgres"
     DB_PASSWORD: str = "pw1234"
     DB_NAME: str = "ai_health"
     DB_CONNECT_TIMEOUT: int = 5
     DB_CONNECTION_POOL_MAXSIZE: int = 10
+    DATABASE_URL: str | None = None
+
+    @property
+    def database_url(self) -> str:
+        if self.DATABASE_URL:
+            return self.DATABASE_URL
+        return (
+            f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        )
+
+    FAMILY_INVITATION_EXPIRE_DAYS: int = 7
 
     COOKIE_DOMAIN: str = "localhost"
 
