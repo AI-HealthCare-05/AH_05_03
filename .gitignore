@@ -2,3 +2,15 @@
 .env
 __pycache__/
 work/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info/
+.venv/
+.*.env
+.idea/
+.vscode/
+.coverage
+*.coverage
+.coverage.*

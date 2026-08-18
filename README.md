@@ -28,3 +28,23 @@
 ## 지금 해야 할 일 (2026-08-12 기준)
 
 현재 **Sprint 1 [기획 문서 & 와이어프레임 작성]** 구간(~08-16)이다. `docs/01~04` 4대 문서를 각 담당자가 초안 기준으로 다듬고, 8/17 Sprint 2(기능 구현) 착수 전 확정하는 것이 최우선 목표다. 진행 상황은 `docs/06_evaluation_plan.md`의 상태 컬럼과 `docs/07_roadmap.md`의 스프린트 계획을 기준으로 관리한다.
+
+## 백엔드 템플릿 구성
+
+OZ Coding School의 AI Healthcare Final Project Template을 기반으로 다음 구성을 추가했다.
+
+- `app/`: FastAPI API 서버, 인증/JWT, Tortoise ORM, 테스트
+- `ai_worker/`: AI 모델 추론·학습 워커
+- `envs/`: 로컬·운영 환경 변수 예시
+- `infra/`: Docker Compose와 Nginx 운영 설정
+- `scripts/`: CI, 배포, 인증서 자동화 스크립트
+
+의존성은 용도별로 설치할 수 있다.
+
+```bash
+uv sync --group app
+uv sync --group ai
+uv sync --group dev
+```
+
+로컬 전체 스택은 `docker compose up -d --build`로 실행한다. API 문서는 실행 후 `http://localhost/api/docs`에서 확인할 수 있다.
