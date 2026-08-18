@@ -29,12 +29,16 @@ class Config(BaseSettings):
     TEMPLATE_DIR: str = os.path.join(Path(__file__).resolve().parent.parent, "templates")
 
     DB_HOST: str = "localhost"
-    DB_PORT: int = 3306
-    DB_USER: str = "root"
+    DB_PORT: int = 5432
+    DB_USER: str = "postgres"
     DB_PASSWORD: str = "pw1234"
     DB_NAME: str = "ai_health"
+    DB_TEST_NAME: str = "ai_health_test"
+    # 전체 DSN 재정의. 값이 있으면 위 항목보다 우선한다 (CI·스테이징용)
+    DB_URL: str | None = None
     DB_CONNECT_TIMEOUT: int = 5
     DB_CONNECTION_POOL_MAXSIZE: int = 10
+    DB_POOL_RECYCLE: int = 1800
 
     COOKIE_DOMAIN: str = "localhost"
 
