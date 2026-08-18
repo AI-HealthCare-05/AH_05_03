@@ -89,7 +89,10 @@ class TokenStore:
         try:
             jtis = await self._redis.smembers(self._rt_index(account_id))
             async with self._redis.pipeline(transaction=True) as pipe:
-                for jti in jtis:
+                for raw_jti in jtis:
+                    # decode_responses=True라 런타임엔 항상 str이다.
+                    # redis-py의 제네릭 스텁이 bytes|str로 넓혀 잡힐 뿐이다.
+                    jti = raw_jti if isinstance(raw_jti, str) else raw_jti.decode()
                     pipe.delete(self._rt(account_id, jti))
                     # used 마커를 남겨 두면, 대량 무효화 이후의 재사용이
                     # 단순 REVOKED가 아니라 REUSE_DETECTED로 잡힌다.

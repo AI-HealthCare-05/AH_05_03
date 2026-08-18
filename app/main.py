@@ -10,12 +10,18 @@ from app.apis.v1 import v1_routers
 from app.core import config
 from app.core.db.session import dispose_engine
 from app.core.errors import ErrorCode
+from app.core.redis.client import close_redis_pool, create_redis_pool
 from app.dtos.envelope import error_responses
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # httpx의 ASGITransport는 lifespan을 실행하지 않으므로, 테스트에서는
+    # app.state.redis가 존재하지 않는다. conftest가 get_redis를 override해서
+    # 이 블록 자체를 건너뛴다.
+    app.state.redis = create_redis_pool()
     yield
+    await close_redis_pool(app.state.redis)
     await dispose_engine()
 
 

@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 
 import pytest_asyncio
+from fakeredis.aioredis import FakeRedis
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
@@ -11,6 +12,7 @@ from app.core import config
 from app.core.db.base import Base
 from app.core.db.session import get_session
 from app.core.db.url import build_db_url
+from app.core.redis.client import get_redis
 from app.main import app
 
 TEST_BASE_URL = "http://test"
@@ -100,6 +102,26 @@ async def _override_session(db_session: AsyncSession) -> AsyncIterator[None]:
     app.dependency_overrides[get_session] = _get_session
     yield
     app.dependency_overrides.pop(get_session, None)
+
+
+@pytest_asyncio.fixture(loop_scope="session", autouse=True)
+async def _override_redis() -> AsyncIterator[None]:
+    """앱의 get_redis를 fakeredis로 바꿔치기한다.
+
+    ASGITransport는 lifespan을 실행하지 않으므로 app.state.redis가 아예
+    없다. 실제 Redis를 쓰지 않는 또 다른 이유는, compose의 redis가 ai-worker
+    브로커라 테스트에서 FLUSHDB하면 팀원의 브로커 상태를 지울 수 있어서다.
+    테스트마다 새 인스턴스라 flush나 순서 의존이 필요 없다.
+    """
+    fake = FakeRedis(decode_responses=True)
+
+    async def _get_redis():
+        return fake
+
+    app.dependency_overrides[get_redis] = _get_redis
+    yield
+    app.dependency_overrides.pop(get_redis, None)
+    await fake.aclose()
 
 
 @pytest_asyncio.fixture(loop_scope="session")
