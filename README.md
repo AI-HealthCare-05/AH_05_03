@@ -33,7 +33,7 @@
 
 OZ Coding School의 AI Healthcare Final Project Template을 기반으로 다음 구성을 추가했다.
 
-- `app/`: FastAPI API 서버, 인증/JWT, Tortoise ORM, 테스트
+- `app/`: FastAPI API 서버, 인증/JWT, SQLAlchemy 2.x Async ORM, Alembic, 테스트
 - `ai_worker/`: AI 모델 추론·학습 워커
 - `envs/`: 로컬·운영 환경 변수 예시
 - `infra/`: Docker Compose와 Nginx 운영 설정
@@ -45,6 +45,13 @@ OZ Coding School의 AI Healthcare Final Project Template을 기반으로 다음 
 uv sync --group app
 uv sync --group ai
 uv sync --group dev
+```
+
+DB 스키마 마이그레이션은 Alembic으로 관리한다.
+
+```bash
+uv run --group app alembic upgrade head
+uv run --group app alembic revision --autogenerate -m "describe change"
 ```
 
 로컬 전체 스택은 `docker compose up -d --build`로 실행한다. API 문서는 실행 후 `http://localhost/api/docs`에서 확인할 수 있다.

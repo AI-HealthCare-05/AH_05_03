@@ -1,17 +1,14 @@
 from calendar import timegm
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
-
-try:
-    from typing import Self
-except ImportError:  # Python 3.10 compatibility
-    from typing_extensions import Self
 from uuid import uuid4
 
+from typing_extensions import Self
+
 from app.core import config
-from app.models.users import User
 from app.core.jwt.exceptions import ExpiredTokenError, TokenBackendError, TokenBackendExpiredError, TokenError
 from app.core.jwt.state import token_backend
+from app.models.users import User
 
 if TYPE_CHECKING:
     from app.core.jwt.backends import TokenBackend

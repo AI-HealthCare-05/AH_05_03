@@ -2,19 +2,13 @@ import os
 import uuid
 import zoneinfo
 from dataclasses import field
-try:
-    from enum import StrEnum
-except ImportError:  # Python 3.10 compatibility
-    from enum import Enum
-
-    class StrEnum(str, Enum):
-        pass
+from enum import Enum
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Env(StrEnum):
+class Env(str, Enum):
     LOCAL = "local"
     DEV = "dev"
     PROD = "prod"
@@ -29,8 +23,8 @@ class Config(BaseSettings):
     TEMPLATE_DIR: str = os.path.join(Path(__file__).resolve().parent.parent, "templates")
 
     DB_HOST: str = "localhost"
-    DB_PORT: int = 3306
-    DB_USER: str = "root"
+    DB_PORT: int = 5432
+    DB_USER: str = "postgres"
     DB_PASSWORD: str = "pw1234"
     DB_NAME: str = "ai_health"
     DB_CONNECT_TIMEOUT: int = 5

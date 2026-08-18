@@ -1,32 +1,39 @@
-try:
-    from enum import StrEnum
-except ImportError:  # Python 3.10 compatibility
-    from enum import Enum
+from datetime import date, datetime
+from enum import Enum
 
-    class StrEnum(str, Enum):
-        pass
+from sqlalchemy import BigInteger, Boolean, Date, DateTime, Integer, String
+from sqlalchemy import Enum as SqlEnum
+from sqlalchemy.orm import Mapped, mapped_column
 
-from tortoise import fields, models
+from app.core import config
+from app.models.base import Base
 
 
-class Gender(StrEnum):
+class Gender(str, Enum):
     MALE = "MALE"
     FEMALE = "FEMALE"
 
 
-class User(models.Model):
-    id = fields.BigIntField(primary_key=True)
-    email = fields.CharField(max_length=40)
-    hashed_password = fields.CharField(max_length=128)
-    name = fields.CharField(max_length=20)
-    gender = fields.CharEnumField(enum_type=Gender)
-    birthday = fields.DateField()
-    phone_number = fields.CharField(max_length=11)
-    is_active = fields.BooleanField(default=True)
-    is_admin = fields.BooleanField(default=False)
-    last_login = fields.DatetimeField(null=True)
-    created_at = fields.DatetimeField(auto_now_add=True)
-    updated_at = fields.DatetimeField(auto_now=True)
+def now_in_service_timezone() -> datetime:
+    return datetime.now(config.TIMEZONE)
 
-    class Meta:
-        table = "users"
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(40), nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(128), nullable=False)
+    name: Mapped[str] = mapped_column(String(20), nullable=False)
+    gender: Mapped[Gender] = mapped_column(SqlEnum(Gender, native_enum=False, length=6), nullable=False)
+    birthday: Mapped[date] = mapped_column(Date, nullable=False)
+    phone_number: Mapped[str] = mapped_column(String(11), nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now_in_service_timezone
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=now_in_service_timezone, onupdate=now_in_service_timezone
+    )
