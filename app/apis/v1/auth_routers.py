@@ -1,56 +1,119 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, status
-from fastapi.responses import JSONResponse as Response
+from fastapi import APIRouter, Depends, Response, status
 
 from app.core import config
-from app.core.config import Env
-from app.dependencies.services import get_auth_service
-from app.dtos.auth import LoginRequest, LoginResponse, SignUpRequest, TokenRefreshResponse
-from app.services.auth import AuthService
-from app.services.jwt import JwtService
+from app.core.errors import ErrorCode
+from app.dependencies.security import get_access_token_payload, get_refresh_token_cookie, require_trusted_origin
+from app.dtos.auth import AccessTokenData, LoginRequest, SignUpData, SignUpRequest
+from app.dtos.envelope import ApiResponse, error_responses
+from app.services.auth import AuthService, IssuedTokens
 
-auth_router = APIRouter(prefix="/auth", tags=["auth"])
+auth_router = APIRouter(prefix="/auth", tags=["auth"], dependencies=[Depends(require_trusted_origin)])
 
 
-@auth_router.post("/signup", status_code=status.HTTP_201_CREATED)
+def _set_refresh_cookie(response: Response, tokens: IssuedTokens) -> None:
+    response.set_cookie(
+        key=config.REFRESH_COOKIE_NAME,
+        value=tokens.refresh_token,
+        max_age=tokens.refresh_expires_in,
+        path=config.REFRESH_COOKIE_PATH,
+        secure=config.REFRESH_COOKIE_SECURE,
+        httponly=True,
+        samesite=config.REFRESH_COOKIE_SAMESITE,
+    )
+
+
+def _delete_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=config.REFRESH_COOKIE_NAME,
+        path=config.REFRESH_COOKIE_PATH,
+        secure=config.REFRESH_COOKIE_SECURE,
+        httponly=True,
+        samesite=config.REFRESH_COOKIE_SAMESITE,
+    )
+
+
+@auth_router.post(
+    "/signup",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ApiResponse[SignUpData],
+    responses=error_responses(ErrorCode.EMAIL_ALREADY_REGISTERED),
+    summary="서비스 계정 생성",
+)
 async def signup(
     request: SignUpRequest,
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-) -> Response:
-    await auth_service.signup(request)
-    return Response(content={"detail": "회원가입이 성공적으로 완료되었습니다."}, status_code=status.HTTP_201_CREATED)
+    auth_service: Annotated[AuthService, Depends(AuthService)],
+) -> ApiResponse[SignUpData]:
+    account = await auth_service.signup(request)
+    return ApiResponse(data=SignUpData.model_validate(account), message="회원가입이 완료되었습니다.")
 
 
-@auth_router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
+@auth_router.post(
+    "/login",
+    response_model=ApiResponse[AccessTokenData],
+    responses=error_responses(
+        ErrorCode.CREDENTIALS_INVALID,
+        ErrorCode.ACCOUNT_SUSPENDED,
+        ErrorCode.ACCOUNT_CLOSED,
+        ErrorCode.SERVICE_UNAVAILABLE,
+    ),
+    summary="로그인과 토큰 발급",
+)
 async def login(
     request: LoginRequest,
-    auth_service: Annotated[AuthService, Depends(get_auth_service)],
-) -> Response:
-    user = await auth_service.authenticate(request)
-    tokens = await auth_service.login(user)
-    resp = Response(
-        content=LoginResponse(access_token=str(tokens["access_token"])).model_dump(), status_code=status.HTTP_200_OK
-    )
-    resp.set_cookie(
-        key="refresh_token",
-        value=str(tokens["refresh_token"]),
-        httponly=True,
-        secure=True if config.ENV == Env.PROD else False,
-        domain=config.COOKIE_DOMAIN or None,
-        expires=tokens["access_token"].payload["exp"],
-    )
-    return resp
+    response: Response,
+    auth_service: Annotated[AuthService, Depends(AuthService)],
+) -> ApiResponse[AccessTokenData]:
+    account = await auth_service.authenticate(request)
+    tokens = await auth_service.login(account)
+    _set_refresh_cookie(response, tokens)
+    return ApiResponse(data=tokens.access, message="로그인이 완료되었습니다.")
 
 
-@auth_router.get("/token/refresh", response_model=TokenRefreshResponse, status_code=status.HTTP_200_OK)
-async def token_refresh(
-    jwt_service: Annotated[JwtService, Depends(JwtService)],
-    refresh_token: Annotated[str | None, Cookie()] = None,
-) -> Response:
-    if not refresh_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token is missing.")
-    access_token = jwt_service.refresh_jwt(refresh_token)
-    return Response(
-        content=TokenRefreshResponse(access_token=str(access_token)).model_dump(), status_code=status.HTTP_200_OK
-    )
+@auth_router.post(
+    "/refresh",
+    response_model=ApiResponse[AccessTokenData],
+    responses=error_responses(
+        ErrorCode.TOKEN_INVALID,
+        ErrorCode.TOKEN_EXPIRED,
+        ErrorCode.TOKEN_REVOKED,
+        ErrorCode.TOKEN_REUSE_DETECTED,
+        ErrorCode.ACCOUNT_NOT_FOUND,
+        ErrorCode.ACCOUNT_SUSPENDED,
+        ErrorCode.ACCOUNT_CLOSED,
+        ErrorCode.SERVICE_UNAVAILABLE,
+    ),
+    summary="Access Token 갱신 (Refresh Token 회전)",
+    description="Refresh Token은 Secure HttpOnly 쿠키로만 전달하며 매번 회전한다.",
+)
+async def refresh(
+    response: Response,
+    raw_refresh_token: Annotated[str, Depends(get_refresh_token_cookie)],
+    auth_service: Annotated[AuthService, Depends(AuthService)],
+) -> ApiResponse[AccessTokenData]:
+    tokens = await auth_service.refresh(raw_refresh_token)
+    _set_refresh_cookie(response, tokens)
+    return ApiResponse(data=tokens.access, message="토큰이 갱신되었습니다.")
+
+
+@auth_router.post(
+    "/logout",
+    response_model=ApiResponse[None],
+    responses=error_responses(
+        ErrorCode.AUTH_REQUIRED,
+        ErrorCode.TOKEN_INVALID,
+        ErrorCode.TOKEN_EXPIRED,
+        ErrorCode.TOKEN_REVOKED,
+        ErrorCode.SERVICE_UNAVAILABLE,
+    ),
+    summary="로그아웃",
+)
+async def logout(
+    response: Response,
+    payload: Annotated[dict, Depends(get_access_token_payload)],
+    auth_service: Annotated[AuthService, Depends(AuthService)],
+) -> ApiResponse[None]:
+    await auth_service.logout(payload)
+    _delete_refresh_cookie(response)
+    return ApiResponse[None](data=None, message="로그아웃되었습니다.")

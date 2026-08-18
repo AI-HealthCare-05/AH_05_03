@@ -15,6 +15,12 @@ on:
       - 'release/*'
       - 'hotfix/*'
 
+# uv는 .python-version(3.10)을 우선하므로, setup-python이 3.13을 깔아도
+# 조용히 3.10 환경이 만들어진다. 배포 이미지가 python:3.13-slim이라
+# CI도 3.13을 쓰도록 명시한다.
+env:
+  UV_PYTHON: '3.13'
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -45,18 +51,40 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:17
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: pw1234
           POSTGRES_DB: ai_health
         ports:
           - 5432:5432
+        # 기존 mysql 서비스에는 healthcheck가 아예 없어서 test job이
+        # 컨테이너 기동과 경쟁하고 있었다.
         options: >-
-          --health-cmd "pg_isready -U postgres -d ai_health"
+          --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # .env는 git 제외라 CI에는 없다. 지금까지는 Config 기본값이
+      # 우연히 mysql과 맞아떨어졌을 뿐이므로 명시한다.
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: pw1234
+      DB_NAME: ai_health
+      DB_TEST_NAME: ai_health_test
+      SECRET_KEY: ci-secret-key
+      REDIS_URL: redis://localhost:6379/0
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -83,6 +111,14 @@ jobs:
           else
             echo "has_tests=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Apply migrations
+        run: uv run alembic upgrade head
+
+      - name: Verify no model/migration drift
+        # 테스트는 create_all로 스키마를 만들기 때문에, 모델과 마이그레이션이
+        # 어긋나는 것을 잡는 장치는 이 단계가 유일하다.
+        run: uv run alembic check
 
       - name: Run Tests with Coverage
         if: steps.check_tests.outputs.has_tests == 'true'

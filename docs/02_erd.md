@@ -27,20 +27,31 @@
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | id | PK, UUID | 서버 계정 식별자 |
-| email | varchar, unique | 로그인 식별자 |
-| password_hash | varchar | 인증용 해시 |
+| email | varchar(255), unique | 로그인 식별자 |
+| password_hash | varchar(255) | 인증용 해시 |
 | status | enum | active, suspended, closed |
-| created_at | timestamp | 생성 시각 |
+| closed_at | timestamptz, null | 해지 시각. 유예기간 계산의 기준 |
+| created_at | timestamptz | 생성 시각 |
+| updated_at | timestamptz | 마지막 수정 시각 |
 
 ### subscriptions
 
 | 컬럼 | 타입 | 설명 |
 |---|---|---|
 | id | PK, UUID | 구독 식별자 |
-| account_id | FK | 결제·구독 계정 |
-| plan | varchar | 플랜 |
+| account_id | FK, unique | 결제·구독 계정. 계정당 구독 1개 |
+| plan | varchar(20) | FREE, BASIC, FAMILY |
 | status | enum | active, expired, cancelled |
-| renewed_at | timestamp | 갱신 시각 |
+| renewed_at | timestamptz, null | 갱신 시각. 갱신 이력이 없으면 null |
+| created_at | timestamptz | 생성 시각 |
+| updated_at | timestamptz | 마지막 수정 시각 |
+
+> **구현 시 확장한 항목** (docs/05_tech_architecture.md 10절 협업 규칙에 따라 기록)
+>
+> - `service_accounts.closed_at` — `DELETE /account`가 유예기간 후 파기 방식이라 해지 시각이 필요하다. 유예기간은 14일로 가정했고 파기 배치는 아직 없다.
+> - `service_accounts.updated_at`, `subscriptions.created_at/updated_at` — 감사 흔적용.
+> - `subscriptions.account_id`에 unique — 현재 계정당 구독 1개다. 2순위 가족 라이선스가 들어오면 재검토한다.
+> - enum은 네이티브 PostgreSQL ENUM이 아니라 `varchar` + CHECK 제약으로 구현했다. 네이티브 ENUM은 값 추가·변경을 Alembic autogenerate가 감지하지 못해, 열거형이 여럿인 이 스키마에서는 변경 비용이 계속 누적된다.
 
 ### family_invitations
 

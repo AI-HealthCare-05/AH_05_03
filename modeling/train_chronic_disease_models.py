@@ -20,7 +20,6 @@ import pandas as pd
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
-
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -34,7 +33,6 @@ from sklearn.metrics import (
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
-
 
 DATASET_URL = "hf://datasets/hesscl/quackrfss/data/BRFSS_2024.parquet"
 
@@ -112,9 +110,7 @@ TARGETS = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"))
-    parser.add_argument(
-        "--model-dir", type=Path, default=Path("models/chronic_disease")
-    )
+    parser.add_argument("--model-dir", type=Path, default=Path("models/chronic_disease"))
     parser.add_argument(
         "--sample-size",
         type=int,
@@ -131,9 +127,7 @@ def load_brfss(sample_size: int | None, seed: int) -> pd.DataFrame:
     if sample_size is not None:
         if sample_size < 1:
             raise ValueError("sample_size must be a positive integer")
-        sample_clause = (
-            f"USING SAMPLE reservoir({sample_size} ROWS) REPEATABLE({seed})"
-        )
+        sample_clause = f"USING SAMPLE reservoir({sample_size} ROWS) REPEATABLE({seed})"
 
     query = f"""
         SELECT
@@ -172,17 +166,11 @@ def load_brfss(sample_size: int | None, seed: int) -> pd.DataFrame:
 
 def assign_group_splits(data: pd.DataFrame, seed: int) -> pd.Series:
     splitter = GroupShuffleSplit(n_splits=1, test_size=0.20, random_state=seed)
-    train_valid_positions, test_positions = next(
-        splitter.split(data, groups=data["state"])
-    )
+    train_valid_positions, test_positions = next(splitter.split(data, groups=data["state"]))
 
     train_valid = data.iloc[train_valid_positions]
-    validation_splitter = GroupShuffleSplit(
-        n_splits=1, test_size=0.20, random_state=seed + 1
-    )
-    train_relative, validation_relative = next(
-        validation_splitter.split(train_valid, groups=train_valid["state"])
-    )
+    validation_splitter = GroupShuffleSplit(n_splits=1, test_size=0.20, random_state=seed + 1)
+    train_relative, validation_relative = next(validation_splitter.split(train_valid, groups=train_valid["state"]))
 
     splits = pd.Series("test", index=data.index, dtype="string")
     splits.iloc[train_valid_positions[train_relative]] = "train"
@@ -220,12 +208,8 @@ def normalized_weights(weights: np.ndarray) -> np.ndarray:
     return weights / mean_weight
 
 
-def choose_threshold(
-    y_true: np.ndarray, probabilities: np.ndarray, weights: np.ndarray
-) -> float:
-    false_positive_rate, true_positive_rate, thresholds = roc_curve(
-        y_true, probabilities, sample_weight=weights
-    )
+def choose_threshold(y_true: np.ndarray, probabilities: np.ndarray, weights: np.ndarray) -> float:
+    false_positive_rate, true_positive_rate, thresholds = roc_curve(y_true, probabilities, sample_weight=weights)
     youden_j = true_positive_rate - false_positive_rate
     finite = np.isfinite(thresholds)
     if not finite.any():
@@ -242,9 +226,7 @@ def evaluate_predictions(
     threshold: float,
 ) -> dict[str, float | int]:
     predictions = (probabilities >= threshold).astype(int)
-    tn, fp, fn, tp = confusion_matrix(
-        y_true, predictions, labels=[0, 1], sample_weight=weights
-    ).ravel()
+    tn, fp, fn, tp = confusion_matrix(y_true, predictions, labels=[0, 1], sample_weight=weights).ravel()
 
     def safe_ratio(numerator: float, denominator: float) -> float:
         return float(numerator / denominator) if denominator > 0 else float("nan")
@@ -254,12 +236,8 @@ def evaluate_predictions(
         "positive_n": int(np.sum(y_true)),
         "weighted_prevalence": float(np.average(y_true, weights=weights)),
         "auroc": float(roc_auc_score(y_true, probabilities, sample_weight=weights)),
-        "auprc": float(
-            average_precision_score(y_true, probabilities, sample_weight=weights)
-        ),
-        "brier_score": float(
-            brier_score_loss(y_true, probabilities, sample_weight=weights)
-        ),
+        "auprc": float(average_precision_score(y_true, probabilities, sample_weight=weights)),
+        "brier_score": float(brier_score_loss(y_true, probabilities, sample_weight=weights)),
         "threshold": float(threshold),
         "sensitivity": safe_ratio(tp, tp + fn),
         "specificity": safe_ratio(tn, tn + fp),
@@ -270,19 +248,12 @@ def evaluate_predictions(
 
 def transform_splits(data: pd.DataFrame, preprocessor: ColumnTransformer):
     split_positions = {
-        name: np.flatnonzero(data["split"].eq(name).to_numpy())
-        for name in ("train", "validation", "test")
+        name: np.flatnonzero(data["split"].eq(name).to_numpy()) for name in ("train", "validation", "test")
     }
     transformed = {
-        "train": preprocessor.fit_transform(
-            data.iloc[split_positions["train"]][FEATURES]
-        ),
-        "validation": preprocessor.transform(
-            data.iloc[split_positions["validation"]][FEATURES]
-        ),
-        "test": preprocessor.transform(
-            data.iloc[split_positions["test"]][FEATURES]
-        ),
+        "train": preprocessor.fit_transform(data.iloc[split_positions["train"]][FEATURES]),
+        "validation": preprocessor.transform(data.iloc[split_positions["validation"]][FEATURES]),
+        "test": preprocessor.transform(data.iloc[split_positions["test"]][FEATURES]),
     }
     return split_positions, transformed
 
@@ -375,9 +346,7 @@ def main() -> None:
 
         for split_name, (_, y_values, _, _) in prepared.items():
             if np.unique(y_values).size != 2:
-                raise RuntimeError(
-                    f"{disease} has fewer than two classes in {split_name} split"
-                )
+                raise RuntimeError(f"{disease} has fewer than two classes in {split_name} split")
 
         classifier = LogisticRegression(
             solver="lbfgs",
@@ -387,13 +356,9 @@ def main() -> None:
         classifier.fit(x_train, y_train, sample_weight=normalized_weights(w_train))
 
         validation_probabilities = classifier.predict_proba(x_validation)[:, 1]
-        threshold = choose_threshold(
-            y_validation, validation_probabilities, w_validation
-        )
+        threshold = choose_threshold(y_validation, validation_probabilities, w_validation)
         test_probabilities = classifier.predict_proba(x_test)[:, 1]
-        disease_metrics = evaluate_predictions(
-            y_test, test_probabilities, w_test, threshold
-        )
+        disease_metrics = evaluate_predictions(y_test, test_probabilities, w_test, threshold)
         disease_metrics.update(
             {
                 "disease": disease,
@@ -416,9 +381,7 @@ def main() -> None:
                 w_test[subgroup_mask],
                 threshold,
             )
-            subgroup_metrics.update(
-                {"disease": disease, "subgroup": "sex", "group": sex_label}
-            )
+            subgroup_metrics.update({"disease": disease, "subgroup": "sex", "group": sex_label})
             subgroup_rows.append(subgroup_metrics)
 
         coefficient_frames.append(
@@ -433,9 +396,7 @@ def main() -> None:
         joblib.dump(classifier, args.model_dir / f"{disease}.joblib")
 
     metrics = pd.DataFrame(metric_rows).sort_values("disease")
-    subgroup_metrics = pd.DataFrame(subgroup_rows).sort_values(
-        ["disease", "subgroup", "group"]
-    )
+    subgroup_metrics = pd.DataFrame(subgroup_rows).sort_values(["disease", "subgroup", "group"])
     coefficients = pd.concat(coefficient_frames, ignore_index=True).sort_values(
         ["disease", "abs_coefficient"], ascending=[True, False]
     )
@@ -462,10 +423,7 @@ def main() -> None:
         "targets": TARGETS,
         "thresholds": thresholds,
         "split": {
-            split_name: sorted(
-                int(value)
-                for value in data.loc[data["split"].eq(split_name), "state"].unique()
-            )
+            split_name: sorted(int(value) for value in data.loc[data["split"].eq(split_name), "state"].unique())
             for split_name in ("train", "validation", "test")
         },
         "disclaimer": (
@@ -473,9 +431,7 @@ def main() -> None:
             "disease onset, diagnosis, or medical advice."
         ),
     }
-    (args.model_dir / "manifest.json").write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    (args.model_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print("\nHeld-out-state evaluation")
     print(

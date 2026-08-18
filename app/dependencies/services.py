@@ -1,16 +1,11 @@
 from typing import Annotated
 
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from redis.asyncio import Redis
 
-from app.core.db.databases import get_db_session
-from app.services.auth import AuthService
-from app.services.users import UserManageService
-
-
-def get_auth_service(session: Annotated[AsyncSession, Depends(get_db_session)]) -> AuthService:
-    return AuthService(session)
+from app.core.redis.client import get_redis
+from app.services.token_store import TokenStore
 
 
-def get_user_manage_service(session: Annotated[AsyncSession, Depends(get_db_session)]) -> UserManageService:
-    return UserManageService(session)
+def get_token_store(redis: Annotated[Redis, Depends(get_redis)]) -> TokenStore:
+    return TokenStore(redis)

@@ -8,7 +8,6 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
-
 # .env
 # NAVER_OCR_URL=받은_Invoke_URL
 # NAVER_OCR_SECRET=받은_Secret_Key
@@ -23,9 +22,7 @@ def naver_ocr(image_path: str, lang: str = "ko") -> str:
     """이미지 파일에서 텍스트를 추출합니다."""
 
     if not OCR_URL or not OCR_SECRET:
-        raise RuntimeError(
-            ".env에 NAVER_OCR_URL과 NAVER_OCR_SECRET을 설정하세요."
-        )
+        raise RuntimeError(".env에 NAVER_OCR_URL과 NAVER_OCR_SECRET을 설정하세요.")
 
     path = Path(image_path)
 
@@ -50,10 +47,7 @@ def naver_ocr(image_path: str, lang: str = "ko") -> str:
         ],
     }
 
-    mime_type = (
-        mimetypes.guess_type(path.name)[0]
-        or "application/octet-stream"
-    )
+    mime_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
     with path.open("rb") as image_file:
         response = requests.post(
@@ -67,10 +61,7 @@ def naver_ocr(image_path: str, lang: str = "ko") -> str:
         )
 
     if not response.ok:
-        raise RuntimeError(
-            f"OCR 호출 실패 ({response.status_code}): "
-            f"{response.text}"
-        )
+        raise RuntimeError(f"OCR 호출 실패 ({response.status_code}): {response.text}")
 
     result = response.json()
     lines = []

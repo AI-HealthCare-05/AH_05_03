@@ -22,13 +22,15 @@ services:
     environment:
     # ${환경변수명} 문법은 OS 환경변수 혹은 .env에서 해당 환경변수명과 일치하는 항목이 있으면 대입합니다.
     # 반드시 사전에 .env에 해당 항목이 존재하는지 확인해야 합니다.
-      POSTGRES_DB: ${DB_NAME}
+    # POSTGRES_USER가 클러스터 슈퍼유저다. 별도 root 계정이 없다.
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
       TZ: Asia/Seoul
       PGTZ: Asia/Seoul
     ports:
-      - ${DB_EXPOSE_PORT}:${DB_PORT}
+      - ${DB_EXPOSE_PORT}:5432
     networks:
       - ws
     volumes:
@@ -38,6 +40,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+
+  # 2-1. 마이그레이션 (일회성)
+  #      이미지 CMD에 넣으면 워커 3개가 alembic_version 행을 두고 경쟁한다.
+  migrate:
+    container_name: migrate
+    image: ${DOCKER_USER}/${DOCKER_REPOSITORY}:app-${APP_VERSION}
+    command: ["uv", "run", "--no-sync", "alembic", "upgrade", "head"]
+    env_file: .env
+    networks:
+      - ws
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # 3. API Server (FastAPI)
   fastapi:
@@ -53,8 +70,8 @@ services:
     networks:
       - ws
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
