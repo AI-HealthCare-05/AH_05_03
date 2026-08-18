@@ -2,10 +2,15 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 
+from app.apis.exception_handlers import register_exception_handlers
 from app.apis.v1 import v1_routers
+from app.core import config
 from app.core.db.session import dispose_engine
+from app.core.errors import ErrorCode
+from app.dtos.envelope import error_responses
 
 
 @asynccontextmanager
@@ -20,6 +25,22 @@ app = FastAPI(
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
     lifespan=lifespan,
+    # 앱 레벨에 걸면 모든 라우트로 전파된다. FastAPI는 422가 이미 선언돼
+    # 있으면 기본 HTTPValidationError를 넣지 않으므로, 이 한 줄이 전역에서
+    # 기본 스키마를 우리 봉투로 대체한다.
+    responses=error_responses(ErrorCode.VALIDATION_ERROR, ErrorCode.INTERNAL_ERROR),
 )
+
+# 프론트가 별 오리진(React)이라 필요하다. 지금까지 아예 없었다.
+# refresh 토큰을 본문으로 옮겼으므로 allow_credentials는 False로 둘 수 있다.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.CORS_ALLOW_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+register_exception_handlers(app)
 
 app.include_router(v1_routers)

@@ -35,9 +35,25 @@ class Config(BaseSettings):
     DB_CONNECTION_POOL_MAXSIZE: int = 10
     DB_POOL_RECYCLE: int = 1800
 
-    COOKIE_DOMAIN: str = "localhost"
+    # --- redis / token store -----------------------------------------
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_KEY_PREFIX: str = "ieobom"
+    REDIS_MAX_CONNECTIONS: int = 20
+    # 짧게 잡아 장애 시 매달리지 않고 빠르게 503으로 떨어지게 한다.
+    REDIS_SOCKET_TIMEOUT: float = 0.5
+    REDIS_SOCKET_CONNECT_TIMEOUT: float = 0.5
 
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    # docs/05_tech_architecture.md 7절 "Access Token은 짧게 유지".
+    # Redis 장애 시 fail-open 브레이크글래스의 노출 창을 15분으로 묶는 값이기도 하다.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 14 * 24 * 60
     JWT_LEEWAY: int = 5
+    # access 토큰 denylist 조회에만 적용되는 비상 스위치.
+    # 회전·등록·무효화는 이 값과 무관하게 항상 fail-closed다.
+    AUTH_FAIL_OPEN_ON_REDIS_ERROR: bool = False
+
+    # --- api ----------------------------------------------------------
+    # 오류 응답의 details는 비규격 필드다. 운영에서는 끈다.
+    API_ERROR_INCLUDE_DETAILS: bool = False
+    CORS_ALLOW_ORIGINS: list[str] = ["http://localhost:5173"]
