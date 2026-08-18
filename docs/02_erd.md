@@ -7,7 +7,7 @@
 > 서버 API: [03_api_spec.md](03_api_spec.md), [OpenAPI 3.1](api/openapi.yaml)
 >
 > 로컬 물리 스키마: [10_local_data_contract.md](10_local_data_contract.md)
-> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md)
+> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md)
 
 ## 1. 물리적 경계
 

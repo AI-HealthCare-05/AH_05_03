@@ -92,3 +92,44 @@ class SubscriptionInactiveError(AppError):
 
 class PlanChangeNotAllowedError(AppError):
     error_code = ErrorCode.PLAN_CHANGE_NOT_ALLOWED
+
+
+# --- household / invitation ----------------------------------------------
+class HouseholdNotFoundError(AppError):
+    error_code = ErrorCode.HOUSEHOLD_NOT_FOUND
+
+
+class HouseholdMembershipRequiredError(AppError):
+    error_code = ErrorCode.HOUSEHOLD_MEMBERSHIP_REQUIRED
+
+
+class InvitationNotFoundError(AppError):
+    error_code = ErrorCode.INVITATION_NOT_FOUND
+
+
+class InvitationAlreadyPendingError(AppError):
+    error_code = ErrorCode.INVITATION_ALREADY_PENDING
+
+
+class InvitationSelfNotAllowedError(AppError):
+    error_code = ErrorCode.INVITATION_SELF_NOT_ALLOWED
+
+
+class InvitationExpiredError(AppError):
+    error_code = ErrorCode.INVITATION_EXPIRED
+
+
+class InvitationStateConflictError(AppError):
+    error_code = ErrorCode.INVITATION_STATE_CONFLICT
+
+
+class InvitationTokenInvalidError(AppError):
+    error_code = ErrorCode.INVITATION_TOKEN_INVALID
+
+
+class InvitationTokenReusedError(AppError):
+    error_code = ErrorCode.INVITATION_TOKEN_REUSED
+
+
+class RateLimitedError(AppError):
+    error_code = ErrorCode.RATE_LIMITED
