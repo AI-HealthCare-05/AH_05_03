@@ -6,6 +6,7 @@ except ImportError:  # Python 3.10 compatibility
     class StrEnum(str, Enum):
         pass
 
+
 from tortoise import fields, models
 
 
