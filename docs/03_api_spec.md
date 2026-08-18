@@ -20,6 +20,10 @@
 - 오류: `{ "error_code": "...", "message": "...", "success": false }`
 - 요청·응답에 건강정보 원문, 프로필 이름·생년·관계, 기록 개수를 포함하지 않는다.
 
+**토큰 전송 (구현 시 확정).** Refresh Token은 httpOnly 쿠키가 아니라 요청 본문으로 전달한다 — `POST /auth/login`·`POST /auth/refresh`의 응답 `data`에 `access_token`·`refresh_token`이 함께 담기고, `POST /auth/refresh`는 `{"refresh_token": "..."}`를 받는다. 별 오리진 SPA에서 httpOnly 쿠키는 `SameSite=None; Secure` + `allow_credentials=True`가 필요해 지금 구조(본문 + `allow_credentials=False`)보다 공격면이 넓다. 대신 Refresh Token은 **회전(rotation)** 하며, 이미 사용된 토큰이 재사용되면 계정의 refresh 토큰 전체를 무효화한다.
+
+**`DELETE`가 본문을 가진 경우 상태 코드는 200이다.** 위 봉투가 모든 응답에 필수이고 204는 본문을 가질 수 없기 때문이다. `DELETE /account`가 여기 해당한다.
+
 ## 3. 서버 엔드포인트
 
 ### 인증·계정 — 1순위
@@ -39,6 +43,14 @@
 |---|---|---|---|
 | GET | `/subscription` | 구독·라이선스 상태 조회 | Y |
 | POST | `/subscription/change` | 플랜 변경 요청 | Y |
+
+`POST /subscription/change` 요청 본문:
+
+```json
+{ "plan": "FREE" }
+```
+
+`plan`은 `FREE` · `BASIC` · `FAMILY` 중 하나다. 결제 연동은 범위 밖이라 요청 즉시 상태에 반영한다. 이미 적용된 플랜을 다시 요청하면 `PLAN_CHANGE_NOT_ALLOWED`(409)를 반환한다 — 종단 상태가 이미 같아도 조용히 200을 주면 클라이언트 버그를 숨기기 때문이다(`DELETE /account`의 멱등 200과는 의도적으로 다르다).
 
 ### 가족 초대 — 2순위
 
@@ -112,6 +124,34 @@
 서버 연결 변경이 실패하면 로컬 병합을 완료 상태로 확정하지 않고 복구 가능한 상태로 남겨야 한다.
 
 ## 7. 주요 오류 코드
+
+### 7.1 인증·계정·구독 — 공통 오류 (구현 확정)
+
+`error_code`는 봉투(§2)의 필수 필드다. 아래는 인증·계정·구독 1순위 API가 실제로 반환하는 오류 코드다.
+
+| 오류 코드 | 상태 코드 | 의미 |
+|---|---|---|
+| `VALIDATION_ERROR` | 422 | 요청 본문·쿼리 검증 실패 |
+| `NOT_FOUND` | 404 | 존재하지 않는 경로 |
+| `METHOD_NOT_ALLOWED` | 405 | 허용되지 않은 HTTP 메서드 |
+| `RATE_LIMITED` | 429 | 요청 빈도 초과 (예약, 현재 미적용) |
+| `SERVICE_UNAVAILABLE` | 503 | Redis 등 의존 서비스 장애로 일시 처리 불가 |
+| `INTERNAL_ERROR` | 500 | 처리되지 않은 서버 오류 |
+| `AUTH_REQUIRED` | 401 | 인증 토큰 누락 |
+| `CREDENTIALS_INVALID` | 401 | 이메일 또는 비밀번호 불일치 (계정 열거 방지를 위해 두 경우 동일 응답) |
+| `EMAIL_ALREADY_REGISTERED` | 409 | 이미 가입된 이메일로 재가입 시도 |
+| `TOKEN_INVALID` | 401 | 서명·형식이 잘못된 토큰 |
+| `TOKEN_EXPIRED` | 401 | 만료된 토큰 |
+| `TOKEN_REVOKED` | 401 | 무효화된(로그아웃·해지 등) 토큰 |
+| `TOKEN_REUSE_DETECTED` | 401 | 이미 소비된 Refresh Token 재사용 시도 — 해당 계정의 토큰 패밀리 전체 무효화 |
+| `ACCOUNT_NOT_FOUND` | 401 | 토큰의 계정이 존재하지 않음 (재인증 유도, 계정 존재 여부 비노출) |
+| `ACCOUNT_SUSPENDED` | 403 | 이용 정지된 계정 |
+| `ACCOUNT_CLOSED` | 403 | 해지된 계정 |
+| `SUBSCRIPTION_NOT_FOUND` | 404 | 계정에 연결된 구독 정보 없음 (정상 상태에서는 발생하지 않아야 함) |
+| `SUBSCRIPTION_INACTIVE` | 409 | 활성 상태가 아닌 구독에 대한 조작 시도 |
+| `PLAN_CHANGE_NOT_ALLOWED` | 409 | 이미 적용된 플랜으로 변경 요청 |
+
+### 7.2 가족 초대·프로필 연결·기기 — 2·3순위 (미구현)
 
 | 오류 코드 | 의미 |
 |---|---|
