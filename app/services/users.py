@@ -1,25 +1,32 @@
-from tortoise.transactions import in_transaction
+from typing import Annotated
 
+from fastapi import Depends
+
+from app.core.db.session import SessionDep
 from app.dtos.users import UserUpdateRequest
-from app.models.users import User
-from app.repositories.user_repository import UserRepository
-from app.services.auth import AuthService
-from app.core.utils.common import normalize_phone_number
+from app.models.service_accounts import ServiceAccount
+from app.repositories.service_account_repository import ServiceAccountRepository
+from app.services.auth import AuthService, get_account_repository
 
 
 class UserManageService:
-    def __init__(self):
-        self.repo = UserRepository()
-        self.auth_service = AuthService()
+    def __init__(
+        self,
+        session: SessionDep,
+        account_repo: Annotated[ServiceAccountRepository, Depends(get_account_repository)],
+        auth_service: Annotated[AuthService, Depends(AuthService)],
+    ) -> None:
+        self.session = session
+        self.account_repo = account_repo
+        self.auth_service = auth_service
 
-    async def update_user(self, user: User, data: UserUpdateRequest) -> User:
+    async def update_user(self, account: ServiceAccount, data: UserUpdateRequest) -> ServiceAccount:
         if data.email:
             await self.auth_service.check_email_exists(data.email)
-        if data.phone_number:
-            normalized_phone_number = normalize_phone_number(data.phone_number)
-            await self.auth_service.check_phone_number_exists(normalized_phone_number)
-            data.phone_number = normalized_phone_number
-        async with in_transaction():
-            await self.repo.update_instance(user=user, data=data.model_dump(exclude_none=True))
-            await user.refresh_from_db()
-        return user
+
+        await self.account_repo.update_instance(account, data.model_dump(exclude_none=True))
+        await self.session.commit()
+        # 예전 user.refresh_from_db()에 해당한다. expire_on_commit=False라
+        # 서버 생성값(updated_at)이 메모리에서 낡기 때문에 명시적으로 다시 읽는다.
+        await self.session.refresh(account)
+        return account

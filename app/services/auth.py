@@ -1,74 +1,75 @@
+from typing import Annotated
+
+from fastapi import Depends
 from fastapi.exceptions import HTTPException
 from pydantic import EmailStr
+from sqlalchemy.exc import IntegrityError
 from starlette import status
-from tortoise.transactions import in_transaction
 
-from app.dtos.auth import LoginRequest, SignUpRequest
-from app.models.users import User
-from app.repositories.user_repository import UserRepository
-from app.services.jwt import JwtService
-from app.core.utils.common import normalize_phone_number
+from app.core.db.session import SessionDep
 from app.core.jwt.tokens import AccessToken, RefreshToken
 from app.core.utils.security import hash_password, verify_password
+from app.dtos.auth import LoginRequest, SignUpRequest
+from app.models.service_accounts import ServiceAccount, ServiceAccountStatus
+from app.repositories.service_account_repository import ServiceAccountRepository
+from app.services.jwt import JwtService
+
+
+def get_account_repository(session: SessionDep) -> ServiceAccountRepository:
+    return ServiceAccountRepository(session)
 
 
 class AuthService:
-    def __init__(self):
-        self.user_repo = UserRepository()
+    def __init__(
+        self,
+        session: SessionDep,
+        account_repo: Annotated[ServiceAccountRepository, Depends(get_account_repository)],
+    ) -> None:
+        self.session = session
+        self.account_repo = account_repo
         self.jwt_service = JwtService()
 
-    async def signup(self, data: SignUpRequest) -> User:
-        # 이메일 중복 체크
+    async def signup(self, data: SignUpRequest) -> ServiceAccount:
         await self.check_email_exists(data.email)
 
-        # 입력받은 휴대폰 번호를 노말라이즈
-        normalized_phone_number = normalize_phone_number(data.phone_number)
+        account = await self.account_repo.create(
+            email=str(data.email),
+            password_hash=hash_password(data.password),
+        )
 
-        # 휴대폰 번호 중복 체크
-        await self.check_phone_number_exists(normalized_phone_number)
+        # session.begin()을 쓰면 안 된다. autobegin=True라 위 SELECT가 이미
+        # 트랜잭션을 열어놨고, begin()은 InvalidRequestError를 낸다.
+        try:
+            await self.session.commit()
+        except IntegrityError as err:
+            await self.session.rollback()
+            # 사전 검사와 유니크 인덱스 둘 다 남긴다. 앞은 메시지가 좋고,
+            # 뒤는 TOCTOU 경쟁을 실제로 막는다.
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="이미 사용중인 이메일입니다.") from err
 
-        # 유저 생성
-        async with in_transaction():
-            user = await self.user_repo.create_user(
-                email=data.email,
-                hashed_password=hash_password(data.password),  # 해시화된 비밀번호를 사용
-                name=data.name,
-                phone_number=normalized_phone_number,
-                gender=data.gender,
-                birthday=data.birth_date,
-            )
+        return account
 
-            return user
-
-    async def authenticate(self, data: LoginRequest) -> User:
-        # 이메일로 사용자 조회
-        email = str(data.email)
-        user = await self.user_repo.get_user_by_email(email)
-        if not user:
+    async def authenticate(self, data: LoginRequest) -> ServiceAccount:
+        account = await self.account_repo.get_by_email(str(data.email))
+        if not account:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="이메일 또는 비밀번호가 올바르지 않습니다."
             )
 
-        # 비밀번호 검증
-        if not verify_password(data.password, user.hashed_password):
+        if not verify_password(data.password, account.password_hash):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="이메일 또는 비밀번호가 올바르지 않습니다."
             )
 
-        # 활성 사용자 체크
-        if not user.is_active:
+        if account.status is not ServiceAccountStatus.ACTIVE:
             raise HTTPException(status_code=status.HTTP_423_LOCKED, detail="비활성화된 계정입니다.")
 
-        return user
+        return account
 
-    async def login(self, user: User) -> dict[str, AccessToken | RefreshToken]:
-        await self.user_repo.update_last_login(user.id)
-        return self.jwt_service.issue_jwt_pair(user)
+    async def login(self, account: ServiceAccount) -> dict[str, AccessToken | RefreshToken]:
+        # ERD service_accounts에 last_login 컬럼이 없으므로 갱신하지 않는다.
+        return self.jwt_service.issue_jwt_pair(account)
 
     async def check_email_exists(self, email: str | EmailStr) -> None:
-        if await self.user_repo.exists_by_email(email):
+        if await self.account_repo.exists_by_email(str(email)):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="이미 사용중인 이메일입니다.")
-
-    async def check_phone_number_exists(self, phone_number: str) -> None:
-        if await self.user_repo.exists_by_phone_number(phone_number):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="이미 사용중인 휴대폰 번호입니다.")

@@ -2,6 +2,7 @@ import os
 import uuid
 import zoneinfo
 from dataclasses import field
+
 try:
     from enum import StrEnum
 except ImportError:  # Python 3.10 compatibility
@@ -9,6 +10,8 @@ except ImportError:  # Python 3.10 compatibility
 
     class StrEnum(str, Enum):
         pass
+
+
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict

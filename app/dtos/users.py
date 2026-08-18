@@ -1,41 +1,16 @@
-from datetime import date, datetime
 from typing import Annotated
 
 from pydantic import BaseModel, EmailStr, Field
 
-from app.dtos.base import BaseSerializerModel
-from app.models.users import Gender
-from app.core.validators import optional_after_validator
-from app.core.validators import validate_birthday, validate_phone_number
+from app.dtos.auth import AccountInfoResponse
+
+# 이 모듈은 작업 단위 2에서 /users/me와 함께 사라진다.
+# docs/03_api_spec.md의 계정 표면은 /account이고 계정 수정 엔드포인트는 없다.
+
+UserInfoResponse = AccountInfoResponse
 
 
 class UserUpdateRequest(BaseModel):
-    name: Annotated[str | None, Field(None, min_length=2, max_length=20)]
-    email: Annotated[
-        EmailStr | None,
-        Field(None, max_length=40),
-    ]
-    phone_number: Annotated[
-        str | None,
-        Field(None, description="Available Format: +8201011112222, 01011112222, 010-1111-2222"),
-        optional_after_validator(validate_phone_number),
-    ]
-    birthday: Annotated[
-        date | None,
-        Field(None, description="Date Format: YYYY-MM-DD"),
-        optional_after_validator(validate_birthday),
-    ]
-    gender: Annotated[
-        Gender | None,
-        Field(None, description="'MALE' or 'FEMALE'"),
-    ]
-
-
-class UserInfoResponse(BaseSerializerModel):
-    id: int
-    name: str
-    email: str
-    phone_number: str
-    birthday: date
-    gender: Gender
-    created_at: datetime
+    # 이름·성별·생년·휴대폰은 서버에 저장하지 않으므로 수정할 것도 없다
+    # (docs/05_tech_architecture.md 4절 금지 항목). 이메일만 남는다.
+    email: Annotated[EmailStr | None, Field(None, max_length=254)]

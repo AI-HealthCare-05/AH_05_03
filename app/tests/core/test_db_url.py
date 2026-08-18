@@ -36,9 +36,7 @@ def test_database_override_switches_target_db(monkeypatch) -> None:
 
 
 def test_db_url_setting_takes_precedence(monkeypatch) -> None:
-    monkeypatch.setattr(
-        url_module.config, "DB_URL", "postgresql+asyncpg://u:p@example:5555/other", raising=False
-    )
+    monkeypatch.setattr(url_module.config, "DB_URL", "postgresql+asyncpg://u:p@example:5555/other", raising=False)
 
     url = url_module.build_db_url()
 

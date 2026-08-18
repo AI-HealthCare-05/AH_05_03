@@ -9,9 +9,9 @@ except ImportError:  # Python 3.10 compatibility
 from uuid import uuid4
 
 from app.core import config
-from app.models.users import User
 from app.core.jwt.exceptions import ExpiredTokenError, TokenBackendError, TokenBackendExpiredError, TokenError
 from app.core.jwt.state import token_backend
+from app.models.service_accounts import ServiceAccount
 
 if TYPE_CHECKING:
     from app.core.jwt.backends import TokenBackend
@@ -81,9 +81,10 @@ class Token:
         self.payload["jti"] = uuid4().hex
 
     @classmethod
-    def for_user(cls, user: User) -> Self:
+    def for_user(cls, user: ServiceAccount) -> Self:
         token = cls()
-        token["user_id"] = user.id
+        # UUID를 그대로 넣으면 PyJWT의 json.dumps가 TypeError를 낸다.
+        token["user_id"] = str(user.id)
         return token
 
 
