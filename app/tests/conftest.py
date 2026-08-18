@@ -1,45 +1,108 @@
-import asyncio
-from collections.abc import Generator
-from typing import Any
-from unittest.mock import Mock, patch
+from collections.abc import AsyncIterator
 
-import pytest
 import pytest_asyncio
-from _pytest.fixtures import FixtureRequest
-from tortoise import generate_config
-from tortoise.contrib.test import finalizer, initializer
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
+import app.models  # noqa: F401  Base.metadata에 매퍼를 등록한다
 from app.core import config
-from app.core.db.databases import TORTOISE_APP_MODELS
+from app.core.db.base import Base
+from app.core.db.session import get_session
+from app.core.db.url import build_db_url
+from app.main import app
 
 TEST_BASE_URL = "http://test"
-TEST_DB_LABEL = "models"
-TEST_DB_TZ = "Asia/Seoul"
 
 
-def get_test_db_config() -> dict[str, Any]:
-    tortoise_config = generate_config(
-        db_url=f"mysql://{config.DB_USER}:{config.DB_PASSWORD}@{config.DB_HOST}:{config.DB_PORT}/test",
-        app_modules={TEST_DB_LABEL: TORTOISE_APP_MODELS},
-        connection_label=TEST_DB_LABEL,
-        testing=True,
-    )
-    tortoise_config["timezone"] = TEST_DB_TZ
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def _create_test_database() -> AsyncIterator[None]:
+    """CREATE DATABASE는 트랜잭션 블록 안에서 못 돈다 → AUTOCOMMIT.
 
-    return tortoise_config
+    POSTGRES_USER가 클러스터 슈퍼유저이므로 별도 권한 부여가 필요 없다.
+    MySQL 시절 run_test.sh의 GRANT 해킹이 사라진 자리다.
+    """
+    admin_url = build_db_url(database="postgres")
+    admin = create_async_engine(admin_url, isolation_level="AUTOCOMMIT", poolclass=NullPool)
+    async with admin.connect() as conn:
+        await conn.execute(text(f'DROP DATABASE IF EXISTS "{config.DB_TEST_NAME}" WITH (FORCE)'))
+        await conn.execute(text(f'CREATE DATABASE "{config.DB_TEST_NAME}"'))
+    await admin.dispose()
 
-
-@pytest.fixture(scope="session", autouse=True)
-def initialize(request: FixtureRequest) -> Generator[None, None]:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    with patch("tortoise.contrib.test.getDBConfig", Mock(return_value=get_test_db_config())):
-        initializer(modules=TORTOISE_APP_MODELS)
     yield
-    finalizer()
-    loop.close()
+
+    admin = create_async_engine(admin_url, isolation_level="AUTOCOMMIT", poolclass=NullPool)
+    async with admin.connect() as conn:
+        await conn.execute(text(f'DROP DATABASE IF EXISTS "{config.DB_TEST_NAME}" WITH (FORCE)'))
+    await admin.dispose()
 
 
-@pytest_asyncio.fixture(autouse=True, scope="session")  # type: ignore[type-var]
-def event_loop() -> None:
-    pass
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def engine(_create_test_database: None) -> AsyncIterator[AsyncEngine]:
+    """스키마는 create_all로 만든다.
+
+    마이그레이션이 아니라 모델에서 직접 만들어야 테스트 실패가
+    "모델 버그"와 "마이그레이션 버그" 사이에서 모호해지지 않는다.
+    둘 사이의 드리프트는 CI의 `alembic check`가 잡는다.
+    """
+    eng = create_async_engine(build_db_url(database=config.DB_TEST_NAME), poolclass=NullPool)
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield eng
+    await eng.dispose()
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def db_session(engine: AsyncEngine) -> AsyncIterator[AsyncSession]:
+    """테스트마다 바깥 트랜잭션을 열고 끝에 롤백한다.
+
+    서비스가 commit()을 호출하므로 join_transaction_mode="create_savepoint"가
+    필요하다. 각 commit()이 RELEASE SAVEPOINT로 재해석되어 테스트 안에서는
+    쓴 값이 보이고, 바깥 트랜잭션 롤백 시 전부 사라진다.
+    """
+    conn = await engine.connect()
+    trans = await conn.begin()
+    session = AsyncSession(
+        bind=conn,
+        join_transaction_mode="create_savepoint",
+        expire_on_commit=False,  # 운영 설정과 맞춘다
+    )
+    try:
+        yield session
+    finally:
+        await session.close()
+        await trans.rollback()
+        await conn.close()
+
+
+@pytest_asyncio.fixture(loop_scope="session", autouse=True)
+async def _override_session(db_session: AsyncSession) -> AsyncIterator[None]:
+    """앱의 get_session을 테스트 세션으로 바꿔치기한다.
+
+    이게 유일한 이음새다. override가 없으면 앱이 자기 get_session을 해석해
+    개발 DB에 별도 세션을 열고, 테스트는 그걸 보지도 롤백하지도 못한다.
+
+    알려진 한계: 한 테스트 안의 모든 HTTP 요청이 세션 하나를 공유하므로
+    identity map도 공유된다. 운영에서는 요청마다 세션이 따로다. "요청 간
+    재조회가 필요한" 버그는 이 하네스로 잡히지 않는다.
+    """
+
+    async def _get_session() -> AsyncIterator[AsyncSession]:
+        try:
+            yield db_session
+        except Exception:
+            await db_session.rollback()
+            # 반드시 다시 올려야 한다. FastAPI 0.141은 yield 의존성이 예외를
+            # 삼키면 FastAPIError를 낸다.
+            raise
+
+    app.dependency_overrides[get_session] = _get_session
+    yield
+    app.dependency_overrides.pop(get_session, None)
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def client() -> AsyncIterator[AsyncClient]:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url=TEST_BASE_URL) as c:
+        yield c
