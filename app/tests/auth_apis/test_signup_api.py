@@ -59,3 +59,14 @@ class TestSignupAPI:
         )
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    async def test_signup_creates_a_free_subscription(self, client: AsyncClient) -> None:
+        email = "withsub@example.com"
+        await client.post("/api/v1/auth/signup", json={"email": email, "password": "Password123!"})
+        login = await client.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
+        token = login.json()["data"]["access_token"]
+
+        response = await client.get("/api/v1/subscription", headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["data"]["plan"] == "FREE"
