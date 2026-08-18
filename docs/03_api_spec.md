@@ -1,181 +1,334 @@
-# API 및 로컬 기능 명세서 — 초안
+# API 및 로컬 기능 계약
 
-> 담당: 권민재(주도), 정다원(보조)
-> 관련 문서: [01_requirements.md](01_requirements.md), [08_account_profile_policy.md](08_account_profile_policy.md)
+> 상태: 상세 목표 계약 1.0 초안
+>
+> 서버 계약 원본: [OpenAPI 3.1](api/openapi.yaml)
+>
+> 로컬 계약 원본: [브라우저 로컬 데이터 계약](10_local_data_contract.md)
+>
+> 데이터 모델: [서버·로컬 ERD](02_erd.md), [PostgreSQL DDL](database/0002_service_domain.sql)
+> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-003](adr/0003-web-authentication-token-transport.md)
 
-## 1. 경계 원칙
+## 1. 계약 분리
 
-서버 API는 서비스 계정, 구독, 가족 초대와 최소 연결정보만 처리한다. 건강기록·원본 서류·가족력·OCR·예측·변경 이력은 서버 API로 전송하지 않고 기기 내 기능으로 처리한다.
+이어봄에는 서로 다른 세 종류의 계약이 있다.
 
-```text
-서버 API: 인증 / 구독 / 초대 / 최소 프로필 연결 / 기기 등록
-로컬 기능: 프로필 / 건강기록 / OCR / 예측 / 백업 / 병합 / 동기화
-```
+| 계약 | 실행 위치 | 다루는 데이터 | 원본 문서 |
+|---|---|---|---|
+| Service Metadata REST API | FastAPI·PostgreSQL | 인증, 계정, 구독, 가정, 초대, 불투명 프로필 연결 | `docs/api/openapi.yaml` |
+| Local Domain API | 브라우저 TypeScript | 가족 프로필, 건강기록, 가족력, OCR, 예측, 병합, 변경 이력 | `docs/10_local_data_contract.md` |
+| Backup Container | 브라우저·사용자 파일 | 허용된 로컬 데이터를 묶은 암호화 백업·이전 파일 | `docs/10_local_data_contract.md` §8 |
 
-## 2. 서버 API 공통 규칙
+건강기록 CRUD를 FastAPI 엔드포인트로 만들지 않는다. 프론트엔드가 로컬 저장소에 접근할 때도 UI 컴포넌트가 IndexedDB나 OPFS를 직접 호출하지 않고 Local Domain API를 사용한다.
 
-- Base URL: `/api/v1`
-- 인증: `Authorization: Bearer <access_token>`
-- 응답: `{ "data": ..., "message": "...", "success": true }`
-- 오류: `{ "error_code": "...", "message": "...", "success": false }`
-- 요청·응답에 건강정보 원문, 프로필 이름·생년·관계, 기록 개수를 포함하지 않는다.
+## 2. 서버 API 전역 규칙
 
-**토큰 전송 (구현 확정).** Access Token은 응답 `data`로 발급하고 클라이언트 메모리에만 보관한 뒤 `Authorization: Bearer` 헤더로 전송한다. Refresh Token은 응답 본문이나 JavaScript 저장소에 노출하지 않고 `Secure; HttpOnly; SameSite=Lax; Path=/` 쿠키로만 전달한다. `POST /auth/refresh`는 요청 본문을 받지 않으며 브라우저가 쿠키를 자동으로 전송한다. 성공할 때마다 Refresh Token을 회전하고, 이미 사용된 토큰이 재사용되면 해당 계정의 Refresh Token 패밀리 전체를 무효화한다. 인증 라우트에 `Origin`이 있으면 CORS 허용 목록과 정확히 일치해야 한다.
+### 2.1 프로토콜
 
-로그인과 갱신의 성공 응답 `data`는 다음 형태이며 Refresh Token은 포함하지 않는다.
+| 항목 | 값 |
+|---|---|
+| Base URL | `/api/v1` |
+| 명세 | OpenAPI 3.1 |
+| 요청·응답 | `application/json; charset=utf-8` |
+| 시간 | UTC RFC 3339, 예: `2026-08-18T09:30:00Z` |
+| 서버 엔티티 ID | UUID v4 |
+| 서비스 계정 ID | UUID v4 |
+| 페이지 크기 | 기본 20, 최소 1, 최대 100 |
+| 목록 방식 | 불투명 cursor 기반 |
+| Access Token | `Authorization: Bearer <JWT>`, 기본 15분 |
+| Refresh Token | Secure·HttpOnly·SameSite=Lax 쿠키, 본문 반환 금지 |
+| 동시 수정 | `row_version`과 `If-Match: "<version>"` |
+| 요청 추적 | 서버가 UUID `request_id`를 생성하고 오류 응답·로그에 기록 |
+
+Pydantic 요청 모델은 `extra="forbid"`로 정의한다. 허용 DTO에 없는 필드는 `422 VALIDATION_ERROR`로 거부한다. 이는 건강정보가 실수로 서버 DTO에 추가되는 것을 막는 첫 번째 경계다.
+
+### 2.2 성공 응답
+
+성공 응답은 공통 봉투를 사용한다. `data`의 구체적인 형태는 엔드포인트별 OpenAPI 스키마로 고정한다.
 
 ```json
 {
-  "access_token": "<short-lived-jwt>",
-  "token_type": "bearer",
-  "expires_in": 900
+  "data": {
+    "id": "82f809e0-c995-4c06-82cc-ec062a88be63",
+    "status": "active"
+  },
+  "message": "요청이 완료되었습니다.",
+  "success": true
 }
 ```
 
-브라우저는 교차 오리진 개발 환경에서 `credentials: "include"`를 사용해야 한다. 운영에서는 프론트엔드와 `/api`를 같은 사이트로 배치한다. 여러 탭이 동시에 갱신해 1회성 Refresh Token을 경쟁하지 않도록 프론트엔드는 단일 탭에서 요청을 합치고, 탭 간에는 Web Locks 또는 `BroadcastChannel`로 갱신 결과를 공유한다. 서버 측 짧은 재시도 유예·멱등 처리는 별도 보안 검토 후 후속 작업으로 다룬다.
-
-**`DELETE`가 본문을 가진 경우 상태 코드는 200이다.** 위 봉투가 모든 응답에 필수이고 204는 본문을 가질 수 없기 때문이다. `DELETE /account`가 여기 해당한다.
-
-## 3. 서버 엔드포인트
-
-### 인증·계정 — 1순위
-
-| Method | Endpoint | 설명 | 인증 |
-|---|---|---|---|
-| POST | `/auth/signup` | 서비스 계정 생성 | N |
-| POST | `/auth/login` | 로그인과 토큰 발급 | N |
-| POST | `/auth/refresh` | Access Token 갱신 | Refresh |
-| POST | `/auth/logout` | 로그아웃 | Y |
-| GET | `/account` | 계정·구독 요약 | Y |
-| DELETE | `/account` | 서비스 계정 해지(로컬 데이터 미삭제) | Y |
-
-### 구독·라이선스 — 1순위
-
-| Method | Endpoint | 설명 | 인증 |
-|---|---|---|---|
-| GET | `/subscription` | 구독·라이선스 상태 조회 | Y |
-| POST | `/subscription/change` | 플랜 변경 요청 | Y |
-
-`POST /subscription/change` 요청 본문:
+### 2.3 오류 응답
 
 ```json
-{ "plan": "FREE" }
+{
+  "error_code": "PROFILE_ALREADY_LINKED",
+  "message": "이 가정에서 이미 다른 로컬 프로필과 연결되어 있습니다.",
+  "success": false,
+  "details": null
+}
 ```
 
-`plan`은 `FREE` · `BASIC` · `FAMILY` 중 하나다. 결제 연동은 범위 밖이라 요청 즉시 상태에 반영한다. 이미 적용된 플랜을 다시 요청하면 `PLAN_CHANGE_NOT_ALLOWED`(409)를 반환한다 — 종단 상태가 이미 같아도 조용히 200을 주면 클라이언트 버그를 숨기기 때문이다(`DELETE /account`의 멱등 200과는 의도적으로 다르다).
+오류 메시지에는 이메일을 제외한 개인정보, 토큰, 불투명 참조값 전체, 건강정보를 넣지 않는다. 서버 내부 예외 메시지와 SQL을 그대로 반환하지 않는다.
 
-### 가족 초대 — 2순위
+| HTTP | 코드 | 발생 조건 |
+|---:|---|---|
+| 400 | `INVALID_REQUEST` | JSON은 유효하지만 요청 조합이 잘못됨 |
+| 401 | `AUTHENTICATION_REQUIRED` | Access Token 누락·만료·위조 |
+| 403 | `PERMISSION_DENIED` | 현재 계정이 작업 대상의 참여자가 아님 |
+| 404 | `RESOURCE_NOT_FOUND` | 대상이 없거나 존재를 숨겨야 함 |
+| 409 | `EMAIL_ALREADY_EXISTS` | 대소문자 무시 이메일 중복 |
+| 409 | `INVITATION_ALREADY_PENDING` | 같은 가정·이메일·프로필에 대기 초대 존재 |
+| 409 | `INVITATION_STATE_CONFLICT` | 대기 상태가 아닌 초대의 수락·거절·취소 |
+| 409 | `PROFILE_ALREADY_LINKED` | 계정이 같은 가정의 다른 프로필에 연결됨 |
+| 409 | `PROFILE_REF_ALREADY_CLAIMED` | 같은 프로필 참조값에 다른 계정이 연결됨 |
+| 409 | `ACTIVE_MEMBERS_REMAIN` | 다른 활성 구성원이 있는 가정 폐쇄 시도 |
+| 410 | `INVITATION_EXPIRED` | 초대 만료 |
+| 412 | `VERSION_MISMATCH` | `If-Match`와 `row_version` 불일치 |
+| 422 | `VALIDATION_ERROR` | 형식·길이·enum·금지 필드 오류 |
+| 422 | `HEALTH_DATA_NOT_ALLOWED` | 서버 금지 데이터가 감지됨 |
+| 429 | `RATE_LIMITED` | 인증·초대 등의 속도 제한 초과 |
+| 503 | `DEPENDENCY_UNAVAILABLE` | 결제사 등 외부 시스템 일시 실패 |
 
-| Method | Endpoint | 설명 | 인증 |
+### 2.4 멱등성
+
+다음 변경 요청은 `Idempotency-Key` 헤더를 필수로 사용한다.
+
+- 가정 생성·폐쇄
+- 구독 변경 시작
+- 초대 생성·수락·거절·취소
+- 프로필 연결·연결 해제
+- 계정 폐쇄
+
+규칙:
+
+1. 값은 클라이언트가 생성한 16~72자의 문자열이다.
+2. 서버는 `(account_id, operation, idempotency_key)` 단위로 24시간 보존한다.
+3. 같은 키와 같은 요청 해시는 이전 상태 코드와 응답을 반환한다.
+4. 같은 키에 다른 요청 본문이 오면 `409 IDEMPOTENCY_KEY_REUSED`를 반환한다.
+5. 비밀번호, Refresh Token과 건강정보는 멱등성 응답 저장소에 넣지 않는다.
+
+### 2.5 낙관적 잠금
+
+변경 가능한 서버 엔티티는 `row_version bigint`를 가진다. 조회 응답의 `row_version=3`이면 변경 요청에 `If-Match: "3"`을 보낸다. PostgreSQL 갱신은 다음 조건을 사용한다.
+
+```sql
+UPDATE family_invitations
+SET status = 'accepted', accepted_at = now(), accepted_by_account_id = :account_id
+WHERE id = :invitation_id
+  AND status = 'pending'
+  AND row_version = :expected_version
+RETURNING *;
+```
+
+반환 행이 없으면 현재 상태를 재조회해 존재하지 않음, 상태 충돌, 버전 충돌을 구분한다.
+
+## 3. 인증·계정 계약
+
+### 3.1 `POST /auth/signup`
+
+요청:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "correct horse battery staple"
+}
+```
+
+| 필드 | 타입 | 필수 | 제약 |
+|---|---|---:|---|
+| `email` | email string | Y | 최대 254자, 대소문자 무시 유일 |
+| `password` | string | Y | 8~72자, 서버 로그 금지 |
+
+응답은 `201 ServiceAccountResponse`이며 비밀번호 해시를 반환하지 않는다. 서비스 가입에 이름, 가족관계, 성별, 생년, 전화번호와 건강정보를 요구하지 않는다.
+
+### 3.2 `POST /auth/login`
+
+요청은 `email`, `password`이며 응답은 다음과 같다.
+
+```json
+{
+  "data": {
+    "access_token": "eyJ...",
+    "token_type": "bearer",
+    "expires_in": 900
+  },
+  "message": "로그인이 완료되었습니다.",
+  "success": true
+}
+```
+
+- 인증 실패는 계정 존재 여부를 구분하지 않고 `401 INVALID_CREDENTIALS`로 통일한다.
+- Refresh Token 원문은 PostgreSQL에 저장하지 않고 Redis의 만료되는 allowlist에서 JTI만 추적한다.
+- Refresh Token 재사용이 탐지되면 같은 세션 계열을 모두 폐기한다.
+
+### 3.3 `POST /auth/refresh`
+
+Refresh Token은 `Secure·HttpOnly·SameSite=Lax` 쿠키로만 받는다. 성공 시 Access Token과 회전된 Refresh Token 쿠키를 발급한다. 요청에 Origin이 있으면 허용 목록과 정확히 일치해야 하며 `GET` 메서드로 토큰을 갱신하지 않는다.
+
+### 3.4 `GET·DELETE /account`
+
+- `GET`: 계정 ID, 이메일, 상태, 생성 시각과 구독 요약을 반환한다.
+- `DELETE`: 계정과 Refresh Token 계열을 폐쇄한다. 로컬 건강정보는 건드리지 않는다.
+
+## 4. 가정·구독 계약
+
+### 4.1 가정 컨테이너
+
+가정은 서버에서 초대와 계정 연결을 묶기 위한 UUID 컨테이너다. 가정 이름, 주소, 가족관계, 구성원 수, 건강정보 요약을 저장하지 않는다.
+
+| Method | Path | Request | Response |
 |---|---|---|---|
-| POST | `/family-invitations` | 기존 로컬 프로필 참조값을 대상으로 초대 생성 | Y |
-| GET | `/family-invitations` | 보낸·받은 초대 상태 조회 | Y |
-| POST | `/family-invitations/{id}/accept` | 초대 수락 | Y |
-| POST | `/family-invitations/{id}/decline` | 초대 거절 | Y |
-| DELETE | `/family-invitations/{id}` | 대기 중 초대 취소 | Y |
+| POST | `/households` | 빈 JSON 객체 | `201 HouseholdResponse` |
+| GET | `/households` | 없음 | 참여 가정 배열 |
+| GET | `/households/{id}` | 없음 | `200 HouseholdResponse` |
+| DELETE | `/households/{id}` | 헤더만 | `204` |
 
-### 최소 프로필 연결 — 2순위
+가정 생성자는 `household_memberships`의 첫 활성 구성원이 된다. 이는 건강정보 접근 권한이나 대표 관리자 역할을 의미하지 않는다.
 
-| Method | Endpoint | 설명 | 인증 |
-|---|---|---|---|
-| POST | `/profile-links` | 수락한 초대와 기존 로컬 프로필 참조값 연결 | Y |
-| GET | `/profile-links/me` | 현재 계정의 연결 상태 조회 | Y |
-| DELETE | `/profile-links/{id}` | 계정·프로필 연결 해제 | Y |
+### 4.2 구독
 
-### 기기 상태 — 3순위
+| Method | Path | 설명 |
+|---|---|---|
+| GET | `/subscription` | 현재 구독 조회 |
+| POST | `/subscription/change` | 플랜 변경 또는 결제 절차 시작 |
 
-| Method | Endpoint | 설명 | 인증 |
-|---|---|---|---|
-| POST | `/devices` | 기기 등록과 공개 연결정보 저장 | Y |
-| GET | `/devices` | 연결 가능한 본인 기기 조회 | Y |
-| DELETE | `/devices/{id}` | 기기 등록 해제 | Y |
+결제사 Webhook은 공개 클라이언트 API와 분리하고 서명 검증에 성공한 이벤트만 처리한다. 구독이 종료되어도 브라우저 로컬 데이터를 삭제하지 않는다.
 
-서버의 기기 API는 건강정보를 중계하거나 저장하지 않는다. 실제 건강정보 전송은 사용자가 승인한 기기끼리 암호화해 수행한다.
+## 5. 가족 초대 상태 머신
 
-## 4. 초대·프로필 연결 계약
+```text
+pending ──accept──> accepted
+   ├────decline──> declined
+   ├────cancel───> cancelled
+   └────timeout──> expired
+```
+
+종료 상태에서 다른 상태로 전이하지 않는다. 재초대는 새 초대 행을 만든다.
+
+### 5.1 초대 생성
 
 `POST /family-invitations`
 
 ```json
 {
+  "household_id": "0d27a026-ed25-4b68-a9ca-9fb219c45876",
   "invitee_email": "family@example.com",
-  "household_ref": "opaque-household-ref",
-  "target_profile_ref": "opaque-profile-ref"
+  "target_profile_ref": "5FT17CTFGGFQfHLFF09m35gJ8wF3JzY0LyD4fZvVfEI"
 }
 ```
 
-서버 참조값은 이름, 관계, 생년 또는 건강정보를 포함하지 않는 불투명 값이어야 한다.
+`target_profile_ref`는 브라우저가 CSPRNG로 만든 32바이트 이상의 base64url 값이다. 로컬 프로필 ID, 이름, 생년, 관계를 암호화하거나 인코딩한 값이 아니어야 한다.
 
-초대 수락 후 `POST /profile-links`가 성공해도 건강정보 전송은 시작하지 않는다. 별도의 접근 범위 확인과 기기 연결이 완료되어야 한다.
+서버 처리 순서:
 
-## 5. 기기 로컬 기능 인터페이스
+1. 요청 계정이 가정의 활성 구성원인지 확인한다.
+2. 같은 가정·이메일·프로필 참조값의 대기 초대가 있는지 확인한다.
+3. 32바이트 초대 토큰을 생성하고 SHA-256 해시만 DB에 저장한다.
+4. 만료 시각을 생성 시각으로부터 7일로 설정한다.
+5. 이메일에는 원문 토큰이 포함된 HTTPS 링크만 전송한다.
+6. 감사 로그에는 초대 ID와 이벤트 종류만 기록하고 토큰·프로필 참조값 전체를 기록하지 않는다.
 
-다음 기능은 서버 REST API가 아니라 프론트엔드의 로컬 저장·도메인 계층에서 제공한다.
+### 5.2 초대 수락·거절·취소
 
-| 기능 | 입력 | 결과 | 우선순위 |
-|---|---|---|---:|
-| 로컬 프로필 생성 | 이름·관계·생년 | `family_profile` 저장 | 1 |
-| 건강기록 CRUD | 프로필·기록 값 | 로컬 이력 갱신 | 1 |
-| 암호화 백업 | 로컬 가정 데이터·비밀번호 | 암호화 파일 | 1 |
-| OCR | 원본 이미지 | 로컬 인식 결과·신뢰도 | 2 |
-| 프로필 비교 | source·target 프로필 | 충돌 목록 | 2 |
-| 프로필 병합 | 사용자 충돌 선택 | 병합 결과·복구 지점 | 2 |
-| 병합 취소 | 병합 작업 ID | 병합 전 상태 복원 | 2 |
-| 기기 동기화 | 허용 범위·암호화 세션 | 상대 기기 로컬 저장 | 3 |
+- 수락자는 로그인 이메일과 초대 이메일이 일치해야 한다.
+- 수락 시 `household_memberships`를 생성하거나 기존 `left` 멤버십을 활성화한다.
+- 수락만으로 `profile_links`를 생성하지 않는다.
+- 수락·연결만으로 건강정보 파일을 서버에 업로드하거나 다운로드하지 않는다.
+- 만료 판정은 `status`뿐 아니라 `expires_at <= now()`도 확인하고 원자적으로 `expired`로 전환한다.
 
-## 6. 프로필 병합 처리 순서
+## 6. 프로필 연결 계약
 
-1. source와 target이 같은 사람인지 확인한다.
-2. 병합 전 복구 지점을 생성한다.
-3. 기본정보·기록·파일·가족력 충돌을 계산한다.
-4. 사용자가 충돌별 처리 방법을 선택한다.
-5. 로컬 트랜잭션으로 target에 데이터를 반영한다.
-6. 서비스 계정 연결을 target 참조값으로 변경한다.
-7. source를 숨김 처리하고 되돌리기 기한을 저장한다.
+`POST /profile-links`
 
-서버 연결 변경이 실패하면 로컬 병합을 완료 상태로 확정하지 않고 복구 가능한 상태로 남겨야 한다.
+```json
+{
+  "invitation_id": "2975850e-f743-4899-95e7-306c61878958",
+  "local_profile_ref": "5FT17CTFGGFQfHLFF09m35gJ8wF3JzY0LyD4fZvVfEI"
+}
+```
 
-## 7. 주요 오류 코드
+사전조건:
 
-### 7.1 인증·계정·구독 — 공통 오류 (구현 확정)
+- 초대가 `accepted` 상태다.
+- 현재 계정이 초대를 수락한 계정이다.
+- 요청 참조값과 초대의 `target_profile_ref`가 일치한다.
+- 현재 계정은 같은 가정에서 활성 프로필 연결이 없다.
+- 해당 참조값은 같은 가정의 다른 활성 계정에 연결되어 있지 않다.
 
-`error_code`는 봉투(§2)의 필수 필드다. 아래는 인증·계정·구독 1순위 API가 실제로 반환하는 오류 코드다.
+PostgreSQL 트랜잭션:
 
-| 오류 코드 | 상태 코드 | 의미 |
+1. 초대 행을 `SELECT ... FOR UPDATE`로 잠근다.
+2. 상태, 수락 계정, 참조값을 확인한다.
+3. `profile_links`를 생성한다.
+4. `account_audit_events`에 `profile_link.created`를 기록한다.
+5. 커밋 후 응답한다.
+
+연결 성공 응답은 건강정보가 존재한다는 의미가 아니다. 실제 건강정보 이전은 사용자가 로컬에서 암호화 이전 파일을 만들고 상대가 가져오는 별도 흐름이다.
+
+## 7. 서버 데이터 금지 규칙
+
+다음 필드나 내용이 서버 DTO·DB·Redis·로그·메트릭 태그·오류 추적·작업 큐에 들어가면 결함으로 처리한다.
+
+- 로컬 프로필 이름, 관계, 생년
+- 혈압·혈당·검사 수치·통증·가족력·유전정보
+- 건강서류 파일명·본문·OCR 원문·확정값
+- 예측 입력·결과·질환명
+- 프로필별 기록 개수와 건강정보 기반 요약
+- 백업 파일, 암호화 건강정보 본문과 복호화 키
+
+`target_profile_ref`와 `local_profile_ref`는 허용되지만 다음 조건을 모두 지켜야 한다.
+
+- 최소 256비트 무작위성
+- base64url 표현
+- 가정·프로필 내용과 독립적
+- 서버 로그에서는 앞 6자만 남기거나 완전히 마스킹
+- 해지·연결 해제 후 재사용 금지
+
+## 8. 로컬 기능과 서버 보상 처리
+
+프로필 병합은 브라우저 로컬 트랜잭션과 서버 연결 변경을 동시에 수행하므로 분산 원자성이 없다. 다음 순서를 사용한다.
+
+```text
+로컬 복구 지점 생성
+→ 로컬 병합 staged
+→ 서버 profile_link 연결 또는 재연결
+→ 서버 성공
+→ 로컬 병합 committed, source hidden
+```
+
+서버 요청이 실패하면 로컬 작업은 `awaiting_server` 또는 `rollback_required` 상태로 남긴다. 성공을 추정해 source 데이터를 삭제하지 않는다. 재시도에는 같은 `Idempotency-Key`를 사용한다.
+
+## 9. WebRTC 경계
+
+WebRTC 직접 전송은 현재 OpenAPI에서 제외한다. 기술검증을 통과하면 별도 ADR과 API 버전에서 다음 메타데이터만 추가할 수 있다.
+
+- 페어링 세션 ID와 만료 시각
+- 일회성 시그널링 메시지
+- 기기 공개키와 기기 확인 상태
+- 연결 성공·실패 상태
+
+건강정보 본문을 시그널링 API 또는 PostgreSQL에 저장하는 설계는 허용하지 않는다. TURN 중계를 사용할 경우 암호문이 서버를 통과한다는 사실과 보존·로그 정책을 별도로 검토한다.
+
+## 10. 현재 코드와 목표 계약의 차이
+
+| 현재 구현 | 목표 계약 | 필요한 변경 |
 |---|---|---|
-| `VALIDATION_ERROR` | 422 | 요청 본문·쿼리 검증 실패 |
-| `NOT_FOUND` | 404 | 존재하지 않는 경로 |
-| `METHOD_NOT_ALLOWED` | 405 | 허용되지 않은 HTTP 메서드 |
-| `RATE_LIMITED` | 429 | 요청 빈도 초과 (예약, 현재 미적용) |
-| `SERVICE_UNAVAILABLE` | 503 | Redis 등 의존 서비스 장애로 일시 처리 불가 |
-| `INTERNAL_ERROR` | 500 | 처리되지 않은 서버 오류 |
-| `AUTH_REQUIRED` | 401 | 인증 토큰 누락 |
-| `CREDENTIALS_INVALID` | 401 | 이메일 또는 비밀번호 불일치 (계정 열거 방지를 위해 두 경우 동일 응답) |
-| `EMAIL_ALREADY_REGISTERED` | 409 | 이미 가입된 이메일로 재가입 시도 |
-| `TOKEN_INVALID` | 401 | 서명·형식이 잘못된 토큰 |
-| `TOKEN_EXPIRED` | 401 | 만료된 토큰 |
-| `TOKEN_REVOKED` | 401 | 무효화된(로그아웃·해지 등) 토큰 |
-| `TOKEN_REUSE_DETECTED` | 401 | 이미 소비된 Refresh Token 재사용 시도 — 해당 계정의 토큰 패밀리 전체 무효화 |
-| `ORIGIN_NOT_ALLOWED` | 403 | CORS 허용 목록에 없는 브라우저 출처의 인증 요청 |
-| `ACCOUNT_NOT_FOUND` | 401 | 토큰의 계정이 존재하지 않음 (재인증 유도, 계정 존재 여부 비노출) |
-| `ACCOUNT_SUSPENDED` | 403 | 이용 정지된 계정 |
-| `ACCOUNT_CLOSED` | 403 | 해지된 계정 |
-| `SUBSCRIPTION_NOT_FOUND` | 404 | 계정에 연결된 구독 정보 없음 (정상 상태에서는 발생하지 않아야 함) |
-| `SUBSCRIPTION_INACTIVE` | 409 | 활성 상태가 아닌 구독에 대한 조작 시도 |
-| `PLAN_CHANGE_NOT_ALLOWED` | 409 | 이미 적용된 플랜으로 변경 요청 |
+| 가입 시 성별·생년·전화번호 필수 | 이메일·비밀번호·표시 이름만 필수 | DTO·검증기·테스트 수정 |
+| 이메일 유일 인덱스 없음 | `lower(email)` 유일 | DDL·Alembic 반영 |
+| Refresh가 `GET /auth/token/refresh` | `POST /auth/refresh` + 회전 세션 | 라우터·세션 테이블 구현 |
+| Refresh Token DB 추적 없음 | 해시 저장·회전·폐기 | `auth_sessions` 구현 |
+| 공통 오류가 FastAPI `detail` 형태 | `ErrorResponse` | 예외 핸들러 구현 |
+| `row_version` 없음 | `If-Match` 낙관적 잠금 | 모델·Repository 수정 |
+| 가정·구독·초대·연결 API 없음 | OpenAPI 정의 완료 | 2순위 구현 |
 
-### 7.2 가족 초대·프로필 연결·기기 — 2·3순위 (미구현)
+OpenAPI는 목표 계약이며 현재 FastAPI 코드가 자동으로 충족한다는 뜻이 아니다. 구현 PR은 OpenAPI 계약 테스트를 추가하고 차이를 하나씩 제거해야 한다.
 
-| 오류 코드 | 의미 |
-|---|---|
-| `INVITATION_EXPIRED` | 초대 만료 |
-| `PROFILE_ALREADY_LINKED` | 같은 가정에서 계정이 이미 다른 프로필에 연결됨 |
-| `PROFILE_REF_INVALID` | 유효하지 않은 불투명 프로필 참조값 |
-| `PROFILE_MERGE_CONFLICT` | 사용자 확인이 필요한 병합 충돌 |
-| `PROFILE_MERGE_NOT_SAFE` | 서로 다른 사람일 가능성으로 병합 중단 |
-| `DEVICE_PAIRING_REQUIRED` | 건강정보 전송 전 기기 연결 필요 |
-| `LOCAL_ROLLBACK_REQUIRED` | 서버 연결 변경 실패로 로컬 복구 필요 |
+## 11. 완료 기준
 
-## 8. 미확정 사항
-
-대표 관리자·공동 관리자와 같은 별도 역할 기반 API는 만들지 않는다. 역할 정책이 확정된 후 별도 요구사항과 API로 추가한다.
+- OpenAPI 문서가 파서와 린터를 통과한다.
+- 모든 요청 DTO가 정의되지 않은 필드를 거부한다.
+- OpenAPI 응답과 FastAPI 실제 응답에 대한 계약 테스트가 통과한다.
+- DDL의 유일·부분 인덱스와 상태 `CHECK`가 상태 머신을 방어한다.
+- 서버 네트워크 캡처와 로그 검사에서 건강정보가 발견되지 않는다.
+- 로컬 기능은 네트워크가 없어도 프로필·건강기록·백업 기능을 수행한다.

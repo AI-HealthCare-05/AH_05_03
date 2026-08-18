@@ -1,0 +1,725 @@
+openapi: 3.1.0
+info:
+  title: 이어봄 Service Metadata API
+  version: 1.0.0-target-draft
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+  description: |
+    서비스 계정, 구독, 가정, 가족 초대와 불투명 로컬 프로필 연결만 처리한다.
+    건강기록, 가족력, 통증 기록, 건강서류, OCR 결과, 예측 결과와 로컬 변경 이력은
+    이 API의 요청·응답·로그·작업 큐에 포함할 수 없다.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+    description: 서비스 계정 가입, 로그인, 토큰 회전과 로그아웃
+  - name: Account
+    description: 현재 서비스 계정 조회, 수정과 폐쇄
+  - name: Households
+    description: 가족 초대와 연결을 묶는 비건강정보 가정 컨테이너
+  - name: Subscriptions
+    description: 서비스 계정의 구독·라이선스 상태
+  - name: Invitations
+    description: 가족 서비스 계정 초대와 수락 상태
+  - name: ProfileLinks
+    description: 서비스 계정과 불투명 로컬 프로필 참조값 연결
+
+paths:
+  /auth/signup:
+    post:
+      tags: [Auth]
+      operationId: signUp
+      security: []
+      summary: 서비스 계정을 생성한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignUpRequest'
+      responses:
+        '201':
+          description: 계정 생성 완료
+          headers:
+            Location:
+              schema: { type: string, example: /api/v1/account }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceAccountResponse'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      security: []
+      summary: 로그인하고 Access Token을 발급한다.
+      description: Refresh Token은 응답 본문이 아닌 Secure, HttpOnly, SameSite=Lax 쿠키로만 발급한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 로그인 완료
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: __Host-ieobom_refresh=...; Path=/; HttpOnly; Secure; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '423':
+          description: 비활성화 또는 폐쇄된 계정
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      security: []
+      summary: Refresh Token을 회전하고 새 Access Token을 발급한다.
+      description: 쿠키가 포함된 브라우저 요청은 허용된 Origin과 정확히 일치해야 한다.
+      responses:
+        '200':
+          description: 토큰 회전 완료
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: 현재 Refresh Token 세션을 폐기한다.
+      responses:
+        '204':
+          description: 로그아웃 완료. 이미 폐기된 세션에도 동일하게 응답한다.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /account:
+    get:
+      tags: [Account]
+      operationId: getMe
+      summary: 현재 서비스 계정을 조회한다.
+      responses:
+        '200':
+          description: 계정 조회 완료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServiceAccountResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags: [Account]
+      operationId: closeAccount
+      summary: 서비스 계정을 폐쇄한다.
+      description: 브라우저 로컬 건강정보는 삭제하지 않는다. 사용자가 별도로 로컬 데이터 삭제를 실행해야 한다.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: 계정 폐쇄 완료
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+
+  /households:
+    post:
+      tags: [Households]
+      operationId: createHousehold
+      summary: 가족 초대와 계정 연결을 묶는 가정 컨테이너를 생성한다.
+      description: 서버에는 가정 이름이나 가족 구성원 프로필 내용을 저장하지 않는다.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties: {}
+      responses:
+        '201':
+          description: 가정 생성 완료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HouseholdResponse' }
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      tags: [Households]
+      operationId: listHouseholds
+      summary: 현재 계정이 참여 중인 가정 목록을 조회한다.
+      responses:
+        '200':
+          description: 목록 조회 완료
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/HouseholdResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /households/{household_id}:
+    parameters:
+      - $ref: '#/components/parameters/HouseholdId'
+    get:
+      tags: [Households]
+      operationId: getHousehold
+      summary: 참여 중인 가정의 서버 상태를 조회한다.
+      responses:
+        '200':
+          description: 조회 완료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HouseholdResponse' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Households]
+      operationId: closeHousehold
+      summary: 가정의 서버 컨테이너를 폐쇄한다.
+      description: 로컬 프로필과 건강정보는 삭제하지 않는다. 다른 활성 구성원이 있으면 폐쇄할 수 없다.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: 폐쇄 완료
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+
+  /subscription:
+    get:
+      tags: [Subscriptions]
+      operationId: getMySubscription
+      summary: 현재 계정의 구독 상태를 조회한다.
+      responses:
+        '200':
+          description: 구독 조회 완료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionResponse' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /subscription/change:
+    post:
+      tags: [Subscriptions]
+      operationId: changeSubscription
+      summary: 구독 플랜 변경 절차를 시작한다.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionChangeRequest'
+      responses:
+        '200':
+          description: 즉시 변경 또는 결제 페이지 이동 정보
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionChangeResponse' }
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /family-invitations:
+    post:
+      tags: [Invitations]
+      operationId: createFamilyInvitation
+      summary: 기존 가족 구성원 로컬 프로필을 대상으로 서비스 계정 초대를 생성한다.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InvitationCreateRequest' }
+      responses:
+        '201':
+          description: 초대 생성 완료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationResponse' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+    get:
+      tags: [Invitations]
+      operationId: listFamilyInvitations
+      summary: 현재 계정이 보냈거나 받은 초대를 조회한다.
+      parameters:
+        - name: direction
+          in: query
+          required: false
+          schema: { type: string, enum: [sent, received], default: received }
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/InvitationStatus' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 초대 목록
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationPage' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /family-invitations/{invitation_id}:
+    parameters:
+      - $ref: '#/components/parameters/InvitationId'
+    get:
+      tags: [Invitations]
+      operationId: getFamilyInvitation
+      summary: 초대 상세 상태를 조회한다.
+      responses:
+        '200':
+          description: 조회 완료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationResponse' }
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Invitations]
+      operationId: cancelFamilyInvitation
+      summary: 보낸 대기 중 초대를 취소한다.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: 취소 완료
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+
+  /family-invitations/{invitation_id}/accept:
+    post:
+      tags: [Invitations]
+      operationId: acceptFamilyInvitation
+      summary: 받은 초대를 수락한다.
+      description: 초대 수락은 계정 참여만 확정하며 건강정보 다운로드나 로컬 프로필 자동 생성은 실행하지 않는다.
+      parameters:
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: 수락 완료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationResponse' }
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          description: 초대 만료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+
+  /family-invitations/{invitation_id}/decline:
+    post:
+      tags: [Invitations]
+      operationId: declineFamilyInvitation
+      summary: 받은 초대를 거절한다.
+      parameters:
+        - $ref: '#/components/parameters/InvitationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: 거절 완료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationResponse' }
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+
+  /profile-links:
+    post:
+      tags: [ProfileLinks]
+      operationId: createProfileLink
+      summary: 수락된 초대의 불투명 로컬 프로필 참조값과 서비스 계정을 연결한다.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfileLinkCreateRequest' }
+      responses:
+        '201':
+          description: 연결 완료. 건강정보 전송은 발생하지 않는다.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileLinkResponse' }
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /profile-links/me:
+    get:
+      tags: [ProfileLinks]
+      operationId: listMyProfileLinks
+      summary: 현재 계정의 불투명 프로필 연결 상태를 조회한다.
+      parameters:
+        - name: household_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: 연결 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ProfileLinkResponse' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /profile-links/{profile_link_id}:
+    delete:
+      tags: [ProfileLinks]
+      operationId: unlinkProfile
+      summary: 서비스 계정과 불투명 로컬 프로필 참조값의 연결을 해제한다.
+      description: 브라우저의 로컬 프로필과 건강정보는 삭제하지 않는다.
+      parameters:
+        - $ref: '#/components/parameters/ProfileLinkId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204':
+          description: 연결 해제 완료
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    HouseholdId:
+      name: household_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    InvitationId:
+      name: invitation_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ProfileLinkId:
+      name: profile_link_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: 동일 계정·operation에서 24시간 동안 유효한 16~72자의 클라이언트 생성 키
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 72
+        pattern: '^[A-Za-z0-9._:-]+$'
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: '조회 응답의 row_version. 예: "3"'
+      schema: { type: string, pattern: '^"[1-9][0-9]*"$' }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 512 }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  responses:
+    Unauthorized:
+      description: Access Token 누락·만료·위조
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Forbidden:
+      description: 인증됐으나 대상 작업 권한 없음
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    NotFound:
+      description: 대상이 없거나 조회 권한이 없어 존재를 숨김
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: 현재 상태 또는 유일성 제약과 충돌
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    PreconditionFailed:
+      description: If-Match row_version 불일치
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ValidationError:
+      description: 요청 스키마 또는 비즈니스 입력 검증 실패
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  schemas:
+    SignUpRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 8, maxLength: 72, writeOnly: true }
+
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 72, writeOnly: true }
+
+    TokenResponse:
+      type: object
+      additionalProperties: false
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token: { type: string, minLength: 1 }
+        token_type: { type: string, const: bearer }
+        expires_in: { type: integer, minimum: 60, example: 900 }
+
+    ServiceAccountResponse:
+      type: object
+      additionalProperties: false
+      required: [id, email, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        status: { type: string, enum: [active, suspended, closed] }
+        created_at: { type: string, format: date-time }
+
+    HouseholdResponse:
+      type: object
+      additionalProperties: false
+      required: [id, status, membership_status, created_at, updated_at, row_version]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [active, closed] }
+        membership_status: { type: string, enum: [active, left] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        row_version: { type: integer, format: int64, minimum: 1 }
+
+    SubscriptionChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [plan_code]
+      properties:
+        plan_code: { type: string, minLength: 1, maxLength: 40, pattern: '^[a-z0-9_-]+$' }
+        success_url: { type: string, format: uri, maxLength: 2048 }
+        cancel_url: { type: string, format: uri, maxLength: 2048 }
+
+    SubscriptionResponse:
+      type: object
+      additionalProperties: false
+      required: [id, provider, plan_code, status, cancel_at_period_end, row_version]
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [internal, stripe, app_store, play_store] }
+        plan_code: { type: string }
+        status: { type: string, enum: [trialing, active, past_due, cancelled, expired] }
+        current_period_start: { type: [string, 'null'], format: date-time }
+        current_period_end: { type: [string, 'null'], format: date-time }
+        cancel_at_period_end: { type: boolean }
+        row_version: { type: integer, format: int64, minimum: 1 }
+
+    SubscriptionChangeResponse:
+      type: object
+      additionalProperties: false
+      required: [subscription, checkout_required]
+      properties:
+        subscription: { $ref: '#/components/schemas/SubscriptionResponse' }
+        checkout_required: { type: boolean }
+        checkout_url: { type: [string, 'null'], format: uri }
+
+    InvitationStatus:
+      type: string
+      enum: [pending, accepted, declined, expired, cancelled]
+
+    OpaqueLocalRef:
+      type: string
+      description: 32바이트 이상 CSPRNG로 만든 base64url 불투명 값. 프로필 내용을 인코딩하지 않는다.
+      minLength: 43
+      maxLength: 86
+      pattern: '^[A-Za-z0-9_-]+$'
+
+    InvitationCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [household_id, invitee_email, target_profile_ref]
+      properties:
+        household_id: { type: string, format: uuid }
+        invitee_email: { type: string, format: email, maxLength: 320 }
+        target_profile_ref: { $ref: '#/components/schemas/OpaqueLocalRef' }
+
+    InvitationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - household_id
+        - direction
+        - counterparty_email
+        - target_profile_ref
+        - status
+        - expires_at
+        - created_at
+        - updated_at
+        - row_version
+      properties:
+        id: { type: string, format: uuid }
+        household_id: { type: string, format: uuid }
+        direction: { type: string, enum: [sent, received] }
+        counterparty_email: { type: string, format: email }
+        target_profile_ref: { $ref: '#/components/schemas/OpaqueLocalRef' }
+        status: { $ref: '#/components/schemas/InvitationStatus' }
+        expires_at: { type: string, format: date-time }
+        accepted_at: { type: [string, 'null'], format: date-time }
+        declined_at: { type: [string, 'null'], format: date-time }
+        cancelled_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        row_version: { type: integer, format: int64, minimum: 1 }
+
+    InvitationPage:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/InvitationResponse' }
+        next_cursor: { type: [string, 'null'] }
+
+    ProfileLinkCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [invitation_id, local_profile_ref]
+      properties:
+        invitation_id: { type: string, format: uuid }
+        local_profile_ref:
+          allOf:
+            - $ref: '#/components/schemas/OpaqueLocalRef'
+          description: 초대의 target_profile_ref와 상수 시간 비교로 일치해야 한다.
+
+    ProfileLinkResponse:
+      type: object
+      additionalProperties: false
+      required: [id, household_id, local_profile_ref, status, linked_at, row_version]
+      properties:
+        id: { type: string, format: uuid }
+        household_id: { type: string, format: uuid }
+        local_profile_ref: { $ref: '#/components/schemas/OpaqueLocalRef' }
+        status: { type: string, enum: [active, unlinked] }
+        linked_at: { type: string, format: date-time }
+        unlinked_at: { type: [string, 'null'], format: date-time }
+        row_version: { type: integer, format: int64, minimum: 1 }
+
+    FieldError:
+      type: object
+      additionalProperties: false
+      required: [field, reason]
+      properties:
+        field: { type: string, example: invitee_email }
+        reason: { type: string, example: invalid_format }
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, request_id]
+          properties:
+            code: { type: string, pattern: '^[A-Z][A-Z0-9_]+$' }
+            message: { type: string }
+            request_id: { type: string, format: uuid }
+            field_errors:
+              type: array
+              items: { $ref: '#/components/schemas/FieldError' }
+            details:
+              type: object
+              additionalProperties: true

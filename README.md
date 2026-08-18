@@ -18,12 +18,20 @@
 |---|---|---|
 | [docs/01_requirements.md](docs/01_requirements.md) | 요구사항 정의서 (문제정의, 기능/비기능 요구사항, AI 실험 계획) | 오성민 |
 | [docs/02_erd.md](docs/02_erd.md) | ERD 초안 | 조현승 |
-| [docs/03_api_spec.md](docs/03_api_spec.md) | API 명세서 초안 | 권민재 |
+| [docs/03_api_spec.md](docs/03_api_spec.md) | 서버 REST API·로컬 기능 상세 목표 계약 | 권민재 |
+| [docs/api/openapi.yaml](docs/api/openapi.yaml) | 서비스 계정·구독·초대·프로필 연결 OpenAPI 3.1 계약 | 권민재 |
+| [docs/database/0002_service_domain.sql](docs/database/0002_service_domain.sql) | PostgreSQL 17 서버 메타데이터 실행 가능 DDL | 조현승·권민재 |
 | [docs/04_wireframe.md](docs/04_wireframe.md) | 화면 목록 및 흐름 가이드 (Figma 링크 예정) | 정다원 |
 | [docs/05_tech_architecture.md](docs/05_tech_architecture.md) | 기술 스택 선정 근거 + 시스템 아키텍처 | 전체 |
 | [docs/06_evaluation_plan.md](docs/06_evaluation_plan.md) | **참여기업 평가기준 20개 항목 ↔ 대응 전략 매핑표** | 전체 |
 | [docs/07_roadmap.md](docs/07_roadmap.md) | 공식 일정 + 스프린트별 팀원 R&R | 오성민 |
 | [docs/08_account_profile_policy.md](docs/08_account_profile_policy.md) | 서비스 계정·가족 구성원 로컬 프로필·초대·연결·병합 정책 | 전체 |
+| [docs/10_local_data_contract.md](docs/10_local_data_contract.md) | IndexedDB·OPFS·Web Crypto 기반 로컬 도메인 API와 백업 포맷 | 전체 |
+| [docs/adr/0001-web-local-first-architecture.md](docs/adr/0001-web-local-first-architecture.md) | 데스크톱 앱에서 웹 기반 로컬 우선 서비스로 전환한 아키텍처 결정 | 전체 |
+| [docs/adr/0002-separate-server-api-and-local-domain-contract.md](docs/adr/0002-separate-server-api-and-local-domain-contract.md) | 서버 REST API와 브라우저 Local Domain API를 분리한 아키텍처 결정 | 전체 |
+| [docs/adr/0003-web-authentication-token-transport.md](docs/adr/0003-web-authentication-token-transport.md) | Access JWT와 HttpOnly Refresh Cookie를 선택한 인증 결정 | 전체 |
+| [docs/adr/README.md](docs/adr/README.md) | ADR 추가·대체·대안 기록 원칙 | 전체 |
+| [docs/legacy/desktop-app/2026-08-18-pre-web-prd.md](docs/legacy/desktop-app/2026-08-18-pre-web-prd.md) | 웹 버전 완성 후 재검토할 데스크톱·Wi-Fi 동기화 구버전 백업 | 전체 |
 
 ## 지금 해야 할 일 (2026-08-12 기준)
 
