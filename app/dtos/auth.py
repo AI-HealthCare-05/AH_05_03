@@ -2,14 +2,14 @@ import uuid
 from datetime import datetime
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, EmailStr, Field
+from pydantic import AfterValidator, EmailStr, Field
 
 from app.core.validators import validate_password
-from app.dtos.base import BaseSerializerModel
+from app.dtos.base import BaseRequestModel, BaseSerializerModel
 from app.models.service_accounts import ServiceAccountStatus
 
 
-class SignUpRequest(BaseModel):
+class SignUpRequest(BaseRequestModel):
     # docs/03_api_spec.md 2절이 요청에 프로필 이름·생년을 넣지 못하게 하고,
     # docs/02_erd.md의 service_accounts에는 담을 컬럼도 없다.
     email: Annotated[EmailStr, Field(max_length=254)]
@@ -17,20 +17,35 @@ class SignUpRequest(BaseModel):
     password: Annotated[str, Field(min_length=8, max_length=72), AfterValidator(validate_password)]
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(BaseRequestModel):
     email: EmailStr
     # min_length을 두면 짧은 오답이 422로 새어 비밀번호 정책이 노출된다.
     password: str
 
 
-class LoginResponse(BaseModel):
+class RefreshRequest(BaseRequestModel):
+    # 스펙은 POST /auth/refresh(인증=Refresh)라고만 적고 전송 방식을
+    # 규정하지 않는다. 쿠키를 버리고 본문으로 옮겼다 — 별 오리진 SPA에서
+    # httpOnly 쿠키는 SameSite=None + allow_credentials=True가 필요해
+    # 지금 깨진 쿠키(만료 오설정 등)보다 공격면이 넓어진다.
+    refresh_token: Annotated[str, Field(min_length=1)]
+
+
+class SignUpData(BaseSerializerModel):
+    account_id: uuid.UUID = Field(validation_alias="id")
+    email: str
+    status: ServiceAccountStatus
+
+
+class TokenPairData(BaseSerializerModel):
     access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    refresh_expires_in: int
 
 
-class TokenRefreshResponse(LoginResponse): ...
-
-
-class AccountInfoResponse(BaseSerializerModel):
+class AccountInfo(BaseSerializerModel):
     id: uuid.UUID
     email: str
     status: ServiceAccountStatus
