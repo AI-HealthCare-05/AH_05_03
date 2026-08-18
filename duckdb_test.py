@@ -1,4 +1,5 @@
 import duckdb
+
 con = duckdb.connect()
 
 # Single year

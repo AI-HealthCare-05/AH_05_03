@@ -20,7 +20,19 @@
 - 오류: `{ "error_code": "...", "message": "...", "success": false }`
 - 요청·응답에 건강정보 원문, 프로필 이름·생년·관계, 기록 개수를 포함하지 않는다.
 
-**토큰 전송 (구현 시 확정).** Refresh Token은 httpOnly 쿠키가 아니라 요청 본문으로 전달한다 — `POST /auth/login`·`POST /auth/refresh`의 응답 `data`에 `access_token`·`refresh_token`이 함께 담기고, `POST /auth/refresh`는 `{"refresh_token": "..."}`를 받는다. 별 오리진 SPA에서 httpOnly 쿠키는 `SameSite=None; Secure` + `allow_credentials=True`가 필요해 지금 구조(본문 + `allow_credentials=False`)보다 공격면이 넓다. 대신 Refresh Token은 **회전(rotation)** 하며, 이미 사용된 토큰이 재사용되면 계정의 refresh 토큰 전체를 무효화한다.
+**토큰 전송 (구현 확정).** Access Token은 응답 `data`로 발급하고 클라이언트 메모리에만 보관한 뒤 `Authorization: Bearer` 헤더로 전송한다. Refresh Token은 응답 본문이나 JavaScript 저장소에 노출하지 않고 `Secure; HttpOnly; SameSite=Lax; Path=/` 쿠키로만 전달한다. `POST /auth/refresh`는 요청 본문을 받지 않으며 브라우저가 쿠키를 자동으로 전송한다. 성공할 때마다 Refresh Token을 회전하고, 이미 사용된 토큰이 재사용되면 해당 계정의 Refresh Token 패밀리 전체를 무효화한다. 인증 라우트에 `Origin`이 있으면 CORS 허용 목록과 정확히 일치해야 한다.
+
+로그인과 갱신의 성공 응답 `data`는 다음 형태이며 Refresh Token은 포함하지 않는다.
+
+```json
+{
+  "access_token": "<short-lived-jwt>",
+  "token_type": "bearer",
+  "expires_in": 900
+}
+```
+
+브라우저는 교차 오리진 개발 환경에서 `credentials: "include"`를 사용해야 한다. 운영에서는 프론트엔드와 `/api`를 같은 사이트로 배치한다. 여러 탭이 동시에 갱신해 1회성 Refresh Token을 경쟁하지 않도록 프론트엔드는 단일 탭에서 요청을 합치고, 탭 간에는 Web Locks 또는 `BroadcastChannel`로 갱신 결과를 공유한다. 서버 측 짧은 재시도 유예·멱등 처리는 별도 보안 검토 후 후속 작업으로 다룬다.
 
 **`DELETE`가 본문을 가진 경우 상태 코드는 200이다.** 위 봉투가 모든 응답에 필수이고 204는 본문을 가질 수 없기 때문이다. `DELETE /account`가 여기 해당한다.
 
@@ -144,6 +156,7 @@
 | `TOKEN_EXPIRED` | 401 | 만료된 토큰 |
 | `TOKEN_REVOKED` | 401 | 무효화된(로그아웃·해지 등) 토큰 |
 | `TOKEN_REUSE_DETECTED` | 401 | 이미 소비된 Refresh Token 재사용 시도 — 해당 계정의 토큰 패밀리 전체 무효화 |
+| `ORIGIN_NOT_ALLOWED` | 403 | CORS 허용 목록에 없는 브라우저 출처의 인증 요청 |
 | `ACCOUNT_NOT_FOUND` | 401 | 토큰의 계정이 존재하지 않음 (재인증 유도, 계정 존재 여부 비노출) |
 | `ACCOUNT_SUSPENDED` | 403 | 이용 정지된 계정 |
 | `ACCOUNT_CLOSED` | 403 | 해지된 계정 |

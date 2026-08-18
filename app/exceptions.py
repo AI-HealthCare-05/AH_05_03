@@ -64,6 +64,10 @@ class TokenStoreUnavailableError(AppError):
     error_code = ErrorCode.SERVICE_UNAVAILABLE
 
 
+class OriginNotAllowedError(AppError):
+    error_code = ErrorCode.ORIGIN_NOT_ALLOWED
+
+
 # --- account -------------------------------------------------------------
 class AccountNotFoundError(AppError):
     error_code = ErrorCode.ACCOUNT_NOT_FOUND

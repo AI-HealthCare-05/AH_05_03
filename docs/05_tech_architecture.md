@@ -83,7 +83,10 @@
 ## 7. 보안 고려사항
 
 - 비밀번호는 Argon2id 또는 검증된 비밀번호 해시로 서버에 저장한다.
-- Access Token은 짧게 유지하고 Refresh Token 회전 정책을 적용한다.
+- Access Token은 15분의 짧은 JWT로 유지하고 클라이언트 메모리에만 보관한다.
+- Refresh Token은 Secure HttpOnly SameSite 쿠키로만 전달하고 Redis allowlist에서 매번 회전한다.
+- 이미 소비된 Refresh Token 재사용 시 해당 계정의 Refresh Token 패밀리를 폐기한다.
+- 인증 라우트는 허용된 브라우저 Origin만 받아 CSRF 공격면을 제한한다.
 - 로컬 백업은 인증된 암호화(AES-GCM 등)와 강한 키 파생 함수를 사용한다.
 - 기기 연결에는 상대 기기 확인 코드 또는 QR 검증을 사용한다.
 - 서버 로그·분석 도구에 이메일 외의 프로필 및 건강정보를 남기지 않는다.

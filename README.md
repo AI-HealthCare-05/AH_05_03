@@ -51,7 +51,7 @@ uv sync --group dev
 
 ### DB 마이그레이션
 
-서버 DB는 PostgreSQL 16이고 스키마는 Alembic으로 관리한다.
+서버 DB는 PostgreSQL 17이고 스키마는 Alembic으로 관리한다.
 
 ```bash
 uv run alembic revision --autogenerate -m "변경 내용"

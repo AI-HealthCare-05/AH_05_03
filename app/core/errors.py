@@ -26,6 +26,7 @@ class ErrorCode(StrEnum):
     TOKEN_EXPIRED = "TOKEN_EXPIRED"
     TOKEN_REVOKED = "TOKEN_REVOKED"
     TOKEN_REUSE_DETECTED = "TOKEN_REUSE_DETECTED"
+    ORIGIN_NOT_ALLOWED = "ORIGIN_NOT_ALLOWED"
     # --- account ---------------------------------------------------
     ACCOUNT_NOT_FOUND = "ACCOUNT_NOT_FOUND"
     ACCOUNT_SUSPENDED = "ACCOUNT_SUSPENDED"
@@ -50,6 +51,7 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     ErrorCode.TOKEN_EXPIRED: status.HTTP_401_UNAUTHORIZED,
     ErrorCode.TOKEN_REVOKED: status.HTTP_401_UNAUTHORIZED,
     ErrorCode.TOKEN_REUSE_DETECTED: status.HTTP_401_UNAUTHORIZED,
+    ErrorCode.ORIGIN_NOT_ALLOWED: status.HTTP_403_FORBIDDEN,
     # 행은 지워지지 않으므로 "일어날 수 없는" 경로다. 404 대신 401을 주어
     # 재인증을 유도하고, sub의 존재 여부도 노출하지 않는다.
     ErrorCode.ACCOUNT_NOT_FOUND: status.HTTP_401_UNAUTHORIZED,
@@ -74,6 +76,7 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.TOKEN_EXPIRED: "토큰이 만료되었습니다. 다시 로그인해 주세요.",
     ErrorCode.TOKEN_REVOKED: "만료되었거나 무효화된 토큰입니다. 다시 로그인해 주세요.",
     ErrorCode.TOKEN_REUSE_DETECTED: "이미 사용된 토큰입니다. 보안을 위해 다시 로그인해 주세요.",
+    ErrorCode.ORIGIN_NOT_ALLOWED: "허용되지 않은 출처의 인증 요청입니다.",
     ErrorCode.ACCOUNT_NOT_FOUND: "계정을 찾을 수 없습니다. 다시 로그인해 주세요.",
     ErrorCode.ACCOUNT_SUSPENDED: "이용이 정지된 계정입니다.",
     ErrorCode.ACCOUNT_CLOSED: "해지된 계정입니다.",

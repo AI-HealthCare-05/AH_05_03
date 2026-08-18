@@ -1,14 +1,17 @@
 from typing import Annotated, Any
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.core import config
 from app.dependencies.services import get_token_store
 from app.exceptions import (
     AccountClosedError,
     AccountNotFoundError,
     AccountSuspendedError,
     AuthRequiredError,
+    OriginNotAllowedError,
+    TokenInvalidError,
 )
 from app.models.service_accounts import ServiceAccount, ServiceAccountStatus
 from app.repositories.service_account_repository import ServiceAccountRepository
@@ -19,6 +22,29 @@ from app.services.token_store import TokenStore
 # auto_error=False로 둔다. FastAPI가 기본으로 내리는 401 {"detail": "..."}
 # 대신 우리 봉투로 통일해서 내려야 하므로, 여기서 직접 AuthRequiredError를 던진다.
 security = HTTPBearer(auto_error=False)
+
+
+def require_trusted_origin(request: Request) -> None:
+    """브라우저의 쿠키 인증 요청이 허용된 프론트에서 왔는지 확인한다.
+
+    Origin이 없는 CLI·서버 간 호출은 쿠키를 자동 첨부할 수 없으므로 허용한다.
+    브라우저의 상태 변경 요청은 Origin이 붙고, 정확히 일치해야 한다.
+    """
+
+    origin = request.headers.get("origin")
+    if origin is None:
+        return
+
+    allowed = {item.rstrip("/") for item in config.CORS_ALLOW_ORIGINS}
+    if origin.rstrip("/") not in allowed:
+        raise OriginNotAllowedError()
+
+
+def get_refresh_token_cookie(request: Request) -> str:
+    token = request.cookies.get(config.REFRESH_COOKIE_NAME)
+    if not token:
+        raise TokenInvalidError("Refresh Token 쿠키가 필요합니다.")
+    return token
 
 
 async def get_access_token_payload(

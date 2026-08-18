@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends
@@ -7,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.db.session import SessionDep
 from app.core.utils.security import hash_password, verify_password
 from app.dependencies.services import get_token_store
-from app.dtos.auth import LoginRequest, SignUpRequest, TokenPairData
+from app.dtos.auth import AccessTokenData, LoginRequest, SignUpRequest
 from app.exceptions import (
     AccountClosedError,
     AccountNotFoundError,
@@ -27,6 +28,19 @@ from app.services.token_store import TokenStore
 # 그래야 "이메일 없음"과 "비밀번호 오답"의 응답 시간이 같아져
 # 이메일 존재 여부가 타이밍으로 새지 않는다.
 _DUMMY_PASSWORD_HASH = hash_password("not-a-real-password-used-only-for-timing")
+
+
+@dataclass(frozen=True, slots=True)
+class IssuedTokens:
+    """서비스 내부 토큰 묶음.
+
+    Refresh Token은 라우터가 HttpOnly 쿠키로만 전달하고 응답 DTO에는 절대
+    넣지 않는다.
+    """
+
+    access: AccessTokenData
+    refresh_token: str
+    refresh_expires_in: int
 
 
 def get_account_repository(session: SessionDep) -> ServiceAccountRepository:
@@ -90,13 +104,13 @@ class AuthService:
 
         return account
 
-    async def login(self, account: ServiceAccount) -> TokenPairData:
+    async def login(self, account: ServiceAccount) -> IssuedTokens:
         # ERD service_accounts에 last_login 컬럼이 없으므로 갱신하지 않는다.
         access, refresh = self.jwt_service.issue_pair(account)
         await self.token_store.register_refresh(account.id, str(refresh["jti"]), exp=refresh["exp"])
         return self._pair_data(access, refresh)
 
-    async def refresh(self, raw_refresh_token: str) -> TokenPairData:
+    async def refresh(self, raw_refresh_token: str) -> IssuedTokens:
         refresh_token = self.jwt_service.verify_jwt(raw_refresh_token, "refresh")
         account_id = account_id_from_payload(refresh_token.payload)
 
@@ -136,10 +150,12 @@ class AuthService:
             raise EmailAlreadyRegisteredError()
 
     @staticmethod
-    def _pair_data(access, refresh) -> TokenPairData:
-        return TokenPairData(
-            access_token=str(access),
+    def _pair_data(access, refresh) -> IssuedTokens:
+        return IssuedTokens(
+            access=AccessTokenData(
+                access_token=str(access),
+                expires_in=access["exp"] - access["iat"],
+            ),
             refresh_token=str(refresh),
-            expires_in=access["exp"] - access["iat"],
             refresh_expires_in=refresh["exp"] - refresh["iat"],
         )

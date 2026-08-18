@@ -37,12 +37,12 @@ app = FastAPI(
     responses=error_responses(ErrorCode.VALIDATION_ERROR, ErrorCode.INTERNAL_ERROR),
 )
 
-# 프론트가 별 오리진(React)이라 필요하다. 지금까지 아예 없었다.
-# refresh 토큰을 본문으로 옮겼으므로 allow_credentials는 False로 둘 수 있다.
+# 개발 중 React와 API의 오리진이 다를 수 있다. Refresh Token 쿠키를 보내기
+# 위해 credentials를 허용하되, origin은 명시적 allowlist로만 제한한다.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ALLOW_ORIGINS,
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

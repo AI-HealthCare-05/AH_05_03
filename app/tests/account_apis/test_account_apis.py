@@ -81,7 +81,7 @@ class TestDeleteAccount:
         tokens = await _login(client, "post_close_refresh@example.com")
         await client.delete("/api/v1/account", headers={"Authorization": f"Bearer {tokens['access_token']}"})
 
-        response = await client.post("/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
+        response = await client.post("/api/v1/auth/refresh")
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 

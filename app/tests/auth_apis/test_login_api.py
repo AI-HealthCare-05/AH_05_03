@@ -2,6 +2,8 @@ import jwt as pyjwt
 from httpx import AsyncClient
 from starlette import status
 
+from app.core import config
+
 
 class TestLoginAPI:
     async def test_login_success(self, client: AsyncClient) -> None:
@@ -13,20 +15,47 @@ class TestLoginAPI:
         assert response.status_code == status.HTTP_200_OK
         data = response.json()["data"]
         assert data["access_token"]
-        assert data["refresh_token"]
         assert data["token_type"] == "bearer"
         assert data["expires_in"] == 900
-        assert data["refresh_expires_in"] == 14 * 24 * 3600
+        assert "refresh_token" not in data
 
-    async def test_login_never_sets_a_cookie(self, client: AsyncClient) -> None:
-        """refresh token은 본문으로만 전달한다. 예전 쿠키는 만료·시크어 설정이
-        세 군데나 깨져 있었다 (계획서 참조) — 고치는 대신 아예 없앴다."""
-        email = "no_cookie@example.com"
+    async def test_login_sets_hardened_refresh_cookie(self, client: AsyncClient) -> None:
+        email = "cookie@example.com"
         await client.post("/api/v1/auth/signup", json={"email": email, "password": "Password123!"})
 
         response = await client.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
 
-        assert not response.headers.get_list("set-cookie")
+        assert response.cookies.get(config.REFRESH_COOKIE_NAME)
+        set_cookie = response.headers["set-cookie"]
+        assert "HttpOnly" in set_cookie
+        assert "Secure" in set_cookie
+        assert "SameSite=lax" in set_cookie
+        assert "Path=/" in set_cookie
+        assert f"Max-Age={14 * 24 * 3600}" in set_cookie
+
+    async def test_untrusted_browser_origin_is_rejected(self, client: AsyncClient) -> None:
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "someone@example.com", "password": "Password123!"},
+            headers={"Origin": "https://evil.example"},
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json()["error_code"] == "ORIGIN_NOT_ALLOWED"
+
+    async def test_trusted_browser_origin_receives_credentialed_cors_headers(self, client: AsyncClient) -> None:
+        email = "trusted-origin@example.com"
+        await client.post("/api/v1/auth/signup", json={"email": email, "password": "Password123!"})
+
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": "Password123!"},
+            headers={"Origin": config.CORS_ALLOW_ORIGINS[0]},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.headers["access-control-allow-origin"] == config.CORS_ALLOW_ORIGINS[0]
+        assert response.headers["access-control-allow-credentials"] == "true"
 
     async def test_login_invalid_credentials(self, client: AsyncClient) -> None:
         response = await client.post(

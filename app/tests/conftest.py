@@ -15,7 +15,8 @@ from app.core.db.url import build_db_url
 from app.core.redis.client import get_redis
 from app.main import app
 
-TEST_BASE_URL = "http://test"
+# 운영과 동일하게 Secure 쿠키 동작을 검증한다.
+TEST_BASE_URL = "https://test"
 
 
 @pytest_asyncio.fixture(scope="session", loop_scope="session")

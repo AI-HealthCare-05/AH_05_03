@@ -3,7 +3,9 @@ import uuid
 import zoneinfo
 from dataclasses import field
 from pathlib import Path
+from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.utils.enums import StrEnum
@@ -57,3 +59,22 @@ class Config(BaseSettings):
     # 오류 응답의 details는 비규격 필드다. 운영에서는 끈다.
     API_ERROR_INCLUDE_DETAILS: bool = False
     CORS_ALLOW_ORIGINS: list[str] = ["http://localhost:5173"]
+
+    # Refresh Token은 JavaScript에 노출하지 않고 host 전용 쿠키로만 전달한다.
+    # __Host- 접두사는 Secure + Path=/ + Domain 미지정을 브라우저가 강제한다.
+    REFRESH_COOKIE_NAME: str = "__Host-ieobom_refresh"
+    REFRESH_COOKIE_PATH: str = "/"
+    REFRESH_COOKIE_SECURE: bool = True
+    REFRESH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
+
+    @model_validator(mode="after")
+    def validate_browser_security(self) -> "Config":
+        if "*" in self.CORS_ALLOW_ORIGINS:
+            raise ValueError("credentialed CORS requires explicit origins")
+        if self.REFRESH_COOKIE_NAME.startswith("__Host-") and (
+            not self.REFRESH_COOKIE_SECURE or self.REFRESH_COOKIE_PATH != "/"
+        ):
+            raise ValueError("__Host- cookies require Secure and Path=/")
+        if self.REFRESH_COOKIE_SAMESITE == "none" and not self.REFRESH_COOKIE_SECURE:
+            raise ValueError("SameSite=None cookies require Secure")
+        return self

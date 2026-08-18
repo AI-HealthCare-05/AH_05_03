@@ -23,26 +23,16 @@ class LoginRequest(BaseRequestModel):
     password: str
 
 
-class RefreshRequest(BaseRequestModel):
-    # 스펙은 POST /auth/refresh(인증=Refresh)라고만 적고 전송 방식을
-    # 규정하지 않는다. 쿠키를 버리고 본문으로 옮겼다 — 별 오리진 SPA에서
-    # httpOnly 쿠키는 SameSite=None + allow_credentials=True가 필요해
-    # 지금 깨진 쿠키(만료 오설정 등)보다 공격면이 넓어진다.
-    refresh_token: Annotated[str, Field(min_length=1)]
-
-
 class SignUpData(BaseSerializerModel):
     account_id: uuid.UUID = Field(validation_alias="id")
     email: str
     status: ServiceAccountStatus
 
 
-class TokenPairData(BaseSerializerModel):
+class AccessTokenData(BaseSerializerModel):
     access_token: str
-    refresh_token: str
     token_type: str = "bearer"
     expires_in: int
-    refresh_expires_in: int
 
 
 class AccountInfo(BaseSerializerModel):
