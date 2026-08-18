@@ -2,17 +2,16 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    python3-dev \
-    libffi-dev \
-    && rm -rf /var/lib/apt/lists/*
+# build-essential 등은 asyncmy를 컴파일하려고 있던 것이다.
+# asyncpg는 manylinux 휠을 제공하므로 더 이상 필요 없다.
 
 # 1. uv 설치 (공식 이미지에서 복사해오는 가장 깔끔한 방법)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 # 2. 의존성 패키지 관리 파일을 컨테이너 내부에 복사합니다.
-COPY pyproject.toml uv.lock ./
+#    alembic.ini가 없으면 컨테이너 안에서 alembic upgrade가
+#    "No config file 'alembic.ini' found"로 실패한다.
+COPY pyproject.toml uv.lock alembic.ini ./
 
 # 3. pyproject.toml에 명시된 의존성 패키지 중에서 'app' 그룹만 설치합니다.
 RUN uv sync --group app --no-dev --frozen

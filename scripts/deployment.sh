@@ -135,6 +135,11 @@ ssh -i ~/.ssh/${ssh_key_file} ubuntu@${ec2_ip} \
   echo "Docker login"
   docker login -u "$DOCKER_USERNAME" -p "$DOCKER_PAT"
 
+  # --no-deps는 depends_on을 건너뛰므로 migrate 서비스가 자동으로 돌지 않는다.
+  # 마이그레이션을 명시적으로 한 번 실행한다.
+  echo "Applying migrations"
+  docker compose run --rm migrate
+
   echo "Deploying services: $DEPLOY_SERVICES"
   docker compose up -d --pull always --no-deps $DEPLOY_SERVICES
 
