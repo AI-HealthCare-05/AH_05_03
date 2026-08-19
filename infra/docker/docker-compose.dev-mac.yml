@@ -11,6 +11,10 @@ services:
       PGTZ: Asia/Seoul
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # 기본값은 admin Mac 자신만 접근한다. 팀 공유가 필요할 때만 dev.env의
+    # DEV_DB_BIND_HOST를 이 Mac의 Tailscale IPv4로 지정한다. 0.0.0.0 금지.
+    ports:
+      - "${DEV_DB_BIND_HOST:-127.0.0.1}:${DEV_DB_PORT:-15432}:5432"
     networks:
       - app
     healthcheck:
