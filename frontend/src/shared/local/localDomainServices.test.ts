@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 
 import { IndexedDbEncryptedRecordRepository } from "./indexedDbEncryptedRecordRepository";
 import { AesGcmJsonCipher } from "./jsonCipher";
-import { LocalDashboardService, LocalHealthRecordService, LocalProfileService } from "./localDomainServices";
+import {
+  LocalAccessGrantService,
+  LocalDashboardService,
+  LocalFamilyHistoryService,
+  LocalHealthRecordService,
+  LocalProfileMergeService,
+  LocalProfileService,
+} from "./localDomainServices";
 
 describe("로컬 수직 기능", () => {
   it("프로필과 건강기록을 암호화 저장하고 대시보드 집계를 만든다", async () => {
@@ -67,6 +74,107 @@ describe("로컬 수직 기능", () => {
 
     const result = await profiles.list(firstHousehold);
     expect(result.ok && result.value.map((profile) => profile.displayName)).toEqual(["첫째"]);
+    repository.close();
+  });
+
+  it("프로필을 수정하고 기록이 있는 프로필은 삭제 대신 숨긴다", async () => {
+    const repository = new IndexedDbEncryptedRecordRepository(
+      "ieobom-profile-lifecycle-" + crypto.randomUUID(),
+      indexedDB,
+    );
+    const cipher = await AesGcmJsonCipher.create();
+    const profiles = new LocalProfileService(repository, cipher);
+    const records = new LocalHealthRecordService(repository, cipher);
+    const householdId = crypto.randomUUID();
+    const created = await profiles.create({ householdId, displayName: "수정 전", relationship: "본인" });
+    if (!created.ok) throw new Error(created.error.message);
+
+    const updated = await profiles.update(created.value.id, {
+      displayName: "수정 후",
+      relationship: "본인",
+      expectedVersion: 1,
+    });
+    expect(updated.ok && updated.value.version).toBe(2);
+    await records.create({
+      householdId,
+      profileId: created.value.id,
+      recordType: "note",
+      recordedAt: "2026-08-20T00:00:00.000Z",
+      source: "manual",
+      payload: { text: "보존할 기록" },
+    });
+    expect((await profiles.deleteEmpty(created.value.id)).ok).toBe(false);
+    expect((await profiles.hide(created.value.id, 2)).ok).toBe(true);
+    const visibleProfiles = await profiles.list(householdId);
+    expect(visibleProfiles.ok && visibleProfiles.value).toHaveLength(0);
+    repository.close();
+  });
+
+  it("가족력과 구성원별 접근 범위를 로컬 암호화 저장한다", async () => {
+    const repository = new IndexedDbEncryptedRecordRepository(
+      "ieobom-family-history-" + crypto.randomUUID(),
+      indexedDB,
+    );
+    const cipher = await AesGcmJsonCipher.create();
+    const profiles = new LocalProfileService(repository, cipher);
+    const histories = new LocalFamilyHistoryService(repository, cipher);
+    const grants = new LocalAccessGrantService(repository, cipher);
+    const householdId = crypto.randomUUID();
+    const profile = await profiles.create({ householdId, displayName: "가족력 대상", relationship: "자녀" });
+    if (!profile.ok) throw new Error(profile.error.message);
+
+    const history = await histories.create({
+      householdId,
+      profileId: profile.value.id,
+      relativeRelationship: "외할머니",
+      conditionName: "고혈압",
+      onsetAge: 60,
+    });
+    expect(history.ok).toBe(true);
+    const grant = await grants.grant({
+      householdId,
+      profileId: profile.value.id,
+      granteeAccountId: crypto.randomUUID(),
+      allowedRecordTypes: ["health-record", "family-history"],
+    });
+    expect(grant.ok && grant.value.allowedRecordTypes).toEqual(["health-record", "family-history"]);
+    if (grant.ok) expect((await grants.revoke(grant.value.id)).ok).toBe(true);
+    expect(JSON.stringify(await repository.list())).not.toContain("고혈압");
+    repository.close();
+  });
+
+  it("프로필 병합은 기록을 이동하고 복구 지점으로 되돌린다", async () => {
+    const repository = new IndexedDbEncryptedRecordRepository(
+      "ieobom-profile-merge-" + crypto.randomUUID(),
+      indexedDB,
+    );
+    const cipher = await AesGcmJsonCipher.create();
+    const profiles = new LocalProfileService(repository, cipher);
+    const healthRecords = new LocalHealthRecordService(repository, cipher);
+    const merges = new LocalProfileMergeService(repository, cipher);
+    const householdId = crypto.randomUUID();
+    const source = await profiles.create({ householdId, displayName: "중복", relationship: "자녀" });
+    const target = await profiles.create({ householdId, displayName: "기존", relationship: "자녀" });
+    if (!source.ok || !target.ok) throw new Error("프로필 생성 실패");
+    await healthRecords.create({
+      householdId,
+      profileId: source.value.id,
+      recordType: "note",
+      recordedAt: "2026-08-20T00:00:00.000Z",
+      source: "manual",
+      payload: { text: "이동할 기록" },
+    });
+
+    const merged = await merges.merge(source.value.id, target.value.id);
+    expect(merged.ok).toBe(true);
+    expect((await healthRecords.query({ profileId: target.value.id })).ok).toBe(true);
+    const mergedSource = await profiles.get(source.value.id);
+    expect(mergedSource.ok && mergedSource.value.status).toBe("merged");
+    if (!merged.ok) throw new Error(merged.error.message);
+    const reverted = await merges.revert(merged.value.id);
+    expect(reverted.ok).toBe(true);
+    const restoredRecords = await healthRecords.query({ profileId: source.value.id });
+    expect(restoredRecords.ok && restoredRecords.value).toHaveLength(1);
     repository.close();
   });
 });

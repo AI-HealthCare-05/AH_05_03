@@ -1,4 +1,5 @@
 import type { EncryptedLocalRecord, EncryptedRecordRepository } from "./contracts";
+import type { ShareableRecordType } from "./domainContracts";
 import type { JsonCipher } from "./jsonCipher";
 
 const BACKUP_FORMAT = "ieobom-backup";
@@ -54,6 +55,27 @@ export class LocalBackupService {
   public async exportAll(passphrase: string): Promise<Blob> {
     validatePassphrase(passphrase);
     const records = await this.repository.list();
+    return this.exportRecords(records, passphrase);
+  }
+
+  public async exportProfileTransfer(
+    profileId: string,
+    allowedRecordTypes: ShareableRecordType[],
+    passphrase: string,
+  ): Promise<Blob> {
+    validatePassphrase(passphrase);
+    if (allowedRecordTypes.length === 0) throw new Error("하나 이상의 공유 범위를 선택해야 합니다.");
+    const records = await this.repository.list({ profileRef: profileId });
+    const selected = records.filter(
+      (record) => record.recordType === "family-profile" || allowedRecordTypes.includes(record.recordType as ShareableRecordType),
+    );
+    if (!selected.some((record) => record.recordType === "family-profile")) {
+      throw new Error("공유할 가족 구성원 프로필을 찾을 수 없습니다.");
+    }
+    return this.exportRecords(selected, passphrase);
+  }
+
+  private async exportRecords(records: EncryptedLocalRecord[], passphrase: string): Promise<Blob> {
     const backupRecords: BackupRecord[] = [];
     for (const record of records) {
       backupRecords.push({
@@ -86,7 +108,7 @@ export class LocalBackupService {
   public async importAll(
     file: Blob,
     passphrase: string,
-    mode: "replace" | "reject-if-not-empty" = "reject-if-not-empty",
+    mode: "replace" | "merge" | "reject-if-not-empty" = "reject-if-not-empty",
   ): Promise<BackupPreview> {
     const payload = await readBackup(file, passphrase, this.cryptoApi);
     const existing = await this.repository.list();
@@ -97,21 +119,40 @@ export class LocalBackupService {
     const encryptedRecords: EncryptedLocalRecord[] = [];
     for (const record of payload.records) {
       validateBackupRecord(record);
+      const normalizedPayload = normalizeImportedPayload(record);
       encryptedRecords.push({
         id: record.id,
         householdRef: record.householdRef,
         profileRef: record.profileRef,
         recordType: record.recordType,
         schemaVersion: record.schemaVersion,
-        encryptedPayload: await this.localCipher.encrypt(record.payload),
+        encryptedPayload: await this.localCipher.encrypt(normalizedPayload),
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
       });
     }
 
-    await this.repository.replaceAll(encryptedRecords);
+    if (mode === "merge") {
+      const existingIds = new Set(existing.map((record) => record.id));
+      const duplicate = encryptedRecords.find((record) => existingIds.has(record.id));
+      if (duplicate) throw new Error("가져올 파일에 현재 브라우저와 중복되는 기록이 있습니다.");
+      await this.repository.replaceAll([...existing, ...encryptedRecords]);
+    } else {
+      await this.repository.replaceAll(encryptedRecords);
+    }
     return summarize(payload);
   }
+}
+
+function normalizeImportedPayload(record: BackupRecord): unknown {
+  if (record.recordType !== "family-profile" || typeof record.payload !== "object" || record.payload === null) {
+    return record.payload;
+  }
+  return {
+    ...record.payload,
+    opaqueServerRef: null,
+    serverRefState: "none",
+  };
 }
 
 async function encryptBackup(

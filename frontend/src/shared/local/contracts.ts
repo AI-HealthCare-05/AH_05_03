@@ -2,7 +2,10 @@ export type LocalRecordType =
   | "family-profile"
   | "health-record"
   | "family-history"
-  | "model-result";
+  | "model-result"
+  | "access-grant"
+  | "merge-operation"
+  | "restore-point";
 
 export interface EncryptedValue {
   algorithm: "A256GCM";
