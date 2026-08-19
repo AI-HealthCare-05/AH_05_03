@@ -26,10 +26,14 @@
 | [docs/06_evaluation_plan.md](docs/06_evaluation_plan.md) | **참여기업 평가기준 20개 항목 ↔ 대응 전략 매핑표** | 전체 |
 | [docs/07_roadmap.md](docs/07_roadmap.md) | 공식 일정 + 스프린트별 팀원 R&R | 오성민 |
 | [docs/08_account_profile_policy.md](docs/08_account_profile_policy.md) | 서비스 계정·가족 구성원 로컬 프로필·초대·연결·병합 정책 | 전체 |
+| [docs/09_chronic_disease_model_plan.md](docs/09_chronic_disease_model_plan.md) | BRFSS 만성질환 학습 모델의 실행·평가 계획과 결과 | 데이터·ML |
 | [docs/10_local_data_contract.md](docs/10_local_data_contract.md) | IndexedDB·OPFS·Web Crypto 기반 로컬 도메인 API와 백업 포맷 | 전체 |
+| [docs/11_local_model_runtime_implementation.md](docs/11_local_model_runtime_implementation.md) | Python 참조 모델 격리, 브라우저 로컬 추론과 Rust/WASM·ONNX 전환 구현 기준 | 데이터·ML·프론트엔드 |
 | [docs/adr/0001-web-local-first-architecture.md](docs/adr/0001-web-local-first-architecture.md) | 데스크톱 앱에서 웹 기반 로컬 우선 서비스로 전환한 아키텍처 결정 | 전체 |
 | [docs/adr/0002-separate-server-api-and-local-domain-contract.md](docs/adr/0002-separate-server-api-and-local-domain-contract.md) | 서버 REST API와 브라우저 Local Domain API를 분리한 아키텍처 결정 | 전체 |
 | [docs/adr/0003-web-authentication-token-transport.md](docs/adr/0003-web-authentication-token-transport.md) | Access JWT와 HttpOnly Refresh Cookie를 선택한 인증 결정 | 전체 |
+| [docs/adr/0004-family-invitation-state-and-redis-boundary.md](docs/adr/0004-family-invitation-state-and-redis-boundary.md) | 가족 초대의 PostgreSQL 정본과 Redis 보안·전송 책임 경계 | 전체 |
+| [docs/adr/0005-vite-spa-local-first-frontend-foundation.md](docs/adr/0005-vite-spa-local-first-frontend-foundation.md) | Vite SPA 프론트 기반과 서버·로컬 건강정보 상태 분리 결정 | 전체 |
 | [docs/adr/README.md](docs/adr/README.md) | ADR 추가·대체·대안 기록 원칙 | 전체 |
 | [docs/legacy/desktop-app/2026-08-18-pre-web-prd.md](docs/legacy/desktop-app/2026-08-18-pre-web-prd.md) | 웹 버전 완성 후 재검토할 데스크톱·Wi-Fi 동기화 구버전 백업 | 전체 |
 
@@ -37,12 +41,13 @@
 
 현재 **Sprint 1 [기획 문서 & 와이어프레임 작성]** 구간(~08-16)이다. `docs/01~04` 4대 문서를 각 담당자가 초안 기준으로 다듬고, 8/17 Sprint 2(기능 구현) 착수 전 확정하는 것이 최우선 목표다. 진행 상황은 `docs/06_evaluation_plan.md`의 상태 컬럼과 `docs/07_roadmap.md`의 스프린트 계획을 기준으로 관리한다.
 
-## 백엔드 템플릿 구성
+## 프로젝트 구성
 
 OZ Coding School의 AI Healthcare Final Project Template을 기반으로 다음 구성을 추가했다.
 
 - `app/`: FastAPI API 서버, 인증/JWT, SQLAlchemy 2.0(async) + Alembic, 테스트
-- `ai_worker/`: AI 모델 추론·학습 워커
+- `frontend/`: Vite 기반 React·TypeScript SPA, 로컬 저장·모델 실행 경계와 테스트
+- `ai_worker/`: 연구·비건강 비동기 작업용 워커. 브라우저 건강정보 추론에는 사용하지 않음
 - `envs/`: 로컬·운영 환경 변수 예시
 - `infra/`: Docker Compose와 Nginx 운영 설정
 - `scripts/`: CI, 배포, 인증서 자동화 스크립트
@@ -56,6 +61,18 @@ uv sync --group dev
 ```
 
 로컬 전체 스택은 `docker compose up -d --build`로 실행한다. API 문서는 실행 후 `http://localhost/api/docs`에서 확인할 수 있다.
+
+개발용 Compose에는 로컬 기본값이 있어 `.env` 없이도 실행된다. 포트·DB 계정 등을 바꾸려면 `cp envs/example.local.env .env` 후 값을 수정한다. 대용량 AI worker는 기본 실행에서 제외되며 필요할 때만 `docker compose --profile ai up -d --build`로 함께 실행한다.
+
+프론트엔드만 개발할 때는 다음 명령을 사용한다.
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+프론트엔드 검증 명령과 데이터 경계는 [frontend/README.md](frontend/README.md)를 참고한다.
 
 ### DB 마이그레이션
 

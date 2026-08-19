@@ -1,6 +1,6 @@
 # 기술 스택 및 로컬 우선 아키텍처
 
-> 관련 문서: [01_requirements.md](01_requirements.md), [02_erd.md](02_erd.md), [03_api_spec.md](03_api_spec.md), [브라우저 로컬 데이터 계약](10_local_data_contract.md), [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-003](adr/0003-web-authentication-token-transport.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md)
+> 관련 문서: [01_requirements.md](01_requirements.md), [02_erd.md](02_erd.md), [03_api_spec.md](03_api_spec.md), [브라우저 로컬 데이터 계약](10_local_data_contract.md), [로컬 규칙·ML 모델 실행 구현 가이드](11_local_model_runtime_implementation.md), [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-003](adr/0003-web-authentication-token-transport.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md), [ADR-006](adr/0006-lifecycle-scoped-profile-reference.md)
 
 ## 1. 핵심 아키텍처 원칙
 
@@ -16,7 +16,7 @@
 
 | 영역 | 채택 | 역할 |
 |---|---|---|
-| 프론트엔드 | React + TypeScript 반응형 웹 | 화면, 로컬 도메인 로직, 브라우저 기능 연동 |
+| 프론트엔드 | React + TypeScript + Vite SPA | 화면, 로컬 도메인 로직, 브라우저 기능 연동 |
 | 클라이언트 상태 | Zustand | 화면·선택·병합 진행 상태 |
 | 서버 상태 | TanStack Query | 계정·구독·초대·연결 상태 |
 | 로컬 저장 | IndexedDB 우선 + OPFS 단계 도입 | 구조화된 건강기록과 큰 원본 파일 보관 |
@@ -24,10 +24,12 @@
 | 백엔드 | FastAPI + SQLAlchemy 2.x Async + Alembic | 인증·구독·초대·최소 연결 API와 스키마 관리 |
 | 서버 DB | PostgreSQL | 건강정보를 제외한 계정 메타데이터 |
 | 임시 상태 | Redis | 인증 토큰 회전, 초대 토큰 1회성 소비·전송 신호·속도 제한 등 비건강정보 |
-| 로컬 AI/OCR | ONNX Runtime Web·Tesseract 계열 검토 | 기기 내 예측과 문서 인식 |
+| 로컬 AI/OCR | TypeScript·Rust/WASM·ONNX Runtime Web·Tesseract 계열 검토 | 기기 내 규칙 평가, 예측과 문서 인식 |
 | 인프라 | Docker, AWS EC2, Nginx | 계정 API 배포 |
 
 건강정보를 외부 API나 서버 AI 워커로 보내는 구조는 현재 로컬 보관 원칙과 맞지 않으므로 사용하지 않는다.
+
+Python 규칙·학습 모델은 개발자 PC와 CI의 참조 구현으로만 유지한다. FastAPI와 서버 AI worker에서 참조 모델을 import하지 않으며, 제품 런타임 선택과 포팅 조건은 [로컬 규칙·ML 모델 실행 구현 가이드](11_local_model_runtime_implementation.md)를 따른다.
 
 ## 3. 시스템 경계
 
@@ -64,7 +66,7 @@
 
 ## 5. 계정·프로필 연결
 
-초대 생성 시 서버에는 불투명 `target_profile_ref`만 전달한다. 초대 수락 후 계정과 참조값을 연결하되, 실제 프로필 내용과 건강정보는 움직이지 않는다.
+초대 생성 시 서버에는 이번 연결 생명주기에만 사용하는 불투명 `target_profile_ref`만 전달한다. 초대 수락 후 계정과 참조값을 연결하되, 실제 프로필 내용과 건강정보는 움직이지 않는다. 연결 종료·프로필 병합·계정 변경 뒤에는 참조값을 폐기하고 재연결 시 새 값을 만든다. 폐기 이력과 재사용 금지는 Redis TTL이 아니라 PostgreSQL이 보장한다.
 
 초기 버전에서 건강정보를 다른 브라우저나 기기로 옮기려면 사용자가 접근 범위를 확인한 뒤 허용 데이터로 암호화 이전 파일을 생성하고, 상대 기기에서 직접 가져온다. WebRTC 기반 기기 직접 전송은 [ADR-001](adr/0001-web-local-first-architecture.md)의 후순위 기술검증을 통과한 뒤 적용 여부를 결정한다.
 

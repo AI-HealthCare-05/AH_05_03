@@ -5,6 +5,10 @@ work/
 *.py[oc]
 build/
 dist/
+node_modules/
+coverage/
+playwright-report/
+test-results/
 wheels/
 *.egg-info/
 .venv/

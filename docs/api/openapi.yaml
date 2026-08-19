@@ -619,7 +619,7 @@ components:
 
     OpaqueLocalRef:
       type: string
-      description: 32바이트 이상 CSPRNG로 만든 base64url 불투명 값. 프로필 내용을 인코딩하지 않는다.
+      description: 한 연결 생명주기에만 사용하는 32바이트 이상 CSPRNG base64url 불투명 값. 같은 작업의 재시도에서는 유지하고 종료 후에는 재사용하지 않으며 프로필 내용을 인코딩하지 않는다.
       minLength: 43
       maxLength: 86
       pattern: '^[A-Za-z0-9_-]+$'
@@ -681,7 +681,7 @@ components:
         local_profile_ref:
           allOf:
             - $ref: '#/components/schemas/OpaqueLocalRef'
-          description: 초대의 target_profile_ref와 상수 시간 비교로 일치해야 한다.
+          description: 초대의 target_profile_ref와 상수 시간 비교로 일치해야 하며, 과거 종료된 연결에서 사용된 값이면 거부한다.
 
     ProfileLinkResponse:
       type: object

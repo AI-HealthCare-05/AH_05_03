@@ -7,7 +7,7 @@
 > 로컬 계약 원본: [브라우저 로컬 데이터 계약](10_local_data_contract.md)
 >
 > 데이터 모델: [서버·로컬 ERD](02_erd.md), [PostgreSQL DDL](database/0002_service_domain.sql)
-> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-003](adr/0003-web-authentication-token-transport.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md)
+> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-003](adr/0003-web-authentication-token-transport.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md), [ADR-006](adr/0006-lifecycle-scoped-profile-reference.md)
 
 ## 1. 계약 분리
 
@@ -79,6 +79,7 @@ Pydantic 요청 모델은 `extra="forbid"`로 정의한다. 허용 DTO에 없는
 | 409 | `EMAIL_ALREADY_EXISTS` | 대소문자 무시 이메일 중복 |
 | 409 | `INVITATION_ALREADY_PENDING` | 같은 가정·이메일·프로필에 대기 초대 존재 |
 | 409 | `INVITATION_STATE_CONFLICT` | 대기 상태가 아닌 초대의 수락·거절·취소 |
+| 409 | `PROFILE_REFERENCE_ALREADY_USED` | 같은 가정의 과거 초대·연결에서 이미 사용한 참조값 제출 |
 | 409 | `PROFILE_ALREADY_LINKED` | 계정이 같은 가정의 다른 프로필에 연결됨 |
 | 409 | `PROFILE_REF_ALREADY_CLAIMED` | 같은 프로필 참조값에 다른 계정이 연결됨 |
 | 409 | `ACTIVE_MEMBERS_REMAIN` | 다른 활성 구성원이 있는 가정 폐쇄 시도 |
@@ -218,7 +219,7 @@ pending ──accept──> accepted
 }
 ```
 
-`target_profile_ref`는 브라우저가 CSPRNG로 만든 32바이트 이상의 base64url 값이다. 로컬 프로필 ID, 이름, 생년, 관계를 암호화하거나 인코딩한 값이 아니어야 한다.
+`target_profile_ref`는 브라우저가 이번 연결 생명주기를 위해 CSPRNG로 만든 32바이트 이상의 base64url 값이다. 로컬 프로필 ID, 이름, 생년, 관계를 암호화하거나 인코딩한 값이 아니어야 한다. 같은 초대 생성 작업을 재시도할 때는 같은 참조값과 `Idempotency-Key`를 사용하지만, 초대가 거절·취소·만료되면 새 초대에 새 참조값을 사용한다.
 
 서버 처리 순서:
 
@@ -259,6 +260,7 @@ pending ──accept──> accepted
 - 요청 참조값과 초대의 `target_profile_ref`가 일치한다.
 - 현재 계정은 같은 가정에서 활성 프로필 연결이 없다.
 - 해당 참조값은 같은 가정의 다른 활성 계정에 연결되어 있지 않다.
+- 해당 참조값은 같은 가정의 다른 초대나 종료된 과거 연결에서 사용된 적이 없다.
 
 PostgreSQL 트랜잭션:
 
@@ -287,7 +289,10 @@ PostgreSQL 트랜잭션:
 - base64url 표현
 - 가정·프로필 내용과 독립적
 - 서버 로그에서는 앞 6자만 남기거나 완전히 마스킹
-- 해지·연결 해제 후 재사용 금지
+- 초대 생성부터 연결 종료까지 같은 논리 작업과 재시도에서만 유지
+- 초대 거절·취소·만료, 연결 해제, 계정 변경, 프로필 병합 후 즉시 폐기
+- 재초대·재연결과 폐기 참조값이 포함된 백업 복구에서는 새 값 생성
+- PostgreSQL 종료 이력과 유일 제약으로 생애 전체 재사용 금지; Redis TTL을 재사용 금지의 근거로 사용하지 않음
 
 ## 8. 로컬 기능과 서버 보상 처리
 

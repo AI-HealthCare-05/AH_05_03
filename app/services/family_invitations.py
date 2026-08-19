@@ -26,6 +26,7 @@ from app.exceptions import (
     InvitationSelfNotAllowedError,
     InvitationStateConflictError,
     InvitationTokenInvalidError,
+    ProfileReferenceAlreadyUsedError,
     TokenStoreUnavailableError,
 )
 from app.models.family_invitations import FamilyInvitation, InvitationStatus
@@ -69,7 +70,7 @@ class FamilyInvitationService:
 
         await self.invitation_store.enforce_create_rate(account.id, email)
         now = datetime.now(tz=timezone.utc)
-        await self._expire_stale_duplicate_or_raise(household.id, email, request.target_profile_ref, now)
+        await self._reject_reused_profile_ref(household.id, email, request.target_profile_ref, now)
 
         raw_token = secrets.token_urlsafe(config.FAMILY_INVITATION_TOKEN_BYTES)
         invitation = FamilyInvitation(
@@ -94,8 +95,8 @@ class FamilyInvitationService:
             if registered:
                 await self._best_effort_revoke(invitation)
             constraint = getattr(getattr(err.orig, "__cause__", None), "constraint_name", None)
-            if constraint == "uq_family_invitations_pending_target":
-                raise InvitationAlreadyPendingError() from err
+            if constraint == "uq_family_invitations_profile_ref_lifetime":
+                raise ProfileReferenceAlreadyUsedError() from err
             raise
         except Exception:
             await self.session.rollback()
@@ -105,18 +106,19 @@ class FamilyInvitationService:
 
         return FamilyInvitationCreatedData(invitation=self._serialize(invitation))
 
-    async def _expire_stale_duplicate_or_raise(
+    async def _reject_reused_profile_ref(
         self, household_id: uuid.UUID, email: str, profile_ref: str, now: datetime
     ) -> None:
-        duplicate = await self.invitation_repo.find_pending_duplicate(household_id, email, profile_ref)
-        if duplicate is None:
+        previous = await self.invitation_repo.find_by_profile_ref(household_id, profile_ref)
+        if previous is None:
             return
-        if duplicate.expires_at > now:
+        if (
+            previous.status is InvitationStatus.PENDING
+            and previous.invitee_email.lower() == email
+            and previous.expires_at > now
+        ):
             raise InvitationAlreadyPendingError()
-        duplicate.status = InvitationStatus.EXPIRED
-        duplicate.row_version += 1
-        await self.session.flush()
-        await self._best_effort_revoke(duplicate)
+        raise ProfileReferenceAlreadyUsedError()
 
     async def list_for_account(self, account: ServiceAccount) -> FamilyInvitationListData:
         invitations = await self.invitation_repo.list_for_account(account.id, account.email)
