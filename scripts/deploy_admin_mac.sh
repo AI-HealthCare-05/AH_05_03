@@ -47,7 +47,10 @@ echo "Validating Compose configuration"
 compose config --quiet
 
 echo "Building application images for ${DEPLOY_VERSION}"
-compose build --pull fastapi frontend
+# Do not force a registry refresh on every dev deployment. BuildKit still
+# downloads missing base images, while cached images keep deployments working
+# through short Docker Hub or GHCR metadata outages.
+compose build fastapi frontend
 
 echo "Starting PostgreSQL and Redis"
 compose up -d postgres redis
