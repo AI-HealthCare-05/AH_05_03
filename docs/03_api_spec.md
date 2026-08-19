@@ -9,6 +9,36 @@
 > 데이터 모델: [서버·로컬 ERD](02_erd.md), [PostgreSQL DDL](database/0002_service_domain.sql)
 > 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-003](adr/0003-web-authentication-token-transport.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md)
 
+## 0. 빠른 보기
+
+이 절은 탐색을 위한 요약이다. 기능의 삭제 여부나 상세 계약을 결정하지 않는다. 구현 우선순위의 원본은 [요구사항](01_requirements.md)과 [로드맵](07_roadmap.md), 서버 계약의 원본은 [OpenAPI 3.1](api/openapi.yaml), 로컬 계약의 원본은 [브라우저 로컬 데이터 계약](10_local_data_contract.md)이다.
+
+| 우선순위 | 기능 영역 | 처리 위치 | 상세 기준 |
+|---:|---|---|---|
+| 1 | 서비스 계정 가입·로그인, 구독·라이선스 | 서버 API | OpenAPI |
+| 1 | 가족 구성원 로컬 프로필, 건강기록 | 브라우저 로컬 | 로컬 데이터 계약 |
+| 1 | 암호화 백업·복구 | 브라우저와 사용자 파일 | 로컬 데이터 계약 §8 |
+| 2 | 가족 초대·수락, 기존 로컬 프로필 연결 | 서버 API와 로컬 보상 처리 | OpenAPI·이 문서 §5~8 |
+| 2 | 중복 프로필 비교·병합·되돌리기 | 브라우저 로컬 | 로컬 데이터 계약 §9 |
+| 3 | 구성원별 공유 범위, 암호화 데이터 이전 | 브라우저 로컬 | 요구사항·로컬 데이터 계약 |
+| 3 | WebRTC 기기 직접 전송 | 브라우저와 최소 서버 메타데이터 | 기술검증 후 별도 ADR·API 결정 |
+
+2·3순위는 제외 기능이 아니라 후순위 구현 기능이다. 선행조건이 일찍 충족되면 앞당길 수 있으며 최종 요구사항과 와이어프레임 범위에는 유지한다.
+
+### 서버 API 영역 요약
+
+| 영역 | 주요 경로 | 데이터 경계 |
+|---|---|---|
+| 인증 | `/auth/signup`, `/auth/login`, `/auth/refresh`, `/auth/logout` | 인증과 세션 상태만 처리 |
+| 계정 | `/account` | 서비스 계정과 구독 요약만 처리 |
+| 구독 | `/subscription`, `/subscription/change` | 구독·라이선스 상태만 처리 |
+| 가정 | `/households`, `/households/{id}` | 초대와 연결을 묶는 UUID 컨테이너만 처리 |
+| 가족 초대 | `/family-invitations` 및 상태 전이 경로 | 이메일, 초대 상태, 불투명 프로필 참조값만 처리 |
+| 프로필 연결 | `/profile-links` | 서비스 계정과 불투명 로컬 프로필 참조값만 연결 |
+| 기기 연결 | 현재 OpenAPI에서 제외 | WebRTC 기술검증 후 채택 여부 결정 |
+
+건강기록, 가족력, 원본 서류, OCR 결과, 예측 결과와 로컬 변경 이력은 위 서버 API에 보내지 않는다.
+
 ## 1. 계약 분리
 
 이어봄에는 서로 다른 세 종류의 계약이 있다.
