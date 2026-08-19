@@ -80,7 +80,7 @@ Nginx의 8080 포트는 Mac 내부 헬스체크와 장애 진단에 사용한다
 https://admin-macbookpro.taila6d25d.ts.net/
 ```
 
-`http://100.105.8.109:8080` 같은 IP 기반 HTTP 주소에서는 `crypto.subtle`을 사용할 수 없어 로컬 키 생성과 암호화 저장이 동작하지 않는다.
+`http://<admin-macbook-tailscale-ip>:8080` 같은 IP 기반 HTTP 주소에서는 `crypto.subtle`을 사용할 수 없어 로컬 키 생성과 암호화 저장이 동작하지 않는다.
 
 ## 4. GitHub Environment
 
@@ -114,9 +114,68 @@ docker compose \
   ps
 ```
 
-DB와 Redis는 호스트 포트를 열지 않는다. Nginx의 `DEV_HTTP_PORT`만 Mac에 공개한다. PostgreSQL 데이터와 Redis 운영 상태는 `ieobom-dev` 이름의 Docker volume에 유지되며 배포 과정에서 `down -v`를 실행하지 않는다.
+Redis는 호스트 포트를 열지 않는다. PostgreSQL은 DBeaver 점검을 위해 기본적으로 `127.0.0.1:15432`에만 노출하며, 팀 공유가 필요할 때에만 admin Mac의 Tailscale IPv4에 바인딩한다. PostgreSQL 데이터와 Redis 운영 상태는 `ieobom-dev` 이름의 Docker volume에 유지되며 배포 과정에서 `down -v`를 실행하지 않는다.
 
-## 6. 운영상 제한
+## 6. 팀 DBeaver 접근
+
+팀원에게 애플리케이션의 `DB_USER`와 `DB_PASSWORD`를 공유하지 않는다. admin Mac의 `~/.config/ieobom/dev.env`에 다음 값을 설정해 PostgreSQL을 Tailscale 안에서만 노출한다.
+
+```dotenv
+DEV_DB_BIND_HOST=<admin-macbook-tailscale-ip>
+DEV_DB_PORT=15432
+```
+
+`DEV_DB_BIND_HOST`에는 admin Mac의 현재 Tailscale IPv4만 사용한다. `0.0.0.0`, LAN IP 또는 공인 IP를 사용하지 않는다. Tailscale 관리 화면에서는 TCP 15432 접근 대상을 프로젝트 팀원 또는 프로젝트 기기 그룹으로 제한한다.
+
+설정 반영 후 admin Mac에서 다음을 확인한다.
+
+```bash
+docker compose \
+  --project-name ieobom-dev \
+  --env-file ~/.config/ieobom/dev.env \
+  --file /path/to/checkout/infra/docker/docker-compose.dev-mac.yml \
+  up -d postgres
+
+nc -vz <admin-macbook-tailscale-ip> 15432
+```
+
+### 6.1 팀원별 읽기 전용 계정
+
+공유 계정 하나 대신 로그인 계정을 팀원별로 생성하고, 공통 읽기 전용 역할을 부여한다. 아래 SQL의 로그인 이름과 비밀번호는 팀원마다 바꾸고 비밀번호는 Git·Discord·문서에 기록하지 않는다.
+
+```sql
+CREATE ROLE ieobom_team_readonly NOLOGIN;
+GRANT CONNECT ON DATABASE ieobom_dev TO ieobom_team_readonly;
+GRANT USAGE ON SCHEMA public TO ieobom_team_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO ieobom_team_readonly;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO ieobom_team_readonly;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE ieobom IN SCHEMA public
+GRANT SELECT ON TABLES TO ieobom_team_readonly;
+ALTER DEFAULT PRIVILEGES FOR ROLE ieobom IN SCHEMA public
+GRANT SELECT ON SEQUENCES TO ieobom_team_readonly;
+
+CREATE ROLE ieobom_member_name LOGIN PASSWORD '<long-random-password>';
+GRANT ieobom_team_readonly TO ieobom_member_name;
+```
+
+이미 역할이 존재하면 `CREATE ROLE`은 다시 실행하지 않는다. 팀원이 나가면 해당 로그인만 `ALTER ROLE ieobom_member_name NOLOGIN`으로 즉시 비활성화한다. 데이터 수정이 필요한 팀원에게도 애플리케이션 계정을 공유하지 않고 별도의 쓰기 역할을 검토한다.
+
+### 6.2 DBeaver 설정
+
+| 항목 | 값 |
+|---|---|
+| Driver | PostgreSQL |
+| Host | admin Mac 관리자가 별도로 전달한 Tailscale IPv4 또는 MagicDNS 이름 |
+| Port | `15432` |
+| Database | `ieobom_dev` |
+| Username | 발급받은 개인 DB 로그인 |
+| Password | 개인에게 별도 전달된 비밀번호 |
+| SSL | Tailscale 내부 연결에서는 Disable |
+
+연결 전 팀원 기기에서 `tailscale ping admin-macbookpro`가 성공해야 한다. DBeaver의 `Test Connection`이 실패하면 PostgreSQL 비밀번호를 공유하기 전에 Tailscale 소속·ACL, admin Mac의 절전 상태와 Docker 컨테이너 상태부터 확인한다.
+
+## 7. 운영상 제한
 
 - Mac이 잠자기 상태면 runner와 서비스가 응답하지 않을 수 있으므로 전원 연결 중 자동 잠자기를 비활성화한다.
 - Docker Desktop 또는 runner 서비스가 중지되면 배포가 대기한다.
