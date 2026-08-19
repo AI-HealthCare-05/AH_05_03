@@ -131,5 +131,9 @@ class InvitationTokenReusedError(AppError):
     error_code = ErrorCode.INVITATION_TOKEN_REUSED
 
 
+class ProfileReferenceAlreadyUsedError(AppError):
+    error_code = ErrorCode.PROFILE_REFERENCE_ALREADY_USED
+
+
 class RateLimitedError(AppError):
     error_code = ErrorCode.RATE_LIMITED

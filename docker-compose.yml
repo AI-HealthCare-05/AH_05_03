@@ -23,22 +23,22 @@ services:
     # ${환경변수명} 문법은 OS 환경변수 혹은 .env에서 해당 환경변수명과 일치하는 항목이 있으면 대입합니다.
     # 반드시 사전에 .env에 해당 항목이 존재하는지 확인해야 합니다.
     # POSTGRES_USER가 곧 클러스터 슈퍼유저다. MySQL과 달리 별도 root 계정이 없다.
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-pw1234}
+      POSTGRES_DB: ${DB_NAME:-ai_health}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
       TZ: 'Asia/Seoul'
       PGTZ: 'Asia/Seoul'
     ports:
       # 컨테이너 안 포트는 5432로 고정한다. 바꾸면 healthcheck의 pg_isready도
       # 같이 고쳐야 하고, 놓치면 depends_on 게이트가 영영 안 열린다.
-      - ${DB_EXPOSE_PORT}:5432
+      - ${DB_EXPOSE_PORT:-5432}:5432
     networks:
       - ws
     volumes:
       - postgres_data:/var/lib/postgresql/data  # 컨테이너가 삭제돼도 데이터는 호스트 파일시스템에 남음
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-ai_health}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -50,16 +50,23 @@ services:
     build:
       context: .  # 프로젝트 루트를 빌드 컨텍스트로 지정
       dockerfile: app/Dockerfile  # Dockerfile 위치 지정
-      platforms:
-        - linux/amd64
-        - linux/arm64
-    image: ${DOCKER_USER}/${DOCKER_REPOSITORY}:app-${APP_VERSION}  # APP_VERSION은 빌드된 이미지의 버전관리를 위함입니다. v1.0.0 형식으로 사용합니다.
-    env_file: .env
+    image: ${APP_IMAGE:-ieobom-app:local}
     environment:
+      ENV: local
+      SECRET_KEY: ${SECRET_KEY:-local-only-secret-key-change-before-deploy}
       # .env의 DB_HOST/REDIS_URL은 호스트에서 uv run으로 직접 띄울 때 쓰는 값(localhost)이다.
       # 컨테이너 안에서는 서비스명으로 붙어야 한다.
       DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-pw1234}
+      DB_NAME: ${DB_NAME:-ai_health}
+      DB_TEST_NAME: ${DB_TEST_NAME:-ai_health_test}
       REDIS_URL: redis://redis:6379/0
+      CORS_ALLOW_ORIGINS: '["http://localhost","http://localhost:5173","http://127.0.0.1:5173"]'
+      # 로컬 HTTP 실험에서는 __Host- Secure 쿠키를 사용할 수 없다.
+      REFRESH_COOKIE_NAME: ieobom_refresh
+      REFRESH_COOKIE_SECURE: "false"
     command: |
       sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
@@ -76,17 +83,23 @@ services:
       redis:
         condition: service_healthy
 
-  # 4. AI Worker (Model 학습 및 추론)
+  # 4. AI Worker (연구·비건강 비동기 작업 전용)
+  #    브라우저의 건강정보 또는 건강 모델 입출력을 전달하지 않는다.
   ai-worker:
     container_name: ai-worker
     build:
       context: .  # 프로젝트 루트를 빌드 컨텍스트로 지정
       dockerfile: ai_worker/Dockerfile  # Dockerfile 위치 지정
-      platforms:
-        - linux/amd64
-        - linux/arm64
-    image: ${DOCKER_USER}/${DOCKER_REPOSITORY}:ai-${AI_WORKER_VERSION}  # AI_WORKER_VERSION은 빌드된 이미지의 버전관리를 위함입니다. V1.0.0 형식으로 사용합니다.
-    env_file: .env
+    image: ${AI_WORKER_IMAGE:-ieobom-ai-worker:local}
+    profiles:
+      - ai
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-pw1234}
+      DB_NAME: ${DB_NAME:-ai_health}
+      REDIS_URL: redis://redis:6379/0
     restart: always
     mem_limit: 4G
     networks:
@@ -97,7 +110,18 @@ services:
       redis:
         condition: service_healthy
 
-  # 5. Nginx (웹 서버 - 요청 리버스 프록시로 전달)
+  # 5. Frontend (Vite production build를 정적 제공)
+  frontend:
+    container_name: frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: ieobom-frontend:local
+    restart: always
+    networks:
+      - ws
+
+  # 6. Nginx (프론트엔드와 API 요청을 리버스 프록시로 전달)
   nginx:
     container_name: nginx
     image: nginx:latest
@@ -110,6 +134,7 @@ services:
       - ws
     depends_on:
       - fastapi
+      - frontend
 
 volumes:
   postgres_data:

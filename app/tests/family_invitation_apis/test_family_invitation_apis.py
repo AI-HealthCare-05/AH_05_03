@@ -101,7 +101,7 @@ class TestFamilyInvitationAPI:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.json()["error_code"] == "INVITATION_SELF_NOT_ALLOWED"
 
-    async def test_expired_pending_invitation_does_not_block_reissue(
+    async def test_expired_invitation_requires_new_profile_reference(
         self, client: AsyncClient, db_session: AsyncSession
     ) -> None:
         headers = await _login(client, "reissue-owner@example.com")
@@ -114,8 +114,11 @@ class TestFamilyInvitationAPI:
         invitation.expires_at = invitation.created_at + timedelta(microseconds=1)
         await db_session.commit()
 
-        reissued = await _invite(client, headers, household_id, "reissue-target@example.com", profile_ref)
+        reused = await _invite(client, headers, household_id, "reissue-target@example.com", profile_ref)
+        reissued = await _invite(client, headers, household_id, "reissue-target@example.com")
 
+        assert reused.status_code == status.HTTP_409_CONFLICT
+        assert reused.json()["error_code"] == "PROFILE_REFERENCE_ALREADY_USED"
         assert reissued.status_code == status.HTTP_201_CREATED
         assert reissued.json()["data"]["invitation"]["id"] != str(first_id)
 

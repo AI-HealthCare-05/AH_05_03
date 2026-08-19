@@ -45,6 +45,7 @@ class ErrorCode(StrEnum):
     INVITATION_STATE_CONFLICT = "INVITATION_STATE_CONFLICT"
     INVITATION_TOKEN_INVALID = "INVITATION_TOKEN_INVALID"
     INVITATION_TOKEN_REUSED = "INVITATION_TOKEN_REUSED"
+    PROFILE_REFERENCE_ALREADY_USED = "PROFILE_REFERENCE_ALREADY_USED"
 
 
 ERROR_STATUS: dict[ErrorCode, int] = {
@@ -79,6 +80,7 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     ErrorCode.INVITATION_STATE_CONFLICT: status.HTTP_409_CONFLICT,
     ErrorCode.INVITATION_TOKEN_INVALID: status.HTTP_403_FORBIDDEN,
     ErrorCode.INVITATION_TOKEN_REUSED: status.HTTP_409_CONFLICT,
+    ErrorCode.PROFILE_REFERENCE_ALREADY_USED: status.HTTP_409_CONFLICT,
 }
 
 DEFAULT_MESSAGE: dict[ErrorCode, str] = {
@@ -111,6 +113,7 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.INVITATION_STATE_CONFLICT: "현재 상태에서는 초대를 처리할 수 없습니다.",
     ErrorCode.INVITATION_TOKEN_INVALID: "초대 링크가 유효하지 않습니다.",
     ErrorCode.INVITATION_TOKEN_REUSED: "이미 사용된 초대 링크입니다.",
+    ErrorCode.PROFILE_REFERENCE_ALREADY_USED: "이미 사용된 프로필 연결 참조값입니다. 새 참조값으로 다시 시도해 주세요.",
 }
 
 # 프레임워크가 직접 올리는 오류(라우터 404·405, HTTPBearer 401)만 여기로 온다.

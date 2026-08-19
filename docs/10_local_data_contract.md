@@ -7,7 +7,7 @@
 > 서버 계약: [03_api_spec.md](03_api_spec.md)
 >
 > 데이터 모델: [02_erd.md](02_erd.md)
-> 결정 근거: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md)
+> 결정 근거: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-006](adr/0006-lifecycle-scoped-profile-reference.md)
 
 ## 1. 목적과 경계
 
@@ -83,7 +83,8 @@ interface LocalHousehold {
 interface FamilyProfile {
   id: UUID;
   householdId: UUID;
-  opaqueServerRef: Base64Url;
+  opaqueServerRef: Base64Url | null;
+  serverRefState: "none" | "pending" | "active" | "retired";
   status: "active" | "hidden" | "merged";
   displayNameCiphertext: EncryptedValue;
   relationshipCiphertext: EncryptedValue;
@@ -102,7 +103,9 @@ interface EncryptedValue {
 }
 ```
 
-`opaqueServerRef`는 프로필 생성 시 32바이트 CSPRNG로 만들고 서버 연결이 없어도 생성한다. 프로필 이름·관계·생년을 해시하거나 암호화한 값으로 만들지 않는다.
+`opaqueServerRef`는 로컬 프로필의 영구 ID가 아니다. 가족 초대를 시작할 때 32바이트 이상의 CSPRNG로 생성하고, 초대부터 연결 종료까지 한 연결 생명주기에서만 사용한다. 동일 작업 재시도에서는 유지하고, 초대 거절·취소·만료, 연결 해제, 계정 변경 또는 프로필 병합 시 `retired`로 전환한 뒤 값을 지운다. 재연결에는 새 값을 만든다. 프로필 이름·관계·생년을 해시하거나 암호화한 값으로 만들지 않는다.
+
+백업에서 `retired` 상태나 종료된 연결의 참조값을 읽어도 활성화하지 않는다. 로컬 프로필과 건강정보는 복구하되 `opaqueServerRef=null`, `serverRefState="none"`으로 정규화하고 다음 초대 시 새 값을 만든다.
 
 ### 3.2 건강기록
 

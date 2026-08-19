@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, LargeBinary, String, Uuid, func, text
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, Index, LargeBinary, String, Uuid
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -79,10 +79,8 @@ class FamilyInvitation(TimestampMixin, Base):
 
 
 Index(
-    "uq_family_invitations_pending_target",
+    "uq_family_invitations_profile_ref_lifetime",
     FamilyInvitation.household_id,
-    func.lower(FamilyInvitation.invitee_email),
     FamilyInvitation.target_profile_ref,
     unique=True,
-    postgresql_where=text("status = 'pending'"),
 )
