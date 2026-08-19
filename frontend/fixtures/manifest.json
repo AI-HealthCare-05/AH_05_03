@@ -1,0 +1,53 @@
+[
+  {
+    "id": "checkup-a",
+    "title": "A 디지털 원본",
+    "file": "checkup-a.png",
+    "measuredDate": "2026-03-11",
+    "truth": {
+      "total_cholesterol": 185,
+      "hdl_cholesterol": 62,
+      "ldl_cholesterol": 103,
+      "triglyceride": 98,
+      "fasting_glucose": 92,
+      "hemoglobin": 14.2,
+      "bun": 15,
+      "creatinine": 0.91,
+      "uric_acid": 5.4
+    }
+  },
+  {
+    "id": "checkup-b",
+    "title": "B 스캔본",
+    "file": "checkup-b.jpg",
+    "measuredDate": "2025-11-04",
+    "truth": {
+      "total_cholesterol": 236,
+      "hdl_cholesterol": 38,
+      "ldl_cholesterol": 158,
+      "triglyceride": 214,
+      "fasting_glucose": 118,
+      "hemoglobin": 13.1,
+      "bun": 18.4,
+      "creatinine": 1.24,
+      "uric_acid": 7.8
+    }
+  },
+  {
+    "id": "checkup-c",
+    "title": "C 휴대폰 촬영본",
+    "file": "checkup-c.jpg",
+    "measuredDate": "2026-01-27",
+    "truth": {
+      "total_cholesterol": 201,
+      "hdl_cholesterol": 55,
+      "ldl_cholesterol": 124,
+      "triglyceride": 142,
+      "fasting_glucose": 105,
+      "hemoglobin": 15,
+      "bun": 12.7,
+      "creatinine": 0.78,
+      "uric_acid": 6.2
+    }
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "name": "ieobom-frontend",
+  "private": true,
+  "type": "module",
+  "description": "이어봄 브라우저 로컬 도메인 계층. 건강정보는 이 경계 밖으로 나가지 않는다 (ADR-002).",
+  "scripts": {
+    "verify:ocr": "tsx scripts/verify-ocr.ts"
+  },
+  "dependencies": {
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

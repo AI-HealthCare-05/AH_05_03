@@ -45,6 +45,14 @@ class Config(BaseSettings):
     REDIS_SOCKET_TIMEOUT: float = 0.5
     REDIS_SOCKET_CONNECT_TIMEOUT: float = 0.5
 
+    # --- ai-worker job queue -----------------------------------------
+    JOB_STREAM_MAXLEN: int = 10_000
+    # 검진문서 이미지가 Redis에 머무는 시간. docs/05_tech_architecture.md 2절의
+    # 로컬 보관 원칙에 대한 예외라서 워커가 처리 직후 지우고, 못 지운 경우를
+    # 대비해 상한을 짧게 잡는다.
+    JOB_PAYLOAD_TTL_SECONDS: int = 5 * 60
+    JOB_RECORD_TTL_SECONDS: int = 10 * 60
+
     JWT_ALGORITHM: str = "HS256"
     # docs/05_tech_architecture.md 7절 "Access Token은 짧게 유지".
     # Redis 장애 시 fail-open 브레이크글래스의 노출 창을 15분으로 묶는 값이기도 하다.
