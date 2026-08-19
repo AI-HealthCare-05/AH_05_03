@@ -30,6 +30,9 @@ class FamilyInvitationRepository:
             select(FamilyInvitation).where(FamilyInvitation.id == invitation_id).with_for_update()
         )
 
+    async def get(self, invitation_id: uuid.UUID) -> FamilyInvitation | None:
+        return await self.session.get(FamilyInvitation, invitation_id)
+
     async def list_for_account(self, account_id: uuid.UUID, email: str) -> list[FamilyInvitation]:
         result = await self.session.scalars(
             select(FamilyInvitation)

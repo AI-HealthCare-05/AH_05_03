@@ -8,7 +8,9 @@ import type {
   FamilyInvitationData,
   FamilyInvitationListData,
   HouseholdData,
+  HouseholdMembershipData,
   PlanChangeData,
+  ProfileLinkData,
   SignUpData,
   SubscriptionBrief,
   SubscriptionData,
@@ -113,6 +115,32 @@ export class ServerApiClient {
     return result.items;
   }
 
+  public getHousehold(householdId: string): Promise<HouseholdData> {
+    return this.request(`/households/${encodeURIComponent(householdId)}`, { authenticated: true });
+  }
+
+  public async listHouseholdMemberships(householdId: string): Promise<HouseholdMembershipData[]> {
+    const result = await this.request<{ items: HouseholdMembershipData[] }>(
+      `/households/${encodeURIComponent(householdId)}/memberships`,
+      { authenticated: true },
+    );
+    return result.items;
+  }
+
+  public leaveHousehold(householdId: string): Promise<HouseholdMembershipData> {
+    return this.request(`/households/${encodeURIComponent(householdId)}/leave`, {
+      method: "POST",
+      authenticated: true,
+    });
+  }
+
+  public closeHousehold(householdId: string): Promise<void> {
+    return this.request(`/households/${encodeURIComponent(householdId)}`, {
+      method: "DELETE",
+      authenticated: true,
+    });
+  }
+
   public createInvitation(input: {
     householdId: string;
     inviteeEmail: string;
@@ -143,6 +171,28 @@ export class ServerApiClient {
 
   public cancelInvitation(invitationId: string): Promise<FamilyInvitationData> {
     return this.request(`/family-invitations/${encodeURIComponent(invitationId)}/cancel`, {
+      method: "POST",
+      authenticated: true,
+    });
+  }
+
+  public createProfileLink(invitationId: string, localProfileRef: string): Promise<ProfileLinkData> {
+    return this.request("/profile-links", {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify({ invitation_id: invitationId, local_profile_ref: localProfileRef }),
+    });
+  }
+
+  public async listProfileLinks(): Promise<ProfileLinkData[]> {
+    const result = await this.request<{ items: ProfileLinkData[] }>("/profile-links", {
+      authenticated: true,
+    });
+    return result.items;
+  }
+
+  public unlinkProfileLink(linkId: string): Promise<ProfileLinkData> {
+    return this.request(`/profile-links/${encodeURIComponent(linkId)}/unlink`, {
       method: "POST",
       authenticated: true,
     });

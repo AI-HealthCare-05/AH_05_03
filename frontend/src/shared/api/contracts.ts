@@ -60,6 +60,28 @@ export interface HouseholdData {
   row_version: number;
 }
 
+export interface HouseholdMembershipData {
+  id: string;
+  household_id: string;
+  account_id: string;
+  status: "active" | "left";
+  joined_at: string;
+  left_at: string | null;
+  row_version: number;
+}
+
+export interface ProfileLinkData {
+  id: string;
+  household_id: string;
+  account_id: string;
+  invitation_id: string | null;
+  local_profile_ref: string;
+  status: "active" | "unlinked";
+  linked_at: string;
+  unlinked_at: string | null;
+  row_version: number;
+}
+
 export interface FamilyInvitationData {
   id: string;
   household_id: string;
