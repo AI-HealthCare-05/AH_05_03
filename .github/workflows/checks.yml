@@ -59,9 +59,6 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
       - name: Verify local model network boundary
         run: npm run test:e2e
 
