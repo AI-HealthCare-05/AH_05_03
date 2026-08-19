@@ -65,6 +65,17 @@ export class LocalProfileService {
   }
 
   public async list(householdId: string): Promise<LocalResult<FamilyProfile[]>> {
+    return this.listByStatus(householdId, "active");
+  }
+
+  public async listHidden(householdId: string): Promise<LocalResult<FamilyProfile[]>> {
+    return this.listByStatus(householdId, "hidden");
+  }
+
+  private async listByStatus(
+    householdId: string,
+    status: FamilyProfile["status"],
+  ): Promise<LocalResult<FamilyProfile[]>> {
     const records = await this.repository.list({ householdRef: householdId, recordType: "family-profile" });
     const profiles: FamilyProfile[] = [];
     for (const record of records) {
@@ -73,7 +84,7 @@ export class LocalProfileService {
         return result;
       }
       const profile = normalizeFamilyProfile(result.value);
-      if (profile.status === "active") {
+      if (profile.status === status) {
         profiles.push(profile);
       }
     }
@@ -110,6 +121,23 @@ export class LocalProfileService {
     const updated: FamilyProfile = {
       ...current.value,
       status: "hidden",
+      updatedAt: new Date().toISOString(),
+      version: current.value.version + 1,
+    };
+    await this.repository.put(await toEncryptedRecord(updated, "family-profile", updated.id, this.cipher));
+    return success(updated);
+  }
+
+  public async restore(profileId: string, expectedVersion: number): Promise<LocalResult<FamilyProfile>> {
+    const current = await this.get(profileId);
+    if (!current.ok) return current;
+    if (current.value.version !== expectedVersion) return failure("VERSION_CONFLICT", "프로필 버전이 변경되었습니다.");
+    if (current.value.status !== "hidden") {
+      return failure("VALIDATION_ERROR", "숨겨진 프로필만 가족 목록으로 복원할 수 있습니다.");
+    }
+    const updated: FamilyProfile = {
+      ...current.value,
+      status: "active",
       updatedAt: new Date().toISOString(),
       version: current.value.version + 1,
     };

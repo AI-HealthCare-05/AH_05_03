@@ -273,6 +273,7 @@ main {
 
 .primary-button,
 .secondary-button,
+.danger-button,
 .text-button {
   border-radius: 12px;
   padding: 12px 17px;
@@ -295,6 +296,17 @@ main {
   border: 1px solid var(--line);
   color: var(--blue-700);
   background: white;
+}
+
+.danger-button {
+  border: 1px solid #e3a2a2;
+  color: #a32626;
+  background: #fff7f7;
+}
+
+.danger-button:hover:not(:disabled) {
+  border-color: #cf6e6e;
+  background: #fff0f0;
 }
 
 .text-button {
@@ -387,6 +399,18 @@ main {
   background: white;
 }
 
+.member-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.compact-button {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+}
+
 .member-list {
   margin-top: 20px;
   display: grid;
@@ -468,6 +492,12 @@ main {
   color: #718099;
   font-size: 0.63rem;
   font-weight: 700;
+}
+
+.member-dashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .add-member-card {
@@ -878,6 +908,80 @@ main {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.profile-lifecycle-zone {
+  margin-top: 24px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.profile-lifecycle-zone h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.profile-lifecycle-zone p,
+.profile-confirmation p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.65;
+}
+
+.profile-lifecycle-actions {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.profile-confirmation {
+  margin-top: 20px;
+}
+
+.profile-confirmation .alert {
+  margin-top: 16px;
+}
+
+.profile-confirmation .form-actions {
+  margin-top: 22px;
+}
+
+.hidden-profiles-content {
+  margin-top: 20px;
+}
+
+.hidden-profiles-content .alert {
+  margin-top: 16px;
+}
+
+.hidden-profile-list {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.hidden-profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 15px;
+  background: var(--surface);
+}
+
+.hidden-profile-row strong,
+.hidden-profile-row small {
+  display: block;
+}
+
+.hidden-profile-row small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .data-page .dashboard-heading {

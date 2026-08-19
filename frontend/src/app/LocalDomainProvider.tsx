@@ -16,6 +16,7 @@ import {
   LocalDomainContext,
   type LocalDomainContextValue,
   PRIMARY_HOUSEHOLD_ID,
+  type UpdateProfileInput,
 } from "./localDomainContext";
 import type { FamilyProfile } from "../shared/local/domainContracts";
 
@@ -25,6 +26,7 @@ export function LocalDomainProvider({
 }: PropsWithChildren<{ databaseName?: string }>) {
   const [runtime, setRuntime] = useState<LocalDomainRuntime>();
   const [profiles, setProfiles] = useState<FamilyProfile[]>([]);
+  const [hiddenProfiles, setHiddenProfiles] = useState<FamilyProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
@@ -39,11 +41,16 @@ export function LocalDomainProvider({
           createdRuntime.close();
           return;
         }
-        const result = await createdRuntime.profiles.list(PRIMARY_HOUSEHOLD_ID);
+        const [result, hiddenResult] = await Promise.all([
+          createdRuntime.profiles.list(PRIMARY_HOUSEHOLD_ID),
+          createdRuntime.profiles.listHidden(PRIMARY_HOUSEHOLD_ID),
+        ]);
         if (disposed) return;
         if (!result.ok) throw new Error(result.error.message);
+        if (!hiddenResult.ok) throw new Error(hiddenResult.error.message);
         setRuntime(createdRuntime);
         setProfiles(result.value);
+        setHiddenProfiles(hiddenResult.value);
         setError(undefined);
       })
       .catch((caught: unknown) => {
@@ -63,9 +70,14 @@ export function LocalDomainProvider({
 
   const refreshProfiles = useCallback(async () => {
     if (!runtime) return;
-    const result = await runtime.profiles.list(PRIMARY_HOUSEHOLD_ID);
+    const [result, hiddenResult] = await Promise.all([
+      runtime.profiles.list(PRIMARY_HOUSEHOLD_ID),
+      runtime.profiles.listHidden(PRIMARY_HOUSEHOLD_ID),
+    ]);
     if (!result.ok) throw new Error(result.error.message);
+    if (!hiddenResult.ok) throw new Error(hiddenResult.error.message);
     setProfiles(result.value);
+    setHiddenProfiles(hiddenResult.value);
   }, [runtime]);
 
   const createProfile = useCallback(
@@ -99,17 +111,78 @@ export function LocalDomainProvider({
     [runtime],
   );
 
+  const updateProfile = useCallback(
+    async (profileId: string, input: UpdateProfileInput) => {
+      if (!runtime) throw new Error("로컬 저장소를 준비하는 중입니다.");
+      const result = await runtime.profiles.update(profileId, input);
+      if (!result.ok) throw new Error(result.error.message);
+      await refreshProfiles();
+      return result.value;
+    },
+    [refreshProfiles, runtime],
+  );
+
+  const hideProfile = useCallback(
+    async (profileId: string, expectedVersion: number) => {
+      if (!runtime) throw new Error("로컬 저장소를 준비하는 중입니다.");
+      const result = await runtime.profiles.hide(profileId, expectedVersion);
+      if (!result.ok) throw new Error(result.error.message);
+      await refreshProfiles();
+      return result.value;
+    },
+    [refreshProfiles, runtime],
+  );
+
+  const deleteEmptyProfile = useCallback(
+    async (profileId: string) => {
+      if (!runtime) throw new Error("로컬 저장소를 준비하는 중입니다.");
+      const result = await runtime.profiles.deleteEmpty(profileId);
+      if (!result.ok) throw new Error(result.error.message);
+      await refreshProfiles();
+    },
+    [refreshProfiles, runtime],
+  );
+
+  const restoreProfile = useCallback(
+    async (profileId: string, expectedVersion: number) => {
+      if (!runtime) throw new Error("로컬 저장소를 준비하는 중입니다.");
+      const result = await runtime.profiles.restore(profileId, expectedVersion);
+      if (!result.ok) throw new Error(result.error.message);
+      await refreshProfiles();
+      return result.value;
+    },
+    [refreshProfiles, runtime],
+  );
+
   const value = useMemo<LocalDomainContextValue>(
     () => ({
       runtime,
       profiles,
+      hiddenProfiles,
       loading,
       error,
       refreshProfiles,
       createProfile,
+      updateProfile,
+      hideProfile,
+      restoreProfile,
+      deleteEmptyProfile,
       createHealthRecord,
     }),
-    [createHealthRecord, createProfile, error, loading, profiles, refreshProfiles, runtime],
+    [
+      createHealthRecord,
+      createProfile,
+      deleteEmptyProfile,
+      error,
+      hideProfile,
+      hiddenProfiles,
+      loading,
+      profiles,
+      refreshProfiles,
+      runtime,
+      restoreProfile,
+      updateProfile,
+    ],
   );
 
   return <LocalDomainContext.Provider value={value}>{children}</LocalDomainContext.Provider>;

@@ -11,6 +11,10 @@ export interface CreateProfileInput {
   birthDate?: `${number}-${number}-${number}`;
 }
 
+export interface UpdateProfileInput extends CreateProfileInput {
+  expectedVersion: number;
+}
+
 export interface CreateHealthRecordInput {
   profileId: string;
   recordType: HealthRecordType;
@@ -21,10 +25,15 @@ export interface CreateHealthRecordInput {
 export interface LocalDomainContextValue {
   runtime?: LocalDomainRuntime;
   profiles: FamilyProfile[];
+  hiddenProfiles: FamilyProfile[];
   loading: boolean;
   error?: string;
   refreshProfiles(): Promise<void>;
   createProfile(input: CreateProfileInput): Promise<FamilyProfile>;
+  updateProfile(profileId: string, input: UpdateProfileInput): Promise<FamilyProfile>;
+  hideProfile(profileId: string, expectedVersion: number): Promise<FamilyProfile>;
+  restoreProfile(profileId: string, expectedVersion: number): Promise<FamilyProfile>;
+  deleteEmptyProfile(profileId: string): Promise<void>;
   createHealthRecord(input: CreateHealthRecordInput): Promise<HealthRecord>;
 }
 

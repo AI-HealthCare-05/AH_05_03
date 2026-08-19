@@ -107,6 +107,12 @@ describe("로컬 수직 기능", () => {
     expect((await profiles.hide(created.value.id, 2)).ok).toBe(true);
     const visibleProfiles = await profiles.list(householdId);
     expect(visibleProfiles.ok && visibleProfiles.value).toHaveLength(0);
+    const hiddenProfiles = await profiles.listHidden(householdId);
+    expect(hiddenProfiles.ok && hiddenProfiles.value.map((profile) => profile.displayName)).toEqual(["수정 후"]);
+    if (!hiddenProfiles.ok) throw new Error(hiddenProfiles.error.message);
+    expect((await profiles.restore(created.value.id, hiddenProfiles.value[0].version)).ok).toBe(true);
+    const restoredProfiles = await profiles.list(householdId);
+    expect(restoredProfiles.ok && restoredProfiles.value.map((profile) => profile.displayName)).toEqual(["수정 후"]);
     repository.close();
   });
 

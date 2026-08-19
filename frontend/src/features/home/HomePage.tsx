@@ -4,6 +4,7 @@ import { NavLink } from "react-router-dom";
 import { useLocalDomain } from "../../app/localDomainContext";
 import type {
   DashboardSummary,
+  FamilyProfile,
   HealthRecord,
   HealthRecordType,
 } from "../../shared/local/domainContracts";
@@ -23,12 +24,27 @@ const RECORD_LABELS: Record<HealthRecordType, string> = {
 const RELATIONSHIPS = ["본인", "배우자", "자녀", "부모", "형제·자매", "기타"];
 
 export function HomePage() {
-  const { runtime, profiles, loading, error, createProfile, createHealthRecord } = useLocalDomain();
+  const {
+    runtime,
+    profiles,
+    hiddenProfiles,
+    loading,
+    error,
+    createProfile,
+    updateProfile,
+    hideProfile,
+    restoreProfile,
+    deleteEmptyProfile,
+    createHealthRecord,
+  } = useLocalDomain();
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [summary, setSummary] = useState<DashboardSummary>();
   const [records, setRecords] = useState<HealthRecord[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [profileEditDialogOpen, setProfileEditDialogOpen] = useState(false);
+  const [profileLifecycleAction, setProfileLifecycleAction] = useState<"hide" | "delete">();
+  const [hiddenProfilesDialogOpen, setHiddenProfilesDialogOpen] = useState(false);
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
   const [actionError, setActionError] = useState<string>();
   const [saving, setSaving] = useState(false);
@@ -114,6 +130,60 @@ export function HomePage() {
     }
   }
 
+  async function submitProfileUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedProfile) return;
+    setSaving(true);
+    setActionError(undefined);
+    const form = new FormData(event.currentTarget);
+    try {
+      await updateProfile(selectedProfile.id, {
+        displayName: String(form.get("displayName") ?? ""),
+        relationship: String(form.get("relationship") ?? ""),
+        birthDate: optionalDate(form.get("birthDate")),
+        expectedVersion: selectedProfile.version,
+      });
+      setProfileEditDialogOpen(false);
+    } catch (caught) {
+      setActionError(messageFrom(caught, "프로필을 수정하지 못했습니다."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmProfileLifecycle() {
+    if (!selectedProfile || !profileLifecycleAction) return;
+    setSaving(true);
+    setActionError(undefined);
+    try {
+      if (profileLifecycleAction === "hide") {
+        await hideProfile(selectedProfile.id, selectedProfile.version);
+      } else {
+        await deleteEmptyProfile(selectedProfile.id);
+      }
+      setSelectedProfileId(undefined);
+      setProfileLifecycleAction(undefined);
+    } catch (caught) {
+      setActionError(messageFrom(caught, "프로필 상태를 변경하지 못했습니다."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function restoreHiddenProfile(profile: FamilyProfile) {
+    setSaving(true);
+    setActionError(undefined);
+    try {
+      const restored = await restoreProfile(profile.id, profile.version);
+      setSelectedProfileId(restored.id);
+      if (hiddenProfiles.length === 1) setHiddenProfilesDialogOpen(false);
+    } catch (caught) {
+      setActionError(messageFrom(caught, "숨긴 프로필을 복원하지 못했습니다."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="product-page">
       <section className="dashboard-heading">
@@ -147,7 +217,7 @@ export function HomePage() {
       </section>
 
       {error ? <div className="alert error-alert" role="alert">{error}</div> : null}
-      {actionError ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
+      {actionError && !profileLifecycleAction && !hiddenProfilesDialogOpen ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
 
       <section className="dashboard-section" aria-labelledby="members-heading">
         <div className="section-title-row">
@@ -155,7 +225,17 @@ export function HomePage() {
             <p className="section-kicker">가족 구성원</p>
             <h2 id="members-heading">누구의 기록을 볼까요?</h2>
           </div>
-          <span className="section-count">{profiles.length}명</span>
+          <div className="member-section-actions">
+            {hiddenProfiles.length > 0 ? (
+              <button className="secondary-button compact-button" type="button" onClick={() => {
+                setActionError(undefined);
+                setHiddenProfilesDialogOpen(true);
+              }}>
+                숨긴 프로필 {hiddenProfiles.length}명
+              </button>
+            ) : null}
+            <span className="section-count">{profiles.length}명</span>
+          </div>
         </div>
 
         {loading ? <DashboardSkeleton /> : null}
@@ -210,9 +290,17 @@ export function HomePage() {
                 <p className="section-kicker">선택한 구성원</p>
                 <h2 id="selected-member-heading">{selectedProfile.displayName}님의 건강기록</h2>
               </div>
-              <button className="primary-button" type="button" onClick={() => setRecordDialogOpen(true)}>
-                건강기록 작성
-              </button>
+              <div className="member-dashboard-actions">
+                <button className="secondary-button" type="button" onClick={() => {
+                  setActionError(undefined);
+                  setProfileEditDialogOpen(true);
+                }}>
+                  프로필 관리
+                </button>
+                <button className="primary-button" type="button" onClick={() => setRecordDialogOpen(true)}>
+                  건강기록 작성
+                </button>
+              </div>
             </div>
 
             <div className="metric-grid">
@@ -327,6 +415,114 @@ export function HomePage() {
               <button className="primary-button" type="submit" disabled={saving}>{saving ? "암호화 중…" : "기록 저장"}</button>
             </div>
           </form>
+        </Modal>
+      ) : null}
+
+      {profileEditDialogOpen && selectedProfile ? (
+        <Modal title={`${selectedProfile.displayName} 프로필 관리`} onClose={() => setProfileEditDialogOpen(false)}>
+          <form className="product-form" onSubmit={submitProfileUpdate}>
+            <p className="form-notice">프로필 정보와 건강기록은 계속 이 브라우저에만 저장됩니다.</p>
+            <label>
+              이름 또는 호칭
+              <input
+                name="displayName"
+                maxLength={100}
+                required
+                defaultValue={selectedProfile.displayName}
+                autoFocus
+              />
+            </label>
+            <label>
+              관계
+              <select name="relationship" required defaultValue={selectedProfile.relationship}>
+                {RELATIONSHIPS.map((relationship) => <option key={relationship}>{relationship}</option>)}
+              </select>
+            </label>
+            <label>
+              생년월일 <span className="optional-label">선택</span>
+              <input name="birthDate" type="date" defaultValue={selectedProfile.birthDate ?? ""} />
+            </label>
+            <div className="form-actions">
+              <button className="secondary-button" type="button" onClick={() => setProfileEditDialogOpen(false)}>취소</button>
+              <button className="primary-button" type="submit" disabled={saving}>{saving ? "저장 중…" : "변경사항 저장"}</button>
+            </div>
+          </form>
+
+          <section className="profile-lifecycle-zone" aria-labelledby="profile-lifecycle-heading">
+            <h3 id="profile-lifecycle-heading">프로필 정리</h3>
+            <p>기록을 보존하려면 숨기기를 사용하세요. 영구 삭제는 연결된 기록이 없는 프로필에만 허용됩니다.</p>
+            <div className="profile-lifecycle-actions">
+              <button className="secondary-button" type="button" onClick={() => {
+                setActionError(undefined);
+                setProfileEditDialogOpen(false);
+                setProfileLifecycleAction("hide");
+              }}>
+                목록에서 숨기기
+              </button>
+              <button className="danger-button" type="button" onClick={() => {
+                setActionError(undefined);
+                setProfileEditDialogOpen(false);
+                setProfileLifecycleAction("delete");
+              }}>
+                빈 프로필 영구 삭제
+              </button>
+            </div>
+          </section>
+        </Modal>
+      ) : null}
+
+      {profileLifecycleAction && selectedProfile ? (
+        <Modal
+          title={profileLifecycleAction === "hide" ? "프로필을 목록에서 숨길까요?" : "빈 프로필을 영구 삭제할까요?"}
+          onClose={() => setProfileLifecycleAction(undefined)}
+        >
+          <div className="profile-confirmation">
+            {profileLifecycleAction === "hide" ? (
+              <p><strong>{selectedProfile.displayName}</strong> 프로필과 연결 기록은 보존됩니다. 현재 가족 목록에서만 보이지 않게 됩니다.</p>
+            ) : (
+              <p><strong>{selectedProfile.displayName}</strong> 프로필을 이 브라우저에서 삭제합니다. 연결된 기록이 하나라도 있으면 삭제하지 않고 안내합니다.</p>
+            )}
+            {actionError ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
+            <div className="form-actions">
+              <button className="secondary-button" type="button" onClick={() => setProfileLifecycleAction(undefined)}>취소</button>
+              <button
+                className={profileLifecycleAction === "delete" ? "danger-button" : "primary-button"}
+                type="button"
+                disabled={saving}
+                onClick={() => void confirmProfileLifecycle()}
+              >
+                {saving ? "처리 중…" : profileLifecycleAction === "hide" ? "프로필 숨기기" : "영구 삭제"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {hiddenProfilesDialogOpen ? (
+        <Modal title="숨긴 프로필 관리" onClose={() => setHiddenProfilesDialogOpen(false)}>
+          <div className="hidden-profiles-content">
+            <p className="form-notice">숨긴 프로필과 연결된 건강기록은 삭제되지 않았습니다. 복원하면 가족 목록에서 다시 확인할 수 있습니다.</p>
+            {actionError ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
+            <div className="hidden-profile-list">
+              {hiddenProfiles.map((profile) => (
+                <article key={profile.id} className="hidden-profile-row">
+                  <div>
+                    <strong>{profile.displayName}</strong>
+                    <small>{profile.relationship}{profile.birthDate ? ` · ${profile.birthDate.slice(0, 4)}년생` : ""}</small>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={saving}
+                    aria-label={`${profile.displayName} 프로필 복원`}
+                    onClick={() => void restoreHiddenProfile(profile)}
+                  >
+                    {saving ? "처리 중…" : "복원"}
+                  </button>
+                </article>
+              ))}
+            </div>
+          </div>
         </Modal>
       ) : null}
     </div>
