@@ -7,7 +7,10 @@ export type LocalErrorCode =
   | "VERSION_CONFLICT"
   | "ENCRYPTION_FAILED"
   | "DECRYPTION_FAILED"
-  | "DUPLICATE_RECORD";
+  | "DUPLICATE_RECORD"
+  | "PROFILE_MERGE_CONFLICT"
+  | "PROFILE_MERGE_NOT_SAFE"
+  | "ROLLBACK_REQUIRED";
 
 export type LocalResult<T> =
   | { ok: true; value: T }
@@ -19,9 +22,53 @@ export interface FamilyProfile {
   displayName: string;
   relationship: string;
   birthDate: ISODate | null;
+  opaqueServerRef: string | null;
+  serverRefState: "none" | "pending" | "active" | "retired";
   status: "active" | "hidden" | "merged";
+  mergedIntoProfileId: string | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
+  version: number;
+}
+
+export interface FamilyHistory {
+  id: string;
+  householdId: string;
+  profileId: string;
+  relativeRelationship: string;
+  conditionName: string;
+  onsetAge: number | null;
+  note: string | null;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+  version: number;
+}
+
+export type ShareableRecordType = "health-record" | "family-history" | "model-result";
+
+export interface LocalAccessGrant {
+  id: string;
+  householdId: string;
+  profileId: string;
+  granteeAccountId: string;
+  allowedRecordTypes: ShareableRecordType[];
+  status: "active" | "revoked";
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+  revokedAt: ISODateTime | null;
+  version: number;
+}
+
+export interface ProfileMergeOperation {
+  id: string;
+  householdId: string;
+  sourceProfileId: string;
+  targetProfileId: string;
+  restorePointId: string;
+  status: "committed" | "reverted";
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+  revertedAt: ISODateTime | null;
   version: number;
 }
 

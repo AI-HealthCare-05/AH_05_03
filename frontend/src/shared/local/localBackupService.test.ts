@@ -72,4 +72,49 @@ describe("LocalBackupService", () => {
     expect(await repository.list()).toHaveLength(1);
     repository.close();
   });
+
+  it("선택한 구성원의 허용 기록만 암호화 이전 파일로 내보내고 병합 가져오기한다", async () => {
+    const sourceRepository = new IndexedDbEncryptedRecordRepository(
+      "ieobom-transfer-source-" + crypto.randomUUID(),
+      indexedDB,
+    );
+    const sourceCipher = await AesGcmJsonCipher.create();
+    const householdId = crypto.randomUUID();
+    const profiles = new LocalProfileService(sourceRepository, sourceCipher);
+    const records = new LocalHealthRecordService(sourceRepository, sourceCipher);
+    const first = await profiles.create({ householdId, displayName: "공유 대상", relationship: "가족" });
+    const second = await profiles.create({ householdId, displayName: "공유 제외", relationship: "가족" });
+    if (!first.ok || !second.ok) throw new Error("프로필 생성 실패");
+    await records.create({
+      householdId,
+      profileId: first.value.id,
+      recordType: "note",
+      recordedAt: "2026-08-20T00:00:00.000Z",
+      source: "manual",
+      payload: { text: "공유 기록" },
+    });
+    const transfer = await new LocalBackupService(sourceRepository, sourceCipher).exportProfileTransfer(
+      first.value.id,
+      ["health-record"],
+      "correct horse battery staple",
+    );
+
+    const targetRepository = new IndexedDbEncryptedRecordRepository(
+      "ieobom-transfer-target-" + crypto.randomUUID(),
+      indexedDB,
+    );
+    const targetCipher = await AesGcmJsonCipher.create();
+    const preview = await new LocalBackupService(targetRepository, targetCipher).importAll(
+      transfer,
+      "correct horse battery staple",
+      "merge",
+    );
+    expect(preview.totalRecords).toBe(2);
+    const imported = await new LocalProfileService(targetRepository, targetCipher).get(first.value.id);
+    expect(imported.ok && imported.value.displayName).toBe("공유 대상");
+    expect(imported.ok && imported.value.serverRefState).toBe("none");
+    expect(JSON.stringify(await targetRepository.list())).not.toContain("공유 제외");
+    sourceRepository.close();
+    targetRepository.close();
+  });
 });

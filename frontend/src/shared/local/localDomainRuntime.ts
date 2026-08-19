@@ -1,12 +1,22 @@
 import { IndexedDbEncryptedRecordRepository } from "./indexedDbEncryptedRecordRepository";
 import { LocalBackupService } from "./localBackupService";
-import { LocalDashboardService, LocalHealthRecordService, LocalProfileService } from "./localDomainServices";
+import {
+  LocalAccessGrantService,
+  LocalDashboardService,
+  LocalFamilyHistoryService,
+  LocalHealthRecordService,
+  LocalProfileMergeService,
+  LocalProfileService,
+} from "./localDomainServices";
 import { IndexedDbLocalKeyVault } from "./localKeyVault";
 
 export interface LocalDomainRuntime {
   profiles: LocalProfileService;
   healthRecords: LocalHealthRecordService;
   dashboard: LocalDashboardService;
+  familyHistories: LocalFamilyHistoryService;
+  accessGrants: LocalAccessGrantService;
+  profileMerges: LocalProfileMergeService;
   backup: LocalBackupService;
   close(): void;
 }
@@ -35,6 +45,9 @@ export async function createLocalDomainRuntime(
     profiles,
     healthRecords,
     dashboard: new LocalDashboardService(healthRecords),
+    familyHistories: new LocalFamilyHistoryService(repository, cipher),
+    accessGrants: new LocalAccessGrantService(repository, cipher),
+    profileMerges: new LocalProfileMergeService(repository, cipher),
     backup: new LocalBackupService(repository, cipher, cryptoApi),
     close() {
       repository.close();
