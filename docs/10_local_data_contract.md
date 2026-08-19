@@ -327,7 +327,9 @@ interface ProfileService {
   get(profileId: UUID): Promise<LocalResult<FamilyProfile, "NOT_FOUND" | "DECRYPTION_FAILED">>;
   list(householdId: UUID, includeHidden?: boolean): Promise<LocalResult<FamilyProfile[]>>;
   update(input: UpdateProfileInput): Promise<LocalResult<FamilyProfile>>;
-  softDelete(profileId: UUID, expectedVersion: number): Promise<LocalResult<void>>;
+  hide(profileId: UUID, expectedVersion: number): Promise<LocalResult<FamilyProfile>>;
+  deleteEmpty(profileId: UUID): Promise<LocalResult<{ deleted: true }>>;
+  setServerReference(profileId: UUID, reference: Base64Url | null, state: ServerRefState): Promise<LocalResult<FamilyProfile>>;
 }
 
 interface CreateProfileInput {
@@ -348,9 +350,28 @@ interface UpdateProfileInput {
 }
 ```
 
-`expectedVersion` 불일치는 `VERSION_CONFLICT`를 반환한다. 프로필 삭제는 연결된 기록을 즉시 물리 삭제하지 않고 `hidden` 처리 후 별도 영구삭제 확인 흐름을 사용한다.
+`expectedVersion` 불일치는 `VERSION_CONFLICT`를 반환한다. 기록이 연결된 프로필은 `deleteEmpty`가 거부하며 `hide` 또는 병합으로 처리한다. 연결 기록이 전혀 없는 빈 프로필만 물리 삭제할 수 있다.
 
-### 4.2 건강기록
+### 4.2 가족력과 접근 범위
+
+```ts
+interface FamilyHistoryService {
+  create(input: CreateFamilyHistoryInput): Promise<LocalResult<FamilyHistory>>;
+  list(profileId: UUID): Promise<LocalResult<FamilyHistory[]>>;
+  update(historyId: UUID, input: UpdateFamilyHistoryInput): Promise<LocalResult<FamilyHistory>>;
+  delete(historyId: UUID): Promise<LocalResult<{ deleted: true }>>;
+}
+
+interface AccessGrantService {
+  grant(input: LocalAccessGrantInput): Promise<LocalResult<LocalAccessGrant>>;
+  list(profileId: UUID): Promise<LocalResult<LocalAccessGrant[]>>;
+  revoke(grantId: UUID): Promise<LocalResult<LocalAccessGrant>>;
+}
+```
+
+가족력과 접근 범위는 모두 암호화된 로컬 레코드로 저장한다. 접근 범위는 서버 권한이 아니라 사용자가 암호화 이전 파일에 어떤 로컬 기록 유형을 포함할지 정하는 로컬 정책이다.
+
+### 4.3 건강기록
 
 ```ts
 interface HealthRecordService {
@@ -397,7 +418,7 @@ interface CursorPage<T> {
 
 중복 후보는 `(profileId, recordType, recordedAt, canonicalPayloadHash)`로 탐지한다. `canonicalPayloadHash`는 정규화한 평문 payload의 SHA-256이지만 암호화해 저장하며 서버에 전송하지 않는다.
 
-### 4.3 원본 파일
+### 4.4 원본 파일
 
 ```ts
 interface DocumentService {
@@ -548,10 +569,8 @@ header 제한 검사 → 비밀번호로 DEK 해제 → manifest 복호화
 
 ```ts
 interface ProfileMergeService {
-  compare(sourceProfileId: UUID, targetProfileId: UUID): Promise<LocalResult<MergePlan>>;
-  execute(input: ExecuteMergeInput): Promise<LocalResult<MergeOperation>>;
-  commitServerLink(operationId: UUID, serverProfileLinkId: UUID): Promise<LocalResult<MergeOperation>>;
-  rollback(operationId: UUID): Promise<LocalResult<MergeOperation>>;
+  merge(sourceProfileId: UUID, targetProfileId: UUID): Promise<LocalResult<MergeOperation>>;
+  revert(operationId: UUID): Promise<LocalResult<MergeOperation>>;
 }
 
 interface MergePlan {
@@ -583,7 +602,9 @@ interface MergeOperation {
 }
 ```
 
-생년이 명백히 다르거나 사용자가 동일인이 아니라고 표시하면 `PROFILE_MERGE_NOT_SAFE`로 중단한다. 서버 프로필 연결이 필요한 병합은 `awaiting_server`에서 멈추고 성공 응답 전에는 source를 영구 삭제하지 않는다.
+현재 구현은 같은 가정의 활성 프로필만 병합하며, 영향받는 암호화 레코드를 복구 지점에 보존한 뒤 하나의 IndexedDB `replaceAll` 트랜잭션으로 기록 소유 참조를 대상 프로필로 옮긴다. 원본 프로필은 물리 삭제하지 않고 `merged`로 전환하며 서버 참조를 폐기한다. 병합된 접근 범위는 자동 승계하지 않고 `revoked`로 전환한다. `revert`는 복구 지점의 원본 암호화 레코드를 되돌린다.
+
+생년·이름·관계 충돌의 사용자 비교 화면과 서버 연결 보상 상태(`awaiting_server`)는 다음 고도화 단계에서 추가한다. 서버 프로필 연결이 필요한 경우에는 로컬 병합을 실행하기 전에 해당 UI 흐름이 준비되어야 한다.
 
 ## 10. 로컬 로그·분석 규칙
 

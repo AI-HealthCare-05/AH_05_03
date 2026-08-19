@@ -215,6 +215,7 @@ erDiagram
     family_profiles ||--o{ health_records : owns
     family_profiles ||--o{ health_documents : owns
     family_profiles ||--o{ family_histories : subject
+    family_profiles ||--o{ local_access_grants : controls
     family_profiles ||--o{ prediction_results : predicts
     health_documents ||--o{ ocr_results : produces
     health_documents ||--|| file_metadata : references
@@ -224,6 +225,8 @@ erDiagram
     family_profiles ||--o{ merge_operations : target
     restore_points ||--o| merge_operations : protects
 ```
+
+`local_access_grants`는 대상 서비스 계정 ID와 허용할 로컬 레코드 유형만 암호화해 브라우저에 저장한다. 서버 권한 테이블이 아니며 암호화 이전 파일을 만들 때 포함 범위를 결정하는 데 사용한다. 프로필 병합 시 자동 승계하지 않고 회수한 뒤 사용자가 다시 확인한다.
 
 로컬 엔티티의 필드, 암호화 형식, IndexedDB object store와 인덱스는 [10_local_data_contract.md](10_local_data_contract.md)를 기준으로 한다.
 
