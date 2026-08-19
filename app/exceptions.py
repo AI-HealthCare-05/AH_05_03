@@ -103,6 +103,18 @@ class HouseholdMembershipRequiredError(AppError):
     error_code = ErrorCode.HOUSEHOLD_MEMBERSHIP_REQUIRED
 
 
+class HouseholdStateConflictError(AppError):
+    error_code = ErrorCode.HOUSEHOLD_STATE_CONFLICT
+
+
+class HouseholdHasOtherMembersError(AppError):
+    error_code = ErrorCode.ACTIVE_MEMBERS_REMAIN
+
+
+class MembershipStateConflictError(AppError):
+    error_code = ErrorCode.MEMBERSHIP_STATE_CONFLICT
+
+
 class InvitationNotFoundError(AppError):
     error_code = ErrorCode.INVITATION_NOT_FOUND
 
@@ -133,6 +145,26 @@ class InvitationTokenReusedError(AppError):
 
 class ProfileReferenceAlreadyUsedError(AppError):
     error_code = ErrorCode.PROFILE_REFERENCE_ALREADY_USED
+
+
+class ProfileLinkNotFoundError(AppError):
+    error_code = ErrorCode.PROFILE_LINK_NOT_FOUND
+
+
+class ProfileLinkStateConflictError(AppError):
+    error_code = ErrorCode.PROFILE_LINK_STATE_CONFLICT
+
+
+class ProfileLinkAccountConflictError(AppError):
+    error_code = ErrorCode.PROFILE_ALREADY_LINKED
+
+
+class ProfileRefAlreadyClaimedError(AppError):
+    error_code = ErrorCode.PROFILE_REF_ALREADY_CLAIMED
+
+
+class ProfileLinkInvitationMismatchError(AppError):
+    error_code = ErrorCode.PROFILE_LINK_INVITATION_MISMATCH
 
 
 class RateLimitedError(AppError):
