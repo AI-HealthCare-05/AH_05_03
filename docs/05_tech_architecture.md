@@ -1,6 +1,6 @@
 # 기술 스택 및 로컬 우선 아키텍처
 
-> 관련 문서: [01_requirements.md](01_requirements.md), [02_erd.md](02_erd.md), [03_api_spec.md](03_api_spec.md), [브라우저 로컬 데이터 계약](10_local_data_contract.md), [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-003](adr/0003-web-authentication-token-transport.md)
+> 관련 문서: [01_requirements.md](01_requirements.md), [02_erd.md](02_erd.md), [03_api_spec.md](03_api_spec.md), [브라우저 로컬 데이터 계약](10_local_data_contract.md), [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-003](adr/0003-web-authentication-token-transport.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md)
 
 ## 1. 핵심 아키텍처 원칙
 
@@ -23,7 +23,7 @@
 | 로컬 암호화·백업 | Web Crypto API + 외부 암호화 파일 | 민감 로컬 데이터 암호화와 독립적인 복구 |
 | 백엔드 | FastAPI + SQLAlchemy 2.x Async + Alembic | 인증·구독·초대·최소 연결 API와 스키마 관리 |
 | 서버 DB | PostgreSQL | 건강정보를 제외한 계정 메타데이터 |
-| 임시 상태 | Redis | 인증·초대 만료·속도 제한 등 비건강정보 |
+| 임시 상태 | Redis | 인증 토큰 회전, 초대 토큰 1회성 소비·전송 신호·속도 제한 등 비건강정보 |
 | 로컬 AI/OCR | ONNX Runtime Web·Tesseract 계열 검토 | 기기 내 예측과 문서 인식 |
 | 인프라 | Docker, AWS EC2, Nginx | 계정 API 배포 |
 
@@ -87,6 +87,7 @@
 - Access Token은 15분의 짧은 JWT로 유지하고 클라이언트 메모리에만 보관한다.
 - Refresh Token은 Secure HttpOnly SameSite 쿠키로만 전달하고 Redis allowlist에서 매번 회전한다.
 - 이미 소비된 Refresh Token 재사용 시 해당 계정의 Refresh Token 패밀리를 폐기한다.
+- 초대 최종 상태는 PostgreSQL에 두고 Redis는 초대 원문 토큰 allowlist, 소비 마커, 워커 인계와 속도 제한에만 사용한다.
 - 인증 라우트는 허용된 브라우저 Origin만 받아 CSRF 공격면을 제한한다.
 - 로컬 백업은 인증된 암호화(AES-GCM 등)와 강한 키 파생 함수를 사용한다.
 - 후순위 WebRTC 기술검증에서 기기 연결을 채택하면 상대 기기 확인 코드 또는 QR 검증을 사용한다.

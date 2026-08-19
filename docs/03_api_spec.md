@@ -7,7 +7,7 @@
 > 로컬 계약 원본: [브라우저 로컬 데이터 계약](10_local_data_contract.md)
 >
 > 데이터 모델: [서버·로컬 ERD](02_erd.md), [PostgreSQL DDL](database/0002_service_domain.sql)
-> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-003](adr/0003-web-authentication-token-transport.md)
+> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-003](adr/0003-web-authentication-token-transport.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md)
 
 ## 1. 계약 분리
 
@@ -229,6 +229,8 @@ pending ──accept──> accepted
 5. 이메일에는 원문 토큰이 포함된 HTTPS 링크만 전송한다.
 6. 감사 로그에는 초대 ID와 이벤트 종류만 기록하고 토큰·프로필 참조값 전체를 기록하지 않는다.
 
+현재 구현은 원문 토큰을 API 응답에 반환하지 않는다. 짧은 TTL의 Redis 키에 보관하고 토큰이 없는 초대 ID만 Redis Stream에 기록해 메일 워커에 인계한다. 실제 이메일 공급자 연동은 후속 작업이다.
+
 ### 5.2 초대 수락·거절·취소
 
 - 수락자는 로그인 이메일과 초대 이메일이 일치해야 한다.
@@ -236,6 +238,8 @@ pending ──accept──> accepted
 - 수락만으로 `profile_links`를 생성하지 않는다.
 - 수락·연결만으로 건강정보 파일을 서버에 업로드하거나 다운로드하지 않는다.
 - 만료 판정은 `status`뿐 아니라 `expires_at <= now()`도 확인하고 원자적으로 `expired`로 전환한다.
+- 수락과 거절 요청은 `{ "token": "<base64url>" }` 본문으로 링크의 원문 토큰을 증명한다.
+- 취소는 `POST /family-invitations/{invitation_id}/cancel`을 사용하며 GET 요청으로 상태를 변경하지 않는다.
 
 ## 6. 프로필 연결 계약
 
@@ -320,7 +324,7 @@ WebRTC 직접 전송은 현재 OpenAPI에서 제외한다. 기술검증을 통�
 | Refresh Token DB 추적 없음 | 해시 저장·회전·폐기 | `auth_sessions` 구현 |
 | 공통 오류가 FastAPI `detail` 형태 | `ErrorResponse` | 예외 핸들러 구현 |
 | `row_version` 없음 | `If-Match` 낙관적 잠금 | 모델·Repository 수정 |
-| 가정·구독·초대·연결 API 없음 | OpenAPI 정의 완료 | 2순위 구현 |
+| 가정 생성·목록과 초대 생성·목록·수락·거절·취소 구현 | 프로필 연결·멱등성·If-Match까지 포함한 목표 계약 | 남은 2순위 구현 |
 
 OpenAPI는 목표 계약이며 현재 FastAPI 코드가 자동으로 충족한다는 뜻이 아니다. 구현 PR은 OpenAPI 계약 테스트를 추가하고 차이를 하나씩 제거해야 한다.
 

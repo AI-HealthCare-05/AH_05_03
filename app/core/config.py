@@ -55,6 +55,19 @@ class Config(BaseSettings):
     # 회전·등록·무효화는 이 값과 무관하게 항상 fail-closed다.
     AUTH_FAIL_OPEN_ON_REDIS_ERROR: bool = False
 
+    # --- family invitations -----------------------------------------
+    FAMILY_INVITATION_EXPIRE_DAYS: int = 7
+    FAMILY_INVITATION_TOKEN_BYTES: int = 32
+    FAMILY_INVITATION_DELIVERY_TTL_SECONDS: int = 5 * 60
+    FAMILY_INVITATION_DELIVERY_STREAM_MAXLEN: int = 10_000
+    FAMILY_INVITATION_USED_TOKEN_TTL_SECONDS: int = 7 * 24 * 60 * 60
+    FAMILY_INVITATION_ACCOUNT_RATE_LIMIT: int = 10
+    FAMILY_INVITATION_ACCOUNT_RATE_WINDOW_SECONDS: int = 60
+    FAMILY_INVITATION_EMAIL_RATE_LIMIT: int = 20
+    FAMILY_INVITATION_EMAIL_RATE_WINDOW_SECONDS: int = 60 * 60
+    FAMILY_INVITATION_TRANSITION_RATE_LIMIT: int = 20
+    FAMILY_INVITATION_TRANSITION_RATE_WINDOW_SECONDS: int = 60
+
     # --- api ----------------------------------------------------------
     # 오류 응답의 details는 비규격 필드다. 운영에서는 끈다.
     API_ERROR_INCLUDE_DETAILS: bool = False
