@@ -13,9 +13,18 @@ export interface LocalDomainRuntime {
 
 export async function createLocalDomainRuntime(
   databaseName = "ieobom-local",
-  indexedDb: IDBFactory = globalThis.indexedDB,
-  cryptoApi: Crypto = globalThis.crypto,
+  indexedDb: IDBFactory | undefined = globalThis.indexedDB,
+  cryptoApi: Crypto | undefined = globalThis.crypto,
 ): Promise<LocalDomainRuntime> {
+  if (!cryptoApi?.subtle) {
+    throw new Error(
+      "로컬 건강정보 암호화를 사용할 수 없습니다. HTTPS 보안 주소로 다시 접속해 주세요.",
+    );
+  }
+  if (!indexedDb) {
+    throw new Error("이 브라우저에서는 로컬 건강정보 저장소를 사용할 수 없습니다.");
+  }
+
   const repository = new IndexedDbEncryptedRecordRepository(databaseName, indexedDb);
   const keyVault = new IndexedDbLocalKeyVault(databaseName, indexedDb, cryptoApi);
   const cipher = await keyVault.getOrCreateCipher();

@@ -32,6 +32,7 @@ export function HomePage() {
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
   const [actionError, setActionError] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const localStorageReady = Boolean(runtime);
 
   const refreshDashboard = useCallback(
     async (profileId: string) => {
@@ -122,8 +123,15 @@ export function HomePage() {
           <p>기록은 서버가 아니라 현재 브라우저에 암호화되어 저장됩니다.</p>
         </div>
         <div className="heading-actions">
-          <span className="local-status-badge">이 브라우저에 저장 중</span>
-          <button className="primary-button" type="button" onClick={() => setProfileDialogOpen(true)}>
+          <span className="local-status-badge">
+            {localStorageReady ? "이 브라우저에 저장 중" : "로컬 저장소 확인 필요"}
+          </span>
+          <button
+            className="primary-button"
+            type="button"
+            disabled={!localStorageReady}
+            onClick={() => setProfileDialogOpen(true)}
+          >
             구성원 추가
           </button>
         </div>
@@ -152,7 +160,10 @@ export function HomePage() {
 
         {loading ? <DashboardSkeleton /> : null}
         {!loading && profiles.length === 0 ? (
-          <EmptyHousehold onCreate={() => setProfileDialogOpen(true)} />
+          <EmptyHousehold
+            disabled={!localStorageReady}
+            onCreate={() => setProfileDialogOpen(true)}
+          />
         ) : null}
         {profiles.length > 0 ? (
           <div className="member-list" role="list">
@@ -175,7 +186,12 @@ export function HomePage() {
                 <span className="member-storage-label">로컬 프로필</span>
               </button>
             ))}
-            <button className="member-card add-member-card" type="button" onClick={() => setProfileDialogOpen(true)}>
+            <button
+              className="member-card add-member-card"
+              type="button"
+              disabled={!localStorageReady}
+              onClick={() => setProfileDialogOpen(true)}
+            >
               <span className="add-member-mark" aria-hidden="true">+</span>
               <span className="member-card-copy">
                 <strong>구성원 추가</strong>
@@ -317,14 +333,16 @@ export function HomePage() {
   );
 }
 
-function EmptyHousehold({ onCreate }: { onCreate: () => void }) {
+function EmptyHousehold({ disabled, onCreate }: { disabled: boolean; onCreate: () => void }) {
   return (
     <div className="empty-household">
       <div className="empty-household-copy">
         <span className="empty-step">첫 단계</span>
         <h3>가족 구성원 프로필을 만들어 시작하세요.</h3>
         <p>별도 로그인 없이 건강기록의 대상을 구분하는 로컬 프로필입니다.</p>
-        <button className="primary-button" type="button" onClick={onCreate}>첫 구성원 등록</button>
+        <button className="primary-button" type="button" disabled={disabled} onClick={onCreate}>
+          첫 구성원 등록
+        </button>
       </div>
       <ol className="onboarding-steps">
         <li><span>1</span><div><strong>프로필 만들기</strong><small>이름·관계·생년 정보</small></div></li>

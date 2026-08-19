@@ -67,7 +67,20 @@ chmod 600 ~/.config/ieobom/dev.env
 - `CORS_ALLOW_ORIGINS`
 - 필요하면 `DEV_HTTP_PORT`
 
-랜에서 `http://192.168.x.x:8080`으로 접속한다면 해당 Origin을 `CORS_ALLOW_ORIGINS` 배열에 정확히 추가한다. HTTP 개발 배포에서는 `REFRESH_COOKIE_SECURE=false`와 `ieobom_refresh` 이름을 사용한다. TLS를 적용하면 `__Host-ieobom_refresh`와 `REFRESH_COOKIE_SECURE=true`로 변경한다.
+Nginx의 8080 포트는 Mac 내부 헬스체크와 장애 진단에 사용한다. 사용자 브라우저는 Web Crypto 보안 컨텍스트가 필요하므로 Tailscale Serve가 제공하는 HTTPS 주소로 접속한다. `CORS_ALLOW_ORIGINS`에는 해당 HTTPS Origin을 정확히 추가하고 `REFRESH_COOKIE_SECURE=true` 및 `__Host-ieobom_refresh`를 사용한다.
+
+```bash
+/Applications/Tailscale.app/Contents/MacOS/Tailscale serve --bg --yes http://127.0.0.1:8080
+/Applications/Tailscale.app/Contents/MacOS/Tailscale serve status
+```
+
+현재 개발 환경의 접속 주소는 다음과 같다.
+
+```text
+https://admin-macbookpro.taila6d25d.ts.net/
+```
+
+`http://100.105.8.109:8080` 같은 IP 기반 HTTP 주소에서는 `crypto.subtle`을 사용할 수 없어 로컬 키 생성과 암호화 저장이 동작하지 않는다.
 
 ## 4. GitHub Environment
 
@@ -88,6 +101,7 @@ chmod 600 ~/.config/ieobom/dev.env
 ```bash
 curl http://127.0.0.1:8080/healthz
 curl http://127.0.0.1:8080/api/openapi.json
+curl https://admin-macbookpro.taila6d25d.ts.net/healthz
 ```
 
 서비스 상태와 로그는 runner 사용자로 확인한다.
