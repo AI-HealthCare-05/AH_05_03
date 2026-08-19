@@ -5,6 +5,7 @@ import { useUiStore } from "../stores/uiStore";
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
   { to: "/data", label: "데이터 관리", end: false },
+  { to: "/ui-preview", label: "UI 미리보기", end: false },
 ] as const;
 
 export function RootLayout() {
