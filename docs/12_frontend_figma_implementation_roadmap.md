@@ -2,6 +2,7 @@
 
 > 관련 문서: [04_wireframe.md](04_wireframe.md), [07_roadmap.md](07_roadmap.md), [10_local_data_contract.md](10_local_data_contract.md), [ADR-005](adr/0005-vite-spa-local-first-frontend-foundation.md)
 > 목적: 정적 Figma 와이어프레임을 이어봄의 데이터 경계를 지키는 React 화면과 기능으로 단계적으로 전환한다.
+> 구현 현황: [화면·API 구현 매핑](13_screen_api_implementation_map.md)
 
 ## 1. 문서 역할
 

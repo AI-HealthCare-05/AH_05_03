@@ -29,6 +29,7 @@
 | [docs/09_chronic_disease_model_plan.md](docs/09_chronic_disease_model_plan.md) | BRFSS 만성질환 학습 모델의 실행·평가 계획과 결과 | 데이터·ML |
 | [docs/10_local_data_contract.md](docs/10_local_data_contract.md) | IndexedDB·OPFS·Web Crypto 기반 로컬 도메인 API와 백업 포맷 | 전체 |
 | [docs/11_local_model_runtime_implementation.md](docs/11_local_model_runtime_implementation.md) | Python 참조 모델 격리, 브라우저 로컬 추론과 Rust/WASM·ONNX 전환 구현 기준 | 데이터·ML·프론트엔드 |
+| [docs/14_admin_macbook_dev_deployment.md](docs/14_admin_macbook_dev_deployment.md) | `dev` CI 성공 후 관리자 MacBook self-hosted runner 자동 배포 | DevOps·관리자 |
 | [docs/adr/0001-web-local-first-architecture.md](docs/adr/0001-web-local-first-architecture.md) | 데스크톱 앱에서 웹 기반 로컬 우선 서비스로 전환한 아키텍처 결정 | 전체 |
 | [docs/adr/0002-separate-server-api-and-local-domain-contract.md](docs/adr/0002-separate-server-api-and-local-domain-contract.md) | 서버 REST API와 브라우저 Local Domain API를 분리한 아키텍처 결정 | 전체 |
 | [docs/adr/0003-web-authentication-token-transport.md](docs/adr/0003-web-authentication-token-transport.md) | Access JWT와 HttpOnly Refresh Cookie를 선택한 인증 결정 | 전체 |

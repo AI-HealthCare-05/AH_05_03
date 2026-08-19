@@ -7,6 +7,7 @@ import { IndexedDbEncryptedRecordRepository } from "./indexedDbEncryptedRecordRe
 function createEncryptedRecord(): EncryptedLocalRecord {
   return {
     id: crypto.randomUUID(),
+    householdRef: crypto.randomUUID(),
     profileRef: crypto.randomUUID(),
     recordType: "health-record",
     schemaVersion: 1,
@@ -47,6 +48,30 @@ describe("IndexedDbEncryptedRecordRepository", () => {
     record.encryptedPayload.ciphertext = "";
 
     await expect(repository.put(record)).rejects.toThrow("ciphertext");
+    repository.close();
+  });
+
+  it("프로필과 레코드 유형으로 암호문 envelope를 조회하고 전체 삭제한다", async () => {
+    const repository = new IndexedDbEncryptedRecordRepository(
+      "ieobom-test-" + crypto.randomUUID(),
+      indexedDB,
+    );
+    const first = createEncryptedRecord();
+    const second = { ...createEncryptedRecord(), profileRef: first.profileRef };
+    await repository.put(first);
+    await repository.put(second);
+
+    const records = await repository.list({
+      profileRef: first.profileRef,
+      recordType: "health-record",
+    });
+    expect(records).toHaveLength(2);
+
+    await repository.clear();
+    expect(await repository.list()).toEqual([]);
+
+    await repository.replaceAll([first]);
+    expect(await repository.list()).toEqual([first]);
     repository.close();
   });
 });

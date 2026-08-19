@@ -1,0 +1,96 @@
+export interface ApiEnvelope<T> {
+  data: T;
+  message: string;
+  success: true;
+}
+
+export interface ApiErrorEnvelope {
+  error_code: string;
+  message: string;
+  success: false;
+  details?: Array<{
+    field: string;
+    message: string;
+    type: string;
+  }>;
+}
+
+export interface AccessTokenData {
+  access_token: string;
+  token_type: "bearer";
+  expires_in: number;
+}
+
+export interface SignUpData {
+  account_id: string;
+  email: string;
+  status: "active" | "suspended" | "closed";
+}
+
+export interface AccountSummary {
+  account: {
+    id: string;
+    email: string;
+    status: "active" | "suspended" | "closed";
+    created_at: string;
+  };
+  subscription: SubscriptionBrief;
+}
+
+export interface SubscriptionBrief {
+  plan: "FREE" | "BASIC" | "FAMILY";
+  status: "active" | "expired" | "cancelled";
+  renewed_at: string | null;
+}
+
+export interface SubscriptionData extends SubscriptionBrief {
+  id: string;
+  license_valid: boolean;
+}
+
+export interface PlanChangeData extends SubscriptionData {
+  previous_plan: SubscriptionBrief["plan"];
+  applied: boolean;
+}
+
+export interface HouseholdData {
+  id: string;
+  status: "active" | "closed";
+  created_at: string;
+  row_version: number;
+}
+
+export interface FamilyInvitationData {
+  id: string;
+  household_id: string;
+  inviter_account_id: string;
+  invitee_email: string;
+  target_profile_ref: string;
+  status: "pending" | "accepted" | "declined" | "expired" | "cancelled";
+  expires_at: string;
+  accepted_by_account_id: string | null;
+  accepted_at: string | null;
+  declined_at: string | null;
+  cancelled_at: string | null;
+  created_at: string;
+  updated_at: string;
+  row_version: number;
+}
+
+export interface FamilyInvitationListData {
+  sent: FamilyInvitationData[];
+  received: FamilyInvitationData[];
+}
+
+export interface FamilyInvitationCreatedData {
+  invitation: FamilyInvitationData;
+  delivery_queued: boolean;
+}
+
+export interface AccountCloseData {
+  account_id: string;
+  status: "closed";
+  closed_at: string;
+  subscription_status: "cancelled";
+  local_data_deleted: false;
+}

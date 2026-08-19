@@ -13,6 +13,7 @@ export interface EncryptedValue {
 
 export interface EncryptedLocalRecord {
   id: string;
+  householdRef: string;
   profileRef: string;
   recordType: LocalRecordType;
   schemaVersion: 1;
@@ -24,6 +25,15 @@ export interface EncryptedLocalRecord {
 export interface EncryptedRecordRepository {
   put(record: EncryptedLocalRecord): Promise<void>;
   get(recordId: string): Promise<EncryptedLocalRecord | undefined>;
+  list(query?: EncryptedRecordQuery): Promise<EncryptedLocalRecord[]>;
   delete(recordId: string): Promise<void>;
+  clear(): Promise<void>;
+  replaceAll(records: EncryptedLocalRecord[]): Promise<void>;
   close(): void;
+}
+
+export interface EncryptedRecordQuery {
+  householdRef?: string;
+  profileRef?: string;
+  recordType?: LocalRecordType;
 }
