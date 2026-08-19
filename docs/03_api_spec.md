@@ -270,6 +270,17 @@ PostgreSQL 트랜잭션:
 
 연결 성공 응답은 건강정보가 존재한다는 의미가 아니다. 실제 건강정보 이전은 사용자가 로컬에서 암호화 이전 파일을 만들고 상대가 가져오는 별도 흐름이다.
 
+조회와 해제는 다음을 사용한다.
+
+| Method | Path | 설명 |
+|---|---|---|
+| GET | `/profile-links/me` | 현재 계정의 연결 목록, `household_id`로 좁힐 수 있다 |
+| DELETE | `/profile-links/{profile_link_id}` | 연결을 `unlinked`로 바꾼다 |
+
+해제는 로컬 프로필과 건강기록을 삭제하지 않고 서버의 연결 행만 종료한다. 이미 해제된 연결에 같은 요청이 다시 오면 상태를 바꾸지 않고 현재 상태를 그대로 반환한다.
+
+현재 구현은 `account_audit_events` 기록, `Idempotency-Key` 저장, `If-Match`를 아직 포함하지 않는다. 응답은 다른 엔드포인트와 같은 성공 봉투를 사용하므로 해제도 `204`가 아니라 `200`이다.
+
 ## 7. 서버 데이터 금지 규칙
 
 다음 필드나 내용이 서버 DTO·DB·Redis·로그·메트릭 태그·오류 추적·작업 큐에 들어가면 결함으로 처리한다.
@@ -324,7 +335,7 @@ WebRTC 직접 전송은 현재 OpenAPI에서 제외한다. 기술검증을 통�
 | Refresh Token DB 추적 없음 | 해시 저장·회전·폐기 | `auth_sessions` 구현 |
 | 공통 오류가 FastAPI `detail` 형태 | `ErrorResponse` | 예외 핸들러 구현 |
 | `row_version` 없음 | `If-Match` 낙관적 잠금 | 모델·Repository 수정 |
-| 가정 생성·목록과 초대 생성·목록·수락·거절·취소 구현 | 프로필 연결·멱등성·If-Match까지 포함한 목표 계약 | 남은 2순위 구현 |
+| 가정·초대·프로필 연결 구현 | 멱등성·If-Match·감사 로그까지 포함한 목표 계약 | `api_idempotency_keys`·`account_audit_events` 구현 |
 
 OpenAPI는 목표 계약이며 현재 FastAPI 코드가 자동으로 충족한다는 뜻이 아니다. 구현 PR은 OpenAPI 계약 테스트를 추가하고 차이를 하나씩 제거해야 한다.
 

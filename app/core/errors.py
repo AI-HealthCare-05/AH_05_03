@@ -45,6 +45,11 @@ class ErrorCode(StrEnum):
     INVITATION_STATE_CONFLICT = "INVITATION_STATE_CONFLICT"
     INVITATION_TOKEN_INVALID = "INVITATION_TOKEN_INVALID"
     INVITATION_TOKEN_REUSED = "INVITATION_TOKEN_REUSED"
+    # --- profile link ----------------------------------------------
+    PROFILE_LINK_NOT_FOUND = "PROFILE_LINK_NOT_FOUND"
+    PROFILE_REF_INVALID = "PROFILE_REF_INVALID"
+    PROFILE_ALREADY_LINKED = "PROFILE_ALREADY_LINKED"
+    PROFILE_REF_ALREADY_CLAIMED = "PROFILE_REF_ALREADY_CLAIMED"
 
 
 ERROR_STATUS: dict[ErrorCode, int] = {
@@ -79,6 +84,12 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     ErrorCode.INVITATION_STATE_CONFLICT: status.HTTP_409_CONFLICT,
     ErrorCode.INVITATION_TOKEN_INVALID: status.HTTP_403_FORBIDDEN,
     ErrorCode.INVITATION_TOKEN_REUSED: status.HTTP_409_CONFLICT,
+    ErrorCode.PROFILE_LINK_NOT_FOUND: status.HTTP_404_NOT_FOUND,
+    # 형식은 통과했으나 이 초대와 함께 쓸 수 없는 참조값이다. 03_api_spec.md
+    # 2.3의 "JSON은 유효하지만 요청 조합이 잘못됨"에 해당하므로 422가 아니다.
+    ErrorCode.PROFILE_REF_INVALID: status.HTTP_400_BAD_REQUEST,
+    ErrorCode.PROFILE_ALREADY_LINKED: status.HTTP_409_CONFLICT,
+    ErrorCode.PROFILE_REF_ALREADY_CLAIMED: status.HTTP_409_CONFLICT,
 }
 
 DEFAULT_MESSAGE: dict[ErrorCode, str] = {
@@ -111,6 +122,10 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.INVITATION_STATE_CONFLICT: "현재 상태에서는 초대를 처리할 수 없습니다.",
     ErrorCode.INVITATION_TOKEN_INVALID: "초대 링크가 유효하지 않습니다.",
     ErrorCode.INVITATION_TOKEN_REUSED: "이미 사용된 초대 링크입니다.",
+    ErrorCode.PROFILE_LINK_NOT_FOUND: "프로필 연결을 찾을 수 없습니다.",
+    ErrorCode.PROFILE_REF_INVALID: "초대 대상 프로필과 일치하지 않는 참조값입니다.",
+    ErrorCode.PROFILE_ALREADY_LINKED: "이 가정에서 이미 다른 로컬 프로필과 연결되어 있습니다.",
+    ErrorCode.PROFILE_REF_ALREADY_CLAIMED: "이 프로필은 이미 다른 계정과 연결되어 있습니다.",
 }
 
 # 프레임워크가 직접 올리는 오류(라우터 404·405, HTTPBearer 401)만 여기로 온다.

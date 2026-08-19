@@ -6,6 +6,7 @@ autogenerate가 빈 마이그레이션을 만들거나 방금 만든 테이블�
 
 from app.models.family_invitations import FamilyInvitation, InvitationStatus
 from app.models.households import Household, HouseholdMembership, HouseholdStatus, MembershipStatus
+from app.models.profile_links import ProfileLink, ProfileLinkStatus
 from app.models.service_accounts import ServiceAccount, ServiceAccountStatus
 from app.models.subscriptions import Subscription, SubscriptionPlan, SubscriptionStatus
 
@@ -16,6 +17,8 @@ __all__ = [
     "HouseholdStatus",
     "InvitationStatus",
     "MembershipStatus",
+    "ProfileLink",
+    "ProfileLinkStatus",
     "ServiceAccount",
     "ServiceAccountStatus",
     "Subscription",
