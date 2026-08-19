@@ -131,5 +131,22 @@ class InvitationTokenReusedError(AppError):
     error_code = ErrorCode.INVITATION_TOKEN_REUSED
 
 
+# --- profile link --------------------------------------------------------
+class ProfileLinkNotFoundError(AppError):
+    error_code = ErrorCode.PROFILE_LINK_NOT_FOUND
+
+
+class ProfileRefInvalidError(AppError):
+    error_code = ErrorCode.PROFILE_REF_INVALID
+
+
+class ProfileAlreadyLinkedError(AppError):
+    error_code = ErrorCode.PROFILE_ALREADY_LINKED
+
+
+class ProfileRefAlreadyClaimedError(AppError):
+    error_code = ErrorCode.PROFILE_REF_ALREADY_CLAIMED
+
+
 class RateLimitedError(AppError):
     error_code = ErrorCode.RATE_LIMITED
