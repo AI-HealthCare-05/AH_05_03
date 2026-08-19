@@ -1,149 +1,401 @@
-import { useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { NavLink } from "react-router-dom";
 
-import { detectLocalCapabilities } from "../../shared/local/capabilities";
-import type { FoundationAssessmentResult } from "../../shared/model/contracts";
-import { runAssessmentInWorker } from "../../shared/model/assessmentWorkerClient";
+import { useLocalDomain } from "../../app/localDomainContext";
+import type {
+  DashboardSummary,
+  HealthRecord,
+  HealthRecordType,
+} from "../../shared/local/domainContracts";
 
-const SYNTHETIC_INPUT = {
-  schemaVersion: 1,
-  modelId: "foundation-smoke-test",
-  synthetic: true,
-  metrics: {
-    first: 17,
-    second: 25,
-  },
-} as const;
+const RECORD_LABELS: Record<HealthRecordType, string> = {
+  blood_pressure: "혈압",
+  blood_glucose: "혈당",
+  body_measurement: "신체 측정",
+  lab_result: "검사 결과",
+  vaccination: "예방접종",
+  health_screening: "건강검진",
+  pain: "통증 기록",
+  walking: "걷기",
+  note: "건강 메모",
+};
+
+const RELATIONSHIPS = ["본인", "배우자", "자녀", "부모", "형제·자매", "기타"];
 
 export function HomePage() {
-  const capabilities = useMemo(() => detectLocalCapabilities(), []);
-  const [result, setResult] = useState<FoundationAssessmentResult>();
-  const [error, setError] = useState<string>();
-  const [running, setRunning] = useState(false);
+  const { runtime, profiles, loading, error, createProfile, createHealthRecord } = useLocalDomain();
+  const [selectedProfileId, setSelectedProfileId] = useState<string>();
+  const [summary, setSummary] = useState<DashboardSummary>();
+  const [records, setRecords] = useState<HealthRecord[]>([]);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [recordDialogOpen, setRecordDialogOpen] = useState(false);
+  const [actionError, setActionError] = useState<string>();
+  const [saving, setSaving] = useState(false);
 
-  async function runLocalCheck() {
-    setRunning(true);
-    setResult(undefined);
-    setError(undefined);
+  const refreshDashboard = useCallback(
+    async (profileId: string) => {
+      if (!runtime) return;
+      setDashboardLoading(true);
+      try {
+        const [summaryResult, recordsResult] = await Promise.all([
+          runtime.dashboard.summarize(profileId),
+          runtime.healthRecords.query({ profileId }),
+        ]);
+        if (!summaryResult.ok) throw new Error(summaryResult.error.message);
+        if (!recordsResult.ok) throw new Error(recordsResult.error.message);
+        setSummary(summaryResult.value);
+        setRecords(recordsResult.value);
+        setActionError(undefined);
+      } catch (caught) {
+        setActionError(messageFrom(caught, "건강 대시보드를 불러오지 못했습니다."));
+      } finally {
+        setDashboardLoading(false);
+      }
+    },
+    [runtime],
+  );
 
+  const selectedProfile = useMemo(
+    () => profiles.find((profile) => profile.id === selectedProfileId) ?? profiles[0],
+    [profiles, selectedProfileId],
+  );
+
+  useEffect(() => {
+    if (!selectedProfile) return;
+    const timeout = window.setTimeout(() => void refreshDashboard(selectedProfile.id), 0);
+    return () => window.clearTimeout(timeout);
+  }, [refreshDashboard, selectedProfile]);
+
+  async function submitProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setActionError(undefined);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
-      setResult(await runAssessmentInWorker(SYNTHETIC_INPUT));
+      const profile = await createProfile({
+        displayName: String(form.get("displayName") ?? ""),
+        relationship: String(form.get("relationship") ?? ""),
+        birthDate: optionalDate(form.get("birthDate")),
+      });
+      setSelectedProfileId(profile.id);
+      setProfileDialogOpen(false);
+      formElement.reset();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "로컬 실행에 실패했습니다.");
+      setActionError(messageFrom(caught, "구성원을 저장하지 못했습니다."));
     } finally {
-      setRunning(false);
+      setSaving(false);
+    }
+  }
+
+  async function submitHealthRecord(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedProfile) return;
+    setSaving(true);
+    setActionError(undefined);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    try {
+      await createHealthRecord({
+        profileId: selectedProfile.id,
+        recordType: String(form.get("recordType")) as HealthRecordType,
+        recordedAt: new Date(String(form.get("recordedAt"))).toISOString(),
+        note: String(form.get("note") ?? ""),
+      });
+      await refreshDashboard(selectedProfile.id);
+      setRecordDialogOpen(false);
+      formElement.reset();
+    } catch (caught) {
+      setActionError(messageFrom(caught, "건강기록을 저장하지 못했습니다."));
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
-    <>
-      <section className="hero">
-        <div className="content-width hero-grid">
+    <div className="product-page">
+      <section className="dashboard-heading">
+        <div>
+          <p className="page-kicker">우리 가족 건강 홈</p>
+          <h1>가족의 건강 흐름을 한곳에서 이어보세요</h1>
+          <p>기록은 서버가 아니라 현재 브라우저에 암호화되어 저장됩니다.</p>
+        </div>
+        <div className="heading-actions">
+          <span className="local-status-badge">이 브라우저에 저장 중</span>
+          <button className="primary-button" type="button" onClick={() => setProfileDialogOpen(true)}>
+            구성원 추가
+          </button>
+        </div>
+      </section>
+
+      <section className="privacy-strip" aria-label="데이터 보관 안내">
+        <span className="privacy-strip-mark" aria-hidden="true">로컬</span>
+        <div>
+          <strong>민감한 건강정보는 이 기기 안에서 처리합니다.</strong>
+          <p>계정·구독·초대 상태만 서버에 저장되며 건강기록은 자동 업로드되지 않습니다.</p>
+        </div>
+        <NavLink to="/data">백업 관리</NavLink>
+      </section>
+
+      {error ? <div className="alert error-alert" role="alert">{error}</div> : null}
+      {actionError ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
+
+      <section className="dashboard-section" aria-labelledby="members-heading">
+        <div className="section-title-row">
           <div>
-            <p className="eyebrow">LOCAL-FIRST FOUNDATION</p>
-            <h1>
-              건강정보가 서버로 가지 않는
-              <br />
-              프론트엔드 기반
-            </h1>
-            <p className="hero-copy">
-              이어봄은 계정 메타데이터와 건강정보를 분리합니다. 현재 화면은 브라우저
-              저장소와 로컬 모델 실행 경계를 검증하는 기초 구현입니다.
-            </p>
-            <div className="hero-actions">
+            <p className="section-kicker">가족 구성원</p>
+            <h2 id="members-heading">누구의 기록을 볼까요?</h2>
+          </div>
+          <span className="section-count">{profiles.length}명</span>
+        </div>
+
+        {loading ? <DashboardSkeleton /> : null}
+        {!loading && profiles.length === 0 ? (
+          <EmptyHousehold onCreate={() => setProfileDialogOpen(true)} />
+        ) : null}
+        {profiles.length > 0 ? (
+          <div className="member-list" role="list">
+            {profiles.map((profile, index) => (
               <button
-                className="primary-button"
+                className={profile.id === selectedProfileId ? "member-card is-selected" : "member-card"}
+                key={profile.id}
                 type="button"
-                onClick={runLocalCheck}
-                disabled={running}
+                role="listitem"
+                aria-pressed={profile.id === selectedProfileId}
+                onClick={() => setSelectedProfileId(profile.id)}
               >
-                {running ? "로컬 worker 확인 중…" : "합성 데이터로 로컬 실행 확인"}
+                <span className={`member-avatar avatar-tone-${index % 4}`} aria-hidden="true">
+                  {profile.displayName.slice(0, 1)}
+                </span>
+                <span className="member-card-copy">
+                  <strong>{profile.displayName}</strong>
+                  <small>{profile.relationship}{profile.birthDate ? ` · ${profile.birthDate.slice(0, 4)}년생` : ""}</small>
+                </span>
+                <span className="member-storage-label">로컬 프로필</span>
               </button>
-              <span className="privacy-label">이 동작은 /api 요청을 만들지 않습니다.</span>
+            ))}
+            <button className="member-card add-member-card" type="button" onClick={() => setProfileDialogOpen(true)}>
+              <span className="add-member-mark" aria-hidden="true">+</span>
+              <span className="member-card-copy">
+                <strong>구성원 추가</strong>
+                <small>이 브라우저에 새 프로필 만들기</small>
+              </span>
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      {selectedProfile ? (
+        <section className="member-dashboard" aria-labelledby="selected-member-heading">
+          <div className="member-dashboard-main">
+            <div className="section-title-row">
+              <div>
+                <p className="section-kicker">선택한 구성원</p>
+                <h2 id="selected-member-heading">{selectedProfile.displayName}님의 건강기록</h2>
+              </div>
+              <button className="primary-button" type="button" onClick={() => setRecordDialogOpen(true)}>
+                건강기록 작성
+              </button>
             </div>
 
-            {result ? (
-              <div className="result-banner" role="status" data-testid="local-result">
-                <strong>{result.resultCode}</strong>
-                <span>worker checksum {result.checksum}</span>
-              </div>
-            ) : null}
-            {error ? (
-              <div className="error-banner" role="alert">
-                {error}
-              </div>
-            ) : null}
-          </div>
+            <div className="metric-grid">
+              <MetricCard label="저장된 기록" value={`${summary?.totalRecords ?? 0}건`} helper="암호화 로컬 저장" />
+              <MetricCard
+                label="최근 기록"
+                value={summary?.latestRecordedAt ? formatDate(summary.latestRecordedAt) : "아직 없음"}
+                helper="이 브라우저 기준"
+              />
+              <MetricCard label="프로필 상태" value="안전" helper="서버 전송 없음" tone="safe" />
+            </div>
 
-          <aside className="boundary-card" aria-label="데이터 처리 경계">
-            <p className="card-kicker">처리 위치</p>
-            <h2>사용자 브라우저</h2>
-            <ul className="plain-list">
-              <li>가족 구성원 로컬 프로필</li>
-              <li>건강기록·가족력·원본 서류</li>
-              <li>OCR·규칙 평가·예측 결과</li>
-            </ul>
-            <div className="boundary-divider" />
-            <p className="card-kicker">원격 서버</p>
-            <p className="muted-copy">계정·구독·초대와 불투명 연결정보만 처리</p>
-          </aside>
-        </div>
-      </section>
-
-      <section className="content-section">
-        <div className="content-width">
-          <div className="section-heading">
-            <p className="eyebrow">BROWSER CAPABILITIES</p>
-            <h2>이 브라우저의 로컬 기능</h2>
-          </div>
-
-          <div className="capability-grid">
-            {capabilities.map((capability) => (
-              <article className="capability-card" key={capability.id}>
-                <span
-                  className={capability.supported ? "status-dot is-ready" : "status-dot"}
-                  aria-hidden="true"
-                />
+            <div className="records-panel">
+              <div className="panel-heading">
                 <div>
-                  <h3>{capability.label}</h3>
-                  <p>
-                    {capability.supported ? "사용 가능" : "현재 브라우저에서 지원되지 않음"}
-                    {capability.requiredNow ? " · 초기 필수" : " · 후순위"}
-                  </p>
+                  <h3>최근 건강기록</h3>
+                  <p>최신 기록부터 보여줍니다.</p>
                 </div>
-              </article>
-            ))}
+                {dashboardLoading ? <span className="subtle-status">불러오는 중…</span> : null}
+              </div>
+              {records.length === 0 ? (
+                <div className="compact-empty">
+                  <strong>아직 건강기록이 없습니다.</strong>
+                  <p>검진 결과, 통증 변화나 건강 메모부터 남겨보세요.</p>
+                  <button className="text-button" type="button" onClick={() => setRecordDialogOpen(true)}>
+                    첫 기록 작성하기
+                  </button>
+                </div>
+              ) : (
+                <ul className="record-list">
+                  {records.slice(0, 5).map((record) => (
+                    <li key={record.id}>
+                      <span className="record-type-mark" aria-hidden="true">{recordMark(record.recordType)}</span>
+                      <div>
+                        <strong>{RECORD_LABELS[record.recordType]}</strong>
+                        <p>{recordNote(record)}</p>
+                      </div>
+                      <time dateTime={record.recordedAt}>{formatDateTime(record.recordedAt)}</time>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
-        </div>
-      </section>
 
-      <section className="content-section is-tinted">
-        <div className="content-width">
-          <div className="section-heading">
-            <p className="eyebrow">CURRENT SCOPE</p>
-            <h2>지금 구현한 것과 아직 구현하지 않은 것</h2>
-          </div>
-          <div className="scope-grid">
-            <article>
-              <h3>현재 기반</h3>
-              <ul>
-                <li>React·TypeScript SPA와 반응형 레이아웃</li>
-                <li>서버 상태와 화면 상태 provider 분리</li>
-                <li>암호문 전용 IndexedDB 저장소 계약</li>
-                <li>합성 입력 전용 Web Worker 모델 경계</li>
-              </ul>
-            </article>
-            <article>
-              <h3>후속 구현</h3>
-              <ul>
-                <li>실제 암호화 키 복구·백업 정책</li>
-                <li>건강기록 입력과 OPFS 원본 파일</li>
-                <li>검증된 TypeScript·Rust/WASM·ONNX 모델</li>
-                <li>모델 버전 전환과 복구 UI</li>
-              </ul>
-            </article>
-          </div>
-        </div>
-      </section>
-    </>
+          <aside className="quick-actions-panel">
+            <p className="section-kicker">빠른 작업</p>
+            <h2>무엇을 기록할까요?</h2>
+            <button type="button" onClick={() => setRecordDialogOpen(true)}>
+              <strong>건강기록 작성</strong>
+              <small>검진·통증·수치·메모</small>
+            </button>
+            <button type="button" disabled title="다음 구현 단계에서 제공됩니다.">
+              <strong>가족력 관리</strong>
+              <small>구성원별 정보 · 후속 구현</small>
+            </button>
+            <NavLink to="/data">
+              <strong>암호화 백업</strong>
+              <small>파일로 내보내기·가져오기</small>
+            </NavLink>
+          </aside>
+        </section>
+      ) : null}
+
+      {profileDialogOpen ? (
+        <Modal title="가족 구성원 로컬 프로필 만들기" onClose={() => setProfileDialogOpen(false)}>
+          <form className="product-form" onSubmit={submitProfile}>
+            <p className="form-notice">입력한 정보는 이 브라우저에 암호화해 저장하며 서버로 보내지 않습니다.</p>
+            <label>
+              이름 또는 호칭
+              <input name="displayName" maxLength={100} required placeholder="예: 나, 엄마, 민준" autoFocus />
+            </label>
+            <label>
+              관계
+              <select name="relationship" required defaultValue="">
+                <option value="" disabled>관계를 선택하세요</option>
+                {RELATIONSHIPS.map((relationship) => <option key={relationship}>{relationship}</option>)}
+              </select>
+            </label>
+            <label>
+              생년월일 <span className="optional-label">선택</span>
+              <input name="birthDate" type="date" />
+            </label>
+            <div className="form-actions">
+              <button className="secondary-button" type="button" onClick={() => setProfileDialogOpen(false)}>취소</button>
+              <button className="primary-button" type="submit" disabled={saving}>{saving ? "저장 중…" : "프로필 저장"}</button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {recordDialogOpen && selectedProfile ? (
+        <Modal title={`${selectedProfile.displayName}님의 건강기록 작성`} onClose={() => setRecordDialogOpen(false)}>
+          <form className="product-form" onSubmit={submitHealthRecord}>
+            <p className="form-notice">이 기록은 서버 API를 거치지 않고 현재 브라우저에 바로 암호화됩니다.</p>
+            <label>
+              기록 종류
+              <select name="recordType" defaultValue="note" required>
+                {Object.entries(RECORD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <label>
+              기록 시각
+              <input name="recordedAt" type="datetime-local" required defaultValue={currentLocalDateTime()} />
+            </label>
+            <label>
+              기록 내용
+              <textarea name="note" rows={5} required placeholder="변화, 수치 또는 확인할 내용을 적어주세요." />
+            </label>
+            <div className="form-actions">
+              <button className="secondary-button" type="button" onClick={() => setRecordDialogOpen(false)}>취소</button>
+              <button className="primary-button" type="submit" disabled={saving}>{saving ? "암호화 중…" : "기록 저장"}</button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+    </div>
   );
+}
+
+function EmptyHousehold({ onCreate }: { onCreate: () => void }) {
+  return (
+    <div className="empty-household">
+      <div className="empty-household-copy">
+        <span className="empty-step">첫 단계</span>
+        <h3>가족 구성원 프로필을 만들어 시작하세요.</h3>
+        <p>별도 로그인 없이 건강기록의 대상을 구분하는 로컬 프로필입니다.</p>
+        <button className="primary-button" type="button" onClick={onCreate}>첫 구성원 등록</button>
+      </div>
+      <ol className="onboarding-steps">
+        <li><span>1</span><div><strong>프로필 만들기</strong><small>이름·관계·생년 정보</small></div></li>
+        <li><span>2</span><div><strong>건강기록 남기기</strong><small>검진·통증·건강 메모</small></div></li>
+        <li><span>3</span><div><strong>백업 파일 보관</strong><small>암호화해 직접 내보내기</small></div></li>
+      </ol>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return <div className="dashboard-skeleton" aria-label="로컬 프로필 불러오는 중"><span /><span /><span /></div>;
+}
+
+function MetricCard({ label, value, helper, tone }: { label: string; value: string; helper: string; tone?: "safe" }) {
+  return (
+    <article className={tone === "safe" ? "metric-card is-safe" : "metric-card"}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{helper}</small>
+    </article>
+  );
+}
+
+function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div className="modal-heading">
+          <div><p className="section-kicker">이 기기에 저장</p><h2 id="modal-title">{title}</h2></div>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="닫기">×</button>
+        </div>
+        {children}
+      </section>
+    </div>
+  );
+}
+
+function optionalDate(value: FormDataEntryValue | null): `${number}-${number}-${number}` | undefined {
+  const date = String(value ?? "");
+  return date ? (date as `${number}-${number}-${number}`) : undefined;
+}
+
+function messageFrom(caught: unknown, fallback: string): string {
+  return caught instanceof Error ? caught.message : fallback;
+}
+
+function formatDate(value: string): string {
+  return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric" }).format(new Date(value));
+}
+
+function formatDateTime(value: string): string {
+  return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function currentLocalDateTime(): string {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function recordNote(record: HealthRecord): string {
+  const note = record.payload.note;
+  return typeof note === "string" ? note : "저장된 건강기록";
+}
+
+function recordMark(type: HealthRecordType): string {
+  if (type === "health_screening" || type === "lab_result") return "검";
+  if (type === "pain") return "통";
+  if (type === "blood_pressure" || type === "blood_glucose") return "수";
+  return "기";
 }

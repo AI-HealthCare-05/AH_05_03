@@ -2,6 +2,11 @@ import { NavLink, Outlet } from "react-router-dom";
 
 import { useUiStore } from "../stores/uiStore";
 
+const NAVIGATION = [
+  { to: "/", label: "가족 홈", end: true },
+  { to: "/data", label: "데이터 관리", end: false },
+] as const;
+
 export function RootLayout() {
   const navigationOpen = useUiStore((state) => state.navigationOpen);
   const toggleNavigation = useUiStore((state) => state.toggleNavigation);
@@ -12,12 +17,10 @@ export function RootLayout() {
       <header className="site-header">
         <div className="header-inner">
           <NavLink className="brand" to="/" onClick={closeNavigation}>
-            <span className="brand-mark" aria-hidden="true">
-              이
-            </span>
-            <span>
+            <span className="brand-mark" aria-hidden="true">이</span>
+            <span className="brand-copy">
               <strong>이어봄</strong>
-              <small>내 건강정보는 내 기기에</small>
+              <small>우리 가족 건강기록</small>
             </span>
           </NavLink>
 
@@ -36,13 +39,18 @@ export function RootLayout() {
             className={navigationOpen ? "primary-navigation is-open" : "primary-navigation"}
             aria-label="주 메뉴"
           >
-            <NavLink to="/" end onClick={closeNavigation}>
-              시작
-            </NavLink>
-            <NavLink to="/architecture" onClick={closeNavigation}>
-              데이터 경계
-            </NavLink>
+            {NAVIGATION.map((item) => (
+              <NavLink key={`${item.to}-${item.label}`} to={item.to} end={item.end} onClick={closeNavigation}>
+                {item.label}
+              </NavLink>
+            ))}
+            <span className="navigation-future" title="서비스 계정 화면은 후속 구현입니다.">계정</span>
           </nav>
+
+          <div className="header-status">
+            <span><i aria-hidden="true" /> 로컬 보관</span>
+            <button type="button" disabled title="서비스 계정 화면은 후속 구현입니다.">내 계정</button>
+          </div>
         </div>
       </header>
 
@@ -51,7 +59,11 @@ export function RootLayout() {
       </main>
 
       <footer className="site-footer">
-        <p>현재 화면은 로컬 우선 프론트엔드 기반 검증용입니다.</p>
+        <div>
+          <strong>이어봄</strong>
+          <span>건강정보는 내 기기에, 연결정보만 서버에</span>
+        </div>
+        <NavLink to="/dev/architecture">개발용 데이터 경계 확인</NavLink>
       </footer>
     </div>
   );

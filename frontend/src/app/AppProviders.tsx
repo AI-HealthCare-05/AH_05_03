@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { RouterProvider } from "react-router-dom";
 
+import { LocalDomainProvider } from "./LocalDomainProvider";
 import { router } from "./router";
 
 export function AppProviders() {
@@ -19,7 +20,9 @@ export function AppProviders() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <LocalDomainProvider>
+        <RouterProvider router={router} />
+      </LocalDomainProvider>
     </QueryClientProvider>
   );
 }

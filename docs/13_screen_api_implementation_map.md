@@ -57,6 +57,17 @@ Access Token은 프론트 메모리에만 두고 localStorage·IndexedDB에 저�
 
 자동 테스트는 저장된 envelope와 백업 파일에 프로필 이름·건강 필드명이 평문으로 남지 않는지 확인한다.
 
+### 4.1 프론트 연결 현황
+
+| 경로 | 화면 | 연결 상태 |
+|---|---|---|
+| `/` | 가족 홈·구성원 목록·구성원 대시보드 | `LocalProfileService`, `LocalDashboardService` 연결 |
+| `/` 모달 | 구성원 등록·건강기록 작성 | `LocalProfileService.create`, `LocalHealthRecordService.create` 연결 |
+| `/data` | 암호화 백업 내보내기·검증·가져오기 | `LocalBackupService` 연결 |
+| `/dev/architecture` | 서버·로컬 데이터 경계 개발 검증 | 서버 요청과 로컬 경로 분리 확인 |
+
+제품 홈의 구성원 등록부터 건강기록 작성·새로고침 후 재조회까지 `/api` 요청이 발생하지 않는 Playwright E2E로 검증한다. 화면은 390px 모바일과 1440px 데스크톱에서 같은 작업 순서를 유지한다.
+
 ## 5. 아직 해소할 계약 차이
 
 - 목표 OpenAPI의 초대 취소는 `DELETE /family-invitations/{id}`이지만 현재 코드는 `POST /family-invitations/{id}/cancel`이다.
@@ -67,7 +78,7 @@ Access Token은 프론트 메모리에만 두고 localStorage·IndexedDB에 저�
 
 ## 6. 다음 구현 순서
 
-1. 첫 수직 흐름을 `/household/members`, `/members/:id/records`, `/members/:id` 화면에 연결한다.
+1. 구성원·기록 상세 URL을 `/members/:id`, `/members/:id/records`로 분리하고 수정 화면을 추가한다.
 2. 로컬 optimistic version 기반 수정·숨김 삭제·복원을 구현한다.
 3. OPFS `DocumentService`와 단일 백업 컨테이너 파일 포함을 구현한다.
 4. 브라우저 로컬 OCR adapter와 결과 검토 화면을 구현한다.
