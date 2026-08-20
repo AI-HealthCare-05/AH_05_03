@@ -41,7 +41,10 @@ services:
   # 개발용 초대 메일 수신함. Web UI만 명시한 Tailscale 인터페이스에
   # 공개할 수 있으며 SMTP 포트는 호스트에 노출하지 않는다.
   mailpit:
-    image: axllent/mailpit:v1.30.6
+    # Mailpit 공식 릴리스는 Docker Hub와 GHCR에 같은 이미지를 게시한다.
+    # admin Mac에서 Docker Hub credential helper가 멈춘 이력이 있어 GHCR을 사용하고
+    # 다중 아키텍처 index digest까지 고정한다.
+    image: ${MAILPIT_IMAGE:-ghcr.io/axllent/mailpit:v1.30.6@sha256:7f33095f80e901f6ad08028f06ca284aa58fe84942be5496008d041d3b9f4d4d}
     restart: unless-stopped
     ports:
       - "${DEV_MAILPIT_BIND_HOST:-127.0.0.1}:${DEV_MAILPIT_WEB_PORT:-8025}:8025"
