@@ -70,6 +70,11 @@ export interface HouseholdMembershipData {
   row_version: number;
 }
 
+export interface HouseholdMembershipListItemData extends HouseholdMembershipData {
+  masked_email: string;
+  local_profile_ref: string | null;
+}
+
 export interface ProfileLinkData {
   id: string;
   household_id: string;

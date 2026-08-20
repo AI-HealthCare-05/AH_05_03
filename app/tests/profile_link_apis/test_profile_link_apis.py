@@ -78,6 +78,19 @@ class TestProfileLinkAPI:
         assert linked.json()["data"]["status"] == "active"
         assert linked.json()["data"]["local_profile_ref"] == profile_ref
 
+        memberships = await client.get(
+            f"/api/v1/households/{household_id}/memberships",
+            headers=owner_headers,
+        )
+        member = next(
+            item
+            for item in memberships.json()["data"]["items"]
+            if item["account_id"] == linked.json()["data"]["account_id"]
+        )
+        assert member["masked_email"] == "pro********@example.com"
+        assert member["local_profile_ref"] == profile_ref
+        assert "profile-member@example.com" not in memberships.text
+
         link_id = linked.json()["data"]["id"]
         unlinked = await client.post(f"/api/v1/profile-links/{link_id}/unlink", headers=member_headers)
         assert unlinked.status_code == status.HTTP_200_OK

@@ -26,5 +26,10 @@ class HouseholdMembershipData(BaseSerializerModel):
     row_version: int
 
 
+class HouseholdMembershipListItemData(HouseholdMembershipData):
+    masked_email: str
+    local_profile_ref: str | None
+
+
 class HouseholdMembershipListData(BaseSerializerModel):
-    items: list[HouseholdMembershipData]
+    items: list[HouseholdMembershipListItemData]

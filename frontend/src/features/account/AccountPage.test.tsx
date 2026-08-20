@@ -92,6 +92,38 @@ describe("AccountPage", () => {
     expect(screen.getByRole("button", { name: "계정 종료" })).toBeInTheDocument();
   });
 
+  it("가정 구성원을 UUID 대신 현재 계정과 마스킹 이메일로 구분한다", async () => {
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    mockAccountReads();
+    vi.mocked(serverApiClient.listHouseholds).mockResolvedValue([{
+      id: "household-id",
+      status: "active",
+      created_at: "2026-08-20T00:00:00Z",
+      row_version: 1,
+    }]);
+    vi.spyOn(serverApiClient, "listHouseholdMemberships").mockResolvedValue([{
+      id: "membership-id",
+      household_id: "household-id",
+      account_id: "account-id",
+      masked_email: "mem***@example.com",
+      local_profile_ref: null,
+      status: "active",
+      joined_at: "2026-08-20T00:00:00Z",
+      left_at: null,
+      row_version: 1,
+    }]);
+
+    renderAccountPage();
+    await screen.findByRole("heading", { name: "member@example.com" });
+    await userEvent.setup().click(screen.getByRole("button", { name: "멤버 보기" }));
+
+    expect(await screen.findByText("내 계정", { selector: ".membership-identity strong" })).toBeInTheDocument();
+    expect(screen.getByText("나")).toBeInTheDocument();
+    expect(screen.getByText("mem***@example.com")).toBeInTheDocument();
+    expect(screen.getByText("로컬 프로필 미연결")).toBeInTheDocument();
+    expect(screen.queryByText(/account-id/u)).not.toBeInTheDocument();
+  });
+
   it("계정 종료 전에 이메일 재확인을 요구하고 로컬 데이터 보존 결과를 알린다", async () => {
     const user = userEvent.setup();
     vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });

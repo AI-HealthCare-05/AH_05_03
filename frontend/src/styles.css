@@ -403,6 +403,37 @@ main {
   margin-top: 8px;
 }
 
+.membership-identity,
+.membership-state {
+  display: grid;
+  gap: 5px;
+}
+
+.membership-identity {
+  min-width: 190px;
+}
+
+.membership-identity strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.membership-identity small,
+.membership-state small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.current-member-badge {
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: #1559c7;
+  background: #e8f0ff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
 .membership-panel time,
 .membership-panel span,
 .profile-link-row span {

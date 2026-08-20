@@ -6,7 +6,7 @@ import type {
   FamilyInvitationData,
   FamilyInvitationListData,
   HouseholdData,
-  HouseholdMembershipData,
+  HouseholdMembershipListItemData,
   ProfileLinkData,
   SubscriptionBrief,
   SubscriptionData,
@@ -31,7 +31,7 @@ export function AccountPage() {
   const [subscription, setSubscription] = useState<SubscriptionData>();
   const [households, setHouseholds] = useState<HouseholdData[]>([]);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>();
-  const [memberships, setMemberships] = useState<HouseholdMembershipData[]>([]);
+  const [memberships, setMemberships] = useState<HouseholdMembershipListItemData[]>([]);
   const [invitations, setInvitations] = useState<FamilyInvitationListData>({ sent: [], received: [] });
   const [links, setLinks] = useState<ProfileLinkData[]>([]);
   const [confirmation, setConfirmation] = useState<Confirmation>();
@@ -308,7 +308,7 @@ export function AccountPage() {
         <div className="account-grid">
           <section className="account-card"><p className="section-kicker">내 계정</p><h2>{account.account.email}</h2><dl><div><dt>계정 상태</dt><dd>{account.account.status}</dd></div><div><dt>가입일</dt><dd>{formatDate(account.account.created_at)}</dd></div></dl></section>
           <SubscriptionCard account={account} subscription={subscription} working={working} onSubmit={changePlan} />
-          <HouseholdCard households={households} selectedHouseholdId={selectedHouseholdId} memberships={memberships} working={working} onCreate={createHousehold} onSelect={selectHousehold} onConfirm={setConfirmation} />
+          <HouseholdCard households={households} selectedHouseholdId={selectedHouseholdId} memberships={memberships} profiles={profiles} currentAccountId={account.account.id} working={working} onCreate={createHousehold} onSelect={selectHousehold} onConfirm={setConfirmation} />
           <InvitationCard households={households} profiles={profiles} invitations={invitations} working={working} onSend={sendInvitation} onAccept={acceptAndLink} onDecline={declineInvitation} onCancel={(invitation) => setConfirmation({ kind: "cancel-invitation", invitation })} linkRecovery={linkRecovery} onRetry={retryProfileLink} />
           <section className="account-card account-wide"><p className="section-kicker">서비스 계정 연결</p><h2>연결된 프로필 참조</h2>{links.filter((item) => item.status === "active").length === 0 ? <p className="account-empty">활성 연결이 없습니다.</p> : links.filter((item) => item.status === "active").map((link) => <div className="profile-link-row" key={link.id}><code>{link.local_profile_ref.slice(0, 12)}…</code><span>계정 연결 완료 · 기기 연결 대기</span><button className="secondary-button" type="button" disabled={working} onClick={() => setConfirmation({ kind: "unlink-profile", link })}>연결 해제</button></div>)}</section>
           <section className="account-card account-wide danger-zone"><p className="section-kicker">계정 종료</p><h2>서비스 계정 닫기</h2><p>인증·구독·서버 연결 상태를 종료합니다. 이 브라우저에 저장된 로컬 건강정보는 삭제하지 않습니다.</p><button className="danger-button" type="button" onClick={() => setConfirmation({ kind: "close-account" })}>계정 종료</button></section>
@@ -331,8 +331,18 @@ function SubscriptionCard({ account, subscription, working, onSubmit }: { accoun
   return <section className="account-card"><p className="section-kicker">구독</p><h2>{subscription?.plan ?? account.subscription.plan}</h2><form className="subscription-form" onSubmit={(event) => void onSubmit(event)}><label><span>플랜 변경</span><select name="plan" defaultValue={subscription?.plan ?? account.subscription.plan}><option value="FREE">FREE</option><option value="BASIC">BASIC</option><option value="FAMILY">FAMILY</option></select></label><button className="secondary-button" disabled={working}>적용</button></form><small>{subscription?.license_valid ? "라이선스 사용 가능" : "라이선스 확인 필요"}</small></section>;
 }
 
-function HouseholdCard({ households, selectedHouseholdId, memberships, working, onCreate, onSelect, onConfirm }: { households: HouseholdData[]; selectedHouseholdId?: string; memberships: HouseholdMembershipData[]; working: boolean; onCreate: () => Promise<void>; onSelect: (id: string) => Promise<void>; onConfirm: (confirmation: Confirmation) => void }) {
-  return <section className="account-card account-wide"><div className="section-title-row"><div><p className="section-kicker">가정</p><h2>가입한 가정 {households.length}개</h2></div><button className="secondary-button" type="button" disabled={working} onClick={() => void onCreate()}>가정 만들기</button></div>{households.length === 0 ? <p className="account-empty">아직 가입한 가정이 없습니다.</p> : <div className="household-list">{households.map((household) => <article key={household.id} className={selectedHouseholdId === household.id ? "is-selected" : ""}><div><strong>가정 {household.id.slice(0, 8)}</strong><small>{household.status} · {formatDate(household.created_at)}</small></div><div className="row-actions"><button className="secondary-button" type="button" onClick={() => void onSelect(household.id)}>멤버 보기</button><button className="text-danger-button" type="button" onClick={() => onConfirm({ kind: "leave-household", household })}>나가기</button><button className="text-danger-button" type="button" onClick={() => onConfirm({ kind: "close-household", household })}>가정 종료</button></div></article>)}</div>}{selectedHouseholdId ? <div className="membership-panel"><h3>가정 구성원</h3>{memberships.map((membership) => <div key={membership.id}><code>{membership.account_id.slice(0, 12)}…</code><span>{membership.status}</span><time>{formatDate(membership.joined_at)}</time></div>)}</div> : null}</section>;
+function HouseholdCard({ households, selectedHouseholdId, memberships, profiles, currentAccountId, working, onCreate, onSelect, onConfirm }: { households: HouseholdData[]; selectedHouseholdId?: string; memberships: HouseholdMembershipListItemData[]; profiles: ReturnType<typeof useLocalDomain>["profiles"]; currentAccountId: string; working: boolean; onCreate: () => Promise<void>; onSelect: (id: string) => Promise<void>; onConfirm: (confirmation: Confirmation) => void }) {
+  return <section className="account-card account-wide"><div className="section-title-row"><div><p className="section-kicker">가정</p><h2>가입한 가정 {households.length}개</h2></div><button className="secondary-button" type="button" disabled={working} onClick={() => void onCreate()}>가정 만들기</button></div>{households.length === 0 ? <p className="account-empty">아직 가입한 가정이 없습니다.</p> : <div className="household-list">{households.map((household) => <article key={household.id} className={selectedHouseholdId === household.id ? "is-selected" : ""}><div><strong>가정 {household.id.slice(0, 8)}</strong><small>{household.status} · {formatDate(household.created_at)}</small></div><div className="row-actions"><button className="secondary-button" type="button" onClick={() => void onSelect(household.id)}>멤버 보기</button><button className="text-danger-button" type="button" onClick={() => onConfirm({ kind: "leave-household", household })}>나가기</button><button className="text-danger-button" type="button" onClick={() => onConfirm({ kind: "close-household", household })}>가정 종료</button></div></article>)}</div>}{selectedHouseholdId ? <div className="membership-panel"><h3>가정 구성원</h3>{memberships.map((membership) => {
+    const isCurrent = membership.account_id === currentAccountId;
+    const localProfile = profiles.find((profile) => profile.opaqueServerRef === membership.local_profile_ref);
+    const displayName = localProfile?.displayName ?? (isCurrent ? "내 계정" : membership.masked_email);
+    const connectionLabel = localProfile
+      ? "로컬 프로필 연결됨"
+      : membership.local_profile_ref
+        ? "프로필 연결됨 · 이 브라우저에서 이름 확인 불가"
+        : "로컬 프로필 미연결";
+    return <div key={membership.id}><div className="membership-identity"><strong>{displayName}{isCurrent ? <span className="current-member-badge">나</span> : null}</strong><small>{membership.masked_email}</small></div><div className="membership-state"><span>{membership.status === "active" ? "활동 중" : "나감"}</span><small>{connectionLabel}</small></div><time>{formatDate(membership.joined_at)}</time></div>;
+  })}</div> : null}</section>;
 }
 
 function InvitationCard({ households, profiles, invitations, working, onSend, onAccept, onDecline, onCancel, linkRecovery, onRetry }: { households: HouseholdData[]; profiles: ReturnType<typeof useLocalDomain>["profiles"]; invitations: FamilyInvitationListData; working: boolean; onSend: (event: FormEvent<HTMLFormElement>) => Promise<void>; onAccept: (event: FormEvent<HTMLFormElement>) => Promise<void>; onDecline: (event: MouseEvent<HTMLButtonElement>) => Promise<void>; onCancel: (invitation: FamilyInvitationData) => void; linkRecovery?: LinkRecovery; onRetry: () => Promise<void> }) {
