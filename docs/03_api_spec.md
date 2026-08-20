@@ -214,7 +214,7 @@ Refresh Token은 `Secure·HttpOnly·SameSite=Lax` 쿠키로만 받는다. 성공
 | GET | `/households` | 없음 | 참여 가정 배열 |
 | GET | `/households/{id}` | 없음 | `200 HouseholdResponse` |
 | DELETE | `/households/{id}` | 헤더만 | `204` |
-| GET | `/households/{id}/memberships` | 없음 | 가정 멤버십 이력 배열 |
+| GET | `/households/{id}/memberships` | 없음 | 가정 멤버십 이력 배열. 계정 UUID를 화면에 직접 노출하지 않고 표시할 `masked_email`과 브라우저 로컬 이름을 찾기 위한 활성 `local_profile_ref`를 포함한다. 프로필 이름과 건강정보는 포함하지 않는다. |
 | POST | `/households/{id}/leave` | 없음 | 현재 계정의 `left` 멤버십 |
 
 가정 생성자는 `household_memberships`의 첫 활성 구성원이 된다. 이는 건강정보 접근 권한이나 대표 관리자 역할을 의미하지 않는다.

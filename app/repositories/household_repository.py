@@ -1,7 +1,8 @@
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.households import (
@@ -12,6 +13,14 @@ from app.models.households import (
     ProfileLink,
     ProfileLinkStatus,
 )
+from app.models.service_accounts import ServiceAccount
+
+
+@dataclass(frozen=True)
+class HouseholdMembershipView:
+    membership: HouseholdMembership
+    account_email: str
+    local_profile_ref: str | None
 
 
 class HouseholdRepository:
@@ -55,13 +64,29 @@ class HouseholdRepository:
         )
         return membership_id is not None
 
-    async def list_memberships(self, household_id: uuid.UUID) -> list[HouseholdMembership]:
-        result = await self.session.scalars(
-            select(HouseholdMembership)
+    async def list_memberships(self, household_id: uuid.UUID) -> list[HouseholdMembershipView]:
+        result = await self.session.execute(
+            select(HouseholdMembership, ServiceAccount.email, ProfileLink.local_profile_ref)
+            .join(ServiceAccount, ServiceAccount.id == HouseholdMembership.account_id)
+            .outerjoin(
+                ProfileLink,
+                and_(
+                    ProfileLink.household_id == HouseholdMembership.household_id,
+                    ProfileLink.account_id == HouseholdMembership.account_id,
+                    ProfileLink.status == ProfileLinkStatus.ACTIVE,
+                ),
+            )
             .where(HouseholdMembership.household_id == household_id)
             .order_by(HouseholdMembership.joined_at, HouseholdMembership.id)
         )
-        return list(result)
+        return [
+            HouseholdMembershipView(
+                membership=membership,
+                account_email=account_email,
+                local_profile_ref=local_profile_ref,
+            )
+            for membership, account_email, local_profile_ref in result.all()
+        ]
 
     async def get_membership_for_update(
         self, household_id: uuid.UUID, account_id: uuid.UUID

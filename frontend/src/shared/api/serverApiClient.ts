@@ -9,6 +9,7 @@ import type {
   FamilyInvitationListData,
   HouseholdData,
   HouseholdMembershipData,
+  HouseholdMembershipListItemData,
   PlanChangeData,
   ProfileLinkData,
   SignUpData,
@@ -119,8 +120,8 @@ export class ServerApiClient {
     return this.request(`/households/${encodeURIComponent(householdId)}`, { authenticated: true });
   }
 
-  public async listHouseholdMemberships(householdId: string): Promise<HouseholdMembershipData[]> {
-    const result = await this.request<{ items: HouseholdMembershipData[] }>(
+  public async listHouseholdMemberships(householdId: string): Promise<HouseholdMembershipListItemData[]> {
+    const result = await this.request<{ items: HouseholdMembershipListItemData[] }>(
       `/households/${encodeURIComponent(householdId)}/memberships`,
       { authenticated: true },
     );

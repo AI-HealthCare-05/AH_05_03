@@ -10,6 +10,7 @@ from app.dtos.households import (
     HouseholdListData,
     HouseholdMembershipData,
     HouseholdMembershipListData,
+    HouseholdMembershipListItemData,
 )
 from app.exceptions import (
     HouseholdHasOtherMembersError,
@@ -57,7 +58,22 @@ class HouseholdService:
     async def list_members(self, household_id: uuid.UUID, account: ServiceAccount) -> HouseholdMembershipListData:
         await self.get_for_account(household_id, account)
         memberships = await self.household_repo.list_memberships(household_id)
-        return HouseholdMembershipListData(items=[HouseholdMembershipData.model_validate(item) for item in memberships])
+        return HouseholdMembershipListData(
+            items=[
+                HouseholdMembershipListItemData(
+                    id=item.membership.id,
+                    household_id=item.membership.household_id,
+                    account_id=item.membership.account_id,
+                    masked_email=_mask_email(item.account_email),
+                    local_profile_ref=item.local_profile_ref,
+                    status=item.membership.status,
+                    joined_at=item.membership.joined_at,
+                    left_at=item.membership.left_at,
+                    row_version=item.membership.row_version,
+                )
+                for item in memberships
+            ]
+        )
 
     async def leave(self, household_id: uuid.UUID, account: ServiceAccount) -> HouseholdMembershipData:
         household = await self.household_repo.get_for_update(household_id)
@@ -101,3 +117,13 @@ class HouseholdService:
         household.closed_at = datetime.now(tz=timezone.utc)
         household.row_version += 1
         await self.session.commit()
+
+
+def _mask_email(email: str) -> str:
+    local, separator, domain = email.rpartition("@")
+    if not separator:
+        return "***"
+    visible_length = 1 if len(local) < 3 else 3
+    visible = local[:visible_length]
+    hidden = "*" * max(3, min(8, len(local) - visible_length))
+    return f"{visible}{hidden}@{domain}"
