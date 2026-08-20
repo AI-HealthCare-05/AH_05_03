@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
@@ -9,6 +9,10 @@ import type {
   HealthRecordType,
 } from "../../shared/local/domainContracts";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
+
+const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
+  default: module.VanatomeBodyMap,
+})));
 
 const RECORD_LABELS: Record<HealthRecordType, string> = {
   blood_pressure: "혈압",
@@ -392,6 +396,10 @@ export function HomePage() {
               />
               <MetricCard label="프로필 상태" value="안전" helper="서버 전송 없음" tone="safe" />
             </div>
+
+            <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
+              <VanatomeBodyMap profileName={selectedProfile.displayName} />
+            </Suspense>
 
             <div className="records-panel">
               <div className="panel-heading">
