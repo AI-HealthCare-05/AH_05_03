@@ -27,6 +27,7 @@ export type HealthRecordType =
   | "lab_result"
   | "vaccination"
   | "health_screening"
+  | "pain"
   | "walking"
   | "note";
 
@@ -37,6 +38,7 @@ export type HealthPayload =
   | { type: "lab_result"; testCode: string; testName: string; value: number | string; unit?: string; note?: string }
   | { type: "vaccination"; vaccineName: string; doseNumber?: number; institution?: string; note?: string }
   | { type: "health_screening"; screeningName: string; institution?: string; summary?: string }
+  | { type: "pain"; bodyArea: string; intensity: number; sensation?: string; onsetAt?: ISODateTime; aggravatingFactors?: string; note?: string }
   | { type: "walking"; steps?: number; distanceKm?: number; durationMinutes?: number; sourceName?: string; note?: string }
   | { type: "note"; title?: string; text: string };
 
@@ -54,10 +56,10 @@ export interface StoredHealthRecord {
   recordType: HealthRecordType;
   schemaVersion: 1;
   recordedAt: ISODateTime;
-  source: "manual";
+  source: "manual" | "ocr" | "import" | "local_ai";
   payloadCiphertext: EncryptedValue;
   canonicalPayloadHashCiphertext: EncryptedValue;
-  sourceDocumentId: null;
+  sourceDocumentId: UUID | null;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
   deletedAt: ISODateTime | null;
@@ -68,11 +70,46 @@ export interface CreateHealthRecordInput {
   householdId: UUID;
   profileId: UUID;
   recordedAt: ISODateTime;
-  source: "manual";
+  source: "manual" | "ocr" | "import" | "local_ai";
   payload: HealthPayload;
+  sourceDocumentId?: UUID;
   duplicatePolicy: "reject" | "allow";
 }
 
 export interface HealthRecordView extends Omit<StoredHealthRecord, "payloadCiphertext" | "canonicalPayloadHashCiphertext"> {
   payload: HealthPayload;
+}
+
+export interface StoredHealthDocument {
+  id: UUID;
+  householdId: UUID;
+  profileId: UUID;
+  encryptedFileId: UUID;
+  originalNameCiphertext: EncryptedValue;
+  mimeType: "image/jpeg" | "image/png";
+  plaintextSize: number;
+  plaintextSha256Ciphertext: EncryptedValue;
+  capturedAt: ISODateTime | null;
+  createdAt: ISODateTime;
+  deletedAt: ISODateTime | null;
+  version: 1;
+}
+
+export interface HealthDocumentView extends Omit<StoredHealthDocument, "originalNameCiphertext" | "plaintextSha256Ciphertext"> {
+  originalName: string;
+}
+
+export interface OcrExamItem { testName: string; value: string; unit: string; judgment: string }
+export interface OcrContent { text: string; tables: Array<{ table_index: number; rows: string[][] }>; examItems?: OcrExamItem[] }
+export interface StoredOcrResult {
+  id: UUID;
+  documentId: UUID;
+  engine: string;
+  engineVersion: string;
+  rawContentCiphertext: EncryptedValue;
+  confirmedContentCiphertext: EncryptedValue;
+  status: "draft" | "confirmed";
+  createdAt: ISODateTime;
+  confirmedAt: ISODateTime | null;
+  version: number;
 }

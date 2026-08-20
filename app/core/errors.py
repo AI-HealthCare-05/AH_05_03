@@ -18,6 +18,7 @@ class ErrorCode(StrEnum):
     RATE_LIMITED = "RATE_LIMITED"
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+    OCR_UNAVAILABLE = "OCR_UNAVAILABLE"
     # --- auth ------------------------------------------------------
     AUTH_REQUIRED = "AUTH_REQUIRED"
     CREDENTIALS_INVALID = "CREDENTIALS_INVALID"
@@ -54,6 +55,7 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     ErrorCode.RATE_LIMITED: status.HTTP_429_TOO_MANY_REQUESTS,
     ErrorCode.SERVICE_UNAVAILABLE: status.HTTP_503_SERVICE_UNAVAILABLE,
     ErrorCode.INTERNAL_ERROR: status.HTTP_500_INTERNAL_SERVER_ERROR,
+    ErrorCode.OCR_UNAVAILABLE: status.HTTP_503_SERVICE_UNAVAILABLE,
     ErrorCode.AUTH_REQUIRED: status.HTTP_401_UNAUTHORIZED,
     ErrorCode.CREDENTIALS_INVALID: status.HTTP_401_UNAUTHORIZED,
     ErrorCode.EMAIL_ALREADY_REGISTERED: status.HTTP_409_CONFLICT,
@@ -88,6 +90,7 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.RATE_LIMITED: "요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.",
     ErrorCode.SERVICE_UNAVAILABLE: "일시적으로 서비스를 이용할 수 없습니다.",
     ErrorCode.INTERNAL_ERROR: "일시적인 오류가 발생했습니다.",
+    ErrorCode.OCR_UNAVAILABLE: "OCR 기능을 사용할 수 없습니다.",
     ErrorCode.AUTH_REQUIRED: "로그인이 필요합니다.",
     ErrorCode.CREDENTIALS_INVALID: "이메일 또는 비밀번호가 올바르지 않습니다.",
     ErrorCode.EMAIL_ALREADY_REGISTERED: "이미 사용중인 이메일입니다.",

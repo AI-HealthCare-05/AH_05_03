@@ -71,7 +71,13 @@ class Config(BaseSettings):
     # --- api ----------------------------------------------------------
     # 오류 응답의 details는 비규격 필드다. 운영에서는 끈다.
     API_ERROR_INCLUDE_DETAILS: bool = False
-    CORS_ALLOW_ORIGINS: list[str] = ["http://localhost:5173"]
+    CORS_ALLOW_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+    # --- local OCR development bridge -------------------------------
+    # ocr.py는 현재 Naver OCR로 원본을 전송한다. 로컬 우선 정책과 충돌하므로
+    # 운영 기능이 아니라 명시적으로 켠 개발 환경에서만 노출한다.
+    ENABLE_DEV_OCR_BRIDGE: bool = False
+    DEV_OCR_MAX_FILE_BYTES: int = 20 * 1024 * 1024
 
     # Refresh Token은 JavaScript에 노출하지 않고 host 전용 쿠키로만 전달한다.
     # __Host- 접두사는 Secure + Path=/ + Domain 미지정을 브라우저가 강제한다.

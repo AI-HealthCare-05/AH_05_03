@@ -1,8 +1,8 @@
-import type { StoredHealthRecord } from "../../local-domain/types";
+import type { StoredHealthDocument, StoredHealthRecord, StoredOcrResult } from "../../local-domain/types";
 import { createDataKey } from "../crypto/record-crypto";
 
 const DB_NAME = "ieobom-local";
-const DB_VERSION = 1;
+const DB_VERSION = 3;
 
 export async function openLocalDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -19,9 +19,24 @@ export async function openLocalDatabase(): Promise<IDBDatabase> {
         store.createIndex("householdOccurredAt", ["householdId", "occurredAt"]);
       }
       if (!db.objectStoreNames.contains("cryptoMetadata")) db.createObjectStore("cryptoMetadata", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("documents")) {
+        const store = db.createObjectStore("documents", { keyPath: "id" });
+        store.createIndex("profileCreatedAt", ["profileId", "createdAt"]);
+        store.createIndex("encryptedFileId", "encryptedFileId", { unique: true });
+      }
+      if (!db.objectStoreNames.contains("fileMetadata")) db.createObjectStore("fileMetadata", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("ocrResults")) {
+        const store = db.createObjectStore("ocrResults", { keyPath: "id" });
+        store.createIndex("documentId", "documentId");
+        store.createIndex("documentStatus", ["documentId", "status"]);
+      }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
     request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new DOMException("기존 탭이 로컬 데이터베이스 업데이트를 막고 있습니다.", "VersionError"));
   });
 }
 
@@ -45,6 +60,14 @@ export async function findCandidates(db: IDBDatabase, profileId: string, recordT
   return requestResult(index.getAll(IDBKeyRange.only([profileId, recordType, recordedAt])));
 }
 
+export async function listRecordsForProfile(db: IDBDatabase, profileId: string): Promise<StoredHealthRecord[]> {
+  const index = db.transaction("healthRecords").objectStore("healthRecords").index("profileRecordedAt");
+  const records: StoredHealthRecord[] = await requestResult(
+    index.getAll(IDBKeyRange.bound([profileId, ""], [profileId, "\uffff"])),
+  );
+  return records.filter((record) => !record.deletedAt).sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
+}
+
 export async function saveRecordAndEvent(db: IDBDatabase, record: StoredHealthRecord, event: object): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(["healthRecords", "changeEvents"], "readwrite");
@@ -54,4 +77,39 @@ export async function saveRecordAndEvent(db: IDBDatabase, record: StoredHealthRe
     tx.onerror = () => reject(tx.error);
     tx.onabort = () => reject(tx.error);
   });
+}
+
+export async function saveDocumentMetadata(db: IDBDatabase, document: StoredHealthDocument, fileMetadata: object): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(["documents", "fileMetadata"], "readwrite");
+    tx.objectStore("documents").add(document);
+    tx.objectStore("fileMetadata").add(fileMetadata);
+    tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
+  });
+}
+
+export async function listDocumentsForProfile(db: IDBDatabase, profileId: string): Promise<StoredHealthDocument[]> {
+  const index = db.transaction("documents").objectStore("documents").index("profileCreatedAt");
+  const values: StoredHealthDocument[] = await requestResult(index.getAll(IDBKeyRange.bound([profileId, ""], [profileId, "\uffff"])));
+  return values.filter((item) => !item.deletedAt).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getDocumentMetadata(db: IDBDatabase, documentId: string): Promise<StoredHealthDocument | undefined> {
+  return requestResult(db.transaction("documents").objectStore("documents").get(documentId));
+}
+
+export async function deleteDocumentMetadata(db: IDBDatabase, documentId: string, fileId: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(["documents", "fileMetadata"], "readwrite");
+    tx.objectStore("documents").delete(documentId); tx.objectStore("fileMetadata").delete(fileId);
+    tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
+  });
+}
+
+export async function putOcrResult(db: IDBDatabase, result: StoredOcrResult): Promise<void> {
+  await requestResult(db.transaction("ocrResults", "readwrite").objectStore("ocrResults").put(result));
+}
+
+export async function getOcrResult(db: IDBDatabase, resultId: string): Promise<StoredOcrResult | undefined> {
+  return requestResult(db.transaction("ocrResults").objectStore("ocrResults").get(resultId));
 }

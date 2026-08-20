@@ -22,3 +22,21 @@ npm run dev
 ```
 
 브라우저 개발자 도구의 Application → IndexedDB → `ieobom-local`에서 암호화된 레코드와 변경 이력을 확인할 수 있다. DBeaver는 PostgreSQL 서버 데이터용이므로 로컬 건강기록은 표시하지 않는다.
+
+## 현재 Python OCR 테스트 연결
+
+`ocr.py`의 현재 `naver_ocr()` 반환값(`text`, `tables`)을 확인하기 위한 개발용 브리지가 포함되어 있다. 운영에서는 기본적으로 꺼져 있으며 원본과 결과를 PostgreSQL에 저장하지 않는다.
+
+```env
+ENABLE_DEV_OCR_BRIDGE=true
+NAVER_OCR_URL=네이버_OCR_Invoke_URL
+NAVER_OCR_SECRET=네이버_OCR_Secret
+```
+
+```bash
+uv run uvicorn app.main:app --reload
+cd frontend
+npm run dev
+```
+
+건강기록 작성 화면 오른쪽 아래의 `문서 OCR 테스트` 버튼에서 JPEG 또는 PNG를 선택한다. 출력은 원시 텍스트와 표를 그대로 보여줄 뿐 건강기록으로 자동 변환하거나 확정하지 않는다. `ocr.py`가 정리되거나 브라우저 OCR로 교체되면 `src/ocr/ocr-adapter.ts`의 구현체만 교체한다.

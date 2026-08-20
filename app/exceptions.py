@@ -27,6 +27,10 @@ class AppError(Exception):
         super().__init__(self.message)
 
 
+class OcrUnavailableError(AppError):
+    error_code = ErrorCode.OCR_UNAVAILABLE
+
+
 # --- auth ----------------------------------------------------------------
 class AuthRequiredError(AppError):
     error_code = ErrorCode.AUTH_REQUIRED

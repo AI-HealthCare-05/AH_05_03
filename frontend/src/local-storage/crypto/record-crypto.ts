@@ -2,6 +2,7 @@ import type { EncryptedValue } from "../../local-domain/types";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+const asArrayBuffer = (bytes: Uint8Array): ArrayBuffer => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 const toBase64Url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 const fromBase64Url = (value: string) => Uint8Array.from(atob(value.replaceAll("-", "+").replaceAll("_", "/")), (c) => c.charCodeAt(0));
 
@@ -31,5 +32,21 @@ export async function decryptJson<T>(key: CryptoKey, value: EncryptedValue, aad:
 export async function canonicalHash(value: unknown): Promise<string> {
   const canonical = JSON.stringify(value, Object.keys(value as object).sort());
   const hash = await crypto.subtle.digest("SHA-256", encoder.encode(canonical));
+  return toBase64Url(new Uint8Array(hash));
+}
+
+export async function encryptBytes(key: CryptoKey, bytes: Uint8Array, aad: string) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: encoder.encode(aad) }, key, asArrayBuffer(bytes));
+  return { iv: toBase64Url(iv), ciphertext: new Uint8Array(ciphertext) };
+}
+
+export async function decryptBytes(key: CryptoKey, iv: string, ciphertext: Uint8Array, aad: string) {
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64Url(iv), additionalData: encoder.encode(aad) }, key, asArrayBuffer(ciphertext));
+  return new Uint8Array(plaintext);
+}
+
+export async function sha256Bytes(bytes: Uint8Array): Promise<string> {
+  const hash = await crypto.subtle.digest("SHA-256", asArrayBuffer(bytes));
   return toBase64Url(new Uint8Array(hash));
 }

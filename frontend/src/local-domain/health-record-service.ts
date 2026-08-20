@@ -1,5 +1,5 @@
 import { canonicalHash, decryptJson, encryptJson } from "../local-storage/crypto/record-crypto";
-import { findCandidates, getOrCreateDataKey, openLocalDatabase, saveRecordAndEvent } from "../local-storage/indexeddb/database";
+import { findCandidates, getOrCreateDataKey, listRecordsForProfile, openLocalDatabase, saveRecordAndEvent } from "../local-storage/indexeddb/database";
 import type { CreateHealthRecordInput, HealthPayload, HealthRecordView, LocalResult, StoredHealthRecord } from "./types";
 
 const fieldError = (field: string, reason: string) => ({ field, reason });
@@ -37,6 +37,10 @@ export function validatePayload(payload: HealthPayload) {
       if (!payload.screeningName.trim()) errors.push(fieldError("screeningName", "검진명을 입력해 주세요."));
       if (payload.summary && payload.summary.length > 10000) errors.push(fieldError("summary", "요약은 10,000자 이하여야 합니다."));
       break;
+    case "pain":
+      if (!payload.bodyArea.trim()) errors.push(fieldError("bodyArea", "통증 부위를 입력해 주세요."));
+      if (!Number.isInteger(payload.intensity) || payload.intensity < 0 || payload.intensity > 10) errors.push(fieldError("intensity", "통증 강도는 0~10 사이여야 합니다."));
+      break;
     case "walking":
       if ([payload.steps, payload.distanceKm, payload.durationMinutes].every((v) => v === undefined)) errors.push(fieldError("walking", "걸음 수, 거리 또는 시간을 하나 이상 입력해 주세요."));
       if (!inRange(payload.steps, 0, 200000)) errors.push(fieldError("steps", "걸음 수는 0~200,000 사이여야 합니다."));
@@ -51,6 +55,21 @@ export function validatePayload(payload: HealthPayload) {
 }
 
 export class HealthRecordService {
+  async query(profileId: string): Promise<LocalResult<HealthRecordView[]>> {
+    try {
+      const db = await openLocalDatabase();
+      const key = await getOrCreateDataKey(db);
+      const records = await listRecordsForProfile(db, profileId);
+      const values = await Promise.all(records.map(async (record) => ({
+        ...record,
+        payload: await decryptJson<HealthPayload>(key, record.payloadCiphertext, `healthRecord:${record.id}:payload`),
+      })));
+      return { ok: true, value: values };
+    } catch {
+      return { ok: false, error: { code: "DECRYPTION_FAILED", message: "저장된 건강기록을 불러오지 못했습니다.", retryable: true } };
+    }
+  }
+
   async create(input: CreateHealthRecordInput): Promise<LocalResult<HealthRecordView>> {
     if (!input.householdId || !input.profileId || Number.isNaN(Date.parse(input.recordedAt))) {
       return { ok: false, error: { code: "VALIDATION_ERROR", message: "기록 대상과 날짜를 확인해 주세요.", retryable: false } };
@@ -73,8 +92,8 @@ export class HealthRecordService {
       const now = new Date().toISOString();
       const record: StoredHealthRecord = {
         id, householdId: input.householdId, profileId: input.profileId, recordType, schemaVersion: 1,
-        recordedAt: input.recordedAt, source: "manual", payloadCiphertext: await encryptJson(key, input.payload, `healthRecord:${id}:payload`),
-        canonicalPayloadHashCiphertext: await encryptJson(key, hash, `healthRecord:${id}:hash`), sourceDocumentId: null,
+        recordedAt: input.recordedAt, source: input.source, payloadCiphertext: await encryptJson(key, input.payload, `healthRecord:${id}:payload`),
+        canonicalPayloadHashCiphertext: await encryptJson(key, hash, `healthRecord:${id}:hash`), sourceDocumentId: input.sourceDocumentId ?? null,
         createdAt: now, updatedAt: now, deletedAt: null, version: 1,
       };
       const eventId = crypto.randomUUID();
