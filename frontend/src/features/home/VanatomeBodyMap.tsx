@@ -5,14 +5,27 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 import { ProceduralBodyMap } from "./ProceduralBodyMap";
 
-const MODEL_URL = "/vendor/vanatome/models/z-anatomy-1.4.0-regional-anatomy.glb";
+type ViewMode = "surface" | "internal";
+type AnatomyMetadata = { id: string; name: string; system: string };
+type MetadataBundle = { structures: AnatomyMetadata[] };
+type SelectedStructure = { name: string; system?: string };
+
+const MODEL_URLS: Record<ViewMode, string> = {
+  surface: "/vendor/vanatome/models/z-anatomy-1.4.0-regional-anatomy.glb",
+  internal: "/vendor/vanatome/models/z-anatomy-1.4.0-full-body.glb",
+};
+const FULL_BODY_METADATA_URL = "/vendor/vanatome/releases/1.4.0/full-body.metadata.json";
 const ATTRIBUTION_URL = "/vendor/vanatome/ATTRIBUTION.txt";
-const SELECTED_COLOR = new THREE.Color(0x2563eb);
+const SELECTED_COLOR = new THREE.Color(0x38bdf8);
+const INTERNAL_SYSTEMS = new Set([
+  "cardiovascular", "digestive", "endocrine", "respiratory", "skeletal", "urinary",
+]);
 
 export function VanatomeBodyMap({ profileName }: { profileName: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const clearSelectionRef = useRef<() => void>(() => undefined);
-  const [selectedStructure, setSelectedStructure] = useState<string>();
+  const [viewMode, setViewMode] = useState<ViewMode>("surface");
+  const [selectedStructure, setSelectedStructure] = useState<SelectedStructure>();
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadError, setLoadError] = useState<string>();
   const [webGlUnavailable, setWebGlUnavailable] = useState(false);
@@ -21,6 +34,10 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || isTestEnvironment) return;
+
+    setLoadProgress(0);
+    setLoadError(undefined);
+    setSelectedStructure(undefined);
 
     let renderer: THREE.WebGLRenderer;
     try {
@@ -31,14 +48,14 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
     }
 
     let disposed = false;
+    const isInternal = viewMode === "internal";
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf1f6ff);
-
+    scene.background = new THREE.Color(isInternal ? 0x06131d : 0xf1f6ff);
     const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-    camera.position.set(0, 0.1, 6.4);
+    camera.position.set(0, 0.1, isInternal ? 6.8 : 6.4);
 
     const controls = new OrbitControls(camera, canvas);
     controls.enableDamping = false;
@@ -47,15 +64,16 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
     controls.maxDistance = 11;
     controls.target.set(0, 0.15, 0);
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xaebed8, 2.3));
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.8);
+    scene.add(new THREE.HemisphereLight(isInternal ? 0xb9f6ff : 0xffffff, 0x18344b, isInternal ? 1.8 : 2.3));
+    const keyLight = new THREE.DirectionalLight(isInternal ? 0xbff8ff : 0xffffff, isInternal ? 2.2 : 2.8);
     keyLight.position.set(3, 5, 5);
     scene.add(keyLight);
-    const fillLight = new THREE.DirectionalLight(0xb7d2ff, 1.4);
+    const fillLight = new THREE.DirectionalLight(isInternal ? 0x38bdf8 : 0xb7d2ff, 1.4);
     fillLight.position.set(-4, 1, 3);
     scene.add(fillLight);
 
     const selectableMeshes: THREE.Mesh[] = [];
+    const ownedMaterials = new Set<THREE.Material>();
     const originalMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
     let selectedMesh: THREE.Mesh | undefined;
 
@@ -68,7 +86,6 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
       camera.updateProjectionMatrix();
       renderScene();
     };
-
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(canvas);
     controls.addEventListener("change", renderScene);
@@ -76,7 +93,9 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
 
     const clearSelectedMaterial = () => {
       if (!selectedMesh) return;
-      disposeMaterials(selectedMesh.material);
+      materialsOf(selectedMesh.material).forEach((material) => {
+        if (!ownedMaterials.has(material)) material.dispose();
+      });
       const original = originalMaterials.get(selectedMesh);
       if (original) selectedMesh.material = original;
       selectedMesh = undefined;
@@ -87,29 +106,72 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
       setSelectedStructure(undefined);
     };
 
+    const metadataPromise = isInternal
+      ? fetch(FULL_BODY_METADATA_URL)
+          .then((response) => response.ok ? response.json() as Promise<MetadataBundle> : Promise.reject())
+          .then((metadata) => new Map(metadata.structures.map((structure) => [structure.id, structure])))
+          .catch(() => new Map<string, AnatomyMetadata>())
+      : Promise.resolve(new Map<string, AnatomyMetadata>());
     const loadTimeout = window.setTimeout(() => {
       if (!disposed) setLoadError("해부학 인체 모델 로딩 시간이 초과되었습니다.");
-    }, 20_000);
+    }, isInternal ? 60_000 : 20_000);
 
     new GLTFLoader().load(
-      MODEL_URL,
-      (gltf) => {
+      MODEL_URLS[viewMode],
+      async (gltf) => {
         if (disposed) return;
         window.clearTimeout(loadTimeout);
+        const metadata = await metadataPromise;
+        if (disposed) return;
         const model = gltf.scene;
         model.traverse((object) => {
           if (!(object instanceof THREE.Mesh)) return;
-          materialsOf(object.material).forEach((material) => {
-            if (material instanceof THREE.MeshStandardMaterial) {
-              material.transparent = false;
-              material.opacity = 1;
-              material.roughness = 0.68;
-              material.metalness = 0;
+          const anatomyId = String(object.userData.anatomyId ?? "");
+          const anatomySystem = String(object.userData.anatomySystem ?? "regional-anatomy");
+          const bodyShell = anatomyId === "body-shell";
+          if (isInternal) {
+            object.visible = bodyShell || INTERNAL_SYSTEMS.has(anatomySystem);
+            if (!object.visible) return;
+          }
+
+          const styledMaterials = materialsOf(object.material).map((material) => {
+            const styled = material.clone();
+            ownedMaterials.add(styled);
+            if (!(styled instanceof THREE.MeshStandardMaterial)) return styled;
+            styled.metalness = 0;
+            styled.roughness = isInternal ? 0.48 : 0.68;
+            if (isInternal && bodyShell) {
+              styled.color.setHex(0x4de4ff);
+              styled.emissive.setHex(0x0b7895);
+              styled.emissiveIntensity = 0.75;
+              styled.transparent = true;
+              styled.opacity = 0.17;
+              styled.depthWrite = false;
+              styled.wireframe = true;
+              object.renderOrder = 4;
+            } else if (isInternal && anatomySystem === "skeletal") {
+              styled.color.lerp(new THREE.Color(0xd9f7ff), 0.72);
+              styled.emissive.setHex(0x17475a);
+              styled.emissiveIntensity = 0.18;
+              styled.transparent = true;
+              styled.opacity = 0.72;
+            } else if (isInternal) {
+              styled.emissive.copy(styled.color).multiplyScalar(0.12);
+              styled.emissiveIntensity = 0.25;
+              styled.transparent = false;
+              styled.opacity = 1;
+            } else {
+              styled.transparent = false;
+              styled.opacity = 1;
             }
+            return styled;
           });
+          object.material = Array.isArray(object.material) ? styledMaterials : styledMaterials[0];
           originalMaterials.set(object, object.material);
-          object.userData.structureLabel = structureLabel(object.name);
-          selectableMeshes.push(object);
+          const structure = metadata.get(anatomyId);
+          object.userData.structureLabel = structure?.name ?? structureLabel(object.name);
+          object.userData.structureSystem = structure?.system ?? anatomySystem;
+          if (!bodyShell) selectableMeshes.push(object);
         });
 
         const bounds = new THREE.Box3().setFromObject(model);
@@ -137,7 +199,6 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let pointerStart: { x: number; y: number } | undefined;
-
     const handlePointerDown = (event: PointerEvent) => {
       pointerStart = { x: event.clientX, y: event.clientY };
     };
@@ -160,17 +221,21 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
         const clone = material.clone();
         if (clone instanceof THREE.MeshStandardMaterial) {
           clone.color.copy(SELECTED_COLOR);
-          clone.emissive.setHex(0x123d91);
-          clone.emissiveIntensity = 0.42;
+          clone.emissive.setHex(0x0e7490);
+          clone.emissiveIntensity = 0.85;
+          clone.opacity = 1;
+          clone.transparent = false;
         }
         return clone;
       });
       mesh.material = Array.isArray(mesh.material) ? highlighted : highlighted[0];
       selectedMesh = mesh;
-      setSelectedStructure(String(mesh.userData.structureLabel ?? "선택한 해부 구조"));
+      setSelectedStructure({
+        name: String(mesh.userData.structureLabel ?? "선택한 해부 구조"),
+        system: systemLabel(String(mesh.userData.structureSystem ?? "")),
+      });
       renderScene();
     };
-
     canvas.addEventListener("pointerdown", handlePointerDown);
     canvas.addEventListener("pointerup", handlePointerUp);
 
@@ -183,15 +248,13 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
       controls.dispose();
       resizeObserver.disconnect();
       scene.traverse((object) => {
-        if (!(object instanceof THREE.Mesh)) return;
-        object.geometry.dispose();
+        if (object instanceof THREE.Mesh) object.geometry.dispose();
       });
-      if (selectedMesh) disposeMaterials(selectedMesh.material);
-      originalMaterials.forEach(disposeMaterials);
+      ownedMaterials.forEach((material) => material.dispose());
       renderer.dispose();
       clearSelectionRef.current = () => undefined;
     };
-  }, [isTestEnvironment]);
+  }, [isTestEnvironment, viewMode]);
 
   if (isTestEnvironment || loadError || webGlUnavailable) {
     return (
@@ -206,16 +269,28 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
     );
   }
 
+  const isInternal = viewMode === "internal";
   return (
     <section className="body-map-card vanatome-card" aria-labelledby="body-map-title">
       <div className="body-map-copy">
         <p className="section-kicker">해부 구조 미리보기</p>
         <h3 id="body-map-title">{profileName}님의 3D 인체</h3>
         <p>인체를 돌려보거나 구조를 선택해 보세요. 건강기록과 자동으로 연결되지는 않습니다.</p>
+        <div className="vanatome-mode-switch" aria-label="인체 보기 방식">
+          <button type="button" aria-pressed={!isInternal} onClick={() => setViewMode("surface")}>외형 보기</button>
+          <button type="button" aria-pressed={isInternal} onClick={() => setViewMode("internal")}>내부 구조 보기</button>
+        </div>
+        {isInternal ? (
+          <p className="vanatome-layer-summary"><span>반투명 외피</span><span>골격</span><span>주요 장기</span></p>
+        ) : null}
         <div className="body-map-selection" aria-live="polite">
           <span>선택한 구조</span>
-          <strong>{selectedStructure ?? "인체에서 구조를 선택하세요"}</strong>
-          <small>{selectedStructure ? "현재 선택은 미리보기 상태이며 저장되지 않습니다." : "드래그는 회전, 클릭은 구조 선택입니다."}</small>
+          <strong>{selectedStructure?.name ?? "인체에서 구조를 선택하세요"}</strong>
+          <small>
+            {selectedStructure
+              ? `${selectedStructure.system ? `${selectedStructure.system} · ` : ""}현재 선택은 저장되지 않습니다.`
+              : "드래그는 회전, 클릭은 구조 선택입니다."}
+          </small>
         </div>
         <div className="vanatome-actions">
           <button type="button" disabled={!selectedStructure} onClick={() => clearSelectionRef.current()}>선택 해제</button>
@@ -225,8 +300,8 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
           <a href={ATTRIBUTION_URL} target="_blank" rel="noreferrer">CC BY-SA 4.0 출처</a>
         </p>
       </div>
-      <div className="body-map-viewer vanatome-viewer">
-        {loadProgress < 100 ? <BodyMapLoading progress={loadProgress} /> : null}
+      <div className={`body-map-viewer vanatome-viewer${isInternal ? " is-hologram" : ""}`}>
+        {loadProgress < 100 ? <BodyMapLoading progress={loadProgress} mode={viewMode} /> : null}
         <canvas ref={canvasRef} aria-label={`${profileName}님의 회전 가능한 해부학 3D 인체 미리보기`} />
         <span className="body-map-hint">드래그하여 회전 · 클릭하여 선택</span>
       </div>
@@ -234,11 +309,11 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
   );
 }
 
-function BodyMapLoading({ progress }: { progress: number }) {
+function BodyMapLoading({ progress, mode }: { progress: number; mode: ViewMode }) {
   return (
     <div className="vanatome-loading" role="status">
-      <span>해부학 인체 모델을 준비하는 중…</span>
-      <small>{progress > 0 ? `${progress}%` : "약 6 MB · 이 서버에서 직접 불러옵니다"}</small>
+      <span>{mode === "internal" ? "외피·골격·주요 장기를 구성하는 중…" : "해부학 인체 모델을 준비하는 중…"}</span>
+      <small>{progress > 0 ? `${progress}%` : `${mode === "internal" ? "약 30 MB" : "약 6 MB"} · 이 서버에서 직접 불러옵니다`}</small>
     </div>
   );
 }
@@ -247,13 +322,18 @@ function materialsOf(material: THREE.Material | THREE.Material[]) {
   return Array.isArray(material) ? material : [material];
 }
 
-function disposeMaterials(material: THREE.Material | THREE.Material[]) {
-  materialsOf(material).forEach((item) => item.dispose());
-}
-
 function structureLabel(meshName: string) {
   return meshName
     .replace(/^body-shell__/, "")
     .replace(/([lr])$/, (_, side: string) => side === "l" ? " (왼쪽)" : " (오른쪽)")
     .replaceAll("_", " ");
+}
+
+function systemLabel(system: string) {
+  const labels: Record<string, string> = {
+    cardiovascular: "심혈관계", digestive: "소화기계", endocrine: "내분비계",
+    respiratory: "호흡기계", skeletal: "골격계", urinary: "비뇨기계",
+    "regional-anatomy": "외부 해부 구조",
+  };
+  return labels[system];
 }
