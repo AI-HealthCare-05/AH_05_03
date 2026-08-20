@@ -20,6 +20,10 @@ class TestInvitationStore:
         assert delivery.token == token
         assert await store.take_delivery(invitation_id) is None
 
+        await store.requeue_delivery(delivery, 300)
+        retried = await store.take_delivery(invitation_id)
+        assert retried == delivery
+
         await store.consume(invitation_id, token)
         with pytest.raises(InvitationTokenReusedError):
             await store.consume(invitation_id, token)

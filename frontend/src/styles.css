@@ -185,6 +185,7 @@ main {
 }
 
 .header-status button,
+.header-status > a,
 .menu-button {
   border: 1px solid var(--line);
   border-radius: 11px;
@@ -192,6 +193,235 @@ main {
   color: var(--muted-strong);
   background: white;
   font-weight: 700;
+}
+
+.account-card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 24px;
+  background: white;
+}
+
+.account-card > h2 {
+  margin: 0;
+}
+
+.account-grid {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.account-wide {
+  grid-column: 1 / -1;
+}
+
+.account-card dl,
+.account-card dl div {
+  display: flex;
+  gap: 16px;
+}
+
+.account-card dl {
+  margin: 20px 0 0;
+}
+
+.account-card dl div {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.account-card dt,
+.account-card dd {
+  margin: 0;
+}
+
+.account-card dt {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.server-id-row,
+.profile-link-row,
+.received-invitation,
+.invitation-list p {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 12px;
+}
+
+.account-inline-form,
+.received-invitation {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 0.8fr 1fr 1.2fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.received-invitation {
+  grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1.4fr) auto;
+}
+
+.account-inline-form input,
+.account-inline-form select,
+.received-invitation input,
+.received-invitation select {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 11px 12px;
+  background: white;
+}
+
+.invitation-list,
+.profile-link-row {
+  margin-top: 18px;
+}
+
+.invitation-list p,
+.profile-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.auth-card {
+  width: min(560px, 100%);
+  margin-top: 28px;
+}
+
+.auth-card > p,
+.account-help,
+.danger-zone > p,
+.confirmation-copy {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.invitation-account-gate {
+  border-color: #f0c98d;
+  background: #fffaf1;
+}
+
+.invitation-account-gate dl {
+  flex-direction: column;
+}
+
+.invitation-account-gate dl div {
+  overflow-wrap: anywhere;
+}
+
+.invitation-account-gate .primary-button {
+  margin-top: 10px;
+}
+
+.subscription-form {
+  margin: 18px 0 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.subscription-form label {
+  flex: 1;
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.subscription-form select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 10px 12px;
+  background: white;
+}
+
+.account-empty {
+  margin: 18px 0 0;
+  color: var(--muted);
+}
+
+.household-list {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.household-list article,
+.membership-panel > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.household-list article.is-selected {
+  border-color: #a9c5ff;
+  background: #f4f8ff;
+}
+
+.household-list small,
+.invitation-list small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.text-danger-button {
+  border: 0;
+  padding: 8px;
+  color: #a32626;
+  background: transparent;
+  font-weight: 700;
+}
+
+.membership-panel {
+  margin-top: 18px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 18px;
+}
+
+.membership-panel h3 {
+  margin: 0 0 10px;
+}
+
+.membership-panel > div + div {
+  margin-top: 8px;
+}
+
+.membership-panel time,
+.membership-panel span,
+.profile-link-row span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.danger-zone {
+  border-color: #f0c5c5;
+  background: #fffafa;
+}
+
+.danger-zone .danger-button {
+  margin-top: 10px;
+}
+
+.invitation-list span {
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .menu-button {
@@ -273,6 +503,7 @@ main {
 
 .primary-button,
 .secondary-button,
+.danger-button,
 .text-button {
   border-radius: 12px;
   padding: 12px 17px;
@@ -295,6 +526,17 @@ main {
   border: 1px solid var(--line);
   color: var(--blue-700);
   background: white;
+}
+
+.danger-button {
+  border: 1px solid #e3a2a2;
+  color: #a32626;
+  background: #fff7f7;
+}
+
+.danger-button:hover:not(:disabled) {
+  border-color: #cf6e6e;
+  background: #fff0f0;
 }
 
 .text-button {
@@ -387,6 +629,18 @@ main {
   background: white;
 }
 
+.member-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.compact-button {
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+}
+
 .member-list {
   margin-top: 20px;
   display: grid;
@@ -468,6 +722,12 @@ main {
   color: #718099;
   font-size: 0.63rem;
   font-weight: 700;
+}
+
+.member-dashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .add-member-card {
@@ -655,8 +915,19 @@ main {
 }
 
 .panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 18px 20px;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.panel-heading-actions,
+.record-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .panel-heading h3,
@@ -688,11 +959,24 @@ main {
 
 .record-list li {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 13px;
   padding: 15px 20px;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.record-row-actions button {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 6px 8px;
+  color: var(--muted-strong);
+  background: white;
+  font-size: 0.72rem;
+}
+
+.record-row-actions button:last-child {
+  color: #a32626;
 }
 
 .record-list li:last-child { border-bottom: 0; }
@@ -880,6 +1164,133 @@ main {
   gap: 10px;
 }
 
+.profile-lifecycle-zone {
+  margin-top: 24px;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.profile-lifecycle-zone h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.profile-lifecycle-zone p,
+.profile-confirmation p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.65;
+}
+
+.profile-lifecycle-actions {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.profile-confirmation {
+  margin-top: 20px;
+}
+
+.profile-confirmation .alert {
+  margin-top: 16px;
+}
+
+.profile-confirmation .form-actions {
+  margin-top: 22px;
+}
+
+.hidden-profiles-content {
+  margin-top: 20px;
+}
+
+.hidden-profiles-content .alert {
+  margin-top: 16px;
+}
+
+.hidden-profile-list {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.hidden-profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 15px;
+  background: var(--surface);
+}
+
+.hidden-profile-row strong,
+.hidden-profile-row small {
+  display: block;
+}
+
+.family-history-modal {
+  width: min(660px, 100%);
+}
+
+.family-history-notice {
+  margin-top: 20px;
+}
+
+.family-history-toolbar {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.family-history-list {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.family-history-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  padding: 15px;
+}
+
+.family-history-list p,
+.family-history-list small {
+  display: block;
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.inline-confirmation {
+  margin-top: 18px;
+  border: 1px solid #f0c5c5;
+  border-radius: 14px;
+  padding: 15px;
+  background: #fff8f8;
+}
+
+.inline-confirmation p {
+  margin: 0;
+}
+
+.hidden-profile-row small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .data-page .dashboard-heading {
   align-items: center;
 }
@@ -893,6 +1304,80 @@ main {
   border-radius: 22px;
   padding: 30px;
   background: linear-gradient(120deg, #fff, #edf4ff);
+}
+
+.document-panel {
+  margin-top: 28px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 26px;
+  background: white;
+}
+
+.document-upload-row {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: 0.7fr 1.4fr auto;
+  align-items: end;
+  gap: 14px;
+}
+
+.document-upload-row label,
+.ocr-review-field {
+  display: grid;
+  gap: 7px;
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.document-upload-row input,
+.document-upload-row select,
+.ocr-review-field textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: white;
+}
+
+.document-list {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.document-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  padding: 14px 15px;
+}
+
+.document-list strong,
+.document-list small {
+  display: block;
+}
+
+.document-list small {
+  margin-top: 5px;
+  color: var(--muted);
+}
+
+.ocr-review-modal {
+  width: min(720px, 100%);
+}
+
+.ocr-review-field {
+  margin-top: 20px;
+}
+
+.ocr-review-field textarea {
+  resize: vertical;
+  line-height: 1.6;
 }
 
 .data-boundary-card h2 {
@@ -1256,6 +1741,24 @@ main {
   .data-boundary-card { gap: 20px; }
 
   .capability-list { grid-template-columns: 1fr; }
+
+  .account-grid,
+  .account-inline-form,
+  .received-invitation {
+    grid-template-columns: 1fr;
+  }
+
+  .household-list article,
+  .membership-panel > div,
+  .profile-link-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .household-list .row-actions,
+  .received-invitation .row-actions {
+    width: 100%;
+  }
 
   .site-footer {
     align-items: flex-start;

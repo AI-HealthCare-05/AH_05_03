@@ -7,7 +7,7 @@
 > 서버 계약: [03_api_spec.md](03_api_spec.md)
 >
 > 데이터 모델: [02_erd.md](02_erd.md)
-> 결정 근거: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-006](adr/0006-lifecycle-scoped-profile-reference.md)
+> 결정 근거: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-006](adr/0006-lifecycle-scoped-profile-reference.md), [ADR-007](adr/0007-account-scoped-encrypted-local-vault.md)
 
 ## 1. 목적과 경계
 
@@ -491,7 +491,7 @@ staging → verified → committed → deleting → deleted
 
 ### 7.1 데이터 키
 
-1. 최초 가정 생성 시 256비트 Data Encryption Key(DEK)를 `crypto.getRandomValues`로 생성한다.
+1. 최초 암호화 로컬 보관함 생성 시 256비트 Data Encryption Key(DEK)를 `crypto.getRandomValues`로 생성한다.
 2. 런타임에는 `extractable=false`인 AES-GCM `CryptoKey`로 가져온다.
 3. 각 레코드와 파일 청크는 12바이트 무작위 IV를 사용한다.
 4. 같은 키로 IV를 재사용하지 않는다.
@@ -503,6 +503,17 @@ staging → verified → committed → deleting → deleted
 ### 7.2 계정 비밀번호와의 분리
 
 서비스 계정 비밀번호를 로컬 DEK로 직접 사용하지 않는다. 서버 비밀번호 변경이나 계정 해지가 로컬 데이터 복호화 가능성을 자동으로 바꾸지 않아야 한다. 로컬 잠금 비밀번호와 복구 정책은 별도 UX 결정으로 확정한다.
+
+### 7.3 보관함 격리와 잠금
+
+- 각 보관함은 무작위 `vaultId`, 독립 IndexedDB, 독립 OPFS 디렉터리와 독립 DEK를 사용한다.
+- 비민감 레지스트리는 이 기기의 서비스 계정과 `vaultId` 연결, 스키마 버전과 이전 상태만 보관한다. 이메일·프로필 이름·건강정보는 넣지 않는다.
+- 서비스 계정 로그인 또는 초대 수락만으로 DEK를 사용할 수 있게 하지 않는다.
+- 로그아웃·계정 전환 시 Repository와 Worker를 닫고 복호화된 캐시와 메모리 키를 지운다. 다른 탭에도 잠금 이벤트를 전달한다.
+- 보관함이 잠긴 동안 Local Domain Service는 목록을 빈 값으로 위장하지 않고 `VAULT_LOCKED` 오류를 반환한다.
+- 기존 `ieobom-local`은 소유자 미지정 레거시 보관함으로 열고, 백업과 명시적 확인 없이는 계정 보관함으로 이전하지 않는다.
+
+현재 구현의 고정 `ieobom-local` DB와 공용 OPFS 경로는 이 목표 계약을 아직 충족하지 않는다. 계정별 DB 이름만 붙이는 임시 변경은 완료로 간주하지 않으며, 잠금 키와 OPFS 경계까지 함께 적용해야 한다.
 
 ## 8. 암호화 백업·이전 파일
 

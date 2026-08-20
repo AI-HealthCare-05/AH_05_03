@@ -65,6 +65,17 @@ export class LocalProfileService {
   }
 
   public async list(householdId: string): Promise<LocalResult<FamilyProfile[]>> {
+    return this.listByStatus(householdId, "active");
+  }
+
+  public async listHidden(householdId: string): Promise<LocalResult<FamilyProfile[]>> {
+    return this.listByStatus(householdId, "hidden");
+  }
+
+  private async listByStatus(
+    householdId: string,
+    status: FamilyProfile["status"],
+  ): Promise<LocalResult<FamilyProfile[]>> {
     const records = await this.repository.list({ householdRef: householdId, recordType: "family-profile" });
     const profiles: FamilyProfile[] = [];
     for (const record of records) {
@@ -73,7 +84,7 @@ export class LocalProfileService {
         return result;
       }
       const profile = normalizeFamilyProfile(result.value);
-      if (profile.status === "active") {
+      if (profile.status === status) {
         profiles.push(profile);
       }
     }
@@ -110,6 +121,23 @@ export class LocalProfileService {
     const updated: FamilyProfile = {
       ...current.value,
       status: "hidden",
+      updatedAt: new Date().toISOString(),
+      version: current.value.version + 1,
+    };
+    await this.repository.put(await toEncryptedRecord(updated, "family-profile", updated.id, this.cipher));
+    return success(updated);
+  }
+
+  public async restore(profileId: string, expectedVersion: number): Promise<LocalResult<FamilyProfile>> {
+    const current = await this.get(profileId);
+    if (!current.ok) return current;
+    if (current.value.version !== expectedVersion) return failure("VERSION_CONFLICT", "프로필 버전이 변경되었습니다.");
+    if (current.value.status !== "hidden") {
+      return failure("VALIDATION_ERROR", "숨겨진 프로필만 가족 목록으로 복원할 수 있습니다.");
+    }
+    const updated: FamilyProfile = {
+      ...current.value,
+      status: "active",
       updatedAt: new Date().toISOString(),
       version: current.value.version + 1,
     };
@@ -502,6 +530,73 @@ export class LocalHealthRecordService {
       return failure("NOT_FOUND", "건강기록을 찾을 수 없습니다.");
     }
     return decryptResult<HealthRecord>(record, this.cipher);
+  }
+
+  public async update<TPayload extends object>(
+    recordId: string,
+    input: {
+      recordType: HealthRecordType;
+      recordedAt: ISODateTime;
+      payload: TPayload;
+      expectedVersion: number;
+    },
+  ): Promise<LocalResult<HealthRecord<TPayload>>> {
+    const current = await this.get(recordId);
+    if (!current.ok) return current;
+    if (current.value.version !== input.expectedVersion) {
+      return failure("VERSION_CONFLICT", "건강기록이 다른 화면에서 변경되었습니다.");
+    }
+    if (current.value.deletedAt) {
+      return failure("VALIDATION_ERROR", "삭제된 건강기록은 복원한 뒤 수정할 수 있습니다.");
+    }
+    if (Number.isNaN(Date.parse(input.recordedAt)) || Object.keys(input.payload).length === 0) {
+      return failure("VALIDATION_ERROR", "올바른 기록 시각과 건강기록 내용이 필요합니다.");
+    }
+    const updated: HealthRecord<TPayload> = {
+      ...current.value,
+      recordType: input.recordType,
+      recordedAt: input.recordedAt,
+      payload: input.payload,
+      updatedAt: new Date().toISOString(),
+      version: current.value.version + 1,
+    };
+    await this.repository.put(
+      await toEncryptedRecord(updated, "health-record", updated.profileId, this.cipher),
+    );
+    return success(updated);
+  }
+
+  public async softDelete(recordId: string, expectedVersion: number): Promise<LocalResult<HealthRecord>> {
+    return this.changeDeletedState(recordId, expectedVersion, new Date().toISOString());
+  }
+
+  public async restore(recordId: string, expectedVersion: number): Promise<LocalResult<HealthRecord>> {
+    return this.changeDeletedState(recordId, expectedVersion, null);
+  }
+
+  private async changeDeletedState(
+    recordId: string,
+    expectedVersion: number,
+    deletedAt: ISODateTime | null,
+  ): Promise<LocalResult<HealthRecord>> {
+    const current = await this.get(recordId);
+    if (!current.ok) return current;
+    if (current.value.version !== expectedVersion) {
+      return failure("VERSION_CONFLICT", "건강기록이 다른 화면에서 변경되었습니다.");
+    }
+    if (deletedAt === null && current.value.deletedAt === null) {
+      return failure("VALIDATION_ERROR", "삭제된 건강기록만 복원할 수 있습니다.");
+    }
+    const updated: HealthRecord = {
+      ...current.value,
+      deletedAt,
+      updatedAt: new Date().toISOString(),
+      version: current.value.version + 1,
+    };
+    await this.repository.put(
+      await toEncryptedRecord(updated, "health-record", updated.profileId, this.cipher),
+    );
+    return success(updated);
   }
 
   public async query(input: {

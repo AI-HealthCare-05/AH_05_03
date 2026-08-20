@@ -63,7 +63,7 @@ services:
       DB_NAME: ${DB_NAME:-ai_health}
       DB_TEST_NAME: ${DB_TEST_NAME:-ai_health_test}
       REDIS_URL: redis://redis:6379/0
-      CORS_ALLOW_ORIGINS: '["http://localhost","http://localhost:5173","http://127.0.0.1:5173"]'
+      CORS_ALLOW_ORIGINS: '["http://localhost","http://localhost:4173","http://127.0.0.1:4173","http://localhost:5173","http://127.0.0.1:5173"]'
       # 로컬 HTTP 실험에서는 __Host- Secure 쿠키를 사용할 수 없다.
       REFRESH_COOKIE_NAME: ieobom_refresh
       REFRESH_COOKIE_SECURE: "false"
@@ -110,7 +110,48 @@ services:
       redis:
         condition: service_healthy
 
-  # 5. Frontend (Vite production build를 정적 제공)
+  # 5. Invitation email worker (계정·초대 메타데이터 전용)
+  email-worker:
+    container_name: email-worker
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    image: ${APP_IMAGE:-ieobom-app:local}
+    profiles:
+      - mail
+    command: ["uv", "run", "--no-sync", "python", "-m", "app.workers.invitation_email_worker"]
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM_EMAIL: no-reply@ieobom.local
+      SMTP_FROM_NAME: 이어봄
+      INVITATION_WEB_ORIGIN: ${INVITATION_WEB_ORIGIN:-http://127.0.0.1:4173}
+    volumes:
+      - ./app:/app/app
+    restart: always
+    networks:
+      - ws
+    depends_on:
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  # 6. Local-only SMTP inbox. 운영 배포에는 포함하지 않는다.
+  mailpit:
+    container_name: mailpit
+    image: axllent/mailpit:v1.30.6
+    profiles:
+      - mail
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "127.0.0.1:${MAILPIT_WEB_PORT:-8025}:8025"
+    networks:
+      - ws
+
+  # 7. Frontend (Vite production build를 정적 제공)
   frontend:
     container_name: frontend
     build:
@@ -121,7 +162,7 @@ services:
     networks:
       - ws
 
-  # 6. Nginx (프론트엔드와 API 요청을 리버스 프록시로 전달)
+  # 8. Nginx (프론트엔드와 API 요청을 리버스 프록시로 전달)
   nginx:
     container_name: nginx
     image: nginx:latest

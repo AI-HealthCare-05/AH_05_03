@@ -1,6 +1,7 @@
-import type { EncryptedLocalRecord, EncryptedRecordRepository } from "./contracts";
+import type { EncryptedLocalRecord, EncryptedRecordRepository, EncryptedValue } from "./contracts";
 import type { ShareableRecordType } from "./domainContracts";
 import type { JsonCipher } from "./jsonCipher";
+import type { DocumentFileSnapshot, DocumentFileStore } from "./localDocumentService";
 
 const BACKUP_FORMAT = "ieobom-backup";
 const BACKUP_VERSION = 1;
@@ -26,6 +27,7 @@ interface BackupPayload {
   version: typeof BACKUP_VERSION;
   createdAt: string;
   records: BackupRecord[];
+  files?: DocumentFileSnapshot[];
 }
 
 interface BackupEnvelope {
@@ -43,6 +45,7 @@ export interface BackupPreview {
   createdAt: string;
   totalRecords: number;
   countsByType: Partial<Record<EncryptedLocalRecord["recordType"], number>>;
+  totalFiles: number;
 }
 
 export class LocalBackupService {
@@ -50,12 +53,13 @@ export class LocalBackupService {
     private readonly repository: EncryptedRecordRepository,
     private readonly localCipher: JsonCipher,
     private readonly cryptoApi: Crypto = globalThis.crypto,
+    private readonly documentFiles?: DocumentFileStore,
   ) {}
 
   public async exportAll(passphrase: string): Promise<Blob> {
     validatePassphrase(passphrase);
     const records = await this.repository.list();
-    return this.exportRecords(records, passphrase);
+    return this.exportRecords(records, passphrase, await this.prepareFilesForExport());
   }
 
   public async exportProfileTransfer(
@@ -72,10 +76,15 @@ export class LocalBackupService {
     if (!selected.some((record) => record.recordType === "family-profile")) {
       throw new Error("공유할 가족 구성원 프로필을 찾을 수 없습니다.");
     }
-    return this.exportRecords(selected, passphrase);
+    const files = (await this.prepareFilesForExport()).filter((file) => file.profileId === profileId);
+    return this.exportRecords(selected, passphrase, files);
   }
 
-  private async exportRecords(records: EncryptedLocalRecord[], passphrase: string): Promise<Blob> {
+  private async exportRecords(
+    records: EncryptedLocalRecord[],
+    passphrase: string,
+    files: DocumentFileSnapshot[] = [],
+  ): Promise<Blob> {
     const backupRecords: BackupRecord[] = [];
     for (const record of records) {
       backupRecords.push({
@@ -95,9 +104,33 @@ export class LocalBackupService {
       version: BACKUP_VERSION,
       createdAt: new Date().toISOString(),
       records: backupRecords,
+      files,
     };
     const envelope = await encryptBackup(payload, passphrase, this.cryptoApi);
     return new Blob([JSON.stringify(envelope)], { type: "application/vnd.ieobom.backup+json" });
+  }
+
+  private async prepareFilesForExport(): Promise<DocumentFileSnapshot[]> {
+    const files = await this.documentFiles?.list() ?? [];
+    const exported: DocumentFileSnapshot[] = [];
+    for (const file of files) {
+      const encryptedChunks = JSON.parse(file.content) as EncryptedValue[];
+      const plaintextChunks: string[] = [];
+      for (const chunk of encryptedChunks) plaintextChunks.push(await this.localCipher.decrypt<string>(chunk));
+      exported.push({ ...file, content: JSON.stringify(plaintextChunks) });
+    }
+    return exported;
+  }
+
+  private async prepareFilesForImport(files: DocumentFileSnapshot[]): Promise<DocumentFileSnapshot[]> {
+    const imported: DocumentFileSnapshot[] = [];
+    for (const file of files) {
+      const plaintextChunks = JSON.parse(file.content) as string[];
+      const encryptedChunks: EncryptedValue[] = [];
+      for (const chunk of plaintextChunks) encryptedChunks.push(await this.localCipher.encrypt(chunk));
+      imported.push({ ...file, content: JSON.stringify(encryptedChunks) });
+    }
+    return imported;
   }
 
   public async inspect(file: Blob, passphrase: string): Promise<BackupPreview> {
@@ -132,13 +165,29 @@ export class LocalBackupService {
       });
     }
 
+    const existingFiles = await this.documentFiles?.list() ?? [];
+    const importedFiles = await this.prepareFilesForImport(payload.files ?? []);
+    let nextRecords = encryptedRecords;
+    let nextFiles = importedFiles;
     if (mode === "merge") {
       const existingIds = new Set(existing.map((record) => record.id));
-      const duplicate = encryptedRecords.find((record) => existingIds.has(record.id));
-      if (duplicate) throw new Error("가져올 파일에 현재 브라우저와 중복되는 기록이 있습니다.");
-      await this.repository.replaceAll([...existing, ...encryptedRecords]);
-    } else {
-      await this.repository.replaceAll(encryptedRecords);
+      if (encryptedRecords.some((record) => existingIds.has(record.id))) {
+        throw new Error("가져올 파일에 현재 브라우저와 중복되는 기록이 있습니다.");
+      }
+      const existingFileIds = new Set(existingFiles.map((file) => file.documentId));
+      if (importedFiles.some((file) => existingFileIds.has(file.documentId))) {
+        throw new Error("가져올 파일에 현재 브라우저와 중복되는 원본 문서가 있습니다.");
+      }
+      nextRecords = [...existing, ...encryptedRecords];
+      nextFiles = [...existingFiles, ...importedFiles];
+    }
+
+    try {
+      if (this.documentFiles) await this.documentFiles.replaceAll(nextFiles);
+      await this.repository.replaceAll(nextRecords);
+    } catch (caught) {
+      if (this.documentFiles) await this.documentFiles.replaceAll(existingFiles);
+      throw caught;
     }
     return summarize(payload);
   }
@@ -278,6 +327,7 @@ function summarize(payload: BackupPayload): BackupPreview {
     createdAt: payload.createdAt,
     totalRecords: payload.records.length,
     countsByType,
+    totalFiles: payload.files?.length ?? 0,
   };
 }
 

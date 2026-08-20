@@ -7,6 +7,7 @@ export type LocalErrorCode =
   | "VERSION_CONFLICT"
   | "ENCRYPTION_FAILED"
   | "DECRYPTION_FAILED"
+  | "VAULT_LOCKED"
   | "DUPLICATE_RECORD"
   | "PROFILE_MERGE_CONFLICT"
   | "PROFILE_MERGE_NOT_SAFE"
@@ -93,6 +94,19 @@ export interface HealthRecord<TPayload extends object = Record<string, unknown>>
   payload: TPayload;
   sourceDocumentId: string | null;
   deletedAt: ISODateTime | null;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+  version: number;
+}
+
+export interface LocalDocument {
+  id: string;
+  householdId: string;
+  profileId: string;
+  fileName: string;
+  mimeType: string;
+  byteSize: number;
+  chunkCount: number;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
   version: number;

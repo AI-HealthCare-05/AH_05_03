@@ -245,6 +245,10 @@ export class ServerApiClient {
       throw await toApiError(response);
     }
 
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
     const envelope = (await response.json()) as ApiEnvelope<T>;
     return envelope.data;
   }

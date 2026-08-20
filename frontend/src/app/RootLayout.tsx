@@ -6,6 +6,7 @@ const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
   { to: "/data", label: "데이터 관리", end: false },
   { to: "/ui-preview", label: "UI 미리보기", end: false },
+  { to: "/account", label: "계정", end: false },
 ] as const;
 
 export function RootLayout() {
@@ -45,12 +46,11 @@ export function RootLayout() {
                 {item.label}
               </NavLink>
             ))}
-            <span className="navigation-future" title="서비스 계정 화면은 후속 구현입니다.">계정</span>
           </nav>
 
           <div className="header-status">
-            <span><i aria-hidden="true" /> 로컬 보관</span>
-            <button type="button" disabled title="서비스 계정 화면은 후속 구현입니다.">내 계정</button>
+            <span title="현재 버전은 공용 브라우저의 사용자별 보관함 잠금을 지원하지 않습니다."><i aria-hidden="true" /> 기기 로컬</span>
+            <NavLink to="/account">내 계정</NavLink>
           </div>
         </div>
       </header>

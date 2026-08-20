@@ -7,7 +7,8 @@
 ## 프로젝트 정보
 
 - **기간**: 2026-08-10 (OT) ~ 2026-09-22 (데모데이) — 결과 제출 마감 2026-09-21 15:00
-- **팀원**: 오성민(팀장/PM), 정다원(FE), 권민재(BE), 조현승(데이터 엔지니어)
+- **현재 팀원(2026-08-20 기준)**: 오성민(팀장/PM), 정다원(FE), 권민재(BE)
+- **참여 이력**: 조현승(데이터 엔지니어, 취업으로 2026-08-19 참여 종료)
 - **기술 스택**: FastAPI · React/TypeScript · PostgreSQL · Redis · Docker · AWS EC2 (상세는 [docs/05_tech_architecture.md](docs/05_tech_architecture.md))
 
 ## 문서 인덱스
@@ -17,10 +18,10 @@
 | 문서 | 내용 | 담당 |
 |---|---|---|
 | [docs/01_requirements.md](docs/01_requirements.md) | 요구사항 정의서 (문제정의, 기능/비기능 요구사항, AI 실험 계획) | 오성민 |
-| [docs/02_erd.md](docs/02_erd.md) | ERD 초안 | 조현승 |
+| [docs/02_erd.md](docs/02_erd.md) | ERD 초안 | 초안: 조현승 |
 | [docs/03_api_spec.md](docs/03_api_spec.md) | 서버 REST API·로컬 기능 상세 목표 계약 | 권민재 |
 | [docs/api/openapi.yaml](docs/api/openapi.yaml) | 서비스 계정·구독·초대·프로필 연결 OpenAPI 3.1 계약 | 권민재 |
-| [docs/database/0002_service_domain.sql](docs/database/0002_service_domain.sql) | PostgreSQL 17 서버 메타데이터 실행 가능 DDL | 조현승·권민재 |
+| [docs/database/0002_service_domain.sql](docs/database/0002_service_domain.sql) | PostgreSQL 17 서버 메타데이터 실행 가능 DDL | 초안: 조현승·권민재 |
 | [docs/04_wireframe.md](docs/04_wireframe.md) | 화면 목록 및 흐름 가이드 (Figma 링크 예정) | 정다원 |
 | [docs/05_tech_architecture.md](docs/05_tech_architecture.md) | 기술 스택 선정 근거 + 시스템 아키텍처 | 전체 |
 | [docs/06_evaluation_plan.md](docs/06_evaluation_plan.md) | **참여기업 평가기준 20개 항목 ↔ 대응 전략 매핑표** | 전체 |
@@ -29,12 +30,17 @@
 | [docs/09_chronic_disease_model_plan.md](docs/09_chronic_disease_model_plan.md) | BRFSS 만성질환 학습 모델의 실행·평가 계획과 결과 | 데이터·ML |
 | [docs/10_local_data_contract.md](docs/10_local_data_contract.md) | IndexedDB·OPFS·Web Crypto 기반 로컬 도메인 API와 백업 포맷 | 전체 |
 | [docs/11_local_model_runtime_implementation.md](docs/11_local_model_runtime_implementation.md) | Python 참조 모델 격리, 브라우저 로컬 추론과 Rust/WASM·ONNX 전환 구현 기준 | 데이터·ML·프론트엔드 |
-| [docs/14_admin_macbook_dev_deployment.md](docs/14_admin_macbook_dev_deployment.md) | `dev` CI 성공 후 관리자 MacBook self-hosted runner 자동 배포 | DevOps·관리자 |
+| [docs/13_screen_api_implementation_map.md](docs/13_screen_api_implementation_map.md) | 제품 화면별 서버 REST API·로컬 도메인 구현 연결 현황 | 전체 |
+| [docs/15_mailpit_invitation_email_testing.md](docs/15_mailpit_invitation_email_testing.md) | Mailpit·Redis Stream 이메일 워커 기반 가족 초대 개발·테스트 가이드 | 백엔드·프론트엔드 |
+| [docs/16_ocr_cloud_baseline_local_replacement_challenge.md](docs/16_ocr_cloud_baseline_local_replacement_challenge.md) | Naver OCR 기준선과 브라우저·기기 로컬 OCR/VLM 대체 챌린지 | 데이터·ML·프론트엔드 |
 | [docs/adr/0001-web-local-first-architecture.md](docs/adr/0001-web-local-first-architecture.md) | 데스크톱 앱에서 웹 기반 로컬 우선 서비스로 전환한 아키텍처 결정 | 전체 |
 | [docs/adr/0002-separate-server-api-and-local-domain-contract.md](docs/adr/0002-separate-server-api-and-local-domain-contract.md) | 서버 REST API와 브라우저 Local Domain API를 분리한 아키텍처 결정 | 전체 |
 | [docs/adr/0003-web-authentication-token-transport.md](docs/adr/0003-web-authentication-token-transport.md) | Access JWT와 HttpOnly Refresh Cookie를 선택한 인증 결정 | 전체 |
 | [docs/adr/0004-family-invitation-state-and-redis-boundary.md](docs/adr/0004-family-invitation-state-and-redis-boundary.md) | 가족 초대의 PostgreSQL 정본과 Redis 보안·전송 책임 경계 | 전체 |
 | [docs/adr/0005-vite-spa-local-first-frontend-foundation.md](docs/adr/0005-vite-spa-local-first-frontend-foundation.md) | Vite SPA 프론트 기반과 서버·로컬 건강정보 상태 분리 결정 | 전체 |
+| [docs/adr/0006-lifecycle-scoped-profile-reference.md](docs/adr/0006-lifecycle-scoped-profile-reference.md) | 연결 생명주기 단위의 일회용 프로필 참조값 결정 | 전체 |
+| [docs/adr/0007-account-scoped-encrypted-local-vault.md](docs/adr/0007-account-scoped-encrypted-local-vault.md) | 공용 브라우저의 계정별 암호화 로컬 보관함 격리 결정 | 전체 |
+| [docs/adr/0008-temporary-cloud-ocr-baseline.md](docs/adr/0008-temporary-cloud-ocr-baseline.md) | 합성·비식별 문서의 임시 Naver OCR 기준선 허용 결정 | 전체 |
 | [docs/adr/README.md](docs/adr/README.md) | ADR 추가·대체·대안 기록 원칙 | 전체 |
 | [docs/legacy/desktop-app/2026-08-18-pre-web-prd.md](docs/legacy/desktop-app/2026-08-18-pre-web-prd.md) | 웹 버전 완성 후 재검토할 데스크톱·Wi-Fi 동기화 구버전 백업 | 전체 |
 

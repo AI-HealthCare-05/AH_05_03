@@ -68,10 +68,29 @@ class Config(BaseSettings):
     FAMILY_INVITATION_TRANSITION_RATE_LIMIT: int = 20
     FAMILY_INVITATION_TRANSITION_RATE_WINDOW_SECONDS: int = 60
 
+    # --- invitation email worker ------------------------------------
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025
+    SMTP_FROM_EMAIL: str = "no-reply@ieobom.local"
+    SMTP_FROM_NAME: str = "이어봄"
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_USE_TLS: bool = False
+    SMTP_USE_STARTTLS: bool = False
+    INVITATION_WEB_ORIGIN: str = "http://localhost:5173"
+    INVITATION_EMAIL_STREAM_GROUP: str = "invitation-email-workers"
+    INVITATION_EMAIL_STREAM_BLOCK_MS: int = 5_000
+    INVITATION_EMAIL_RETRY_DELAY_SECONDS: float = 2.0
+
     # --- api ----------------------------------------------------------
     # 오류 응답의 details는 비규격 필드다. 운영에서는 끈다.
     API_ERROR_INCLUDE_DETAILS: bool = False
-    CORS_ALLOW_ORIGINS: list[str] = ["http://localhost:5173"]
+    CORS_ALLOW_ORIGINS: list[str] = [
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
     # Refresh Token은 JavaScript에 노출하지 않고 host 전용 쿠키로만 전달한다.
     # __Host- 접두사는 Secure + Path=/ + Domain 미지정을 브라우저가 강제한다.

@@ -61,6 +61,45 @@ describe("로컬 수직 기능", () => {
     repository.close();
   });
 
+  it("건강기록을 수정하고 소프트 삭제한 뒤 복원한다", async () => {
+    const repository = new IndexedDbEncryptedRecordRepository(
+      "ieobom-health-lifecycle-" + crypto.randomUUID(),
+      indexedDB,
+    );
+    const cipher = await AesGcmJsonCipher.create();
+    const profiles = new LocalProfileService(repository, cipher);
+    const records = new LocalHealthRecordService(repository, cipher);
+    const householdId = crypto.randomUUID();
+    const profile = await profiles.create({ householdId, displayName: "기록 대상", relationship: "본인" });
+    if (!profile.ok) throw new Error(profile.error.message);
+    const created = await records.create({
+      householdId,
+      profileId: profile.value.id,
+      recordType: "note",
+      recordedAt: "2026-08-20T01:00:00.000Z",
+      source: "manual",
+      payload: { note: "수정 전" },
+    });
+    if (!created.ok) throw new Error(created.error.message);
+
+    const updated = await records.update(created.value.id, {
+      recordType: "pain",
+      recordedAt: "2026-08-20T02:00:00.000Z",
+      payload: { note: "수정 후" },
+      expectedVersion: 1,
+    });
+    expect(updated.ok && updated.value.version).toBe(2);
+    const removed = await records.softDelete(created.value.id, 2);
+    expect(removed.ok && removed.value.deletedAt).not.toBeNull();
+    const afterDelete = await records.query({ profileId: profile.value.id });
+    expect(afterDelete.ok && afterDelete.value).toHaveLength(0);
+    const restored = await records.restore(created.value.id, 3);
+    expect(restored.ok && restored.value.deletedAt).toBeNull();
+    const visible = await records.query({ profileId: profile.value.id });
+    expect(visible.ok && visible.value[0].payload.note).toBe("수정 후");
+    repository.close();
+  });
+
   it("다른 가정의 프로필을 목록에 섞지 않는다", async () => {
     const repository = new IndexedDbEncryptedRecordRepository(
       "ieobom-domain-test-" + crypto.randomUUID(),
@@ -107,6 +146,12 @@ describe("로컬 수직 기능", () => {
     expect((await profiles.hide(created.value.id, 2)).ok).toBe(true);
     const visibleProfiles = await profiles.list(householdId);
     expect(visibleProfiles.ok && visibleProfiles.value).toHaveLength(0);
+    const hiddenProfiles = await profiles.listHidden(householdId);
+    expect(hiddenProfiles.ok && hiddenProfiles.value.map((profile) => profile.displayName)).toEqual(["수정 후"]);
+    if (!hiddenProfiles.ok) throw new Error(hiddenProfiles.error.message);
+    expect((await profiles.restore(created.value.id, hiddenProfiles.value[0].version)).ok).toBe(true);
+    const restoredProfiles = await profiles.list(householdId);
+    expect(restoredProfiles.ok && restoredProfiles.value.map((profile) => profile.displayName)).toEqual(["수정 후"]);
     repository.close();
   });
 
