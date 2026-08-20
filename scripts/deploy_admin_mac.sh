@@ -23,6 +23,12 @@ fi
 if [[ -n "${IEOBOM_DEV_INVITATION_WEB_ORIGIN:-}" ]]; then
   export INVITATION_WEB_ORIGIN="${IEOBOM_DEV_INVITATION_WEB_ORIGIN}"
 fi
+if [[ -n "${IEOBOM_DEV_CORS_ALLOW_ORIGINS:-}" ]]; then
+  export CORS_ALLOW_ORIGINS="${IEOBOM_DEV_CORS_ALLOW_ORIGINS}"
+fi
+if [[ -n "${IEOBOM_DEV_REFRESH_COOKIE_SECURE:-}" ]]; then
+  export REFRESH_COOKIE_SECURE="${IEOBOM_DEV_REFRESH_COOKIE_SECURE}"
+fi
 
 if ! command -v docker >/dev/null 2>&1 && [[ -x /Applications/Docker.app/Contents/Resources/bin/docker ]]; then
   export PATH="/Applications/Docker.app/Contents/Resources/bin:${PATH}"

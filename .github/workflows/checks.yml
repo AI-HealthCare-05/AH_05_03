@@ -183,6 +183,8 @@ jobs:
       IEOBOM_HTTP_PORT: ${{ vars.IEOBOM_DEV_HTTP_PORT }}
       IEOBOM_DEV_TAILSCALE_HOST: ${{ vars.IEOBOM_DEV_TAILSCALE_HOST }}
       IEOBOM_DEV_INVITATION_WEB_ORIGIN: ${{ vars.IEOBOM_DEV_INVITATION_WEB_ORIGIN }}
+      IEOBOM_DEV_CORS_ALLOW_ORIGINS: ${{ vars.IEOBOM_DEV_CORS_ALLOW_ORIGINS }}
+      IEOBOM_DEV_REFRESH_COOKIE_SECURE: ${{ vars.IEOBOM_DEV_REFRESH_COOKIE_SECURE }}
       DEPLOY_SHA: ${{ github.sha }}
     steps:
       - name: Check out the exact dev revision that passed CI

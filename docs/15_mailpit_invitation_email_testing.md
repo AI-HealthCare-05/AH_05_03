@@ -105,7 +105,9 @@ Compose 파일에 하드코딩하지 않는다.
 | GitHub Environment 변수 | 예시 형식 | 용도 |
 |---|---|---|
 | `IEOBOM_DEV_TAILSCALE_HOST` | `100.x.y.z` | Mailpit Web UI가 바인딩할 admin Mac Tailscale IPv4 |
-| `IEOBOM_DEV_INVITATION_WEB_ORIGIN` | `http://100.x.y.z:8080` | 초대 메일의 이어봄 dev 링크 |
+| `IEOBOM_DEV_INVITATION_WEB_ORIGIN` | `https://admin-macbookpro.<tailnet>.ts.net` | 초대 메일의 이어봄 dev 링크 |
+| `IEOBOM_DEV_CORS_ALLOW_ORIGINS` | `["https://admin-macbookpro.<tailnet>.ts.net","http://100.x.y.z:8080","http://localhost:8080"]` | 브라우저 인증 요청의 정확한 허용 Origin 목록 |
+| `IEOBOM_DEV_REFRESH_COOKIE_SECURE` | `true` | Tailscale HTTPS에서 Refresh Token 쿠키를 Secure로 제한 |
 
 배포가 끝나면 tailnet에 초대된 팀원은 다음 주소로 접속한다.
 
