@@ -43,8 +43,10 @@ services:
   mailpit:
     # Mailpit 공식 릴리스는 Docker Hub와 GHCR에 같은 이미지를 게시한다.
     # admin Mac에서 Docker Hub credential helper가 멈춘 이력이 있어 GHCR을 사용하고
-    # 다중 아키텍처 index digest까지 고정한다.
+    # 다중 아키텍처 index digest까지 고정한다. 배포 스크립트가 빈 Docker config로
+    # 먼저 익명 pull하므로 Compose는 자격증명 도우미를 다시 호출하지 않는다.
     image: ${MAILPIT_IMAGE:-ghcr.io/axllent/mailpit:v1.30.6@sha256:7f33095f80e901f6ad08028f06ca284aa58fe84942be5496008d041d3b9f4d4d}
+    pull_policy: never
     restart: unless-stopped
     ports:
       - "${DEV_MAILPIT_BIND_HOST:-127.0.0.1}:${DEV_MAILPIT_WEB_PORT:-8025}:8025"
