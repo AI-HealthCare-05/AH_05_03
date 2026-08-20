@@ -29,11 +29,15 @@
 | [docs/09_chronic_disease_model_plan.md](docs/09_chronic_disease_model_plan.md) | BRFSS 만성질환 학습 모델의 실행·평가 계획과 결과 | 데이터·ML |
 | [docs/10_local_data_contract.md](docs/10_local_data_contract.md) | IndexedDB·OPFS·Web Crypto 기반 로컬 도메인 API와 백업 포맷 | 전체 |
 | [docs/11_local_model_runtime_implementation.md](docs/11_local_model_runtime_implementation.md) | Python 참조 모델 격리, 브라우저 로컬 추론과 Rust/WASM·ONNX 전환 구현 기준 | 데이터·ML·프론트엔드 |
+| [docs/13_screen_api_implementation_map.md](docs/13_screen_api_implementation_map.md) | 제품 화면별 서버 REST API·로컬 도메인 구현 연결 현황 | 전체 |
+| [docs/15_mailpit_invitation_email_testing.md](docs/15_mailpit_invitation_email_testing.md) | Mailpit·Redis Stream 이메일 워커 기반 가족 초대 개발·테스트 가이드 | 백엔드·프론트엔드 |
 | [docs/adr/0001-web-local-first-architecture.md](docs/adr/0001-web-local-first-architecture.md) | 데스크톱 앱에서 웹 기반 로컬 우선 서비스로 전환한 아키텍처 결정 | 전체 |
 | [docs/adr/0002-separate-server-api-and-local-domain-contract.md](docs/adr/0002-separate-server-api-and-local-domain-contract.md) | 서버 REST API와 브라우저 Local Domain API를 분리한 아키텍처 결정 | 전체 |
 | [docs/adr/0003-web-authentication-token-transport.md](docs/adr/0003-web-authentication-token-transport.md) | Access JWT와 HttpOnly Refresh Cookie를 선택한 인증 결정 | 전체 |
 | [docs/adr/0004-family-invitation-state-and-redis-boundary.md](docs/adr/0004-family-invitation-state-and-redis-boundary.md) | 가족 초대의 PostgreSQL 정본과 Redis 보안·전송 책임 경계 | 전체 |
 | [docs/adr/0005-vite-spa-local-first-frontend-foundation.md](docs/adr/0005-vite-spa-local-first-frontend-foundation.md) | Vite SPA 프론트 기반과 서버·로컬 건강정보 상태 분리 결정 | 전체 |
+| [docs/adr/0006-lifecycle-scoped-profile-reference.md](docs/adr/0006-lifecycle-scoped-profile-reference.md) | 연결 생명주기 단위의 일회용 프로필 참조값 결정 | 전체 |
+| [docs/adr/0007-account-scoped-encrypted-local-vault.md](docs/adr/0007-account-scoped-encrypted-local-vault.md) | 공용 브라우저의 계정별 암호화 로컬 보관함 격리 결정 | 전체 |
 | [docs/adr/README.md](docs/adr/README.md) | ADR 추가·대체·대안 기록 원칙 | 전체 |
 | [docs/legacy/desktop-app/2026-08-18-pre-web-prd.md](docs/legacy/desktop-app/2026-08-18-pre-web-prd.md) | 웹 버전 완성 후 재검토할 데스크톱·Wi-Fi 동기화 구버전 백업 | 전체 |
 

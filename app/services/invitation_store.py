@@ -197,3 +197,31 @@ class InvitationStore:
             invitee_email=data["invitee_email"],
             token=data["token"],
         )
+
+    async def requeue_delivery(self, delivery: InvitationDelivery, ttl_seconds: int) -> None:
+        """SMTP 실패 뒤 원문 토큰을 짧게 복원하고 새 Stream 이벤트를 만든다.
+
+        성공 여부를 모르는 프로세스 강제 종료까지 exactly-once로 해결하지는
+        않는다. 메일은 중복될 수 있지만 같은 토큰을 담고, 수락 토큰 소비는
+        별도로 1회만 허용한다.
+        """
+        payload = json.dumps(
+            {
+                "invitation_id": str(delivery.invitation_id),
+                "invitee_email": delivery.invitee_email,
+                "token": delivery.token,
+            },
+            separators=(",", ":"),
+        )
+        try:
+            async with self._redis.pipeline(transaction=True) as pipe:
+                pipe.set(self._delivery(delivery.invitation_id), payload, ex=max(ttl_seconds, 1))
+                pipe.xadd(
+                    self._delivery_stream(),
+                    {"invitation_id": str(delivery.invitation_id)},
+                    maxlen=config.FAMILY_INVITATION_DELIVERY_STREAM_MAXLEN,
+                    approximate=True,
+                )
+                await pipe.execute()
+        except RedisError as err:
+            raise TokenStoreUnavailableError() from err

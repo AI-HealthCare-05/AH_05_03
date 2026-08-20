@@ -103,4 +103,15 @@ describe("ServerApiClient", () => {
       local_profile_ref: reference,
     });
   });
+
+  it("204 No Content 응답을 JSON 파싱 없이 처리한다", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(success({ access_token: "access", token_type: "bearer", expires_in: 900 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const client = new ServerApiClient(fetcher);
+    await client.login("member@example.com", "Password123!");
+
+    await expect(client.closeHousehold("household-id")).resolves.toBeUndefined();
+  });
 });

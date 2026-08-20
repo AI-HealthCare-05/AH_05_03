@@ -49,7 +49,7 @@ export function RootLayout() {
           </nav>
 
           <div className="header-status">
-            <span><i aria-hidden="true" /> 로컬 보관</span>
+            <span title="현재 버전은 공용 브라우저의 사용자별 보관함 잠금을 지원하지 않습니다."><i aria-hidden="true" /> 기기 로컬</span>
             <NavLink to="/account">내 계정</NavLink>
           </div>
         </div>

@@ -259,6 +259,10 @@ main {
   gap: 10px;
 }
 
+.received-invitation {
+  grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1.4fr) auto;
+}
+
 .account-inline-form input,
 .account-inline-form select,
 .received-invitation input,
@@ -280,7 +284,139 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
+}
+
+.auth-card {
+  width: min(560px, 100%);
+  margin-top: 28px;
+}
+
+.auth-card > p,
+.account-help,
+.danger-zone > p,
+.confirmation-copy {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.invitation-account-gate {
+  border-color: #f0c98d;
+  background: #fffaf1;
+}
+
+.invitation-account-gate dl {
+  flex-direction: column;
+}
+
+.invitation-account-gate dl div {
+  overflow-wrap: anywhere;
+}
+
+.invitation-account-gate .primary-button {
+  margin-top: 10px;
+}
+
+.subscription-form {
+  margin: 18px 0 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.subscription-form label {
+  flex: 1;
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.subscription-form select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 10px 12px;
+  background: white;
+}
+
+.account-empty {
+  margin: 18px 0 0;
+  color: var(--muted);
+}
+
+.household-list {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.household-list article,
+.membership-panel > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.household-list article.is-selected {
+  border-color: #a9c5ff;
+  background: #f4f8ff;
+}
+
+.household-list small,
+.invitation-list small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.text-danger-button {
+  border: 0;
+  padding: 8px;
+  color: #a32626;
+  background: transparent;
+  font-weight: 700;
+}
+
+.membership-panel {
+  margin-top: 18px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 18px;
+}
+
+.membership-panel h3 {
+  margin: 0 0 10px;
+}
+
+.membership-panel > div + div {
+  margin-top: 8px;
+}
+
+.membership-panel time,
+.membership-panel span,
+.profile-link-row span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.danger-zone {
+  border-color: #f0c5c5;
+  background: #fffafa;
+}
+
+.danger-zone .danger-button {
+  margin-top: 10px;
 }
 
 .invitation-list span {
@@ -1605,6 +1741,24 @@ main {
   .data-boundary-card { gap: 20px; }
 
   .capability-list { grid-template-columns: 1fr; }
+
+  .account-grid,
+  .account-inline-form,
+  .received-invitation {
+    grid-template-columns: 1fr;
+  }
+
+  .household-list article,
+  .membership-panel > div,
+  .profile-link-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .household-list .row-actions,
+  .received-invitation .row-actions {
+    width: 100%;
+  }
 
   .site-footer {
     align-items: flex-start;

@@ -288,7 +288,7 @@ export function HomePage() {
         <span className="privacy-strip-mark" aria-hidden="true">로컬</span>
         <div>
           <strong>민감한 건강정보는 이 기기 안에서 처리합니다.</strong>
-          <p>계정·구독·초대 상태만 서버에 저장되며 건강기록은 자동 업로드되지 않습니다.</p>
+          <p>현재 버전은 같은 브라우저 프로필의 사용자별 보관함 잠금을 아직 지원하지 않습니다. 공용 PC에서는 각자 다른 OS·브라우저 프로필을 사용하세요.</p>
         </div>
         <NavLink to="/data">백업 관리</NavLink>
       </section>
