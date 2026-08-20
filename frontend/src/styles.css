@@ -1121,33 +1121,6 @@ main {
   gap: 8px;
 }
 
-.vanatome-mode-switch {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 18px;
-  border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  padding: 4px;
-  background: #f5f8fd;
-}
-
-.vanatome-mode-switch button {
-  border: 0;
-  border-radius: 8px;
-  padding: 9px 8px;
-  color: var(--muted-strong);
-  background: transparent;
-  font-size: 0.76rem;
-  font-weight: 750;
-}
-
-.vanatome-mode-switch button[aria-pressed="true"] {
-  color: var(--blue-700);
-  background: white;
-  box-shadow: 0 1px 4px rgba(27, 65, 120, 0.12);
-}
-
 .vanatome-layer-summary {
   display: flex;
   flex-wrap: wrap;
@@ -1163,6 +1136,56 @@ main {
   background: #edfbfd;
   font-size: 0.66rem;
   font-weight: 700;
+}
+
+.vanatome-focus-control {
+  margin-top: 18px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 16px;
+}
+
+.vanatome-focus-control > span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.vanatome-focus-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.vanatome-focus-buttons button,
+.vanatome-reset-focus {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 6px;
+  color: var(--muted-strong);
+  background: white;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.vanatome-focus-buttons button[aria-pressed="true"] {
+  border-color: #85aefc;
+  color: var(--blue-700);
+  background: #edf4ff;
+}
+
+.vanatome-focus-buttons button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.vanatome-reset-focus {
+  margin-top: 7px;
+  border-color: transparent;
+  padding-inline: 0;
+  color: var(--blue-700);
+  background: transparent;
 }
 
 .vanatome-actions button {
