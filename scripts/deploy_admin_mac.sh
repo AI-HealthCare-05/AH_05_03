@@ -67,6 +67,25 @@ compose up -d postgres redis
 echo "Applying Alembic migrations once"
 compose run --rm migrate
 
+echo "Pulling Mailpit without the macOS Docker credential helper"
+# A non-interactive self-hosted runner can block indefinitely while Docker
+# Desktop waits for its macOS credential helper. Mailpit is a public image, so
+# resolve the Compose-selected image first and pull it with an empty temporary
+# Docker config. Keep the current daemon endpoint explicit because Docker
+# contexts live under the normal Docker config directory.
+mailpit_image="$(compose config --images mailpit)"
+docker_host="$(docker context inspect "$(docker context show)" --format '{{.Endpoints.docker.Host}}')"
+anonymous_docker_config="$(mktemp -d "${TMPDIR:-/tmp}/ieobom-docker-config.XXXXXX")"
+cleanup_anonymous_docker_config() {
+  rm -rf "${anonymous_docker_config}"
+}
+trap cleanup_anonymous_docker_config EXIT
+printf '{"auths":{}}\n' > "${anonymous_docker_config}/config.json"
+docker \
+  --config "${anonymous_docker_config}" \
+  --host "${docker_host}" \
+  pull "${mailpit_image}"
+
 echo "Starting application services and development invitation inbox"
 compose up -d --remove-orphans mailpit email-worker fastapi frontend nginx
 

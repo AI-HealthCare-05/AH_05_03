@@ -20,6 +20,13 @@
 
 Mailpit 공식 Docker 이미지는 Web UI `8025`, SMTP `1025`를 기본 포트로 사용한다. 참고: [Mailpit Docker 문서](https://mailpit.axllent.org/docs/install/docker/), [Mailpit 저장소](https://github.com/axllent/mailpit).
 
+admin Mac의 self-hosted GitHub Actions 러너는 로그인 UI를 사용할 수 없는 비대화형
+환경이다. Docker Desktop의 macOS credential helper가 응답을 기다리며 공개 이미지
+pull을 멈추는 경우가 있으므로, 배포 스크립트는 Mailpit 이미지만 임시 빈 Docker
+config로 익명 pull한다. Compose에는 `pull_policy: never`를 적용해 같은 배포에서
+credential helper를 다시 호출하지 않는다. 애플리케이션 이미지와 영구 Docker 설정은
+변경하지 않는다.
+
 ## 2. 비목표
 
 - 실제 Gmail·네이버·회사 메일로 발송
