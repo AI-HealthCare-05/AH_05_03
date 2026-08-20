@@ -19,67 +19,129 @@ load_dotenv()
 OCR_URL = os.getenv("NAVER_OCR_URL")
 OCR_SECRET = os.getenv("NAVER_OCR_SECRET")
 
-TARGET_TESTS = [
-    "HDL콜레스테롤",
-    "LDL콜레스테롤",
-    "트리글리세라이드",
-    "총콜레스테롤",
+TARGET_KEYWORDS = [
     "공복혈당",
-    "혈압",
+    "공복할당",  # OCR 오인식 대비
+    "혈색소",
+    "총콜레스테롤",
+    "HDL",
+    "LDL",
+    "중성지방",
     "크레아티닌",
-    "요소질소",
-    "요산",
     "AST",
     "ALT",
     "감마지티피",
+    "e-GFR",
 ]
 
 # 이미지 기울기 보정
-def preprocess_image(image_path):
-    image = cv2.imread(image_path)
+import cv2
+import numpy as np
+from pathlib import Path
 
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    _, binary = cv2.threshold(
+def preprocess_image(image_path: str) -> str:
+    """
+    이미지 전처리
+
+    1. 그레이스케일 변환
+    2. 노이즈 제거
+    3. 이진화
+    4. 기울기 보정
+    5. 보정된 이미지 저장
+
+    반환값:
+        보정된 이미지의 경로
+    """
+
+    path = Path(image_path)
+    image = cv2.imread(str(path))
+
+    if image is None:
+        raise FileNotFoundError(
+            f"이미지를 읽을 수 없습니다: {image_path}"
+        )
+
+    # 1. 그레이스케일
+    gray = cv2.cvtColor(
+        image,
+        cv2.COLOR_BGR2GRAY,
+    )
+
+    # 2. 노이즈 제거
+    blurred = cv2.GaussianBlur(
         gray,
+        (5, 5),
+        0,
+    )
+
+    # 3. 이진화
+    thresh = cv2.threshold(
+        blurred,
         0,
         255,
         cv2.THRESH_BINARY + cv2.THRESH_OTSU,
+    )[1]
+
+    # 글자를 흰색으로 변환
+    thresh = cv2.bitwise_not(thresh)
+
+    # 4. 기울기 계산
+    coords = np.column_stack(
+        np.where(thresh > 0)
     )
 
-    coords = np.column_stack(np.where(binary < 255))
+    angle = cv2.minAreaRect(
+        coords
+    )[-1]
 
-    if len(coords) > 0:
-        angle = cv2.minAreaRect(coords)[-1]
+    if angle < -45:
+        angle = -(90 + angle)
 
-        if angle < -45:
-            angle = -(90 + angle)
-        else:
-            angle = -angle
+    else:
+        angle = -angle
 
-        h, w = image.shape[:2]
+    # 5. 회전
+    (h, w) = image.shape[:2]
 
-        center = (w // 2, h // 2)
+    center = (
+        w // 2,
+        h // 2,
+    )
 
-        matrix = cv2.getRotationMatrix2D(
-            center,
-            angle,
-            1.0,
-        )
+    matrix = cv2.getRotationMatrix2D(
+        center,
+        angle,
+        1.0,
+    )
+    corrected = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
 
-        image = cv2.warpAffine(
-            image,
-            matrix,
-            (w, h),
-            flags=cv2.INTER_CUBIC,
-            borderMode=cv2.BORDER_REPLICATE,
-        )
+    # corrected = cv2.warpAffine(
+    #     image,
+    #     matrix,
+    #     (w, h),
+    #     flags=cv2.INTER_CUBIC,
+    #     borderMode=cv2.BORDER_REPLICATE,
+    # )
 
-    output_path = "corrected_sample.jpeg"
+    # 6. 파일 저장
+    output_path = (
+        path.parent
+        / f"corrected_{path.stem}.jpg"
+    )
 
-    cv2.imwrite(output_path, image)
+    cv2.imwrite(
+        str(output_path),
+        corrected,
+    )
 
-    return output_path
+    print(
+        f"보정된 이미지 저장: {output_path}"
+    )
+    print(f"회전 각도: {angle}")
+
+    return str(output_path)
+
 
 
 def naver_ocr(image_path: str, lang: str = "ko") -> str:
