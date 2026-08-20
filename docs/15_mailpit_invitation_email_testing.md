@@ -83,9 +83,34 @@ docker compose --profile mail up -d --build
 - Mailpit Web UI: `http://127.0.0.1:8025`
 - Mailpit SMTP: `127.0.0.1:1025`
 
-Mailpit 포트는 호스트의 `127.0.0.1`에만 바인딩한다. 인증 없는 Mailpit을 Tailscale IP나 공인 인터페이스에 그대로 노출하지 않는다.
+일반 로컬 Compose의 Mailpit 포트는 호스트의 `127.0.0.1`에만 바인딩한다.
+공인 인터페이스와 LAN 주소에는 노출하지 않는다.
 
-### 5.2 상태 확인
+### 5.2 admin Mac 팀 공유 개발 환경
+
+팀원이 같은 Tailscale tailnet에 가입된 개발 환경에서는 Mailpit Web UI만 admin Mac의
+Tailscale IPv4에 바인딩할 수 있다. SMTP `1025`는 Docker 내부 네트워크에서만 사용하며
+호스트 포트로 공개하지 않는다.
+
+GitHub Environment `admin-macbook-dev`에는 다음 변수를 설정한다. 실제 주소를 Git 문서나
+Compose 파일에 하드코딩하지 않는다.
+
+| GitHub Environment 변수 | 예시 형식 | 용도 |
+|---|---|---|
+| `IEOBOM_DEV_TAILSCALE_HOST` | `100.x.y.z` | Mailpit Web UI가 바인딩할 admin Mac Tailscale IPv4 |
+| `IEOBOM_DEV_INVITATION_WEB_ORIGIN` | `http://100.x.y.z:8080` | 초대 메일의 이어봄 dev 링크 |
+
+배포가 끝나면 tailnet에 초대된 팀원은 다음 주소로 접속한다.
+
+```text
+http://<admin-mac-tailscale-ip>:8025
+```
+
+Mailpit에는 로그인 기능이 없고 초대 토큰이 표시된다. 따라서 이 공유는 개발·합성 데이터에만
+사용하고, Tailscale 멤버 권한이 없는 사용자에게 포트를 열지 않는다. 운영 배포에서는 Mailpit을
+실행하지 않는다.
+
+### 5.3 상태 확인
 
 ```bash
 docker compose --profile mail ps
@@ -145,6 +170,8 @@ invitation email delivered: <invitation UUID>
 | `INVITATION_WEB_ORIGIN` | `http://127.0.0.1:4173` | 메일 링크의 프론트 Origin |
 | `MAILPIT_WEB_PORT` | `8025` | 호스트 Web UI 포트 |
 | `MAILPIT_SMTP_PORT` | `1025` | 호스트 SMTP 포트 |
+| `DEV_MAILPIT_BIND_HOST` | `127.0.0.1` | admin Mac dev Mailpit Web UI 바인딩 주소 |
+| `DEV_MAILPIT_WEB_PORT` | `8025` | admin Mac dev Mailpit Web UI 포트 |
 
 `SMTP_USE_TLS`와 `SMTP_USE_STARTTLS`는 제공업체 계약에 맞춰 하나만 사용한다. 운영 자격증명은 GitHub Secret 또는 배포 환경의 비밀 저장소로 주입한다.
 

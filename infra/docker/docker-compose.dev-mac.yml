@@ -38,6 +38,16 @@ services:
       timeout: 3s
       retries: 12
 
+  # 개발용 초대 메일 수신함. Web UI만 명시한 Tailscale 인터페이스에
+  # 공개할 수 있으며 SMTP 포트는 호스트에 노출하지 않는다.
+  mailpit:
+    image: axllent/mailpit:v1.30.6
+    restart: unless-stopped
+    ports:
+      - "${DEV_MAILPIT_BIND_HOST:-127.0.0.1}:${DEV_MAILPIT_WEB_PORT:-8025}:8025"
+    networks:
+      - app
+
   migrate:
     image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
     command: ["uv", "run", "--no-sync", "alembic", "upgrade", "head"]
@@ -89,6 +99,27 @@ services:
       timeout: 5s
       retries: 12
       start_period: 15s
+
+  email-worker:
+    image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
+    command: ["uv", "run", "--no-sync", "python", "-m", "app.workers.invitation_email_worker"]
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@ieobom.local}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-이어봄}
+      SMTP_USE_TLS: "false"
+      SMTP_USE_STARTTLS: "false"
+      INVITATION_WEB_ORIGIN: ${INVITATION_WEB_ORIGIN:-http://127.0.0.1:8080}
+    networks:
+      - app
+    depends_on:
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
 
   frontend:
     image: ieobom-dev-frontend:${DEPLOY_VERSION:-local}

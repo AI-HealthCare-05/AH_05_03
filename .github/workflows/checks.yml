@@ -181,6 +181,8 @@ jobs:
     env:
       IEOBOM_ENV_FILE: ${{ vars.IEOBOM_DEV_ENV_FILE }}
       IEOBOM_HTTP_PORT: ${{ vars.IEOBOM_DEV_HTTP_PORT }}
+      IEOBOM_DEV_TAILSCALE_HOST: ${{ vars.IEOBOM_DEV_TAILSCALE_HOST }}
+      IEOBOM_DEV_INVITATION_WEB_ORIGIN: ${{ vars.IEOBOM_DEV_INVITATION_WEB_ORIGIN }}
       DEPLOY_SHA: ${{ github.sha }}
     steps:
       - name: Check out the exact dev revision that passed CI
@@ -234,4 +236,4 @@ jobs:
             --project-name ieobom-dev \
             --env-file "${env_file}" \
             --file infra/docker/docker-compose.dev-mac.yml \
-            logs --tail 200 fastapi frontend nginx migrate || true
+            logs --tail 200 fastapi frontend nginx migrate mailpit email-worker || true
