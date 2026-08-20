@@ -88,6 +88,48 @@ describe("HomePage", () => {
     );
     expect(screen.getByRole("dialog")).toHaveTextContent("아빠 프로필을 이 브라우저에서 삭제합니다.");
   });
+
+  it("건강기록을 수정하고 삭제 목록에서 복원한다", async () => {
+    const user = userEvent.setup();
+    renderHomePage();
+    await createProfile(user, "나", "본인");
+    await user.click(screen.getAllByRole("button", { name: "건강기록 작성" })[0]);
+    await user.type(screen.getByRole("textbox", { name: "기록 내용" }), "수정 전 기록");
+    await user.click(screen.getByRole("button", { name: "기록 저장" }));
+    expect(await screen.findByText("수정 전 기록")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "수정" }));
+    const note = screen.getByRole("textbox", { name: "기록 내용" });
+    await user.clear(note);
+    await user.type(note, "수정 후 기록");
+    await user.click(screen.getByRole("button", { name: "변경사항 저장" }));
+    expect(await screen.findByText("수정 후 기록")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "삭제" }));
+    await user.click(screen.getByRole("button", { name: "삭제 목록으로 이동" }));
+    await user.click(await screen.findByRole("button", { name: "삭제된 기록 1건" }));
+    await user.click(screen.getByRole("button", { name: "복원" }));
+    expect(await screen.findByText("수정 후 기록")).toBeInTheDocument();
+  });
+
+  it("구성원별 가족력을 생성하고 수정한다", async () => {
+    const user = userEvent.setup();
+    renderHomePage();
+    await createProfile(user, "자녀", "자녀");
+    await user.click(screen.getByRole("button", { name: /가족력 관리/ }));
+    await user.click(screen.getByRole("button", { name: "가족력 추가" }));
+    await user.type(screen.getByRole("textbox", { name: "친족 관계" }), "외할머니");
+    await user.type(screen.getByRole("textbox", { name: "질환명" }), "고혈압");
+    await user.click(screen.getByRole("button", { name: "가족력 추가" }));
+    expect(await screen.findByText("고혈압")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "수정" }));
+    const condition = screen.getByRole("textbox", { name: "질환명" });
+    await user.clear(condition);
+    await user.type(condition, "당뇨병");
+    await user.click(screen.getByRole("button", { name: "변경사항 저장" }));
+    expect(await screen.findByText("당뇨병")).toBeInTheDocument();
+  });
 });
 
 function renderHomePage() {

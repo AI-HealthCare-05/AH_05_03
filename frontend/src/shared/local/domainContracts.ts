@@ -98,6 +98,19 @@ export interface HealthRecord<TPayload extends object = Record<string, unknown>>
   version: number;
 }
 
+export interface LocalDocument {
+  id: string;
+  householdId: string;
+  profileId: string;
+  fileName: string;
+  mimeType: string;
+  byteSize: number;
+  chunkCount: number;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+  version: number;
+}
+
 export interface DashboardSummary {
   profileId: string;
   totalRecords: number;

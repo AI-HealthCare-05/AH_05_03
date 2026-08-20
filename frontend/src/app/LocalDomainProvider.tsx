@@ -17,6 +17,7 @@ import {
   type LocalDomainContextValue,
   PRIMARY_HOUSEHOLD_ID,
   type UpdateProfileInput,
+  type UpdateHealthRecordInput,
 } from "./localDomainContext";
 import type { FamilyProfile } from "../shared/local/domainContracts";
 
@@ -122,6 +123,41 @@ export function LocalDomainProvider({
     [refreshProfiles, runtime],
   );
 
+  const updateHealthRecord = useCallback(
+    async (recordId: string, input: UpdateHealthRecordInput) => {
+      if (!runtime) throw new Error("로컬 저장소를 준비하는 중입니다.");
+      const result = await runtime.healthRecords.update(recordId, {
+        recordType: input.recordType,
+        recordedAt: input.recordedAt,
+        payload: { note: input.note.trim() },
+        expectedVersion: input.expectedVersion,
+      });
+      if (!result.ok) throw new Error(result.error.message);
+      return result.value;
+    },
+    [runtime],
+  );
+
+  const deleteHealthRecord = useCallback(
+    async (recordId: string, expectedVersion: number) => {
+      if (!runtime) throw new Error("로컬 저장소를 준비하는 중입니다.");
+      const result = await runtime.healthRecords.softDelete(recordId, expectedVersion);
+      if (!result.ok) throw new Error(result.error.message);
+      return result.value;
+    },
+    [runtime],
+  );
+
+  const restoreHealthRecord = useCallback(
+    async (recordId: string, expectedVersion: number) => {
+      if (!runtime) throw new Error("로컬 저장소를 준비하는 중입니다.");
+      const result = await runtime.healthRecords.restore(recordId, expectedVersion);
+      if (!result.ok) throw new Error(result.error.message);
+      return result.value;
+    },
+    [runtime],
+  );
+
   const hideProfile = useCallback(
     async (profileId: string, expectedVersion: number) => {
       if (!runtime) throw new Error("로컬 저장소를 준비하는 중입니다.");
@@ -168,11 +204,15 @@ export function LocalDomainProvider({
       restoreProfile,
       deleteEmptyProfile,
       createHealthRecord,
+      updateHealthRecord,
+      deleteHealthRecord,
+      restoreHealthRecord,
     }),
     [
       createHealthRecord,
       createProfile,
       deleteEmptyProfile,
+      deleteHealthRecord,
       error,
       hideProfile,
       hiddenProfiles,
@@ -181,7 +221,9 @@ export function LocalDomainProvider({
       refreshProfiles,
       runtime,
       restoreProfile,
+      restoreHealthRecord,
       updateProfile,
+      updateHealthRecord,
     ],
   );
 

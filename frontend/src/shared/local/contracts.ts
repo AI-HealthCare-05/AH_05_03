@@ -1,5 +1,6 @@
 export type LocalRecordType =
   | "family-profile"
+  | "document"
   | "health-record"
   | "family-history"
   | "model-result"

@@ -9,6 +9,11 @@ import {
   LocalProfileService,
 } from "./localDomainServices";
 import { IndexedDbLocalKeyVault } from "./localKeyVault";
+import {
+  LocalDocumentService,
+  OpfsDocumentFileStore,
+  type DocumentFileStore,
+} from "./localDocumentService";
 
 export interface LocalDomainRuntime {
   profiles: LocalProfileService;
@@ -18,6 +23,7 @@ export interface LocalDomainRuntime {
   accessGrants: LocalAccessGrantService;
   profileMerges: LocalProfileMergeService;
   backup: LocalBackupService;
+  documents?: LocalDocumentService;
   close(): void;
 }
 
@@ -40,6 +46,13 @@ export async function createLocalDomainRuntime(
   const cipher = await keyVault.getOrCreateCipher();
   const profiles = new LocalProfileService(repository, cipher);
   const healthRecords = new LocalHealthRecordService(repository, cipher);
+  let documentFiles: DocumentFileStore | undefined;
+  if (typeof navigator.storage?.getDirectory === "function") {
+    documentFiles = new OpfsDocumentFileStore(await navigator.storage.getDirectory());
+  }
+  const documents = documentFiles
+    ? new LocalDocumentService(repository, cipher, documentFiles)
+    : undefined;
 
   return {
     profiles,
@@ -48,7 +61,8 @@ export async function createLocalDomainRuntime(
     familyHistories: new LocalFamilyHistoryService(repository, cipher),
     accessGrants: new LocalAccessGrantService(repository, cipher),
     profileMerges: new LocalProfileMergeService(repository, cipher),
-    backup: new LocalBackupService(repository, cipher, cryptoApi),
+    backup: new LocalBackupService(repository, cipher, cryptoApi, documentFiles),
+    documents,
     close() {
       repository.close();
       keyVault.close();

@@ -22,6 +22,13 @@ export interface CreateHealthRecordInput {
   note: string;
 }
 
+export interface UpdateHealthRecordInput {
+  recordType: HealthRecordType;
+  recordedAt: string;
+  note: string;
+  expectedVersion: number;
+}
+
 export interface LocalDomainContextValue {
   runtime?: LocalDomainRuntime;
   profiles: FamilyProfile[];
@@ -35,6 +42,9 @@ export interface LocalDomainContextValue {
   restoreProfile(profileId: string, expectedVersion: number): Promise<FamilyProfile>;
   deleteEmptyProfile(profileId: string): Promise<void>;
   createHealthRecord(input: CreateHealthRecordInput): Promise<HealthRecord>;
+  updateHealthRecord(recordId: string, input: UpdateHealthRecordInput): Promise<HealthRecord>;
+  deleteHealthRecord(recordId: string, expectedVersion: number): Promise<HealthRecord>;
+  restoreHealthRecord(recordId: string, expectedVersion: number): Promise<HealthRecord>;
 }
 
 export const LocalDomainContext = createContext<LocalDomainContextValue | undefined>(undefined);

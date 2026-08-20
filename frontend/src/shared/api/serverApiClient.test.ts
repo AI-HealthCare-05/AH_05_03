@@ -76,4 +76,31 @@ describe("ServerApiClient", () => {
       details: [{ field: "email", message: "invalid", type: "value_error" }],
     });
   });
+
+  it("가족 초대와 프로필 연결에는 불투명 참조값만 전송한다", async () => {
+    const reference = "A".repeat(43);
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(success({ access_token: "access", token_type: "bearer", expires_in: 900 }))
+      .mockResolvedValueOnce(success({ invitation: { id: "invitation-id" }, delivery_queued: true }))
+      .mockResolvedValueOnce(success({ id: "link-id", local_profile_ref: reference }));
+    const client = new ServerApiClient(fetcher);
+    await client.login("member@example.com", "Password123!");
+    await client.createInvitation({
+      householdId: "household-id",
+      inviteeEmail: "family@example.com",
+      targetProfileRef: reference,
+    });
+    await client.createProfileLink("invitation-id", reference);
+
+    expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toEqual({
+      household_id: "household-id",
+      invitee_email: "family@example.com",
+      target_profile_ref: reference,
+    });
+    expect(JSON.parse(String(fetcher.mock.calls[2]?.[1]?.body))).toEqual({
+      invitation_id: "invitation-id",
+      local_profile_ref: reference,
+    });
+  });
 });

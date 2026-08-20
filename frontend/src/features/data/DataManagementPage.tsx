@@ -1,8 +1,10 @@
-import { type ChangeEvent, useMemo, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { useLocalDomain } from "../../app/localDomainContext";
 import { detectLocalCapabilities } from "../../shared/local/capabilities";
 import type { BackupPreview } from "../../shared/local/localBackupService";
+import type { LocalDocument } from "../../shared/local/domainContracts";
+import { BrowserOcrAdapter } from "../../shared/local/browserOcrAdapter";
 
 export function DataManagementPage() {
   const { runtime, profiles, refreshProfiles } = useLocalDomain();
@@ -14,6 +16,29 @@ export function DataManagementPage() {
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
+  const [selectedProfileId, setSelectedProfileId] = useState("");
+  const [documentFile, setDocumentFile] = useState<File>();
+  const [documents, setDocuments] = useState<LocalDocument[]>([]);
+  const [ocrDocument, setOcrDocument] = useState<LocalDocument>();
+  const [ocrText, setOcrText] = useState("");
+  const [ocrProgress, setOcrProgress] = useState<string>();
+  const [deletingDocument, setDeletingDocument] = useState<LocalDocument>();
+
+  const effectiveProfileId = selectedProfileId || profiles[0]?.id || "";
+
+  const refreshDocuments = useCallback(async () => {
+    if (!runtime?.documents) return;
+    const result = await runtime.documents.list();
+    if (!result.ok) throw new Error(result.error.message);
+    setDocuments(result.value);
+  }, [runtime]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void refreshDocuments().catch((caught: unknown) => setError(errorMessage(caught, "문서 목록을 불러오지 못했습니다.")));
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, [refreshDocuments]);
 
   async function exportBackup() {
     if (!runtime) return;
@@ -82,6 +107,106 @@ export function DataManagementPage() {
     setError(undefined);
   }
 
+  async function saveDocument() {
+    if (!runtime?.documents || !documentFile || !effectiveProfileId) return;
+    const profile = profiles.find((item) => item.id === effectiveProfileId);
+    if (!profile) return;
+    setWorking(true);
+    resetFeedback();
+    try {
+      const result = await runtime.documents.save({
+        householdId: profile.householdId,
+        profileId: profile.id,
+        file: documentFile,
+        fileName: documentFile.name,
+      });
+      if (!result.ok) throw new Error(result.error.message);
+      await refreshDocuments();
+      setDocumentFile(undefined);
+      setMessage("원본 문서를 암호화해 OPFS에 저장했습니다.");
+    } catch (caught) {
+      setError(errorMessage(caught, "문서를 저장하지 못했습니다."));
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function downloadDocument(document: LocalDocument) {
+    if (!runtime?.documents) return;
+    const result = await runtime.documents.read(document);
+    if (!result.ok) return setError(result.error.message);
+    const url = URL.createObjectURL(result.value);
+    const anchor = window.document.createElement("a");
+    anchor.href = url;
+    anchor.download = document.fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function runOcr(document: LocalDocument) {
+    if (!runtime?.documents) return;
+    setWorking(true);
+    resetFeedback();
+    setOcrDocument(document);
+    setOcrText("");
+    try {
+      const source = await runtime.documents.read(document);
+      if (!source.ok) throw new Error(source.error.message);
+      const adapter = new BrowserOcrAdapter();
+      const text = await adapter.recognize(source.value, (progress) => {
+        setOcrProgress(`${progress.status} ${Math.round(progress.progress * 100)}%`);
+      });
+      setOcrText(text);
+      setOcrProgress(undefined);
+    } catch (caught) {
+      setError(errorMessage(caught, "로컬 OCR을 실행하지 못했습니다."));
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function saveOcrResult() {
+    if (!runtime || !ocrDocument || !ocrText.trim()) return;
+    setWorking(true);
+    resetFeedback();
+    try {
+      const result = await runtime.healthRecords.create({
+        householdId: ocrDocument.householdId,
+        profileId: ocrDocument.profileId,
+        recordType: "lab_result",
+        recordedAt: new Date().toISOString(),
+        source: "ocr",
+        sourceDocumentId: ocrDocument.id,
+        payload: { note: ocrText.trim() },
+      });
+      if (!result.ok) throw new Error(result.error.message);
+      setMessage("검토한 OCR 결과를 구성원의 로컬 건강기록으로 저장했습니다.");
+      setOcrDocument(undefined);
+      setOcrText("");
+    } catch (caught) {
+      setError(errorMessage(caught, "OCR 결과를 저장하지 못했습니다."));
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function confirmDeleteDocument() {
+    if (!runtime?.documents || !deletingDocument) return;
+    setWorking(true);
+    resetFeedback();
+    try {
+      const result = await runtime.documents.delete(deletingDocument.id);
+      if (!result.ok) throw new Error(result.error.message);
+      await refreshDocuments();
+      setDeletingDocument(undefined);
+      setMessage("원본 문서를 이 브라우저에서 삭제했습니다.");
+    } catch (caught) {
+      setError(errorMessage(caught, "문서를 삭제하지 못했습니다."));
+    } finally {
+      setWorking(false);
+    }
+  }
+
   return (
     <div className="product-page data-page">
       <section className="dashboard-heading">
@@ -146,6 +271,7 @@ export function DataManagementPage() {
           {preview ? (
             <div className="backup-preview">
               <strong>{preview.totalRecords}개 데이터가 들어 있습니다.</strong>
+              <span>원본 문서 {preview.totalFiles}개 포함</span>
               <span>생성 시각 {new Date(preview.createdAt).toLocaleString("ko-KR")}</span>
               {profiles.length > 0 ? (
                 <label className="danger-checkbox">
@@ -175,6 +301,52 @@ export function DataManagementPage() {
           ))}
         </div>
       </section>
+
+      <section className="document-panel">
+        <div className="section-title-row">
+          <div><p className="section-kicker">원본 문서·로컬 OCR</p><h2>건강서류를 이 브라우저에서 처리하세요</h2></div>
+        </div>
+        {!runtime?.documents ? (
+          <div className="alert error-alert">이 브라우저에서는 OPFS 문서 저장을 사용할 수 없습니다.</div>
+        ) : (
+          <>
+            <div className="document-upload-row">
+              <label>구성원<select value={effectiveProfileId} onChange={(event) => setSelectedProfileId(event.currentTarget.value)}>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.displayName}</option>)}</select></label>
+              <label>건강서류<input type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => setDocumentFile(event.currentTarget.files?.[0])} /></label>
+              <button className="primary-button" type="button" disabled={!documentFile || !effectiveProfileId || working} onClick={() => void saveDocument()}>암호화 저장</button>
+            </div>
+            <div className="document-list">
+              {documents.map((document) => (
+                <article key={document.id}>
+                  <div><strong>{document.fileName}</strong><small>{profiles.find((profile) => profile.id === document.profileId)?.displayName ?? "알 수 없는 구성원"} · {(document.byteSize / 1024).toFixed(1)}KB</small></div>
+                  <div className="record-row-actions"><button type="button" onClick={() => void downloadDocument(document)}>내려받기</button><button type="button" disabled={!(document.mimeType.startsWith("image/") || document.mimeType === "application/pdf") || working} onClick={() => void runOcr(document)}>로컬 OCR</button><button type="button" onClick={() => setDeletingDocument(document)}>삭제</button></div>
+                </article>
+              ))}
+              {documents.length === 0 ? <div className="compact-empty"><strong>저장된 원본 문서가 없습니다.</strong></div> : null}
+            </div>
+          </>
+        )}
+      </section>
+
+      {ocrDocument ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-panel ocr-review-modal" role="dialog" aria-modal="true" aria-labelledby="ocr-review-title">
+            <div className="modal-heading"><div><p className="section-kicker">서버 전송 없음</p><h2 id="ocr-review-title">OCR 결과 검토</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={() => setOcrDocument(undefined)}>×</button></div>
+            {ocrProgress ? <p className="form-notice">{ocrProgress}</p> : null}
+            <label className="ocr-review-field">추출 결과<textarea rows={14} value={ocrText} onChange={(event) => setOcrText(event.currentTarget.value)} placeholder="OCR 처리 결과가 여기에 표시됩니다." /></label>
+            <div className="form-actions"><button className="secondary-button" type="button" onClick={() => setOcrDocument(undefined)}>취소</button><button className="primary-button" type="button" disabled={working || !ocrText.trim()} onClick={() => void saveOcrResult()}>검토 결과 저장</button></div>
+          </section>
+        </div>
+      ) : null}
+
+      {deletingDocument ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="delete-document-title">
+            <div className="modal-heading"><div><p className="section-kicker">원본 문서 삭제</p><h2 id="delete-document-title">{deletingDocument.fileName}</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={() => setDeletingDocument(undefined)}>×</button></div>
+            <div className="profile-confirmation"><p>OPFS에 저장된 암호화 원본을 삭제합니다. 이미 생성한 건강기록은 자동으로 삭제하지 않습니다.</p><div className="form-actions"><button className="secondary-button" type="button" onClick={() => setDeletingDocument(undefined)}>취소</button><button className="danger-button" type="button" disabled={working} onClick={() => void confirmDeleteDocument()}>원본 삭제</button></div></div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

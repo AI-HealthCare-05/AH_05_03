@@ -1,5 +1,5 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
 import type {
@@ -8,6 +8,7 @@ import type {
   HealthRecord,
   HealthRecordType,
 } from "../../shared/local/domainContracts";
+import { FamilyHistoryManager } from "./FamilyHistoryManager";
 
 const RECORD_LABELS: Record<HealthRecordType, string> = {
   blood_pressure: "혈압",
@@ -24,6 +25,9 @@ const RECORD_LABELS: Record<HealthRecordType, string> = {
 const RELATIONSHIPS = ["본인", "배우자", "자녀", "부모", "형제·자매", "기타"];
 
 export function HomePage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { profileId: routeProfileId, recordId: routeRecordId } = useParams();
   const {
     runtime,
     profiles,
@@ -36,16 +40,24 @@ export function HomePage() {
     restoreProfile,
     deleteEmptyProfile,
     createHealthRecord,
+    updateHealthRecord,
+    deleteHealthRecord,
+    restoreHealthRecord,
   } = useLocalDomain();
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [summary, setSummary] = useState<DashboardSummary>();
   const [records, setRecords] = useState<HealthRecord[]>([]);
+  const [deletedRecords, setDeletedRecords] = useState<HealthRecord[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [profileEditDialogOpen, setProfileEditDialogOpen] = useState(false);
   const [profileLifecycleAction, setProfileLifecycleAction] = useState<"hide" | "delete">();
   const [hiddenProfilesDialogOpen, setHiddenProfilesDialogOpen] = useState(false);
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<HealthRecord>();
+  const [deletingRecord, setDeletingRecord] = useState<HealthRecord>();
+  const [deletedRecordsDialogOpen, setDeletedRecordsDialogOpen] = useState(false);
+  const [familyHistoryDialogOpen, setFamilyHistoryDialogOpen] = useState(false);
   const [actionError, setActionError] = useState<string>();
   const [saving, setSaving] = useState(false);
   const localStorageReady = Boolean(runtime);
@@ -57,12 +69,13 @@ export function HomePage() {
       try {
         const [summaryResult, recordsResult] = await Promise.all([
           runtime.dashboard.summarize(profileId),
-          runtime.healthRecords.query({ profileId }),
+          runtime.healthRecords.query({ profileId, includeDeleted: true }),
         ]);
         if (!summaryResult.ok) throw new Error(summaryResult.error.message);
         if (!recordsResult.ok) throw new Error(recordsResult.error.message);
         setSummary(summaryResult.value);
-        setRecords(recordsResult.value);
+        setRecords(recordsResult.value.filter((record) => !record.deletedAt));
+        setDeletedRecords(recordsResult.value.filter((record) => Boolean(record.deletedAt)));
         setActionError(undefined);
       } catch (caught) {
         setActionError(messageFrom(caught, "건강 대시보드를 불러오지 못했습니다."));
@@ -74,9 +87,19 @@ export function HomePage() {
   );
 
   const selectedProfile = useMemo(
-    () => profiles.find((profile) => profile.id === selectedProfileId) ?? profiles[0],
-    [profiles, selectedProfileId],
+    () => profiles.find((profile) => profile.id === (routeProfileId ?? selectedProfileId)) ?? profiles[0],
+    [profiles, routeProfileId, selectedProfileId],
   );
+
+  useEffect(() => {
+    if (!runtime || !routeRecordId) return;
+    void runtime.healthRecords.get(routeRecordId).then((result) => {
+      if (result.ok && !result.value.deletedAt) setEditingRecord(result.value);
+    });
+  }, [routeRecordId, runtime]);
+
+  const familyHistoryDialogVisible = familyHistoryDialogOpen
+    || Boolean(routeProfileId && location.pathname.endsWith("/family-history"));
 
   useEffect(() => {
     if (!selectedProfile) return;
@@ -97,6 +120,7 @@ export function HomePage() {
         birthDate: optionalDate(form.get("birthDate")),
       });
       setSelectedProfileId(profile.id);
+      void navigate(`/members/${profile.id}`);
       setProfileDialogOpen(false);
       formElement.reset();
     } catch (caught) {
@@ -146,6 +170,59 @@ export function HomePage() {
       setProfileEditDialogOpen(false);
     } catch (caught) {
       setActionError(messageFrom(caught, "프로필을 수정하지 못했습니다."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitHealthRecordUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingRecord || !selectedProfile) return;
+    setSaving(true);
+    setActionError(undefined);
+    const form = new FormData(event.currentTarget);
+    try {
+      await updateHealthRecord(editingRecord.id, {
+        recordType: String(form.get("recordType")) as HealthRecordType,
+        recordedAt: new Date(String(form.get("recordedAt"))).toISOString(),
+        note: String(form.get("note") ?? ""),
+        expectedVersion: editingRecord.version,
+      });
+      await refreshDashboard(selectedProfile.id);
+      setEditingRecord(undefined);
+      void navigate(`/members/${selectedProfile.id}/records`);
+    } catch (caught) {
+      setActionError(messageFrom(caught, "건강기록을 수정하지 못했습니다."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmHealthRecordDelete() {
+    if (!deletingRecord || !selectedProfile) return;
+    setSaving(true);
+    setActionError(undefined);
+    try {
+      await deleteHealthRecord(deletingRecord.id, deletingRecord.version);
+      await refreshDashboard(selectedProfile.id);
+      setDeletingRecord(undefined);
+    } catch (caught) {
+      setActionError(messageFrom(caught, "건강기록을 삭제하지 못했습니다."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function restoreDeletedHealthRecord(record: HealthRecord) {
+    if (!selectedProfile) return;
+    setSaving(true);
+    setActionError(undefined);
+    try {
+      await restoreHealthRecord(record.id, record.version);
+      await refreshDashboard(selectedProfile.id);
+      if (deletedRecords.length === 1) setDeletedRecordsDialogOpen(false);
+    } catch (caught) {
+      setActionError(messageFrom(caught, "건강기록을 복원하지 못했습니다."));
     } finally {
       setSaving(false);
     }
@@ -249,12 +326,15 @@ export function HomePage() {
           <div className="member-list" role="list">
             {profiles.map((profile, index) => (
               <button
-                className={profile.id === selectedProfileId ? "member-card is-selected" : "member-card"}
+                className={profile.id === selectedProfile?.id ? "member-card is-selected" : "member-card"}
                 key={profile.id}
                 type="button"
                 role="listitem"
-                aria-pressed={profile.id === selectedProfileId}
-                onClick={() => setSelectedProfileId(profile.id)}
+                aria-pressed={profile.id === selectedProfile?.id}
+                onClick={() => {
+                  setSelectedProfileId(profile.id);
+                  void navigate(`/members/${profile.id}`);
+                }}
               >
                 <span className={`member-avatar avatar-tone-${index % 4}`} aria-hidden="true">
                   {profile.displayName.slice(0, 1)}
@@ -315,11 +395,21 @@ export function HomePage() {
 
             <div className="records-panel">
               <div className="panel-heading">
-                <div>
-                  <h3>최근 건강기록</h3>
-                  <p>최신 기록부터 보여줍니다.</p>
-                </div>
+              <div>
+                <h3>최근 건강기록</h3>
+                <p>최신 기록부터 보여줍니다.</p>
+              </div>
+              <div className="panel-heading-actions">
+                {deletedRecords.length > 0 ? (
+                  <button className="text-button" type="button" onClick={() => {
+                    setActionError(undefined);
+                    setDeletedRecordsDialogOpen(true);
+                  }}>
+                    삭제된 기록 {deletedRecords.length}건
+                  </button>
+                ) : null}
                 {dashboardLoading ? <span className="subtle-status">불러오는 중…</span> : null}
+              </div>
               </div>
               {records.length === 0 ? (
                 <div className="compact-empty">
@@ -339,6 +429,17 @@ export function HomePage() {
                         <p>{recordNote(record)}</p>
                       </div>
                       <time dateTime={record.recordedAt}>{formatDateTime(record.recordedAt)}</time>
+                      <div className="record-row-actions">
+                        <button type="button" onClick={() => {
+                          setActionError(undefined);
+                          setEditingRecord(record);
+                          void navigate(`/members/${selectedProfile.id}/records/${record.id}`);
+                        }}>수정</button>
+                        <button type="button" onClick={() => {
+                          setActionError(undefined);
+                          setDeletingRecord(record);
+                        }}>삭제</button>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -353,9 +454,12 @@ export function HomePage() {
               <strong>건강기록 작성</strong>
               <small>검진·통증·수치·메모</small>
             </button>
-            <button type="button" disabled title="다음 구현 단계에서 제공됩니다.">
+            <button type="button" onClick={() => {
+              setFamilyHistoryDialogOpen(true);
+              void navigate(`/members/${selectedProfile.id}/family-history`);
+            }}>
               <strong>가족력 관리</strong>
-              <small>구성원별 정보 · 후속 구현</small>
+              <small>구성원별 질환·친족 정보</small>
             </button>
             <NavLink to="/data">
               <strong>암호화 백업</strong>
@@ -415,6 +519,69 @@ export function HomePage() {
               <button className="primary-button" type="submit" disabled={saving}>{saving ? "암호화 중…" : "기록 저장"}</button>
             </div>
           </form>
+        </Modal>
+      ) : null}
+
+      {editingRecord ? (
+        <Modal title="건강기록 수정" onClose={() => {
+          setEditingRecord(undefined);
+          if (selectedProfile) void navigate(`/members/${selectedProfile.id}/records`);
+        }}>
+          <form className="product-form" onSubmit={submitHealthRecordUpdate}>
+            <label>
+              기록 종류
+              <select name="recordType" defaultValue={editingRecord.recordType} required>
+                {Object.entries(RECORD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <label>
+              기록 시각
+              <input name="recordedAt" type="datetime-local" required defaultValue={toLocalDateTime(editingRecord.recordedAt)} />
+            </label>
+            <label>
+              기록 내용
+              <textarea name="note" rows={5} required defaultValue={recordNote(editingRecord)} />
+            </label>
+            <div className="form-actions">
+              <button className="secondary-button" type="button" onClick={() => {
+                setEditingRecord(undefined);
+                if (selectedProfile) void navigate(`/members/${selectedProfile.id}/records`);
+              }}>취소</button>
+              <button className="primary-button" type="submit" disabled={saving}>{saving ? "저장 중…" : "변경사항 저장"}</button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {deletingRecord ? (
+        <Modal title="건강기록을 삭제할까요?" onClose={() => setDeletingRecord(undefined)}>
+          <div className="profile-confirmation">
+            <p>기록은 즉시 영구 삭제되지 않고 삭제 목록으로 이동합니다. 필요하면 다시 복원할 수 있습니다.</p>
+            {actionError ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
+            <div className="form-actions">
+              <button className="secondary-button" type="button" onClick={() => setDeletingRecord(undefined)}>취소</button>
+              <button className="danger-button" type="button" disabled={saving} onClick={() => void confirmHealthRecordDelete()}>
+                {saving ? "처리 중…" : "삭제 목록으로 이동"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {deletedRecordsDialogOpen ? (
+        <Modal title="삭제된 건강기록" onClose={() => setDeletedRecordsDialogOpen(false)}>
+          <div className="hidden-profiles-content">
+            <p className="form-notice">삭제한 기록은 대시보드 집계에서 제외되며 이 브라우저에서 복원할 수 있습니다.</p>
+            {actionError ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
+            <div className="hidden-profile-list">
+              {deletedRecords.map((record) => (
+                <article className="hidden-profile-row" key={record.id}>
+                  <div><strong>{RECORD_LABELS[record.recordType]}</strong><small>{formatDateTime(record.recordedAt)} · {recordNote(record)}</small></div>
+                  <button className="secondary-button" type="button" disabled={saving} onClick={() => void restoreDeletedHealthRecord(record)}>복원</button>
+                </article>
+              ))}
+            </div>
+          </div>
         </Modal>
       ) : null}
 
@@ -525,6 +692,13 @@ export function HomePage() {
           </div>
         </Modal>
       ) : null}
+
+      {familyHistoryDialogVisible && runtime && selectedProfile ? (
+        <FamilyHistoryManager runtime={runtime} profile={selectedProfile} onClose={() => {
+          setFamilyHistoryDialogOpen(false);
+          void navigate(`/members/${selectedProfile.id}`);
+        }} />
+      ) : null}
     </div>
   );
 }
@@ -599,6 +773,12 @@ function formatDateTime(value: string): string {
 function currentLocalDateTime(): string {
   const now = new Date();
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function toLocalDateTime(value: string): string {
+  const date = new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
 }
 
