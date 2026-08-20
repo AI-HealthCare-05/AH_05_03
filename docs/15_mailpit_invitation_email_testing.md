@@ -110,6 +110,11 @@ Mailpit에는 로그인 기능이 없고 초대 토큰이 표시된다. 따라�
 사용하고, Tailscale 멤버 권한이 없는 사용자에게 포트를 열지 않는다. 운영 배포에서는 Mailpit을
 실행하지 않는다.
 
+admin Mac 배포는 Mailpit 공식 GHCR 이미지와 다중 아키텍처 digest를 사용한다. Docker Hub
+credential helper가 응답하지 않아 배포가 무기한 대기하는 일을 피하기 위한 선택이다. GitHub
+Actions의 배포 단계는 10분 제한을 두며, 제한을 넘기면 실패 로그를 남기고 기존 실행 중인
+서비스는 유지한다.
+
 ### 5.3 상태 확인
 
 ```bash

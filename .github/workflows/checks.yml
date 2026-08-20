@@ -220,6 +220,7 @@ jobs:
 
       - name: Deploy dev stack
         shell: bash
+        timeout-minutes: 10
         run: ./scripts/deploy_admin_mac.sh
 
       - name: Show service logs after a failed deployment
