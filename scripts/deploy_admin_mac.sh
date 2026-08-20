@@ -87,7 +87,13 @@ docker \
   pull "${mailpit_image}"
 
 echo "Starting application services and development invitation inbox"
-compose up -d --remove-orphans mailpit email-worker fastapi frontend nginx
+compose up -d --remove-orphans mailpit email-worker fastapi frontend
+
+# The nginx image resolves Docker service names when nginx starts. Reusing an
+# existing nginx container after frontend or FastAPI is recreated can leave it
+# proxying to the old container IP and returning 502 despite healthy services.
+echo "Recreating nginx to refresh Docker upstream addresses"
+compose up -d --no-deps --force-recreate nginx
 
 echo "Waiting for http://127.0.0.1:${HTTP_PORT}/healthz"
 for attempt in $(seq 1 30); do
