@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { HealthRecordService } from "../local-domain/health-record-service";
 import { DocumentService } from "../local-domain/document-service";
+import { PainTimeline } from "./PainTimeline";
 import type { HealthPayload, HealthRecordView } from "../local-domain/types";
 
 interface ProfileOption { id: string; name: string; relationship: string }
@@ -22,9 +23,11 @@ function summary(payload: HealthPayload): string {
   }
 }
 
-function PayloadDetail({ payload }: { payload: HealthPayload }) {
+function PayloadDetail({ record }: { record: HealthRecordView }) {
+  const payload = record.payload;
   if (payload.type === "health_screening") return <div className="record-longtext">{payload.summary || "상세 내용이 없습니다."}</div>;
   if (payload.type === "note") return <div className="record-longtext">{payload.text}</div>;
+  if (payload.type === "pain") return <PainTimeline record={record} />;
   return <pre>{JSON.stringify(payload, null, 2)}</pre>;
 }
 
@@ -66,7 +69,7 @@ export function HealthRecordHistory({ profiles, onCreate }: Props) {
     {loading && <section className="history-empty">기록을 불러오는 중…</section>}
     {error && <div className="form-error">{error}</div>}
     {!loading && !error && visible.length === 0 && <section className="history-empty"><strong>아직 저장된 기록이 없어요.</strong><p>첫 건강기록을 직접 등록해 보세요.</p><button className="primary" onClick={onCreate}>기록 작성하기</button></section>}
-    {!loading && visible.length > 0 && <div className="history-layout"><section className="history-list">{visible.map((record) => <button key={record.id} className={selected?.id === record.id ? "history-item active" : "history-item"} onClick={() => setSelected(record)}><span className={`record-icon ${record.recordType}`}>●</span><span><strong>{labels[record.recordType]}</strong><small>{summary(record.payload)}</small></span><time>{new Date(record.recordedAt).toLocaleDateString("ko-KR")}</time></button>)}</section><section className="record-detail">{selected ? <><p className="eyebrow">기록 상세</p><h2>{labels[selected.recordType]}</h2><dl><div><dt>기록일</dt><dd>{new Date(selected.recordedAt).toLocaleString("ko-KR")}</dd></div><div><dt>기록 내용</dt><dd>{summary(selected.payload)}</dd></div><div><dt>입력 방식</dt><dd>{selected.source === "ocr" ? "OCR 확인 후 등록" : "직접 입력"}</dd></div><div><dt>저장 위치</dt><dd>이 브라우저의 암호화 저장소</dd></div></dl>{selected.sourceDocumentId && <button className="source-document-button" onClick={() => void openSourceDocument(selected.sourceDocumentId!)}>연결된 원본 서류 열기</button>}<PayloadDetail payload={selected.payload} /></> : <div className="detail-placeholder">기록을 선택하면 상세 내용을 확인할 수 있어요.</div>}</section></div>}
+    {!loading && visible.length > 0 && <div className="history-layout"><section className="history-list">{visible.map((record) => <button key={record.id} className={selected?.id === record.id ? "history-item active" : "history-item"} onClick={() => setSelected(record)}><span className={`record-icon ${record.recordType}`}>●</span><span><strong>{labels[record.recordType]}</strong><small>{summary(record.payload)}</small></span><time>{new Date(record.recordedAt).toLocaleDateString("ko-KR")}</time></button>)}</section><section className="record-detail">{selected ? <><p className="eyebrow">기록 상세</p><h2>{labels[selected.recordType]}</h2><dl><div><dt>기록일</dt><dd>{new Date(selected.recordedAt).toLocaleString("ko-KR")}</dd></div><div><dt>기록 내용</dt><dd>{summary(selected.payload)}</dd></div><div><dt>입력 방식</dt><dd>{selected.source === "ocr" ? "OCR 확인 후 등록" : "직접 입력"}</dd></div><div><dt>저장 위치</dt><dd>이 브라우저의 암호화 저장소</dd></div></dl>{selected.sourceDocumentId && <button className="source-document-button" onClick={() => void openSourceDocument(selected.sourceDocumentId!)}>연결된 원본 서류 열기</button>}<PayloadDetail record={selected} /></> : <div className="detail-placeholder">기록을 선택하면 상세 내용을 확인할 수 있어요.</div>}</section></div>}
     {sourcePreview && <div className="modal-backdrop source-preview-backdrop"><section className="source-preview-modal" role="dialog" aria-modal="true" aria-label="연결된 원본 서류"><header><strong>{sourcePreview.name}</strong><button aria-label="닫기" onClick={() => setSourcePreview(null)}>×</button></header><img src={sourcePreview.url} alt="건강기록에 연결된 원본 서류" /></section></div>}
   </main>;
 }

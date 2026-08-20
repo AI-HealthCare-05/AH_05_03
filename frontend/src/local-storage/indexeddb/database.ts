@@ -1,8 +1,8 @@
-import type { StoredHealthDocument, StoredHealthRecord, StoredOcrResult } from "../../local-domain/types";
+import type { StoredHealthDocument, StoredHealthRecord, StoredOcrResult, StoredPainProgress } from "../../local-domain/types";
 import { createDataKey } from "../crypto/record-crypto";
 
 const DB_NAME = "ieobom-local";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 export async function openLocalDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -29,6 +29,10 @@ export async function openLocalDatabase(): Promise<IDBDatabase> {
         const store = db.createObjectStore("ocrResults", { keyPath: "id" });
         store.createIndex("documentId", "documentId");
         store.createIndex("documentStatus", ["documentId", "status"]);
+      }
+      if (!db.objectStoreNames.contains("painProgress")) {
+        const store = db.createObjectStore("painProgress", { keyPath: "id" });
+        store.createIndex("painRecordedAt", ["painRecordId", "recordedAt"]);
       }
     };
     request.onsuccess = () => {
@@ -112,4 +116,13 @@ export async function putOcrResult(db: IDBDatabase, result: StoredOcrResult): Pr
 
 export async function getOcrResult(db: IDBDatabase, resultId: string): Promise<StoredOcrResult | undefined> {
   return requestResult(db.transaction("ocrResults").objectStore("ocrResults").get(resultId));
+}
+
+export async function addPainProgress(db: IDBDatabase, progress: StoredPainProgress): Promise<void> {
+  await requestResult(db.transaction("painProgress", "readwrite").objectStore("painProgress").add(progress));
+}
+
+export async function listPainProgress(db: IDBDatabase, painRecordId: string): Promise<StoredPainProgress[]> {
+  const index = db.transaction("painProgress").objectStore("painProgress").index("painRecordedAt");
+  return requestResult(index.getAll(IDBKeyRange.bound([painRecordId, ""], [painRecordId, "\uffff"])));
 }

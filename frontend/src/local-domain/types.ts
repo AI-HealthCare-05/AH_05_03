@@ -113,3 +113,16 @@ export interface StoredOcrResult {
   confirmedAt: ISODateTime | null;
   version: number;
 }
+
+export type PainProgressStatus = "improved" | "same" | "worse" | "resolved";
+export interface PainProgressPayload { intensity: number; status: PainProgressStatus; medication?: string; medicalVisit: boolean; note?: string }
+export interface StoredPainProgress {
+  id: UUID;
+  painRecordId: UUID;
+  profileId: UUID;
+  recordedAt: ISODateTime;
+  payloadCiphertext: EncryptedValue;
+  createdAt: ISODateTime;
+  version: 1;
+}
+export interface PainProgressView extends Omit<StoredPainProgress, "payloadCiphertext"> { payload: PainProgressPayload }
