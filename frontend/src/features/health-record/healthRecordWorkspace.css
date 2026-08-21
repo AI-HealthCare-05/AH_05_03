@@ -10,9 +10,11 @@
 .floating-health-tools button { border: 0; border-radius: 999px; padding: 12px 16px; color: white; background: var(--blue-700); font-weight: 750; box-shadow: var(--shadow); }
 .floating-health-tools button + button { background: #6b5aa7; }
 .health-record-history-dialog ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.health-record-history-dialog li { display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid var(--line-soft); border-radius: 12px; padding: 14px; }
-.health-record-history-dialog strong, .health-record-history-dialog small { display: block; }
-.health-record-history-dialog small { color: var(--muted); margin-top: 4px; }
+.health-record-history-dialog li { display: flex; flex-direction: column; align-items: stretch; gap: 12px; border: 1px solid var(--line-soft); border-radius: 12px; padding: 16px; background: #fff; }
+.health-record-history-dialog li > div:first-child { display: flex; flex-direction: column; gap: 6px; }
+.health-record-history-dialog strong { display: block; font-size: 15px; }
+.health-record-history-dialog small { color: var(--text-sub, #475569); margin-top: 4px; white-space: pre-wrap; line-height: 1.6; background: var(--surface-subtle, #f8fafc); padding: 10px 14px; border-radius: 8px; border: 1px solid var(--line-soft, #e2e8f0); font-family: inherit; font-size: 13px; max-height: 200px; overflow-y: auto; }
+.health-record-history-dialog .record-row-actions { display: flex; justify-content: flex-end; gap: 8px; border-top: 1px dashed var(--line-soft, #e2e8f0); padding-top: 10px; }
 .health-pain-chat { width: min(640px, calc(100vw - 32px)); }
 .ocr-quick-dialog { width: min(760px, calc(100vw - 32px)); }
 .ocr-review-table { display: grid; gap: 8px; }

@@ -169,11 +169,23 @@ function DocumentOcrDialog({ profile, runtime, onClose, onSaved, onManage }: { p
   async function confirm() {
     if (!runtime || !documentId || !text.trim()) return;
     setWorking(true);
-    const tableText = rows.map((item) => [item.testName, item.value, item.unit, item.judgment].filter(Boolean).join(" | ")).join("\n");
-    const result = await runtime.healthRecords.create({ householdId: PRIMARY_HOUSEHOLD_ID, profileId: profile.id, recordType: "lab_result", recordedAt: new Date().toISOString(), source: "ocr", sourceDocumentId: documentId, payload: { note: [text.trim(), tableText].filter(Boolean).join("\n\n") } });
+    const tableText = rows
+      .map((item) => [item.testName, item.value, item.unit, item.judgment].filter(Boolean).join(" | "))
+      .join("\n");
+    const finalNote = tableText.trim() ? `[검사 결과 요약]\n${tableText}` : text.trim();
+    const result = await runtime.healthRecords.create({
+      householdId: PRIMARY_HOUSEHOLD_ID,
+      profileId: profile.id,
+      recordType: "lab_result",
+      recordedAt: new Date().toISOString(),
+      source: "ocr",
+      sourceDocumentId: documentId,
+      payload: { note: finalNote },
+    });
     setWorking(false);
     if (!result.ok) return setError(result.error.message);
-    await onSaved(); onClose();
+    await onSaved();
+    onClose();
   }
   return <div className="modal-backdrop" role="presentation"><section className="modal-panel ocr-quick-dialog" role="dialog" aria-modal="true"><div className="modal-heading"><div><p className="section-kicker">사용자 확인 단계</p><h2>{profile.displayName}님의 서류 OCR</h2></div><button className="modal-close" type="button" onClick={onClose}>×</button></div><p className="form-notice">OCR은 글자를 읽을 뿐 의료 판단을 하지 않습니다. 수정·확정 후에만 건강기록으로 저장됩니다.</p>{!text ? <><label>건강서류 (JPEG·PNG)<input type="file" accept="image/jpeg,image/png" onChange={(event) => setFile(event.currentTarget.files?.[0])} /></label><div className="form-actions"><button className="secondary-button" type="button" onClick={onManage}>전체 서류 관리</button><button className="primary-button" type="button" disabled={!file || working} onClick={() => void recognize()}>{working ? "글자를 읽는 중…" : "OCR 읽기"}</button></div></> : <><label>추출 텍스트<textarea rows={8} value={text} onChange={(event) => setText(event.target.value)} /></label>{rows.length > 0 ? <div className="ocr-review-table"><strong>검사 항목 확인</strong>{rows.map((row, index) => <div key={index}><input value={row.testName} aria-label="검사항목" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, testName: event.target.value } : value))} /><input value={row.value} aria-label="결과값" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, value: event.target.value } : value))} /><input value={row.unit} aria-label="단위" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, unit: event.target.value } : value))} /><input value={row.judgment} aria-label="판정" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, judgment: event.target.value } : value))} /></div>)}</div> : null}<div className="form-actions"><button className="secondary-button" type="button" onClick={onClose}>취소</button><button className="primary-button" type="button" disabled={working} onClick={() => void confirm()}>{working ? "저장 중…" : "수정 내용 확정 · 건강기록 저장"}</button></div></>}{error ? <div className="alert error-alert">{error}</div> : null}</section></div>;
 }
@@ -196,7 +208,7 @@ export function PainChatDialog({ profile, runtime, onClose, onSaved }: { profile
     setWorking(true);
     try {
       const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 2800);
+      const timeout = window.setTimeout(() => controller.abort(), 30000);
       const response = await fetch("http://127.0.0.1:8000/api/v1/pain-chat/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: next }), signal: controller.signal });
       window.clearTimeout(timeout);
       const body = await response.json();
@@ -205,7 +217,7 @@ export function PainChatDialog({ profile, runtime, onClose, onSaved }: { profile
       setDraft(body.data.draft ?? {});
       setMissing(body.data.missing_fields ?? []);
       setError(undefined);
-    } catch (caught) { setError(caught instanceof DOMException && caught.name === "AbortError" ? "3초 안에 답이 오지 않았어요. 통증 부위와 정도를 직접 입력해 주세요." : caught instanceof Error ? caught.message : "대화에 실패했습니다."); } finally { setWorking(false); }
+    } catch (caught) { setError(caught instanceof DOMException && caught.name === "AbortError" ? "응답 시간이 초과되었습니다. 통증 부위와 정도를 직접 입력해 주세요." : caught instanceof Error ? caught.message : "대화에 실패했습니다."); } finally { setWorking(false); }
   }
 
   async function save() {
@@ -218,7 +230,7 @@ export function PainChatDialog({ profile, runtime, onClose, onSaved }: { profile
     onClose();
   }
 
-  return <div className="modal-backdrop" role="presentation"><section className="modal-panel health-pain-chat" role="dialog" aria-modal="true"><div className="modal-heading"><div><p className="section-kicker">OpenAI 대화형 입력</p><h2>{profile.displayName}님의 통증 기록</h2></div><button className="modal-close" type="button" onClick={onClose}>×</button></div><p className="form-notice">입력 내용은 기록 초안 생성을 위해 OpenAI API로 전송됩니다. 저장 전 직접 확인하세요.</p><div className="health-chat-messages">{messages.map((message, index) => <p key={index} className={message.role}>{message.content}</p>)}</div><form className="health-chat-form" onSubmit={(event) => void send(event)}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="예: 어제부터 오른쪽 무릎이 욱신거려요" /><button className="primary-button" disabled={working}>{working ? "정리 중…" : "보내기"}</button></form>{Object.keys(draft).length > 0 ? <div className="chat-draft"><h3>저장 전 확인</h3><label>통증 부위<input value={String(draft.body_area ?? "")} onChange={(event) => setDraft({ ...draft, body_area: event.target.value })} /></label><label>통증 정도<input type="number" min="0" max="10" value={typeof draft.intensity === "number" ? draft.intensity : ""} onChange={(event) => setDraft({ ...draft, intensity: Number(event.target.value) })} /></label>{missing.length > 0 ? <p>추가 확인: {missing.join(", ")}</p> : <button className="primary-button" type="button" disabled={working} onClick={() => void save()}>통증 기록으로 저장</button>}</div> : null}{error ? <div className="alert error-alert">{error}</div> : null}</section></div>;
+  return <div className="modal-backdrop" role="presentation"><section className="modal-panel health-pain-chat" role="dialog" aria-modal="true"><div className="modal-heading"><div><p className="section-kicker">대화형 입력</p><h2>{profile.displayName}님의 통증 기록</h2></div><button className="modal-close" type="button" onClick={onClose}>×</button></div><p className="form-notice">입력 내용은 기록 초안 생성을 위해 AI로 전송됩니다. 저장 전 직접 확인하세요.</p><div className="health-chat-messages">{messages.map((message, index) => <p key={index} className={message.role}>{message.content}</p>)}</div><form className="health-chat-form" onSubmit={(event) => void send(event)}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="예: 어제부터 오른쪽 무릎이 욱신거려요" /><button className="primary-button" disabled={working}>{working ? "정리 중…" : "보내기"}</button></form>{Object.keys(draft).length > 0 ? <div className="chat-draft"><h3>저장 전 확인</h3><label>통증 부위<input value={String(draft.body_area ?? "")} onChange={(event) => setDraft({ ...draft, body_area: event.target.value })} /></label><label>통증 정도<input type="number" min="0" max="10" value={typeof draft.intensity === "number" ? draft.intensity : ""} onChange={(event) => setDraft({ ...draft, intensity: Number(event.target.value) })} /></label>{missing.length > 0 ? <p>추가 확인: {missing.join(", ")}</p> : <button className="primary-button" type="button" disabled={working} onClick={() => void save()}>통증 기록으로 저장</button>}</div> : null}{error ? <div className="alert error-alert">{error}</div> : null}</section></div>;
 }
 
 function recordSummary(record: HealthRecord) {
