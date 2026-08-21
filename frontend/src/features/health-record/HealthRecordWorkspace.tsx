@@ -163,7 +163,7 @@ function DocumentOcrDialog({ profile, runtime, onClose, onSaved, onManage }: { p
       setDocumentId(saved.value.id);
       const result = normalizeOcrResult(await new DevServerOcrAdapter().recognize(file));
       setText(result.text);
-      setRows(result.examItems.map((item) => ({ ...item })));
+      setRows(result.examItems?.map((item) => ({ ...item })) ?? []);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "OCR을 실행하지 못했습니다."); } finally { setWorking(false); }
   }
   async function confirm() {

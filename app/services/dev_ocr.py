@@ -41,31 +41,51 @@ class DevOcrService:
         client = genai.Client(api_key=api_key)
 
         prompt = (
-            "이 문서는 건강 검진 결과지, 진단서, 처방전 등의 의료 문서입니다. "
-            "문서에 있는 모든 텍스트를 읽고 지정된 JSON 스키마에 맞게 구조화해 주세요.\n"
-            "1. text: 문서 전체의 텍스트 내용을 한 문자열로 이어서 작성\n"
-            "2. tables: 문서 내에 표(Table)가 있다면 각 표를 식별해서 배열로 반환. "
-            "각 표는 table_index(0부터 시작)와 rows(2차원 배열 형태의 문자열 리스트)를 가짐."
+            "당신은 의료 문서 전문 OCR 및 데이터 구조화 AI입니다.\n"
+            "제공된 건강검진 결과지, 검사결과서, 진단서, 처방전 이미지를 분석하여 "
+            "사용자가 보기 쉽고 명확하게 정형화된 JSON 데이터로 변환하세요.\n\n"
+            "지침:\n"
+            "1. tables (검사 항목 표 추출):\n"
+            "   - 문서에 있는 모든 검사 항목(요검사, 혈액검사, 간기능, 혈당, 콜레스테롤 등)을 표로 구조화하세요.\n"
+            "   - 각 행(row)의 배열은 반드시 다음 순서의 4개 열로 구성하세요: [검사항목명, 결과값, 단위, 판정및참고치]\n"
+            "     예시: ['식전혈당(FBS)', '113', 'mg/dL', '이상 (정상: 74~99)'], ['AST (SGOT)', '41', 'U/L', '이상 (정상: 0~40)']\n"
+            "   - 단위나 판정이 문서에 없으면 빈 문자열('')로 채우세요.\n"
+            "2. text (전체 텍스트 정리):\n"
+            "   - 문서의 기본 정보(환자 정보, 검사일자, 병원/기관명)와 검사 결과들을 줄바꿈(\\n)을 적절히 사용하여 깔끔하고 가독성 높게 작성하세요.\n"
+            "   - 문장이 이어져서 한 덩어리의 줄글로 뭉치지 않도록 항목별로 줄바꿈을 반드시 적용하세요."
         )
 
         try:
-            # 네트워크 IO를 block하지 않도록 asyncio.to_thread 사용
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model='gemini-1.5-pro',
-                contents=[
-                    types.Part.from_bytes(data=content, mime_type=mime_type),
-                    prompt
-                ],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=RawOcrData,
-                    temperature=0.0,
-                )
-            )
+            # 주 모델로 gemini-3.6-flash 사용, 일시적 지연/과부하 시 3.5-flash로 fallback
+            models_to_try = ["gemini-3.6-flash", "gemini-3.5-flash"]
+            last_err = None
+            response = None
 
-            if not response.text:
-                raise OcrUnavailableError("Gemini API로부터 빈 응답을 받았습니다.")
+            for model_name in models_to_try:
+                try:
+                    response = await asyncio.to_thread(
+                        client.models.generate_content,
+                        model=model_name,
+                        contents=[
+                            types.Part.from_bytes(data=content, mime_type=mime_type),
+                            prompt
+                        ],
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=RawOcrData,
+                            temperature=0.0,
+                        )
+                    )
+                    if response and response.text:
+                        break
+                except Exception as ex:
+                    last_err = ex
+                    continue
+
+            if not response or not response.text:
+                if last_err:
+                    raise last_err
+                raise OcrUnavailableError("Gemini API로부터 응답을 받지 못했습니다.")
 
             result_dict = json.loads(response.text)
             
