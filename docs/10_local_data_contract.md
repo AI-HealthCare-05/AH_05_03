@@ -7,7 +7,7 @@
 > 서버 계약: [03_api_spec.md](03_api_spec.md)
 >
 > 데이터 모델: [02_erd.md](02_erd.md)
-> 결정 근거: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md)
+> 결정 근거: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-006](adr/0006-lifecycle-scoped-profile-reference.md), [ADR-007](adr/0007-account-scoped-encrypted-local-vault.md)
 
 ## 1. 목적과 경계
 
@@ -83,7 +83,8 @@ interface LocalHousehold {
 interface FamilyProfile {
   id: UUID;
   householdId: UUID;
-  opaqueServerRef: Base64Url;
+  opaqueServerRef: Base64Url | null;
+  serverRefState: "none" | "pending" | "active" | "retired";
   status: "active" | "hidden" | "merged";
   displayNameCiphertext: EncryptedValue;
   relationshipCiphertext: EncryptedValue;
@@ -102,7 +103,9 @@ interface EncryptedValue {
 }
 ```
 
-`opaqueServerRef`는 프로필 생성 시 32바이트 CSPRNG로 만들고 서버 연결이 없어도 생성한다. 프로필 이름·관계·생년을 해시하거나 암호화한 값으로 만들지 않는다.
+`opaqueServerRef`는 로컬 프로필의 영구 ID가 아니다. 가족 초대를 시작할 때 32바이트 이상의 CSPRNG로 생성하고, 초대부터 연결 종료까지 한 연결 생명주기에서만 사용한다. 동일 작업 재시도에서는 유지하고, 초대 거절·취소·만료, 연결 해제, 계정 변경 또는 프로필 병합 시 `retired`로 전환한 뒤 값을 지운다. 재연결에는 새 값을 만든다. 프로필 이름·관계·생년을 해시하거나 암호화한 값으로 만들지 않는다.
+
+백업에서 `retired` 상태나 종료된 연결의 참조값을 읽어도 활성화하지 않는다. 로컬 프로필과 건강정보는 복구하되 `opaqueServerRef=null`, `serverRefState="none"`으로 정규화하고 다음 초대 시 새 값을 만든다.
 
 ### 3.2 건강기록
 
@@ -324,7 +327,9 @@ interface ProfileService {
   get(profileId: UUID): Promise<LocalResult<FamilyProfile, "NOT_FOUND" | "DECRYPTION_FAILED">>;
   list(householdId: UUID, includeHidden?: boolean): Promise<LocalResult<FamilyProfile[]>>;
   update(input: UpdateProfileInput): Promise<LocalResult<FamilyProfile>>;
-  softDelete(profileId: UUID, expectedVersion: number): Promise<LocalResult<void>>;
+  hide(profileId: UUID, expectedVersion: number): Promise<LocalResult<FamilyProfile>>;
+  deleteEmpty(profileId: UUID): Promise<LocalResult<{ deleted: true }>>;
+  setServerReference(profileId: UUID, reference: Base64Url | null, state: ServerRefState): Promise<LocalResult<FamilyProfile>>;
 }
 
 interface CreateProfileInput {
@@ -345,9 +350,28 @@ interface UpdateProfileInput {
 }
 ```
 
-`expectedVersion` 불일치는 `VERSION_CONFLICT`를 반환한다. 프로필 삭제는 연결된 기록을 즉시 물리 삭제하지 않고 `hidden` 처리 후 별도 영구삭제 확인 흐름을 사용한다.
+`expectedVersion` 불일치는 `VERSION_CONFLICT`를 반환한다. 기록이 연결된 프로필은 `deleteEmpty`가 거부하며 `hide` 또는 병합으로 처리한다. 연결 기록이 전혀 없는 빈 프로필만 물리 삭제할 수 있다.
 
-### 4.2 건강기록
+### 4.2 가족력과 접근 범위
+
+```ts
+interface FamilyHistoryService {
+  create(input: CreateFamilyHistoryInput): Promise<LocalResult<FamilyHistory>>;
+  list(profileId: UUID): Promise<LocalResult<FamilyHistory[]>>;
+  update(historyId: UUID, input: UpdateFamilyHistoryInput): Promise<LocalResult<FamilyHistory>>;
+  delete(historyId: UUID): Promise<LocalResult<{ deleted: true }>>;
+}
+
+interface AccessGrantService {
+  grant(input: LocalAccessGrantInput): Promise<LocalResult<LocalAccessGrant>>;
+  list(profileId: UUID): Promise<LocalResult<LocalAccessGrant[]>>;
+  revoke(grantId: UUID): Promise<LocalResult<LocalAccessGrant>>;
+}
+```
+
+가족력과 접근 범위는 모두 암호화된 로컬 레코드로 저장한다. 접근 범위는 서버 권한이 아니라 사용자가 암호화 이전 파일에 어떤 로컬 기록 유형을 포함할지 정하는 로컬 정책이다.
+
+### 4.3 건강기록
 
 ```ts
 interface HealthRecordService {
@@ -394,7 +418,7 @@ interface CursorPage<T> {
 
 중복 후보는 `(profileId, recordType, recordedAt, canonicalPayloadHash)`로 탐지한다. `canonicalPayloadHash`는 정규화한 평문 payload의 SHA-256이지만 암호화해 저장하며 서버에 전송하지 않는다.
 
-### 4.3 원본 파일
+### 4.4 원본 파일
 
 ```ts
 interface DocumentService {
@@ -467,7 +491,7 @@ staging → verified → committed → deleting → deleted
 
 ### 7.1 데이터 키
 
-1. 최초 가정 생성 시 256비트 Data Encryption Key(DEK)를 `crypto.getRandomValues`로 생성한다.
+1. 최초 암호화 로컬 보관함 생성 시 256비트 Data Encryption Key(DEK)를 `crypto.getRandomValues`로 생성한다.
 2. 런타임에는 `extractable=false`인 AES-GCM `CryptoKey`로 가져온다.
 3. 각 레코드와 파일 청크는 12바이트 무작위 IV를 사용한다.
 4. 같은 키로 IV를 재사용하지 않는다.
@@ -479,6 +503,17 @@ staging → verified → committed → deleting → deleted
 ### 7.2 계정 비밀번호와의 분리
 
 서비스 계정 비밀번호를 로컬 DEK로 직접 사용하지 않는다. 서버 비밀번호 변경이나 계정 해지가 로컬 데이터 복호화 가능성을 자동으로 바꾸지 않아야 한다. 로컬 잠금 비밀번호와 복구 정책은 별도 UX 결정으로 확정한다.
+
+### 7.3 보관함 격리와 잠금
+
+- 각 보관함은 무작위 `vaultId`, 독립 IndexedDB, 독립 OPFS 디렉터리와 독립 DEK를 사용한다.
+- 비민감 레지스트리는 이 기기의 서비스 계정과 `vaultId` 연결, 스키마 버전과 이전 상태만 보관한다. 이메일·프로필 이름·건강정보는 넣지 않는다.
+- 서비스 계정 로그인 또는 초대 수락만으로 DEK를 사용할 수 있게 하지 않는다.
+- 로그아웃·계정 전환 시 Repository와 Worker를 닫고 복호화된 캐시와 메모리 키를 지운다. 다른 탭에도 잠금 이벤트를 전달한다.
+- 보관함이 잠긴 동안 Local Domain Service는 목록을 빈 값으로 위장하지 않고 `VAULT_LOCKED` 오류를 반환한다.
+- 기존 `ieobom-local`은 소유자 미지정 레거시 보관함으로 열고, 백업과 명시적 확인 없이는 계정 보관함으로 이전하지 않는다.
+
+현재 구현의 고정 `ieobom-local` DB와 공용 OPFS 경로는 이 목표 계약을 아직 충족하지 않는다. 계정별 DB 이름만 붙이는 임시 변경은 완료로 간주하지 않으며, 잠금 키와 OPFS 경계까지 함께 적용해야 한다.
 
 ## 8. 암호화 백업·이전 파일
 
@@ -545,10 +580,8 @@ header 제한 검사 → 비밀번호로 DEK 해제 → manifest 복호화
 
 ```ts
 interface ProfileMergeService {
-  compare(sourceProfileId: UUID, targetProfileId: UUID): Promise<LocalResult<MergePlan>>;
-  execute(input: ExecuteMergeInput): Promise<LocalResult<MergeOperation>>;
-  commitServerLink(operationId: UUID, serverProfileLinkId: UUID): Promise<LocalResult<MergeOperation>>;
-  rollback(operationId: UUID): Promise<LocalResult<MergeOperation>>;
+  merge(sourceProfileId: UUID, targetProfileId: UUID): Promise<LocalResult<MergeOperation>>;
+  revert(operationId: UUID): Promise<LocalResult<MergeOperation>>;
 }
 
 interface MergePlan {
@@ -580,7 +613,9 @@ interface MergeOperation {
 }
 ```
 
-생년이 명백히 다르거나 사용자가 동일인이 아니라고 표시하면 `PROFILE_MERGE_NOT_SAFE`로 중단한다. 서버 프로필 연결이 필요한 병합은 `awaiting_server`에서 멈추고 성공 응답 전에는 source를 영구 삭제하지 않는다.
+현재 구현은 같은 가정의 활성 프로필만 병합하며, 영향받는 암호화 레코드를 복구 지점에 보존한 뒤 하나의 IndexedDB `replaceAll` 트랜잭션으로 기록 소유 참조를 대상 프로필로 옮긴다. 원본 프로필은 물리 삭제하지 않고 `merged`로 전환하며 서버 참조를 폐기한다. 병합된 접근 범위는 자동 승계하지 않고 `revoked`로 전환한다. `revert`는 복구 지점의 원본 암호화 레코드를 되돌린다.
+
+생년·이름·관계 충돌의 사용자 비교 화면과 서버 연결 보상 상태(`awaiting_server`)는 다음 고도화 단계에서 추가한다. 서버 프로필 연결이 필요한 경우에는 로컬 병합을 실행하기 전에 해당 UI 흐름이 준비되어야 한다.
 
 ## 10. 로컬 로그·분석 규칙
 

@@ -7,7 +7,37 @@
 > 로컬 계약 원본: [브라우저 로컬 데이터 계약](10_local_data_contract.md)
 >
 > 데이터 모델: [서버·로컬 ERD](02_erd.md), [PostgreSQL DDL](database/0002_service_domain.sql)
-> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-003](adr/0003-web-authentication-token-transport.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md)
+> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-002](adr/0002-separate-server-api-and-local-domain-contract.md), [ADR-003](adr/0003-web-authentication-token-transport.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md), [ADR-006](adr/0006-lifecycle-scoped-profile-reference.md)
+
+## 0. 빠른 보기
+
+이 절은 탐색을 위한 요약이다. 기능의 삭제 여부나 상세 계약을 결정하지 않는다. 구현 우선순위의 원본은 [요구사항](01_requirements.md)과 [로드맵](07_roadmap.md), 서버 계약의 원본은 [OpenAPI 3.1](api/openapi.yaml), 로컬 계약의 원본은 [브라우저 로컬 데이터 계약](10_local_data_contract.md)이다.
+
+| 우선순위 | 기능 영역 | 처리 위치 | 상세 기준 |
+|---:|---|---|---|
+| 1 | 서비스 계정 가입·로그인, 구독·라이선스 | 서버 API | OpenAPI |
+| 1 | 가족 구성원 로컬 프로필, 건강기록 | 브라우저 로컬 | 로컬 데이터 계약 |
+| 1 | 암호화 백업·복구 | 브라우저와 사용자 파일 | 로컬 데이터 계약 §8 |
+| 2 | 가족 초대·수락, 기존 로컬 프로필 연결 | 서버 API와 로컬 보상 처리 | OpenAPI·이 문서 §5~8 |
+| 2 | 중복 프로필 비교·병합·되돌리기 | 브라우저 로컬 | 로컬 데이터 계약 §9 |
+| 3 | 구성원별 공유 범위, 암호화 데이터 이전 | 브라우저 로컬 | 요구사항·로컬 데이터 계약 |
+| 3 | WebRTC 기기 직접 전송 | 브라우저와 최소 서버 메타데이터 | 기술검증 후 별도 ADR·API 결정 |
+
+2·3순위는 제외 기능이 아니라 후순위 구현 기능이다. 선행조건이 일찍 충족되면 앞당길 수 있으며 최종 요구사항과 와이어프레임 범위에는 유지한다.
+
+### 서버 API 영역 요약
+
+| 영역 | 주요 경로 | 데이터 경계 |
+|---|---|---|
+| 인증 | `/auth/signup`, `/auth/login`, `/auth/refresh`, `/auth/logout` | 인증과 세션 상태만 처리 |
+| 계정 | `/account` | 서비스 계정과 구독 요약만 처리 |
+| 구독 | `/subscription`, `/subscription/change` | 구독·라이선스 상태만 처리 |
+| 가정 | `/households`, `/households/{id}` | 초대와 연결을 묶는 UUID 컨테이너만 처리 |
+| 가족 초대 | `/family-invitations` 및 상태 전이 경로 | 이메일, 초대 상태, 불투명 프로필 참조값만 처리 |
+| 프로필 연결 | `/profile-links` | 서비스 계정과 불투명 로컬 프로필 참조값만 연결 |
+| 기기 연결 | 현재 OpenAPI에서 제외 | WebRTC 기술검증 후 채택 여부 결정 |
+
+건강기록, 가족력, 원본 서류, OCR 결과, 예측 결과와 로컬 변경 이력은 위 서버 API에 보내지 않는다.
 
 ## 1. 계약 분리
 
@@ -79,6 +109,7 @@ Pydantic 요청 모델은 `extra="forbid"`로 정의한다. 허용 DTO에 없는
 | 409 | `EMAIL_ALREADY_EXISTS` | 대소문자 무시 이메일 중복 |
 | 409 | `INVITATION_ALREADY_PENDING` | 같은 가정·이메일·프로필에 대기 초대 존재 |
 | 409 | `INVITATION_STATE_CONFLICT` | 대기 상태가 아닌 초대의 수락·거절·취소 |
+| 409 | `PROFILE_REFERENCE_ALREADY_USED` | 같은 가정의 과거 초대·연결에서 이미 사용한 참조값 제출 |
 | 409 | `PROFILE_ALREADY_LINKED` | 계정이 같은 가정의 다른 프로필에 연결됨 |
 | 409 | `PROFILE_REF_ALREADY_CLAIMED` | 같은 프로필 참조값에 다른 계정이 연결됨 |
 | 409 | `ACTIVE_MEMBERS_REMAIN` | 다른 활성 구성원이 있는 가정 폐쇄 시도 |
@@ -183,8 +214,11 @@ Refresh Token은 `Secure·HttpOnly·SameSite=Lax` 쿠키로만 받는다. 성공
 | GET | `/households` | 없음 | 참여 가정 배열 |
 | GET | `/households/{id}` | 없음 | `200 HouseholdResponse` |
 | DELETE | `/households/{id}` | 헤더만 | `204` |
+| GET | `/households/{id}/memberships` | 없음 | 가정 멤버십 이력 배열. 계정 UUID를 화면에 직접 노출하지 않고 표시할 `masked_email`과 브라우저 로컬 이름을 찾기 위한 활성 `local_profile_ref`를 포함한다. 프로필 이름과 건강정보는 포함하지 않는다. |
+| POST | `/households/{id}/leave` | 없음 | 현재 계정의 `left` 멤버십 |
 
 가정 생성자는 `household_memberships`의 첫 활성 구성원이 된다. 이는 건강정보 접근 권한이나 대표 관리자 역할을 의미하지 않는다.
+현재 계정은 자신이 생성하지 않은 가정에서 자진 탈퇴할 수 있으며, 탈퇴 시 자신의 활성 `profile_link`도 함께 해제된다. 가정 생성자는 다른 활성 구성원이 남아 있으면 탈퇴·폐쇄할 수 없다. 별도 관리자 역할이 확정되지 않았으므로 다른 구성원을 강제로 내보내는 API는 제공하지 않는다.
 
 ### 4.2 구독
 
@@ -218,7 +252,7 @@ pending ──accept──> accepted
 }
 ```
 
-`target_profile_ref`는 브라우저가 CSPRNG로 만든 32바이트 이상의 base64url 값이다. 로컬 프로필 ID, 이름, 생년, 관계를 암호화하거나 인코딩한 값이 아니어야 한다.
+`target_profile_ref`는 브라우저가 이번 연결 생명주기를 위해 CSPRNG로 만든 32바이트 이상의 base64url 값이다. 로컬 프로필 ID, 이름, 생년, 관계를 암호화하거나 인코딩한 값이 아니어야 한다. 같은 초대 생성 작업을 재시도할 때는 같은 참조값과 `Idempotency-Key`를 사용하지만, 초대가 거절·취소·만료되면 새 초대에 새 참조값을 사용한다.
 
 서버 처리 순서:
 
@@ -259,6 +293,7 @@ pending ──accept──> accepted
 - 요청 참조값과 초대의 `target_profile_ref`가 일치한다.
 - 현재 계정은 같은 가정에서 활성 프로필 연결이 없다.
 - 해당 참조값은 같은 가정의 다른 활성 계정에 연결되어 있지 않다.
+- 해당 참조값은 같은 가정의 다른 초대나 종료된 과거 연결에서 사용된 적이 없다.
 
 PostgreSQL 트랜잭션:
 
@@ -269,6 +304,15 @@ PostgreSQL 트랜잭션:
 5. 커밋 후 응답한다.
 
 연결 성공 응답은 건강정보가 존재한다는 의미가 아니다. 실제 건강정보 이전은 사용자가 로컬에서 암호화 이전 파일을 만들고 상대가 가져오는 별도 흐름이다.
+
+추가 조회·해제 경로:
+
+| Method | Path | 설명 |
+|---|---|---|
+| GET | `/profile-links` | 현재 계정의 활성·해제 연결 이력 조회 |
+| POST | `/profile-links/{link_id}/unlink` | 현재 계정 소유의 활성 연결 해제 |
+
+연결 해제는 행을 삭제하지 않고 `status=unlinked`, `unlinked_at=now()`로 전환한다. 해제된 참조값은 다시 사용할 수 없으며 재연결은 새 초대와 새 불투명 참조값으로 수행한다.
 
 ## 7. 서버 데이터 금지 규칙
 
@@ -287,7 +331,10 @@ PostgreSQL 트랜잭션:
 - base64url 표현
 - 가정·프로필 내용과 독립적
 - 서버 로그에서는 앞 6자만 남기거나 완전히 마스킹
-- 해지·연결 해제 후 재사용 금지
+- 초대 생성부터 연결 종료까지 같은 논리 작업과 재시도에서만 유지
+- 초대 거절·취소·만료, 연결 해제, 계정 변경, 프로필 병합 후 즉시 폐기
+- 재초대·재연결과 폐기 참조값이 포함된 백업 복구에서는 새 값 생성
+- PostgreSQL 종료 이력과 유일 제약으로 생애 전체 재사용 금지; Redis TTL을 재사용 금지의 근거로 사용하지 않음
 
 ## 8. 로컬 기능과 서버 보상 처리
 
@@ -324,7 +371,10 @@ WebRTC 직접 전송은 현재 OpenAPI에서 제외한다. 기술검증을 통�
 | Refresh Token DB 추적 없음 | 해시 저장·회전·폐기 | `auth_sessions` 구현 |
 | 공통 오류가 FastAPI `detail` 형태 | `ErrorResponse` | 예외 핸들러 구현 |
 | `row_version` 없음 | `If-Match` 낙관적 잠금 | 모델·Repository 수정 |
-| 가정 생성·목록과 초대 생성·목록·수락·거절·취소 구현 | 프로필 연결·멱등성·If-Match까지 포함한 목표 계약 | 남은 2순위 구현 |
+| 가정 생성·목록·상세·폐쇄, 멤버십 조회·자진 탈퇴 구현 | 타 구성원 강제 제거 | 관리자 역할 정책 확정 전 보류 |
+| 초대 생성·목록·수락·거절·취소 구현 | 실제 이메일 공급자 워커 | 후순위 구현 |
+| 프로필 연결·이력 조회·연결 해제 구현 | 멱등성·If-Match | 후순위 구현 |
+| 로컬 프로필 수정·숨김·빈 프로필 삭제, 가족력, 접근 범위, 병합·되돌리기, 선택 암호화 이전 구현 | 문서·OPFS 포함 대용량 이전과 UI 전체 연동 | 후순위 고도화 |
 
 OpenAPI는 목표 계약이며 현재 FastAPI 코드가 자동으로 충족한다는 뜻이 아니다. 구현 PR은 OpenAPI 계약 테스트를 추가하고 차이를 하나씩 제거해야 한다.
 

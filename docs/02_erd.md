@@ -7,7 +7,7 @@
 > 서버 API: [03_api_spec.md](03_api_spec.md), [OpenAPI 3.1](api/openapi.yaml)
 >
 > 로컬 물리 스키마: [10_local_data_contract.md](10_local_data_contract.md)
-> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md)
+> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md), [ADR-006](adr/0006-lifecycle-scoped-profile-reference.md)
 
 ## 1. 물리적 경계
 
@@ -121,11 +121,10 @@ erDiagram
 | `accepted_at` / `declined_at` / `cancelled_at` | timestamptz nullable | 종료 상태와 CHECK로 결합 |
 | `row_version` | bigint | 낙관적 잠금 |
 
-부분 유일 인덱스:
+참조값 생애 전체 유일 인덱스:
 
 ```sql
-UNIQUE (household_id, lower(invitee_email), target_profile_ref)
-WHERE status = 'pending'
+UNIQUE (household_id, target_profile_ref)
 ```
 
 ### 2.6 `profile_links`
@@ -141,14 +140,14 @@ WHERE status = 'pending'
 | `linked_at` / `unlinked_at` | timestamptz | 상태와 CHECK로 결합 |
 | `row_version` | bigint | 낙관적 잠금 |
 
-활성 상태에서 다음 두 제약을 동시에 적용한다.
+계정 제약은 활성 상태에만, 참조값 제약은 종료 이력을 포함한 전체 생애에 적용한다.
 
 ```sql
 UNIQUE (household_id, account_id) WHERE status = 'active';
-UNIQUE (household_id, local_profile_ref) WHERE status = 'active';
+UNIQUE (household_id, local_profile_ref);
 ```
 
-따라서 같은 가정에서 한 계정은 한 프로필에만 연결되고 한 프로필 참조값도 한 계정만 점유한다.
+따라서 같은 가정에서 한 계정은 활성 프로필 하나에만 연결되고, 한 번 사용한 프로필 참조값은 연결 해제 후에도 다시 사용할 수 없다.
 
 ### 2.7 `registered_devices`
 
@@ -202,7 +201,7 @@ Cross-row 규칙을 다른 행을 조회하는 `CHECK`로 만들지 않고 트�
 | `households` | `status=closed` | 연결 이력 보존 |
 | `household_memberships` | `status=left` | 참여 이력 보존 |
 | `family_invitations` | 종료 상태 전환 | 초대 상태 추적 |
-| `profile_links` | `status=unlinked` | 재연결·감사 추적 |
+| `profile_links` | `status=unlinked` | 감사 추적·참조값 재사용 방지 |
 | `api_idempotency_keys` | 24시간 후 물리 삭제 | 재시도 창 종료 |
 | `account_audit_events` | 보존정책 후 익명화·삭제 | 개인정보 최소화 |
 
@@ -216,6 +215,7 @@ erDiagram
     family_profiles ||--o{ health_records : owns
     family_profiles ||--o{ health_documents : owns
     family_profiles ||--o{ family_histories : subject
+    family_profiles ||--o{ local_access_grants : controls
     family_profiles ||--o{ prediction_results : predicts
     health_documents ||--o{ ocr_results : produces
     health_documents ||--|| file_metadata : references
@@ -225,6 +225,8 @@ erDiagram
     family_profiles ||--o{ merge_operations : target
     restore_points ||--o| merge_operations : protects
 ```
+
+`local_access_grants`는 대상 서비스 계정 ID와 허용할 로컬 레코드 유형만 암호화해 브라우저에 저장한다. 서버 권한 테이블이 아니며 암호화 이전 파일을 만들 때 포함 범위를 결정하는 데 사용한다. 프로필 병합 시 자동 승계하지 않고 회수한 뒤 사용자가 다시 확인한다.
 
 로컬 엔티티의 필드, 암호화 형식, IndexedDB object store와 인덱스는 [10_local_data_contract.md](10_local_data_contract.md)를 기준으로 한다.
 
@@ -241,7 +243,9 @@ IndexedDB profiles.opaqueServerRef
 - 브라우저는 `opaqueServerRef → profileId` 매핑을 로컬에서만 해석한다.
 - 참조값은 최소 256비트 무작위 값이다.
 - 참조값에 프로필 내용을 암호화·해시·인코딩하지 않는다.
-- 연결 해제한 참조값을 새 프로필에 재사용하지 않는다.
+- 참조값은 초대 생성부터 연결 종료까지 한 연결 생명주기에만 사용한다. 같은 작업의 재시도에서는 유지한다.
+- 초대 거절·취소·만료, 연결 해제, 계정 변경 또는 프로필 병합 뒤에는 폐기하고 재초대·재연결 시 새 값을 만든다.
+- PostgreSQL은 종료 이력을 보존하고 가정 범위 유일 제약으로 폐기된 값의 재사용도 거부한다.
 
 ## 7. 마이그레이션 적용 순서
 

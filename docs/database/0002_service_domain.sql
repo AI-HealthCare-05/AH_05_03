@@ -129,9 +129,8 @@ CREATE TABLE family_invitations (
 CREATE UNIQUE INDEX uq_family_invitations_token_hash
     ON family_invitations (token_hash);
 
-CREATE UNIQUE INDEX uq_family_invitations_one_pending_target
-    ON family_invitations (household_id, lower(invitee_email), target_profile_ref)
-    WHERE status = 'pending';
+CREATE UNIQUE INDEX uq_family_invitations_profile_ref_lifetime
+    ON family_invitations (household_id, target_profile_ref);
 
 CREATE INDEX ix_family_invitations_invitee_status
     ON family_invitations (lower(invitee_email), status, created_at DESC);
@@ -164,9 +163,8 @@ CREATE UNIQUE INDEX uq_profile_links_one_active_profile_per_account_household
     ON profile_links (household_id, account_id)
     WHERE status = 'active';
 
-CREATE UNIQUE INDEX uq_profile_links_one_active_account_per_profile
-    ON profile_links (household_id, local_profile_ref)
-    WHERE status = 'active';
+CREATE UNIQUE INDEX uq_profile_links_profile_ref_lifetime
+    ON profile_links (household_id, local_profile_ref);
 
 CREATE INDEX ix_profile_links_account_status
     ON profile_links (account_id, status);
@@ -267,8 +265,8 @@ COMMENT ON TABLE service_accounts IS '최소 서비스 계정. 건강기록의 �
 COMMENT ON TABLE households IS '가족 초대와 계정 연결을 묶는 서버 컨테이너. 가족 이름이나 건강정보를 저장하지 않는다.';
 COMMENT ON TABLE household_memberships IS '서비스 계정의 가정 참여 상태. 건강정보 접근 권한을 의미하지 않는다.';
 COMMENT ON TABLE family_invitations IS '서비스 계정 초대 상태와 불투명 로컬 프로필 참조값만 저장한다.';
-COMMENT ON COLUMN family_invitations.target_profile_ref IS '무작위 불투명 참조값. 이름, 관계, 생년 또는 건강정보를 인코딩하지 않는다.';
-COMMENT ON TABLE profile_links IS '서비스 계정과 불투명 로컬 프로필 참조값의 연결. 실제 프로필은 브라우저에만 존재한다.';
+COMMENT ON COLUMN family_invitations.target_profile_ref IS '한 연결 생명주기에만 사용하는 무작위 불투명 참조값. 이름, 관계, 생년 또는 건강정보를 인코딩하지 않는다.';
+COMMENT ON TABLE profile_links IS '서비스 계정과 연결 생명주기 단위 불투명 로컬 프로필 참조값의 연결. 종료 행은 참조값 재사용 방지를 위해 보존한다.';
 COMMENT ON TABLE registered_devices IS '후순위 WebRTC 기술검증용 공개 연결정보. 건강정보 또는 암호화 건강파일을 저장하지 않는다.';
 COMMENT ON TABLE account_audit_events IS '계정·구독·초대 메타데이터 감사 로그. metadata에 건강정보를 넣는 것을 금지한다.';
 

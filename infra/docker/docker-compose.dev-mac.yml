@@ -1,0 +1,164 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:?DB_USER is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:?DB_NAME is required}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8
+      TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # 기본값은 admin Mac 자신만 접근한다. 팀 공유가 필요할 때만 dev.env의
+    # DEV_DB_BIND_HOST를 이 Mac의 Tailscale IPv4로 지정한다. 0.0.0.0 금지.
+    ports:
+      - "${DEV_DB_BIND_HOST:-127.0.0.1}:${DEV_DB_PORT:-15432}:5432"
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # 개발용 초대 메일 수신함. Web UI만 명시한 Tailscale 인터페이스에
+  # 공개할 수 있으며 SMTP 포트는 호스트에 노출하지 않는다.
+  mailpit:
+    # Mailpit 공식 릴리스는 Docker Hub와 GHCR에 같은 이미지를 게시한다.
+    # admin Mac에서 Docker Hub credential helper가 멈춘 이력이 있어 GHCR을 사용하고
+    # 다중 아키텍처 index digest까지 고정한다. 배포 스크립트가 빈 Docker config로
+    # 먼저 익명 pull하므로 Compose는 자격증명 도우미를 다시 호출하지 않는다.
+    image: ${MAILPIT_IMAGE:-ghcr.io/axllent/mailpit:v1.30.6@sha256:7f33095f80e901f6ad08028f06ca284aa58fe84942be5496008d041d3b9f4d4d}
+    pull_policy: never
+    restart: unless-stopped
+    ports:
+      - "${DEV_MAILPIT_BIND_HOST:-127.0.0.1}:${DEV_MAILPIT_WEB_PORT:-8025}:8025"
+    networks:
+      - app
+
+  migrate:
+    image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
+    command: ["uv", "run", "--no-sync", "alembic", "upgrade", "head"]
+    environment: &app_environment
+      ENV: dev
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:?DB_USER is required}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_NAME: ${DB_NAME:?DB_NAME is required}
+      DB_TEST_NAME: ${DB_TEST_NAME:-ai_health_test}
+      REDIS_URL: redis://redis:6379/0
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-["http://localhost:8080"]}
+      REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-ieobom_refresh}
+      REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-false}
+      REFRESH_COOKIE_SAMESITE: ${REFRESH_COOKIE_SAMESITE:-lax}
+      API_ERROR_INCLUDE_DETAILS: ${API_ERROR_INCLUDE_DETAILS:-false}
+    networks:
+      - app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: "no"
+
+  fastapi:
+    image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
+    build:
+      context: ../..
+      dockerfile: app/Dockerfile
+    restart: unless-stopped
+    environment: *app_environment
+    networks:
+      - app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/openapi.json', timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  email-worker:
+    image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
+    command: ["uv", "run", "--no-sync", "python", "-m", "app.workers.invitation_email_worker"]
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@ieobom.local}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-이어봄}
+      SMTP_USE_TLS: "false"
+      SMTP_USE_STARTTLS: "false"
+      INVITATION_WEB_ORIGIN: ${INVITATION_WEB_ORIGIN:-http://127.0.0.1:8080}
+    networks:
+      - app
+    depends_on:
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  frontend:
+    image: ieobom-dev-frontend:${DEPLOY_VERSION:-local}
+    build:
+      context: ../..
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  nginx:
+    image: nginx:1.29-alpine
+    restart: unless-stopped
+    volumes:
+      - ../nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "${DEV_HTTP_PORT:-8080}:80"
+    networks:
+      - app
+    depends_on:
+      fastapi:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  app:
+    driver: bridge

@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - dev
       - develop
       - 'release/*'
       - 'hotfix/*'
@@ -11,9 +12,14 @@ on:
     # feature 브랜치는 보통 develop으로 PR을 생성하기 때문에 develop이 target 브랜치에 포함되어 있다면 별도로 적지 않아도 됩니다.
     branches:
       - main
+      - dev
       - develop
       - 'release/*'
       - 'hotfix/*'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
 
 # uv는 .python-version(3.10)을 우선하므로, setup-python이 3.13을 깔아도
 # 조용히 3.10 환경이 만들어진다. 배포 이미지가 python:3.13-slim이라
@@ -22,6 +28,40 @@ env:
   UV_PYTHON: '3.13'
 
 jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend lint
+        run: npm run lint
+
+      - name: Run frontend type check
+        run: npm run typecheck
+
+      - name: Run frontend unit tests
+        run: npm test
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Verify local model network boundary
+        run: npm run test:e2e
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -106,10 +146,10 @@ jobs:
         id: check_tests
         # tests 폴더나 test_*.py 파일이 있는지 확인
         run: |
-          if [ -d "tests" ] || [ $(find . -name "test_*.py" | wc -l) -gt 0 ]; then
-            echo "has_tests=true" >> $GITHUB_OUTPUT
+          if [ -d "tests" ] || [ "$(find . -name "test_*.py" | wc -l)" -gt 0 ]; then
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_tests=false" >> $GITHUB_OUTPUT
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Apply migrations
@@ -125,3 +165,78 @@ jobs:
         run: |
           uv run coverage run -m pytest app
           uv run coverage report -m
+
+  deploy-dev-admin-mac:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs:
+      - frontend
+      - lint
+      - test
+    runs-on:
+      - self-hosted
+      - macOS
+      - ieobom-admin
+    environment: admin-macbook-dev
+    timeout-minutes: 45
+    env:
+      IEOBOM_ENV_FILE: ${{ vars.IEOBOM_DEV_ENV_FILE }}
+      IEOBOM_HTTP_PORT: ${{ vars.IEOBOM_DEV_HTTP_PORT }}
+      IEOBOM_DEV_TAILSCALE_HOST: ${{ vars.IEOBOM_DEV_TAILSCALE_HOST }}
+      IEOBOM_DEV_INVITATION_WEB_ORIGIN: ${{ vars.IEOBOM_DEV_INVITATION_WEB_ORIGIN }}
+      IEOBOM_DEV_CORS_ALLOW_ORIGINS: ${{ vars.IEOBOM_DEV_CORS_ALLOW_ORIGINS }}
+      IEOBOM_DEV_REFRESH_COOKIE_SECURE: ${{ vars.IEOBOM_DEV_REFRESH_COOKIE_SECURE }}
+      DEPLOY_SHA: ${{ github.sha }}
+    steps:
+      - name: Check out the exact dev revision that passed CI
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify deployment revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          if [[ "${checked_out_sha}" != "${DEPLOY_SHA}" ]]; then
+            echo "Expected ${DEPLOY_SHA}, checked out ${checked_out_sha}" >&2
+            exit 1
+          fi
+          echo "Deploying ${checked_out_sha}"
+
+      - name: Locate Docker Desktop CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v docker >/dev/null 2>&1; then
+            exit 0
+          fi
+          docker_cli_dir="/Applications/Docker.app/Contents/Resources/bin"
+          if [[ ! -x "${docker_cli_dir}/docker" ]]; then
+            echo "Docker Desktop CLI was not found at ${docker_cli_dir}." >&2
+            exit 1
+          fi
+          echo "${docker_cli_dir}" >> "$GITHUB_PATH"
+
+      - name: Deploy dev stack
+        shell: bash
+        timeout-minutes: 10
+        run: ./scripts/deploy_admin_mac.sh
+
+      - name: Show service logs after a failed deployment
+        if: failure()
+        shell: bash
+        run: |
+          env_file="${IEOBOM_ENV_FILE:-$HOME/.config/ieobom/dev.env}"
+          docker compose \
+            --project-name ieobom-dev \
+            --env-file "${env_file}" \
+            --file infra/docker/docker-compose.dev-mac.yml \
+            ps || true
+          docker compose \
+            --project-name ieobom-dev \
+            --env-file "${env_file}" \
+            --file infra/docker/docker-compose.dev-mac.yml \
+            logs --tail 200 fastapi frontend nginx migrate mailpit email-worker || true
