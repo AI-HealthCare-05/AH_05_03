@@ -21,6 +21,8 @@ dependencies = [
     "seaborn>=0.13.2",
     "tomlkit>=0.14.0",
     "typing-extensions>=4.15.0",
+    # 학습 전용. 서빙은 순수 파이썬 JSON 순회라 런타임 의존이 없다.
+    "xgboost>=3.0",
 ]
 
 [dependency-groups]
@@ -72,6 +74,9 @@ markers = ["redis: 실제 Redis 서버가 필요한 통합 테스트"]
 [tool.ruff]
 line-length = 120
 target-version = "py310"
+# 가져온 코드는 우리 린트 규칙으로 고치지 않는다. 한 글자라도 바꾸면 "팀원의 엔진과
+# 비교"가 아니라 "내가 고친 엔진과 비교"가 된다. chronic_disease_engine/PROVENANCE.md 참조.
+extend-exclude = ["chronic_disease_engine"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "C90", "B", "UP", "N"]
@@ -89,4 +94,10 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.mypy]
-exclude = ["app/core/db/migrations/"]
+exclude = ["app/core/db/migrations/", "chronic_disease_engine/"]
+
+# sklearn·tabpfn 은 py.typed 마커가 없고, schema 는 modeling/data 를 sys.path 에
+# 얹어 부르는 지역 모듈이라 mypy 가 경로로 찾지 못한다.
+[[tool.mypy.overrides]]
+module = ["sklearn.*", "tabpfn.*", "schema"]
+ignore_missing_imports = true

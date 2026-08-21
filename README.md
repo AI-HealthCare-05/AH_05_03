@@ -31,8 +31,16 @@
 | [docs/10_local_data_contract.md](docs/10_local_data_contract.md) | IndexedDB·OPFS·Web Crypto 기반 로컬 도메인 API와 백업 포맷 | 전체 |
 | [docs/11_local_model_runtime_implementation.md](docs/11_local_model_runtime_implementation.md) | Python 참조 모델 격리, 브라우저 로컬 추론과 Rust/WASM·ONNX 전환 구현 기준 | 데이터·ML·프론트엔드 |
 | [docs/13_screen_api_implementation_map.md](docs/13_screen_api_implementation_map.md) | 제품 화면별 서버 REST API·로컬 도메인 구현 연결 현황 | 전체 |
+| [docs/14_multi_disease_datasets.md](docs/14_multi_disease_datasets.md) | 다질환 확장에 쓸 공개 데이터셋 조사와 채택·기각 근거 | 데이터·ML |
 | [docs/15_mailpit_invitation_email_testing.md](docs/15_mailpit_invitation_email_testing.md) | Mailpit·Redis Stream 이메일 워커 기반 가족 초대 개발·테스트 가이드 | 백엔드·프론트엔드 |
 | [docs/16_ocr_cloud_baseline_local_replacement_challenge.md](docs/16_ocr_cloud_baseline_local_replacement_challenge.md) | Naver OCR 기준선과 브라우저·기기 로컬 OCR/VLM 대체 챌린지 | 데이터·ML·프론트엔드 |
+| [docs/18_core_feature_gap_and_mentoring_action_plan.md](docs/18_core_feature_gap_and_mentoring_action_plan.md) | 핵심 피처 공백 분석과 멘토링 실행 계획 | 전체 |
+| [docs/19_multi_disease_model_results.md](docs/19_multi_disease_model_results.md) | **10개 질환 × 2개 tier 학습 결과와 4계층 평가 지표 전문** | 데이터·ML |
+| [docs/20_prediction_inputs_and_levers.md](docs/20_prediction_inputs_and_levers.md) | **예측 최소 입력 4문항 + 위험도를 내리는 지렛대 측정 결과** | 데이터·ML |
+| [docs/21_modeling_overview.md](docs/21_modeling_overview.md) | **모델링 전체 개요 — 사용 데이터셋, 작업 내역, 이어받을 작업** | 데이터·ML |
+| [docs/22_two_engines_comparison.md](docs/22_two_engines_comparison.md) | **규칙 엔진 ↔ ML 모델 실측 비교와 데모 두 화면** | 데이터·ML |
+| [docs/23_multi_disease_model_design.md](docs/23_multi_disease_model_design.md) | 다질환 모델 설계 — 타깃 정의, 누출 차단, tier 분리 | 데이터·ML |
+| [docs/24_ocr_implementation_alignment.md](docs/24_ocr_implementation_alignment.md) | OCR 챌린지 구현 정렬·개발 진행 설계 | 데이터·ML·백엔드 |
 | [docs/adr/0001-web-local-first-architecture.md](docs/adr/0001-web-local-first-architecture.md) | 데스크톱 앱에서 웹 기반 로컬 우선 서비스로 전환한 아키텍처 결정 | 전체 |
 | [docs/adr/0002-separate-server-api-and-local-domain-contract.md](docs/adr/0002-separate-server-api-and-local-domain-contract.md) | 서버 REST API와 브라우저 Local Domain API를 분리한 아키텍처 결정 | 전체 |
 | [docs/adr/0003-web-authentication-token-transport.md](docs/adr/0003-web-authentication-token-transport.md) | Access JWT와 HttpOnly Refresh Cookie를 선택한 인증 결정 | 전체 |

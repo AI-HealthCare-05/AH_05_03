@@ -1,0 +1,545 @@
+"""질환 8개 × 입력 tier 2개 × 모델 2종을 같은 홀드아웃에서 재는 하네스.
+
+답하려는 질문은 두 개다.
+
+**하나. 질환을 늘릴 수 있는가.** 당뇨·고혈압 말고 이상지질혈증·대사증후군·
+신기능·지방간·빈혈을 NHANES 로 라벨링할 수 있다. 새로 받은 데이터는 없고
+이미 내려받아 둔 8개 주기 안에 있던 파일을 읽었을 뿐이다. 각 타깃이 실제로
+학습되는지, 판별력이 화면에 올릴 만한지를 여기서 잰다.
+
+**둘. 검사값을 특징으로 넣으면 성능이 오르는가.** 지금 서빙 모델은 검사값 중
+혈압만 받는다. 그런데 라벨 누출 차단 집합은 질환마다 다르다 — 당뇨 라벨은
+공복혈당·HbA1c 로 정의되므로 지질·간효소·요산·혈색소는 **막을 이유가 없다.**
+막지 않아도 되는 검사값을 한 번도 넣어 본 적이 없다는 것이 이 실험의 출발점이다.
+
+    ../.venv/Scripts/python.exe train_multi.py
+    ../.venv/Scripts/python.exe train_multi.py --target dm htn dlp
+    ../.venv/Scripts/python.exe train_multi.py --models logistic
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "data"))
+
+from metrics import evaluate, selection_score
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.isotonic import IsotonicRegression
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from splits import SEED, cv_folds, make_split
+from targets import CATEGORICAL, DERIVED, TARGETS, Target
+
+DATA = Path(__file__).resolve().parent / "data" / "processed" / "nhanes_pooled.csv"
+ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
+
+AGE_EDGES = [19, 40, 50, 60, 70, 200]
+AGE_LABELS = ["19-40", "40-50", "50-60", "60-70", "70+"]
+
+# 최소 표본. 이보다 작은 셀의 AUROC 는 숫자로 남기지 않는다 — 보고하면
+# 반드시 누군가 인용하고, 그 인용은 노이즈다.
+MIN_EVAL_ROWS = 150
+MIN_POSITIVES = 15
+
+# --drop 으로 채워지는 전역. 특징 하나를 빼면 얼마를 잃는지 재려고 둔다.
+#
+# 주관적 건강이 이 손잡이가 필요한 이유: 역학에서 가장 강한 예측변수 중 하나인데
+# 동시에 **자가보고**다. 같은 사람이 날마다 다르게 답하고, "몸이 안 좋다"가
+# 위험도를 올린다는 결과는 사용자가 이미 아는 것을 되돌려 줄 뿐이다. 빼는 게
+# 맞는지는 취향이 아니라 손실 폭으로 정한다.
+DROPPED: set[str] = set()
+
+
+# ---------------------------------------------------------------------------
+# 특징
+# ---------------------------------------------------------------------------
+
+
+def _ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
+    """0 과 음수 분모는 결측으로. 검사값에 0 이 오는 건 미측정이지 값이 아니다."""
+    safe = denominator.where(denominator > 0)
+    return numerator / safe
+
+
+def build_frame(source: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    """요청된 컬럼만 담은 설계용 프레임. 파생 비율은 여기서 계산한다."""
+    raw_needed = {c for c in columns if c not in DERIVED}
+    for name in columns:
+        raw_needed.update(DERIVED.get(name, ()))
+
+    frame = pd.DataFrame(index=source.index)
+    for column in sorted(raw_needed):
+        series = source[column]
+        frame[column] = series if column in CATEGORICAL else pd.to_numeric(series, errors="coerce")
+
+    if "tg_hdl_ratio" in columns:
+        frame["tg_hdl_ratio"] = _ratio(frame["triglyceride"], frame["hdl"])
+    if "non_hdl" in columns:
+        frame["non_hdl"] = frame["total_chol"] - frame["hdl"]
+    if "ast_alt_ratio" in columns:
+        frame["ast_alt_ratio"] = _ratio(frame["ast"], frame["alt"])
+    if "waist_height_ratio" in columns:
+        frame["waist_height_ratio"] = _ratio(frame["waist_cm"], frame["height_cm"])
+
+    frame = frame[columns]
+    for column in columns:
+        if column in CATEGORICAL:
+            frame[column] = frame[column].astype("object").fillna("__missing__").astype(str)
+    return frame
+
+
+# 방향이 임상적으로 정해져 있고 제품이 계약으로 삼는 특징.
+#
+# 주관적 건강이 나빠지면 위험이 올라가야 한다. 이건 데이터에 맡길 문제가 아니다 —
+# 표본의 작은 요철 때문에 "매우 좋음"이 "좋음"보다 위험하게 학습되면, 사용자가
+# 설문에서 자기 건강을 더 좋게 답했을 때 숫자가 나빠진다. 제품으로서 설명할 수
+# 없는 동작이고, 실제로 트리 모델에서 그 역전이 나왔다.
+#
+# 나이·BMI 는 넣지 않는다. 방향이 뚜렷해 보이지만 타깃마다 다르다 — 빈혈은 BMI 가
+# 높을수록 유병률이 낮고, 지방간은 고령에서 오히려 떨어진다. 틀린 제약은 제약이
+# 없느니만 못하다.
+MONOTONE: dict[str, int] = {"self_rated_health": 1}
+
+
+def monotone_vector(frame: pd.DataFrame, numeric: list[str], categorical: list[str]) -> tuple[int, ...] | None:
+    """설계 행렬 순서에 맞춘 단조 제약 벡터.
+
+    XGBoost 는 열 이름이 아니라 위치로 제약을 읽고, 벡터가 특징 수보다 길면
+    거부한다. 원핫 폭을 미리 세려고 하면 학습에 실제로 등장한 범주 수를 맞혀야
+    하는데 폴드마다 달라질 수 있다 — 한 번 어긋나서 학습이 통째로 죽었다.
+
+    그래서 세지 않는다. 제약이 걸린 마지막 위치까지만 벡터를 만들고 자른다.
+    XGBoost 는 짧은 벡터를 허용하고 나머지를 제약 없음으로 읽으며, 제약 대상은
+    전부 numeric 블록(설계 행렬 앞쪽)에 있으므로 원핫 자리에는 닿지 않는다.
+    """
+    _ = frame, categorical
+    directions = [MONOTONE.get(name, 0) for name in numeric]
+    if not any(directions):
+        return None
+    last = max(index for index, value in enumerate(directions) if value)
+    return tuple(directions[: last + 1])
+
+
+def make_pipeline(
+    numeric: list[str], categorical: list[str], model: str, monotone: tuple[int, ...] | None = None
+) -> Pipeline:
+    """결측 지시자를 쓰지 않는다.
+
+    "이 질문을 건너뛰었다"가 특징이 되면, 사용자가 선택 항목 하나를 비우는
+    행위만으로 확률이 튄다. 빈칸은 '평균이라고 가정'이라는 뜻이어야 한다.
+    """
+    steps: list[tuple[str, Any]] = [
+        (
+            "preprocess",
+            ColumnTransformer(
+                [
+                    (
+                        "numeric",
+                        Pipeline(
+                            [
+                                ("impute", SimpleImputer(strategy="median", add_indicator=False)),
+                                ("scale", StandardScaler()),
+                            ]
+                        ),
+                        numeric,
+                    ),
+                    ("categorical", OneHotEncoder(handle_unknown="ignore", drop="first"), categorical),
+                ]
+            ),
+        )
+    ]
+
+    if model == "logistic":
+        steps.append(("model", LogisticRegression(max_iter=5000, C=0.1, random_state=SEED)))
+    elif model == "xgboost":
+        from xgboost import XGBClassifier
+
+        # EXPERIMENTS_REPORT.md 4장에서 튜닝한 설정. 기본값(depth 4, 400트리)은
+        # 이 표본 크기에 과하다.
+        steps.append(
+            (
+                "model",
+                XGBClassifier(
+                    n_estimators=200,
+                    max_depth=3,
+                    min_child_weight=50,
+                    learning_rate=0.05,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    reg_lambda=1.0,
+                    eval_metric="logloss",
+                    random_state=SEED,
+                    n_jobs=4,
+                    **({"monotone_constraints": monotone} if monotone else {}),
+                ),
+            )
+        )
+    elif model == "catboost":
+        # 비교 실험용 분기다 (`compare_catboost.py`). 기본 경로에서는 쓰지 않으므로
+        # import 도 여기서만 한다 — catboost 가 없는 환경에서 하네스가 죽지 않는다.
+        from catboost import CatBoostClassifier
+
+        steps.append(
+            (
+                "model",
+                CatBoostClassifier(
+                    iterations=400,
+                    depth=6,
+                    learning_rate=0.05,
+                    l2_leaf_reg=3.0,
+                    random_seed=SEED,
+                    verbose=0,
+                    allow_writing_files=False,
+                    **({"monotone_constraints": list(monotone)} if monotone else {}),
+                ),
+            )
+        )
+    else:
+        raise ValueError(f"알 수 없는 모델: {model}")
+
+    return Pipeline(steps)
+
+
+# ---------------------------------------------------------------------------
+# 확률 보정
+# ---------------------------------------------------------------------------
+#
+# 판별력과 보정은 다른 문제다. 순위를 아무리 잘 매겨도 확률이 틀리면 화면의
+# 숫자가 틀리고, 이 제품은 확률에서 백분위·등급·경보가 전부 파생된다. GBDT 는
+# 로지스틱보다 순위는 잘 매기지만 확률이 중앙으로 몰리는 성질이 있어서
+# (보정 기울기 1.1~1.2) 보정을 붙이지 않으면 지표 묶음의 확률 층에서 진다.
+
+
+def score(y: np.ndarray, p: np.ndarray) -> dict | None:
+    return evaluate(y, p, min_rows=MIN_EVAL_ROWS, min_positives=MIN_POSITIVES)
+
+
+def _out_of_fold(frame: pd.DataFrame, y: pd.Series, numeric, categorical, model: str, monotone=None) -> np.ndarray:
+    """학습 구간의 out-of-fold 예측.
+
+    보정을 인샘플 예측에 맞추면 모델 자신의 낙관을 학습하게 되고, 홀드아웃에서는
+    아무것도 나아지지 않는다. 보정기는 모델이 본 적 없는 행에서 적합해야 한다.
+    """
+    predictions = np.zeros(len(y))
+    for train_rows, valid_rows in cv_folds(y).split(frame, y):
+        fold = make_pipeline(numeric, categorical, model, monotone).fit(frame.iloc[train_rows], y.iloc[train_rows])
+        predictions[valid_rows] = fold.predict_proba(frame.iloc[valid_rows])[:, 1]
+    return predictions
+
+
+def _logit(p: np.ndarray) -> np.ndarray:
+    clipped = np.clip(p, 1e-6, 1 - 1e-6)
+    return np.log(clipped / (1 - clipped))
+
+
+def fit_calibrator(
+    frame: pd.DataFrame, y: pd.Series, numeric, categorical, model: str, monotone=None
+) -> dict[str, Any]:
+    """Platt 와 isotonic 을 둘 다 적합하고 out-of-fold ECE 가 낮은 쪽을 고른다.
+
+    둘의 성질이 다르다. Platt 은 로짓에 직선 하나를 얹는 두 모수짜리라 표본이
+    적어도 안정적이지만 휘어진 오차는 못 편다. Isotonic 은 단조 계단함수라
+    무엇이든 맞출 수 있는 대신 표본이 적으면 계단이 데이터 잡음을 따라간다.
+    어느 쪽이 나은지는 타깃마다 다르므로 미리 정하지 않고 매번 잰다.
+
+    둘 다 단조 변환이라 **AUROC 와 백분위 순위는 어느 쪽을 골라도 변하지 않는다.**
+    바뀌는 것은 Brier·ECE 뿐이고, 그게 이 단계가 노리는 것이다.
+    """
+    from metrics import expected_calibration_error
+
+    predicted = _out_of_fold(frame, y, numeric, categorical, model, monotone)
+    target = y.to_numpy()
+
+    platt = LogisticRegression(max_iter=1000).fit(_logit(predicted).reshape(-1, 1), target)
+    platt_out = 1.0 / (1.0 + np.exp(-(platt.coef_[0][0] * _logit(predicted) + platt.intercept_[0])))
+
+    isotonic = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0).fit(predicted, target)
+    isotonic_out = isotonic.predict(predicted)
+
+    candidates = {
+        "platt": (
+            expected_calibration_error(target, platt_out)[0],
+            {"a": float(platt.coef_[0][0]), "b": float(platt.intercept_[0])},
+        ),
+        "isotonic": (
+            expected_calibration_error(target, isotonic_out)[0],
+            {
+                "x": [round(float(v), 6) for v in isotonic.X_thresholds_],
+                "y": [round(float(v), 6) for v in isotonic.y_thresholds_],
+            },
+        ),
+        "none": (expected_calibration_error(target, predicted)[0], {}),
+    }
+    chosen = min(candidates, key=lambda name: candidates[name][0])
+    return {
+        "method": chosen,
+        "parameters": candidates[chosen][1],
+        "out_of_fold_ece": {name: round(value, 5) for name, (value, _) in candidates.items()},
+    }
+
+
+def apply_calibrator(probability: np.ndarray, calibrator: dict[str, Any]) -> np.ndarray:
+    method, parameters = calibrator["method"], calibrator["parameters"]
+    if method == "platt":
+        return 1.0 / (1.0 + np.exp(-(parameters["a"] * _logit(probability) + parameters["b"])))
+    if method == "isotonic":
+        return np.interp(probability, parameters["x"], parameters["y"])
+    return probability
+
+
+# ---------------------------------------------------------------------------
+# 실행
+# ---------------------------------------------------------------------------
+
+
+def lab_present(source: pd.DataFrame, lab_columns: list[str]) -> pd.Series:
+    """검진 결과지를 실제로 가진 행.
+
+    한 컬럼만 보고 판정하지 않는다. 지질 4종 중 LDL·중성지방은 공복 채혈
+    하위표본에만 있어서 그 둘로 자르면 표본이 반으로 준다. 반대로 총콜레스테롤
+    하나만 보면 생화학 검사를 안 받은 행이 섞인다. 그래서 비율로 자른다.
+    """
+    if not lab_columns:
+        return pd.Series(True, index=source.index)
+    filled = source[lab_columns].notna().mean(axis=1)
+    return filled >= 0.6
+
+
+def run_one(
+    data: pd.DataFrame,
+    target: Target,
+    tier: str,
+    model: str,
+    *,
+    restrict_to_lab_rows: bool = False,
+    label_tier: str | None = None,
+) -> dict[str, Any] | None:
+    """한 (타깃, tier, 모델) 조합을 학습하고 홀드아웃에서 잰다.
+
+    ``restrict_to_lab_rows`` 는 basic 모델을 검사값 보유자만으로 평가할 때 쓴다.
+    정밀형의 이득은 "검사값을 낸 사람에게 얼마나 더 잘 맞히는가"이지 전체 인구
+    평균이 아니다. 두 tier 를 서로 다른 사람들 위에서 비교하면 그 차이가 모델
+    성능이 아니라 표본 구성 차이를 재게 된다.
+    """
+    columns = [c for c in target.features(tier) if c not in DROPPED]
+    # 파생 비율은 재료가 이미 이 목록에 있으므로 보유 판정에서 뺀다.
+    basic_columns = set(target.features("basic"))
+    lab_columns = [c for c in target.features("lab") if c not in basic_columns and c not in DERIVED]
+
+    label = data[target.label].astype("boolean")
+    usable = label.notna()
+    if tier == "lab" or restrict_to_lab_rows:
+        usable = usable & lab_present(data, lab_columns)
+    if int(usable.sum()) < 500:
+        return None
+
+    subset = data.loc[usable]
+    frame = build_frame(subset, columns)
+    y = label[usable].astype(int)
+
+    cycle = subset["cycle"].astype(str)
+    cycle.index = frame.index
+    try:
+        split = make_split(cycle, target.holdout_cycle)
+    except ValueError:
+        return None
+    if len(split.holdout_index) < MIN_EVAL_ROWS or len(split.train_index) < 500:
+        return None
+
+    numeric = [c for c in columns if c not in CATEGORICAL]
+    categorical = [c for c in columns if c in CATEGORICAL]
+
+    monotone = monotone_vector(frame, numeric, categorical) if model == "xgboost" else None
+    pipeline = make_pipeline(numeric, categorical, model, monotone)
+    pipeline.fit(frame.loc[split.train_index], y.loc[split.train_index])
+    raw = pipeline.predict_proba(frame.loc[split.holdout_index])[:, 1]
+    y_holdout = y.loc[split.holdout_index].to_numpy()
+
+    calibrator = fit_calibrator(
+        frame.loc[split.train_index], y.loc[split.train_index], numeric, categorical, model, monotone
+    )
+    probability = apply_calibrator(raw, calibrator)
+
+    uncalibrated = score(y_holdout, raw)
+    calibrated = score(y_holdout, probability)
+
+    entry: dict[str, Any] = {
+        "target": target.key,
+        "name": target.name,
+        "tier": label_tier or tier,
+        "model": model,
+        "evaluated_on": "검사값 보유자" if (tier == "lab" or restrict_to_lab_rows) else "전체",
+        "n_features": len(columns),
+        "features": columns,
+        "train_rows": int(len(split.train_index)),
+        "train_cycles": split.train_cycles,
+        "holdout_cycle": split.holdout_cycle,
+        "calibration": calibrator,
+        # 보정 전후를 둘 다 남긴다. 보정이 판별력 문제를 가리는 위장이 아니라는
+        # 것을 보이려면 "보정 전후 AUROC 가 같다"를 숫자로 확인할 수 있어야 한다.
+        "overall_uncalibrated": uncalibrated,
+        "overall": calibrated,
+    }
+    if calibrated:
+        entry["selection"] = selection_score(calibrated)
+
+    # 미진단자만. 이미 진단받은 사람을 맞히는 건 쉽고 값어치가 없다 —
+    # 제품이 찾아야 하는 사람은 자기가 그 질환인 줄 모르는 사람이다.
+    # 남기는 집합은 음성 + 미진단 양성이고, 진단받은 양성은 통째로 뺀다.
+    # diagnose_targets.py 와 같은 규칙이라 두 리포트의 숫자를 나란히 놓을 수 있다.
+    if target.undiagnosed_label and target.undiagnosed_label in subset.columns:
+        prevalent = y.loc[split.holdout_index]
+        undiagnosed = subset.loc[split.holdout_index, target.undiagnosed_label].astype("boolean")
+        keep = (undiagnosed.notna() & ~(prevalent.eq(1) & undiagnosed.ne(True))).to_numpy()
+        entry["undiagnosed"] = score(undiagnosed[keep].astype(int).to_numpy(), probability[keep])
+
+    age = pd.to_numeric(subset.loc[split.holdout_index, "age"], errors="coerce")
+    band = pd.cut(age, AGE_EDGES, labels=AGE_LABELS, right=False)
+    entry["by_age"] = {
+        name: score(y_holdout[band.eq(name).to_numpy()], probability[band.eq(name).to_numpy()]) for name in AGE_LABELS
+    }
+    sex = subset.loc[split.holdout_index, "sex"].astype(str)
+    entry["by_sex"] = {
+        value: score(y_holdout[sex.eq(value).to_numpy()], probability[sex.eq(value).to_numpy()]) for value in ("M", "F")
+    }
+
+    if model == "logistic":
+        names = list(pipeline.named_steps["preprocess"].get_feature_names_out())
+        weights = pipeline.named_steps["model"].coef_[0]
+        entry["coefficients"] = {
+            name.split("__", 1)[-1]: round(float(w), 4)
+            for name, w in sorted(zip(names, weights, strict=True), key=lambda kv: -abs(kv[1]))
+        }
+
+    return entry
+
+
+HEADER = (
+    f"  {'구성':<11}{'모델':<10}{'변수':>4}{'AUROC':>8}{'AUPRC×':>8}{'Brier':>8}"
+    f"{'BSS':>7}{'ECE':>8}{'기울기':>7}{'상위10% PPV':>12}{'민감도':>8}{'MCC':>7}  보정"
+)
+
+
+def show(entry: dict[str, Any], baseline: dict[str, Any] | None) -> None:
+    overall = entry["overall"]
+    if overall is None:
+        print(f"  {entry['tier']:<11}{entry['model']:<10} 표본 부족")
+        return
+    delta = ""
+    if baseline and baseline.get("overall"):
+        delta = f" ({overall['auroc'] - baseline['overall']['auroc']:+.3f})"
+    top10 = overall["operating_points"]["top_10pct"]
+    gate = "" if entry.get("selection", {}).get("calibration_ok", True) else "  ← 보정 탈락"
+    print(
+        f"  {entry['tier']:<11}{entry['model']:<10}{entry['n_features']:>4}"
+        f"{overall['auroc']:>8.3f}{overall['auprc_lift']:>8.2f}{overall['brier']:>8.4f}"
+        f"{overall['brier_skill']:>7.3f}{overall['ece']:>8.4f}{overall['calibration_slope']:>7.2f}"
+        f"{top10['ppv']:>12.3f}{top10['sensitivity']:>8.3f}{top10['mcc']:>7.3f}"
+        f"  {entry['calibration']['method']}{delta}{gate}"
+    )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data", type=Path, default=DATA)
+    parser.add_argument("--target", nargs="*", default=list(TARGETS))
+    parser.add_argument("--tiers", nargs="*", default=["basic", "lab"])
+    parser.add_argument("--models", nargs="*", default=["logistic", "xgboost"])
+    parser.add_argument("--drop", nargs="*", default=[], help="이 특징을 빼고 학습한다")
+    parser.add_argument("--out", type=Path, default=ARTIFACTS / "multi_target_results.json")
+    args = parser.parse_args()
+
+    DROPPED.update(args.drop)
+    data = pd.read_csv(args.data, low_memory=False)
+    print(f"data: {args.data.name}  rows={len(data)}" + (f"  제외: {', '.join(args.drop)}" if args.drop else "") + "\n")
+
+    results: list[dict[str, Any]] = []
+    for key in args.target:
+        target = TARGETS[key]
+        labelled = int(data[target.label].astype("boolean").notna().sum())
+        positives = int(data[target.label].astype("boolean").sum(skipna=True))
+        print("=" * 120)
+        print(
+            f"{target.key} — {target.name}  "
+            f"라벨 {labelled:,}행 / 양성 {positives:,} ({positives / max(labelled, 1):.1%})  "
+            f"차단 {len(target.blocked)}개"
+        )
+        print(f"  정의: {target.definition}")
+        print("=" * 120)
+        print(HEADER)
+
+        # 세 줄을 나란히 놓아야 정밀형의 이득이 읽힌다.
+        #   basic      전체 인구, 검사값 없음        — 지금 서빙 중인 것
+        #   basic@lab  검사값 보유자, 검사값 미사용  — 정밀형과 같은 사람들
+        #   lab        검사값 보유자, 검사값 사용    — 정밀형
+        # 이득은 lab − basic@lab 이다. lab − basic 은 표본 구성 차이가 섞인다.
+        plans: list[tuple[str, dict[str, Any]]] = [("basic", {})]
+        if "lab" in target.tiers and "lab" in args.tiers:
+            plans.append(("basic", {"restrict_to_lab_rows": True, "label_tier": "basic@lab"}))
+            plans.append(("lab", {}))
+        plans = [(tier, options) for tier, options in plans if tier in args.tiers or options.get("label_tier")]
+
+        comparison: dict[str, Any] | None = None
+        for tier, options in plans:
+            for model in args.models:
+                entry = run_one(data, target, tier, model, **options)
+                if entry is None:
+                    print(f"  {options.get('label_tier', tier):<10}{model:<10} 건너뜀 (표본 부족)")
+                    continue
+                if entry["tier"] == "basic@lab" and model == "logistic":
+                    comparison = entry
+                show(entry, comparison if entry["tier"] == "lab" else None)
+                results.append(entry)
+        print()
+
+    summarise(results)
+
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"\nwrote {args.out}")
+    return 0
+
+
+def summarise(results: list[dict[str, Any]]) -> None:
+    """타깃마다 지표 묶음으로 한 구성을 고르고, 그 이유를 같이 적는다.
+
+    AUROC 최고를 고르지 않는다. 보정 게이트(ECE·기울기·Brier skill)를 먼저
+    통과해야 하고, 통과한 것들 사이에서 AUPRC 리프트로 순위를 매긴다.
+    """
+    print("\n" + "=" * 120)
+    print("선택 — 보정 게이트 통과 후 AUPRC 리프트 순")
+    print("=" * 120)
+    print(f"  {'질환':<20}{'선택 구성':<26}{'AUROC':>8}{'AUPRC×':>8}{'ECE':>8}{'PPV@10%':>9}{'MCC':>7}  탈락한 것")
+
+    by_target: dict[str, list[dict[str, Any]]] = {}
+    for entry in results:
+        if entry.get("overall") and entry["tier"] != "basic":
+            by_target.setdefault(entry["target"], []).append(entry)
+
+    for key, entries in by_target.items():
+        ranked = sorted(entries, key=lambda e: e["selection"]["rank_key"], reverse=True)
+        winner = ranked[0]
+        overall = winner["overall"]
+        rejected = [f"{e['tier']}·{e['model']}" for e in entries if not e["selection"]["calibration_ok"]]
+        print(
+            f"  {winner['name']:<20}{winner['tier'] + ' · ' + winner['model']:<26}"
+            f"{overall['auroc']:>8.3f}{overall['auprc_lift']:>8.2f}{overall['ece']:>8.4f}"
+            f"{overall['operating_points']['top_10pct']['ppv']:>9.3f}"
+            f"{overall['operating_points']['top_10pct']['mcc']:>7.3f}"
+            f"  {', '.join(rejected) if rejected else '-'}"
+        )
+        _ = key
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

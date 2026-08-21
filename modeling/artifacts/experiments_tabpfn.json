@@ -1,0 +1,28 @@
+{
+  "tabpfn": [
+    {
+      "target": "dm_undiagnosed",
+      "model": "tabpfn",
+      "holdout_auroc": 0.7829731689630167,
+      "holdout_auprc": 0.10670749491730988,
+      "brier": 0.032515914494894646,
+      "seconds": 232.4
+    },
+    {
+      "target": "prediabetes",
+      "model": "tabpfn",
+      "holdout_auroc": 0.6768742593934951,
+      "holdout_auprc": 0.5412159582123532,
+      "brier": 0.21960743986153258,
+      "seconds": 218.5
+    },
+    {
+      "target": "htn_undiagnosed",
+      "model": "tabpfn",
+      "holdout_auroc": 0.7306980505090469,
+      "holdout_auprc": 0.21031713535918964,
+      "brier": 0.0848129829487172,
+      "seconds": 164.9
+    }
+  ]
+}
