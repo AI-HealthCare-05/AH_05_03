@@ -25,7 +25,7 @@ class PainChatService:
         instructions = """You support a Korean health-recording form. Do not diagnose, prescribe, or reassure medically. Extract only facts explicitly stated by the user into the draft. Ask one concise Korean follow-up question for missing body_area or intensity. missing_fields may only contain body_area or intensity. If the user mentions severe chest pain, breathing difficulty, loss of consciousness, stroke-like symptoms, severe bleeding, or self-harm, set emergency_notice to a short Korean emergency-care instruction; still do not diagnose. Return only the required JSON schema."""
         body = {"model": config.OPENAI_PAIN_CHAT_MODEL, "instructions": instructions, "input": [{"role": item.role, "content": item.content} for item in messages], "text": {"format": {"type": "json_schema", "name": "pain_chat", "strict": True, "schema": schema}}, "temperature": 0}
         try:
-            async with httpx.AsyncClient(timeout=20) as client:
+            async with httpx.AsyncClient(timeout=config.OPENAI_PAIN_CHAT_TIMEOUT_SECONDS) as client:
                 response = await client.post("https://api.openai.com/v1/responses", headers={"Authorization": f"Bearer {config.OPENAI_KEY}"}, json=body)
             response.raise_for_status()
             payload = response.json()
@@ -54,5 +54,10 @@ class PainChatService:
             else:
                 message = f"OpenAI 요청 설정 오류(HTTP {status})입니다. 모델 또는 API 프로젝트 설정을 확인해 주세요."
             raise AppError(message, status_code=503) from error
+        except httpx.TimeoutException as error:
+            raise AppError(
+                "응답이 3초 안에 도착하지 않았습니다. 통증 부위와 정도를 직접 입력해 주세요.",
+                status_code=503,
+            ) from error
         except (httpx.HTTPError, ValueError, json.JSONDecodeError) as error:
             raise AppError("OpenAI 응답을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.", status_code=503) from error

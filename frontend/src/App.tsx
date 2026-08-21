@@ -1,18 +1,6 @@
-import { useState } from "react";
-import { HealthRecordForm } from "./components/HealthRecordForm";
-import { HealthRecordHistory } from "./components/HealthRecordHistory";
-import { OcrImportPanel } from "./components/OcrImportPanel";
-import { DocumentLibrary } from "./components/DocumentLibrary";
-import { PainChatPanel } from "./components/PainChatPanel";
-import { HealthChangeDashboard } from "./components/HealthChangeDashboard";
+import { AppProviders } from "./app/AppProviders";
 
-const demoProfiles = [
-  { id: "profile-dawon", name: "정다원", relationship: "본인" },
-  { id: "profile-mother", name: "김봄", relationship: "어머니" },
-  { id: "profile-father", name: "정한결", relationship: "아버지" },
-];
-
+// 기존 가상 프론트 진입점은 유지하되, 화면은 최신 dev의 공용 앱 구조를 사용한다.
 export function App() {
-  const [view, setView] = useState<"history" | "create" | "documents" | "changes">("history");
-  return <div className="app"><aside><div className="brand"><span>이</span>이어봄</div><nav><a>홈</a><a className={view === "history" || view === "create" ? "active" : ""} onClick={() => setView("history")}>건강 기록</a><a className={view === "documents" ? "active" : ""} onClick={() => setView("documents")}>원본 서류</a><a className={view === "changes" ? "active" : ""} onClick={() => setView("changes")}>건강 변화</a><a>가족 관리</a></nav><div className="privacy">● 이 기기에 안전하게 저장 중</div></aside>{view === "history" ? <HealthRecordHistory profiles={demoProfiles} onCreate={() => setView("create")} /> : view === "create" ? <HealthRecordForm householdId="local-household-demo" profiles={demoProfiles} onShowHistory={() => setView("history")} /> : view === "documents" ? <DocumentLibrary householdId="local-household-demo" profiles={demoProfiles} /> : <HealthChangeDashboard profiles={demoProfiles} />}<OcrImportPanel /><PainChatPanel householdId="local-household-demo" profiles={demoProfiles} /></div>;
+  return <AppProviders />;
 }

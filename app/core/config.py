@@ -83,6 +83,8 @@ class Config(BaseSettings):
     # 키는 서버 환경변수에만 두고, 브라우저로 전달하지 않는다.
     OPENAI_KEY: str | None = None
     OPENAI_PAIN_CHAT_MODEL: str = "gpt-4o-mini"
+    # 대화형 기록은 즉시 반응해야 하므로, 느린 외부 AI 호출을 오래 기다리지 않는다.
+    OPENAI_PAIN_CHAT_TIMEOUT_SECONDS: float = 2.2
 
     # Refresh Token은 JavaScript에 노출하지 않고 host 전용 쿠키로만 전달한다.
     # __Host- 접두사는 Secure + Path=/ + Domain 미지정을 브라우저가 강제한다.

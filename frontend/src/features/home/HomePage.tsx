@@ -9,6 +9,12 @@ import type {
   HealthRecordType,
 } from "../../shared/local/domainContracts";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
+import {
+  FloatingHealthTools,
+  HealthRecordComposer,
+  HealthRecordHistoryDialog,
+  PainChatDialog,
+} from "../health-record/HealthRecordWorkspace";
 
 const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
   default: module.VanatomeBodyMap,
@@ -58,6 +64,8 @@ export function HomePage() {
   const [profileLifecycleAction, setProfileLifecycleAction] = useState<"hide" | "delete">();
   const [hiddenProfilesDialogOpen, setHiddenProfilesDialogOpen] = useState(false);
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
+  const [recordHistoryDialogOpen, setRecordHistoryDialogOpen] = useState(false);
+  const [painChatDialogOpen, setPainChatDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<HealthRecord>();
   const [deletingRecord, setDeletingRecord] = useState<HealthRecord>();
   const [deletedRecordsDialogOpen, setDeletedRecordsDialogOpen] = useState(false);
@@ -388,7 +396,9 @@ export function HomePage() {
             </div>
 
             <div className="metric-grid">
-              <MetricCard label="저장된 기록" value={`${summary?.totalRecords ?? 0}건`} helper="암호화 로컬 저장" />
+              <button className="metric-card-button" type="button" onClick={() => setRecordHistoryDialogOpen(true)}>
+                <MetricCard label="저장된 기록" value={`${summary?.totalRecords ?? 0}건`} helper="눌러서 전체 기록 보기" />
+              </button>
               <MetricCard
                 label="최근 기록"
                 value={summary?.latestRecordedAt ? formatDate(summary.latestRecordedAt) : "아직 없음"}
@@ -462,6 +472,10 @@ export function HomePage() {
               <strong>건강기록 작성</strong>
               <small>검진·통증·수치·메모</small>
             </button>
+            <NavLink to="/data">
+              <strong>서류 관리 · OCR</strong>
+              <small>등록·열람·OCR 결과 확인</small>
+            </NavLink>
             <button type="button" onClick={() => {
               setFamilyHistoryDialogOpen(true);
               void navigate(`/members/${selectedProfile.id}/family-history`);
@@ -506,27 +520,33 @@ export function HomePage() {
 
       {recordDialogOpen && selectedProfile ? (
         <Modal title={`${selectedProfile.displayName}님의 건강기록 작성`} onClose={() => setRecordDialogOpen(false)}>
-          <form className="product-form" onSubmit={submitHealthRecord}>
-            <p className="form-notice">이 기록은 서버 API를 거치지 않고 현재 브라우저에 바로 암호화됩니다.</p>
-            <label>
-              기록 종류
-              <select name="recordType" defaultValue="note" required>
-                {Object.entries(RECORD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-            </label>
-            <label>
-              기록 시각
-              <input name="recordedAt" type="datetime-local" required defaultValue={currentLocalDateTime()} />
-            </label>
-            <label>
-              기록 내용
-              <textarea name="note" rows={5} required placeholder="변화, 수치 또는 확인할 내용을 적어주세요." />
-            </label>
-            <div className="form-actions">
-              <button className="secondary-button" type="button" onClick={() => setRecordDialogOpen(false)}>취소</button>
-              <button className="primary-button" type="submit" disabled={saving}>{saving ? "암호화 중…" : "기록 저장"}</button>
-            </div>
-          </form>
+          <HealthRecordComposer
+            profile={selectedProfile}
+            runtime={runtime}
+            onClose={() => setRecordDialogOpen(false)}
+            onSaved={() => refreshDashboard(selectedProfile.id)}
+            onOpenPainChat={() => {
+              setRecordDialogOpen(false);
+              setPainChatDialogOpen(true);
+            }}
+          />
+        </Modal>
+      ) : null}
+
+      {recordHistoryDialogOpen ? (
+        <Modal title={`${selectedProfile?.displayName ?? ""}님의 저장된 건강기록`} onClose={() => setRecordHistoryDialogOpen(false)}>
+          <HealthRecordHistoryDialog
+            records={records}
+            onEdit={(record) => {
+              setRecordHistoryDialogOpen(false);
+              setEditingRecord(record);
+              if (selectedProfile) void navigate(`/members/${selectedProfile.id}/records/${record.id}`);
+            }}
+            onDelete={(record) => {
+              setRecordHistoryDialogOpen(false);
+              setDeletingRecord(record);
+            }}
+          />
         </Modal>
       ) : null}
 
@@ -707,6 +727,15 @@ export function HomePage() {
           void navigate(`/members/${selectedProfile.id}`);
         }} />
       ) : null}
+      {painChatDialogOpen && selectedProfile ? (
+        <PainChatDialog
+          profile={selectedProfile}
+          runtime={runtime}
+          onClose={() => setPainChatDialogOpen(false)}
+          onSaved={() => refreshDashboard(selectedProfile.id)}
+        />
+      ) : null}
+      <FloatingHealthTools profile={selectedProfile} runtime={runtime} onSaved={() => selectedProfile ? refreshDashboard(selectedProfile.id) : Promise.resolve()} />
     </div>
   );
 }
