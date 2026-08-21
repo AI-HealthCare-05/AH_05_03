@@ -1,0 +1,420 @@
+[
+  {
+    "target": "dm_undiagnosed",
+    "model": "logistic",
+    "features": [
+      "age",
+      "bmi",
+      "waist_cm",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "sleep_hours",
+      "sbp",
+      "dbp",
+      "sex",
+      "smoking_status"
+    ],
+    "holdout_cycle": "2021_2023",
+    "train_cycles": [
+      "2013_2014",
+      "2015_2016",
+      "2017_2018"
+    ],
+    "cv_auroc_mean": 0.7498968117274905,
+    "cv_auroc_std": 0.022678963509168804,
+    "cv_auprc_mean": 0.10714468601827616,
+    "holdout": {
+      "auroc": 0.7712496978486826,
+      "auprc": 0.104297259873369,
+      "brier": 0.03270775886177672,
+      "positive_rate": 0.03498950314905528,
+      "n": 4287
+    },
+    "lift_over_base": 2.9808156871808866
+  },
+  {
+    "target": "dm_undiagnosed",
+    "model": "xgboost",
+    "features": [
+      "age",
+      "bmi",
+      "waist_cm",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "sleep_hours",
+      "sbp",
+      "dbp",
+      "sex",
+      "smoking_status"
+    ],
+    "holdout_cycle": "2021_2023",
+    "train_cycles": [
+      "2013_2014",
+      "2015_2016",
+      "2017_2018"
+    ],
+    "cv_auroc_mean": 0.7319626576722442,
+    "cv_auroc_std": 0.02531651047327838,
+    "cv_auprc_mean": 0.09118316101147225,
+    "holdout": {
+      "auroc": 0.7503883651599388,
+      "auprc": 0.08089130361674153,
+      "brier": 0.03335107757786748,
+      "positive_rate": 0.03498950314905528,
+      "n": 4287
+    },
+    "lift_over_base": 2.311873457366473
+  },
+  {
+    "target": "dm_undiagnosed_fh",
+    "model": "logistic",
+    "features": [
+      "age",
+      "bmi",
+      "waist_cm",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "sleep_hours",
+      "sbp",
+      "dbp",
+      "fh_diabetes",
+      "fh_cvd",
+      "sex",
+      "smoking_status"
+    ],
+    "holdout_cycle": "2017_2018",
+    "train_cycles": [
+      "2013_2014",
+      "2015_2016"
+    ],
+    "cv_auroc_mean": 0.7596882529561813,
+    "cv_auroc_std": 0.01978423937638926,
+    "cv_auprc_mean": 0.12241814060099288,
+    "holdout": {
+      "auroc": 0.7379662397043626,
+      "auprc": 0.1047235348985526,
+      "brier": 0.04751564994594604,
+      "positive_rate": 0.050866098432774266,
+      "n": 3637
+    },
+    "lift_over_base": 2.0588080887893825
+  },
+  {
+    "target": "dm_undiagnosed_fh",
+    "model": "xgboost",
+    "features": [
+      "age",
+      "bmi",
+      "waist_cm",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "sleep_hours",
+      "sbp",
+      "dbp",
+      "fh_diabetes",
+      "fh_cvd",
+      "sex",
+      "smoking_status"
+    ],
+    "holdout_cycle": "2017_2018",
+    "train_cycles": [
+      "2013_2014",
+      "2015_2016"
+    ],
+    "cv_auroc_mean": 0.7337775659952512,
+    "cv_auroc_std": 0.020645344442753503,
+    "cv_auprc_mean": 0.10556892578562294,
+    "holdout": {
+      "auroc": 0.7197566628041716,
+      "auprc": 0.09139974754424214,
+      "brier": 0.04908434024325609,
+      "positive_rate": 0.050866098432774266,
+      "n": 3637
+    },
+    "lift_over_base": 1.7968696314508577
+  },
+  {
+    "target": "prediabetes",
+    "model": "logistic",
+    "features": [
+      "age",
+      "bmi",
+      "waist_cm",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "sleep_hours",
+      "sbp",
+      "dbp",
+      "sex",
+      "smoking_status"
+    ],
+    "holdout_cycle": "2021_2023",
+    "train_cycles": [
+      "2013_2014",
+      "2015_2016",
+      "2017_2018"
+    ],
+    "cv_auroc_mean": 0.6991178037658285,
+    "cv_auroc_std": 0.009286316590151705,
+    "cv_auprc_mean": 0.5602392213382335,
+    "holdout": {
+      "auroc": 0.6805636528122913,
+      "auprc": 0.5501103738372494,
+      "brier": 0.21963488035986073,
+      "positive_rate": 0.40922401171303074,
+      "n": 4098
+    },
+    "lift_over_base": 1.3442768705933499
+  },
+  {
+    "target": "prediabetes",
+    "model": "xgboost",
+    "features": [
+      "age",
+      "bmi",
+      "waist_cm",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "sleep_hours",
+      "sbp",
+      "dbp",
+      "sex",
+      "smoking_status"
+    ],
+    "holdout_cycle": "2021_2023",
+    "train_cycles": [
+      "2013_2014",
+      "2015_2016",
+      "2017_2018"
+    ],
+    "cv_auroc_mean": 0.695803451676521,
+    "cv_auroc_std": 0.00441291632224621,
+    "cv_auprc_mean": 0.5562262861133718,
+    "holdout": {
+      "auroc": 0.6618659478519425,
+      "auprc": 0.5232518423483182,
+      "brier": 0.22478454338140272,
+      "positive_rate": 0.40922401171303074,
+      "n": 4098
+    },
+    "lift_over_base": 1.2786440369370353
+  },
+  {
+    "target": "prediabetes_fh",
+    "model": "logistic",
+    "features": [
+      "age",
+      "bmi",
+      "waist_cm",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "sleep_hours",
+      "sbp",
+      "dbp",
+      "fh_diabetes",
+      "fh_cvd",
+      "sex",
+      "smoking_status"
+    ],
+    "holdout_cycle": "2017_2018",
+    "train_cycles": [
+      "2013_2014",
+      "2015_2016"
+    ],
+    "cv_auroc_mean": 0.7083948913490145,
+    "cv_auroc_std": 0.009279642504621712,
+    "cv_auprc_mean": 0.5608918390876113,
+    "holdout": {
+      "auroc": 0.6638461305574861,
+      "auprc": 0.5745149675456651,
+      "brier": 0.22977510609920734,
+      "positive_rate": 0.4472333143183115,
+      "n": 3506
+    },
+    "lift_over_base": 1.284597880239223
+  },
+  {
+    "target": "prediabetes_fh",
+    "model": "xgboost",
+    "features": [
+      "age",
+      "bmi",
+      "waist_cm",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "sleep_hours",
+      "sbp",
+      "dbp",
+      "fh_diabetes",
+      "fh_cvd",
+      "sex",
+      "smoking_status"
+    ],
+    "holdout_cycle": "2017_2018",
+    "train_cycles": [
+      "2013_2014",
+      "2015_2016"
+    ],
+    "cv_auroc_mean": 0.7014064717367108,
+    "cv_auroc_std": 0.011405966565636411,
+    "cv_auprc_mean": 0.5553198944581065,
+    "holdout": {
+      "auroc": 0.6513648222446874,
+      "auprc": 0.5444045761398635,
+      "brier": 0.23517038881294736,
+      "positive_rate": 0.4472333143183115,
+      "n": 3506
+    },
+    "lift_over_base": 1.2172719668025263
+  },
+  {
+    "target": "htn_undiagnosed",
+    "model": "logistic",
+    "features": [
+      "age",
+      "bmi",
+      "waist_cm",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "sleep_hours",
+      "sex",
+      "smoking_status"
+    ],
+    "holdout_cycle": "2021_2023",
+    "train_cycles": [
+      "2013_2014",
+      "2015_2016",
+      "2017_2018"
+    ],
+    "cv_auroc_mean": 0.7887895017131411,
+    "cv_auroc_std": 0.017809670675212507,
+    "cv_auprc_mean": 0.2562255010083573,
+    "holdout": {
+      "auroc": 0.7241795685045975,
+      "auprc": 0.19801312036286073,
+      "brier": 0.08725660850602272,
+      "positive_rate": 0.09854353889061047,
+      "n": 3227
+    },
+    "lift_over_base": 2.0093972937451308
+  },
+  {
+    "target": "htn_undiagnosed",
+    "model": "xgboost",
+    "features": [
+      "age",
+      "bmi",
+      "waist_cm",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "sleep_hours",
+      "sex",
+      "smoking_status"
+    ],
+    "holdout_cycle": "2021_2023",
+    "train_cycles": [
+      "2013_2014",
+      "2015_2016",
+      "2017_2018"
+    ],
+    "cv_auroc_mean": 0.7848751419321193,
+    "cv_auroc_std": 0.01857321369544182,
+    "cv_auprc_mean": 0.2574944011634144,
+    "holdout": {
+      "auroc": 0.7124700830863229,
+      "auprc": 0.19340121703897611,
+      "brier": 0.08936602568354347,
+      "positive_rate": 0.09854353889061047,
+      "n": 3227
+    },
+    "lift_over_base": 1.9625966269961508
+  },
+  {
+    "target": "htn_undiagnosed_fh",
+    "model": "logistic",
+    "features": [
+      "age",
+      "bmi",
+      "waist_cm",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "sleep_hours",
+      "fh_diabetes",
+      "fh_cvd",
+      "sex",
+      "smoking_status"
+    ],
+    "holdout_cycle": "2017_2018",
+    "train_cycles": [
+      "2013_2014",
+      "2015_2016"
+    ],
+    "cv_auroc_mean": 0.7801413740164959,
+    "cv_auroc_std": 0.024014021624273203,
+    "cv_auprc_mean": 0.2266586003654178,
+    "holdout": {
+      "auroc": 0.7700865265760197,
+      "auprc": 0.28987627402498445,
+      "brier": 0.10421045164275247,
+      "positive_rate": 0.13197424892703863,
+      "n": 2796
+    },
+    "lift_over_base": 2.1964608730998822
+  },
+  {
+    "target": "htn_undiagnosed_fh",
+    "model": "xgboost",
+    "features": [
+      "age",
+      "bmi",
+      "waist_cm",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "sleep_hours",
+      "fh_diabetes",
+      "fh_cvd",
+      "sex",
+      "smoking_status"
+    ],
+    "holdout_cycle": "2017_2018",
+    "train_cycles": [
+      "2013_2014",
+      "2015_2016"
+    ],
+    "cv_auroc_mean": 0.7725405279556022,
+    "cv_auroc_std": 0.022092043251435347,
+    "cv_auprc_mean": 0.23798240717858782,
+    "holdout": {
+      "auroc": 0.7518823354694197,
+      "auprc": 0.2725800203508688,
+      "brier": 0.10750619344129876,
+      "positive_rate": 0.13197424892703863,
+      "n": 2796
+    },
+    "lift_over_base": 2.0654030810325996
+  }
+]
