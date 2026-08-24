@@ -27,4 +27,72 @@
 .health-chat-form input { flex: 1; }
 .chat-draft { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; border-top: 1px solid var(--line-soft); padding-top: 16px; }
 .chat-draft h3, .chat-draft p, .chat-draft button { grid-column: 1 / -1; margin: 0; }
+.ocr-file-badge-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.ocr-file-badge { background: #e0e7ff; color: #3730a3; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 6px; }
+
+/* Exam Trend Section */
+.exam-trend-section { margin-top: 28px; background: #ffffff; border: 1px solid var(--line-soft, #e2e8f0); border-radius: 16px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.trend-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+.trend-header h3 { margin: 2px 0 4px 0; font-size: 18px; color: #0f172a; }
+.trend-subtext { margin: 0; font-size: 13px; color: #64748b; }
+.trend-badge span { background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; }
+
+.trend-empty-card { text-align: center; padding: 36px 16px; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; }
+.trend-empty-icon { font-size: 32px; display: block; margin-bottom: 8px; }
+.trend-empty-card strong { font-size: 15px; color: #334155; display: block; margin-bottom: 4px; }
+.trend-empty-card p { font-size: 13px; color: #64748b; margin: 0 auto; max-width: 440px; line-height: 1.5; }
+
+.trend-category-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 14px; }
+.trend-tab { background: #f1f5f9; border: 1px solid transparent; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 600; color: #475569; cursor: pointer; white-space: nowrap; }
+.trend-tab.is-active { background: #2563eb; color: #ffffff; }
+
+.trend-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.trend-summary-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; text-align: left; cursor: pointer; transition: all 0.15s; }
+.trend-summary-card:hover { border-color: #93c5fd; background: #f0f9ff; }
+.trend-summary-card.is-selected { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
+.trend-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.trend-metric-name { font-size: 13px; font-weight: 700; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trend-data-count { font-size: 11px; color: #64748b; }
+.trend-card-value { margin: 6px 0; }
+.trend-card-value strong { font-size: 20px; color: #0f172a; }
+.trend-card-value small { font-size: 12px; color: #64748b; margin-left: 4px; }
+.trend-card-bottom { display: flex; justify-content: space-between; align-items: center; font-size: 11px; }
+.trend-latest-date { color: #94a3b8; }
+.trend-delta-chip { font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+.delta-increased { background: #fee2e2; color: #b91c1c; }
+.delta-decreased { background: #dbeafe; color: #1d4ed8; }
+.delta-same { background: #f1f5f9; color: #64748b; }
+.delta-first { background: #f1f5f9; color: #64748b; }
+
+.trend-detail-box { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 18px; }
+.trend-detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.trend-detail-header h4 { margin: 0; font-size: 15px; color: #1e293b; }
+.overall-change-badge { font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 6px; }
+
+.trend-svg-container { width: 100%; overflow-x: auto; margin-bottom: 12px; }
+.trend-svg-chart { width: 100%; max-width: 580px; height: auto; display: block; margin: 0 auto; }
+
+.trend-timeline-list { display: flex; flex-wrap: wrap; gap: 8px; border-top: 1px dashed #e2e8f0; padding-top: 12px; font-size: 12px; }
+.trend-timeline-item { background: #f8fafc; border-radius: 6px; padding: 4px 8px; display: flex; align-items: center; gap: 6px; }
+.timeline-date { color: #64748b; font-weight: 600; }
+.timeline-judgment { background: #fef3c7; color: #92400e; font-size: 10px; padding: 1px 4px; border-radius: 3px; }
+.timeline-diff { font-weight: 600; }
+.initial-mark { color: #94a3b8; }
+
+.trend-table-wrapper { margin-top: 16px; }
+.trend-table-wrapper h4 { margin: 0 0 8px 0; font-size: 14px; color: #334155; }
+.trend-table-scroll { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+.trend-comparison-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.trend-comparison-table th, .trend-comparison-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
+.trend-comparison-table thead th { background: #f8fafc; color: #475569; font-weight: 700; }
+.trend-comparison-table .sticky-col { position: sticky; left: 0; background: #ffffff; font-weight: 600; border-right: 1px solid #e2e8f0; }
+.trend-comparison-table thead .sticky-col { background: #f8fafc; }
+.trend-comparison-table .tabular-value { color: #0f172a; font-weight: 600; }
+.trend-comparison-table .unit-label { font-size: 11px; color: #64748b; font-weight: 400; }
+.trend-comparison-table .no-data { color: #cbd5e1; }
+.trend-comparison-table .delta-text { font-weight: 700; font-size: 12px; }
+
+.trend-disclaimer { margin-top: 14px; font-size: 11px; color: #94a3b8; line-height: 1.4; }
+
 @media (max-width: 680px) { .record-field-grid, .chat-draft { grid-template-columns: 1fr; }.floating-health-tools { left: 14px; bottom: 14px; }.floating-health-tools button { font-size: 13px; }.record-kind-tabs { grid-template-columns: repeat(2, 1fr); } }
+

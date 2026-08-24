@@ -9,6 +9,7 @@ import type {
   HealthRecordType,
 } from "../../shared/local/domainContracts";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
+import { ExamTrendSection } from "../health-record/ExamTrendSection";
 import {
   FloatingHealthTools,
   HealthRecordComposer,
@@ -463,6 +464,8 @@ export function HomePage() {
                 </ul>
               )}
             </div>
+
+            <ExamTrendSection records={records} profileName={selectedProfile.displayName} />
           </div>
 
           <aside className="quick-actions-panel">
