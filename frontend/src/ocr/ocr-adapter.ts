@@ -2,6 +2,7 @@ export interface RawOcrTable { table_index: number; rows: string[][] }
 export interface RawOcrResult {
   text: string;
   tables: RawOcrTable[];
+  exam_date?: string | null;
   status: "raw";
   automatically_confirmed: false;
 }

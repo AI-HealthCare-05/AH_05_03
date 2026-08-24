@@ -100,7 +100,8 @@ export interface HealthDocumentView extends Omit<StoredHealthDocument, "original
 }
 
 export interface OcrExamItem { testName: string; value: string; unit: string; judgment: string }
-export interface OcrContent { text: string; tables: Array<{ table_index: number; rows: string[][] }>; examItems?: OcrExamItem[] }
+export interface OcrContent { text: string; tables: Array<{ table_index: number; rows: string[][] }>; examItems?: OcrExamItem[]; examDate?: string | null }
+
 export interface StoredOcrResult {
   id: UUID;
   documentId: UUID;

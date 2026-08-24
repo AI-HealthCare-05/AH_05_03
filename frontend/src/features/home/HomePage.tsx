@@ -398,7 +398,7 @@ export function HomePage() {
 
             <div className="metric-grid">
               <button className="metric-card-button" type="button" onClick={() => setRecordHistoryDialogOpen(true)}>
-                <MetricCard label="저장된 기록" value={`${summary?.totalRecords ?? 0}건`} helper="눌러서 전체 기록 보기" />
+                <MetricCard label="저장된 기록" value={`${summary?.totalRecords ?? 0}건`} helper="암호화 로컬 저장" />
               </button>
               <MetricCard
                 label="최근 기록"
@@ -465,7 +465,7 @@ export function HomePage() {
               )}
             </div>
 
-            <ExamTrendSection records={records} profileName={selectedProfile.displayName} />
+            <ExamTrendSection records={records} profileName={selectedProfile.displayName} runtime={runtime} />
           </div>
 
           <aside className="quick-actions-panel">
