@@ -9,7 +9,6 @@ import type {
   HealthRecordType,
 } from "../../shared/local/domainContracts";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
-import { ExamTrendSection } from "../health-record/ExamTrendSection";
 import {
   FloatingHealthTools,
   HealthRecordComposer,
@@ -465,7 +464,21 @@ export function HomePage() {
               )}
             </div>
 
-            <ExamTrendSection records={records} profileName={selectedProfile.displayName} runtime={runtime} />
+            {/* 건강 분석 & AI 예측 바로가기 배너 */}
+            <div className="home-analysis-banner">
+              <div className="banner-text">
+                <span className="page-kicker">건강 심층 분석 & AI 예측</span>
+                <h3>{selectedProfile.displayName}님의 건강 변화 추이와 만성질환 위험도를 확인하세요</h3>
+                <p>로컬에 등록된 혈당, 혈압, 콜레스테롤 등의 과거 시계열 변화와 10대 만성질환 통계 예측을 제공합니다.</p>
+              </div>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => navigate(`/members/${selectedProfile.id}/analysis`)}
+              >
+                📊 건강 분석 바로가기
+              </button>
+            </div>
           </div>
 
           <aside className="quick-actions-panel">
@@ -823,8 +836,45 @@ function toLocalDateTime(value: string): string {
 }
 
 function recordNote(record: HealthRecord): string {
+  const payload = record.payload as Record<string, unknown>;
+  if (record.recordType === "pain") {
+    if (typeof payload.note === "string" && payload.note.includes("부위:")) {
+      let text = payload.note.replace(/\s*·\s*/g, "\n");
+      if (!text.includes("시작시각:") && (payload.onsetFormatted || payload.onsetDate || payload.onsetDescription)) {
+        const onset = payload.onsetFormatted || (payload.onsetDate ? `${payload.onsetDate}${payload.onsetDescription ? ` (${payload.onsetDescription})` : ""}` : payload.onsetDescription);
+        text = text.replace("양상:", `시작시각: ${onset}\n양상:`);
+      }
+      return text;
+    }
+    const lines: string[] = [];
+    if (payload.bodyArea) lines.push(`부위: ${payload.bodyArea}`);
+    if (payload.intensity !== undefined) lines.push(`통증강도: ${payload.intensity}/10`);
+    if (payload.sensation) lines.push(`양상: ${payload.sensation}`);
+    const onset = payload.onsetFormatted || (payload.onsetDate ? `${payload.onsetDate}${payload.onsetDescription ? ` (${payload.onsetDescription})` : ""}` : payload.onsetDescription);
+    if (onset) lines.push(`시작시각: ${onset}`);
+    if (payload.note && payload.note !== payload.bodyArea) {
+      lines.push(`내용: ${payload.note}`);
+    }
+    return lines.join("\n") || "통증 기록";
+  }
+  if (record.recordType === "blood_pressure") {
+    return `수축기 ${payload.systolic} / 이완기 ${payload.diastolic} mmHg${payload.note ? `\n내용: ${payload.note}` : ""}`;
+  }
+  if (record.recordType === "blood_glucose") {
+    const timing = payload.timing === "fasting" ? "공복" : payload.timing === "after_meal" ? "식후" : payload.timing || "";
+    return `혈당 ${payload.value} mg/dL ${timing ? `(${timing})` : ""}${payload.note ? `\n내용: ${payload.note}` : ""}`.trim();
+  }
+  if (record.recordType === "body_measurement") {
+    const wt = payload.weight || payload.weightKg;
+    const ht = payload.height || payload.heightCm;
+    return `체중 ${wt}kg${ht ? ` · 키 ${ht}cm` : ""}${payload.note ? `\n내용: ${payload.note}` : ""}`;
+  }
+  if (record.recordType === "lab_result" || record.recordType === "health_screening") {
+    if (payload.note) return String(payload.note);
+    if (payload.testName) return `${payload.testName}: ${payload.value} ${payload.unit || ""}`;
+  }
   const note = record.payload.note;
-  return typeof note === "string" ? note : "저장된 건강기록";
+  return typeof note === "string" && note.trim() ? note : "저장된 건강기록";
 }
 
 function recordMark(type: HealthRecordType): string {

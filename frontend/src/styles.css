@@ -907,6 +907,32 @@ main {
   padding: 26px;
 }
 
+.home-analysis-banner {
+  margin-top: 24px;
+  background: linear-gradient(135deg, #f0f7ff 0%, #e0edff 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: 18px;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.home-analysis-banner .banner-text h3 {
+  margin: 4px 0 6px 0;
+  font-size: 1.1rem;
+  color: #1e3a8a;
+  font-weight: 800;
+}
+
+.home-analysis-banner .banner-text p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #3b82f6;
+}
+
 .metric-grid {
   margin-top: 22px;
   display: grid;
@@ -1345,13 +1371,13 @@ main {
 }
 
 .record-list p {
-  max-width: 450px;
-  margin-top: 4px;
-  overflow: hidden;
+  max-width: 500px;
+  margin-top: 6px;
   color: var(--muted);
-  font-size: 0.78rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre-line;
+  word-break: break-word;
 }
 
 .record-list time {
@@ -1362,6 +1388,9 @@ main {
 
 .quick-actions-panel {
   padding: 24px;
+  position: sticky;
+  top: 88px;
+  z-index: 10;
 }
 
 .quick-actions-panel h2 {

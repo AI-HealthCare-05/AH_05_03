@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { HealthRecord } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
+import { ComparisonTableModal } from "./ComparisonTableModal";
 import { analyzeExamTrends, type ExamDataPoint, type MetricTrendSeries } from "./examTrendAnalyzer";
 
 interface Props {
@@ -14,6 +15,7 @@ export function ExamTrendSection({ records, profileName, runtime }: Props) {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedMetricName, setSelectedMetricName] = useState<string | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<ExamDataPoint | null>(null);
+  const [tableModalOpen, setTableModalOpen] = useState(false);
 
   // 원본 서류 열람 상태
   const [previewDoc, setPreviewDoc] = useState<{ name: string; url: string; mimeType: string } | null>(null);
@@ -27,11 +29,24 @@ export function ExamTrendSection({ records, profileName, runtime }: Props) {
 
   const activeMetric = useMemo(() => {
     if (selectedMetricName) {
-      const found = trendData.metrics.find((m) => m.canonicalName === selectedMetricName);
+      const found = filteredMetrics.find((m) => m.canonicalName === selectedMetricName);
       if (found) return found;
     }
-    return filteredMetrics[0] || trendData.metrics[0];
-  }, [trendData, selectedMetricName, filteredMetrics]);
+    return filteredMetrics[0] || null;
+  }, [filteredMetrics, selectedMetricName]);
+
+  function handleCategoryChange(catKey: string) {
+    setSelectedCategory(catKey);
+    const inCat = catKey === "all" ? trendData.metrics : trendData.metrics.filter((m) => m.category === catKey);
+    const firstMetric = inCat[0] || null;
+    if (firstMetric) {
+      setSelectedMetricName(firstMetric.canonicalName);
+      setSelectedPoint(firstMetric.latest);
+    } else {
+      setSelectedMetricName(null);
+      setSelectedPoint(null);
+    }
+  }
 
   // 활성 메트릭이 변경되면 최신 포인트를 기본 선택 포인트로 지정
   useEffect(() => {
@@ -137,7 +152,7 @@ export function ExamTrendSection({ records, profileName, runtime }: Props) {
             key={tab.key}
             type="button"
             className={selectedCategory === tab.key ? "trend-tab is-active" : "trend-tab"}
-            onClick={() => setSelectedCategory(tab.key)}
+            onClick={() => handleCategoryChange(tab.key)}
           >
             {tab.label}
           </button>
@@ -314,108 +329,164 @@ export function ExamTrendSection({ records, profileName, runtime }: Props) {
         </div>
       )}
 
-      {/* 종합 시계열 비교 테이블 */}
-      <div className="trend-table-wrapper">
-        <h4>연도 및 날짜별 전체 항목 비교표</h4>
-        <div className="trend-table-scroll">
-          <table className="trend-comparison-table">
-            <thead>
-              <tr>
-                <th className="sticky-col">검사 항목</th>
-                {trendData.dates.map((d) => (
-                  <th key={d}>{d}</th>
-                ))}
-                <th>최근 변화</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredMetrics.map((m) => {
-                const pointsMap = new Map(m.dataPoints.map((p) => [p.date, p]));
-                const diff = m.latest.diffFromPrev;
-                return (
-                  <tr
-                    key={m.canonicalName}
-                    className={activeMetric?.canonicalName === m.canonicalName ? "row-selected" : ""}
-                    onClick={() => {
-                      setSelectedMetricName(m.canonicalName);
-                      setSelectedPoint(m.latest);
-                    }}
-                  >
-                    <td className="sticky-col font-semibold">{m.canonicalName}</td>
-                    {trendData.dates.map((d) => {
-                      const pt = pointsMap.get(d);
-                      return (
-                        <td
-                          key={d}
-                          className="tabular-value"
-                          onClick={(e) => {
-                            if (pt) {
-                              e.stopPropagation();
-                              setSelectedMetricName(m.canonicalName);
-                              setSelectedPoint(pt);
-                            }
-                          }}
-                        >
-                          {pt ? (
-                            <span className="clickable-cell" title="클릭하여 근거 상세 확인">
-                              {pt.value} {shouldShowUnit(pt.value, pt.unit) ? <small className="unit-label">{pt.unit}</small> : null}
-                            </span>
-                          ) : (
-                            <span className="no-data">-</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className="trend-cell">
-                      {diff ? (
-                        <span className={`delta-text delta-${diff.direction}`}>
-                          {diff.direction === "increased" ? "▲" : diff.direction === "decreased" ? "▼" : "•"} {diff.text}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">-</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      {/* 연도 및 날짜별 전체 항목 비교표 모달 열기 버튼 */}
+      <div className="trend-table-action-card">
+        <div className="trend-table-action-text">
+          <h4>연도 및 날짜별 전체 항목 비교</h4>
+          <p>등록된 모든 과거 검사 수치({trendData.metrics.length}개 항목, {trendData.dates.length}개 일자)를 한눈에 비교하고 분석합니다.</p>
         </div>
+        <button
+          type="button"
+          className="secondary-button open-table-modal-btn"
+          onClick={() => setTableModalOpen(true)}
+        >
+          📊 전체 항목 비교표 열기
+        </button>
       </div>
 
-      <p className="trend-disclaimer">
-        ※ 본 비교표는 사용자가 확인하고 브라우저 로컬에 저장한 기록의 단순 수치 변화이며, 의학적 진단이나 처방이 아닙니다.
-      </p>
+      {tableModalOpen && (
+        <ComparisonTableModal
+          trendData={trendData}
+          activeMetric={activeMetric}
+          onSelectPoint={(pt) => {
+            setSelectedMetricName(pt.canonicalName);
+            setSelectedPoint(pt);
+          }}
+          onClose={() => setTableModalOpen(false)}
+        />
+      )}
 
-      {/* 원본 서류 안전 미리보기 모달 */}
+      {/* 원본 서류 안전 미리보기 모달 (창 맞춤 및 확대/축소 지원) */}
       {previewDoc && (
-        <div className="modal-backdrop" role="presentation">
-          <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="preview-doc-title">
-            <div className="modal-heading">
-              <div>
-                <p className="section-kicker">로컬 원본 서류 열람</p>
-                <h2 id="preview-doc-title">{previewDoc.name}</h2>
-              </div>
-              <button className="modal-close" type="button" onClick={handleCloseDocPreview} aria-label="닫기">
-                ×
-              </button>
-            </div>
-            <div className="document-preview-modal-body">
-              {previewDoc.mimeType === "application/pdf" ? (
-                <iframe src={previewDoc.url} title={previewDoc.name} />
-              ) : (
-                <img src={previewDoc.url} alt={previewDoc.name} />
-              )}
-            </div>
-            <div className="form-actions">
-              <button className="primary-button" type="button" onClick={handleCloseDocPreview}>
-                닫기
-              </button>
-            </div>
-          </section>
-        </div>
+        <DocumentPreviewModal
+          previewDoc={previewDoc}
+          onClose={handleCloseDocPreview}
+        />
       )}
     </section>
+  );
+}
+
+function DocumentPreviewModal({
+  previewDoc,
+  onClose,
+}: {
+  previewDoc: { name: string; url: string; mimeType: string };
+  onClose: () => void;
+}) {
+  const [zoom, setZoom] = useState(1.0);
+  const [fitToWindow, setFitToWindow] = useState(true);
+
+  function handleZoomIn() {
+    setFitToWindow(false);
+    setZoom((z) => Math.min(3.0, Math.round((z + 0.25) * 100) / 100));
+  }
+
+  function handleZoomOut() {
+    setFitToWindow(false);
+    setZoom((z) => Math.max(0.5, Math.round((z - 0.25) * 100) / 100));
+  }
+
+  function handleResetFit() {
+    setFitToWindow(true);
+    setZoom(1.0);
+  }
+
+  function handleReset100() {
+    setFitToWindow(false);
+    setZoom(1.0);
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <section
+        className="modal-panel document-preview-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="preview-doc-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-heading">
+          <div>
+            <p className="section-kicker">로컬 원본 서류 열람</p>
+            <h2 id="preview-doc-title">{previewDoc.name}</h2>
+          </div>
+          <button className="modal-close" type="button" onClick={onClose} aria-label="닫기">
+            ×
+          </button>
+        </div>
+
+        {/* 이미지 문서인 경우 줌/맞춤 툴바 노출 */}
+        {previewDoc.mimeType !== "application/pdf" && (
+          <div className="doc-preview-toolbar">
+            <div className="doc-zoom-controls">
+              <button
+                type="button"
+                className="zoom-btn"
+                onClick={handleZoomOut}
+                disabled={zoom <= 0.5}
+                title="축소"
+              >
+                ➖ 축소
+              </button>
+              <span className="zoom-percent-badge">{Math.round(zoom * 100)}%</span>
+              <button
+                type="button"
+                className="zoom-btn"
+                onClick={handleZoomIn}
+                disabled={zoom >= 3.0}
+                title="확대"
+              >
+                ➕ 확대
+              </button>
+            </div>
+            <div className="doc-zoom-presets">
+              <button
+                type="button"
+                className={`zoom-btn ${fitToWindow && zoom === 1.0 ? "is-active" : ""}`}
+                onClick={handleResetFit}
+              >
+                ↔️ 창에 맞추기
+              </button>
+              <button
+                type="button"
+                className={`zoom-btn ${!fitToWindow && zoom === 1.0 ? "is-active" : ""}`}
+                onClick={handleReset100}
+              >
+                🔍 100% 원본
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="document-preview-modal-body">
+          {previewDoc.mimeType === "application/pdf" ? (
+            <iframe src={previewDoc.url} title={previewDoc.name} />
+          ) : (
+            <div className="preview-image-scroll-box">
+              <img
+                src={previewDoc.url}
+                alt={previewDoc.name}
+                className={`document-preview-image ${fitToWindow ? "fit-window" : "raw-size"}`}
+                style={{
+                  transform: `scale(${zoom})`,
+                  transformOrigin: "top center",
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <small className="trend-disclaimer">
+            ※ 브라우저 로컬 OPFS에 안전하게 보관된 원본 서류이며, 외부 서버로 전송되지 않습니다.
+          </small>
+          <button className="primary-button" type="button" onClick={onClose}>
+            닫기
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 

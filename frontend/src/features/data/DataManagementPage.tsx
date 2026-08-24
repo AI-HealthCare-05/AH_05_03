@@ -5,6 +5,7 @@ import { detectLocalCapabilities } from "../../shared/local/capabilities";
 import type { BackupPreview } from "../../shared/local/localBackupService";
 import type { LocalDocument } from "../../shared/local/domainContracts";
 import { BrowserOcrAdapter } from "../../shared/local/browserOcrAdapter";
+import { FloatingHealthTools } from "../health-record/HealthRecordWorkspace";
 
 export function DataManagementPage() {
   const { runtime, profiles, refreshProfiles } = useLocalDomain();
@@ -346,6 +347,14 @@ export function DataManagementPage() {
             <div className="profile-confirmation"><p>OPFS에 저장된 암호화 원본을 삭제합니다. 이미 생성한 건강기록은 자동으로 삭제하지 않습니다.</p><div className="form-actions"><button className="secondary-button" type="button" onClick={() => setDeletingDocument(undefined)}>취소</button><button className="danger-button" type="button" disabled={working} onClick={() => void confirmDeleteDocument()}>원본 삭제</button></div></div>
           </section>
         </div>
+      ) : null}
+
+      {profiles[0] ? (
+        <FloatingHealthTools
+          profile={profiles.find((p) => p.id === effectiveProfileId) || profiles[0]}
+          runtime={runtime}
+          onSaved={refreshDocuments}
+        />
       ) : null}
     </div>
   );

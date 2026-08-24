@@ -14,7 +14,7 @@ export interface OcrAdapter {
 interface ApiEnvelope<T> { success: boolean; data: T; message: string }
 
 export class DevServerOcrAdapter implements OcrAdapter {
-  constructor(private readonly baseUrl = "http://127.0.0.1:8000/api/v1") {}
+  constructor(private readonly baseUrl = "/api/v1") {}
 
   async recognize(input: File | File[]): Promise<RawOcrResult> {
     const fileList = Array.isArray(input) ? input : [input];

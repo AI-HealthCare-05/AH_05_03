@@ -283,6 +283,22 @@ export const CANONICAL_EXAM_DEFINITIONS: CanonicalExamDefinition[] = [
     aliases: ["복부지방률", "복부지방율", "복부비만율", "복부 지방률", "복부 지방율", "waist hip ratio", "whr"],
     fuzzyKeywords: ["복부지방", "복부비만"],
   },
+  {
+    canonicalName: "키 (신장)",
+    category: "other",
+    standardUnit: "cm",
+    aliases: ["키", "신장", "height", "ht", "키(신장)", "신장(cm)", "키(cm)"],
+    fuzzyKeywords: ["신장", "키"],
+    forbiddenKeywords: ["신사구체", "gfr", "egfr"],
+  },
+  {
+    canonicalName: "체중 (몸무게)",
+    category: "other",
+    standardUnit: "kg",
+    aliases: ["체중", "몸무게", "weight", "wt", "체중(몸무게)", "체중(kg)", "몸무게(kg)"],
+    fuzzyKeywords: ["체중", "몸무게"],
+    forbiddenKeywords: ["중성지방", "tg"],
+  },
 ];
 
 const JUDGMENT_WORDS = new Set([

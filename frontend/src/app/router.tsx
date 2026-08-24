@@ -2,6 +2,7 @@ import { createBrowserRouter } from "react-router-dom";
 
 import { ArchitecturePage } from "../features/architecture/ArchitecturePage";
 import { DataManagementPage } from "../features/data/DataManagementPage";
+import { HealthAnalysisPage } from "../features/health-analysis/HealthAnalysisPage";
 import { HomePage } from "../features/home/HomePage";
 import { UiPreviewPage } from "../features/ui-preview/UiPreviewPage";
 import { AccountPage } from "../features/account/AccountPage";
@@ -35,6 +36,14 @@ export const router = createBrowserRouter([
       {
         path: "members/:profileId/family-history",
         element: <HomePage />,
+      },
+      {
+        path: "members/:profileId/analysis",
+        element: <HealthAnalysisPage />,
+      },
+      {
+        path: "analysis",
+        element: <HealthAnalysisPage />,
       },
       {
         path: "data",

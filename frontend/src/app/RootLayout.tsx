@@ -4,6 +4,7 @@ import { useUiStore } from "../stores/uiStore";
 
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
+  { to: "/analysis", label: "건강 분석", end: false },
   { to: "/data", label: "데이터 관리", end: false },
   { to: "/ui-preview", label: "UI 미리보기", end: false },
   { to: "/account", label: "계정", end: false },

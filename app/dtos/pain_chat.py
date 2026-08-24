@@ -19,8 +19,11 @@ class PainDraft(BaseSerializerModel):
     intensity: int | None = Field(default=None, ge=0, le=10)
     sensation: str | None = None
     onset_description: str | None = None
+    onset_date: str | None = None
+    onset_formatted: str | None = None
     aggravating_factors: str | None = None
     note: str | None = None
+    formatted_summary: str | None = None
 
 
 class PainChatData(BaseSerializerModel):

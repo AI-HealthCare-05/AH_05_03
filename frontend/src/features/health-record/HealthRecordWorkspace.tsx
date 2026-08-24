@@ -144,7 +144,7 @@ export function FloatingHealthTools({
   const [ocrOpen, setOcrOpen] = useState(false);
   const navigate = useNavigate();
   if (!profile) return null;
-  return <><div className="floating-health-tools"><button type="button" onClick={() => setOcrOpen(true)}>서류 관리 · OCR</button><button type="button" onClick={() => setChatOpen(true)}>대화로 통증 기록</button></div>{ocrOpen ? <DocumentOcrDialog profile={profile} runtime={runtime} onClose={() => setOcrOpen(false)} onSaved={onSaved} onManage={() => { setOcrOpen(false); void navigate("/data"); }} /> : null}{chatOpen ? <PainChatDialog profile={profile} runtime={runtime} onClose={() => setChatOpen(false)} onSaved={onSaved} /> : null}</>;
+  return <><div className="floating-health-tools"><button type="button" onClick={() => setOcrOpen(true)}>서류 업로드</button><button type="button" onClick={() => setChatOpen(true)}>대화로 통증 기록</button></div>{ocrOpen ? <DocumentOcrDialog profile={profile} runtime={runtime} onClose={() => setOcrOpen(false)} onSaved={onSaved} onManage={() => { setOcrOpen(false); void navigate("/data"); }} /> : null}{chatOpen ? <PainChatDialog profile={profile} runtime={runtime} onClose={() => setChatOpen(false)} onSaved={onSaved} /> : null}</>;
 }
 
 function DocumentOcrDialog({ profile, runtime, onClose, onSaved, onManage }: { profile: FamilyProfile; runtime?: LocalDomainRuntime; onClose: () => void; onSaved: () => Promise<void>; onManage: () => void }) {
@@ -167,7 +167,7 @@ function DocumentOcrDialog({ profile, runtime, onClose, onSaved, onManage }: { p
         setRecordedDate(result.examDate);
         setRecognizedDate(result.examDate);
       }
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "OCR을 실행하지 못했습니다."); } finally { setWorking(false); }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "서류를 분석하지 못했습니다."); } finally { setWorking(false); }
   }
 
   async function confirm() {
@@ -205,7 +205,73 @@ function DocumentOcrDialog({ profile, runtime, onClose, onSaved, onManage }: { p
     }
   }
 
-  return <div className="modal-backdrop" role="presentation"><section className="modal-panel ocr-quick-dialog" role="dialog" aria-modal="true"><div className="modal-heading"><div><p className="section-kicker">사용자 확인 단계</p><h2>{profile.displayName}님의 서류 OCR</h2></div><button className="modal-close" type="button" onClick={onClose}>×</button></div><p className="form-notice">※ 개발·검증용 외부 AI(Google Gemini)로 전송됩니다. 실제 개인정보가 없는 <strong>합성·비식별 문서</strong>로만 테스트해 주세요. 의료 판단을 하지 않으며, 직접 수정·확정해야만 브라우저 로컬에 저장됩니다.</p>{!text ? <><label>건강서류 (PDF 또는 이미지 복수 선택 가능)<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple onChange={(event) => { const chosen = event.currentTarget.files; setFiles(chosen ? Array.from(chosen) : []); }} /></label>{files.length > 0 ? <div className="ocr-file-badge-list">{files.map((f, i) => <span key={i} className="ocr-file-badge">{f.name} ({(f.size / 1024 / 1024).toFixed(1)}MB)</span>)}</div> : null}<div className="form-actions"><button className="secondary-button" type="button" onClick={onManage}>전체 서류 관리</button><button className="primary-button" type="button" disabled={files.length === 0 || working} onClick={() => void recognize()}>{working ? "글자를 읽는 중…" : files.length > 1 ? `동의하고 ${files.length}장 일괄 OCR 읽기` : "동의하고 OCR 읽기"}</button></div></> : <><div className="ocr-date-selector"><label><strong>검사 일자</strong> {recognizedDate ? <span className="optional-label">(문서에서 자동 인식됨: {recognizedDate})</span> : null}<input type="date" value={recordedDate} required onChange={(event) => setRecordedDate(event.target.value)} /></label></div><label>추출 텍스트<textarea rows={8} value={text} onChange={(event) => setText(event.target.value)} /></label>{rows.length > 0 ? <div className="ocr-review-table"><strong>검사 항목 확인</strong>{rows.map((row, index) => <div key={index}><input value={row.testName} aria-label="검사항목" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, testName: event.target.value } : value))} /><input value={row.value} aria-label="결과값" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, value: event.target.value } : value))} /><input value={row.unit} aria-label="단위" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, unit: event.target.value } : value))} /><input value={row.judgment} aria-label="판정" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, judgment: event.target.value } : value))} /></div>)}</div> : null}<div className="form-actions"><button className="secondary-button" type="button" onClick={onClose}>취소</button><button className="primary-button" type="button" disabled={working} onClick={() => void confirm()}>{working ? "저장 중…" : "수정 내용 확정 · 건강기록 저장"}</button></div></>}{error ? <div className="alert error-alert">{error}</div> : null}</section></div>;
+  return <div className="modal-backdrop" role="presentation"><section className="modal-panel ocr-quick-dialog" role="dialog" aria-modal="true"><div className="modal-heading"><div><p className="section-kicker">사용자 확인 단계</p><h2>{profile.displayName}님의 서류 업로드</h2></div><button className="modal-close" type="button" onClick={onClose}>×</button></div><p className="form-notice">※ 개발·검증용 외부 AI(Google Gemini)로 전송됩니다. 실제 개인정보가 없는 <strong>합성·비식별 문서</strong>로만 테스트해 주세요. 의료 판단을 하지 않으며, 직접 수정·확정해야만 브라우저 로컬에 저장됩니다.</p>{!text ? <><label>건강서류 (PDF 또는 이미지 복수 선택 가능)<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple onChange={(event) => { const chosen = event.currentTarget.files; setFiles(chosen ? Array.from(chosen) : []); }} /></label>{files.length > 0 ? <div className="ocr-file-badge-list">{files.map((f, i) => <span key={i} className="ocr-file-badge">{f.name} ({(f.size / 1024 / 1024).toFixed(1)}MB)</span>)}</div> : null}<div className="form-actions"><button className="secondary-button" type="button" onClick={onManage}>전체 서류 관리</button><button className="primary-button" type="button" disabled={files.length === 0 || working} onClick={() => void recognize()}>{working ? "업로드 및 읽는 중…" : files.length > 1 ? `동의하고 ${files.length}장 일괄 업로드하기` : "동의하고 업로드하기"}</button></div></> : <><div className="ocr-date-selector"><label><strong>검사 일자</strong> {recognizedDate ? <span className="optional-label">(문서에서 자동 인식됨: {recognizedDate})</span> : null}<input type="date" value={recordedDate} required onChange={(event) => setRecordedDate(event.target.value)} /></label></div><label>추출 텍스트<textarea rows={8} value={text} onChange={(event) => setText(event.target.value)} /></label>{rows.length > 0 ? <div className="ocr-review-table"><strong>검사 항목 확인</strong>{rows.map((row, index) => <div key={index}><input value={row.testName} aria-label="검사항목" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, testName: event.target.value } : value))} /><input value={row.value} aria-label="결과값" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, value: event.target.value } : value))} /><input value={row.unit} aria-label="단위" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, unit: event.target.value } : value))} /><input value={row.judgment} aria-label="판정" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, judgment: event.target.value } : value))} /></div>)}</div> : null}<div className="form-actions"><button className="secondary-button" type="button" onClick={onClose}>취소</button><button className="primary-button" type="button" disabled={working} onClick={() => void confirm()}>{working ? "저장 중…" : "수정 내용 확정 · 건강기록 저장"}</button></div></>}{error ? <div className="alert error-alert">{error}</div> : null}</section></div>;
+}
+
+function parseKoreanOnsetClient(text: string): { onsetDate?: string; onsetDescription?: string; onsetFormatted?: string } {
+  const now = new Date();
+  const todayWeekday = (now.getDay() + 6) % 7; // Monday = 0, Sunday = 6
+  const weekdays: Record<string, number> = {
+    월: 0, 월요일: 0, 화: 1, 화요일: 1, 수: 2, 수요일: 2, 목: 3, 목요일: 3, 금: 4, 금요일: 4, 토: 5, 토요일: 5, 일: 6, 일요일: 6,
+  };
+
+  const match = /(저번주|지난주|지난|저번)\s*(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)/.exec(text);
+  if (match) {
+    const prefix = match[1];
+    const wStr = match[2];
+    const targetWd = weekdays[wStr] ?? 0;
+    const daysAgo = todayWeekday + 7 - targetWd;
+    const targetDate = new Date(now.getTime() - daysAgo * 86400000);
+    const m = targetDate.getMonth() + 1;
+    const d = targetDate.getDate();
+    const ymd = `${targetDate.getFullYear()}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const desc = `${prefix} ${wStr}`;
+    return { onsetDate: ymd, onsetDescription: desc, onsetFormatted: `${m}월 ${d}일 (${desc})` };
+  }
+
+  const thisWeekMatch = /(이번주|이번)\s*(월요일|화요일|수요일|목요일|금요일|토요일|일요일|월|화|수|목|금|토|일)/.exec(text);
+  if (thisWeekMatch) {
+    const prefix = thisWeekMatch[1];
+    const wStr = thisWeekMatch[2];
+    const targetWd = weekdays[wStr] ?? 0;
+    const daysAgo = todayWeekday - targetWd;
+    const targetDate = new Date(now.getTime() - daysAgo * 86400000);
+    const m = targetDate.getMonth() + 1;
+    const d = targetDate.getDate();
+    const ymd = `${targetDate.getFullYear()}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const desc = `${prefix} ${wStr}`;
+    return { onsetDate: ymd, onsetDescription: desc, onsetFormatted: `${m}월 ${d}일 (${desc})` };
+  }
+
+  if (text.includes("그저께") || text.includes("그제")) {
+    const targetDate = new Date(now.getTime() - 2 * 86400000);
+    const m = targetDate.getMonth() + 1;
+    const d = targetDate.getDate();
+    const ymd = `${targetDate.getFullYear()}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const desc = text.includes("그저께") ? "그저께" : "그제";
+    return { onsetDate: ymd, onsetDescription: desc, onsetFormatted: `${m}월 ${d}일 (${desc})` };
+  }
+
+  if (text.includes("어제")) {
+    const targetDate = new Date(now.getTime() - 86400000);
+    const m = targetDate.getMonth() + 1;
+    const d = targetDate.getDate();
+    const ymd = `${targetDate.getFullYear()}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    return { onsetDate: ymd, onsetDescription: "어제", onsetFormatted: `${m}월 ${d}일 (어제)` };
+  }
+
+  const daysMatch = /(\d+)\s*일\s*전/.exec(text);
+  if (daysMatch) {
+    const days = Number(daysMatch[1]);
+    const targetDate = new Date(now.getTime() - days * 86400000);
+    const m = targetDate.getMonth() + 1;
+    const d = targetDate.getDate();
+    const ymd = `${targetDate.getFullYear()}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const desc = `${days}일 전`;
+    return { onsetDate: ymd, onsetDescription: desc, onsetFormatted: `${m}월 ${d}일 (${desc})` };
+  }
+
+  return {};
 }
 
 export function PainChatDialog({ profile, runtime, onClose, onSaved }: { profile: FamilyProfile; runtime?: LocalDomainRuntime; onClose: () => void; onSaved: () => Promise<void> }) {
@@ -227,12 +293,23 @@ export function PainChatDialog({ profile, runtime, onClose, onSaved }: { profile
     try {
       const controller = new AbortController();
       const timeout = window.setTimeout(() => controller.abort(), 30000);
-      const response = await fetch("http://127.0.0.1:8000/api/v1/pain-chat/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: next }), signal: controller.signal });
+      const response = await fetch("/api/v1/pain-chat/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: next }), signal: controller.signal });
       window.clearTimeout(timeout);
       const body = await response.json();
       if (!response.ok) throw new Error(body.message ?? "대화에 실패했습니다.");
       setMessages((current) => [...current, { role: "assistant", content: body.data.assistant_message }]);
-      setDraft(body.data.draft ?? {});
+
+      const allUserText = next.filter((m) => m.role === "user").map((m) => m.content).join(" ");
+      const clientParsed = parseKoreanOnsetClient(allUserText);
+
+      const serverDraft = (body.data.draft ?? {}) as Record<string, unknown>;
+      const mergedDraft: Record<string, unknown> = {
+        ...serverDraft,
+        onset_date: serverDraft.onset_date || clientParsed.onsetDate,
+        onset_description: serverDraft.onset_description || clientParsed.onsetDescription,
+        onset_formatted: serverDraft.onset_formatted || clientParsed.onsetFormatted,
+      };
+      setDraft(mergedDraft);
       setMissing(body.data.missing_fields ?? []);
       setError(undefined);
     } catch (caught) { setError(caught instanceof DOMException && caught.name === "AbortError" ? "응답 시간이 초과되었습니다. 통증 부위와 정도를 직접 입력해 주세요." : caught instanceof Error ? caught.message : "대화에 실패했습니다."); } finally { setWorking(false); }
@@ -241,19 +318,85 @@ export function PainChatDialog({ profile, runtime, onClose, onSaved }: { profile
   async function save() {
     if (!runtime || !draft.body_area || typeof draft.intensity !== "number") return;
     setWorking(true);
-    const result = await runtime.healthRecords.create({ householdId: PRIMARY_HOUSEHOLD_ID, profileId: profile.id, recordType: "pain", recordedAt: new Date().toISOString(), source: "local_ai", payload: { bodyArea: draft.body_area, intensity: draft.intensity, sensation: draft.sensation, note: draft.note } });
+    const userMsgs = messages.filter((m) => m.role === "user").map((m) => m.content).join(" ");
+    const clientParsed = parseKoreanOnsetClient(userMsgs);
+    const onsetStr = (draft.onset_formatted as string) || clientParsed.onsetFormatted || (draft.onset_date ? `${draft.onset_date}${draft.onset_description ? ` (${draft.onset_description})` : ""}` : (draft.onset_description as string));
+    const onsetDate = (draft.onset_date as string) || clientParsed.onsetDate;
+
+    const lines: string[] = [];
+    lines.push(`부위: ${draft.body_area}`);
+    lines.push(`통증강도: ${draft.intensity}/10`);
+    if (draft.sensation) lines.push(`양상: ${draft.sensation}`);
+    if (onsetStr) lines.push(`시작시각: ${onsetStr}`);
+    if (draft.note) lines.push(`내용: ${draft.note}`);
+    else if (userMsgs) lines.push(`내용: ${userMsgs}`);
+
+    const finalFormattedSummary = lines.join("\n");
+
+    const result = await runtime.healthRecords.create({
+      householdId: PRIMARY_HOUSEHOLD_ID,
+      profileId: profile.id,
+      recordType: "pain",
+      recordedAt: onsetDate ? new Date(`${onsetDate}T12:00:00`).toISOString() : new Date().toISOString(),
+      source: "local_ai",
+      payload: {
+        bodyArea: draft.body_area,
+        intensity: draft.intensity,
+        sensation: draft.sensation,
+        onsetDate: onsetDate,
+        onsetDescription: draft.onset_description || clientParsed.onsetDescription,
+        onsetFormatted: onsetStr,
+        note: finalFormattedSummary,
+      },
+    });
     setWorking(false);
     if (!result.ok) return setError(result.error.message);
     await onSaved();
     onClose();
   }
 
-  return <div className="modal-backdrop" role="presentation"><section className="modal-panel health-pain-chat" role="dialog" aria-modal="true"><div className="modal-heading"><div><p className="section-kicker">대화형 입력</p><h2>{profile.displayName}님의 통증 기록</h2></div><button className="modal-close" type="button" onClick={onClose}>×</button></div><p className="form-notice">입력 내용은 기록 초안 생성을 위해 AI로 전송됩니다. 저장 전 직접 확인하세요.</p><div className="health-chat-messages">{messages.map((message, index) => <p key={index} className={message.role}>{message.content}</p>)}</div><form className="health-chat-form" onSubmit={(event) => void send(event)}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="예: 어제부터 오른쪽 무릎이 욱신거려요" /><button className="primary-button" disabled={working}>{working ? "정리 중…" : "보내기"}</button></form>{Object.keys(draft).length > 0 ? <div className="chat-draft"><h3>저장 전 확인</h3><label>통증 부위<input value={String(draft.body_area ?? "")} onChange={(event) => setDraft({ ...draft, body_area: event.target.value })} /></label><label>통증 정도<input type="number" min="0" max="10" value={typeof draft.intensity === "number" ? draft.intensity : ""} onChange={(event) => setDraft({ ...draft, intensity: Number(event.target.value) })} /></label>{missing.length > 0 ? <p>추가 확인: {missing.join(", ")}</p> : <button className="primary-button" type="button" disabled={working} onClick={() => void save()}>통증 기록으로 저장</button>}</div> : null}{error ? <div className="alert error-alert">{error}</div> : null}</section></div>;
+  return <div className="modal-backdrop" role="presentation"><section className="modal-panel health-pain-chat" role="dialog" aria-modal="true"><div className="modal-heading"><div><p className="section-kicker">대화형 입력</p><h2>{profile.displayName}님의 통증 기록</h2></div><button className="modal-close" type="button" onClick={onClose}>×</button></div><p className="form-notice">입력 내용은 기록 초안 생성을 위해 AI로 전송됩니다. 저장 전 직접 확인하세요.</p><div className="health-chat-messages">{messages.map((message, index) => <p key={index} className={message.role}>{message.content}</p>)}</div><form className="health-chat-form" onSubmit={(event) => void send(event)}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="예: 저번주 수요일부터 오른쪽 손목이 시큰거려요" /><button className="primary-button" disabled={working}>{working ? "정리 중…" : "보내기"}</button></form>{Object.keys(draft).length > 0 ? <div className="chat-draft"><h3>저장 전 확인</h3><label>통증 부위 (좌·우 구분 포함)<input value={String(draft.body_area ?? "")} placeholder="예: 오른쪽 손목" onChange={(event) => setDraft({ ...draft, body_area: event.target.value })} /></label><label>통증 정도 (0~10)<input type="number" min="0" max="10" value={typeof draft.intensity === "number" ? draft.intensity : ""} onChange={(event) => setDraft({ ...draft, intensity: Number(event.target.value) })} /></label><label>통증 양상<input value={String(draft.sensation ?? "")} placeholder="예: 시큰거림, 욱신거림" onChange={(event) => setDraft({ ...draft, sensation: event.target.value })} /></label><label>통증 시작 시점<input value={String(draft.onset_formatted ?? draft.onset_date ?? draft.onset_description ?? "")} placeholder="예: 8월 19일 (저번주 수요일)" onChange={(event) => setDraft({ ...draft, onset_formatted: event.target.value })} /></label><label>상세 내용<textarea rows={2} value={String(draft.note ?? "")} placeholder="상세한 통증 설명" onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></label>{missing.length > 0 ? <p>추가 확인 필요: {missing.join(", ")}</p> : <button className="primary-button" type="button" disabled={working} onClick={() => void save()}>통증 기록으로 저장</button>}</div> : null}{error ? <div className="alert error-alert">{error}</div> : null}</section></div>;
 }
 
-function recordSummary(record: HealthRecord) {
+function recordSummary(record: HealthRecord): string {
   const payload = record.payload as Record<string, unknown>;
-  return String(payload.note ?? payload.bodyArea ?? payload.testName ?? "세부 내용 없음");
+  if (record.recordType === "pain") {
+    if (typeof payload.note === "string" && payload.note.includes("부위:")) {
+      let text = payload.note.replace(/\s*·\s*/g, "\n");
+      if (!text.includes("시작시각:") && (payload.onsetFormatted || payload.onsetDate || payload.onsetDescription)) {
+        const onset = payload.onsetFormatted || (payload.onsetDate ? `${payload.onsetDate}${payload.onsetDescription ? ` (${payload.onsetDescription})` : ""}` : payload.onsetDescription);
+        text = text.replace("양상:", `시작시각: ${onset}\n양상:`);
+      }
+      return text;
+    }
+    const lines: string[] = [];
+    if (payload.bodyArea) lines.push(`부위: ${payload.bodyArea}`);
+    if (payload.intensity !== undefined) lines.push(`통증강도: ${payload.intensity}/10`);
+    if (payload.sensation) lines.push(`양상: ${payload.sensation}`);
+    const onset = payload.onsetFormatted || (payload.onsetDate ? `${payload.onsetDate}${payload.onsetDescription ? ` (${payload.onsetDescription})` : ""}` : payload.onsetDescription);
+    if (onset) lines.push(`시작시각: ${onset}`);
+    if (payload.note && payload.note !== payload.bodyArea) {
+      lines.push(`내용: ${payload.note}`);
+    }
+    return lines.join("\n") || "통증 기록";
+  }
+  if (record.recordType === "blood_pressure") {
+    return `수축기 ${payload.systolic} / 이완기 ${payload.diastolic} mmHg ${payload.note ? `\n내용: ${payload.note}` : ""}`;
+  }
+  if (record.recordType === "blood_glucose") {
+    const timing = payload.timing === "fasting" ? "공복" : payload.timing === "after_meal" ? "식후" : payload.timing || "";
+    return `혈당 ${payload.value} mg/dL ${timing ? `(${timing})` : ""} ${payload.note ? `\n내용: ${payload.note}` : ""}`;
+  }
+  if (record.recordType === "body_measurement") {
+    const wt = payload.weight || payload.weightKg;
+    const ht = payload.height || payload.heightCm;
+    return `체중 ${wt}kg ${ht ? `· 키 ${ht}cm` : ""} ${payload.note ? `\n내용: ${payload.note}` : ""}`;
+  }
+  if (record.recordType === "lab_result" || record.recordType === "health_screening") {
+    if (payload.note) return String(payload.note);
+    if (payload.testName) return `${payload.testName}: ${payload.value} ${payload.unit || ""}`;
+  }
+  return String(payload.note ?? payload.bodyArea ?? payload.testName ?? "저장된 건강기록");
 }
 function text(form: FormData, key: string) { return String(form.get(key) ?? "").trim(); }
 function optional(form: FormData, key: string) { const value = text(form, key); return value || undefined; }

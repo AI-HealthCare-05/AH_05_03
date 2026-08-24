@@ -232,6 +232,50 @@ export function analyzeExamTrends(records: HealthRecord[]): LongitudinalTrendSum
         });
       }
     }
+
+    // 4) 신체 측정 기록 (body_measurement)
+    if (record.recordType === "body_measurement") {
+      if (typeof payload.height === "number") {
+        rawPoints.push({
+          date,
+          dateTime: record.recordedAt,
+          rawName: "신장",
+          canonicalName: "키 (신장)",
+          category: "other",
+          value: String(payload.height),
+          numericValue: payload.height,
+          unit: "cm",
+          judgment: "",
+          matchType: "exact",
+          recordId: record.id,
+          recordType: "body_measurement",
+          recordCreatedAt: record.createdAt,
+          source,
+          sourceDocumentId,
+          isUserConfirmed: true,
+        });
+      }
+      if (typeof payload.weight === "number") {
+        rawPoints.push({
+          date,
+          dateTime: record.recordedAt,
+          rawName: "체중",
+          canonicalName: "체중 (몸무게)",
+          category: "other",
+          value: String(payload.weight),
+          numericValue: payload.weight,
+          unit: "kg",
+          judgment: "",
+          matchType: "exact",
+          recordId: record.id,
+          recordType: "body_measurement",
+          recordCreatedAt: record.createdAt,
+          source,
+          sourceDocumentId,
+          isUserConfirmed: true,
+        });
+      }
+    }
   }
 
   // 고유 날짜 목록
