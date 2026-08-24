@@ -9,5 +9,7 @@ class OcrTableData(BaseSerializerModel):
 class RawOcrData(BaseSerializerModel):
     text: str
     tables: list[OcrTableData]
+    exam_date: str | None = None
     status: str = "raw"
     automatically_confirmed: bool = False
+

@@ -2,12 +2,13 @@ export interface RawOcrTable { table_index: number; rows: string[][] }
 export interface RawOcrResult {
   text: string;
   tables: RawOcrTable[];
+  exam_date?: string | null;
   status: "raw";
   automatically_confirmed: false;
 }
 
 export interface OcrAdapter {
-  recognize(file: File): Promise<RawOcrResult>;
+  recognize(files: File | File[]): Promise<RawOcrResult>;
 }
 
 interface ApiEnvelope<T> { success: boolean; data: T; message: string }
@@ -15,9 +16,18 @@ interface ApiEnvelope<T> { success: boolean; data: T; message: string }
 export class DevServerOcrAdapter implements OcrAdapter {
   constructor(private readonly baseUrl = "http://127.0.0.1:8000/api/v1") {}
 
-  async recognize(file: File): Promise<RawOcrResult> {
+  async recognize(input: File | File[]): Promise<RawOcrResult> {
+    const fileList = Array.isArray(input) ? input : [input];
+    if (fileList.length === 0) {
+      throw new Error("인식할 파일이 선택되지 않았습니다.");
+    }
     const body = new FormData();
-    body.append("file", file);
+    for (const file of fileList) {
+      body.append("files", file);
+    }
+    if (fileList.length === 1) {
+      body.append("file", fileList[0]);
+    }
     const response = await fetch(`${this.baseUrl}/dev/ocr/recognize`, { method: "POST", body });
     if (!response.ok) {
       const error = await response.json().catch(() => null) as { message?: string } | null;
@@ -27,3 +37,4 @@ export class DevServerOcrAdapter implements OcrAdapter {
     return envelope.data;
   }
 }
+

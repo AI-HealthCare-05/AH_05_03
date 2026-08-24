@@ -79,6 +79,10 @@ class Config(BaseSettings):
     ENABLE_DEV_OCR_BRIDGE: bool = False
     DEV_OCR_MAX_FILE_BYTES: int = 20 * 1024 * 1024
 
+    # --- Gemini OCR 프록시 ------------------------------------------
+    # 클라우드 OCR 통신 테스트를 위한 임시 키. 운영 환경이 아닌 개발 환경에서만 사용.
+    GEMINI_API_KEY: str | None = None
+
     # --- OpenAI 대화형 통증 기록 --------------------------------------
     # 키는 서버 환경변수에만 두고, 브라우저로 전달하지 않는다.
     OPENAI_KEY: str | None = None
