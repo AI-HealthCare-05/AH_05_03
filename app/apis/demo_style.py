@@ -24,8 +24,25 @@ CSS = """  :root {
   }
   main { max-width: 640px; margin: 0 auto; }
   h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.8px; line-height: 1.25; margin: 0 0 6px; }
+  /* 홈으로 돌아가는 길. 이 화면은 SPA 밖이라 브라우저 뒤로가기 말고는 나갈 길이
+     없었다 — 데모를 열어 본 사람이 앱으로 못 돌아오는 것이 실제로 불편했다. */
+  .home-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin: 0 0 14px; min-height: 44px; padding: 0 2px;
+    color: var(--ink-2); font-size: 14px; font-weight: 600; text-decoration: none;
+  }
+  .home-link:hover { color: var(--accent); }
+  .home-link span { font-size: 16px; }
   .kicker { font-size: 12px; font-weight: 700; letter-spacing: .06em; color: var(--ink-3); margin: 0 0 4px; }
   .lead { font-size: 15px; color: var(--ink-2); margin: 0 0 24px; }
+  /* 수치 프로필 칩. 눌린 것이 채워지는 모양이라 "고르는 것"임이 바로 읽힌다. */
+  .profiles .profile-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .profiles .profile-chips button {
+    min-height: 44px; padding: 0 14px; border-radius: 10px;
+    border: 1px solid var(--accent); background: var(--canvas); color: var(--accent);
+    font-size: 15px; font-weight: 600;
+  }
+  .profiles .profile-chips button[aria-pressed="true"] { background: var(--accent); color: #fff; }
   .card { background: var(--canvas); border-radius: 18px; padding: 20px; margin-bottom: 16px; }
   h2 { font-size: 17px; font-weight: 600; margin: 0 0 12px; }
   .group { background: var(--surface); border-radius: 14px; overflow: hidden; margin-bottom: 8px; }
@@ -136,14 +153,6 @@ CSS = """  :root {
   .notice ul { margin: 6px 0 0; padding-left: 18px; }
   .error { background: #FFF4F4; border-radius: 12px; padding: 13px 14px; font-size: 14px; color: #C9342A; }
   /* 엔진 선택 스위치. 같은 화면에서 바꿔야 결과 비교가 된다. */
-  .switch { display: flex; gap: 8px; margin-bottom: 6px; }
-  .switch button {
-    flex: 1; width: auto; min-height: 46px; padding: 10px 6px;
-    border: 1px solid var(--accent); border-radius: 10px;
-    color: var(--accent); background: var(--canvas);
-    font-size: 15px; font-weight: 600;
-  }
-  .switch button[aria-pressed="true"] { background: var(--accent); color: #fff; }
   /* 고른 엔진이 쓰지 않는 입력. 숨기지 않는다 — 어떤 항목이 빠지는지 보여야 한다.
      연한 회색으로만 눌러 둔다. 값도 지우지 않는다. 엔진을 되돌리면 그대로 있어야 한다. */
   .row.off label, .row.off .unit { color: var(--placeholder); }
@@ -180,6 +189,16 @@ CSS = """  :root {
   .reason { font-size: 15px; color: var(--ink-2); margin: 0 0 10px; }
   .cite { font-size: 12px; color: var(--ink-3); margin-top: 10px; line-height: 1.5; }
   .missing { background: var(--surface); border-radius: 12px; padding: 12px 14px; font-size: 14px; color: var(--ink-2); }
+  /* 수치 -> 질환 기여 표. 근거 열이 길어서 좁은 화면에서는 가로로 스크롤시킨다 —
+     줄바꿈으로 뭉개면 어느 근거가 어느 신호의 것인지 알 수 없다. */
+  .contrib-wrap { overflow-x: auto; margin: 10px 0 4px; }
+  table.contrib { width: 100%; min-width: 460px; border-collapse: collapse; font-size: 13px; }
+  table.contrib th, table.contrib td { padding: 9px 8px; border-bottom: 1px solid var(--divider); text-align: left; vertical-align: top; }
+  table.contrib tr:last-child td { border-bottom: 0; }
+  table.contrib th { font-size: 12px; font-weight: 700; color: var(--ink-3); }
+  table.contrib td:first-child { width: 44px; }
+  table.contrib .num { font-variant-numeric: tabular-nums; font-weight: 700; }
+  table.contrib .badge { margin-bottom: 3px; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }"""
 
 
@@ -190,15 +209,3 @@ ENGINES = [
 ]
 
 
-def switch(active: str) -> str:
-    """어느 엔진으로 돌릴지 고르는 스위치.
-
-    링크가 아니라 버튼이다. 화면을 새로 열면 입력값이 날아가고, 그러면 같은 사람으로
-    두 엔진을 비교할 수가 없다.
-    """
-    buttons = "".join(
-        f'<button type="button" class="engine-pick" data-engine="{key}" '
-        f'aria-pressed="{"true" if key == active else "false"}">{label}</button>'
-        for key, label in ENGINES
-    )
-    return f'<div class="switch" role="group" aria-label="예측 엔진 선택">{buttons}</div>'

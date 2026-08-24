@@ -50,6 +50,16 @@ class RuleAssessmentRequest(BaseRequestModel):
     non_hdl_c: float | None = Field(default=None, gt=0, le=1000, description="비우면 총콜레스테롤-HDL로 계산")
 
     # --- 심혈관 위험요인 ----------------------------------------------
+    # 규칙 엔진이 다루지 않는 영역. `app/services/lab_staging.py` 가 KDIGO·WHO 기준으로
+    # 단계를 매긴다. 벤더 엔진은 이 값을 무시하므로(extra="ignore") 그대로 넘겨도 안전하다.
+    creatinine: float | None = Field(default=None, gt=0.1, le=20, description="혈청 크레아티닌 mg/dL")
+    urine_acr: float | None = Field(default=None, ge=0, le=20000, description="요알부민/크레아티닌비 mg/g")
+    ast: float | None = Field(default=None, gt=0, le=2000, description="AST(SGOT) IU/L")
+    alt: float | None = Field(default=None, gt=0, le=2000, description="ALT(SGPT) IU/L")
+    ggt: float | None = Field(default=None, gt=0, le=3000, description="감마지티피 IU/L")
+    uric_acid: float | None = Field(default=None, gt=0.1, le=30, description="요산 mg/dL")
+    hemoglobin: float | None = Field(default=None, gt=3, le=25, description="혈색소 g/dL")
+
     smoking: bool | None = None
     has_diabetes: bool | None = None
     has_hypertension: bool | None = None
@@ -84,8 +94,50 @@ class DomainAssessment(BaseSerializerModel):
     disclaimer: str
 
 
+class RiskContributor(BaseSerializerModel):
+    """질환 위험을 올린 신호 하나와 그 근거."""
+
+    key: str
+    label: str
+    detail: str = Field(description="어떤 값이 어느 기준을 넘었는지")
+    weight: int = Field(description="1=약함 2=중등도 3=강함. 효과크기로 매긴다", ge=1, le=3)
+    effect: str = Field(description="상대위험도·위험비 등 보고된 효과크기")
+    source: str = Field(description="지침 또는 코호트·메타분석 출처")
+    causal: bool | None = Field(
+        description=(
+            "인과 근거가 있는가. `false`는 '따져봤더니 인과가 아니었다'(예: γ-GTP는 "
+            "멘델 무작위화에서 귀무), `null`은 '따로 따져본 적 없다'로 서로 다른 뜻이다."
+        )
+    )
+
+
+class DiseaseRiskAssessment(BaseSerializerModel):
+    """질환 하나에 대해 여러 수치가 모여 만든 위험. `DomainAssessment`에 근거 목록을 더한 형태."""
+
+    category: str
+    risk_level: Literal["INSUFFICIENT_DATA", "NORMAL", "CAUTION", "HIGH", "VERY_HIGH"]
+    sub_status: str
+    display_label: str
+    reason: str
+    input_values: dict[str, Any]
+    criteria_reference: str
+    recommendation: str
+    flags: list[str] = []
+    missing_fields: list[str] = []
+    contributors: list[RiskContributor] = Field(default=[], description="위험을 올린 신호. 센 것부터")
+    score: int = Field(description="같은 재료를 두 번 세지 않고 합산한 가중 점수")
+    disclaimer: str
+
+
 class RuleAssessmentData(BaseSerializerModel):
     engine: str = Field(description="판정 엔진 출처")
     domains: dict[str, DomainAssessment]
     evaluated: int = Field(description="판정이 나온 영역 수")
     insufficient: list[str] = Field(description="입력이 부족해 판정하지 못한 영역")
+    disease_risks: dict[str, DiseaseRiskAssessment] = Field(
+        default={},
+        description=(
+            "영역 판정의 전치. 영역 판정이 '여러 수치 → 이 장기의 현재 상태'라면 이쪽은 "
+            "'수치 하나 → 여러 질환의 앞날'이다. 같은 값이 양쪽에 나올 수 있고 뜻이 다르다."
+        ),
+    )

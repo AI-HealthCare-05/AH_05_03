@@ -33,4 +33,12 @@ modeling/data/raw/
 modeling/data/processed/
 modeling/**/__pycache__/
 # artifacts/models 는 제외하지 않는다. compose 가 API 컨테이너에 마운트하는
-# 서빙 번들이고 2.4MB 라 저장소에 두는 편이 배포가 단순하다.
+# 서빙 번들이고 저장소에 두는 편이 배포가 단순하다.
+# (앙상블로 교체한 뒤 24MB 가 됐다. 늘어난 만큼 값은 한다 — 이 파일들이 곧 배포본이다.)
+
+# export_ensemble.py 의 출력 자리. 여기서 artifacts/models 로 복사해 배포하므로
+# 배포 후에는 두 디렉터리가 바이트 단위로 같다. 둘 다 담으면 같은 24MB 를 두 번
+# 넣는 셈이라 뺀다. 필요하면 export_ensemble.py 로 다시 만든다.
+# artifacts/models_singleton_backup 은 빼지 않는다 — 앙상블로 바꾸며 내려간 두 칸을
+# 되돌릴 원본이고(docs/30 §7) 2.4MB 라 값이 있다.
+modeling/artifacts/models_ensemble/

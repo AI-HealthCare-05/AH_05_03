@@ -9,6 +9,14 @@ const NAVIGATION = [
   { to: "/account", label: "계정", end: false },
 ] as const;
 
+// 예측 데모는 FastAPI 가 직접 내는 화면이라 SPA 라우트가 아니다. NavLink 로 걸면
+// react-router 가 클라이언트 라우팅을 시도하고 404 로 떨어진다 — 일반 앵커여야 한다.
+// 규칙 엔진 화면(`/api/demo/rules`)은 데모 안에서 스위치로 바꿀 수 있으므로
+// 내비게이션에는 입구를 하나만 둔다. 주소는 문서에 남아 있어 그대로 살아 있다.
+const DEMO_PAGES = [
+  { href: "/api/demo", label: "예측 데모", hint: "ML 모델과 규칙 엔진을 한 화면에서 비교합니다" },
+] as const;
+
 export function RootLayout() {
   const navigationOpen = useUiStore((state) => state.navigationOpen);
   const toggleNavigation = useUiStore((state) => state.toggleNavigation);
@@ -45,6 +53,18 @@ export function RootLayout() {
               <NavLink key={`${item.to}-${item.label}`} to={item.to} end={item.end} onClick={closeNavigation}>
                 {item.label}
               </NavLink>
+            ))}
+            {DEMO_PAGES.map((item) => (
+              <a
+                key={item.href}
+                className="navigation-external"
+                href={item.href}
+                title={item.hint}
+                onClick={closeNavigation}
+              >
+                {item.label}
+                <i aria-hidden="true">↗</i>
+              </a>
             ))}
           </nav>
 

@@ -38,7 +38,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from splits import SEED, cv_folds, make_split
-from targets import CATEGORICAL, DERIVED, TARGETS, Target
+from targets import CATEGORICAL, DERIVED, NEW_INDICES, TARGETS, Target
 
 DATA = Path(__file__).resolve().parent / "data" / "processed" / "nhanes_pooled.csv"
 ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
@@ -71,6 +71,86 @@ def _ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
     return numerator / safe
 
 
+# 임상 지수의 원 논문은 SI 단위(mmol/L)로 적혀 있고 이 저장소의 검사값은 mg/dL 이다.
+# 계수를 그대로 쓰면 값이 통째로 어긋나는데 **AUROC 로는 안 보인다** — 단조 변환이라
+# 판별력이 그대로기 때문이다. 어긋난 채로 절단값을 화면에 쓰는 순간 사고가 된다.
+TG_MG_TO_MMOL = 88.57
+CHOL_MG_TO_MMOL = 38.67
+
+
+def add_clinical_indices(frame: pd.DataFrame, columns: list[str]) -> None:
+    """학회·코호트에서 검증된 지수. 재료가 없으면 `columns` 에 애초에 안 들어온다.
+
+    어느 지수가 이 타깃에서 허용되는지는 `targets.DERIVED` 와 각 타깃의 ``blocked``
+    이 이미 정했다. 여기서는 계산만 하고 판단하지 않는다.
+    """
+    if not any(name in columns for name in NEW_INDICES):
+        return
+
+    def col(name: str) -> pd.Series:
+        return frame[name]
+
+    if "tyg" in columns:
+        # ln[TG(mg/dL) x FPG(mg/dL) / 2]
+        product = col("triglyceride") * col("fasting_glucose") / 2.0
+        frame["tyg"] = np.log(product.where(product > 0))
+    if "fli" in columns:
+        linear = (
+            0.953 * np.log(col("triglyceride").where(col("triglyceride") > 0))
+            + 0.139 * col("bmi")
+            + 0.718 * np.log(col("ggt").where(col("ggt") > 0))
+            + 0.053 * col("waist_cm")
+            - 15.745
+        )
+        # 100/(1+e^-L). 로지스틱이라 0~100 으로 눌린다.
+        frame["fli"] = 100.0 / (1.0 + np.exp(-linear))
+    if "lap" in columns:
+        female = col("sex").astype("object").eq("F")
+        baseline = pd.Series(np.where(female, 58.0, 65.0), index=frame.index).where(col("sex").notna())
+        excess = (col("waist_cm") - baseline).clip(lower=0)
+        frame["lap"] = excess * (col("triglyceride") / TG_MG_TO_MMOL)
+    if "vai" in columns:
+        female = col("sex").astype("object").eq("F")
+        tg = col("triglyceride") / TG_MG_TO_MMOL
+        hdl = col("hdl") / CHOL_MG_TO_MMOL
+        denominator = pd.Series(np.where(female, 36.58, 39.68), index=frame.index) + pd.Series(
+            np.where(female, 1.89, 1.88), index=frame.index
+        ) * col("bmi")
+        tg_reference = pd.Series(np.where(female, 0.81, 1.03), index=frame.index)
+        hdl_reference = pd.Series(np.where(female, 1.52, 1.31), index=frame.index)
+        value = _ratio(col("waist_cm"), denominator) * (tg / tg_reference) * (hdl_reference / hdl.where(hdl > 0))
+        frame["vai"] = value.where(col("sex").notna())
+    if "cmi" in columns:
+        tg = col("triglyceride") / TG_MG_TO_MMOL
+        hdl = col("hdl") / CHOL_MG_TO_MMOL
+        frame["cmi"] = _ratio(tg, hdl) * _ratio(col("waist_cm"), col("height_cm"))
+    if "mets_ir" in columns:
+        # {ln[(2·FPG) + TG] × BMI} / ln(HDL). 괄호 위치가 중요하다 — BMI 를 로그
+        # 안에 넣으면 값이 2 언저리로 눌리고 문헌 분포(30~50)와 어긋난다.
+        inner = 2.0 * col("fasting_glucose") + col("triglyceride")
+        hdl = col("hdl")
+        # ln(HDL) 이 분모라 HDL=1 에서 0 으로 나뉜다. 실제로는 없는 값이지만 막아 둔다.
+        denominator = np.log(hdl.where(hdl > 1))
+        frame["mets_ir"] = _ratio(np.log(inner.where(inner > 0)) * col("bmi"), denominator)
+    if "absi" in columns:
+        # WC 와 height 를 m 로 맞춘다. BMI 는 kg/m^2 그대로.
+        waist_m = col("waist_cm") / 100.0
+        height_m = col("height_cm") / 100.0
+        frame["absi"] = _ratio(waist_m, col("bmi").clip(lower=0) ** (2 / 3) * height_m.clip(lower=0) ** 0.5)
+    if "remnant_chol" in columns:
+        frame["remnant_chol"] = col("total_chol") - col("hdl") - col("ldl")
+    if "tc_hdl_ratio" in columns:
+        frame["tc_hdl_ratio"] = _ratio(col("total_chol"), col("hdl"))
+    if "ldl_hdl_ratio" in columns:
+        frame["ldl_hdl_ratio"] = _ratio(col("ldl"), col("hdl"))
+    if "uric_creatinine_ratio" in columns:
+        frame["uric_creatinine_ratio"] = _ratio(col("uric_acid"), col("creatinine"))
+    if "pulse_pressure" in columns:
+        frame["pulse_pressure"] = col("sbp") - col("dbp")
+    if "mean_arterial_pressure" in columns:
+        frame["mean_arterial_pressure"] = col("dbp") + (col("sbp") - col("dbp")) / 3.0
+
+
 def build_frame(source: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     """요청된 컬럼만 담은 설계용 프레임. 파생 비율은 여기서 계산한다."""
     raw_needed = {c for c in columns if c not in DERIVED}
@@ -90,6 +170,7 @@ def build_frame(source: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
         frame["ast_alt_ratio"] = _ratio(frame["ast"], frame["alt"])
     if "waist_height_ratio" in columns:
         frame["waist_height_ratio"] = _ratio(frame["waist_cm"], frame["height_cm"])
+    add_clinical_indices(frame, columns)
 
     frame = frame[columns]
     for column in columns:
@@ -131,7 +212,11 @@ def monotone_vector(frame: pd.DataFrame, numeric: list[str], categorical: list[s
 
 
 def make_pipeline(
-    numeric: list[str], categorical: list[str], model: str, monotone: tuple[int, ...] | None = None
+    numeric: list[str],
+    categorical: list[str],
+    model: str,
+    monotone: tuple[int, ...] | None = None,
+    seed: int = SEED,
 ) -> Pipeline:
     """결측 지시자를 쓰지 않는다.
 
@@ -160,7 +245,7 @@ def make_pipeline(
     ]
 
     if model == "logistic":
-        steps.append(("model", LogisticRegression(max_iter=5000, C=0.1, random_state=SEED)))
+        steps.append(("model", LogisticRegression(max_iter=5000, C=0.1, random_state=seed)))
     elif model == "xgboost":
         from xgboost import XGBClassifier
 
@@ -178,7 +263,7 @@ def make_pipeline(
                     colsample_bytree=0.8,
                     reg_lambda=1.0,
                     eval_metric="logloss",
-                    random_state=SEED,
+                    random_state=seed,
                     n_jobs=4,
                     **({"monotone_constraints": monotone} if monotone else {}),
                 ),
@@ -197,7 +282,7 @@ def make_pipeline(
                     depth=6,
                     learning_rate=0.05,
                     l2_leaf_reg=3.0,
-                    random_seed=SEED,
+                    random_seed=seed,
                     verbose=0,
                     allow_writing_files=False,
                     **({"monotone_constraints": list(monotone)} if monotone else {}),

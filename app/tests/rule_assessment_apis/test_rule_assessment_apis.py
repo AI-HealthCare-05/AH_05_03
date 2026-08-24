@@ -28,10 +28,22 @@ FULL: dict[str, Any] = {
     "ldl_c": 140.0,
     "hdl_c": 44.0,
     "triglycerides": 180.0,
+    # lab_staging 이 판정하는 네 영역의 입력. 벤더 엔진은 이 값을 무시한다.
+    "creatinine": 1.10,
+    "urine_acr": 12.0,
+    "ast": 28.0,
+    "alt": 36.0,
+    "ggt": 58.0,
+    "uric_acid": 6.8,
+    "hemoglobin": 15.1,
     "smoking": False,
 }
 
-DOMAINS = {"hypertension", "obesity", "dyslipidemia", "diabetes"}
+# 벤더 엔진이 판정하는 넷과, `app/services/lab_staging.py` 가 붙인 넷.
+# 응답은 둘을 구분하지 않는다 — 사용자에게 "누가 짠 코드인가"는 아무 뜻이 없다.
+VENDOR_DOMAINS = {"hypertension", "obesity", "dyslipidemia", "diabetes"}
+STAGING_DOMAINS = {"kidney", "liver", "fatty_liver", "uric_acid", "anemia"}
+DOMAINS = VENDOR_DOMAINS | STAGING_DOMAINS
 
 
 async def test_full_profile_evaluates_all_domains(client: AsyncClient) -> None:
@@ -40,7 +52,7 @@ async def test_full_profile_evaluates_all_domains(client: AsyncClient) -> None:
 
     data = response.json()["data"]
     assert set(data["domains"]) == DOMAINS
-    assert data["evaluated"] == 4
+    assert data["evaluated"] == len(DOMAINS)
     assert data["insufficient"] == []
     assert "PR #4" in data["engine"]
 
@@ -64,7 +76,8 @@ async def test_missing_labs_are_refused_not_guessed(client: AsyncClient) -> None
     data = response.json()["data"]
     # 비만은 키·체중·허리둘레만으로 판정된다. 나머지 셋은 검사값이 필요하다.
     assert data["domains"]["obesity"]["risk_level"] != "INSUFFICIENT_DATA"
-    assert set(data["insufficient"]) == {"hypertension", "dyslipidemia", "diabetes"}
+    # 비만만 키·체중·허리둘레로 판정된다. 나머지 일곱은 전부 검사값이 필요하다.
+    assert set(data["insufficient"]) == DOMAINS - {"obesity"}
     for name in data["insufficient"]:
         assert data["domains"][name]["missing_fields"]
 
@@ -109,9 +122,15 @@ def test_dto_fields_are_subset_of_engine_schema() -> None:
     """
     from chronic_disease_engine import HealthProfileInput
 
+    from app.services.lab_staging import STAGING_FIELDS
+
     ours = set(RuleAssessmentRequest.model_fields)
     theirs = set(HealthProfileInput.model_fields)
-    assert ours <= theirs, f"엔진에 없는 필드: {sorted(ours - theirs)}"
+    # 우리가 따로 붙인 영역의 입력은 엔진에 없는 것이 정상이다. 그것만 빼고 본다.
+    assert ours - STAGING_FIELDS <= theirs, f"엔진에 없는 필드: {sorted(ours - STAGING_FIELDS - theirs)}"
+    # 반대로 우리 필드가 엔진 필드와 겹치면 어느 쪽이 읽는지 모호해진다.
+    assert not (STAGING_FIELDS & theirs), f"엔진과 이름이 겹친다: {sorted(STAGING_FIELDS & theirs)}"
+    assert STAGING_FIELDS <= ours, "DTO 가 staging 입력을 받지 않는다"
     # 반대 방향은 경고 수준이다. 엔진이 새 입력을 받게 되면 우리도 노출해야 한다.
     assert not (theirs - ours), f"우리가 노출하지 않는 엔진 입력: {sorted(theirs - ours)}"
 
@@ -171,31 +190,20 @@ async def test_one_demo_page_drives_both_engines(client: AsyncClient) -> None:
     # 한 화면이 두 엔드포인트를 모두 호출한다.
     assert "/api/v1/predictions/risk" in page
     assert "/api/v1/assessments/rules" in page
-    # 엔진 스위치 세 개
-    for key in ("ml", "rules", "both"):
-        assert f'data-engine="{key}"' in page
+    # 엔진을 고르게 하지 않는다. 늘 둘 다 돌려야 같은 사람으로 두 결과가 나란히 선다.
+    assert "data-engine=" not in page
+    assert 'const engine = "both"' in page
     assert "--accent: #0066CC" in page
 
 
-@pytest.mark.parametrize(
-    ("url", "expected"),
-    [
-        ("/api/demo", "both"),  # 기본은 둘 다 — 비교가 이 화면의 목적이다
-        ("/api/demo?engine=ml", "ml"),
-        ("/api/demo?engine=rules", "rules"),
-        ("/api/demo/rules", "rules"),  # 화면이 둘이던 시절의 주소
-    ],
-)
-async def test_demo_preselects_engine(client: AsyncClient, url: str, expected: str) -> None:
-    response = await client.get(url)
-    assert response.status_code == status.HTTP_200_OK
-    assert f'let engine = "{expected}"' in response.text
-    assert f'data-engine="{expected}" aria-pressed="true"' in response.text
+async def test_demo_rules_url_redirects(client: AsyncClient) -> None:
+    """엔진을 고르던 시절의 주소. 화면이 하나가 됐으니 정본으로 보낸다.
 
-
-async def test_unknown_engine_is_rejected(client: AsyncClient) -> None:
-    response = await client.get("/api/demo?engine=xgboost")
-    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    문서와 팀 대화에 남아 있어 404 로 만들지 않는다.
+    """
+    response = await client.get("/api/demo/rules", follow_redirects=False)
+    assert response.status_code == status.HTTP_308_PERMANENT_REDIRECT
+    assert response.headers["location"] == "/api/demo"
 
 
 def test_demo_form_field_names_exist_in_both_dtos() -> None:
@@ -230,3 +238,39 @@ def test_demo_form_field_names_exist_in_both_dtos() -> None:
     # 폼이 겹치는 항목을 정말 양쪽에 보내는지 (한쪽만 보내면 비교가 어긋난다)
     assert {"age", "height_cm", "weight_kg", "waist_cm", "sex"} <= ml_sent & rule_sent
     assert "sbp" in ml_sent and "systolic_bp" in rule_sent
+
+
+def test_demo_risk_order_matches_the_matrix() -> None:
+    """데모의 질환 목록과 매트릭스의 질환 축이 어긋나지 않는지.
+
+    `RISK_ORDER` 는 손으로 쓴 목록이라 매트릭스에 질환을 하나 더해도 화면은 모른다.
+    빠진 질환은 아무 오류 없이 그냥 안 보인다 — 그래서 검사로 못 박는다.
+    """
+    import re
+
+    from app.apis.demo_routers import PAGE
+    from app.services.disease_risk_matrix import DISEASES
+
+    order = re.search(r"const RISK_ORDER = \[(.*?)\];", PAGE, re.DOTALL)
+    names = re.search(r"const DISEASE_RISK = \{(.*?)\};", PAGE, re.DOTALL)
+    assert order and names, "데모에서 질환 목록을 찾지 못했다"
+
+    shown = set(re.findall(r'"([a-z_]+)"', order.group(1)))
+    labelled = set(re.findall(r"([a-z_]+):", names.group(1)))
+    assert shown == set(DISEASES), f"화면과 매트릭스가 어긋난다: {shown ^ set(DISEASES)}"
+    assert labelled == set(DISEASES), f"이름이 없는 질환이 있다: {labelled ^ set(DISEASES)}"
+
+
+async def test_rules_response_carries_the_disease_risks(client: AsyncClient) -> None:
+    """봉투에 전치 판정이 실려 나가는지. 라우터에서 빠뜨려도 도메인 판정은 멀쩡해서 안 들킨다."""
+    response = await client.post("/api/v1/assessments/rules", json=FULL)
+    assert response.status_code == status.HTTP_200_OK
+
+    risks = response.json()["data"]["disease_risks"]
+    from app.services.disease_risk_matrix import DISEASES
+
+    assert set(risks) == set(DISEASES)
+    # 이 프로필은 흡연 없음·정상 지질이지만 나이·복부둘레가 걸려 심혈관 신호가 잡힌다.
+    assert risks["cvd_risk"]["contributors"], "근거 목록이 비어 있으면 화면에 표가 안 그려진다"
+    for entry in risks["cvd_risk"]["contributors"]:
+        assert entry["effect"] and entry["source"], "근거 없는 기여 항목이 나갔다"

@@ -57,6 +57,8 @@ CYCLE_SUFFIX = {
 YES_NO_SENTINELS = {7, 9}
 WIDE_SENTINELS = {7777, 9999}
 DAYS_SENTINELS = {77, 99}
+# SLD010H / SLD012 — 수면 시간. 같은 코드표를 쓴다.
+SLEEP_SENTINELS = {77, 99}
 ALQ130_SENTINELS = {777, 999}
 
 # ALQ121: drinking frequency in the past 12 months -> approximate days per year.
@@ -156,8 +158,13 @@ def _blood_pressure(directory: Path, suffix: str, index: pd.Index) -> tuple[pd.S
         diastolic_columns = [c for c in ("BPXODI1", "BPXODI2", "BPXODI3") if c in oscillometric.columns]
         source, style = oscillometric, "BPXO"
 
-    systolic = source[systolic_columns].mean(axis=1, skipna=True)
-    diastolic = source[diastolic_columns].replace(0, np.nan).mean(axis=1, skipna=True)
+    # 0 을 지울 때 `.replace(0, nan)` 으로는 부족하다. XPORT 가 일부 0 을 비정규화
+    # 부동소수(~5.4e-79)로 저장해서 등호 비교를 빠져나가고, 그 값이 평균에 섞이면
+    # 이완기 80 인 사람이 26.7 로 기록된다. EDA 에서 30 미만 329 행으로 잡혔다.
+    diastolic_raw = source[diastolic_columns].apply(lambda column: _blank(column, set()))
+    systolic = source[systolic_columns].apply(lambda column: _blank(column, set()))
+    systolic = systolic.mask(systolic <= 0).mean(axis=1, skipna=True)
+    diastolic = diastolic_raw.mask(diastolic_raw <= 0).mean(axis=1, skipna=True)
     return systolic.reindex(index), diastolic.reindex(index), style
 
 
@@ -326,6 +333,9 @@ def build_cycle(cycle: str) -> pd.DataFrame:
     )
     take("HUQ", {"HUQ010": "huq010"})
     take("PFQ", {"PFQ061B": "pfq061b"})
+    take("RHQ", {"RHQ031": "rhq031", "RHQ060": "rhq060"})
+    take("WHQ", {"WHD020": "whd020", "WHD050": "whd050"})
+    take("KIQ_U", {"KIQ022": "kiq022"})
 
     frame["sbp"], frame["dbp"], bp_style = _blood_pressure(directory, suffix, index)
     moderate, vigorous, sedentary, activity_style = _activity(directory, suffix, index)
@@ -334,8 +344,10 @@ def build_cycle(cycle: str) -> pd.DataFrame:
     frame["sedentary_min_per_day"] = sedentary
 
     # SLQ used SLD010H (hours) through 2015-2016 and SLD012 from 2017-2018.
-    legacy = pd.to_numeric(frame["sleep_hours_legacy"], errors="coerce")
-    frame["sleep_hours"] = pd.to_numeric(frame["sleep_hours"], errors="coerce").fillna(legacy)
+    # 둘 다 77=거부 / 99=모름 이고 마스킹이 빠져 있었다 — 38 명이 하루 77 시간 또는
+    # 99 시간을 잔 것으로 기록돼 있었고 EDA 의 왜도 22 가 그 값들이었다.
+    legacy = _blank(frame["sleep_hours_legacy"], SLEEP_SENTINELS)
+    frame["sleep_hours"] = _blank(frame["sleep_hours"], SLEEP_SENTINELS).fillna(legacy)
     frame = frame.drop(columns=["sleep_hours_legacy"])
 
     told_dm = _codes(frame["diq010"], YES_NO_SENTINELS)
@@ -401,6 +413,29 @@ def build_cycle(cycle: str) -> pd.DataFrame:
     frame["dx_high_cholesterol"] = _yes_no(frame["bpq080"])
     frame["dx_heart_disease"] = _yes_no(frame["mcq160e"])
     frame["dx_stroke"] = _yes_no(frame["mcq160f"])
+    # KIQ022: "콩팥이 약하거나 나빠졌다는 말을 들은 적이 있는가". eGFR·ACR 로
+    # 정의되는 신기능 라벨과 다른 값이지만 상관이 높다. 순환성 판단은 모델링
+    # 단계의 몫이라 여기서는 읽기만 한다.
+    frame["dx_kidney"] = _yes_no(frame["kiq022"])
+
+    # RHQ031: "지난 12개월 규칙적인 월경이 있었는가". 남성에게는 묻지 않으므로
+    # 결측이 곧 남성이다 — sex 와 함께 읽어야 한다.
+    #
+    # 이 문항 하나로 폐경을 세면 임신·수유·자궁적출도 "아니오"에 섞인다. 사유를
+    # 묻는 RHD042/RHD043 이 있지만 주기마다 코드표가 달라지고 2021-2023 에서는
+    # "기타"가 응답의 3분의 2다. 그래서 이름을 지어 부르지 않고 문항 그대로 둔다.
+    periods = _codes(frame["rhq031"], YES_NO_SENTINELS)
+    frame["postmenopausal"] = periods.eq(2).astype("boolean").where(periods.isin([1, 2]))
+    frame["age_at_last_period"] = _blank(frame["rhq060"], {777, 999})
+
+    # WHD020 현재 체중, WHD050 1년 전 체중. 둘 다 파운드 단위 자가보고다.
+    # 실측 체중(BMXWT)이 따로 있으므로 여기서 쓰는 건 두 자가보고의 **차이**뿐이고,
+    # 같은 사람이 같은 척도로 답한 값이라 체계적 오차가 상쇄된다.
+    weight_now = _blank(frame["whd020"], {7777, 9999})
+    weight_year_ago = _blank(frame["whd050"], {7777, 9999})
+    frame["weight_change_1yr_pct"] = (
+        (weight_now - weight_year_ago) / weight_year_ago.where(weight_year_ago > 0) * 100.0
+    )
 
     creatinine = pd.to_numeric(frame["creatinine"], errors="coerce")
     frame["egfr"] = _egfr(creatinine, pd.to_numeric(frame["age"], errors="coerce"), frame["sex"])

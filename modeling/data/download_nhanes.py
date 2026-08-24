@@ -75,6 +75,11 @@ STEMS: list[tuple[str, str]] = [
     ("PFQ", "functional limitation, walking difficulty (2013-2018 only)"),
     ("INQ", "household income"),
     ("DR1TOT", "day-1 dietary recall totals (optional, for the meal feature)"),
+    # 아래 셋은 온보딩이 문항 하나로 받을 수 있는 것만 고른 것이다. 페리틴·인슐린도
+    # 같은 자리에 있지만 국가건강검진 결과지에 인쇄되지 않아 서빙에서 항상 결측이다.
+    ("RHQ", "menopause status — 여성 지질·대사증후군은 폐경 전후가 나이보다 잘 가른다"),
+    ("WHQ", "weight one year ago, self-reported max weight — 체중 변화는 문진으로 받을 수 있다"),
+    ("KIQ_U", "self-reported kidney disease and stones — 신기능 타깃의 비검사 위험인자"),
 ]
 
 DEFAULT_DEST = Path(__file__).resolve().parent / "raw" / "nhanes"

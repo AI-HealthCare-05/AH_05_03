@@ -67,6 +67,19 @@ LAB_FEATURES: tuple[str, ...] = (
 )
 
 # 파생 비율 -> 재료. 재료가 하나라도 blocked 면 파생도 만들지 않는다.
+#
+# 무엇을 넣을지 고르는 기준이 하나 더 있다. **서빙 모델 20 개 중 19 개가 GBDT 다.**
+# 트리는 축에 평행한 분할만 하므로 기존 특징의 **단조 변환은 정보를 0 만큼 더한다** —
+# 트리가 이미 그 순서를 알고 있기 때문이다. 그래서 문헌에 자주 나오지만 여기 없는
+# 지수가 셋 있다.
+#
+#   BRI  = 364.2 − 365.5·√(1 − ((WC/2π)/(0.5·h))²)  → waist_height_ratio 의 단조 증가 함수
+#   RFM  = 64 − 20·(h/WC) + 12·여성                  → waist_height_ratio + sex 로 복원된다
+#   AIP  = log10(TG/HDL)                             → tg_hdl_ratio 의 단조 증가 함수
+#
+# 세 지수의 문헌 근거는 튼튼하지만 그건 **선형 모델**에서 얻은 것이다. 여기 남긴 것은
+# 전부 트리가 스스로 만들기 어려운 형태다 — 곱(LAP·TyG), 선형결합(FLI·remnant),
+# 여러 변수를 한 번에 섞는 비율(VAI·METS-IR).
 DERIVED: dict[str, tuple[str, ...]] = {
     # 인슐린 저항성 대리 지표. 두 값을 따로 넣는 것보다 낫다는 보고가 많다.
     "tg_hdl_ratio": ("triglyceride", "hdl"),
@@ -76,7 +89,67 @@ DERIVED: dict[str, tuple[str, ...]] = {
     "ast_alt_ratio": ("ast", "alt"),
     # BMI 가 못 잡는 복부 비만. 같은 BMI 에서도 위험이 갈린다.
     "waist_height_ratio": ("waist_cm", "height_cm"),
+    # --------------------------------------------------------------- 신규
+    # ln(TG·FPG/2). HOMA-IR 보다 제2형 당뇨 예측이 낫다는 보고가 반복된다.
+    # 한국인 절단값 남 8.82 / 여 8.73 (KNHANES n=39,410).
+    "tyg": ("triglyceride", "fasting_glucose"),
+    # Bedogni 2006. TG·BMI·γ-GTP·허리의 로지스틱 결합이고 CAP 과 상관이 확인돼 있다.
+    # 라벨이 CAP 실측이라 이 지수를 특징으로 써도 순환하지 않는다.
+    "fli": ("triglyceride", "bmi", "ggt", "waist_cm"),
+    # Kahn 2005. 허리에서 성별 기준선을 뺀 값에 TG 를 곱한다.
+    "lap": ("triglyceride", "waist_cm", "sex"),
+    # Amato 2010. 내장지방 '기능'을 재는 성별 분리 식.
+    "vai": ("triglyceride", "hdl", "bmi", "waist_cm", "sex"),
+    # (TG/HDL) × 허리높이비. 두 파생의 곱이라 트리가 스스로 못 만든다.
+    "cmi": ("triglyceride", "hdl", "waist_cm", "height_cm"),
+    # Bello-Chavolla 2018. 공복혈당·TG·BMI·HDL 을 한 번에 섞는다.
+    "mets_ir": ("fasting_glucose", "triglyceride", "bmi", "hdl"),
+    # Krakauer 2012. BRI·RFM 과 달리 BMI 가 따로 들어가 허리높이비로 복원되지 않는다.
+    "absi": ("waist_cm", "bmi", "height_cm"),
+    # 잔여 콜레스테롤. TG 풍부 지단백의 죽상 유발분을 직접 센다.
+    "remnant_chol": ("total_chol", "hdl", "ldl"),
+    "tc_hdl_ratio": ("total_chol", "hdl"),  # Castelli I
+    "ldl_hdl_ratio": ("ldl", "hdl"),  # Castelli II
+    # 신기능으로 표준화한 요산 생산량. 근거가 상충하는 지표라 검정으로 정한다.
+    "uric_creatinine_ratio": ("uric_acid", "creatinine"),
+    # 맥압과 평균동맥압. 고혈압·대사증후군에서는 혈압이 라벨이라 자동으로 막힌다.
+    "pulse_pressure": ("sbp", "dbp"),
+    "mean_arterial_pressure": ("sbp", "dbp"),
 }
+
+# 실제로 학습에 들어가는 임상 지수. **기본은 비어 있다.**
+#
+# 26번 문서의 실측이 이유다 — 35 칸 중 유의한 개선이 다섯이었고 나머지 서른 칸은
+# 0 언저리거나 음수였다. 원재료가 이미 특징이면 GBDT 가 그 조합을 스스로 쓰므로
+# 지수를 얹으면 중복 특징이 분할만 흩뜨린다. 그래서 `DERIVED` 에 정의는 남기되
+# 켜는 것은 근거가 붙은 자리에서 하나씩 한다.
+#
+#     from targets import enable_indices
+#     enable_indices("pulse_pressure")          # 빈혈 일반형 +0.0055
+#     enable_indices(*NEW_INDICES)              # 실험 하네스가 쓰는 방식
+ENABLED_INDICES: set[str] = set()
+
+
+def enable_indices(*names: str) -> None:
+    ENABLED_INDICES.update(names)
+
+
+# 정의만 있고 기본은 꺼져 있는 지수 전체. 실험에서 base 를 만들 때 통째로 빼는 데 쓴다.
+NEW_INDICES: tuple[str, ...] = (
+    "tyg",
+    "fli",
+    "lap",
+    "vai",
+    "cmi",
+    "mets_ir",
+    "absi",
+    "remnant_chol",
+    "tc_hdl_ratio",
+    "ldl_hdl_ratio",
+    "uric_creatinine_ratio",
+    "pulse_pressure",
+    "mean_arterial_pressure",
+)
 
 CATEGORICAL: tuple[str, ...] = ("sex", "smoking_status")
 
@@ -146,6 +219,9 @@ class Target:
             columns += [c for c in LAB_FEATURES if c not in blocked]
         available = set(columns)
         for name, parts in DERIVED.items():
+            # 신규 임상 지수는 명시적으로 켠 것만 들어간다. 기존 파생 넷은 그대로.
+            if name in NEW_INDICES and name not in ENABLED_INDICES:
+                continue
             if all(part in available for part in parts):
                 columns.append(name)
         return columns

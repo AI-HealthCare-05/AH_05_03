@@ -55,7 +55,13 @@ COMORBIDITY = [
     "dx_high_cholesterol",
     "dx_stroke",
     "dx_heart_disease",
+    "dx_kidney",  # "콩팥이 약하다/나빠졌다는 말을 들은 적 있는가" 자가보고
 ]
+
+# 여성 생식 이력. 나이의 대리로는 안 되는 신호다 — 폐경 전후로 LDL·중성지방이
+# 꺾이고 대사증후군 유병률이 갈라지는데, 같은 55세 여성 안에서도 폐경 여부가
+# 다르다. 온보딩은 문항 하나로 받을 수 있다.
+REPRODUCTIVE = ["postmenopausal", "age_at_last_period"]
 
 # SCR-ONBD-03 생활습관
 LIFESTYLE = [
@@ -73,7 +79,18 @@ LIFESTYLE = [
 ]
 
 # SCR-ONBD-04 신체·측정값
-ANTHROPOMETRIC = ["height_cm", "weight_kg", "bmi", "waist_cm", "sbp", "dbp", "heart_rate"]
+ANTHROPOMETRIC = [
+    "height_cm",
+    "weight_kg",
+    "bmi",
+    "waist_cm",
+    "sbp",
+    "dbp",
+    "heart_rate",
+    # 1년 전 체중 대비 변화율(%). 절대 kg 이 아니라 비율로 두는 이유는 같은 5kg
+    # 이 50kg 인 사람과 100kg 인 사람에게 다른 사건이기 때문이다.
+    "weight_change_1yr_pct",
+]
 
 # SCR-ONBD-05 검사값 (선택) — 채우면 정밀형 모델, 비우면 일반형
 #
@@ -135,7 +152,7 @@ LABELS = [
     "label_chd_10yr",  # prospective cohorts only
 ]
 
-FEATURE_COLUMNS = DEMOGRAPHIC + FAMILY_HISTORY + LIFESTYLE + ANTHROPOMETRIC + CONTEXT + COMORBIDITY
+FEATURE_COLUMNS = DEMOGRAPHIC + FAMILY_HISTORY + LIFESTYLE + ANTHROPOMETRIC + CONTEXT + COMORBIDITY + REPRODUCTIVE
 LAB_COLUMNS = LABS
 # "cycle" is empty for datasets that have no survey waves, but it has to be part
 # of the canonical set: conform() drops anything outside this list, and the
@@ -143,7 +160,9 @@ LAB_COLUMNS = LABS
 CANONICAL_COLUMNS = IDENTITY + ["cycle"] + DESIGN + FEATURE_COLUMNS + LAB_COLUMNS + OUTCOME_SOURCE + LABELS
 
 # Features available without any lab work — the 일반형 model.
-GENERAL_MODEL_FEATURES = DEMOGRAPHIC + FAMILY_HISTORY + LIFESTYLE + ANTHROPOMETRIC + CONTEXT + COMORBIDITY
+GENERAL_MODEL_FEATURES = (
+    DEMOGRAPHIC + FAMILY_HISTORY + LIFESTYLE + ANTHROPOMETRIC + CONTEXT + COMORBIDITY + REPRODUCTIVE
+)
 # 정밀형 model adds the optional lab panel.
 PRECISE_MODEL_FEATURES = GENERAL_MODEL_FEATURES + LABS
 
