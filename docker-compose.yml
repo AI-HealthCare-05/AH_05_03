@@ -71,6 +71,11 @@ services:
       sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
       - ./app:/app/app  # 로컬의 app 디렉토리를 컨테이너의 /app/app에 마운트(수정사항 즉시 반영)
+      # 위험도 모델은 순수 JSON이라 이미지에 넣지 않고 마운트한다. 재학습해도
+      # 이미지를 다시 빌드할 필요가 없고, app/services/risk.py가 이 경로를 본다.
+      - ./modeling/artifacts/models:/app/models:ro
+      # PR #4 규칙 엔진. app 과 같이 마운트해 재빌드 없이 반영된다.
+      - ./chronic_disease_engine:/app/chronic_disease_engine:ro
       - static_volume:/app/templates
     restart: always
     ports:

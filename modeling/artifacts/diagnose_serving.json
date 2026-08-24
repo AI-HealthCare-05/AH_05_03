@@ -1,0 +1,248 @@
+{
+  "coverage": [
+    {
+      "feature": "self_rated_health",
+      "brfss_health_indicators": 1.0,
+      "framingham": 0.0,
+      "nhanes_pooled": 0.999,
+      "출처_식별력": 1.0
+    },
+    {
+      "feature": "vigorous_min_per_week",
+      "brfss_health_indicators": 0.0,
+      "framingham": 0.0,
+      "nhanes_pooled": 0.997,
+      "출처_식별력": 1.0
+    },
+    {
+      "feature": "moderate_min_per_week",
+      "brfss_health_indicators": 0.0,
+      "framingham": 0.0,
+      "nhanes_pooled": 0.996,
+      "출처_식별력": 1.0
+    },
+    {
+      "feature": "sleep_hours",
+      "brfss_health_indicators": 0.0,
+      "framingham": 0.0,
+      "nhanes_pooled": 0.992,
+      "출처_식별력": 0.999
+    },
+    {
+      "feature": "sedentary_min_per_day",
+      "brfss_health_indicators": 0.0,
+      "framingham": 0.0,
+      "nhanes_pooled": 0.992,
+      "출처_식별력": 0.999
+    },
+    {
+      "feature": "sbp",
+      "brfss_health_indicators": 0.0,
+      "framingham": 1.0,
+      "nhanes_pooled": 0.867,
+      "출처_식별력": 0.988
+    },
+    {
+      "feature": "dbp",
+      "brfss_health_indicators": 0.0,
+      "framingham": 1.0,
+      "nhanes_pooled": 0.867,
+      "출처_식별력": 0.988
+    },
+    {
+      "feature": "waist_cm",
+      "brfss_health_indicators": 0.0,
+      "framingham": 0.0,
+      "nhanes_pooled": 0.848,
+      "출처_식별력": 0.986
+    },
+    {
+      "feature": "age",
+      "brfss_health_indicators": 1.0,
+      "framingham": 1.0,
+      "nhanes_pooled": 1.0,
+      "출처_식별력": 0.985
+    },
+    {
+      "feature": "sex",
+      "brfss_health_indicators": 1.0,
+      "framingham": 1.0,
+      "nhanes_pooled": 1.0,
+      "출처_식별력": 0.985
+    },
+    {
+      "feature": "alcohol_days_per_year",
+      "brfss_health_indicators": 0.0,
+      "framingham": 0.0,
+      "nhanes_pooled": 0.812,
+      "출처_식별력": 0.983
+    },
+    {
+      "feature": "difficulty_walking",
+      "brfss_health_indicators": 1.0,
+      "framingham": 0.0,
+      "nhanes_pooled": 0.237,
+      "출처_식별력": 0.979
+    },
+    {
+      "feature": "bmi",
+      "brfss_health_indicators": 1.0,
+      "framingham": 0.996,
+      "nhanes_pooled": 0.887,
+      "출처_식별력": 0.975
+    },
+    {
+      "feature": "smoking_status",
+      "brfss_health_indicators": 0.557,
+      "framingham": 0.494,
+      "nhanes_pooled": 0.998,
+      "출처_식별력": 0.596
+    }
+  ],
+  "sensitivity": [
+    {
+      "변경": "나이 54 -> 64",
+      "종류": "필수 입력 변화",
+      "dm_확률": 0.3089,
+      "dm_변화": 0.0886,
+      "htn_확률": 0.6901,
+      "htn_변화": 0.1727,
+      "최대_절대변화": 0.1727
+    },
+    {
+      "변경": "건강 보통 -> 나쁨",
+      "종류": "필수 입력 변화",
+      "dm_확률": 0.3197,
+      "dm_변화": 0.0994,
+      "htn_확률": 0.5957,
+      "htn_변화": 0.0783,
+      "최대_절대변화": 0.0994
+    },
+    {
+      "변경": "BMI 27.7 -> 31",
+      "종류": "필수 입력 변화",
+      "dm_확률": 0.2486,
+      "dm_변화": 0.0283,
+      "htn_확률": 0.5604,
+      "htn_변화": 0.043,
+      "최대_절대변화": 0.043
+    },
+    {
+      "변경": "smoking = never",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.2524,
+      "dm_변화": 0.0321,
+      "htn_확률": 0.4818,
+      "htn_변화": -0.0356,
+      "최대_절대변화": 0.0356
+    },
+    {
+      "변경": "difficulty_walking = 있음",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.1936,
+      "dm_변화": -0.0267,
+      "htn_확률": 0.5393,
+      "htn_변화": 0.0219,
+      "최대_절대변화": 0.0267
+    },
+    {
+      "변경": "alcohol_days = 52",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.2,
+      "dm_변화": -0.0203,
+      "htn_확률": 0.5288,
+      "htn_변화": 0.0114,
+      "최대_절대변화": 0.0203
+    },
+    {
+      "변경": "smoking = current",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.2024,
+      "dm_변화": -0.0179,
+      "htn_확률": 0.5275,
+      "htn_변화": 0.0102,
+      "최대_절대변화": 0.0179
+    },
+    {
+      "변경": "sbp/dbp = 130/82",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.2074,
+      "dm_변화": -0.0129,
+      "htn_확률": 0.5174,
+      "htn_변화": 0.0,
+      "최대_절대변화": 0.0129
+    },
+    {
+      "변경": "sedentary_min = 480",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.219,
+      "dm_변화": -0.0013,
+      "htn_확률": 0.5296,
+      "htn_변화": 0.0122,
+      "최대_절대변화": 0.0122
+    },
+    {
+      "변경": "waist_cm = 96",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.2101,
+      "dm_변화": -0.0102,
+      "htn_확률": 0.5099,
+      "htn_변화": -0.0075,
+      "최대_절대변화": 0.0102
+    },
+    {
+      "변경": "vigorous_min = 60",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.2137,
+      "dm_변화": -0.0066,
+      "htn_확률": 0.5174,
+      "htn_변화": -0.0,
+      "최대_절대변화": 0.0066
+    },
+    {
+      "변경": "moderate_min = 150",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.2193,
+      "dm_변화": -0.001,
+      "htn_확률": 0.5213,
+      "htn_변화": 0.0039,
+      "최대_절대변화": 0.0039
+    },
+    {
+      "변경": "sleep_hours = 7",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.2196,
+      "dm_변화": -0.0007,
+      "htn_확률": 0.5189,
+      "htn_변화": 0.0015,
+      "최대_절대변화": 0.0015
+    },
+    {
+      "변경": "veg_fruit_daily = 아니오",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.2203,
+      "dm_변화": 0.0,
+      "htn_확률": 0.5174,
+      "htn_변화": 0.0,
+      "최대_절대변화": 0.0
+    },
+    {
+      "변경": "veg_fruit_daily = 예",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.2203,
+      "dm_변화": 0.0,
+      "htn_확률": 0.5174,
+      "htn_변화": 0.0,
+      "최대_절대변화": 0.0
+    },
+    {
+      "변경": "difficulty_walking = 없음",
+      "종류": "선택 항목 응답",
+      "dm_확률": 0.2203,
+      "dm_변화": 0.0,
+      "htn_확률": 0.5174,
+      "htn_변화": 0.0,
+      "최대_절대변화": 0.0
+    }
+  ]
+}

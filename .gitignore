@@ -18,3 +18,19 @@ wheels/
 .coverage
 *.coverage
 .coverage.*
+frontend/dist/
+# Tesseract 학습 데이터. 내려받아 쓰는 바이너리라 저장소에 두지 않는다.
+*.traineddata
+
+# 로컬 보안 소프트웨어(Norton 등)의 TLS 가로채기용 개인 루트 인증서.
+# 팀원마다 다르고 재설치 시 바뀌므로 각자 로컬에서만 생성해서 쓴다.
+docker/certs/*.crt
+!docker/certs/.gitkeep
+
+# 모델링 원시·중간 자료. raw 364MB + processed 144MB 라 한 번 커밋되면 되돌리기 어렵다.
+# download_nhanes.py 와 load_*.py 로 동일하게 재현된다 — modeling/data/README.md 참조.
+modeling/data/raw/
+modeling/data/processed/
+modeling/**/__pycache__/
+# artifacts/models 는 제외하지 않는다. compose 가 API 컨테이너에 마운트하는
+# 서빙 번들이고 2.4MB 라 저장소에 두는 편이 배포가 단순하다.

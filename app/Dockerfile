@@ -18,6 +18,9 @@ RUN uv sync --group app --no-dev --frozen
 
 # 4. 로컬 소스 코드를 컨테이너 내부로 복사합니다.
 COPY ./app ./app
+# 규칙 기반 판정 엔진. AH_05_03 PR #4 에서 가져온 코드로 손대지 않는다.
+# chronic_disease_engine/PROVENANCE.md 참조.
+COPY ./chronic_disease_engine ./chronic_disease_engine
 
 # 5. 해당 이미지를 활용하여 도커컨테이너 실행시 실행되는 명령어입니다.
 # FastAPI를 uvicorn을 활용하여 비동기 환경으로 서버를 실행합니다.
