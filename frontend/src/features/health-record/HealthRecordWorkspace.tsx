@@ -148,46 +148,58 @@ export function FloatingHealthTools({
 }
 
 function DocumentOcrDialog({ profile, runtime, onClose, onSaved, onManage }: { profile: FamilyProfile; runtime?: LocalDomainRuntime; onClose: () => void; onSaved: () => Promise<void>; onManage: () => void }) {
-  const [file, setFile] = useState<File>();
+  const [files, setFiles] = useState<File[]>([]);
   const [text, setText] = useState("");
   const [rows, setRows] = useState<Array<{ testName: string; value: string; unit: string; judgment: string }>>([]);
-  const [documentId, setDocumentId] = useState<string>();
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string>();
+
   async function recognize() {
-    if (!file || !runtime?.documents) return setError("JPEG 또는 PNG 원본을 선택해 주세요.");
+    if (files.length === 0) return setError("JPEG, PNG, WEBP 이미지 또는 PDF 문서를 하나 이상 선택해 주세요.");
     setWorking(true); setError(undefined);
     try {
-      const saved = await runtime.documents.save({ householdId: PRIMARY_HOUSEHOLD_ID, profileId: profile.id, file, fileName: file.name });
-      if (!saved.ok) throw new Error(saved.error.message);
-      setDocumentId(saved.value.id);
-      const result = normalizeOcrResult(await new DevServerOcrAdapter().recognize(file));
+      const result = normalizeOcrResult(await new DevServerOcrAdapter().recognize(files));
       setText(result.text);
       setRows(result.examItems?.map((item) => ({ ...item })) ?? []);
     } catch (caught) { setError(caught instanceof Error ? caught.message : "OCR을 실행하지 못했습니다."); } finally { setWorking(false); }
   }
+
   async function confirm() {
-    if (!runtime || !documentId || !text.trim()) return;
+    if (!runtime || files.length === 0 || !text.trim()) return;
     setWorking(true);
-    const tableText = rows
-      .map((item) => [item.testName, item.value, item.unit, item.judgment].filter(Boolean).join(" | "))
-      .join("\n");
-    const finalNote = tableText.trim() ? `[검사 결과 요약]\n${tableText}` : text.trim();
-    const result = await runtime.healthRecords.create({
-      householdId: PRIMARY_HOUSEHOLD_ID,
-      profileId: profile.id,
-      recordType: "lab_result",
-      recordedAt: new Date().toISOString(),
-      source: "ocr",
-      sourceDocumentId: documentId,
-      payload: { note: finalNote },
-    });
-    setWorking(false);
-    if (!result.ok) return setError(result.error.message);
-    await onSaved();
-    onClose();
+    try {
+      let primaryDocumentId: string | undefined;
+      if (runtime.documents) {
+        for (const file of files) {
+          const saved = await runtime.documents.save({ householdId: PRIMARY_HOUSEHOLD_ID, profileId: profile.id, file, fileName: file.name });
+          if (!saved.ok) throw new Error(saved.error.message);
+          if (!primaryDocumentId) primaryDocumentId = saved.value.id;
+        }
+      }
+      const tableText = rows
+        .map((item) => [item.testName, item.value, item.unit, item.judgment].filter(Boolean).join(" | "))
+        .join("\n");
+      const finalNote = tableText.trim() ? `[검사 결과 요약]\n${tableText}` : text.trim();
+      const result = await runtime.healthRecords.create({
+        householdId: PRIMARY_HOUSEHOLD_ID,
+        profileId: profile.id,
+        recordType: "lab_result",
+        recordedAt: new Date().toISOString(),
+        source: "ocr",
+        sourceDocumentId: primaryDocumentId,
+        payload: { note: finalNote },
+      });
+      if (!result.ok) throw new Error(result.error.message);
+      await onSaved();
+      onClose();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "건강기록 저장에 실패했습니다.");
+    } finally {
+      setWorking(false);
+    }
   }
-  return <div className="modal-backdrop" role="presentation"><section className="modal-panel ocr-quick-dialog" role="dialog" aria-modal="true"><div className="modal-heading"><div><p className="section-kicker">사용자 확인 단계</p><h2>{profile.displayName}님의 서류 OCR</h2></div><button className="modal-close" type="button" onClick={onClose}>×</button></div><p className="form-notice">OCR은 글자를 읽을 뿐 의료 판단을 하지 않습니다. 수정·확정 후에만 건강기록으로 저장됩니다.</p>{!text ? <><label>건강서류 (JPEG·PNG)<input type="file" accept="image/jpeg,image/png" onChange={(event) => setFile(event.currentTarget.files?.[0])} /></label><div className="form-actions"><button className="secondary-button" type="button" onClick={onManage}>전체 서류 관리</button><button className="primary-button" type="button" disabled={!file || working} onClick={() => void recognize()}>{working ? "글자를 읽는 중…" : "OCR 읽기"}</button></div></> : <><label>추출 텍스트<textarea rows={8} value={text} onChange={(event) => setText(event.target.value)} /></label>{rows.length > 0 ? <div className="ocr-review-table"><strong>검사 항목 확인</strong>{rows.map((row, index) => <div key={index}><input value={row.testName} aria-label="검사항목" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, testName: event.target.value } : value))} /><input value={row.value} aria-label="결과값" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, value: event.target.value } : value))} /><input value={row.unit} aria-label="단위" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, unit: event.target.value } : value))} /><input value={row.judgment} aria-label="판정" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, judgment: event.target.value } : value))} /></div>)}</div> : null}<div className="form-actions"><button className="secondary-button" type="button" onClick={onClose}>취소</button><button className="primary-button" type="button" disabled={working} onClick={() => void confirm()}>{working ? "저장 중…" : "수정 내용 확정 · 건강기록 저장"}</button></div></>}{error ? <div className="alert error-alert">{error}</div> : null}</section></div>;
+
+  return <div className="modal-backdrop" role="presentation"><section className="modal-panel ocr-quick-dialog" role="dialog" aria-modal="true"><div className="modal-heading"><div><p className="section-kicker">사용자 확인 단계</p><h2>{profile.displayName}님의 서류 OCR</h2></div><button className="modal-close" type="button" onClick={onClose}>×</button></div><p className="form-notice">※ 개발·검증용 외부 AI(Google Gemini)로 전송됩니다. 실제 개인정보가 없는 <strong>합성·비식별 문서</strong>로만 테스트해 주세요. 의료 판단을 하지 않으며, 직접 수정·확정해야만 브라우저 로컬에 저장됩니다.</p>{!text ? <><label>건강서류 (PDF 또는 이미지 복수 선택 가능)<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple onChange={(event) => { const chosen = event.currentTarget.files; setFiles(chosen ? Array.from(chosen) : []); }} /></label>{files.length > 0 ? <div className="ocr-file-badge-list">{files.map((f, i) => <span key={i} className="ocr-file-badge">{f.name} ({(f.size / 1024 / 1024).toFixed(1)}MB)</span>)}</div> : null}<div className="form-actions"><button className="secondary-button" type="button" onClick={onManage}>전체 서류 관리</button><button className="primary-button" type="button" disabled={files.length === 0 || working} onClick={() => void recognize()}>{working ? "글자를 읽는 중…" : files.length > 1 ? `동의하고 ${files.length}장 일괄 OCR 읽기` : "동의하고 OCR 읽기"}</button></div></> : <><label>추출 텍스트<textarea rows={8} value={text} onChange={(event) => setText(event.target.value)} /></label>{rows.length > 0 ? <div className="ocr-review-table"><strong>검사 항목 확인</strong>{rows.map((row, index) => <div key={index}><input value={row.testName} aria-label="검사항목" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, testName: event.target.value } : value))} /><input value={row.value} aria-label="결과값" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, value: event.target.value } : value))} /><input value={row.unit} aria-label="단위" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, unit: event.target.value } : value))} /><input value={row.judgment} aria-label="판정" onChange={(event) => setRows(rows.map((value, current) => current === index ? { ...value, judgment: event.target.value } : value))} /></div>)}</div> : null}<div className="form-actions"><button className="secondary-button" type="button" onClick={onClose}>취소</button><button className="primary-button" type="button" disabled={working} onClick={() => void confirm()}>{working ? "저장 중…" : "수정 내용 확정 · 건강기록 저장"}</button></div></>}{error ? <div className="alert error-alert">{error}</div> : null}</section></div>;
 }
 
 export function PainChatDialog({ profile, runtime, onClose, onSaved }: { profile: FamilyProfile; runtime?: LocalDomainRuntime; onClose: () => void; onSaved: () => Promise<void> }) {
