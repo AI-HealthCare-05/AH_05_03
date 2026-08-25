@@ -77,8 +77,10 @@ describe("HomePage", () => {
     renderHomePage();
     await createProfile(user, "아빠", "부모");
 
-    await user.click(screen.getAllByRole("button", { name: "건강기록 작성" })[0]);
-    await user.type(screen.getByRole("textbox", { name: "기록 내용" }), "정기 검진 메모");
+    await user.click(screen.getAllByRole("button", { name: /건강기록 추가/ })[0]);
+    await user.click(screen.getByText("간편 기록"));
+    await user.click(screen.getByText("메모"));
+    await user.type(screen.getByPlaceholderText("확인한 사실만 간략히 적어주세요."), "정기 검진 메모");
     await user.click(screen.getByRole("button", { name: "기록 저장" }));
     expect(await screen.findByText("1건")).toBeInTheDocument();
 
@@ -96,8 +98,10 @@ describe("HomePage", () => {
     const user = userEvent.setup();
     renderHomePage();
     await createProfile(user, "나", "본인");
-    await user.click(screen.getAllByRole("button", { name: "건강기록 작성" })[0]);
-    await user.type(screen.getByRole("textbox", { name: "기록 내용" }), "수정 전 기록");
+    await user.click(screen.getAllByRole("button", { name: /건강기록 추가/ })[0]);
+    await user.click(screen.getByText("간편 기록"));
+    await user.click(screen.getByText("메모"));
+    await user.type(screen.getByPlaceholderText("확인한 사실만 간략히 적어주세요."), "수정 전 기록");
     await user.click(screen.getByRole("button", { name: "기록 저장" }));
     expect(await screen.findByText("수정 전 기록")).toBeInTheDocument();
 

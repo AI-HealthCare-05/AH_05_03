@@ -16,6 +16,7 @@ import {
   HealthRecordHistoryDialog,
   PainChatDialog,
 } from "../health-record/HealthRecordWorkspace";
+import { HealthRecordEntryPanel } from "../health-record/HealthRecordEntryPanel";
 
 const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
   default: module.VanatomeBodyMap,
@@ -65,6 +66,7 @@ export function HomePage() {
   const [profileLifecycleAction, setProfileLifecycleAction] = useState<"hide" | "delete">();
   const [hiddenProfilesDialogOpen, setHiddenProfilesDialogOpen] = useState(false);
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
+  const [entryPanelOpen, setEntryPanelOpen] = useState(false);
   const [recordHistoryDialogOpen, setRecordHistoryDialogOpen] = useState(false);
   const [painChatDialogOpen, setPainChatDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<HealthRecord>();
@@ -390,8 +392,8 @@ export function HomePage() {
                 }}>
                   프로필 관리
                 </button>
-                <button className="primary-button" type="button" onClick={() => setRecordDialogOpen(true)}>
-                  건강기록 작성
+                <button className="primary-button" type="button" onClick={() => setEntryPanelOpen(true)}>
+                  건강기록 추가
                 </button>
               </div>
             </div>
@@ -470,10 +472,9 @@ export function HomePage() {
 
           <aside className="quick-actions-panel">
             <p className="section-kicker">빠른 작업</p>
-            <h2>무엇을 기록할까요?</h2>
-            <button type="button" onClick={() => setRecordDialogOpen(true)}>
-              <strong>건강기록 작성</strong>
-              <small>검진·통증·수치·메모</small>
+            <button type="button" onClick={() => setEntryPanelOpen(true)}>
+              <strong>건강기록 추가</strong>
+              <small>검진 서류·간편 수치·통증 대화</small>
             </button>
             <NavLink to="/data">
               <strong>서류 관리 · OCR</strong>
@@ -738,7 +739,24 @@ export function HomePage() {
           onSaved={() => refreshDashboard(selectedProfile.id)}
         />
       ) : null}
-      <FloatingHealthTools profile={selectedProfile} runtime={runtime} onSaved={() => selectedProfile ? refreshDashboard(selectedProfile.id) : Promise.resolve()} />
+      {entryPanelOpen && selectedProfile ? (
+        <HealthRecordEntryPanel
+          profile={selectedProfile}
+          runtime={runtime}
+          onClose={() => setEntryPanelOpen(false)}
+          onSaved={() => refreshDashboard(selectedProfile.id)}
+          onNavigateToDataManagement={() => {
+            setEntryPanelOpen(false);
+            void navigate("/data");
+          }}
+        />
+      ) : null}
+      <FloatingHealthTools
+        profile={selectedProfile}
+        runtime={runtime}
+        onSaved={() => (selectedProfile ? refreshDashboard(selectedProfile.id) : Promise.resolve())}
+        onOpen={() => setEntryPanelOpen(true)}
+      />
     </div>
   );
 }

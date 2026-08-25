@@ -6,6 +6,7 @@ import type { FamilyProfile, HealthRecord, HealthRecordType } from "../../shared
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 import { DevServerOcrAdapter } from "../../ocr/ocr-adapter";
 import { normalizeOcrResult } from "../../ocr/ocr-normalizer";
+import { HealthRecordEntryPanel } from "./HealthRecordEntryPanel";
 import "./healthRecordWorkspace.css";
 
 const LABELS: Record<HealthRecordType, string> = {
@@ -135,16 +136,46 @@ export function FloatingHealthTools({
   profile,
   runtime,
   onSaved,
+  onOpen,
 }: {
   profile?: FamilyProfile;
   runtime?: LocalDomainRuntime;
   onSaved: () => Promise<void>;
+  onOpen?: () => void;
 }) {
-  const [chatOpen, setChatOpen] = useState(false);
-  const [ocrOpen, setOcrOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const navigate = useNavigate();
   if (!profile) return null;
-  return <><div className="floating-health-tools"><button type="button" onClick={() => setOcrOpen(true)}>서류 관리 · OCR</button><button type="button" onClick={() => setChatOpen(true)}>대화로 통증 기록</button></div>{ocrOpen ? <DocumentOcrDialog profile={profile} runtime={runtime} onClose={() => setOcrOpen(false)} onSaved={onSaved} onManage={() => { setOcrOpen(false); void navigate("/data"); }} /> : null}{chatOpen ? <PainChatDialog profile={profile} runtime={runtime} onClose={() => setChatOpen(false)} onSaved={onSaved} /> : null}</>;
+
+  return (
+    <>
+      <button
+        type="button"
+        className="floating-health-entry-btn"
+        onClick={() => {
+          if (onOpen) onOpen();
+          else setInternalOpen(true);
+        }}
+        aria-label="건강기록 추가 도우미 열기"
+      >
+        <span className="btn-icon" aria-hidden="true">🌱</span>
+        <span>건강기록 추가</span>
+      </button>
+
+      {!onOpen && internalOpen && (
+        <HealthRecordEntryPanel
+          profile={profile}
+          runtime={runtime}
+          onClose={() => setInternalOpen(false)}
+          onSaved={onSaved}
+          onNavigateToDataManagement={() => {
+            setInternalOpen(false);
+            void navigate("/data");
+          }}
+        />
+      )}
+    </>
+  );
 }
 
 function DocumentOcrDialog({ profile, runtime, onClose, onSaved, onManage }: { profile: FamilyProfile; runtime?: LocalDomainRuntime; onClose: () => void; onSaved: () => Promise<void>; onManage: () => void }) {
