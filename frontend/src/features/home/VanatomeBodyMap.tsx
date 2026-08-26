@@ -31,6 +31,21 @@ type SelectedStructure = { name: string; system?: string };
 type BodyFocus = AnatomyFocus;
 type LazyLayerStatus = { state: "loading" | "loaded" | "error"; label: string };
 
+const ANATOMY_SYSTEM_LAYERS = [
+  { id: "integumentary", label: "외피계" },
+  { id: "skeletal", label: "골격계" },
+  { id: "muscular", label: "근육계" },
+  { id: "cardiovascular", label: "심혈관계" },
+  { id: "nervous", label: "신경계" },
+  { id: "lymphatic", label: "림프계" },
+  { id: "digestive", label: "소화기계" },
+  { id: "respiratory", label: "호흡기계" },
+  { id: "endocrine", label: "내분비계" },
+  { id: "urinary", label: "비뇨기계" },
+  { id: "reproductive", label: "생식계" },
+  { id: "mammary", label: "유방·유선" },
+] as const;
+
 const ATLAS_OPTIONS: Array<{ id: AnatomyAtlasId; label: string }> = [
   { id: "vanatome-male-reference", label: "남성 기준 · Vanatome" },
   {
@@ -44,6 +59,7 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
   const clearSelectionRef = useRef<() => void>(() => undefined);
   const focusCameraRef = useRef<(focus: BodyFocus) => void>(() => undefined);
   const pelvicOrganFocusRef = useRef<(active: boolean) => void>(() => undefined);
+  const setHiddenSystemsRef = useRef<(systems: ReadonlySet<string>) => void>(() => undefined);
   const [atlasId, setAtlasId] = useState<AnatomyAtlasId>("vanatome-male-reference");
   const [manifest, setManifest] = useState<AnatomyAtlasManifest>();
   const [selectedStructure, setSelectedStructure] = useState<SelectedStructure>();
@@ -52,6 +68,7 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadError, setLoadError] = useState<string>();
   const [lazyLayerStatus, setLazyLayerStatus] = useState<LazyLayerStatus>();
+  const [hiddenSystems, setHiddenSystems] = useState<ReadonlySet<string>>(() => new Set());
   const [webGlUnavailable, setWebGlUnavailable] = useState(false);
   const isTestEnvironment = navigator.userAgent.includes("jsdom");
 
@@ -66,6 +83,7 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
     setPelvicOrganFocus(false);
     setManifest(undefined);
     setLazyLayerStatus(undefined);
+    setHiddenSystems(new Set());
 
     let disposed = false;
     let cleanupScene: () => void = () => undefined;
@@ -90,6 +108,7 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
           clearSelectionRef,
           focusCameraRef,
           pelvicOrganFocusRef,
+          setHiddenSystemsRef,
         });
         cleanupScene = nextCleanupScene;
         if (disposed) cleanupScene();
@@ -105,6 +124,7 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
       clearSelectionRef.current = () => undefined;
       focusCameraRef.current = () => undefined;
       pelvicOrganFocusRef.current = () => undefined;
+      setHiddenSystemsRef.current = () => undefined;
     };
   }, [atlasId, isTestEnvironment]);
 
@@ -153,6 +173,55 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
             ))}
           </p>
         ) : null}
+        <fieldset className="vanatome-system-layers">
+          <legend>구조 레이어</legend>
+          <div className="vanatome-system-layer-actions">
+            <button
+              type="button"
+              disabled={loadProgress < 100}
+              onClick={() => {
+                const next = new Set<string>();
+                setHiddenSystems(next);
+                setHiddenSystemsRef.current(next);
+              }}
+            >
+              전체 켜기
+            </button>
+            <button
+              type="button"
+              disabled={loadProgress < 100}
+              onClick={() => {
+                const next = new Set(ANATOMY_SYSTEM_LAYERS.map((layer) => layer.id));
+                setHiddenSystems(next);
+                setHiddenSystemsRef.current(next);
+              }}
+            >
+              전체 끄기
+            </button>
+          </div>
+          <div className="vanatome-system-layer-buttons">
+            {ANATOMY_SYSTEM_LAYERS.map((layer) => {
+              const active = !hiddenSystems.has(layer.id);
+              return (
+                <button
+                  key={layer.id}
+                  type="button"
+                  disabled={loadProgress < 100}
+                  aria-pressed={active}
+                  onClick={() => {
+                    const next = new Set(hiddenSystems);
+                    if (active) next.add(layer.id);
+                    else next.delete(layer.id);
+                    setHiddenSystems(next);
+                    setHiddenSystemsRef.current(next);
+                  }}
+                >
+                  {layer.label}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
         <div className="vanatome-focus-control">
           <span>빠른 확대</span>
           <div className="vanatome-focus-buttons" aria-label="인체 부위 빠른 확대">
@@ -274,13 +343,14 @@ type CreateAnatomySceneOptions = {
   clearSelectionRef: React.MutableRefObject<() => void>;
   focusCameraRef: React.MutableRefObject<(focus: BodyFocus) => void>;
   pelvicOrganFocusRef: React.MutableRefObject<(active: boolean) => void>;
+  setHiddenSystemsRef: React.MutableRefObject<(systems: ReadonlySet<string>) => void>;
 };
 
 async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   const {
     canvas, manifest, isDisposed, onProgress, onReady, onWebGlUnavailable,
     onSelectedStructure, onLazyLayerStatus, clearSelectionRef, focusCameraRef,
-    pelvicOrganFocusRef,
+    pelvicOrganFocusRef, setHiddenSystemsRef,
   } = options;
   let renderer: THREE.WebGLRenderer;
   try {
@@ -324,6 +394,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   let lazyLoadTimer: number | undefined;
   let lazyStatusClearTimer: number | undefined;
   let cleanedUp = false;
+  let hiddenSystems = new Set<string>();
   const lazyLayerGroups = new Map<string, THREE.Group>();
   const lazyLayerControllers = new Map<string, AbortController>();
   const digestiveMaterialStates = new Map<THREE.Material, {
@@ -333,6 +404,10 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   }>();
 
   const renderScene = () => renderer.render(scene, camera);
+  const applyMeshVisibility = (mesh: THREE.Mesh) => {
+    const contextVisible = mesh.userData.contextVisible !== false;
+    mesh.visible = contextVisible && !hiddenSystems.has(String(mesh.userData.structureSystem ?? ""));
+  };
   const viewport = canvas.parentElement;
   let viewportWidth = 0;
   let viewportHeight = 0;
@@ -367,12 +442,23 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     onSelectedStructure(undefined);
   };
 
+  setHiddenSystemsRef.current = (systems) => {
+    hiddenSystems = new Set(systems);
+    if (selectedMesh && hiddenSystems.has(String(selectedMesh.userData.structureSystem ?? ""))) {
+      clearSelectedMaterial();
+      onSelectedStructure(undefined);
+    }
+    anatomyMeshes.forEach(applyMeshVisibility);
+    renderScene();
+  };
+
   pelvicOrganFocusRef.current = (active) => {
     clearSelectedMaterial();
     onSelectedStructure(undefined);
     for (const mesh of anatomyMeshes) {
       if (mesh.userData.structureSystem === "reproductive") {
-        mesh.visible = active;
+        mesh.userData.contextVisible = active;
+        applyMeshVisibility(mesh);
         continue;
       }
       if (mesh.userData.structureSystem !== "digestive") continue;
@@ -466,6 +552,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     if (focusAnimationFrame !== undefined) window.cancelAnimationFrame(focusAnimationFrame);
     clearSelectedMaterial();
     pelvicOrganFocusRef.current = () => undefined;
+    setHiddenSystemsRef.current = () => undefined;
     controls.dispose();
     dracoLoader.dispose();
     resizeObserver.disconnect();
@@ -505,6 +592,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         object.userData.structureLabel = adapted.label;
         object.userData.structureSystem = adapted.system;
         object.userData.visualRole = adapted.visualRole;
+        object.userData.contextVisible = Boolean(adapted);
         anatomyMeshes.push(object);
         const isFemaleComposite = manifest.id === "tripo-triangle2m-v49-internals-preview";
         const isAdaptiveSurfaceFlowGuide = isFemaleComposite
@@ -578,7 +666,8 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       if (!group) return;
       group.traverse((object) => {
         if (object instanceof THREE.Mesh && object.userData.lazyLayerId === layerId) {
-          object.visible = visible;
+          object.userData.contextVisible = visible;
+          applyMeshVisibility(object);
         }
       });
     };
@@ -607,6 +696,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         object.userData.structureSystem = adapted.system;
         object.userData.visualRole = adapted.visualRole;
         object.userData.lazyLayerId = layer.id;
+        object.userData.contextVisible = layer.triggerFocus.includes(activeLazyFocus);
         anatomyMeshes.push(object);
         selectableMeshes.push(object);
         object.material = createHolographicMaterials(
@@ -616,6 +706,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
           ownedMaterials,
         );
         originalMaterials.set(object, object.material);
+        applyMeshVisibility(object);
       });
       layerGroup.add(model);
       atlasGroup.updateMatrixWorld(true);

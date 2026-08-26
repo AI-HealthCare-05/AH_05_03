@@ -1202,6 +1202,64 @@ main {
   font-weight: 700;
 }
 
+.vanatome-system-layers {
+  margin: 18px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  padding: 16px 0 0;
+}
+
+.vanatome-system-layers legend {
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.vanatome-system-layer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: -18px 0 8px;
+}
+
+.vanatome-system-layer-actions button {
+  border: 0;
+  padding: 2px 3px;
+  color: var(--blue-700);
+  background: transparent;
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.vanatome-system-layer-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.vanatome-system-layer-buttons button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 5px;
+  color: var(--muted);
+  background: #f8fafc;
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.vanatome-system-layer-buttons button[aria-pressed="true"] {
+  border-color: #82d6e5;
+  color: #136478;
+  background: #edfbfd;
+}
+
+.vanatome-system-layer-actions button:disabled,
+.vanatome-system-layer-buttons button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
 .vanatome-focus-control {
   margin-top: 18px;
   border-top: 1px solid var(--line-soft);
