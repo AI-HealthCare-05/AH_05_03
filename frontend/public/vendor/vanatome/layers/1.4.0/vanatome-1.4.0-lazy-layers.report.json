@@ -1,25 +1,8 @@
 {
   "source": "z-anatomy-1.4.0-full-body.glb",
-  "policy": "all nervous meshes plus every muscular mesh split by available anatomical region",
+  "policy": "regional muscular layers only; the 97 head/neck muscles are supplied by the official complete-head layer",
+  "excludedHeadNeckMuscles": 97,
   "layers": [
-    {
-      "id": "brain",
-      "objects": 234,
-      "vertices": 255155,
-      "triangles": 505486,
-      "bytes": 8031196,
-      "sha256": "e8d3a8d27ec6012f095a40904e4daff3ed916fbece411dd9790d1ded651f91d2",
-      "output": "vanatome-1.4.0-brain.glb"
-    },
-    {
-      "id": "muscles-head-neck",
-      "objects": 97,
-      "vertices": 77459,
-      "triangles": 154512,
-      "bytes": 2460024,
-      "sha256": "4bc57dc7deb18f308c99f9460c76794d615d6583df5eac537d8408c84ffcadf9",
-      "output": "vanatome-1.4.0-muscles-head-neck.glb"
-    },
     {
       "id": "muscles-upper-core",
       "objects": 27,

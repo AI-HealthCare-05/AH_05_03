@@ -1,19 +1,21 @@
 {
   "id": "vanatome-male-reference",
-  "version": "1.4.0",
+  "version": "1.4.0-complete-head-32693313",
   "label": "남성 기준 · Vanatome",
   "shortLabel": "Vanatome 남성",
   "referenceSex": "male",
   "adapter": "vanatome",
   "experimental": false,
-  "description": "Z-Anatomy에서 파생된 기본 참조 아틀라스입니다. 최초에는 외피·골격·주요 장기만 불러오고, 머리·상반신·하반신·손 확대를 유지하면 해당 뇌와 근육 계층을 지연 로드합니다.",
+  "description": "Z-Anatomy에서 파생된 기본 참조 아틀라스입니다. 최초에는 외피·몸통과 사지 골격·주요 장기만 불러오고, 머리 확대 시 공식 원본의 두개골·안구·내이·신경핵·뇌신경·근육·혈관·림프계를 포함한 머리 해부 구조 738개를 지연 로드합니다. 상반신·하반신·손 근육도 해당 확대 시점에 불러옵니다.",
   "loadingLabel": "외피·골격·주요 장기를 구성하는 중…",
   "loadingSizeLabel": "약 16 MB · 이 서버에서 직접 불러옵니다",
   "layerLabels": [
     "반투명 외피",
     "골격",
     "주요 장기",
-    "머리 확대 시 뇌 234개·얼굴과 목 근육 97개 지연 로드",
+    "머리 확대 시 공식 Z-Anatomy 머리 구조 738개 지연 로드",
+    "두개골 78·근육 84·심혈관 198·림프 26·신경과 감각기관 352개",
+    "안구·각막·홍채·수정체·망막·공막·내이·신경핵 포함",
     "상반신 확대 시 어깨·복부 근육 27개 지연 로드",
     "하반신 확대 시 둔부·서혜부 근육 22개 지연 로드",
     "손 확대 시 손 근육 24개 지연 로드"
@@ -29,28 +31,14 @@
   ],
   "lazyLayers": [
     {
-      "id": "brain",
-      "label": "뇌 구조",
+      "id": "complete-head",
+      "label": "머리 전체 해부 구조",
       "triggerFocus": ["head"],
       "assets": [
         {
-          "url": "/vendor/vanatome/layers/1.4.0/vanatome-1.4.0-brain.glb",
+          "url": "/vendor/vanatome/layers/official-32693313/vanatome-official-complete-head.glb",
           "visualRole": "organ",
-          "system": "nervous",
-          "sha256": "e8d3a8d27ec6012f095a40904e4daff3ed916fbece411dd9790d1ded651f91d2"
-        }
-      ]
-    },
-    {
-      "id": "muscles-head-neck",
-      "label": "얼굴·목 근육",
-      "triggerFocus": ["head"],
-      "assets": [
-        {
-          "url": "/vendor/vanatome/layers/1.4.0/vanatome-1.4.0-muscles-head-neck.glb",
-          "visualRole": "organ",
-          "system": "muscular",
-          "sha256": "4bc57dc7deb18f308c99f9460c76794d615d6583df5eac537d8408c84ffcadf9"
+          "sha256": "441675a33c8a09c171f60ab1d80eb157922c92ed497d9128ca402d18a6a18dc8"
         }
       ]
     },

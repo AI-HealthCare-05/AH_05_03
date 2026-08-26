@@ -15,6 +15,7 @@ const ORGAN_COLORS: Record<string, number> = {
   cardiovascular: 0xe45f63,
   digestive: 0xe7a565,
   endocrine: 0xd28fe2,
+  lymphatic: 0x77c99a,
   mammary: 0xf0a3bd,
   muscular: 0xd97865,
   nervous: 0xf0cf69,

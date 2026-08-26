@@ -66,7 +66,7 @@ describe("final anatomy hologram materials", () => {
     expect(skeleton.transparent).toBe(true);
   });
 
-  it("지연 로드된 근육과 신경계에 서로 다른 계통 색상을 적용한다", () => {
+  it("지연 로드된 근육·신경계·림프계에 서로 다른 계통 색상을 적용한다", () => {
     const ownedMaterials = new Set<THREE.Material>();
     const source = new THREE.MeshStandardMaterial();
     const muscle = createHolographicMaterials(
@@ -81,9 +81,16 @@ describe("final anatomy hologram materials", () => {
       "nervous",
       ownedMaterials,
     ) as THREE.MeshStandardMaterial;
+    const lymphatic = createHolographicMaterials(
+      source,
+      "organ",
+      "lymphatic",
+      ownedMaterials,
+    ) as THREE.MeshStandardMaterial;
 
     expect(muscle.color.getHex()).toBe(0xd97865);
     expect(nervous.color.getHex()).toBe(0xf0cf69);
+    expect(lymphatic.color.getHex()).toBe(0x77c99a);
   });
 });
 

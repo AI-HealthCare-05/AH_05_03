@@ -740,6 +740,7 @@ function systemLabel(system: string) {
     digestive: "소화기계",
     endocrine: "내분비계",
     integumentary: "외피계",
+    lymphatic: "림프계",
     reproductive: "생식계",
     mammary: "유방·유선",
     muscular: "근육계",

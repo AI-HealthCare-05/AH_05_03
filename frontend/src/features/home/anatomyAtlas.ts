@@ -152,7 +152,7 @@ function adaptVanatomeMesh(
   const shell = anatomyId === "body-shell";
   const visibleSystems = new Set([
     "cardiovascular", "digestive", "endocrine", "mammary", "muscular", "nervous",
-    "respiratory", "skeletal", "urinary",
+    "lymphatic", "respiratory", "skeletal", "urinary",
   ]);
   if (!shell && !visibleSystems.has(system)) return undefined;
 

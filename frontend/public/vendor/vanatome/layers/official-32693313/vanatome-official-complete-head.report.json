@@ -1,0 +1,21 @@
+{
+  "source": "Z-Anatomy official Models-of-human-anatomy@32693313",
+  "policy": "every renderable Head object in systems 1, 3, 4, 5, 6, and 7; excludes two-vertex taxonomy helpers and system 9 external surface regions",
+  "objects": 738,
+  "sourceTypes": {
+    "CURVE": 247,
+    "MESH": 491
+  },
+  "systems": {
+    "cardiovascular": 198,
+    "lymphatic": 26,
+    "muscular": 84,
+    "nervous": 352,
+    "skeletal": 78
+  },
+  "vertices": 1600866,
+  "triangles": 1946792,
+  "bytes": 63374748,
+  "sha256": "441675a33c8a09c171f60ab1d80eb157922c92ed497d9128ca402d18a6a18dc8",
+  "output": "vanatome-official-complete-head.glb"
+}

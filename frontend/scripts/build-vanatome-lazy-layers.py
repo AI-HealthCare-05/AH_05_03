@@ -34,7 +34,6 @@ def anatomy_system(obj):
 
 
 muscles = [obj for obj in meshes if anatomy_system(obj) == "muscular"]
-nervous = [obj for obj in meshes if anatomy_system(obj) == "nervous"]
 
 head_neck_prefixes = ("facial-expression-muscles-", "neck-muscles-")
 hand_prefixes = ("hand-muscles-",)
@@ -51,15 +50,13 @@ assigned = set(head_neck + hand + lower)
 upper = [obj for obj in muscles if obj not in assigned]
 
 layers = {
-    "brain": nervous,
-    "muscles-head-neck": head_neck,
     "muscles-upper-core": upper,
     "muscles-lower-pelvic": lower,
     "muscles-hands": hand,
 }
 
-if set().union(*[set(objects) for objects in layers.values()]) != set(nervous + muscles):
-    raise RuntimeError("lazy-layer classification did not cover every nervous and muscular mesh")
+if set().union(set(head_neck), *[set(objects) for objects in layers.values()]) != set(muscles):
+    raise RuntimeError("lazy-layer classification did not match the requested focus structures")
 
 
 def export_layer(layer_id, objects):
@@ -89,7 +86,8 @@ def export_layer(layer_id, objects):
 
 report = {
     "source": source.name,
-    "policy": "all nervous meshes plus every muscular mesh split by available anatomical region",
+    "policy": "regional muscular layers only; the 97 head/neck muscles are supplied by the official complete-head layer",
+    "excludedHeadNeckMuscles": len(head_neck),
     "layers": [export_layer(layer_id, objects) for layer_id, objects in layers.items()],
 }
 (output_directory / "vanatome-1.4.0-lazy-layers.report.json").write_text(

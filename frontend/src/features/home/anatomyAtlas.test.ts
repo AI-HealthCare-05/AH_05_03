@@ -141,10 +141,10 @@ describe("final anatomy atlas adapters", () => {
       adapter: "vanatome",
       lazyLayers: [
         {
-          id: "brain",
-          label: "뇌 구조",
+          id: "complete-head",
+          label: "머리 전체 해부 구조",
           triggerFocus: ["head"],
-          assets: [{ url: "/brain.glb", visualRole: "organ" }],
+          assets: [{ url: "/complete-head.glb", visualRole: "organ" }],
         },
         {
           id: "upper",
@@ -155,7 +155,9 @@ describe("final anatomy atlas adapters", () => {
       ],
     });
 
-    expect(lazyLayersForFocus(male, "head").map((layer) => layer.id)).toEqual(["brain"]);
+    expect(lazyLayersForFocus(male, "head").map((layer) => layer.id)).toEqual([
+      "complete-head",
+    ]);
     expect(lazyLayersForFocus(male, "full")).toEqual([]);
   });
 });
