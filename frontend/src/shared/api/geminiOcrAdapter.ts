@@ -24,7 +24,7 @@ export class GeminiOcrAdapter {
     });
     if (!response.ok) {
       const error = await response.json().catch(() => null) as { message?: string } | null;
-      throw new Error(error?.message ?? "OCR 실행에 실패했습니다.");
+      throw new Error(error?.message ?? "서류 내용을 읽지 못했습니다.");
     }
     const envelope = await response.json() as ApiEnvelope<GeminiOcrResult>;
     return envelope.data;

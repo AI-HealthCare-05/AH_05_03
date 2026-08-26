@@ -157,7 +157,7 @@ export function DataManagementPage() {
       setOcrText(result.text);
       setOcrProgress(undefined);
     } catch (caught) {
-      setError(errorMessage(caught, "Gemini OCR을 실행하지 못했습니다."));
+      setError(errorMessage(caught, "서류 내용을 읽지 못했습니다."));
     } finally {
       setWorking(false);
     }
@@ -178,11 +178,11 @@ export function DataManagementPage() {
         payload: { note: ocrText.trim() },
       });
       if (!result.ok) throw new Error(result.error.message);
-      setMessage("검토한 OCR 결과를 구성원의 로컬 건강기록으로 저장했습니다.");
+      setMessage("검토한 서류 내용을 구성원의 로컬 건강기록으로 저장했습니다.");
       setOcrDocument(undefined);
       setOcrText("");
     } catch (caught) {
-      setError(errorMessage(caught, "OCR 결과를 저장하지 못했습니다."));
+      setError(errorMessage(caught, "확인한 서류 내용을 저장하지 못했습니다."));
     } finally {
       setWorking(false);
     }
@@ -223,7 +223,7 @@ export function DataManagementPage() {
           <p>브라우저 데이터 삭제나 기기 분실에 대비해 암호화 백업 파일을 정기적으로 내려받으세요.</p>
         </div>
         <dl>
-          <div><dt>브라우저 로컬</dt><dd>프로필·건강기록·가족력·OCR</dd></div>
+          <div><dt>브라우저 로컬</dt><dd>프로필·건강기록·가족력·서류 내용</dd></div>
           <div><dt>이어봄 서버</dt><dd>계정·구독·초대·연결 상태</dd></div>
         </dl>
       </section>
@@ -302,7 +302,7 @@ export function DataManagementPage() {
 
       <section className="document-panel">
         <div className="section-title-row">
-          <div><p className="section-kicker">원본 문서·Gemini OCR</p><h2>건강서류를 확인하고 기록으로 연결하세요</h2></div>
+          <div><p className="section-kicker">원본 문서·AI 서류 읽기</p><h2>건강서류를 확인하고 기록으로 연결하세요</h2></div>
         </div>
         {!runtime?.documents ? (
           <div className="alert error-alert">이 브라우저에서는 OPFS 문서 저장을 사용할 수 없습니다.</div>
@@ -317,7 +317,7 @@ export function DataManagementPage() {
               {documents.map((document) => (
                 <article key={document.id}>
                   <div><strong>{document.fileName}</strong><small>{profiles.find((profile) => profile.id === document.profileId)?.displayName ?? "알 수 없는 구성원"} · {(document.byteSize / 1024).toFixed(1)}KB</small></div>
-                  <div className="record-row-actions"><button type="button" onClick={() => void downloadDocument(document)}>내려받기</button><button type="button" disabled={!(document.mimeType.startsWith("image/") || document.mimeType === "application/pdf") || working} onClick={() => void runOcr(document)}>Gemini OCR</button><button type="button" onClick={() => setDeletingDocument(document)}>삭제</button></div>
+                  <div className="record-row-actions"><button type="button" onClick={() => void downloadDocument(document)}>내려받기</button><button type="button" disabled={!(document.mimeType.startsWith("image/") || document.mimeType === "application/pdf") || working} onClick={() => void runOcr(document)}>내용 읽기</button><button type="button" onClick={() => setDeletingDocument(document)}>삭제</button></div>
                 </article>
               ))}
               {documents.length === 0 ? <div className="compact-empty"><strong>저장된 원본 문서가 없습니다.</strong></div> : null}
@@ -329,9 +329,9 @@ export function DataManagementPage() {
       {ocrDocument ? (
         <div className="modal-backdrop" role="presentation">
           <section className="modal-panel ocr-review-modal" role="dialog" aria-modal="true" aria-labelledby="ocr-review-title">
-            <div className="modal-heading"><div><p className="section-kicker">서버 전송 없음</p><h2 id="ocr-review-title">OCR 결과 검토</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={() => setOcrDocument(undefined)}>×</button></div>
+            <div className="modal-heading"><div><p className="section-kicker">사용자 확인 단계</p><h2 id="ocr-review-title">서류 내용 확인</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={() => setOcrDocument(undefined)}>×</button></div>
             {ocrProgress ? <p className="form-notice">{ocrProgress}</p> : null}
-            <label className="ocr-review-field">추출 결과<textarea rows={14} value={ocrText} onChange={(event) => setOcrText(event.currentTarget.value)} placeholder="OCR 처리 결과가 여기에 표시됩니다." /></label>
+            <label className="ocr-review-field">읽은 내용<textarea rows={14} value={ocrText} onChange={(event) => setOcrText(event.currentTarget.value)} placeholder="서류에서 읽은 내용이 여기에 표시됩니다." /></label>
             <div className="form-actions"><button className="secondary-button" type="button" onClick={() => setOcrDocument(undefined)}>취소</button><button className="primary-button" type="button" disabled={working || !ocrText.trim()} onClick={() => void saveOcrResult()}>검토 결과 저장</button></div>
           </section>
         </div>

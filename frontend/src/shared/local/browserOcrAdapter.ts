@@ -10,7 +10,7 @@ export class BrowserOcrAdapter {
       : image.type.startsWith("image/")
         ? [image]
         : [];
-    if (sources.length === 0) throw new Error("이미지 또는 PDF 파일만 로컬 OCR로 처리할 수 있습니다.");
+    if (sources.length === 0) throw new Error("이미지 또는 PDF 파일만 읽을 수 있습니다.");
     const { createWorker, OEM } = await import("tesseract.js");
     const worker = await createWorker("kor+eng", OEM.LSTM_ONLY, {
       logger: (message) => onProgress?.({ status: message.status, progress: message.progress }),
