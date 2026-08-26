@@ -152,7 +152,7 @@ function adaptVanatomeMesh(
   const shell = anatomyId === "body-shell";
   const visibleSystems = new Set([
     "cardiovascular", "digestive", "endocrine", "mammary", "muscular", "nervous",
-    "lymphatic", "respiratory", "skeletal", "urinary",
+    "lymphatic", "reproductive", "respiratory", "skeletal", "urinary",
   ]);
   if (!shell && !visibleSystems.has(system)) return undefined;
 
@@ -161,7 +161,7 @@ function adaptVanatomeMesh(
     anatomyId: anatomyId || slugify(mesh.name),
     sourceKey: `vanatome:${manifest.id}:${manifest.version}:${anatomyId || mesh.name}`,
     label: structure?.name ?? String(mesh.userData.label ?? readableStructureName(mesh.name)),
-    system: structure?.system ?? system,
+    system: shell ? "integumentary" : structure?.system ?? system,
     visualRole: shell ? "shell" : system === "skeletal" ? "skeleton" : "organ",
     selectable: !shell,
   };

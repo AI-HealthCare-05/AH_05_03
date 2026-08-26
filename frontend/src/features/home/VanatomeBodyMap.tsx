@@ -43,8 +43,15 @@ const ANATOMY_SYSTEM_LAYERS = [
   { id: "endocrine", label: "내분비계" },
   { id: "urinary", label: "비뇨기계" },
   { id: "reproductive", label: "생식계" },
-  { id: "mammary", label: "유방·유선" },
 ] as const;
+
+const SUPPORTED_SYSTEMS_BY_ATLAS: Record<AnatomyAtlasId, ReadonlySet<string>> = {
+  "vanatome-male-reference": new Set(ANATOMY_SYSTEM_LAYERS.map((layer) => layer.id)),
+  "tripo-triangle2m-v49-internals-preview": new Set([
+    "integumentary", "skeletal", "cardiovascular", "digestive", "respiratory",
+    "endocrine", "urinary",
+  ]),
+};
 
 const ATLAS_OPTIONS: Array<{ id: AnatomyAtlasId; label: string }> = [
   { id: "vanatome-male-reference", label: "남성 기준 · Vanatome" },
@@ -71,6 +78,9 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
   const [hiddenSystems, setHiddenSystems] = useState<ReadonlySet<string>>(() => new Set());
   const [webGlUnavailable, setWebGlUnavailable] = useState(false);
   const isTestEnvironment = navigator.userAgent.includes("jsdom");
+  const systemLayers = ANATOMY_SYSTEM_LAYERS.filter(
+    (layer) => SUPPORTED_SYSTEMS_BY_ATLAS[atlasId].has(layer.id),
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -191,7 +201,7 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
               type="button"
               disabled={loadProgress < 100}
               onClick={() => {
-                const next = new Set(ANATOMY_SYSTEM_LAYERS.map((layer) => layer.id));
+                const next = new Set(systemLayers.map((layer) => layer.id));
                 setHiddenSystems(next);
                 setHiddenSystemsRef.current(next);
               }}
@@ -200,7 +210,7 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
             </button>
           </div>
           <div className="vanatome-system-layer-buttons">
-            {ANATOMY_SYSTEM_LAYERS.map((layer) => {
+            {systemLayers.map((layer) => {
               const active = !hiddenSystems.has(layer.id);
               return (
                 <button

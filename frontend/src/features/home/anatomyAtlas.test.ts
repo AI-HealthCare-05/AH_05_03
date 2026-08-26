@@ -77,6 +77,47 @@ describe("final anatomy atlas adapters", () => {
     });
   });
 
+  it("남성 body-shell은 regional-anatomy 메타데이터와 무관하게 외피계로 정규화한다", () => {
+    const male = manifest({
+      id: "vanatome-male-reference",
+      version: "1.4.0",
+      referenceSex: "male",
+      adapter: "vanatome",
+    });
+    expect(adaptAnatomyMesh(
+      {
+        name: "body-shell__body-shell",
+        userData: { anatomyId: "body-shell", anatomySystem: "regional-anatomy" },
+      },
+      { url: "/male.glb", visualRole: "atlas" },
+      male,
+      new Map([["body-shell", { id: "body-shell", name: "body-shell", system: "regional-anatomy" }]]),
+    )).toMatchObject({
+      anatomyId: "body-shell",
+      system: "integumentary",
+      visualRole: "shell",
+      selectable: false,
+    });
+  });
+
+  it("남성 하반신 지연 레이어의 생식계 구조를 유지한다", () => {
+    const male = manifest({
+      id: "vanatome-male-reference",
+      version: "1.4.0",
+      referenceSex: "male",
+      adapter: "vanatome",
+    });
+    expect(adaptAnatomyMesh(
+      {
+        name: "prostate",
+        userData: { anatomyId: "prostate", anatomySystem: "reproductive" },
+      },
+      { url: "/lower.glb", visualRole: "organ" },
+      male,
+      new Map(),
+    )).toMatchObject({ system: "reproductive", visualRole: "organ", selectable: true });
+  });
+
   it("Tripo v28의 Vanatome 장기 자산을 선택 가능한 장기로 유지한다", () => {
     expect(adaptAnatomyMesh(
       {
