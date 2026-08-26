@@ -6,9 +6,13 @@
   "cageBones": 181,
   "neighborBones": 8,
   "excludedSystems": {},
+  "shellClampExcludedAnatomyIds": [
+    "official-head-epicranial-aponeurosis-left",
+    "official-head-epicranial-aponeurosis-right"
+  ],
   "shellInset": 0.0015,
-  "clampedObjects": 223,
-  "clampedVertices": 143450,
+  "clampedObjects": 221,
+  "clampedVertices": 143406,
   "maxOutsideDistanceBeforeClamp": 0.019864561472610207,
   "objects": 738,
   "systems": {
@@ -20,7 +24,7 @@
   },
   "vertices": 1716941,
   "triangles": 3168607,
-  "bytes": 8830544,
-  "sha256": "405c6573daa75456dbaeb264ef02d73a1354e118ea7f81539f7b74cb9a4d6294",
+  "bytes": 8831320,
+  "sha256": "d0a25cf405dbcd274d4b5f6899c59b7dd642d964ef00c50d265711370f81b285",
   "output": "female-v29-complete-head.glb"
 }

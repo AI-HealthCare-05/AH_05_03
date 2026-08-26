@@ -1,6 +1,6 @@
 {
   "id": "tripo-triangle2m-v49-internals-preview",
-  "version": "3.6.1-female-aligned-systems-v29",
+  "version": "3.6.2-female-aligned-systems-v29",
   "label": "Tripo 단일 정면 · Triangle 2M 외피 + Z-Anatomy 내부 v49 · 여성 구조 정합 v29",
   "shortLabel": "Tripo 내부 v49 · 여성 구조 정합 v29",
   "referenceSex": "female",
@@ -8,7 +8,7 @@
   "coordinatePolicy": "presentation-fitted",
   "referenceFrameId": "tripo-single-front-triangle2m-extremities-scaled-v01-with-v49-internals",
   "experimental": true,
-  "description": "승인된 v15 외피, v27 골격, v28 장기는 변경하지 않고 원본 골격 181개와 여성 골격의 대응을 변형 케이지로 사용해 확대 부위의 세부 해부 구조를 여성 체형에 정합한 v29 후보입니다. 케이지 변형 뒤 외피를 벗어난 정점은 외피 안쪽 1.5 mm로 별도 제한합니다. 근육·신경·림프·세부 혈관·관절 구조는 필요한 부위를 확대할 때만 지연 로드합니다. 의료 또는 개인 해부 정합이 아닌 시각 비교 후보입니다.",
+  "description": "승인된 v15 외피, v27 골격, v28 장기는 변경하지 않고 원본 골격 181개와 여성 골격의 대응을 변형 케이지로 사용해 확대 부위의 세부 해부 구조를 여성 체형에 정합한 v29 후보입니다. 케이지 변형 뒤 외피를 벗어난 정점은 외피 안쪽 1.5 mm로 별도 제한하되, 머리널힘줄막은 분리된 머리카락 면에 붙지 않도록 케이지 정합 위치를 유지합니다. 근육·신경·림프·세부 혈관·관절 구조는 필요한 부위를 확대할 때만 지연 로드합니다. 의료 또는 개인 해부 정합이 아닌 시각 비교 후보입니다.",
   "loadingLabel": "Triangle 2M 외피와 v29 장기·골격을 구성하는 중…",
   "loadingSizeLabel": "약 66.85 MiB · 고밀도 외피와 내부 276개 구조를 불러옵니다",
   "layerLabels": [
@@ -188,7 +188,7 @@
           "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/layers/female-aligned-v29/female-v29-complete-head.glb",
           "visualRole": "organ",
           "adapter": "vanatome",
-          "sha256": "405c6573daa75456dbaeb264ef02d73a1354e118ea7f81539f7b74cb9a4d6294"
+          "sha256": "d0a25cf405dbcd274d4b5f6899c59b7dd642d964ef00c50d265711370f81b285"
         }
       ]
     },

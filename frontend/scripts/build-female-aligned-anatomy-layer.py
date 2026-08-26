@@ -45,6 +45,10 @@ CHUNK_SIZE = 8192
 MIN_EXTENT = 0.002
 EXCLUDED_TARGET_SYSTEMS = {"reproductive"}
 SHELL_INSET = 0.0015
+SHELL_CLAMP_EXCLUDED_IDS = {
+    "official-head-epicranial-aponeurosis-left",
+    "official-head-epicranial-aponeurosis-right",
+}
 
 
 def imported_meshes(path):
@@ -206,7 +210,12 @@ clamped_objects = 0
 for obj in source_objects:
     points = world_vertices(obj)
     warped = warp_points(points)
-    warped, object_clamped_vertices, object_max_outside = clamp_points_inside_shell(warped)
+    anatomy_id = str(obj.get("anatomyId", ""))
+    if anatomy_id in SHELL_CLAMP_EXCLUDED_IDS:
+        object_clamped_vertices = 0
+        object_max_outside = 0.0
+    else:
+        warped, object_clamped_vertices, object_max_outside = clamp_points_inside_shell(warped)
     if object_clamped_vertices:
         clamped_objects += 1
         clamped_vertices += object_clamped_vertices
@@ -243,6 +252,7 @@ report = {
     "cageBones": len(common_ids),
     "neighborBones": NEIGHBOR_BONES,
     "excludedSystems": dict(sorted(excluded_system_counts.items())),
+    "shellClampExcludedAnatomyIds": sorted(SHELL_CLAMP_EXCLUDED_IDS),
     "shellInset": SHELL_INSET,
     "clampedObjects": clamped_objects,
     "clampedVertices": clamped_vertices,
