@@ -47,17 +47,18 @@ const ANATOMY_SYSTEM_LAYERS = [
 
 const SUPPORTED_SYSTEMS_BY_ATLAS: Record<AnatomyAtlasId, ReadonlySet<string>> = {
   "vanatome-male-reference": new Set(ANATOMY_SYSTEM_LAYERS.map((layer) => layer.id)),
-  "tripo-triangle2m-v49-internals-preview": new Set([
-    "integumentary", "skeletal", "cardiovascular", "digestive", "respiratory",
-    "endocrine", "urinary",
-  ]),
+  "tripo-triangle2m-v49-internals-preview": new Set(
+    ANATOMY_SYSTEM_LAYERS
+      .filter((layer) => layer.id !== "reproductive")
+      .map((layer) => layer.id),
+  ),
 };
 
 const ATLAS_OPTIONS: Array<{ id: AnatomyAtlasId; label: string }> = [
   { id: "vanatome-male-reference", label: "남성 기준 · Vanatome" },
   {
     id: "tripo-triangle2m-v49-internals-preview",
-    label: "Tripo 단일 정면 · Triangle 2M 외피 + Z-Anatomy 내부 v49 · 흉곽·복부 장기 확대 v28",
+    label: "Tripo 단일 정면 · Triangle 2M 외피 + Z-Anatomy 내부 v49 · 여성 구조 정합 v29",
   },
 ];
 

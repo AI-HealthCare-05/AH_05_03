@@ -1,0 +1,29 @@
+{
+  "source": "vanatome-official-complete-lower.glb",
+  "targetSkeleton": "triangle2m-v49-skeleton-relaxed-anatomical-foot-shell-reduced-frontal-straight-humerus-v27.glb",
+  "region": "lower",
+  "policy": "181-bone nearest-cage blended axis-aligned deformation plus female-shell inward clamp; approved female shell, skeleton, and v28 organs unchanged",
+  "cageBones": 181,
+  "neighborBones": 8,
+  "excludedSystems": {
+    "reproductive": 14
+  },
+  "shellInset": 0.0015,
+  "clampedObjects": 253,
+  "clampedVertices": 143683,
+  "maxOutsideDistanceBeforeClamp": 0.030809382246499976,
+  "objects": 611,
+  "systems": {
+    "cardiovascular": 116,
+    "lymphatic": 10,
+    "muscular": 231,
+    "nervous": 78,
+    "skeletal": 174,
+    "urinary": 2
+  },
+  "vertices": 861901,
+  "triangles": 1573258,
+  "bytes": 5287232,
+  "sha256": "d8eeea47eee573079613bf233f8676442c5256f4e3e9a168a251581fb792b6c8",
+  "output": "female-v29-complete-lower.glb"
+}

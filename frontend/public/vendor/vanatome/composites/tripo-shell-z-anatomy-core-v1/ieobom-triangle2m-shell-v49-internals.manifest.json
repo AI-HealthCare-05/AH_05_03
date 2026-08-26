@@ -1,15 +1,15 @@
 {
   "id": "tripo-triangle2m-v49-internals-preview",
-  "version": "3.5.0-enlarged-organs-v28",
-  "label": "Tripo 단일 정면 · Triangle 2M 외피 + Z-Anatomy 내부 v49 · 흉곽·복부 장기 확대 v28",
-  "shortLabel": "Tripo 내부 v49 · 흉곽·복부 장기 확대 v28",
+  "version": "3.6.1-female-aligned-systems-v29",
+  "label": "Tripo 단일 정면 · Triangle 2M 외피 + Z-Anatomy 내부 v49 · 여성 구조 정합 v29",
+  "shortLabel": "Tripo 내부 v49 · 여성 구조 정합 v29",
   "referenceSex": "female",
   "adapter": "shell",
   "coordinatePolicy": "presentation-fitted",
   "referenceFrameId": "tripo-single-front-triangle2m-extremities-scaled-v01-with-v49-internals",
   "experimental": true,
-  "description": "v27의 정면 상완골 직선 보정과 기존 외피·골격 정렬을 그대로 유지하면서, 확장된 흉곽과 복부 공간에 맞게 장기 크기만 조정한 v28 후보입니다. 폐·심장·흉부 혈관 70개는 좌우 18%·높이 5%, 식도를 제외한 소화기관 11개는 좌우 10%·높이 3%, 신장·부신 4개는 좌우 8%·높이 3% 확대했습니다. 앞뒤 깊이는 늘리지 않았으며 각 연결 계통은 공동 해부 중심을 기준으로 변형했습니다. 폐 계통 폭은 흉곽 폭의 약 68.5%에서 80.8%로 증가했습니다. 식도·방광·목과 머리의 내분비 구조, 외피, 골격은 변경하지 않았습니다. 의료 또는 개인 해부 정합이 아닌 시각 비교 후보입니다.",
-  "loadingLabel": "Triangle 2M 외피와 v49 장기·골격을 구성하는 중…",
+  "description": "승인된 v15 외피, v27 골격, v28 장기는 변경하지 않고 원본 골격 181개와 여성 골격의 대응을 변형 케이지로 사용해 확대 부위의 세부 해부 구조를 여성 체형에 정합한 v29 후보입니다. 케이지 변형 뒤 외피를 벗어난 정점은 외피 안쪽 1.5 mm로 별도 제한합니다. 근육·신경·림프·세부 혈관·관절 구조는 필요한 부위를 확대할 때만 지연 로드합니다. 의료 또는 개인 해부 정합이 아닌 시각 비교 후보입니다.",
+  "loadingLabel": "Triangle 2M 외피와 v29 장기·골격을 구성하는 중…",
   "loadingSizeLabel": "약 66.85 MiB · 고밀도 외피와 내부 276개 구조를 불러옵니다",
   "layerLabels": [
     "Triangle 2M 외피·가이드·골격 팔 자세를 함께 변형",
@@ -128,7 +128,14 @@
     "요골은 v49 정렬 유지·척골만 손목 고정형 근위 관절 보정",
     "내부 전체 경계가 현재 외피의 X·Y·Z 범위 안에 있음",
     "추가 리스케일·리깅·외피 리메시·부품 접합 없음",
-    "시각 비교 후보이며 의료 또는 개인 해부 정합이 아님"
+    "시각 비교 후보이며 의료 또는 개인 해부 정합이 아님",
+    "v29 원본·여성 골격 181개 대응을 이용한 지역 변형 케이지",
+    "v29 머리 확대 시 여성 정합 보충 구조 738개 지연 로드",
+    "v29 상반신 확대 시 여성 정합 보충 구조 1,094개 지연 로드",
+    "v29 하반신·무릎·발 확대 시 여성 정합 보충 구조 611개 지연 로드",
+    "v29 손 확대 시 정합된 양손 보충 구조 267개 지연 로드",
+    "v29 여성 보충 구조 합계 2,710개·부위별 지연 로드·캐시 공유",
+    "여성 원본에 없는 남성 생식계 구조 14개 제외"
   ],
   "attributionLabel": "Tripo 외피와 Z-Anatomy/Vanatome 파생 내부 구조 출처·사용 제한",
   "attributionUrl": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ATTRIBUTION.txt",
@@ -169,6 +176,60 @@
       "adapter": "vanatome",
       "sourceUrl": "https://github.com/Z-Anatomy/Models-of-human-anatomy",
       "sha256": "e964084c13b5ab52049b617ca296e9bf8b52c0dd5d961b6e9461ad0c6ab5e533"
+    }
+  ],
+  "lazyLayers": [
+    {
+      "id": "female-complete-head",
+      "label": "여성 정합 머리 전체 해부 구조",
+      "triggerFocus": ["head"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/layers/female-aligned-v29/female-v29-complete-head.glb",
+          "visualRole": "organ",
+          "adapter": "vanatome",
+          "sha256": "405c6573daa75456dbaeb264ef02d73a1354e118ea7f81539f7b74cb9a4d6294"
+        }
+      ]
+    },
+    {
+      "id": "female-complete-upper",
+      "label": "여성 정합 상반신 전체 해부 구조",
+      "triggerFocus": ["upper"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/layers/female-aligned-v29/female-v29-complete-upper.glb",
+          "visualRole": "organ",
+          "adapter": "vanatome",
+          "sha256": "fb68b180b84b87e00feb6f10c808d6c46578612dac197f63e1b4c922f0485eca"
+        }
+      ]
+    },
+    {
+      "id": "female-complete-lower",
+      "label": "여성 정합 하반신 전체 해부 구조",
+      "triggerFocus": ["lower", "knee", "foot"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/layers/female-aligned-v29/female-v29-complete-lower.glb",
+          "visualRole": "organ",
+          "adapter": "vanatome",
+          "sha256": "d8eeea47eee573079613bf233f8676442c5256f4e3e9a168a251581fb792b6c8"
+        }
+      ]
+    },
+    {
+      "id": "female-complete-hand",
+      "label": "여성 정합 손 전체 해부 구조",
+      "triggerFocus": ["hand"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/layers/female-aligned-v29/female-v29-complete-hand.glb",
+          "visualRole": "organ",
+          "adapter": "vanatome",
+          "sha256": "a2423f5e046e41f7d65fb92658eb08908d193d1d0805e7717c1bb7cc942f9b76"
+        }
+      ]
     }
   ]
 }
