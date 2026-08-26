@@ -158,7 +158,7 @@ export function FloatingHealthTools({
         }}
         aria-label="건강기록 추가 도우미 열기"
       >
-        <span className="btn-icon" aria-hidden="true">🌱</span>
+        <span className="btn-icon" aria-hidden="true">＋</span>
         <span>건강기록 추가</span>
       </button>
 

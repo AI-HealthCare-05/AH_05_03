@@ -54,6 +54,46 @@ describe("analyzeExamTrends", () => {
     expect(fbgSeries.dataPoints[0].rawName).toBe("FBS");
   });
 
+  it("동일 날짜에 여러 기록이 존재할 때 더 최근에 생성(createdAt)된 기록을 우선 반영한다", () => {
+    const records: HealthRecord[] = [
+      {
+        id: "rec-old",
+        householdId: "h1",
+        profileId: "p1",
+        recordType: "blood_glucose",
+        recordedAt: "2026-08-25T12:00:00.000Z",
+        source: "manual",
+        sourceDocumentId: null,
+        payload: { value: 117, timing: "fasting" },
+        deletedAt: null,
+        createdAt: "2026-08-25T12:05:00.000Z",
+        updatedAt: "2026-08-25T12:05:00.000Z",
+        version: 1,
+      },
+      {
+        id: "rec-new",
+        householdId: "h1",
+        profileId: "p1",
+        recordType: "blood_glucose",
+        recordedAt: "2026-08-25T08:00:00.000Z",
+        source: "manual",
+        sourceDocumentId: null,
+        payload: { value: 120, timing: "fasting" },
+        deletedAt: null,
+        createdAt: "2026-08-26T13:00:00.000Z",
+        updatedAt: "2026-08-26T13:00:00.000Z",
+        version: 1,
+      },
+    ];
+
+    const result = analyzeExamTrends(records);
+    const fbg = result.metrics.find((m) => m.canonicalName === "공복혈당");
+    expect(fbg).toBeDefined();
+    expect(fbg?.dataPoints.length).toBe(1);
+    expect(fbg?.dataPoints[0].value).toBe("120");
+    expect(fbg?.dataPoints[0].recordId).toBe("rec-new");
+  });
+
   it("식후혈당과 공복혈당은 절대 같은 시계열에 섞이지 않고 분리된다", () => {
     const records: HealthRecord[] = [
       {

@@ -272,8 +272,17 @@ export function analyzeExamTrends(records: HealthRecord[]): LongitudinalTrendSum
           pointsByDate.set(pt.date, pt);
         } else if (isExistingInvalid && isPtValid) {
           pointsByDate.set(pt.date, pt);
+        } else if (
+          pt.recordCreatedAt &&
+          existing.recordCreatedAt &&
+          pt.recordCreatedAt !== existing.recordCreatedAt
+        ) {
+          // 생성 시점(createdAt)이 다르면 더 최근에 등록된 기록 선택
+          if (pt.recordCreatedAt.localeCompare(existing.recordCreatedAt) > 0) {
+            pointsByDate.set(pt.date, pt);
+          }
         } else if (pt.dateTime.localeCompare(existing.dateTime) > 0) {
-          // 최신 시간 우선
+          // 생성 시점이 같거나 없으면 측정 시간(dateTime) 우선
           pointsByDate.set(pt.date, pt);
         }
       }
