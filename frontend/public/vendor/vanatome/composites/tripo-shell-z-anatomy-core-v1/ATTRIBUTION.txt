@@ -20,16 +20,6 @@ Final retained presentation state:
   were enlarged 10% laterally and 3% vertically; kidneys and suprarenal glands
   were enlarged 8% laterally and 3% vertically. Depth was unchanged.
 - The exterior shell and internal layers remain separate GLB assets at runtime.
-- The v29 regional supplements are derived from the official complete head,
-  upper-body, lower-body, and hand layers. Ieobom uses the 181 matching bones
-  in the original and retained v27 skeletons as a blended deformation cage,
-  then clamps only surface-crossing supplement vertices 1.5 mm inside the
-  retained female shell before Draco-compressing the results for focus-triggered
-  loading. The left and right epicranial aponeuroses retain their cage-aligned
-  positions instead of projecting to the disconnected hair surface.
-  The approved v15 shell, v27 skeleton, and v28 organ GLBs are unchanged.
-- The v29 lower-body supplement excludes all 14 male reproductive structures
-  present in the source atlas. No female reproductive anatomy is synthesized.
 
 These transformations are visual comparisons and are not medically validated,
 diagnostic, or patient-specific registration. Preserve the upstream attribution
