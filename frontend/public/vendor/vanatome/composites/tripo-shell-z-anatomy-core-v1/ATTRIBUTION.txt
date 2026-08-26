@@ -1,0 +1,27 @@
+Tripo shell + Z-Anatomy final internal-structure comparison
+
+This presentation loads two independently attributed sources:
+
+1. The retained Tripo female exterior shell and matching surface guides,
+   documented in /vendor/tripo/ATTRIBUTION.txt.
+2. Skeleton and organ meshes adapted from Z-Anatomy through the Vanatome
+   pipeline.
+   Project: https://github.com/Z-Anatomy/Models-of-human-anatomy
+   License: Creative Commons Attribution-ShareAlike 4.0 International
+
+Final retained presentation state:
+
+- The exterior shell, adaptive flow guide, and cleaned regional boundaries are
+  the approved v15 Tripo assets.
+- The skeleton is the v27 candidate with the retained shoulder, wrist, hand,
+  foot, pelvis, thorax, and frontal humerus presentation corrections.
+- The v28 organ layer contains 95 structures. Thoracic structures were enlarged
+  18% laterally and 5% vertically; digestive structures except the oesophagus
+  were enlarged 10% laterally and 3% vertically; kidneys and suprarenal glands
+  were enlarged 8% laterally and 3% vertically. Depth was unchanged.
+- The exterior shell and internal layers remain separate GLB assets at runtime.
+
+These transformations are visual comparisons and are not medically validated,
+diagnostic, or patient-specific registration. Preserve the upstream attribution
+and applicable ShareAlike terms when redistributing the adapted Z-Anatomy
+material.

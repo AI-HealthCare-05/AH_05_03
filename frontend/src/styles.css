@@ -938,6 +938,384 @@ main {
 
 .metric-card.is-safe > strong { color: #126e52; }
 
+.body-map-card {
+  margin-top: 18px;
+  min-height: 430px;
+  display: grid;
+  grid-template-columns: minmax(240px, 0.8fr) minmax(320px, 1.2fr);
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: #f8faff;
+}
+
+.body-map-loading {
+  margin-top: 18px;
+  min-height: 160px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  color: var(--muted);
+  background: #f8faff;
+}
+
+.body-map-copy {
+  padding: 24px;
+  background: white;
+}
+
+.body-map-copy h3,
+.body-map-copy p {
+  margin: 0;
+}
+
+.body-map-copy h3 {
+  margin-top: 7px;
+  font-size: 1.35rem;
+}
+
+.body-map-copy > p:not(.section-kicker) {
+  margin-top: 10px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.body-region-buttons {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.body-region-buttons button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--muted-strong);
+  background: white;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.body-region-buttons button:hover,
+.body-region-buttons button[aria-pressed="true"] {
+  border-color: #86aaf7;
+  color: var(--blue-700);
+  background: var(--blue-100);
+}
+
+.body-map-selection {
+  margin-top: 22px;
+  display: grid;
+  gap: 5px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 18px;
+}
+
+.body-map-selection span,
+.body-map-selection small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.body-map-selection strong {
+  font-size: 1.15rem;
+}
+
+.body-map-viewer {
+  position: relative;
+  min-height: 430px;
+}
+
+.body-map-viewer canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.body-map-hint {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  border: 1px solid rgba(159, 183, 232, 0.65);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: #526985;
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 0.68rem;
+  pointer-events: none;
+}
+
+.body-map-fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 30px;
+  color: var(--muted);
+  background: #f6f9ff;
+  text-align: center;
+}
+
+.body-map-load-notice {
+  margin: 18px 0 -8px;
+  border: 1px solid #f0d7a2;
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: #77561b;
+  background: #fff9ea;
+  font-size: 0.78rem;
+}
+
+.vanatome-card {
+  min-height: 520px;
+  align-items: start;
+}
+
+.vanatome-viewer {
+  height: clamp(520px, 70vh, 760px);
+  min-height: 520px;
+  max-height: 760px;
+  align-self: start;
+  overflow: hidden;
+  background: radial-gradient(circle at center, #f9fbff 0, #edf3ff 72%, #e8f0fd 100%);
+}
+
+.vanatome-viewer > canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.vanatome-viewer.is-hologram {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(24, 130, 165, 0.25), transparent 48%),
+    linear-gradient(180deg, #081924 0%, #041018 100%);
+}
+
+.vanatome-viewer.is-hologram::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  opacity: 0.16;
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0,
+    transparent 3px,
+    rgba(103, 232, 249, 0.12) 4px
+  );
+}
+
+.vanatome-viewer.is-hologram .body-map-hint {
+  z-index: 3;
+  border-color: rgba(103, 232, 249, 0.38);
+  color: #b9f3ff;
+  background: rgba(4, 16, 24, 0.78);
+}
+
+.vanatome-viewer > div {
+  width: 100%;
+  height: 100%;
+}
+
+.vanatome-actions {
+  margin-top: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.anatomy-atlas-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 18px 0 0;
+  border: 0;
+  padding: 0;
+}
+
+.anatomy-atlas-switch legend {
+  grid-column: 1 / -1;
+  margin-bottom: 2px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.anatomy-atlas-switch button {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 7px;
+  color: var(--muted-strong);
+  background: white;
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.anatomy-atlas-switch button[aria-pressed="true"] {
+  border-color: #85aefc;
+  color: var(--blue-700);
+  background: #edf4ff;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
+}
+
+.anatomy-atlas-note {
+  display: grid;
+  gap: 3px;
+  margin-top: 10px !important;
+  border-left: 3px solid #8db4fc;
+  padding: 7px 9px;
+  color: var(--muted-strong) !important;
+  background: #f6f9ff;
+  font-size: 0.68rem !important;
+}
+
+.anatomy-atlas-note strong {
+  color: var(--ink);
+}
+
+.anatomy-atlas-note.is-experimental {
+  border-left-color: #d69b39;
+  background: #fff9ec;
+}
+
+.vanatome-layer-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px !important;
+}
+
+.vanatome-layer-summary span {
+  border: 1px solid #bfe8ee;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #136478;
+  background: #edfbfd;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.vanatome-focus-control {
+  margin-top: 18px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 16px;
+}
+
+.vanatome-focus-control > span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.vanatome-focus-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.vanatome-focus-buttons button,
+.vanatome-reset-focus,
+.vanatome-pelvic-focus {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 6px;
+  color: var(--muted-strong);
+  background: white;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.vanatome-focus-buttons button[aria-pressed="true"] {
+  border-color: #85aefc;
+  color: var(--blue-700);
+  background: #edf4ff;
+}
+
+.vanatome-pelvic-focus {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.vanatome-pelvic-focus[aria-pressed="true"] {
+  border-color: #85aefc;
+  color: var(--blue-700);
+  background: #edf4ff;
+}
+
+.vanatome-focus-buttons button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.vanatome-reset-focus {
+  margin-top: 7px;
+  border-color: transparent;
+  padding-inline: 0;
+  color: var(--blue-700);
+  background: transparent;
+}
+
+.vanatome-actions button {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 11px;
+  color: var(--blue-700);
+  background: white;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.vanatome-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.vanatome-attribution {
+  margin-top: 20px !important;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 14px;
+  font-size: 0.7rem;
+}
+
+.vanatome-attribution a {
+  color: var(--blue-700);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.vanatome-loading {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  color: var(--muted-strong);
+  text-align: center;
+}
+
+.vanatome-loading small {
+  color: var(--muted);
+}
+
+.is-hologram .vanatome-loading {
+  color: #d8f8ff;
+}
+
+.is-hologram .vanatome-loading small {
+  color: #8dc7d5;
+}
+
 .records-panel {
   margin-top: 18px;
   border: 1px solid var(--line-soft);
@@ -1682,6 +2060,10 @@ main {
     grid-template-columns: 1fr;
   }
 
+  .body-map-card {
+    grid-template-columns: minmax(220px, 0.7fr) minmax(300px, 1fr);
+  }
+
   .quick-actions-panel {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -1757,6 +2139,20 @@ main {
     grid-template-columns: 1fr;
   }
 
+  .body-map-card {
+    grid-template-columns: 1fr;
+  }
+
+  .body-map-viewer {
+    min-height: 380px;
+  }
+
+  .vanatome-viewer {
+    height: min(68vh, 560px);
+    min-height: 380px;
+    max-height: 560px;
+  }
+
   .empty-household {
     grid-template-columns: 1fr;
     gap: 24px;
@@ -1825,6 +2221,20 @@ main {
 
   .member-dashboard-main > .section-title-row {
     flex-direction: column;
+  }
+
+  .body-map-copy {
+    padding: 20px;
+  }
+
+  .body-map-viewer {
+    min-height: 340px;
+  }
+
+  .vanatome-viewer {
+    height: min(64vh, 480px);
+    min-height: 340px;
+    max-height: 480px;
   }
 
   .record-list li {

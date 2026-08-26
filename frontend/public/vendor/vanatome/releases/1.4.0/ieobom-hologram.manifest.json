@@ -1,0 +1,22 @@
+{
+  "id": "vanatome-male-reference",
+  "version": "1.4.0",
+  "label": "남성 기준 · Vanatome",
+  "shortLabel": "Vanatome 남성",
+  "referenceSex": "male",
+  "adapter": "vanatome",
+  "experimental": false,
+  "description": "Z-Anatomy에서 파생된 현재 기본 참조 아틀라스입니다.",
+  "loadingLabel": "외피·골격·주요 장기를 구성하는 중…",
+  "loadingSizeLabel": "약 16 MB · 이 서버에서 직접 불러옵니다",
+  "layerLabels": ["반투명 외피", "골격", "주요 장기"],
+  "attributionLabel": "Z-Anatomy 기반 Vanatome · CC BY-SA 4.0 출처",
+  "attributionUrl": "/vendor/vanatome/ATTRIBUTION.txt",
+  "metadataUrl": "/vendor/vanatome/releases/1.4.0/full-body.metadata.json",
+  "assets": [
+    {
+      "url": "/vendor/vanatome/models/z-anatomy-1.4.0-hologram-core.glb",
+      "visualRole": "atlas"
+    }
+  ]
+}
