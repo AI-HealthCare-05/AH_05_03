@@ -1,12 +1,12 @@
 {
   "id": "vanatome-male-reference",
-  "version": "1.4.0-complete-regions-v3-32693313",
+  "version": "1.4.0-complete-regions-v4-32693313",
   "label": "남성 기준 · Vanatome",
   "shortLabel": "Vanatome 남성",
   "referenceSex": "male",
   "adapter": "vanatome",
   "experimental": false,
-  "description": "Z-Anatomy에서 파생된 기본 참조 아틀라스입니다. 최초에는 외피·기본 골격·주요 장기만 불러옵니다. 머리 확대 시 738개, 상반신 확대 시 1,094개, 하반신 또는 무릎 확대 시 골반·양쪽 하지와 발의 근육·관절·신경·혈관·림프·골반 장기 625개를 지연 로드합니다.",
+  "description": "Z-Anatomy에서 파생된 기본 참조 아틀라스입니다. 최초에는 외피·기본 골격·주요 장기만 불러옵니다. 머리 확대 시 738개, 상반신 확대 시 1,094개, 하반신·무릎·발 확대 시 골반·양쪽 하지와 발의 근육·관절·신경·혈관·림프·골반 장기 625개를 지연 로드합니다.",
   "loadingLabel": "외피·골격·주요 장기를 구성하는 중…",
   "loadingSizeLabel": "약 16 MB · 이 서버에서 직접 불러옵니다",
   "layerLabels": [
@@ -18,7 +18,7 @@
     "안구·각막·홍채·수정체·망막·공막·내이·신경핵 포함",
     "상반신 확대 시 공식 Z-Anatomy 보충 구조 1,094개 지연 로드",
     "상반신: 골격·관절 172·근육 361·심혈관 294·림프 78·신경 138·세부 장기 51개",
-    "하반신·무릎 확대 시 공식 Z-Anatomy 보충 구조 625개 지연 로드·캐시 공유",
+    "하반신·무릎·발 확대 시 공식 Z-Anatomy 보충 구조 625개 지연 로드·캐시 공유",
     "하반신: 골격·관절 174·근육 231·심혈관 116·림프 10·신경 78·골반 장기 16개",
     "손 확대 시 손 근육 24개 지연 로드"
   ],
@@ -59,7 +59,7 @@
     {
       "id": "complete-lower",
       "label": "하반신 전체 해부 구조",
-      "triggerFocus": ["lower", "knee"],
+      "triggerFocus": ["lower", "knee", "foot"],
       "assets": [
         {
           "url": "/vendor/vanatome/layers/official-32693313/vanatome-official-complete-lower.glb",

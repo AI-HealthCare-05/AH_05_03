@@ -155,7 +155,7 @@ describe("final anatomy atlas adapters", () => {
         {
           id: "complete-lower",
           label: "하반신 전체 해부 구조",
-          triggerFocus: ["lower", "knee"],
+          triggerFocus: ["lower", "knee", "foot"],
           assets: [{ url: "/lower.glb", visualRole: "organ" }],
         },
       ],
@@ -171,6 +171,9 @@ describe("final anatomy atlas adapters", () => {
       "complete-lower",
     ]);
     expect(lazyLayersForFocus(male, "knee").map((layer) => layer.id)).toEqual([
+      "complete-lower",
+    ]);
+    expect(lazyLayersForFocus(male, "foot").map((layer) => layer.id)).toEqual([
       "complete-lower",
     ]);
     expect(lazyLayersForFocus(male, "full")).toEqual([]);
