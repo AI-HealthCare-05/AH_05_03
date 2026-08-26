@@ -5,11 +5,14 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 import {
   adaptAnatomyMesh,
+  lazyLayersForFocus,
   loadAnatomyAtlasManifest,
   loadAnatomyMetadata,
   type AnatomyAtlasAsset,
+  type AnatomyFocus,
   type AnatomyAtlasId,
   type AnatomyAtlasManifest,
+  type AnatomyLazyLayer,
 } from "./anatomyAtlas";
 import {
   createAdaptiveFlowGuideMaterial,
@@ -24,7 +27,8 @@ import {
 import { ProceduralBodyMap } from "./ProceduralBodyMap";
 
 type SelectedStructure = { name: string; system?: string };
-type BodyFocus = "full" | "head" | "upper" | "lower" | "knee" | "foot" | "hand";
+type BodyFocus = AnatomyFocus;
+type LazyLayerStatus = { state: "loading" | "loaded" | "error"; label: string };
 
 const ATLAS_OPTIONS: Array<{ id: AnatomyAtlasId; label: string }> = [
   { id: "vanatome-male-reference", label: "남성 기준 · Vanatome" },
@@ -46,6 +50,7 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
   const [pelvicOrganFocus, setPelvicOrganFocus] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadError, setLoadError] = useState<string>();
+  const [lazyLayerStatus, setLazyLayerStatus] = useState<LazyLayerStatus>();
   const [webGlUnavailable, setWebGlUnavailable] = useState(false);
   const isTestEnvironment = navigator.userAgent.includes("jsdom");
 
@@ -59,6 +64,7 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
     setActiveFocus("full");
     setPelvicOrganFocus(false);
     setManifest(undefined);
+    setLazyLayerStatus(undefined);
 
     let disposed = false;
     let cleanupScene: () => void = () => undefined;
@@ -79,6 +85,7 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
           },
           onWebGlUnavailable: () => setWebGlUnavailable(true),
           onSelectedStructure: setSelectedStructure,
+          onLazyLayerStatus: setLazyLayerStatus,
           clearSelectionRef,
           focusCameraRef,
           pelvicOrganFocusRef,
@@ -235,6 +242,18 @@ export function VanatomeBodyMap({ profileName }: { profileName: string }) {
       </div>
       <div className="body-map-viewer vanatome-viewer is-hologram">
         {loadProgress < 100 ? <BodyMapLoading progress={loadProgress} manifest={manifest} /> : null}
+        {lazyLayerStatus ? (
+          <span
+            className={`vanatome-lazy-status is-${lazyLayerStatus.state}`}
+            role="status"
+          >
+            {lazyLayerStatus.state === "loading"
+              ? `${lazyLayerStatus.label} 불러오는 중…`
+              : lazyLayerStatus.state === "loaded"
+                ? `${lazyLayerStatus.label} 준비 완료`
+                : `${lazyLayerStatus.label}을 불러오지 못했습니다`}
+          </span>
+        ) : null}
         <canvas ref={canvasRef} aria-label={`${profileName}님의 회전 가능한 해부학 3D 인체 미리보기`} />
         <span className="body-map-hint">드래그하여 회전 · 클릭하여 선택</span>
       </div>
@@ -250,6 +269,7 @@ type CreateAnatomySceneOptions = {
   onReady: () => void;
   onWebGlUnavailable: () => void;
   onSelectedStructure: (structure: SelectedStructure | undefined) => void;
+  onLazyLayerStatus: (status: LazyLayerStatus | undefined) => void;
   clearSelectionRef: React.MutableRefObject<() => void>;
   focusCameraRef: React.MutableRefObject<(focus: BodyFocus) => void>;
   pelvicOrganFocusRef: React.MutableRefObject<(active: boolean) => void>;
@@ -258,7 +278,7 @@ type CreateAnatomySceneOptions = {
 async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   const {
     canvas, manifest, isDisposed, onProgress, onReady, onWebGlUnavailable,
-    onSelectedStructure, clearSelectionRef, focusCameraRef,
+    onSelectedStructure, onLazyLayerStatus, clearSelectionRef, focusCameraRef,
     pelvicOrganFocusRef,
   } = options;
   let renderer: THREE.WebGLRenderer;
@@ -300,7 +320,11 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   const progressByUrl = new Map<string, { loaded: number; total: number }>();
   let selectedMesh: THREE.Mesh | undefined;
   let focusAnimationFrame: number | undefined;
+  let lazyLoadTimer: number | undefined;
+  let lazyStatusClearTimer: number | undefined;
   let cleanedUp = false;
+  const lazyLayerGroups = new Map<string, THREE.Group>();
+  const lazyLayerControllers = new Map<string, AbortController>();
   const digestiveMaterialStates = new Map<THREE.Material, {
     opacity: number;
     transparent: boolean;
@@ -428,6 +452,11 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     if (cleanedUp) return;
     cleanedUp = true;
     window.clearTimeout(loadTimeout);
+    if (lazyLoadTimer !== undefined) window.clearTimeout(lazyLoadTimer);
+    if (lazyStatusClearTimer !== undefined) window.clearTimeout(lazyStatusClearTimer);
+    lazyLayerControllers.forEach((controller) => controller.abort());
+    lazyLayerControllers.clear();
+    onLazyLayerStatus(undefined);
     canvas.removeEventListener("pointerdown", handlePointerDown);
     canvas.removeEventListener("pointerup", handlePointerUp);
     controls.removeEventListener("change", renderScene);
@@ -539,6 +568,119 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     atlasGroup.updateMatrixWorld(true);
     scene.add(atlasGroup);
 
+    let activeLazyFocus: BodyFocus = "full";
+    const setLazyLayerVisible = (layerId: string, visible: boolean) => {
+      const group = lazyLayerGroups.get(layerId);
+      if (!group) return;
+      group.traverse((object) => {
+        if (object instanceof THREE.Mesh && object.userData.lazyLayerId === layerId) {
+          object.visible = visible;
+        }
+      });
+    };
+    const attachLazyModel = (
+      layer: AnatomyLazyLayer,
+      asset: AnatomyAtlasAsset,
+      model: THREE.Group,
+    ) => {
+      let layerGroup = lazyLayerGroups.get(layer.id);
+      if (!layerGroup) {
+        layerGroup = new THREE.Group();
+        layerGroup.name = `lazy-layer:${layer.id}`;
+        lazyLayerGroups.set(layer.id, layerGroup);
+        atlasGroup.add(layerGroup);
+      }
+      model.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        materialsOf(object.material).forEach((material) => sourceMaterials.add(material));
+        const adapted = adaptAnatomyMesh(object, asset, manifest, metadata);
+        object.visible = Boolean(adapted) && layer.triggerFocus.includes(activeLazyFocus);
+        if (!adapted) return;
+
+        object.userData.anatomyId = adapted.anatomyId;
+        object.userData.anatomySourceKey = adapted.sourceKey;
+        object.userData.structureLabel = adapted.label;
+        object.userData.structureSystem = adapted.system;
+        object.userData.visualRole = adapted.visualRole;
+        object.userData.lazyLayerId = layer.id;
+        anatomyMeshes.push(object);
+        selectableMeshes.push(object);
+        object.material = createHolographicMaterials(
+          object.material,
+          adapted.visualRole,
+          adapted.system,
+          ownedMaterials,
+        );
+        originalMaterials.set(object, object.material);
+      });
+      layerGroup.add(model);
+      atlasGroup.updateMatrixWorld(true);
+    };
+    const fetchLazyAsset = async (asset: AnatomyAtlasAsset, signal: AbortSignal) => {
+      const response = await fetch(asset.url, { signal });
+      if (!response.ok) throw new Error(`지연 자산 요청 실패: ${asset.url}`);
+      const buffer = await response.arrayBuffer();
+      const gltf = await loader.parseAsync(buffer, "");
+      return gltf.scene;
+    };
+    const loadLazyLayer = async (layer: AnatomyLazyLayer) => {
+      if (lazyLayerGroups.has(layer.id)) {
+        setLazyLayerVisible(layer.id, layer.triggerFocus.includes(activeLazyFocus));
+        return;
+      }
+      const controller = new AbortController();
+      lazyLayerControllers.set(layer.id, controller);
+      try {
+        const models = await Promise.all(
+          layer.assets.map((asset) => fetchLazyAsset(asset, controller.signal)),
+        );
+        if (controller.signal.aborted || isDisposed()) return;
+        models.forEach((model, index) => attachLazyModel(layer, layer.assets[index], model));
+      } finally {
+        lazyLayerControllers.delete(layer.id);
+      }
+    };
+    const scheduleLazyLayers = (focus: BodyFocus) => {
+      activeLazyFocus = focus;
+      if (lazyLoadTimer !== undefined) window.clearTimeout(lazyLoadTimer);
+      if (lazyStatusClearTimer !== undefined) window.clearTimeout(lazyStatusClearTimer);
+      onLazyLayerStatus(undefined);
+
+      const targets = lazyLayersForFocus(manifest, focus);
+      const targetIds = new Set(targets.map((layer) => layer.id));
+      lazyLayerGroups.forEach((_, layerId) => setLazyLayerVisible(layerId, targetIds.has(layerId)));
+      lazyLayerControllers.forEach((controller, layerId) => {
+        if (!targetIds.has(layerId)) controller.abort();
+      });
+      if (selectedMesh?.userData.lazyLayerId && !targetIds.has(selectedMesh.userData.lazyLayerId)) {
+        clearSelectedMaterial();
+        onSelectedStructure(undefined);
+      }
+      renderScene();
+
+      const pending = targets.filter((layer) => (
+        !lazyLayerGroups.has(layer.id) && !lazyLayerControllers.has(layer.id)
+      ));
+      if (pending.length === 0) return;
+      lazyLoadTimer = window.setTimeout(() => {
+        const label = pending.map((layer) => layer.label).join(" · ");
+        onLazyLayerStatus({ state: "loading", label });
+        void Promise.all(pending.map(loadLazyLayer))
+          .then(() => {
+            if (activeLazyFocus !== focus || isDisposed()) return;
+            onLazyLayerStatus({ state: "loaded", label });
+            renderScene();
+            lazyStatusClearTimer = window.setTimeout(() => onLazyLayerStatus(undefined), 1800);
+          })
+          .catch((error: unknown) => {
+            if (error instanceof DOMException && error.name === "AbortError") return;
+            if (activeLazyFocus !== focus || isDisposed()) return;
+            onLazyLayerStatus({ state: "error", label });
+            lazyStatusClearTimer = window.setTimeout(() => onLazyLayerStatus(undefined), 3000);
+          });
+      }, 400);
+    };
+
     const normalizedBounds = new THREE.Box3().setFromObject(atlasGroup);
     const presets = createFocusPresets(normalizedBounds);
     camera.position.copy(presets.full.position);
@@ -546,6 +688,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     controls.update();
 
     focusCameraRef.current = (focus) => {
+      scheduleLazyLayers(focus);
       const preset = presets[focus];
       const startPosition = camera.position.clone();
       const startTarget = controls.target.clone();
@@ -599,6 +742,8 @@ function systemLabel(system: string) {
     integumentary: "외피계",
     reproductive: "생식계",
     mammary: "유방·유선",
+    muscular: "근육계",
+    nervous: "신경계",
     respiratory: "호흡기계",
     skeletal: "골격계",
     urinary: "비뇨기계",

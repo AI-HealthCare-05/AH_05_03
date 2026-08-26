@@ -6,10 +6,18 @@
   "referenceSex": "male",
   "adapter": "vanatome",
   "experimental": false,
-  "description": "Z-Anatomy에서 파생된 현재 기본 참조 아틀라스입니다.",
+  "description": "Z-Anatomy에서 파생된 기본 참조 아틀라스입니다. 최초에는 외피·골격·주요 장기만 불러오고, 머리·상반신·하반신·손 확대를 유지하면 해당 뇌와 근육 계층을 지연 로드합니다.",
   "loadingLabel": "외피·골격·주요 장기를 구성하는 중…",
   "loadingSizeLabel": "약 16 MB · 이 서버에서 직접 불러옵니다",
-  "layerLabels": ["반투명 외피", "골격", "주요 장기"],
+  "layerLabels": [
+    "반투명 외피",
+    "골격",
+    "주요 장기",
+    "머리 확대 시 뇌 234개·얼굴과 목 근육 97개 지연 로드",
+    "상반신 확대 시 어깨·복부 근육 27개 지연 로드",
+    "하반신 확대 시 둔부·서혜부 근육 22개 지연 로드",
+    "손 확대 시 손 근육 24개 지연 로드"
+  ],
   "attributionLabel": "Z-Anatomy 기반 Vanatome · CC BY-SA 4.0 출처",
   "attributionUrl": "/vendor/vanatome/ATTRIBUTION.txt",
   "metadataUrl": "/vendor/vanatome/releases/1.4.0/full-body.metadata.json",
@@ -17,6 +25,73 @@
     {
       "url": "/vendor/vanatome/models/z-anatomy-1.4.0-hologram-core.glb",
       "visualRole": "atlas"
+    }
+  ],
+  "lazyLayers": [
+    {
+      "id": "brain",
+      "label": "뇌 구조",
+      "triggerFocus": ["head"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/layers/1.4.0/vanatome-1.4.0-brain.glb",
+          "visualRole": "organ",
+          "system": "nervous",
+          "sha256": "e8d3a8d27ec6012f095a40904e4daff3ed916fbece411dd9790d1ded651f91d2"
+        }
+      ]
+    },
+    {
+      "id": "muscles-head-neck",
+      "label": "얼굴·목 근육",
+      "triggerFocus": ["head"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/layers/1.4.0/vanatome-1.4.0-muscles-head-neck.glb",
+          "visualRole": "organ",
+          "system": "muscular",
+          "sha256": "4bc57dc7deb18f308c99f9460c76794d615d6583df5eac537d8408c84ffcadf9"
+        }
+      ]
+    },
+    {
+      "id": "muscles-upper-core",
+      "label": "상반신 근육",
+      "triggerFocus": ["upper"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/layers/1.4.0/vanatome-1.4.0-muscles-upper-core.glb",
+          "visualRole": "organ",
+          "system": "muscular",
+          "sha256": "29b83d789b7d0f2626dc61a88dcf84516280c8fbe8ac7948721cacddbf8faa0a"
+        }
+      ]
+    },
+    {
+      "id": "muscles-lower-pelvic",
+      "label": "하반신 근육",
+      "triggerFocus": ["lower"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/layers/1.4.0/vanatome-1.4.0-muscles-lower-pelvic.glb",
+          "visualRole": "organ",
+          "system": "muscular",
+          "sha256": "b4cd2e0c30913b86e56ac57c283629380f5d184b8a97b1274ff96b03f3bf50c1"
+        }
+      ]
+    },
+    {
+      "id": "muscles-hands",
+      "label": "손 근육",
+      "triggerFocus": ["hand"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/layers/1.4.0/vanatome-1.4.0-muscles-hands.glb",
+          "visualRole": "organ",
+          "system": "muscular",
+          "sha256": "cbcc64152b49b58c167b96b591f837dc91d3e8793111c26c8492b00a71a63f3c"
+        }
+      ]
     }
   ]
 }

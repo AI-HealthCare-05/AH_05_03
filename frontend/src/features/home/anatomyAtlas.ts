@@ -6,6 +6,7 @@ export type AnatomyAtlasId =
 export type AnatomyAdapterId = "vanatome" | "shell";
 export type AnatomyVisualRole = "atlas" | "shell" | "skeleton" | "organ";
 export type AnatomyCoordinatePolicy = "presentation-fitted";
+export type AnatomyFocus = "full" | "head" | "upper" | "lower" | "knee" | "foot" | "hand";
 
 export type AnatomyAtlasAsset = {
   url: string;
@@ -14,6 +15,13 @@ export type AnatomyAtlasAsset = {
   system?: string;
   sourceUrl?: string;
   sha256?: string;
+};
+
+export type AnatomyLazyLayer = {
+  id: string;
+  label: string;
+  triggerFocus: AnatomyFocus[];
+  assets: AnatomyAtlasAsset[];
 };
 
 export type AnatomyAtlasManifest = {
@@ -34,6 +42,7 @@ export type AnatomyAtlasManifest = {
   attributionUrl: string;
   metadataUrl?: string;
   assets: AnatomyAtlasAsset[];
+  lazyLayers?: AnatomyLazyLayer[];
 };
 
 export type AnatomyMetadata = { id: string; name: string; system: string };
@@ -72,7 +81,16 @@ export function validateAnatomyAtlasManifest(
     throw new Error(`아틀라스 자산이 없습니다: ${manifest.id}`);
   }
 
-  const duplicateUrls = manifest.assets
+  for (const layer of manifest.lazyLayers ?? []) {
+    if (!layer.id || !layer.label || layer.triggerFocus.length === 0 || layer.assets.length === 0) {
+      throw new Error(`지연 계층 계약이 올바르지 않습니다: ${manifest.id}`);
+    }
+  }
+
+  const duplicateUrls = [
+    ...manifest.assets,
+    ...(manifest.lazyLayers ?? []).flatMap((layer) => layer.assets),
+  ]
     .map((asset) => asset.url)
     .filter((url, index, urls) => urls.indexOf(url) !== index);
   if (duplicateUrls.length > 0) {
@@ -87,6 +105,13 @@ export async function loadAnatomyMetadata(manifest: AnatomyAtlasManifest) {
   if (!response.ok) throw new Error(`해부 메타데이터를 불러오지 못했습니다: ${manifest.id}`);
   const metadata = await response.json() as AnatomyMetadataBundle;
   return new Map(metadata.structures.map((structure) => [structure.id, structure]));
+}
+
+export function lazyLayersForFocus(
+  manifest: AnatomyAtlasManifest,
+  focus: AnatomyFocus,
+) {
+  return (manifest.lazyLayers ?? []).filter((layer) => layer.triggerFocus.includes(focus));
 }
 
 export function adaptAnatomyMesh(
@@ -126,7 +151,8 @@ function adaptVanatomeMesh(
   const system = String(mesh.userData.anatomySystem ?? "regional-anatomy");
   const shell = anatomyId === "body-shell";
   const visibleSystems = new Set([
-    "cardiovascular", "digestive", "endocrine", "mammary", "respiratory", "skeletal", "urinary",
+    "cardiovascular", "digestive", "endocrine", "mammary", "muscular", "nervous",
+    "respiratory", "skeletal", "urinary",
   ]);
   if (!shell && !visibleSystems.has(system)) return undefined;
 

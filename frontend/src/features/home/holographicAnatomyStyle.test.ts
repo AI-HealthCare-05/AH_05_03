@@ -65,6 +65,26 @@ describe("final anatomy hologram materials", () => {
     expect(skeleton.opacity).toBeCloseTo(0.96);
     expect(skeleton.transparent).toBe(true);
   });
+
+  it("지연 로드된 근육과 신경계에 서로 다른 계통 색상을 적용한다", () => {
+    const ownedMaterials = new Set<THREE.Material>();
+    const source = new THREE.MeshStandardMaterial();
+    const muscle = createHolographicMaterials(
+      source,
+      "organ",
+      "muscular",
+      ownedMaterials,
+    ) as THREE.MeshStandardMaterial;
+    const nervous = createHolographicMaterials(
+      source,
+      "organ",
+      "nervous",
+      ownedMaterials,
+    ) as THREE.MeshStandardMaterial;
+
+    expect(muscle.color.getHex()).toBe(0xd97865);
+    expect(nervous.color.getHex()).toBe(0xf0cf69);
+  });
 });
 
 describe("anatomy camera focus presets", () => {

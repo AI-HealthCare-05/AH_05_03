@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { adaptAnatomyMesh, validateAnatomyAtlasManifest } from "./anatomyAtlas";
+import {
+  adaptAnatomyMesh,
+  lazyLayersForFocus,
+  validateAnatomyAtlasManifest,
+} from "./anatomyAtlas";
 import type { AnatomyAtlasManifest } from "./anatomyAtlas";
 
 function manifest(
@@ -95,5 +99,63 @@ describe("final anatomy atlas adapters", () => {
       manifest(),
       "vanatome-male-reference",
     )).toThrow("아틀라스 ID가 요청과 다릅니다");
+  });
+
+  it("초점과 자산이 지정된 지연 계층을 허용한다", () => {
+    const male = manifest({
+      id: "vanatome-male-reference",
+      referenceSex: "male",
+      adapter: "vanatome",
+      lazyLayers: [{
+        id: "brain",
+        label: "뇌 구조",
+        triggerFocus: ["head"],
+        assets: [{ url: "/brain.glb", visualRole: "organ", system: "nervous" }],
+      }],
+    });
+
+    expect(() => validateAnatomyAtlasManifest(male)).not.toThrow();
+  });
+
+  it("기본 자산과 지연 자산의 URL 중복을 거부한다", () => {
+    const male = manifest({
+      id: "vanatome-male-reference",
+      referenceSex: "male",
+      adapter: "vanatome",
+      assets: [{ url: "/brain.glb", visualRole: "atlas" }],
+      lazyLayers: [{
+        id: "brain",
+        label: "뇌 구조",
+        triggerFocus: ["head"],
+        assets: [{ url: "/brain.glb", visualRole: "organ", system: "nervous" }],
+      }],
+    });
+
+    expect(() => validateAnatomyAtlasManifest(male)).toThrow("중복 자산");
+  });
+
+  it("현재 확대 초점에 해당하는 계층만 선택한다", () => {
+    const male = manifest({
+      id: "vanatome-male-reference",
+      referenceSex: "male",
+      adapter: "vanatome",
+      lazyLayers: [
+        {
+          id: "brain",
+          label: "뇌 구조",
+          triggerFocus: ["head"],
+          assets: [{ url: "/brain.glb", visualRole: "organ" }],
+        },
+        {
+          id: "upper",
+          label: "상반신 근육",
+          triggerFocus: ["upper"],
+          assets: [{ url: "/upper.glb", visualRole: "organ" }],
+        },
+      ],
+    });
+
+    expect(lazyLayersForFocus(male, "head").map((layer) => layer.id)).toEqual(["brain"]);
+    expect(lazyLayersForFocus(male, "full")).toEqual([]);
   });
 });

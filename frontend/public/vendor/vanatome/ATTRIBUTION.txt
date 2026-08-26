@@ -14,6 +14,9 @@ License URL: https://creativecommons.org/licenses/by-sa/4.0/
 
 Vanatome modifications include web export, structure selection identifiers,
 material adjustments, curve-to-mesh conversion, and geometry optimization.
+The Ieobom viewer also distributes separate, unmodified-coordinate lazy layers
+for the Z-Anatomy nervous meshes and available muscular meshes. These layers
+are split by viewer focus region only to reduce the initial browser download.
 
 Z-Anatomy documents models derived from:
 “BodyParts3D — The Database Center for Life Science”

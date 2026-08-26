@@ -1316,6 +1316,34 @@ main {
   color: #8dc7d5;
 }
 
+.vanatome-lazy-status {
+  position: absolute;
+  z-index: 4;
+  top: 14px;
+  left: 50%;
+  max-width: calc(100% - 28px);
+  transform: translateX(-50%);
+  border: 1px solid rgba(103, 232, 249, 0.42);
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: #d8f8ff;
+  background: rgba(4, 16, 24, 0.86);
+  box-shadow: 0 8px 24px rgba(2, 12, 20, 0.28);
+  font-size: 0.72rem;
+  text-align: center;
+  pointer-events: none;
+}
+
+.vanatome-lazy-status.is-loaded {
+  border-color: rgba(110, 231, 183, 0.52);
+  color: #c9ffe9;
+}
+
+.vanatome-lazy-status.is-error {
+  border-color: rgba(251, 191, 36, 0.62);
+  color: #fff0b5;
+}
+
 .records-panel {
   margin-top: 18px;
   border: 1px solid var(--line-soft);

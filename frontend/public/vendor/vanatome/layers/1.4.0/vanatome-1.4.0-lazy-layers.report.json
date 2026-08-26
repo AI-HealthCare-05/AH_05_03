@@ -1,0 +1,51 @@
+{
+  "source": "z-anatomy-1.4.0-full-body.glb",
+  "policy": "all nervous meshes plus every muscular mesh split by available anatomical region",
+  "layers": [
+    {
+      "id": "brain",
+      "objects": 234,
+      "vertices": 255155,
+      "triangles": 505486,
+      "bytes": 8031196,
+      "sha256": "e8d3a8d27ec6012f095a40904e4daff3ed916fbece411dd9790d1ded651f91d2",
+      "output": "vanatome-1.4.0-brain.glb"
+    },
+    {
+      "id": "muscles-head-neck",
+      "objects": 97,
+      "vertices": 77459,
+      "triangles": 154512,
+      "bytes": 2460024,
+      "sha256": "4bc57dc7deb18f308c99f9460c76794d615d6583df5eac537d8408c84ffcadf9",
+      "output": "vanatome-1.4.0-muscles-head-neck.glb"
+    },
+    {
+      "id": "muscles-upper-core",
+      "objects": 27,
+      "vertices": 147957,
+      "triangles": 147896,
+      "bytes": 4041836,
+      "sha256": "29b83d789b7d0f2626dc61a88dcf84516280c8fbe8ac7948721cacddbf8faa0a",
+      "output": "vanatome-1.4.0-muscles-upper-core.glb"
+    },
+    {
+      "id": "muscles-lower-pelvic",
+      "objects": 22,
+      "vertices": 21606,
+      "triangles": 43108,
+      "bytes": 685872,
+      "sha256": "b4cd2e0c30913b86e56ac57c283629380f5d184b8a97b1274ff96b03f3bf50c1",
+      "output": "vanatome-1.4.0-muscles-lower-pelvic.glb"
+    },
+    {
+      "id": "muscles-hands",
+      "objects": 24,
+      "vertices": 7846,
+      "triangles": 15598,
+      "bytes": 275616,
+      "sha256": "cbcc64152b49b58c167b96b591f837dc91d3e8793111c26c8492b00a71a63f3c",
+      "output": "vanatome-1.4.0-muscles-hands.glb"
+    }
+  ]
+}

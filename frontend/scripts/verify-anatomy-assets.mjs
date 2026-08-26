@@ -19,11 +19,20 @@ for (const manifestPath of manifestPaths) {
   if (!manifest.id || !Array.isArray(manifest.assets) || manifest.assets.length === 0) {
     throw new Error(`manifest 계약이 올바르지 않습니다: ${manifestPath}`);
   }
+  for (const layer of manifest.lazyLayers ?? []) {
+    if (!layer.id || !layer.label || !Array.isArray(layer.triggerFocus)
+      || layer.triggerFocus.length === 0 || !Array.isArray(layer.assets)
+      || layer.assets.length === 0) {
+      throw new Error(`지연 계층 계약이 올바르지 않습니다: ${manifestPath}`);
+    }
+  }
 
   await assertPublicFile(manifest.attributionUrl, `${manifest.id} attribution`);
   if (manifest.metadataUrl) await assertPublicFile(manifest.metadataUrl, `${manifest.id} metadata`);
 
-  for (const asset of manifest.assets) {
+  const lazyAssets = (manifest.lazyLayers ?? []).flatMap((layer) => layer.assets);
+  const allAssets = [...manifest.assets, ...lazyAssets];
+  for (const asset of allAssets) {
     if (!asset.url?.startsWith("/")) {
       throw new Error(`${manifest.id} 자산은 같은 origin의 절대 경로여야 합니다: ${asset.url}`);
     }
@@ -40,7 +49,8 @@ for (const manifestPath of manifestPaths) {
     }
   }
 
-  console.log(`✓ ${manifest.id}: ${manifest.assets.length}개 자산과 출처 파일 확인`);
+  const lazyLabel = lazyAssets.length > 0 ? ` + 지연 ${lazyAssets.length}개` : "";
+  console.log(`✓ ${manifest.id}: 기본 ${manifest.assets.length}개${lazyLabel} 자산과 출처 파일 확인`);
 }
 
 console.log(`✓ 총 ${totalAssets}개, ${(totalBytes / 1024 / 1024).toFixed(1)} MiB 검증 완료`);
