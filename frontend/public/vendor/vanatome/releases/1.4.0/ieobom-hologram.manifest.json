@@ -1,12 +1,12 @@
 {
   "id": "vanatome-male-reference",
-  "version": "1.4.0-complete-regions-v4-32693313",
+  "version": "1.4.0-complete-regions-v5-32693313",
   "label": "남성 기준 · Vanatome",
   "shortLabel": "Vanatome 남성",
   "referenceSex": "male",
   "adapter": "vanatome",
   "experimental": false,
-  "description": "Z-Anatomy에서 파생된 기본 참조 아틀라스입니다. 최초에는 외피·기본 골격·주요 장기만 불러옵니다. 머리 확대 시 738개, 상반신 확대 시 1,094개, 하반신·무릎·발 확대 시 골반·양쪽 하지와 발의 근육·관절·신경·혈관·림프·골반 장기 625개를 지연 로드합니다.",
+  "description": "Z-Anatomy에서 파생된 기본 참조 아틀라스입니다. 최초에는 외피·기본 골격·주요 장기만 불러옵니다. 머리 확대 시 738개, 상반신 확대 시 1,094개, 하반신·무릎·발 확대 시 625개, 손 확대 시 양손의 골격·관절·인대·근육·건·혈관·신경 267개를 지연 로드합니다.",
   "loadingLabel": "외피·골격·주요 장기를 구성하는 중…",
   "loadingSizeLabel": "약 16 MB · 이 서버에서 직접 불러옵니다",
   "layerLabels": [
@@ -20,7 +20,8 @@
     "상반신: 골격·관절 172·근육 361·심혈관 294·림프 78·신경 138·세부 장기 51개",
     "하반신·무릎·발 확대 시 공식 Z-Anatomy 보충 구조 625개 지연 로드·캐시 공유",
     "하반신: 골격·관절 174·근육 231·심혈관 116·림프 10·신경 78·골반 장기 16개",
-    "손 확대 시 손 근육 24개 지연 로드"
+    "손 확대 시 공식 Z-Anatomy 양손 구조 267개 지연 로드",
+    "손: 골격·관절·인대 92·근육·건 98·혈관 43·신경 34개"
   ],
   "attributionLabel": "Z-Anatomy 기반 Vanatome · CC BY-SA 4.0 출처",
   "attributionUrl": "/vendor/vanatome/ATTRIBUTION.txt",
@@ -69,15 +70,14 @@
       ]
     },
     {
-      "id": "muscles-hands",
-      "label": "손 근육",
+      "id": "complete-hand",
+      "label": "손 전체 해부 구조",
       "triggerFocus": ["hand"],
       "assets": [
         {
-          "url": "/vendor/vanatome/layers/1.4.0/vanatome-1.4.0-muscles-hands.glb",
+          "url": "/vendor/vanatome/layers/official-32693313/vanatome-official-complete-hand.glb",
           "visualRole": "organ",
-          "system": "muscular",
-          "sha256": "cbcc64152b49b58c167b96b591f837dc91d3e8793111c26c8492b00a71a63f3c"
+          "sha256": "c25148326f8ed76b4af66b37cdf70c77134ed66c859e480efd0aee53801006b9"
         }
       ]
     }

@@ -1,0 +1,24 @@
+{
+  "source": "Z-Anatomy official Models-of-human-anatomy@32693313",
+  "policy": "bilateral hand bones, joints, ligaments, and every upper-limb muscle, vessel, lymphatic, or nerve intersecting the padded official hand envelopes; excludes initial-core duplicates and external regions",
+  "handSeedObjects": 138,
+  "spatiallyIntersectingObjects": 325,
+  "coreStructureNames": 277,
+  "coreDuplicatesExcluded": 58,
+  "objects": 267,
+  "sourceTypes": {
+    "CURVE": 77,
+    "MESH": 190
+  },
+  "systems": {
+    "cardiovascular": 43,
+    "muscular": 98,
+    "nervous": 34,
+    "skeletal": 92
+  },
+  "vertices": 346578,
+  "triangles": 418601,
+  "bytes": 2071328,
+  "sha256": "c25148326f8ed76b4af66b37cdf70c77134ed66c859e480efd0aee53801006b9",
+  "output": "vanatome-official-complete-hand.glb"
+}

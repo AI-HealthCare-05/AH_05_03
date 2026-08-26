@@ -37,6 +37,12 @@ already present in the initial core plus taxonomy helpers and external regions,
 and exports the remaining 625 muscles, joints, vessels, nerves, lymphatics, and
 pelvic-organ structures with Draco geometry compression.
 
+The complete hand lazy layer uses the official bilateral hand collections for
+bones, joints, and ligaments, then adds every upper-limb muscle, tendon, vessel,
+and nerve whose geometry intersects the padded hand envelopes. Ieobom removes
+58 structures already present in the initial core and exports 267 supplemental
+hand structures with Draco geometry compression.
+
 Z-Anatomy documents models derived from:
 “BodyParts3D — The Database Center for Life Science”
 https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html
