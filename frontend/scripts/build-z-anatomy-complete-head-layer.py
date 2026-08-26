@@ -139,6 +139,8 @@ bpy.ops.export_scene.gltf(
     export_apply=True,
     export_materials="EXPORT",
     export_extras=True,
+    export_draco_mesh_compression_enable=True,
+    export_draco_mesh_compression_level=6,
 )
 
 report = {

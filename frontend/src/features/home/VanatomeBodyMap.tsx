@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 import {
@@ -400,7 +401,9 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   }, 30_000);
 
   const metadataPromise = loadAnatomyMetadata(manifest).catch(() => new Map());
+  const dracoLoader = new DRACOLoader();
   const loader = new GLTFLoader();
+  loader.setDRACOLoader(dracoLoader);
   const loadAsset = (asset: AnatomyAtlasAsset) => new Promise<THREE.Group>((resolve, reject) => {
     loader.load(
       asset.url,
@@ -464,6 +467,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     clearSelectedMaterial();
     pelvicOrganFocusRef.current = () => undefined;
     controls.dispose();
+    dracoLoader.dispose();
     resizeObserver.disconnect();
     scene.traverse((object) => {
       if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {

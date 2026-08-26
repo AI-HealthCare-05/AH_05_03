@@ -147,8 +147,8 @@ describe("final anatomy atlas adapters", () => {
           assets: [{ url: "/complete-head.glb", visualRole: "organ" }],
         },
         {
-          id: "upper",
-          label: "상반신 근육",
+          id: "complete-upper",
+          label: "상반신 전체 해부 구조",
           triggerFocus: ["upper"],
           assets: [{ url: "/upper.glb", visualRole: "organ" }],
         },
@@ -157,6 +157,9 @@ describe("final anatomy atlas adapters", () => {
 
     expect(lazyLayersForFocus(male, "head").map((layer) => layer.id)).toEqual([
       "complete-head",
+    ]);
+    expect(lazyLayersForFocus(male, "upper").map((layer) => layer.id)).toEqual([
+      "complete-upper",
     ]);
     expect(lazyLayersForFocus(male, "full")).toEqual([]);
   });

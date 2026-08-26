@@ -1,17 +1,9 @@
 {
   "source": "z-anatomy-1.4.0-full-body.glb",
-  "policy": "regional muscular layers only; the 97 head/neck muscles are supplied by the official complete-head layer",
+  "policy": "lower-body and hand muscular layers only; official complete-region layers supply head/neck and upper-body muscles",
   "excludedHeadNeckMuscles": 97,
+  "excludedUpperBodyMuscles": 27,
   "layers": [
-    {
-      "id": "muscles-upper-core",
-      "objects": 27,
-      "vertices": 147957,
-      "triangles": 147896,
-      "bytes": 4041836,
-      "sha256": "29b83d789b7d0f2626dc61a88dcf84516280c8fbe8ac7948721cacddbf8faa0a",
-      "output": "vanatome-1.4.0-muscles-upper-core.glb"
-    },
     {
       "id": "muscles-lower-pelvic",
       "objects": 22,

@@ -24,6 +24,13 @@ converts curves to meshes, assigns stable system metadata, removes two-vertex
 taxonomy helpers and redundant external surface regions, and exports the
 remaining 738 renderable head structures as a browser GLB.
 
+The complete upper-body lazy layer uses the same official source. Ieobom
+extracts the trunk and both upper limbs through the wrists, removes structures
+already present in the initial core plus taxonomy helpers, external regions,
+hands, and pelvis-only structures, and exports 1,094 supplemental structures.
+Both complete-region GLBs use Draco geometry compression without removing
+anatomical objects. The browser decoder is distributed from Three.js under MIT.
+
 Z-Anatomy documents models derived from:
 “BodyParts3D — The Database Center for Life Science”
 https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html

@@ -1,0 +1,26 @@
+{
+  "source": "Z-Anatomy official Models-of-human-anatomy@32693313",
+  "policy": "renderable trunk and bilateral upper-limb structures through the wrists; excludes initial-core duplicates, taxonomy helpers, external regions, hands, and pelvis-only structures",
+  "coreStructureNames": 277,
+  "coreDuplicatesExcluded": 147,
+  "objects": 1094,
+  "sourceTypes": {
+    "CURVE": 464,
+    "MESH": 630
+  },
+  "systems": {
+    "cardiovascular": 294,
+    "digestive": 18,
+    "lymphatic": 78,
+    "muscular": 361,
+    "nervous": 138,
+    "respiratory": 29,
+    "skeletal": 172,
+    "urinary": 4
+  },
+  "vertices": 2238041,
+  "triangles": 2884989,
+  "bytes": 13227624,
+  "sha256": "db8d85422e7c7307a6a776bf04dd954bdeff26782684a5f0a6aa39dd469fcb53",
+  "output": "vanatome-official-complete-upper.glb"
+}

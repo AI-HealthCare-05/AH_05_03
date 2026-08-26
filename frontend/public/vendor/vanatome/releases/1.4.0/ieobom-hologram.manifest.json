@@ -1,12 +1,12 @@
 {
   "id": "vanatome-male-reference",
-  "version": "1.4.0-complete-head-32693313",
+  "version": "1.4.0-complete-regions-32693313",
   "label": "남성 기준 · Vanatome",
   "shortLabel": "Vanatome 남성",
   "referenceSex": "male",
   "adapter": "vanatome",
   "experimental": false,
-  "description": "Z-Anatomy에서 파생된 기본 참조 아틀라스입니다. 최초에는 외피·몸통과 사지 골격·주요 장기만 불러오고, 머리 확대 시 공식 원본의 두개골·안구·내이·신경핵·뇌신경·근육·혈관·림프계를 포함한 머리 해부 구조 738개를 지연 로드합니다. 상반신·하반신·손 근육도 해당 확대 시점에 불러옵니다.",
+  "description": "Z-Anatomy에서 파생된 기본 참조 아틀라스입니다. 최초에는 외피·기본 골격·주요 장기만 불러옵니다. 머리 확대 시 두개골·안구·내이·신경핵 등을 포함한 738개를, 상반신 확대 시 기본 코어와 겹치지 않는 몸통·양쪽 상지의 근육·관절·신경·혈관·림프·세부 장기 1,094개를 지연 로드합니다.",
   "loadingLabel": "외피·골격·주요 장기를 구성하는 중…",
   "loadingSizeLabel": "약 16 MB · 이 서버에서 직접 불러옵니다",
   "layerLabels": [
@@ -16,7 +16,8 @@
     "머리 확대 시 공식 Z-Anatomy 머리 구조 738개 지연 로드",
     "두개골 78·근육 84·심혈관 198·림프 26·신경과 감각기관 352개",
     "안구·각막·홍채·수정체·망막·공막·내이·신경핵 포함",
-    "상반신 확대 시 어깨·복부 근육 27개 지연 로드",
+    "상반신 확대 시 공식 Z-Anatomy 보충 구조 1,094개 지연 로드",
+    "상반신: 골격·관절 172·근육 361·심혈관 294·림프 78·신경 138·세부 장기 51개",
     "하반신 확대 시 둔부·서혜부 근육 22개 지연 로드",
     "손 확대 시 손 근육 24개 지연 로드"
   ],
@@ -38,20 +39,19 @@
         {
           "url": "/vendor/vanatome/layers/official-32693313/vanatome-official-complete-head.glb",
           "visualRole": "organ",
-          "sha256": "441675a33c8a09c171f60ab1d80eb157922c92ed497d9128ca402d18a6a18dc8"
+          "sha256": "23fb328975b5d3ce57cfb61dcf2e7c8f1bd4d9ab0c44bcf00c2be86361e80dc0"
         }
       ]
     },
     {
-      "id": "muscles-upper-core",
-      "label": "상반신 근육",
+      "id": "complete-upper",
+      "label": "상반신 전체 해부 구조",
       "triggerFocus": ["upper"],
       "assets": [
         {
-          "url": "/vendor/vanatome/layers/1.4.0/vanatome-1.4.0-muscles-upper-core.glb",
+          "url": "/vendor/vanatome/layers/official-32693313/vanatome-official-complete-upper.glb",
           "visualRole": "organ",
-          "system": "muscular",
-          "sha256": "29b83d789b7d0f2626dc61a88dcf84516280c8fbe8ac7948721cacddbf8faa0a"
+          "sha256": "db8d85422e7c7307a6a776bf04dd954bdeff26782684a5f0a6aa39dd469fcb53"
         }
       ]
     },
