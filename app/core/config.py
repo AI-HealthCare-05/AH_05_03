@@ -92,6 +92,12 @@ class Config(BaseSettings):
         "http://127.0.0.1:5173",
     ]
 
+    # --- Gemini OCR development bridge -----------------------------
+    # 개발·시연에서만 명시적으로 켜는 외부 문서 인식 브리지다.
+    ENABLE_DEV_OCR_BRIDGE: bool = False
+    DEV_OCR_MAX_FILE_BYTES: int = 20 * 1024 * 1024
+    GEMINI_API_KEY: str | None = None
+
     # Refresh Token은 JavaScript에 노출하지 않고 host 전용 쿠키로만 전달한다.
     # __Host- 접두사는 Secure + Path=/ + Domain 미지정을 브라우저가 강제한다.
     REFRESH_COOKIE_NAME: str = "__Host-ieobom_refresh"

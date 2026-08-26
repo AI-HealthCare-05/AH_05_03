@@ -4,7 +4,7 @@ import { useLocalDomain } from "../../app/localDomainContext";
 import { detectLocalCapabilities } from "../../shared/local/capabilities";
 import type { BackupPreview } from "../../shared/local/localBackupService";
 import type { LocalDocument } from "../../shared/local/domainContracts";
-import { BrowserOcrAdapter } from "../../shared/local/browserOcrAdapter";
+import { GeminiOcrAdapter } from "../../shared/api/geminiOcrAdapter";
 
 export function DataManagementPage() {
   const { runtime, profiles, refreshProfiles } = useLocalDomain();
@@ -152,14 +152,12 @@ export function DataManagementPage() {
     try {
       const source = await runtime.documents.read(document);
       if (!source.ok) throw new Error(source.error.message);
-      const adapter = new BrowserOcrAdapter();
-      const text = await adapter.recognize(source.value, (progress) => {
-        setOcrProgress(`${progress.status} ${Math.round(progress.progress * 100)}%`);
-      });
-      setOcrText(text);
+      setOcrProgress("Gemini가 문서를 읽는 중입니다…");
+      const result = await new GeminiOcrAdapter().recognize(source.value, document.fileName);
+      setOcrText(result.text);
       setOcrProgress(undefined);
     } catch (caught) {
-      setError(errorMessage(caught, "로컬 OCR을 실행하지 못했습니다."));
+      setError(errorMessage(caught, "Gemini OCR을 실행하지 못했습니다."));
     } finally {
       setWorking(false);
     }
@@ -304,7 +302,7 @@ export function DataManagementPage() {
 
       <section className="document-panel">
         <div className="section-title-row">
-          <div><p className="section-kicker">원본 문서·로컬 OCR</p><h2>건강서류를 이 브라우저에서 처리하세요</h2></div>
+          <div><p className="section-kicker">원본 문서·Gemini OCR</p><h2>건강서류를 확인하고 기록으로 연결하세요</h2></div>
         </div>
         {!runtime?.documents ? (
           <div className="alert error-alert">이 브라우저에서는 OPFS 문서 저장을 사용할 수 없습니다.</div>
@@ -319,7 +317,7 @@ export function DataManagementPage() {
               {documents.map((document) => (
                 <article key={document.id}>
                   <div><strong>{document.fileName}</strong><small>{profiles.find((profile) => profile.id === document.profileId)?.displayName ?? "알 수 없는 구성원"} · {(document.byteSize / 1024).toFixed(1)}KB</small></div>
-                  <div className="record-row-actions"><button type="button" onClick={() => void downloadDocument(document)}>내려받기</button><button type="button" disabled={!(document.mimeType.startsWith("image/") || document.mimeType === "application/pdf") || working} onClick={() => void runOcr(document)}>로컬 OCR</button><button type="button" onClick={() => setDeletingDocument(document)}>삭제</button></div>
+                  <div className="record-row-actions"><button type="button" onClick={() => void downloadDocument(document)}>내려받기</button><button type="button" disabled={!(document.mimeType.startsWith("image/") || document.mimeType === "application/pdf") || working} onClick={() => void runOcr(document)}>Gemini OCR</button><button type="button" onClick={() => setDeletingDocument(document)}>삭제</button></div>
                 </article>
               ))}
               {documents.length === 0 ? <div className="compact-empty"><strong>저장된 원본 문서가 없습니다.</strong></div> : null}

@@ -67,6 +67,8 @@ services:
       # 로컬 HTTP 실험에서는 __Host- Secure 쿠키를 사용할 수 없다.
       REFRESH_COOKIE_NAME: ieobom_refresh
       REFRESH_COOKIE_SECURE: "false"
+      ENABLE_DEV_OCR_BRIDGE: ${ENABLE_DEV_OCR_BRIDGE:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
     command: |
       sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
