@@ -97,6 +97,46 @@ export class ServerApiClient {
     return this.request("/subscription", { authenticated: true });
   }
 
+  /**
+   * 챌린지. 요청·응답 어디에도 측정값이 실리지 않는다 — 서버는 "쟀다" 와 날짜만 안다.
+   */
+  public getChallengeSettings<T>(): Promise<T> {
+    return this.request<T>("/challenges/settings", { authenticated: true });
+  }
+
+  public saveChallengeSettings<T>(body: Record<string, unknown>): Promise<T> {
+    return this.request<T>("/challenges/settings", {
+      method: "PUT",
+      authenticated: true,
+      body: JSON.stringify(body),
+    });
+  }
+
+  public getChallengeToday<T>(): Promise<T> {
+    return this.request<T>("/challenges/today", { authenticated: true });
+  }
+
+  public checkChallenge<T>(challengeId: string): Promise<T> {
+    return this.request<T>("/challenges/checks", {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify({ challenge_id: challengeId }),
+    });
+  }
+
+  public uncheckChallenge<T>(challengeId: string): Promise<T> {
+    return this.request<T>(`/challenges/checks/${encodeURIComponent(challengeId)}`, {
+      method: "DELETE",
+      authenticated: true,
+    });
+  }
+
+  public getHouseholdGarden<T>(householdId: string): Promise<T> {
+    return this.request<T>(`/challenges/households/${encodeURIComponent(householdId)}`, {
+      authenticated: true,
+    });
+  }
+
   public changeSubscription(plan: SubscriptionBrief["plan"]): Promise<PlanChangeData> {
     return this.request("/subscription/change", {
       method: "POST",
