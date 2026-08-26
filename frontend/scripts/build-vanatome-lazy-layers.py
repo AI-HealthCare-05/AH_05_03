@@ -50,11 +50,10 @@ assigned = set(head_neck + hand + lower)
 upper = [obj for obj in muscles if obj not in assigned]
 
 layers = {
-    "muscles-lower-pelvic": lower,
     "muscles-hands": hand,
 }
 
-if set().union(set(head_neck), set(upper), *[set(objects) for objects in layers.values()]) != set(muscles):
+if set().union(set(head_neck), set(upper), set(lower), *[set(objects) for objects in layers.values()]) != set(muscles):
     raise RuntimeError("lazy-layer classification did not match the requested focus structures")
 
 
@@ -85,9 +84,10 @@ def export_layer(layer_id, objects):
 
 report = {
     "source": source.name,
-    "policy": "lower-body and hand muscular layers only; official complete-region layers supply head/neck and upper-body muscles",
+    "policy": "hand muscular layer only; official complete-region layers supply head/neck, upper-body, and lower-body muscles",
     "excludedHeadNeckMuscles": len(head_neck),
     "excludedUpperBodyMuscles": len(upper),
+    "excludedLowerBodyMuscles": len(lower),
     "layers": [export_layer(layer_id, objects) for layer_id, objects in layers.items()],
 }
 (output_directory / "vanatome-1.4.0-lazy-layers.report.json").write_text(

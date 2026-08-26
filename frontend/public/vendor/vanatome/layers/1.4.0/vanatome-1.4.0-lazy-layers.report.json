@@ -1,18 +1,10 @@
 {
   "source": "z-anatomy-1.4.0-full-body.glb",
-  "policy": "lower-body and hand muscular layers only; official complete-region layers supply head/neck and upper-body muscles",
+  "policy": "hand muscular layer only; official complete-region layers supply head/neck, upper-body, and lower-body muscles",
   "excludedHeadNeckMuscles": 97,
   "excludedUpperBodyMuscles": 27,
+  "excludedLowerBodyMuscles": 22,
   "layers": [
-    {
-      "id": "muscles-lower-pelvic",
-      "objects": 22,
-      "vertices": 21606,
-      "triangles": 43108,
-      "bytes": 685872,
-      "sha256": "b4cd2e0c30913b86e56ac57c283629380f5d184b8a97b1274ff96b03f3bf50c1",
-      "output": "vanatome-1.4.0-muscles-lower-pelvic.glb"
-    },
     {
       "id": "muscles-hands",
       "objects": 24,
