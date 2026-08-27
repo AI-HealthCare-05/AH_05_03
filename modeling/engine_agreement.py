@@ -310,6 +310,12 @@ def main() -> int:
                 "society": entry["society"],
                 "positive_from": entry["positive_from"],
                 "n": entry["n_assessed"],
+                # **`overall_rate` 를 빠뜨렸었다.** `risk.py` 의 `interpret()` 과
+                # `medical_band()` 는 이 이름으로 읽는데(`anchor.get("overall_rate")`)
+                # 여기서는 안 써서, 앵커를 넣어도 `baseline` 과 `lift` 가 조용히 null 이
+                # 됐다. 산출물에서의 이름은 `rule_positive_rate_overall` 이다 —
+                # 이름이 달라서 눈에 안 띄었다.
+                "overall_rate": entry["rule_positive_rate_overall"],
                 "bins": entry["anchor"],
             }
             path.write_text(json.dumps(bundle, ensure_ascii=False), encoding="utf-8")

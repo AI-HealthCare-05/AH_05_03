@@ -48,7 +48,16 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from splits import SEED, cv_folds, make_split
 from targets import CATEGORICAL, DERIVED, TARGETS, Target
-from train_multi import DATA, MIN_EVAL_ROWS, MIN_POSITIVES, _logit, build_frame, lab_present, make_pipeline, monotone_vector
+from train_multi import (
+    DATA,
+    MIN_EVAL_ROWS,
+    MIN_POSITIVES,
+    _logit,
+    build_frame,
+    lab_present,
+    make_pipeline,
+    monotone_for,
+)
 
 ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
 
@@ -129,6 +138,7 @@ def member_predictions(
     categorical: list[str],
     model: str,
     seeds: tuple[int, ...],
+    target_key: str,
 ) -> tuple[np.ndarray, np.ndarray, dict[str, np.ndarray]]:
     """한 모델의 out-of-fold(학습 구간)와 홀드아웃 예측.
 
@@ -137,13 +147,19 @@ def member_predictions(
     """
     x_train, y_train = frame.loc[train_index], y.loc[train_index]
     x_holdout = frame.loc[holdout_index]
-    # 단조 제약은 XGBoost 에만 건다. `train_multi.run_one` 이 그렇게 하고 있고,
-    # `compare_catboost.py` 의 기존 비교도 같은 조건에서 나왔다. 여기서만 CatBoost 에
-    # 제약을 걸면 그 근거들과 나란히 놓을 수 없다.
+    # 단조 제약을 **두 멤버 모두에** 건다. 원래는 XGBoost 에만 걸었다 — `train_multi.run_one`
+    # 과 `compare_catboost.py` 의 비교가 그 조건이었고, 한쪽만 바꾸면 그 근거들과 나란히
+    # 놓을 수 없었다. 같은 주석에 "서빙으로 옮길 때는 다시 봐야 한다"고 적어 뒀고 지금이
+    # 그 시점이다.
     #
-    # 서빙으로 옮길 때는 다시 봐야 한다 — 주관적 건강의 단조성은 성능이 아니라
-    # 제품 계약이다.
-    monotone = monotone_vector(frame, numeric, categorical) if model == "xgboost" else None
+    # 이유는 성능이 아니라 계약이다. 번들은 XGBoost 3 시드와 CatBoost 3 시드의 평균이다.
+    # 절반에만 제약을 걸면 평균에서 제약이 희석된다 — 맥압·평균동맥압을 파생으로 갈아 끼운
+    # 뒤에도 `dm_lab` 의 혈압 단조 위반이 1 건 남은 것이 그 결과였다. 방향을 제품 계약으로
+    # 삼기로 했으면 두 멤버가 같은 계약을 지켜야 한다.
+    #
+    # 28·29번 문서의 비교 수치는 CatBoost 무제약 조건에서 나왔다. 이 줄을 바꾼 뒤의
+    # 성능은 그 표와 직접 비교하지 않는다.
+    monotone = monotone_for(model, frame, numeric, categorical, target_key)
 
     # out-of-fold 는 **첫 시드로만** 낸다. 보정기는 두 모수짜리 사상이라 시드
     # 평균된 예측으로 적합하나 단일 시드로 적합하나 차이가 없는데, 폴드 수만큼
@@ -206,7 +222,9 @@ def paired_bootstrap(y: np.ndarray, baseline: np.ndarray, candidate: np.ndarray,
 # ---------------------------------------------------------------------------
 
 
-def run_cell(data: pd.DataFrame, target: Target, tier: str, seeds: tuple[int, ...], rounds: int) -> dict[str, Any] | None:
+def run_cell(  # noqa: C901
+    data: pd.DataFrame, target: Target, tier: str, seeds: tuple[int, ...], rounds: int
+) -> dict[str, Any] | None:
     lab_only = [c for c in target.features("lab") if c not in set(target.features("basic")) and c not in DERIVED]
     label = data[target.label].astype("boolean")
     usable = label.notna()
@@ -238,7 +256,7 @@ def run_cell(data: pd.DataFrame, target: Target, tier: str, seeds: tuple[int, ..
     for model in MEMBERS:
         model_seeds = (seeds[0],) if model in DETERMINISTIC else seeds
         oof, holdout, singles = member_predictions(
-            frame, y, split.train_index, split.holdout_index, numeric, categorical, model, model_seeds
+            frame, y, split.train_index, split.holdout_index, numeric, categorical, model, model_seeds, target.key
         )
         members[model] = {"oof": oof, "holdout": holdout, "oof1": singles["oof"], "holdout1": singles["holdout"]}
 
@@ -285,7 +303,9 @@ def run_cell(data: pd.DataFrame, target: Target, tier: str, seeds: tuple[int, ..
         # 똑같이 통과해야 하므로 재보정 여지를 남기지 않고 그대로 잰다.
         "calibration": {"method": "meta", "parameters": {}},
         "seeds": len(seeds),
-        "weights": {m: round(float(w), 3) for m, w in zip(MEMBERS, meta.coef_[0])},
+        # `stack_oof` 가 MEMBERS 순서로 열을 쌓았으므로 계수 수가 멤버 수와 같아야 한다.
+        # 어긋나면 가중치가 엉뚱한 멤버에 붙으므로 조용히 지나가게 두지 않는다.
+        "weights": {m: round(float(w), 3) for m, w in zip(MEMBERS, meta.coef_[0], strict=True)},
     }
 
     for name, (parts, rule) in recipes.items():
@@ -371,7 +391,11 @@ def main() -> int:
             print(f"  {'구성':<18}{'AUROC':>8}{'리프트':>7}{'ECE':>7}{'기울기':>7}{'게이트':>7}{'ΔAUROC':>10}")
             for name, arm in entry["arms"].items():
                 gate = "통과" if arm["calibration_ok"] else "탈락"
-                delta = f"{arm['delta_auroc']:+.4f}{'*' if arm.get('verdict') == '유의' else ' '}" if "delta_auroc" in arm else "  기준"
+                delta = (
+                    f"{arm['delta_auroc']:+.4f}{'*' if arm.get('verdict') == '유의' else ' '}"
+                    if "delta_auroc" in arm
+                    else "  기준"
+                )
                 print(
                     f"  {name:<18}{arm['auroc']:>8.4f}{arm['auprc_lift']:>7.2f}{arm['ece']:>7.3f}"
                     f"{arm['calibration_slope']:>7.2f}{gate:>7}{delta:>10}"

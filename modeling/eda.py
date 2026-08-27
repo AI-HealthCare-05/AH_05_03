@@ -204,7 +204,7 @@ def subgroup_prevalence(frame: pd.DataFrame) -> list[dict[str, Any]]:
     age = pd.to_numeric(frame["age"], errors="coerce")
     band = pd.cut(age, [19, 40, 50, 60, 70, 200], labels=["19-40", "40-50", "50-60", "60-70", "70+"], right=False)
     rows = []
-    for key, target in TARGETS.items():
+    for target in TARGETS.values():
         if not target.serve:
             continue
         label = frame[target.label].astype("boolean")

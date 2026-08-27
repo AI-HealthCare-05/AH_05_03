@@ -33,7 +33,9 @@ def upgrade() -> None:
         sa.Column("measure_weekday", sa.Integer(), server_default="6", nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("weekly_water_goal in (3, 5, 7)", name=op.f("ck_challenge_settings_weekly_water_goal_allowed")),
+        sa.CheckConstraint(
+            "weekly_water_goal in (3, 5, 7)", name=op.f("ck_challenge_settings_weekly_water_goal_allowed")
+        ),
         sa.CheckConstraint("measure_weekday between 0 and 6", name=op.f("ck_challenge_settings_measure_weekday_range")),
         sa.ForeignKeyConstraint(
             ["account_id"],

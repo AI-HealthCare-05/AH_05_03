@@ -11,9 +11,11 @@ from app.dtos.subscriptions import SubscriptionBrief
 from app.exceptions import SubscriptionNotFoundError
 from app.models.service_accounts import ServiceAccount, ServiceAccountStatus
 from app.models.subscriptions import SubscriptionStatus
+from app.repositories.household_repository import HouseholdRepository
 from app.repositories.service_account_repository import ServiceAccountRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.services.auth import get_account_repository, get_subscription_repository
+from app.services.households import get_household_repository
 from app.services.token_store import TokenStore
 
 
@@ -24,11 +26,13 @@ class AccountService:
         account_repo: Annotated[ServiceAccountRepository, Depends(get_account_repository)],
         subscription_repo: Annotated[SubscriptionRepository, Depends(get_subscription_repository)],
         token_store: Annotated[TokenStore, Depends(get_token_store)],
+        household_repo: Annotated[HouseholdRepository, Depends(get_household_repository)],
     ) -> None:
         self.session = session
         self.account_repo = account_repo
         self.subscription_repo = subscription_repo
         self.token_store = token_store
+        self.household_repo = household_repo
 
     async def get_summary(self, account: ServiceAccount) -> AccountSummaryData:
         subscription = await self.subscription_repo.get_by_account_id(account.id)
@@ -56,6 +60,16 @@ class AccountService:
             subscription = await self.subscription_repo.get_by_account_id(account.id)
             if subscription and subscription.status is SubscriptionStatus.ACTIVE:
                 await self.subscription_repo.set_status(subscription, SubscriptionStatus.CANCELLED)
+
+            # **가구에서도 나간다.** 예전에는 계정만 닫고 멤버십을 그대로 뒀는데,
+            # 그러면 닫힌 계정이 계속 '활성 구성원' 으로 잡혀 남은 사람이 가구를
+            # 정리할 수 없었다. 탈퇴한 사람이 남의 가구 구성원 목록에 계속 보이는
+            # 문제도 같은 뿌리다.
+            #
+            # 나간 뒤 아무도 안 남은 가구는 닫는다. 안 그러면 접근할 수 없는데
+            # `status=active` 인 가구만 쌓인다.
+            touched = await self.household_repo.release_all_memberships(account.id)
+            await self.household_repo.close_if_empty(touched)
 
             # DB를 먼저 커밋하고 나서 Redis를 무효화한다. 순서를 바꾸면 Redis
             # 실패가 "계정은 안 닫혔는데 토큰만 죽은" 상태를 만들 수 있다.

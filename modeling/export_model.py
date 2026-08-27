@@ -51,6 +51,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import bundle_io
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
@@ -310,7 +311,11 @@ def main() -> int:
     for target in args.target:
         bundle = build(unified, target, args.source)
         destination = args.out / f"risk_{target}.json"
+        # 사후 주입된 `rule_anchor` 를 덮어쓰지 않는다 — 이유는 `bundle_io` 참조.
+        carried = bundle_io.carry_over(destination, bundle)
         destination.write_text(json.dumps(bundle, indent=2, ensure_ascii=False), encoding="utf-8")
+        if carried:
+            print(f"  {destination.name}{bundle_io.note(carried)}")
 
         mean_probability, mean_percentile = verify(bundle, unified)
         print(

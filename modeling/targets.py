@@ -20,6 +20,7 @@ AUROC 는 0.99 로 뛰고 모델은 쓸모가 0 이 된다 — 그리고 그 사
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 # ---------------------------------------------------------------------------
@@ -117,21 +118,64 @@ DERIVED: dict[str, tuple[str, ...]] = {
     "mean_arterial_pressure": ("sbp", "dbp"),
 }
 
-# 실제로 학습에 들어가는 임상 지수. **기본은 비어 있다.**
+# 실제로 학습에 들어가는 임상 지수. **혈압 파생 둘만 기본으로 켠다.**
 #
-# 26번 문서의 실측이 이유다 — 35 칸 중 유의한 개선이 다섯이었고 나머지 서른 칸은
-# 0 언저리거나 음수였다. 원재료가 이미 특징이면 GBDT 가 그 조합을 스스로 쓰므로
-# 지수를 얹으면 중복 특징이 분할만 흩뜨린다. 그래서 `DERIVED` 에 정의는 남기되
+# 26번 문서의 실측이 나머지를 끈 이유다 — 35 칸 중 유의한 개선이 다섯이었고 나머지
+# 서른 칸은 0 언저리거나 음수였다. 원재료가 이미 특징이면 GBDT 가 그 조합을 스스로
+# 쓰므로 지수를 얹으면 중복 특징이 분할만 흩뜨린다. 그래서 `DERIVED` 에 정의는 남기되
 # 켜는 것은 근거가 붙은 자리에서 하나씩 한다.
 #
 #     from targets import enable_indices
-#     enable_indices("pulse_pressure")          # 빈혈 일반형 +0.0055
 #     enable_indices(*NEW_INDICES)              # 실험 하네스가 쓰는 방식
-ENABLED_INDICES: set[str] = set()
+#
+# 혈압 둘은 **성능이 아니라 방향 때문에** 켠다. `SUBSTITUTED_MATERIALS` 참조.
+ENABLED_INDICES: set[str] = {"pulse_pressure", "mean_arterial_pressure"}
 
 
 def enable_indices(*names: str) -> None:
     ENABLED_INDICES.update(names)
+
+
+# 파생을 켜면 원재료를 뺀다. `{파생: (뺄 재료들)}`
+#
+# **얹지 않고 갈아 끼우는 이유.** 26번 문서가 "재료가 특징으로 남아 있으면 지수는 0"을
+# 실측으로 결론냈다. GBDT 가 조합을 스스로 쓰기 때문이다. 그러니 방향 계약을 세우려면
+# 지수를 더하는 게 아니라 재료를 빼야 한다.
+#
+# **혈압이 그 자리다.** 실측: 54 세 남성 BMI 26 에서 sbp 를 130 으로 고정하고 dbp 만
+# 올리면 당뇨 확률이 23.23% → 14.94% 로 **8.3%p 내려간다.** 모델이 맥압을 배운 결과이고
+# 임상적으로는 맞는 신호다 — 맥압이 크면 혈관이 굳었다는 뜻이다. 그런데 dbp 단독
+# 스윕으로 보면 "이완기 혈압이 높을수록 안전하다"로 읽힌다. 화면이 그 말을 하면 안 된다.
+#
+# 혈압 쌍을 임상 진행 경로대로 함께 올려도 어긋난다. `dm_lab` 은 105/65 에서 180/110 까지
+# 가는 동안 12.14% → 9.25% 로 **내려가고** 8 개 구간 중 3 개가 단조 위반이었다.
+# `fatty_liver` 는 180/110 에서 10.17%p 떨어졌다. 반대로 `ckd` 는 8.84% → 50.06% 로
+# 위반 0 건이었다 — 타깃마다 다르고, 그래서 데이터에 맡길 수 없다.
+#
+# 맥압과 평균동맥압으로 갈아 끼우면 두 특징 모두 "높을수록 위험"으로 단조 제약을 걸 수
+# 있다. sbp·dbp 쌍으로는 그 제약을 표현할 방법이 없다 — dbp 의 임상적 방향이 sbp 를
+# 고정했을 때와 함께 올릴 때 서로 반대이기 때문이다.
+#
+# 혈압이 라벨인 타깃(고혈압·대사증후군)에서는 sbp·dbp 가 `blocked` 라 맥압·평균동맥압도
+# 자동으로 안 만들어진다. 누출 차단이 파생에도 걸린다.
+SUBSTITUTED_MATERIALS: dict[str, tuple[str, ...]] = {
+    "pulse_pressure": ("sbp", "dbp"),
+    "mean_arterial_pressure": ("sbp", "dbp"),
+}
+
+
+def substituted_materials(columns: Iterable[str]) -> set[str]:
+    """`columns` 에 든 파생이 대체한 원재료 이름.
+
+    두 곳에서 쓴다. `Target.features` 가 특징 목록에서 빼고, `export_multi.prepare`
+    가 설계 행렬에서 뺀다. **둘 다 해야 한다** — 재료는 파생을 계산하는 데 필요하므로
+    raw 프레임에는 남아 있고, 설계 행렬까지 따라 들어가면 파생과 완전 공선이 된다.
+    공선이 되면 제약 없는 원값으로 단조 제약을 우회한다. 실제로 우회했다.
+    """
+    out: set[str] = set()
+    for name in columns:
+        out.update(SUBSTITUTED_MATERIALS.get(name, ()))
+    return out
 
 
 # 정의만 있고 기본은 꺼져 있는 지수 전체. 실험에서 base 를 만들 때 통째로 빼는 데 쓴다.
@@ -212,7 +256,7 @@ class Target:
     extra: dict[str, str] = field(default_factory=dict)
 
     def features(self, tier: str) -> list[str]:
-        """이 타깃·tier 에서 쓸 수 있는 입력. blocked 를 뺀 뒤 파생을 붙인다."""
+        """이 타깃·tier 에서 쓸 수 있는 입력. blocked 를 뺀 뒤 파생을 붙이고 갈아 끼운다."""
         blocked = set(self.blocked)
         columns = [c for c in BASIC_FEATURES if c not in blocked]
         if tier == "lab":
@@ -224,6 +268,12 @@ class Target:
                 continue
             if all(part in available for part in parts):
                 columns.append(name)
+
+        # 갈아 끼우기. 파생이 실제로 들어간 경우에만 재료를 뺀다 — 재료가 blocked 면
+        # 파생도 안 들어왔으므로 뺄 것이 없다.
+        substituted = substituted_materials(columns)
+        if substituted:
+            columns = [c for c in columns if c not in substituted]
         return columns
 
 

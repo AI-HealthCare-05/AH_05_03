@@ -101,7 +101,7 @@ def harrell_c(probability: np.ndarray, deaths: np.ndarray, years: np.ndarray, ro
     concordant = tie = comparable = 0
     a = rng.integers(0, n, rounds)
     b = rng.integers(0, n, rounds)
-    for i, j in zip(a, b):
+    for i, j in zip(a, b, strict=True):
         if i == j:
             continue
         # i 가 죽었고 j 가 i 보다 오래 살아남았다면 비교 가능
@@ -121,9 +121,7 @@ def harrell_c(probability: np.ndarray, deaths: np.ndarray, years: np.ndarray, ro
     return (concordant + 0.5 * tie) / comparable
 
 
-def run_target(
-    data: pd.DataFrame, mortality: pd.DataFrame, key: str, tier: str, model: str
-) -> dict[str, Any] | None:
+def run_target(data: pd.DataFrame, mortality: pd.DataFrame, key: str, tier: str, model: str) -> dict[str, Any] | None:
     target = TARGETS[key]
     lab_only = [c for c in target.features("lab") if c not in set(target.features("basic")) and c not in DERIVED]
 

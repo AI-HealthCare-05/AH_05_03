@@ -9,6 +9,7 @@ import type {
   HealthRecordType,
 } from "../../shared/local/domainContracts";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
+import { ChallengeDashboardCard } from "../challenge/ChallengeDashboardCard";
 
 const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
   default: module.VanatomeBodyMap,
@@ -23,6 +24,7 @@ const RECORD_LABELS: Record<HealthRecordType, string> = {
   health_screening: "건강검진",
   pain: "통증 기록",
   walking: "걷기",
+  assessment: "위험 판정",
   note: "건강 메모",
 };
 
@@ -299,6 +301,9 @@ export function HomePage() {
 
       {error ? <div className="alert error-alert" role="alert">{error}</div> : null}
       {actionError && !profileLifecycleAction && !hiddenProfilesDialogOpen ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
+
+      {/* 챌린지 요약. 로그인 전이거나 서버가 안 붙으면 스스로 아무것도 안 그린다. */}
+      <ChallengeDashboardCard />
 
       <section className="dashboard-section" aria-labelledby="members-heading">
         <div className="section-title-row">

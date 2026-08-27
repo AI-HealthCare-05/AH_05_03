@@ -34,8 +34,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from chronic_disease_engine.schemas import COMMON_DISCLAIMER, RiskLevel
-
 from app.services.lab_staging import (
     ALT_UPPER,
     GGT_UPPER,
@@ -44,6 +42,7 @@ from app.services.lab_staging import (
     resolve_bmi,
 )
 from app.services.risk import egfr_ckd_epi_2021
+from chronic_disease_engine.schemas import COMMON_DISCLAIMER, RiskLevel
 
 # ---------------------------------------------------------------------------
 # 질환 축
@@ -298,285 +297,469 @@ def _hypertension_history(profile: dict[str, Any]) -> tuple[str, dict[str, Any]]
 SIGNALS: tuple[Signal, ...] = (
     # --- 간에 낀 지방 무리. 셋이 같은 것을 보므로 가장 센 하나만 센다 ---------
     Signal(
-        "fatty_liver_high", "지방간 지수 높음", "hepatic_fat", _fatty_liver,
+        "fatty_liver_high",
+        "지방간 지수 높음",
+        "hepatic_fat",
+        _fatty_liver,
         (
-            Link("dm_risk", 3, Evidence(
-                "HR 2.22 (95% CI 1.84-2.60)",
-                "Mantovani 2018 메타분석, 영상으로 진단한 비알코올 지방간 -> 제2형 당뇨 발생",
-                causal=None,
-            )),
+            Link(
+                "dm_risk",
+                3,
+                Evidence(
+                    "HR 2.22 (95% CI 1.84-2.60)",
+                    "Mantovani 2018 메타분석, 영상으로 진단한 비알코올 지방간 -> 제2형 당뇨 발생",
+                    causal=None,
+                ),
+            ),
         ),
         reads=("bmi", "height_cm", "weight_kg", "waist_cm", "triglycerides", "ggt"),
     ),
     Signal(
-        "ggt_high", "γ-GTP 상승", "hepatic_fat", _ggt_high,
+        "ggt_high",
+        "γ-GTP 상승",
+        "hepatic_fat",
+        _ggt_high,
         (
-            Link("dm_risk", 2, Evidence(
-                "RR 1.34 (95% CI 1.27-1.42), 최고 대 최저 삼분위",
-                "Kunutsor 2014 용량-반응 메타분석, 24개 코호트 177,307명 중 당뇨 11,155건",
-                causal=False,  # 멘델 무작위화 RR 0.96 (0.89-1.04)
-            )),
+            Link(
+                "dm_risk",
+                2,
+                Evidence(
+                    "RR 1.34 (95% CI 1.27-1.42), 최고 대 최저 삼분위",
+                    "Kunutsor 2014 용량-반응 메타분석, 24개 코호트 177,307명 중 당뇨 11,155건",
+                    causal=False,  # 멘델 무작위화 RR 0.96 (0.89-1.04)
+                ),
+            ),
         ),
         reads=("ggt",),
     ),
     Signal(
-        "alt_high", "ALT 상승", "hepatic_fat", _alt_high,
+        "alt_high",
+        "ALT 상승",
+        "hepatic_fat",
+        _alt_high,
         (
-            Link("dm_risk", 2, Evidence(
-                "RR 1.16 (95% CI 1.08-1.25), ALT 5 IU/L 증가당",
-                "Kunutsor 2013 간효소-당뇨 체계적 고찰. 영국 여성 코호트에서 log ALT 단위당 HR 1.83",
-                causal=None,
-            )),
+            Link(
+                "dm_risk",
+                2,
+                Evidence(
+                    "RR 1.16 (95% CI 1.08-1.25), ALT 5 IU/L 증가당",
+                    "Kunutsor 2013 간효소-당뇨 체계적 고찰. 영국 여성 코호트에서 log ALT 단위당 HR 1.83",
+                    causal=None,
+                ),
+            ),
         ),
         reads=("alt",),
     ),
     # --- 혈당 무리 ---------------------------------------------------------
     Signal(
-        "glucose_diabetic_range", "혈당이 당뇨 범위", "glycemia", _glucose_diabetic_range,
+        "glucose_diabetic_range",
+        "혈당이 당뇨 범위",
+        "glycemia",
+        _glucose_diabetic_range,
         (
-            Link("cvd_risk", 2, Evidence(
-                "당뇨병은 심혈관질환의 주요 위험인자",
-                "한국지질동맥경화학회 이상지질혈증 진료지침 — 당뇨는 LDL 목표를 낮추는 조건",
-                causal=True,
-            )),
-            Link("ckd_risk", 2, Evidence(
-                "당뇨병성 신증은 말기신부전의 가장 흔한 원인",
-                "KDIGO 2012 CKD 진료지침",
-                causal=True,
-            )),
+            Link(
+                "cvd_risk",
+                2,
+                Evidence(
+                    "당뇨병은 심혈관질환의 주요 위험인자",
+                    "한국지질동맥경화학회 이상지질혈증 진료지침 — 당뇨는 LDL 목표를 낮추는 조건",
+                    causal=True,
+                ),
+            ),
+            Link(
+                "ckd_risk",
+                2,
+                Evidence(
+                    "당뇨병성 신증은 말기신부전의 가장 흔한 원인",
+                    "KDIGO 2012 CKD 진료지침",
+                    causal=True,
+                ),
+            ),
         ),
         reads=("fasting_glucose", "hba1c"),
     ),
     Signal(
-        "prediabetes", "당뇨병전단계", "glycemia", _prediabetes,
+        "prediabetes",
+        "당뇨병전단계",
+        "glycemia",
+        _prediabetes,
         (
-            Link("cvd_risk", 1, Evidence(
-                "RR 1.15 (95% CI 1.11-1.18) 복합 심혈관질환, 뇌졸중 1.14, 사망 1.13",
-                "Cai 2020 BMJ 메타분석, 129개 연구 10,069,955명",
-                causal=None,
-            )),
+            Link(
+                "cvd_risk",
+                1,
+                Evidence(
+                    "RR 1.15 (95% CI 1.11-1.18) 복합 심혈관질환, 뇌졸중 1.14, 사망 1.13",
+                    "Cai 2020 BMJ 메타분석, 129개 연구 10,069,955명",
+                    causal=None,
+                ),
+            ),
         ),
         reads=("fasting_glucose", "hba1c"),
     ),
     Signal(
-        "diabetes_history", "당뇨병 진단 이력", "glycemia", _diabetes_history,
+        "diabetes_history",
+        "당뇨병 진단 이력",
+        "glycemia",
+        _diabetes_history,
         (
-            Link("cvd_risk", 2, Evidence(
-                "당뇨병은 심혈관질환의 주요 위험인자",
-                "한국지질동맥경화학회 이상지질혈증 진료지침",
-                causal=True,
-            )),
-            Link("ckd_risk", 2, Evidence(
-                "당뇨병성 신증은 말기신부전의 가장 흔한 원인",
-                "KDIGO 2012 CKD 진료지침",
-                causal=True,
-            )),
+            Link(
+                "cvd_risk",
+                2,
+                Evidence(
+                    "당뇨병은 심혈관질환의 주요 위험인자",
+                    "한국지질동맥경화학회 이상지질혈증 진료지침",
+                    causal=True,
+                ),
+            ),
+            Link(
+                "ckd_risk",
+                2,
+                Evidence(
+                    "당뇨병성 신증은 말기신부전의 가장 흔한 원인",
+                    "KDIGO 2012 CKD 진료지침",
+                    causal=True,
+                ),
+            ),
         ),
         reads=("has_diabetes",),
     ),
     # --- 요산 -------------------------------------------------------------
     Signal(
-        "uric_acid_high", "고요산혈증", "urate", _uric_acid_high,
+        "uric_acid_high",
+        "고요산혈증",
+        "urate",
+        _uric_acid_high,
         (
-            Link("ckd_risk", 1, Evidence(
-                "RR 1.15 (95% CI 1.10-1.21) 요산 1 mg/dL 증가당, 고요산혈증 자체는 RR 1.17",
-                "Zhu 2021 코호트 + 갱신 메타분석 30개 코호트",
-                causal=None,
-            )),
-            Link("htn_risk", 1, Evidence(
-                "고혈압 동반 시 신기능 저하와의 연관이 더 강해진다",
-                "Kuwabara 2013 PLOS One — 요산·CKD 관계에서 고혈압의 역할",
-                causal=None,
-            )),
+            Link(
+                "ckd_risk",
+                1,
+                Evidence(
+                    "RR 1.15 (95% CI 1.10-1.21) 요산 1 mg/dL 증가당, 고요산혈증 자체는 RR 1.17",
+                    "Zhu 2021 코호트 + 갱신 메타분석 30개 코호트",
+                    causal=None,
+                ),
+            ),
+            Link(
+                "htn_risk",
+                1,
+                Evidence(
+                    "고혈압 동반 시 신기능 저하와의 연관이 더 강해진다",
+                    "Kuwabara 2013 PLOS One — 요산·CKD 관계에서 고혈압의 역할",
+                    causal=None,
+                ),
+            ),
         ),
         reads=("uric_acid",),
     ),
     # --- 콩팥 손상 --------------------------------------------------------
     Signal(
-        "albuminuria_a3", "고도 알부민뇨", "kidney_damage", _albuminuria_a3,
+        "albuminuria_a3",
+        "고도 알부민뇨",
+        "kidney_damage",
+        _albuminuria_a3,
         (
-            Link("cvd_risk", 3, Evidence(
-                "심혈관 사망 HR 2.32 (95% CI 1.31-4.12), ACR 30 미만 대비",
-                "CKD Prognosis Consortium 계열 분석. eGFR 과 독립적으로 예측한다",
-                causal=None,
-            )),
+            Link(
+                "cvd_risk",
+                3,
+                Evidence(
+                    "심혈관 사망 HR 2.32 (95% CI 1.31-4.12), ACR 30 미만 대비",
+                    "CKD Prognosis Consortium 계열 분석. eGFR 과 독립적으로 예측한다",
+                    causal=None,
+                ),
+            ),
         ),
         reads=("urine_acr",),
     ),
     Signal(
-        "albuminuria_a2", "중등도 알부민뇨", "kidney_damage", _albuminuria_a2,
+        "albuminuria_a2",
+        "중등도 알부민뇨",
+        "kidney_damage",
+        _albuminuria_a2,
         (
-            Link("cvd_risk", 1, Evidence(
-                "심혈관 사망 HR 1.08 (95% CI 0.77-1.50) — 신뢰구간이 1을 지난다",
-                "CKD Prognosis Consortium 계열 분석. A3 와 달리 이 구간은 통계적으로 유의하지 않다",
-                causal=None,
-            )),
+            Link(
+                "cvd_risk",
+                1,
+                Evidence(
+                    "심혈관 사망 HR 1.08 (95% CI 0.77-1.50) — 신뢰구간이 1을 지난다",
+                    "CKD Prognosis Consortium 계열 분석. A3 와 달리 이 구간은 통계적으로 유의하지 않다",
+                    causal=None,
+                ),
+            ),
         ),
         reads=("urine_acr",),
     ),
     Signal(
-        "egfr_low", "eGFR 감소", "kidney_function", _egfr_low,
+        "egfr_low",
+        "eGFR 감소",
+        "kidney_function",
+        _egfr_low,
         (
-            Link("cvd_risk", 2, Evidence(
-                "만성콩팥병은 그 자체로 심혈관 위험을 올린다",
-                "KDIGO 2012 CKD 진료지침 — CKD 환자는 말기신부전보다 심혈관 사망이 더 흔하다",
-                causal=True,
-            )),
+            Link(
+                "cvd_risk",
+                2,
+                Evidence(
+                    "만성콩팥병은 그 자체로 심혈관 위험을 올린다",
+                    "KDIGO 2012 CKD 진료지침 — CKD 환자는 말기신부전보다 심혈관 사망이 더 흔하다",
+                    causal=True,
+                ),
+            ),
         ),
         reads=("creatinine",),
     ),
     # --- 혈압 -------------------------------------------------------------
     Signal(
-        "bp_hypertensive", "혈압 140/90 이상", "blood_pressure", _bp_hypertensive,
+        "bp_hypertensive",
+        "혈압 140/90 이상",
+        "blood_pressure",
+        _bp_hypertensive,
         (
-            Link("cvd_risk", 3, Evidence(
-                "혈압은 뇌졸중·심근경색의 가장 큰 교정 가능 위험인자",
-                "대한고혈압학회 진료지침",
-                causal=True,
-            )),
-            Link("ckd_risk", 2, Evidence(
-                "고혈압은 당뇨에 이은 말기신부전의 두 번째 원인",
-                "KDIGO 2012 CKD 진료지침",
-                causal=True,
-            )),
+            Link(
+                "cvd_risk",
+                3,
+                Evidence(
+                    "혈압은 뇌졸중·심근경색의 가장 큰 교정 가능 위험인자",
+                    "대한고혈압학회 진료지침",
+                    causal=True,
+                ),
+            ),
+            Link(
+                "ckd_risk",
+                2,
+                Evidence(
+                    "고혈압은 당뇨에 이은 말기신부전의 두 번째 원인",
+                    "KDIGO 2012 CKD 진료지침",
+                    causal=True,
+                ),
+            ),
         ),
         reads=("systolic_bp", "diastolic_bp"),
     ),
     Signal(
-        "bp_elevated", "혈압 130/80 이상", "blood_pressure", _bp_elevated,
+        "bp_elevated",
+        "혈압 130/80 이상",
+        "blood_pressure",
+        _bp_elevated,
         (
-            Link("cvd_risk", 1, Evidence(
-                "고혈압 전단계에서도 위험이 이미 오르기 시작한다",
-                "대한고혈압학회 진료지침 — 주의혈압·고혈압전단계 구간",
-                causal=True,
-            )),
-            Link("htn_risk", 2, Evidence(
-                "이 구간은 고혈압으로 진행할 확률이 높다",
-                "대한고혈압학회 진료지침",
-                causal=True,
-            )),
+            Link(
+                "cvd_risk",
+                1,
+                Evidence(
+                    "고혈압 전단계에서도 위험이 이미 오르기 시작한다",
+                    "대한고혈압학회 진료지침 — 주의혈압·고혈압전단계 구간",
+                    causal=True,
+                ),
+            ),
+            Link(
+                "htn_risk",
+                2,
+                Evidence(
+                    "이 구간은 고혈압으로 진행할 확률이 높다",
+                    "대한고혈압학회 진료지침",
+                    causal=True,
+                ),
+            ),
         ),
         reads=("systolic_bp", "diastolic_bp"),
     ),
     Signal(
-        "hypertension_history", "고혈압 진단 이력", "blood_pressure", _hypertension_history,
+        "hypertension_history",
+        "고혈압 진단 이력",
+        "blood_pressure",
+        _hypertension_history,
         (
-            Link("cvd_risk", 2, Evidence(
-                "고혈압은 심혈관질환의 주요 위험인자",
-                "한국지질동맥경화학회 이상지질혈증 진료지침 — 위험인자 계수 항목",
-                causal=True,
-            )),
-            Link("ckd_risk", 2, Evidence(
-                "고혈압성 신증",
-                "KDIGO 2012 CKD 진료지침",
-                causal=True,
-            )),
+            Link(
+                "cvd_risk",
+                2,
+                Evidence(
+                    "고혈압은 심혈관질환의 주요 위험인자",
+                    "한국지질동맥경화학회 이상지질혈증 진료지침 — 위험인자 계수 항목",
+                    causal=True,
+                ),
+            ),
+            Link(
+                "ckd_risk",
+                2,
+                Evidence(
+                    "고혈압성 신증",
+                    "KDIGO 2012 CKD 진료지침",
+                    causal=True,
+                ),
+            ),
         ),
         reads=("has_hypertension",),
     ),
     # --- 몸집 -------------------------------------------------------------
     Signal(
-        "central_obesity", "복부비만", "adiposity", _central_obesity,
+        "central_obesity",
+        "복부비만",
+        "adiposity",
+        _central_obesity,
         (
-            Link("dm_risk", 2, Evidence(
-                "복부비만은 인슐린저항성의 직접 지표",
-                "대한비만학회 2024 비만 진료지침 — 허리둘레 남 90 / 여 85 cm",
-                causal=True,
-            )),
-            Link("htn_risk", 2, Evidence(
-                "체중 증가는 혈압 상승과 함께 간다",
-                "대한비만학회 2024 비만 진료지침",
-                causal=True,
-            )),
-            Link("cvd_risk", 1, Evidence(
-                "복부비만은 대사증후군의 필수 구성 요소",
-                "대한비만학회 2024 비만 진료지침",
-                causal=None,
-            )),
+            Link(
+                "dm_risk",
+                2,
+                Evidence(
+                    "복부비만은 인슐린저항성의 직접 지표",
+                    "대한비만학회 2024 비만 진료지침 — 허리둘레 남 90 / 여 85 cm",
+                    causal=True,
+                ),
+            ),
+            Link(
+                "htn_risk",
+                2,
+                Evidence(
+                    "체중 증가는 혈압 상승과 함께 간다",
+                    "대한비만학회 2024 비만 진료지침",
+                    causal=True,
+                ),
+            ),
+            Link(
+                "cvd_risk",
+                1,
+                Evidence(
+                    "복부비만은 대사증후군의 필수 구성 요소",
+                    "대한비만학회 2024 비만 진료지침",
+                    causal=None,
+                ),
+            ),
         ),
         reads=("waist_cm",),
     ),
     Signal(
-        "obese_bmi", "비만 (BMI 25 이상)", "adiposity", _obese_bmi,
+        "obese_bmi",
+        "비만 (BMI 25 이상)",
+        "adiposity",
+        _obese_bmi,
         (
-            Link("dm_risk", 2, Evidence(
-                "BMI 25 이상부터 당뇨 유병률이 꺾여 올라간다",
-                "대한비만학회 2024 비만 진료지침 — 한국인은 서구 기준(30)보다 낮은 BMI 에서 위험이 오른다",
-                causal=True,
-            )),
-            Link("htn_risk", 1, Evidence(
-                "체중과 혈압의 관계",
-                "대한비만학회 2024 비만 진료지침",
-                causal=True,
-            )),
+            Link(
+                "dm_risk",
+                2,
+                Evidence(
+                    "BMI 25 이상부터 당뇨 유병률이 꺾여 올라간다",
+                    "대한비만학회 2024 비만 진료지침 — 한국인은 서구 기준(30)보다 낮은 BMI 에서 위험이 오른다",
+                    causal=True,
+                ),
+            ),
+            Link(
+                "htn_risk",
+                1,
+                Evidence(
+                    "체중과 혈압의 관계",
+                    "대한비만학회 2024 비만 진료지침",
+                    causal=True,
+                ),
+            ),
         ),
         reads=("bmi", "height_cm", "weight_kg"),
     ),
     # --- 지질 -------------------------------------------------------------
     Signal(
-        "ldl_high", "LDL 콜레스테롤 높음", "lipid_atherogenic", _ldl_high,
+        "ldl_high",
+        "LDL 콜레스테롤 높음",
+        "lipid_atherogenic",
+        _ldl_high,
         (
-            Link("cvd_risk", 2, Evidence(
-                "LDL 은 동맥경화의 인과적 원인이다 — 낮출수록 사건이 준다",
-                "한국지질동맥경화학회 이상지질혈증 진료지침. 유전연구·중재시험이 함께 지지한다",
-                causal=True,
-            )),
+            Link(
+                "cvd_risk",
+                2,
+                Evidence(
+                    "LDL 은 동맥경화의 인과적 원인이다 — 낮출수록 사건이 준다",
+                    "한국지질동맥경화학회 이상지질혈증 진료지침. 유전연구·중재시험이 함께 지지한다",
+                    causal=True,
+                ),
+            ),
         ),
         reads=("ldl_c",),
     ),
     Signal(
-        "tg_high", "중성지방 높음", "lipid_atherogenic", _tg_high,
+        "tg_high",
+        "중성지방 높음",
+        "lipid_atherogenic",
+        _tg_high,
         (
-            Link("cvd_risk", 1, Evidence(
-                "중성지방 200 mg/dL 이상은 위험 구간",
-                "한국지질동맥경화학회 이상지질혈증 진료지침. 500 이상은 심혈관보다 췌장염이 먼저 문제가 된다",
-                causal=None,
-            )),
+            Link(
+                "cvd_risk",
+                1,
+                Evidence(
+                    "중성지방 200 mg/dL 이상은 위험 구간",
+                    "한국지질동맥경화학회 이상지질혈증 진료지침. 500 이상은 심혈관보다 췌장염이 먼저 문제가 된다",
+                    causal=None,
+                ),
+            ),
         ),
         reads=("triglycerides",),
     ),
     Signal(
-        "hdl_low", "HDL 콜레스테롤 낮음", "lipid_hdl", _hdl_low,
+        "hdl_low",
+        "HDL 콜레스테롤 낮음",
+        "lipid_hdl",
+        _hdl_low,
         (
-            Link("cvd_risk", 1, Evidence(
-                "위험인자로 오래 쓰였지만 HDL 을 올리는 약은 심근경색을 줄이지 못했다",
-                "한국지질동맥경화학회 지침의 주요 위험인자. 이 저장소의 NHANES 사망 연계에서도 "
-                "낮은 HDL 단독으로는 장기 사망을 가르지 못했다 (Harrell C=0.506)",
-                causal=False,
-            )),
+            Link(
+                "cvd_risk",
+                1,
+                Evidence(
+                    "위험인자로 오래 쓰였지만 HDL 을 올리는 약은 심근경색을 줄이지 못했다",
+                    "한국지질동맥경화학회 지침의 주요 위험인자. 이 저장소의 NHANES 사망 연계에서도 "
+                    "낮은 HDL 단독으로는 장기 사망을 가르지 못했다 (Harrell C=0.506)",
+                    causal=False,
+                ),
+            ),
         ),
         reads=("hdl_c",),
     ),
     # --- 생활·인구 --------------------------------------------------------
     Signal(
-        "smoking", "현재 흡연", "smoking", _smoking,
+        "smoking",
+        "현재 흡연",
+        "smoking",
+        _smoking,
         (
-            Link("cvd_risk", 3, Evidence(
-                "흡연은 심혈관질환의 주요 위험인자이며 끊으면 위험이 내려간다",
-                "한국지질동맥경화학회 이상지질혈증 진료지침 — 위험인자 계수 항목",
-                causal=True,
-            )),
-            Link("dm_risk", 2, Evidence(
-                "RR 1.44 (95% CI 1.31-1.58), 현재 흡연자",
-                "Willi 2007 JAMA 메타분석",
-                causal=None,
-            )),
-            Link("ckd_risk", 1, Evidence(
-                "흡연은 알부민뇨와 신기능 저하 속도를 올린다",
-                "KDIGO 2012 CKD 진료지침의 진행 위험인자",
-                causal=None,
-            )),
+            Link(
+                "cvd_risk",
+                3,
+                Evidence(
+                    "흡연은 심혈관질환의 주요 위험인자이며 끊으면 위험이 내려간다",
+                    "한국지질동맥경화학회 이상지질혈증 진료지침 — 위험인자 계수 항목",
+                    causal=True,
+                ),
+            ),
+            Link(
+                "dm_risk",
+                2,
+                Evidence(
+                    "RR 1.44 (95% CI 1.31-1.58), 현재 흡연자",
+                    "Willi 2007 JAMA 메타분석",
+                    causal=None,
+                ),
+            ),
+            Link(
+                "ckd_risk",
+                1,
+                Evidence(
+                    "흡연은 알부민뇨와 신기능 저하 속도를 올린다",
+                    "KDIGO 2012 CKD 진료지침의 진행 위험인자",
+                    causal=None,
+                ),
+            ),
         ),
         reads=("smoking",),
     ),
     Signal(
-        "age_risk", "연령 위험 구간", "age", _age_risk,
+        "age_risk",
+        "연령 위험 구간",
+        "age",
+        _age_risk,
         (
-            Link("cvd_risk", 1, Evidence(
-                "남 45세 / 여 55세 이상은 주요 위험인자로 센다",
-                "한국지질동맥경화학회 이상지질혈증 진료지침",
-                causal=True,
-            )),
+            Link(
+                "cvd_risk",
+                1,
+                Evidence(
+                    "남 45세 / 여 55세 이상은 주요 위험인자로 센다",
+                    "한국지질동맥경화학회 이상지질혈증 진료지침",
+                    causal=True,
+                ),
+            ),
         ),
         reads=("age",),
     ),

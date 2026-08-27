@@ -157,16 +157,19 @@ def fit_arm(
         "holdout_rows": int(len(split.holdout_index)),
         # 추가한 컬럼이 홀드아웃에서 실제로 채워져 있는지. 이 실험의 전제다.
         "added_coverage": {
-            c: round(float(subset.loc[split.holdout_index, c].notna().mean()), 3)
-            for c in columns
-            if c in ADDED
+            c: round(float(subset.loc[split.holdout_index, c].notna().mean()), 3) for c in columns if c in ADDED
         },
     }
     return y.loc[split.holdout_index].to_numpy(), probability, meta
 
 
 def run_target(
-    data: pd.DataFrame, target: Target, tier: str, model: str, rounds: int, arms: list[tuple[str, tuple[str, ...], tuple[str, ...]]]
+    data: pd.DataFrame,
+    target: Target,
+    tier: str,
+    model: str,
+    rounds: int,
+    arms: list[tuple[str, tuple[str, ...], tuple[str, ...]]],
 ) -> dict[str, Any] | None:
     lab_only = [c for c in target.features("lab") if c not in set(target.features("basic")) and c not in DERIVED]
     usable = data[target.label].astype("boolean").notna()

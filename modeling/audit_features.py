@@ -22,7 +22,6 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-
 from data import schema
 from splits import make_split
 from targets import BASIC_FEATURES, CATEGORICAL, DERIVED, LAB_FEATURES, TARGETS
@@ -144,7 +143,9 @@ def main() -> int:
     for key in TARGETS:
         audits.extend(audit_target(data, key))
 
-    header = f"{'질환':<14}{'tier':<7}{'라벨행':>8}{'양성':>7}{'유병률':>8}{'변수':>5}{'학습양성':>8}{'EPV':>7}{'완결':>7}"
+    header = (
+        f"{'질환':<14}{'tier':<7}{'라벨행':>8}{'양성':>7}{'유병률':>8}{'변수':>5}{'학습양성':>8}{'EPV':>7}{'완결':>7}"
+    )
     print(header)
     print("-" * 78)
     for entry in audits:

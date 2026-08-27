@@ -433,9 +433,7 @@ def build_cycle(cycle: str) -> pd.DataFrame:
     # 같은 사람이 같은 척도로 답한 값이라 체계적 오차가 상쇄된다.
     weight_now = _blank(frame["whd020"], {7777, 9999})
     weight_year_ago = _blank(frame["whd050"], {7777, 9999})
-    frame["weight_change_1yr_pct"] = (
-        (weight_now - weight_year_ago) / weight_year_ago.where(weight_year_ago > 0) * 100.0
-    )
+    frame["weight_change_1yr_pct"] = (weight_now - weight_year_ago) / weight_year_ago.where(weight_year_ago > 0) * 100.0
 
     creatinine = pd.to_numeric(frame["creatinine"], errors="coerce")
     frame["egfr"] = _egfr(creatinine, pd.to_numeric(frame["age"], errors="coerce"), frame["sex"])

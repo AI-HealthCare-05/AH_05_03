@@ -1,9 +1,12 @@
+import { Suspense } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import { useUiStore } from "../stores/uiStore";
 
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
+  { to: "/assessment", label: "위험 판정", end: false },
+  { to: "/challenge", label: "챌린지", end: false },
   { to: "/data", label: "데이터 관리", end: false },
   { to: "/ui-preview", label: "UI 미리보기", end: false },
   { to: "/account", label: "계정", end: false },
@@ -76,7 +79,11 @@ export function RootLayout() {
       </header>
 
       <main>
-        <Outlet />
+        {/* 라우트가 lazy 라 청크를 받는 동안 잠깐 빈다. 폴백을 안 두면 React 가
+            "A component suspended while responding to synchronous input" 으로 던진다. */}
+        <Suspense fallback={<div className="route-loading">불러오는 중…</div>}>
+          <Outlet />
+        </Suspense>
       </main>
 
       <footer className="site-footer">

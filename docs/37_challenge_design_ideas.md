@@ -55,13 +55,13 @@
 ```python
 # services/challenge.py
 CHALLENGE_RULES = {
-    ("htn", "HIGH"):        ["ch_sodium_swap", "ch_weight_2pct", "ch_bp_home_3d"],
-    ("htn", "CAUTION"):     ["ch_sodium_swap", "ch_walk_7000"],
-    ("dm", "HIGH"):         ["ch_weight_5pct", "ch_refined_carb"],
-    ("fatty_liver", "HIGH"):["ch_weight_7pct", "ch_alcohol_half"],
-    ("obesity", "HIGH"):    ["ch_weight_5pct", "ch_walk_7000"],
-    ("uric_acid", "HIGH"):  ["ch_water_1500", "ch_alcohol_half"],
-    ("ckd", "HIGH"):        [],   # 자동 생성 제외 — §12
+    ("htn", "HIGH"): ["ch_sodium_swap", "ch_weight_2pct", "ch_bp_home_3d"],
+    ("htn", "CAUTION"): ["ch_sodium_swap", "ch_walk_7000"],
+    ("dm", "HIGH"): ["ch_weight_5pct", "ch_refined_carb"],
+    ("fatty_liver", "HIGH"): ["ch_weight_7pct", "ch_alcohol_half"],
+    ("obesity", "HIGH"): ["ch_weight_5pct", "ch_walk_7000"],
+    ("uric_acid", "HIGH"): ["ch_water_1500", "ch_alcohol_half"],
+    ("ckd", "HIGH"): [],  # 자동 생성 제외 — §12
 }
 ```
 

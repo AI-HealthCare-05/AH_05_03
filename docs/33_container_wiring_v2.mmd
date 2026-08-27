@@ -1,0 +1,302 @@
+---
+config:
+  theme: dark
+  flowchart:
+    wrappingWidth: 720
+    nodeSpacing: 34
+    rankSpacing: 52
+    padding: 14
+    curve: basis
+  themeVariables:
+    fontSize: 14px
+---
+flowchart TB
+
+LGND["<span style='font-size:26px'><b>이어봄 · 컨테이너 배선도</b></span><br/><b>project/</b> 안에 무엇이 들어 있나<br/><b>초록</b> 동작한다 · <b>빨강</b> 파일이 없다 · <b>파랑</b> 저장소<br/><b>보라</b> 판정 산출물 · <b>노랑</b> 오프라인 학습 · <b>회색</b> 컨테이너 스펙<br/>굵은 화살표 = 주 흐름 · 점선 = 부수 효과 · 관측"]
+
+%% ══════════════════════════════════════════════════════════
+%% 브라우저 · 입력
+%% ══════════════════════════════════════════════════════════
+subgraph BIN[" "]
+direction TB
+  BINH["<span style='font-size:30px'><b>🖥 브라우저 · 입력</b></span><br/><b>frontend/</b> · Vite + React + TypeScript · <b>컨테이너가 아니다</b><br/>빌드 산출물 dist 를 FastAPI 가 그대로 서빙한다"]
+  ROUTE["<b>app/router.tsx</b> · 라우트 7갈래<br/>/ · /assessment · /data · /account · /dev/architecture · /ui-preview<br/>/members/:profileId/records/:recordId — 나머지는 ErrorPage"]
+  subgraph BUI["<span style='font-size:19px'><b>화면 · features/</b></span>"]
+  direction LR
+    FA["<b>assessment/</b> · 입력 폼<br/>AssessmentPage<br/><b>fields.ts 36필드 선언</b><br/>단위·범위를 라벨 옆에 붙여<br/>10배 오입력을 막는다"]
+    FH["<b>home/</b> · HomePage<br/>VanatomeBodyMap 3D 인체<br/>ProceduralBodyMap<br/>FamilyHistoryManager"]
+    FE["<b>data/</b> 백업·복구<br/><b>account/</b> 구독·탈퇴"]
+  end
+  LENG["<b>workers/assessment.worker.ts</b> + shared/model/mockAssessmentEngine<br/>브라우저 안에서 도는 기초 판정 — 서버 왕복이 없다"]
+  ACLI["<b>shared/api/serverApiClient.ts</b> · serviceMetadataClient.ts<br/>ApiResponse 봉투 해석"]
+  BINH ~~~ ROUTE
+  ROUTE --> FA
+  ROUTE --> FH
+  ROUTE --> FE
+  FA -.-> LENG
+  FA --> ACLI
+  FH --> ACLI
+  FE --> ACLI
+end
+
+%% ══════════════════════════════════════════════════════════
+%% modeling — 오프라인
+%% ══════════════════════════════════════════════════════════
+subgraph MDL[" "]
+direction TB
+  MDLH["<span style='font-size:30px'><b>📊 modeling/</b></span><br/><b>컨테이너가 아니다</b> — 오프라인 학습 파이프라인<br/>산출물 JSON 만 런타임으로 넘어간다"]
+  MDA["<b>modeling/data/</b> 로더 · nhanes · brfss · framingham<br/>khp · nhis_checkup · mortality → build_unified · labels"]
+  MDT["<b>features · targets · splits</b> · train_multi · seed_ensemble<br/>tune_lab · compare_models · counterfactual · synthetic"]
+  MDE["<b>export_multi · export_ensemble</b><br/>diagnose_serving · engine_agreement · 서빙 피처 동등성 검사"]
+  MDLH ~~~ MDA
+  MDA --> MDT
+  MDT --> MDE
+end
+
+BUN[("<b>modeling/artifacts/models/*.json · 번들 20개</b><br/>질환 10종 × 기본·lab 2단<br/><b>fastapi 와 ai-worker 에 /app/models :ro 로 같이 붙는다</b><br/>두 경로가 같은 파일을 읽어야 답이 갈리지 않는다")]
+
+%% ══════════════════════════════════════════════════════════
+%% nginx
+%% ══════════════════════════════════════════════════════════
+subgraph NGX[" "]
+  NGXH["<span style='font-size:30px'><b>🔀 nginx</b></span><br/><b>nginx:latest</b> · <b>:80 — 밖으로 열린 유일한 포트</b> · 기본 프로필<br/>depends_on fastapi service_healthy — 기동 창의 502 를 막는다"]
+  NX["<b>infra/nginx/default.conf</b><br/>location /api/ → fastapi:8000 · proxy_buffering off · SSE 대비<br/>location / → fastapi:8000 · <b>SPA 도 FastAPI 가 준다</b><br/>gzip_proxied any 없으면 프록시 응답은 압축되지 않는다<br/>판정 28KB→6.5KB · index.js 453KB→133KB"]
+  NGXH ~~~ NX
+end
+
+%% ══════════════════════════════════════════════════════════
+%% fastapi
+%% ══════════════════════════════════════════════════════════
+subgraph API[" "]
+direction TB
+  APIH["<span style='font-size:30px'><b>⚙️ fastapi</b></span><br/><b>app/</b> · uvicorn :8000 · 기본 프로필 · 127.0.0.1 로만 노출<br/>기동 커맨드가 <b>alembic upgrade head</b> 를 먼저 돌린다<br/>볼륨 — ./app · modeling/artifacts/models:ro · chronic_disease_engine:ro"]
+
+  BOOT["<b>app/main.py — 조립 순서가 곧 계약이다</b><br/>lifespan Redis 풀 → CORS allowlist → 예외 핸들러<br/>→ v1_routers /api/v1 → demo_router → GET /api/health<br/><b>→ spa.mount 는 반드시 마지막</b> · 먼저 붙으면 위를 전부 가린다"]
+
+  subgraph EDGE["<span style='font-size:19px'><b>공통 관문 — 모든 라우터가 통과한다</b></span>"]
+  direction LR
+    GATE["<b>dependencies/security.py</b><br/>require_trusted_origin<br/>require_active_account · core/jwt<br/><b>services/rate_limit.py</b> 계정별"]
+    ENVL["<b>dtos/envelope.py</b><br/>apis/exception_handlers.py<br/>ApiResponse 봉투 · ErrorCode<br/>422 기본 스키마도 봉투로 대체"]
+    SPAM["<b>apis/spa.py</b><br/>SPA 폴백 · 보안 헤더 · 캐시<br/>/api 로 시작하면 폴백 제외<br/>오타 난 API 가 HTML 을 안 받게"]
+    HLTH["<b>GET /api/health</b><br/>models 적재 · targets 수<br/><b>queue.pending</b> 큐 관측<br/>Redis 죽어도 200 을 준다"]
+    DEMO["<b>apis/demo_routers.py</b><br/>GET /api/demo<br/>두 엔진을 한 화면에서<br/>스위치로 바꿔 비교"]
+  end
+
+  subgraph F0["<span style='font-size:19px'><b>① 계정 · 가족 — 라우터 6개 · 동작한다</b></span>"]
+  direction LR
+    RAU["<b>auth_routers</b> /auth<br/>signup · login · refresh · logout"]
+    RAC["<b>account_routers</b> /account<br/><b>subscription_routers</b> /subscription"]
+    RHH["<b>household_routers</b> /households<br/><b>family_invitation_routers</b> /family-invitations<br/><b>profile_link_routers</b> /profile-links"]
+  end
+
+  subgraph F1["<span style='font-size:19px'><b>② 만성질환 판정 — 라우터 4개 · 동작한다</b></span>"]
+  direction TB
+    RSU["<b>assessment_summary_routers</b> · POST /assessments/summary<br/><b>화면이 붙는 단일 진입점</b> · 모델이 없어도 503 을 내지 않는다"]
+    RDB["<b>rule_assessment_routers</b> POST /assessments/rules<br/><b>prediction_routers</b> POST /predictions/risk · GET /model-info"]
+    RJB["<b>prediction_job_routers</b> · POST /predictions/jobs → 202 job_id<br/>GET /predictions/jobs/ID 폴링"]
+
+    ARB["<b>services/assessment.py · 엔진 중재자</b><br/>SPECS 13질환마다 후보를 순서대로 물어 먼저 답하는 쪽이 정본<br/><b>잰 값이 안 잰 값을 이긴다</b><br/>밀려난 ML 확률은 지우지 않고 reference 로 싣는다"]
+
+    E1["<b>E1 규칙</b><br/>chronic_disease_engine/ :ro<br/>diabetes · hypertension<br/>dyslipidemia · obesity<br/>벤더 4규칙 · 무수정 유지"]
+    E3["<b>E3 공개 공식</b><br/>services/lab_staging.py<br/>kidney CKD-EPI 2021 + KDIGO<br/>liver · fatty_liver FLI<br/>uric_acid · anemia<br/>+ 대사증후군 5요소"]
+    E2["<b>E2 ML</b><br/>services/risk.py registry<br/>SeedEnsemble · Tree · Logistic<br/>refresh 1초 스로틀 — 재학습해도<br/>컨테이너를 안 내려도 반영된다<br/>prediction.py <b>build_prediction</b>"]
+
+    VER(["<b>질환 13칸 · 등급 5단계</b><br/>dm · htn · dlp · hyperchol · hypertg · low_hdl<br/>obesity · mets · ckd · fatty_liver · liver · anemia · uric_acid<br/>engine · engine_reason · superseded_by<br/>missing_fields · model_available"])
+
+    MTX(["<b>services/disease_risk_matrix.py</b> · 수치 → 질환 <b>전치</b><br/>cluster 로 같은 재료를 두 번 세지 않는다<br/>연관과 인과를 causal 플래그로 가른다<br/>→ 당뇨 · 심혈관 · 만성콩팥 · 고혈압 4칸"])
+
+    RSU --> ARB
+    RSU --> MTX
+    ARB --> E1
+    ARB --> E3
+    ARB --> E2
+    E1 --> VER
+    E3 --> VER
+    E2 --> VER
+    RDB -.-> E1
+    RDB -.-> E2
+    RJB -.-> E2
+  end
+
+  subgraph F2["<span style='font-size:19px'><b>③ 데이터 계층</b></span>"]
+  direction LR
+    REPO["<b>repositories/ 5개 → models/ 6테이블</b><br/>core/db/session · base · url<br/>alembic 리비전 4개"]
+    STOR["<b>services/token_store.py</b> 리프레시 토큰<br/><b>services/invitation_store.py</b> 초대 토큰 · 배달 스트림"]
+    JOBC["<b>core/jobs/contract.py + store.py</b><br/><b>FastAPI 와 ai_worker 가 같이 읽는 유일한 큐 정의</b><br/>키 · 상태 · TTL · queued → running → succeeded·failed"]
+  end
+
+  subgraph FMS["<span style='font-size:19px'><b>④ 아직 파일 자체가 없다 — 같은 관문에 붙을 자리</b></span>"]
+  direction LR
+    MOC["<b>서버 OCR · 문서분석</b><br/>document_routers · services/ocr/<br/>지금은 브라우저 OCR 뿐이다"]
+    MCH["<b>챗봇 요약</b><br/>chat_routers · services/chat.py"]
+    MCL["<b>챌린지 · 매일 체크</b><br/>challenge_routers · services/challenge.py<br/>challenge · daily_check 테이블<br/>판정 등급을 재료로 쓴다"]
+  end
+
+  APIH ~~~ BOOT
+  BOOT --> GATE
+  BOOT --> ENVL
+  BOOT --> SPAM
+  BOOT --> HLTH
+  BOOT --> DEMO
+  GATE --> RAU
+  GATE --> RAC
+  GATE --> RHH
+  GATE --> RSU
+  GATE --> RDB
+  GATE --> RJB
+  GATE -.-> MOC
+  GATE -.-> MCH
+  GATE -.-> MCL
+  RAU --> STOR
+  RAC --> REPO
+  RHH --> REPO
+  RHH --> STOR
+  RJB --> JOBC
+end
+
+%% ══════════════════════════════════════════════════════════
+%% redis · postgres
+%% ══════════════════════════════════════════════════════════
+subgraph RDS[" "]
+direction TB
+  RDSH["<span style='font-size:30px'><b>🧠 redis</b></span><br/><b>redis:alpine</b> · 127.0.0.1:6379 루프백만 · 기본 프로필<br/><b>지속화를 끈다</b> — save 없음 · appendonly no · 예측 payload 가 디스크에 안 남게<br/>maxmemory 256mb · volatile-ttl — TTL 있는 키만 버린다"]
+  subgraph RDSK["<span style='font-size:19px'><b>키 공간 넷</b></span>"]
+  direction LR
+    KRT[("<b>ieobom:rt:*</b><br/>리프레시 토큰<br/>재시작하면 전원 재로그인")]
+    KRA[("<b>ieobom:rate:*</b><br/>계정별 레이트리밋")]
+    KPR[("<b>ieobom:predict:stream</b> MAXLEN 1만<br/><b>ieobom:predict:job:ID</b> · TTL<br/>그룹 prediction-workers<br/><b>완료 즉시 payload 필드 삭제</b>")]
+    KIN[("<b>ieobom:invite:delivery:stream</b><br/>invite:token · used · rate<br/>그룹 invitation-email-workers")]
+  end
+  RDSH ~~~ KRT
+end
+
+subgraph PGS[" "]
+direction TB
+  PGSH["<span style='font-size:30px'><b>🗄 postgres</b></span><br/><b>postgres:17-alpine</b> · 127.0.0.1:5432 루프백만 · 기본 프로필<br/>postgres_data 볼륨 · TZ Asia/Seoul · <b>건강 수치는 한 줄도 없다</b>"]
+  subgraph PGST["<span style='font-size:19px'><b>테이블 6개</b></span>"]
+  direction LR
+    TAC[("<b>service_accounts</b><br/><b>subscriptions</b>")]
+    THH[("<b>households</b> · <b>household_memberships</b><br/><b>profile_links</b> · <b>family_invitations</b><br/>계정·가족 메타데이터만")]
+  end
+  PGSH ~~~ TAC
+end
+
+%% ══════════════════════════════════════════════════════════
+%% ai-worker · email-worker · mailpit
+%% ══════════════════════════════════════════════════════════
+subgraph AIW[" "]
+direction TB
+  AIWH["<span style='font-size:30px'><b>🤖 ai-worker ×N</b></span><br/><b>ai_worker/</b> · <b>--profile ai</b> 로만 뜬다 · mem_limit 1G<br/>container_name 을 뺐다 → <b>--scale ai-worker=3</b> 가 가능하다<br/>볼륨 — app · ai_worker · models:ro · chronic_disease_engine:ro"]
+  ACN["<b>consumer.py · PredictionConsumer</b><br/>소비자 이름 hostname-pid → 세 대의 몫이 겹치지 않는다<br/>XREADGROUP 배달 · <b>XAUTOCLAIM 으로 죽은 몫 회수</b><br/>죽은 소비자 등록을 주기적으로 정리한다<br/>MAX_ATTEMPTS 초과면 failed 로 확정하고 XACK"]
+  ACL["<b>app.services.prediction.build_prediction 을 그대로 호출한다</b><br/>동기 라우터가 부르는 것과 <b>같은 함수</b> — 두 벌로 두지 않는다<br/>그래서 이 이미지에 app/ 을 같이 담는다"]
+  AHC["<b>healthcheck.py</b> · 그룹에 내 이름이 있는가 + 모델이 적재됐는가<br/>떠 있음과 큐를 소비 중은 다르다"]
+  ATD["<b>tasks/ · schemas/ 는 아직 빈 패키지다</b><br/>문서 · 챗봇 작업이 들어올 자리"]
+  AIWH ~~~ ACN
+  ACN --> ACL
+  ACN -.-> AHC
+  ACN -.-> ATD
+end
+
+subgraph EWK[" "]
+  EWKH["<span style='font-size:30px'><b>✉️ email-worker</b></span><br/><b>--profile mail</b> · fastapi 와 같은 이미지를 다른 커맨드로 띄운다"]
+  EW["<b>app/workers/invitation_email_worker.py</b><br/>초대 배달 스트림 소비 → SMTP 발송<br/>그룹 invitation-email-workers"]
+  EWKH ~~~ EW
+end
+
+subgraph MPT[" "]
+  MPTH["<span style='font-size:30px'><b>📮 mailpit</b></span><br/><b>axllent/mailpit</b> · <b>--profile mail</b> · :1025 SMTP · :8025 웹함"]
+  MP["보낸 초대 메일을 웹함에서 눈으로 확인<br/>로컬 전용 — 운영 배포에는 포함하지 않는다"]
+  MPTH ~~~ MP
+end
+
+%% ══════════════════════════════════════════════════════════
+%% 브라우저 · 출력
+%% ══════════════════════════════════════════════════════════
+subgraph BOUT[" "]
+direction TB
+  BOUTH["<span style='font-size:30px'><b>🖥 브라우저 · 출력 · 보관</b></span><br/><b>frontend/</b> · 건강 수치의 정본은 여기 있다 — 서버는 계산만 하고 버린다"]
+  CARD["<b>판정 카드</b> · features/assessment/<br/>등급 · 엔진 근거 engine_reason<br/>밀려난 확률 · 부족 항목 missing_fields"]
+  SNAP[("<b>snapshots.ts</b> · recordType assessment<br/>입력값 · 등급 · 정본 엔진을 그 시점으로 굳힌다")]
+  TRND["<b>TrendChart.tsx</b><br/>수치 시계열 · 등급 궤적<br/>정본 엔진이 바뀐 시점"]
+  VLT[("<b>localKeyVault</b> · jsonCipher<br/>indexedDbEncryptedRecordRepository<br/><b>IndexedDB 암호화 보관함</b> — 여기가 정본이다")]
+  LDOC[("<b>localDocumentService</b> + OPFS 파일 저장<br/>browserOcrAdapter · kor·eng traineddata<br/>검진결과지 원본은 기기 안에만 있다")]
+  LBK["<b>localBackupService</b><br/>암호화 백업 내보내기 · 복구"]
+  BOUTH ~~~ CARD
+  CARD --> SNAP
+  SNAP --> TRND
+  SNAP --> VLT
+  LDOC --> VLT
+  VLT --> LBK
+end
+
+%% ══════════════════════════════════════════════════════════
+%% 배선
+%% ══════════════════════════════════════════════════════════
+LGND ~~~ BINH
+
+ACLI ==> NX
+NX ==> BOOT
+MDE ==> BUN
+BUN ==>|":ro 마운트"| E2
+BUN ==>|":ro 마운트"| ACL
+
+GATE -.-> KRA
+STOR --> KRT
+STOR --> KIN
+REPO --> TAC
+REPO --> THH
+
+RJB ==>|"payload 등록 · 202 즉시 반환"| KPR
+JOBC -.-> KPR
+HLTH -.->|"pending 관측"| KPR
+KPR ==> ACN
+ACL -.->|"결과 등록 · payload 삭제"| KPR
+
+KIN ==> EW
+EW ==> MP
+
+VER ==>|"응답 — 서버는 저장하지 않는다"| CARD
+MTX ==> CARD
+SPAM -.->|"index.html 폴백"| CARD
+
+%% ══════════════════════════════════════════════════════════
+%% 색
+%% ══════════════════════════════════════════════════════════
+style BIN fill:#0f1519,stroke:#78909c,stroke-width:4px,color:#eceff1
+style BOUT fill:#0f1519,stroke:#78909c,stroke-width:4px,color:#eceff1
+style NGX fill:#0f1519,stroke:#78909c,stroke-width:4px,color:#eceff1
+style API fill:#0f1519,stroke:#78909c,stroke-width:4px,color:#eceff1
+style RDS fill:#0f1519,stroke:#78909c,stroke-width:4px,color:#eceff1
+style PGS fill:#0f1519,stroke:#78909c,stroke-width:4px,color:#eceff1
+style AIW fill:#0f1519,stroke:#78909c,stroke-width:4px,color:#eceff1
+style EWK fill:#0f1519,stroke:#78909c,stroke-width:4px,color:#eceff1
+style MPT fill:#0f1519,stroke:#78909c,stroke-width:4px,color:#eceff1
+style MDL fill:#0f1519,stroke:#78909c,stroke-width:4px,color:#eceff1
+
+style BUI fill:#0b1013,stroke:#66bb6a,color:#c8e6c9
+style EDGE fill:#0b1013,stroke:#66bb6a,color:#c8e6c9
+style F0 fill:#0b1013,stroke:#66bb6a,color:#c8e6c9
+style F1 fill:#0b1013,stroke:#66bb6a,color:#c8e6c9
+style F2 fill:#0b1013,stroke:#66bb6a,color:#c8e6c9
+style FMS fill:#0b1013,stroke:#ef5350,color:#ffcdd2
+style RDSK fill:#0b1013,stroke:#4fc3f7,color:#b3e5fc
+style PGST fill:#0b1013,stroke:#4fc3f7,color:#b3e5fc
+
+classDef done fill:#1b3a22,stroke:#66bb6a,stroke-width:2px,color:#c8e6c9
+classDef missing fill:#4a1f1f,stroke:#ef5350,stroke-width:2px,stroke-dasharray:5 3,color:#ffcdd2
+classDef store fill:#152c3c,stroke:#4fc3f7,stroke-width:2px,color:#b3e5fc
+classDef hub fill:#2a2140,stroke:#b39ddb,stroke-width:3px,color:#ede7f6
+classDef offline fill:#2e2a16,stroke:#ffca28,stroke-width:2px,color:#fff9c4
+classDef meta fill:#1c2731,stroke:#b0bec5,stroke-width:3px,color:#eceff1
+classDef title fill:#1a2129,stroke:#546e7a,stroke-width:2px,color:#eceff1
+
+class ROUTE,FA,FH,FE,ACLI,LENG,CARD,TRND,LBK done
+class NX,BOOT,GATE,ENVL,SPAM,HLTH,DEMO done
+class RAU,RAC,RHH,RSU,RDB,RJB,ARB,E1,E2,E3,REPO,STOR,JOBC done
+class ACN,ACL,AHC,EW,MP done
+class MOC,MCH,MCL,ATD missing
+class KRT,KRA,KPR,KIN,TAC,THH,SNAP,VLT,LDOC store
+class VER,MTX hub
+class MDA,MDT,MDE,BUN offline
+class BINH,MDLH,NGXH,APIH,RDSH,PGSH,AIWH,EWKH,MPTH,BOUTH meta
+class LGND title

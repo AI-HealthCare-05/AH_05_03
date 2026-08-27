@@ -102,7 +102,14 @@ class HouseholdService:
             raise HouseholdNotFoundError()
         if household.status is not HouseholdStatus.ACTIVE:
             raise HouseholdStateConflictError()
-        if household.created_by_account_id != account.id:
+        # **생성자 전용에서 '활성 구성원' 으로 넓혔다.** 생성자만 닫을 수 있게 두면,
+        # 생성자가 계정을 탈퇴한 순간 그 가구는 아무도 닫을 수 없다 — 생성자는
+        # 로그인이 막히고(`ACCOUNT_CLOSED`) 남은 사람은 생성자가 아니기 때문이다.
+        # 실제로 그렇게 영구히 잠긴 가구를 재현했다.
+        #
+        # 넓혀도 남의 가구를 함부로 닫지는 못한다. 바로 아래 "다른 활성 구성원이
+        # 있으면 거절" 이 그대로 남아 있어서, **혼자 남은 사람만** 닫을 수 있다.
+        if not await self.household_repo.has_active_membership(household_id, account.id):
             raise HouseholdMembershipRequiredError()
         if await self.household_repo.count_other_active_members(household_id, account.id):
             raise HouseholdHasOtherMembersError()

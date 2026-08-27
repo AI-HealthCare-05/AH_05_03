@@ -18,6 +18,11 @@ wheels/
 .coverage
 *.coverage
 .coverage.*
+# 도구 캐시. **빠져 있어서 추적 대상이었다** — `.mypy_cache` 만 76MB 라 한 번
+# 커밋되면 되돌리기 번거롭다. 전부 재생성되는 것들이다.
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 frontend/dist/
 # Tesseract 학습 데이터. 내려받아 쓰는 바이너리라 저장소에 두지 않는다.
 *.traineddata

@@ -62,7 +62,9 @@ DAILY_CHALLENGES: tuple[DailyChallenge, ...] = (
 MEASURE_CHALLENGES: tuple[MeasureChallenge, ...] = (
     MeasureChallenge("weight", "체중 · 허리둘레", "일요일 아침, 온 가족이 같은 날", 5, ("obesity", "mets")),
     MeasureChallenge("bp", "혈압", "약국 혈압계도 된다", 10, ("htn",)),
-    MeasureChallenge("lab", "검사값 · 검진 결과지", "결과지 한 장이면 여러 칸이 한꺼번에 열린다", 20, ("dm", "dlp", "ckd", "liver")),
+    MeasureChallenge(
+        "lab", "검사값 · 검진 결과지", "결과지 한 장이면 여러 칸이 한꺼번에 열린다", 20, ("dm", "dlp", "ckd", "liver")
+    ),
 )
 
 DAILY_BY_ID = {item.id: item for item in DAILY_CHALLENGES}
@@ -252,9 +254,7 @@ def _stage_for(points: int) -> tuple[TreeStage, TreeStage | None]:
     return current, following
 
 
-def build_garden(
-    records: list[CheckRecord], today: date, *, water_goal: int = WEEK_WATER_REQUIREMENT
-) -> GardenState:
+def build_garden(records: list[CheckRecord], today: date, *, water_goal: int = WEEK_WATER_REQUIREMENT) -> GardenState:
     """체크 이력 전량을 주 단위로 훑어 정원 상태를 만든다.
 
     매 요청마다 전량을 다시 센다. 1인당 하루 최대 다섯 행이라 1년을 모아도 2천 행이

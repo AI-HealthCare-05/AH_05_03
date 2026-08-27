@@ -101,9 +101,7 @@ class ChallengeService:
         found = await self.challenge_repo.get_settings(account.id)
         return self._settings_payload(found)
 
-    async def save_settings(
-        self, account: ServiceAccount, payload: ChallengeSettingsRequest
-    ) -> ChallengeSettingsData:
+    async def save_settings(self, account: ServiceAccount, payload: ChallengeSettingsRequest) -> ChallengeSettingsData:
         if payload.weekly_water_goal not in WEEK_WATER_GOALS:
             raise ChallengeNotFoundError("주간 목표는 3·5·7일 중에서 고를 수 있습니다.")
         saved = await self.challenge_repo.upsert_settings(
@@ -306,11 +304,7 @@ class ChallengeService:
         # 안 닫혔거나.** "온 가족" 에는 나도 들어가니 내가 미완주면 무조건 거짓이다.
         # 주중 대부분의 체크가 이 두 번째 갈래로 빠진다.
         my_week_done = bool(state.this_week and state.this_week.completed)
-        family = (
-            False
-            if "cat" in already or not my_week_done
-            else await self._family_week_completed(account_id, today)
-        )
+        family = False if "cat" in already or not my_week_done else await self._family_week_completed(account_id, today)
 
         deserved = earned_animals(state, family_week_completed=family)
         newly = [animal.id for animal in ANIMALS if animal.id in deserved and animal.id not in already]

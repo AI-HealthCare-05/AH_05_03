@@ -9,9 +9,11 @@ from typing import Any, Protocol, cast
 from urllib.parse import urlencode
 
 from redis.asyncio import Redis
+from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import ResponseError, TimeoutError
 
 from app.core import config, default_logger
+from app.core.redis.resilience import ensure_group_with_retry, is_missing_group
 from app.services.invitation_store import InvitationDelivery, InvitationStore
 
 
@@ -82,12 +84,28 @@ class InvitationEmailWorker:
         self.stream = f"{config.REDIS_KEY_PREFIX}:invite:delivery:stream"
         self.group = config.INVITATION_EMAIL_STREAM_GROUP
         self.consumer = f"{socket.gethostname()}-{os.getpid()}"
+        # SIGTERM 을 받으면 선다. Redis 를 기다리는 중에도 즉시 깨어나 나가야
+        # `docker compose down` 이 타임아웃까지 매달리지 않는다.
+        self._stopping = asyncio.Event()
+
+    def request_stop(self) -> None:
+        self._stopping.set()
 
     async def run_forever(self) -> None:
-        await self._ensure_group()
+        # 예측·문서 인식 소비자와 **같은 이유로** 루프 안에서 재시도한다. 그냥 await
+        # 하면 기동 순간 Redis 가 아직 안 떴거나 잠깐 끊긴 것만으로 워커가 죽고,
+        # `restart: always` 가 되살려 같은 자리에서 또 죽는다.
+        # `app/core/redis/resilience.py` 참조.
+        if not await ensure_group_with_retry(self._ensure_group, self._stopping, default_logger):
+            return
         default_logger.info("invitation email worker started: group=%s consumer=%s", self.group, self.consumer)
-        while True:
+        while not self._stopping.is_set():
             try:
+                # **죽은 소비자 몫을 먼저 회수한다.** 이게 없어서 워커가 `XACK` 전에
+                # 죽으면 그 초대 메일이 영구 유실됐다 — 새 워커는 pid 가 달라 이름이
+                # 바뀌고 `>` 로만 읽으므로 남의 PEL 을 못 본다. 예측·문서 인식 소비자는
+                # 처음부터 `XAUTOCLAIM` 을 쓰고 있었는데 여기만 빠져 있었다.
+                await self._drain_stale()
                 streams = cast(
                     list[tuple[str, list[tuple[str, dict[str, str]]]]],
                     await cast(Any, self.redis).xreadgroup(
@@ -101,9 +119,55 @@ class InvitationEmailWorker:
             except TimeoutError:
                 default_logger.warning("Redis delivery stream read timed out; retrying")
                 continue
+            except RedisConnectionError:
+                # **이 갈래가 없어서 Redis 순단 한 번에 워커가 죽었다.** 위 `TimeoutError`
+                # 만 잡고 있었는데, 연결이 끊기는 것과 읽기가 오래 걸리는 것은 다른 예외다.
+                default_logger.warning("Redis connection lost; retrying in 2s")
+                await asyncio.sleep(2.0)
+                continue
+            except ResponseError as error:
+                # Redis 는 지속화를 꺼 두어서 재시작하면 그룹이 통째로 사라진다.
+                if not is_missing_group(error):
+                    raise
+                default_logger.warning("consumer group vanished (Redis restart?); recreating")
+                await ensure_group_with_retry(self._ensure_group, self._stopping, default_logger)
+                continue
             for _, messages in streams:
                 for message_id, fields in messages:
                     await self._process(message_id, fields)
+
+    async def _drain_stale(self) -> None:
+        """회수한 건을 그 자리에서 처리한다. 호출부를 한 줄로 두려고 나눠 놨다."""
+        reclaimed = await self._reclaim_stale()
+        if not reclaimed:
+            return
+        default_logger.info("reclaimed %d stale invitation deliveries", len(reclaimed))
+        for message_id, fields in reclaimed:
+            await self._process(message_id, fields)
+
+    async def _reclaim_stale(self) -> list[tuple[str, dict[str, str]]]:
+        """죽은 소비자가 물고 있던 배달 건을 넘겨받는다.
+
+        `min_idle_time` 이 지난 것만 가져오므로 정상 처리 중인 건을 뺏지 않는다.
+        회수한 뒤 `_process` 를 그대로 태우면 되는데, 이미 보낸 건이면
+        `take_delivery()` 가 `None` 을 주고 그쪽이 `XACK` 만 하고 끝난다 —
+        중복 발송이 되지 않는 이유다.
+        """
+        try:
+            result = await cast(Any, self.redis).xautoclaim(
+                name=self.stream,
+                groupname=self.group,
+                consumername=self.consumer,
+                min_idle_time=config.INVITATION_EMAIL_RECLAIM_IDLE_MS,
+                count=10,
+            )
+        except ResponseError:
+            # 그룹이 아직 없거나 사라졌다. 다음 바퀴의 `xreadgroup` 이 같은 상황을
+            # `is_missing_group` 으로 잡아 다시 만든다.
+            return []
+        # redis-py 는 (next_cursor, messages) 또는 (next_cursor, messages, deleted) 를 준다.
+        messages = result[1] if len(result) > 1 else []
+        return [(message_id, fields) for message_id, fields in messages if fields]
 
     async def _ensure_group(self) -> None:
         try:

@@ -1,11 +1,18 @@
 import { createBrowserRouter } from "react-router-dom";
 
 import { ErrorPage } from "./ErrorPage";
-import { ArchitecturePage } from "../features/architecture/ArchitecturePage";
-import { DataManagementPage } from "../features/data/DataManagementPage";
 import { HomePage } from "../features/home/HomePage";
-import { UiPreviewPage } from "../features/ui-preview/UiPreviewPage";
-import { AccountPage } from "../features/account/AccountPage";
+// 라우트 단위 코드 분할. 정적 임포트로 두면 페이지 일곱이 한 청크에 뭉쳐서,
+// 홈만 보는 사용자도 판정 폼 36필드와 개발용 화면까지 받아 간다.
+import {
+  AccountPage,
+  ArchitecturePage,
+  AssessmentPage,
+  ChallengePage,
+  ChallengeSetupPage,
+  DataManagementPage,
+  UiPreviewPage,
+} from "./lazyRoutes";
 import { RootLayout } from "./RootLayout";
 
 export const router = createBrowserRouter([
@@ -40,6 +47,23 @@ export const router = createBrowserRouter([
       {
         path: "members/:profileId/family-history",
         element: <HomePage />,
+      },
+      {
+        // 판정 화면. 지금까지 서버만 답하고 받을 자리가 없던 곳이다 —
+        // `/api/demo` 의 서버 렌더 데모를 SPA 경로로 올렸다.
+        path: "assessment",
+        element: <AssessmentPage />,
+      },
+      {
+        // 생활습관 챌린지. Talos 필수 셋 중 마지막으로 비어 있던 칸 (docs/37 §14~§16).
+        // `/challenge` 는 셋업(모드·주간 목표·재는 날)이고, 한 번 고른 뒤에는
+        // `/challenge/today` 로 넘어간다.
+        path: "challenge",
+        element: <ChallengeSetupPage />,
+      },
+      {
+        path: "challenge/today",
+        element: <ChallengePage />,
       },
       {
         path: "data",

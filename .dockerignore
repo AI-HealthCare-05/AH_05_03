@@ -15,3 +15,17 @@ frontend/test-results/
 work/
 .env
 .*.env
+
+# 모델링 자료. 두 Dockerfile 모두 COPY 하지 않는다 — 서빙 번들은 compose 가
+# `./modeling/artifacts/models:/app/models:ro` 로 마운트한다. 그런데 빌드 컨텍스트에
+# 남아 있어서 `docker build` 마다 600MB 넘게 데몬으로 전송됐다.
+# data/ 552MB + artifacts/ 62MB 이고 둘 다 이미지에 한 바이트도 안 들어간다.
+modeling/data/
+modeling/artifacts/
+modeling/**/__pycache__/
+
+# 스크래치·산출물. 이미지와 무관하다.
+outputs/
+_workspace/
+docs/
+*.ipynb
