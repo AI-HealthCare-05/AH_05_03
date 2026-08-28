@@ -80,32 +80,18 @@ class DevOcrService:
                 "   - 문장이 이어져서 한 덩어리의 줄글로 뭉치지 않도록 항목별로 줄바꿈을 반드시 적용하세요."
             )
 
-            # 주 모델로 gemini-3.5-flash-lite 사용
-            models_to_try = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
-            last_err = None
-            response = None
-
-            for model_name in models_to_try:
-                try:
-                    response = await asyncio.to_thread(
-                        client.models.generate_content,
-                        model=model_name,
-                        contents=[*parts, prompt],
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            response_schema=RawOcrData,
-                            temperature=0.0,
-                        ),
-                    )
-                    if response and response.text:
-                        break
-                except Exception as ex:
-                    last_err = ex
-                    continue
+            response = await asyncio.to_thread(
+                client.models.generate_content,
+                model="gemini-3.5-flash-lite",
+                contents=[*parts, prompt],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=RawOcrData,
+                    temperature=0.0,
+                ),
+            )
 
             if not response or not response.text:
-                if last_err:
-                    raise last_err
                 raise OcrUnavailableError("Gemini API로부터 응답을 받지 못했습니다.")
 
             result_dict = json.loads(response.text)
