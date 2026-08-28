@@ -80,8 +80,8 @@ class DevOcrService:
                 "   - 문장이 이어져서 한 덩어리의 줄글로 뭉치지 않도록 항목별로 줄바꿈을 반드시 적용하세요."
             )
 
-            # 주 모델로 gemini-3.6-flash 사용, 일시적 지연/과부하 시 3.5-flash로 fallback
-            models_to_try = ["gemini-3.6-flash", "gemini-3.5-flash"]
+            # 주 모델로 gemini-3.5-flash-lite 사용
+            models_to_try = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
             last_err = None
             response = None
 
