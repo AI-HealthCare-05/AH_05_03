@@ -1,5 +1,4 @@
 import asyncio
-import json
 
 from google import genai
 from google.genai import types
@@ -29,15 +28,11 @@ Return the structured JSON output."""
             for m in messages
         ]
 
-        models_to_try = ["gemini-3.5-flash-lite", "gemini-3.5-flash"]
-        last_err = None
-        response = None
-
-        for model_name in models_to_try:
-            try:
-                response = await asyncio.to_thread(
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
                     client.models.generate_content,
-                    model=model_name,
+                    model="gemini-3.5-flash-lite",
                     contents=contents,
                     config=types.GenerateContentConfig(
                         system_instruction=instructions,
@@ -45,20 +40,18 @@ Return the structured JSON output."""
                         response_schema=PainChatData,
                         temperature=0.0,
                     ),
-                )
-                if response and response.text:
-                    break
-            except Exception as ex:
-                last_err = ex
-                continue
+                ),
+                timeout=config.OPENAI_PAIN_CHAT_TIMEOUT_SECONDS if hasattr(config, "OPENAI_PAIN_CHAT_TIMEOUT_SECONDS") else 10.0
+            )
+        except asyncio.TimeoutError as ex:
+            raise AppError("응답 시간이 초과되었습니다.", status_code=504) from ex
+        except Exception as ex:
+            raise AppError("통증 대화 처리 중 오류가 발생했습니다.", status_code=503) from ex
 
         if not response or not response.text:
-            if last_err:
-                raise AppError("통증 대화 처리 중 오류가 발생했습니다.", status_code=503) from last_err
             raise AppError("통증 기록 응답을 생성하지 못했습니다.", status_code=503)
 
         try:
             return PainChatData.model_validate_json(response.text)
         except Exception as error:
             raise AppError("통증 대화 응답 데이터 구조화에 실패했습니다.", status_code=503) from error
-

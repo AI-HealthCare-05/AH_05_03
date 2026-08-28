@@ -1,4 +1,3 @@
-import sys
 from types import SimpleNamespace
 
 import pytest
@@ -21,11 +20,11 @@ async def test_dev_ocr_bridge_is_disabled_by_default(monkeypatch) -> None:
 async def test_dev_ocr_bridge_uses_gemini_single_and_multi_file(monkeypatch, tmp_path) -> None:
     source1 = tmp_path / "page1.png"
     source1.write_bytes(b"image1")
-    source2 = tmp_path / "page2.pdf"
-    source2.write_bytes(b"%PDF-1.4 dummy")
+    source2 = tmp_path / "page2.jpg"
+    source2.write_bytes(b"image2")
 
     upload1 = UploadFile(filename="page1.png", file=source1.open("rb"), headers={"content-type": "image/png"})
-    upload2 = UploadFile(filename="page2.pdf", file=source2.open("rb"), headers={"content-type": "application/pdf"})
+    upload2 = UploadFile(filename="page2.jpg", file=source2.open("rb"), headers={"content-type": "image/jpeg"})
 
     # Mock GenAI client
     class FakeResponse:
@@ -45,7 +44,7 @@ async def test_dev_ocr_bridge_uses_gemini_single_and_multi_file(monkeypatch, tmp
     monkeypatch.setattr(config, "ENABLE_DEV_OCR_BRIDGE", True)
     monkeypatch.setattr(config, "GEMINI_API_KEY", "fake_key")
 
-    # Test multi-file (PDF + Image)
+    # Test multi-file (Images)
     result = await DevOcrService().recognize([upload1, upload2])
 
     assert result["text"] == "통합 검사 결과"
@@ -62,6 +61,6 @@ async def test_dev_ocr_bridge_rejects_invalid_file_type(monkeypatch, tmp_path) -
     monkeypatch.setattr(config, "ENABLE_DEV_OCR_BRIDGE", True)
     monkeypatch.setattr(config, "GEMINI_API_KEY", "fake_key")
 
-    with pytest.raises(OcrUnavailableError, match="JPEG, PNG, WEBP 이미지 및 PDF 문서만 지원"):
+    with pytest.raises(OcrUnavailableError, match="JPEG, PNG, WEBP 이미지만 지원"):
         await DevOcrService().recognize(upload)
 

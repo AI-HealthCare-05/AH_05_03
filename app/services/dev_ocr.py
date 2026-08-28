@@ -13,7 +13,6 @@ _ALLOWED_CONTENT_TYPES = {
     "image/jpeg": "image/jpeg",
     "image/png": "image/png",
     "image/webp": "image/webp",
-    "application/pdf": "application/pdf",
 }
 
 
@@ -37,76 +36,82 @@ class DevOcrService:
             raise OcrUnavailableError("Gemini API 키가 설정되지 않았습니다.")
 
         client = genai.Client(api_key=api_key)
-        parts: list[types.Part] = []
-
+        
         try:
-            for upload in file_list:
-                mime_type = _ALLOWED_CONTENT_TYPES.get(upload.content_type or "")
-                if mime_type is None:
-                    # 파일명 확장자 기반 보조 판별
-                    filename = (upload.filename or "").lower()
-                    if filename.endswith(".pdf"):
-                        mime_type = "application/pdf"
-                    elif filename.endswith(".png"):
-                        mime_type = "image/png"
-                    elif filename.endswith((".jpg", ".jpeg")):
-                        mime_type = "image/jpeg"
-                    elif filename.endswith(".webp"):
-                        mime_type = "image/webp"
-
-                if mime_type is None:
-                    raise OcrUnavailableError("현재 OCR은 JPEG, PNG, WEBP 이미지 및 PDF 문서만 지원합니다.")
-
-                content = await upload.read(config.DEV_OCR_MAX_FILE_BYTES + 1)
-                if not content:
-                    raise OcrUnavailableError("비어 있는 파일은 인식할 수 없습니다.")
-                if len(content) > config.DEV_OCR_MAX_FILE_BYTES:
-                    raise OcrUnavailableError("OCR 파일은 각 20MB 이하여야 합니다.")
-
-                parts.append(types.Part.from_bytes(data=content, mime_type=mime_type))
-
-            prompt = (
-                "당신은 의료 문서 전문 OCR 및 데이터 구조화 AI입니다.\n"
-                "제공된 건강검진 결과지, 검사결과서, 진단서, 처방전 문서(다중 페이지 PDF 또는 여러 장의 이미지 포함)를 종합 분석하여 "
-                "사용자가 보기 쉽고 명확하게 정형화된 JSON 데이터로 변환하세요.\n\n"
-                "지침:\n"
-                "1. tables (검사 항목 표 추출):\n"
-                "   - 여러 페이지나 여러 장의 사진에 나뉘어 있는 모든 검사 항목(요검사, 혈액검사, 간기능, 혈당, 지질/콜레스테롤, 신장기능, 혈압 등)을 빠짐없이 하나의 통합 표로 구조화하세요.\n"
-                "   - 각 행(row)의 배열은 반드시 다음 순서의 4개 열로 구성하세요: [검사항목명, 결과값, 단위, 판정및참고치]\n"
-                "     예시: ['식전혈당(FBS)', '113', 'mg/dL', '이상 (정상: 74~99)'], ['AST (SGOT)', '41', 'U/L', '이상 (정상: 0~40)'], ['수축기 혈압', '120', 'mmHg', '정상']\n"
-                "   - 단위나 판정이 문서에 없으면 빈 문자열('')로 채우세요.\n"
-                "2. text (전체 텍스트 정리):\n"
-                "   - 문서의 기본 정보(환자 정보, 검사일자, 병원/기관명)와 검사 결과들을 줄바꿈(\\n)을 적절히 사용하여 깔끔하고 가독성 높게 작성하세요.\n"
-                "   - 문장이 이어져서 한 덩어리의 줄글로 뭉치지 않도록 항목별로 줄바꿈을 반드시 적용하세요."
-            )
-
-            response = await asyncio.to_thread(
-                client.models.generate_content,
-                model="gemini-3.5-flash-lite",
-                contents=[*parts, prompt],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=RawOcrData,
-                    temperature=0.0,
-                ),
-            )
-
-            if not response or not response.text:
-                raise OcrUnavailableError("Gemini API로부터 응답을 받지 못했습니다.")
-
-            result_dict = json.loads(response.text)
-
-            # API 계약(Contract) 충족을 위한 기본값 고정
-            result_dict["status"] = "raw"
-            result_dict["automatically_confirmed"] = False
-
-            return result_dict
-
+            parts = await self._prepare_parts(file_list)
+            return await self._call_gemini_api(client, parts)
         except Exception as error:
             if isinstance(error, OcrUnavailableError):
                 raise
-            # 보안: 원본 데이터나 외부 오류 상세를 로깅하지 않음.
             raise OcrUnavailableError("문서 구조화에 실패했습니다. (외부 전송 오류 포함)") from error
         finally:
             for upload in file_list:
                 await upload.close()
+
+    async def _prepare_parts(self, file_list: list[UploadFile]) -> list[types.Part]:
+        parts = []
+        for upload in file_list:
+            mime_type = _ALLOWED_CONTENT_TYPES.get(upload.content_type or "")
+            if mime_type is None:
+                filename = (upload.filename or "").lower()
+                if filename.endswith(".png"):
+                    mime_type = "image/png"
+                elif filename.endswith((".jpg", ".jpeg")):
+                    mime_type = "image/jpeg"
+                elif filename.endswith(".webp"):
+                    mime_type = "image/webp"
+
+            if mime_type is None:
+                raise OcrUnavailableError("현재 OCR은 JPEG, PNG, WEBP 이미지만 지원합니다.")
+
+            content = await upload.read(config.DEV_OCR_MAX_FILE_BYTES + 1)
+            if not content:
+                raise OcrUnavailableError("비어 있는 파일은 인식할 수 없습니다.")
+            if len(content) > config.DEV_OCR_MAX_FILE_BYTES:
+                raise OcrUnavailableError("OCR 파일은 각 20MB 이하여야 합니다.")
+
+            parts.append(types.Part.from_bytes(data=content, mime_type=mime_type))
+        return parts
+
+    async def _call_gemini_api(self, client: genai.Client, parts: list[types.Part]) -> dict:
+        prompt = (
+            "당신은 의료 문서 전문 OCR 및 데이터 구조화 AI입니다.\n"
+            "제공된 건강검진 결과지, 처방전 등의 문서 이미지들을 분석하여 정형화된 JSON 데이터로 변환하세요.\n\n"
+            "지침:\n"
+            "1. 프라이버시(중요): 이름, 주민등록번호, 연락처 등 환자를 식별할 수 있는 개인정보(PII)는 절대 추출하지 마세요.\n"
+            "2. tables (검사 항목 표 추출):\n"
+            "   - 모든 검사 항목(요검사, 혈액검사, 간기능, 혈당, 지질, 신장기능, 혈압 등)을 빠짐없이 통합 표로 구조화하세요.\n"
+            "   - 각 행(row)은 [검사항목명, 결과값, 단위, 판정및참고치] 4개의 열로 구성하세요.\n"
+            "   - 단위나 판정이 문서에 없으면 빈 문자열('')로 채우세요.\n"
+            "3. text (전체 텍스트 정리):\n"
+            "   - 검사일자, 병원/기관명 및 종합 소견 등을 줄바꿈(\\n)을 사용하여 가독성 높게 작성하세요.\n"
+        )
+
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    client.models.generate_content,
+                    model="gemini-3.5-flash-lite",
+                    contents=[*parts, prompt],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=RawOcrData,
+                        temperature=0.0,
+                    ),
+                ),
+                timeout=30.0
+            )
+        except asyncio.TimeoutError as e:
+            raise OcrUnavailableError("문서 분석 시간이 초과되었습니다. (30초 제한)") from e
+
+        if not response or not response.text:
+            raise OcrUnavailableError("Gemini API로부터 응답을 받지 못했습니다.")
+
+        try:
+            validated_data = RawOcrData.model_validate_json(response.text).model_dump(mode="json")
+        except Exception as e:
+            raise OcrUnavailableError("API 응답 형식이 올바르지 않습니다.") from e
+
+        validated_data["status"] = "raw"
+        validated_data["automatically_confirmed"] = False
+        return validated_data
