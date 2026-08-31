@@ -15,6 +15,7 @@ import {
   HealthRecordHistoryDialog,
   PainChatDialog,
 } from "../health-record/HealthRecordWorkspace";
+import { HealthAssistantDrawer } from "../health-assistant/HealthAssistantDrawer";
 
 const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
   default: module.VanatomeBodyMap,
@@ -29,6 +30,8 @@ const RECORD_LABELS: Record<HealthRecordType, string> = {
   health_screening: "건강검진",
   pain: "통증 기록",
   walking: "걷기",
+  exercise: "운동",
+  medication: "복약",
   note: "건강 메모",
 };
 
@@ -70,6 +73,7 @@ export function HomePage() {
   const [deletingRecord, setDeletingRecord] = useState<HealthRecord>();
   const [deletedRecordsDialogOpen, setDeletedRecordsDialogOpen] = useState(false);
   const [familyHistoryDialogOpen, setFamilyHistoryDialogOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [actionError, setActionError] = useState<string>();
   const [saving, setSaving] = useState(false);
   const localStorageReady = Boolean(runtime);
@@ -468,6 +472,10 @@ export function HomePage() {
           <aside className="quick-actions-panel">
             <p className="section-kicker">빠른 작업</p>
             <h2>무엇을 기록할까요?</h2>
+            <button type="button" onClick={() => setAssistantOpen(true)}>
+              <strong>봄이 건강 비서</strong>
+              <small>자연어로 운동·혈압·복약 대화 기록</small>
+            </button>
             <button type="button" onClick={() => setRecordDialogOpen(true)}>
               <strong>건강기록 작성</strong>
               <small>검진·통증·수치·메모</small>
@@ -527,7 +535,7 @@ export function HomePage() {
             onSaved={() => refreshDashboard(selectedProfile.id)}
             onOpenPainChat={() => {
               setRecordDialogOpen(false);
-              setPainChatDialogOpen(true);
+              setAssistantOpen(true);
             }}
           />
         </Modal>
@@ -727,15 +735,32 @@ export function HomePage() {
           void navigate(`/members/${selectedProfile.id}`);
         }} />
       ) : null}
-      {painChatDialogOpen && selectedProfile ? (
-        <PainChatDialog
-          profile={selectedProfile}
-          runtime={runtime}
-          onClose={() => setPainChatDialogOpen(false)}
-          onSaved={() => refreshDashboard(selectedProfile.id)}
-        />
+      {selectedProfile ? (
+        <>
+          <button
+            type="button"
+            className="health-assistant-launcher-btn"
+            onClick={() => setAssistantOpen(true)}
+            aria-label="건강 비서 봄이 열기"
+          >
+            <span className="launcher-icon" aria-hidden="true">봄</span>
+            <span>봄이 대화</span>
+          </button>
+          <HealthAssistantDrawer
+            profile={selectedProfile}
+            runtime={runtime}
+            isOpen={assistantOpen}
+            onClose={() => setAssistantOpen(false)}
+            onRecordSaved={() => refreshDashboard(selectedProfile.id)}
+            onNavigateToRecords={() => setRecordHistoryDialogOpen(true)}
+          />
+        </>
       ) : null}
-      <FloatingHealthTools profile={selectedProfile} runtime={runtime} onSaved={() => selectedProfile ? refreshDashboard(selectedProfile.id) : Promise.resolve()} />
+      <FloatingHealthTools
+        profile={selectedProfile}
+        runtime={runtime}
+        onSaved={() => selectedProfile ? refreshDashboard(selectedProfile.id) : Promise.resolve()}
+      />
     </div>
   );
 }
@@ -820,8 +845,49 @@ function toLocalDateTime(value: string): string {
 }
 
 function recordNote(record: HealthRecord): string {
-  const note = record.payload.note;
-  return typeof note === "string" ? note : "저장된 건강기록";
+  const p = record.payload as Record<string, unknown>;
+  if (typeof p.note === "string" && p.note.trim()) {
+    return p.note.trim();
+  }
+  if (record.recordType === "exercise" || p.exerciseName) {
+    const parts = [
+      p.exerciseName,
+      p.durationMinutes ? `${p.durationMinutes}분` : "",
+      p.weightKg ? `${p.weightKg}kg` : "",
+      p.reps ? `${p.reps}회` : "",
+      p.sets ? `${p.sets}세트` : "",
+    ].filter(Boolean);
+    return parts.join(" ") || "운동 기록";
+  }
+  if (record.recordType === "blood_pressure" || p.systolic || p.systolicMmHg) {
+    const sys = p.systolic ?? p.systolicMmHg;
+    const dia = p.diastolic ?? p.diastolicMmHg;
+    const pulse = p.pulse ?? p.pulseBpm;
+    return `혈압 ${sys}/${dia} mmHg${pulse ? ` (맥박 ${pulse})` : ""}`;
+  }
+  if (record.recordType === "blood_glucose" || p.glucose || p.valueMgDl || p.value) {
+    const val = p.glucose ?? p.valueMgDl ?? p.value;
+    const timing = p.timing ? ` (${p.timing})` : "";
+    return `혈당 ${val} mg/dL${timing}`;
+  }
+  if (record.recordType === "medication" || p.medicationName) {
+    const name = p.medicationName;
+    const dosage = p.dosage ? ` ${p.dosage}` : "";
+    const taken = p.takenAt ? ` (${p.takenAt})` : "";
+    return `복약: ${name}${dosage}${taken}`;
+  }
+  if (record.recordType === "pain" || p.bodyArea) {
+    const area = p.bodyArea || "통증";
+    const intensity = p.intensity !== undefined ? ` (강도 ${p.intensity})` : "";
+    const sensation = p.sensation ? ` - ${p.sensation}` : "";
+    return `${area}${intensity}${sensation}`;
+  }
+  if (record.recordType === "health_screening" || record.recordType === "lab_result") {
+    const name = p.screeningName || p.testName || "건강검진";
+    const summary = p.summary || p.itemsSummary || "";
+    return `${name}${summary ? `: ${summary}` : ""}`.slice(0, 120);
+  }
+  return "저장된 건강기록";
 }
 
 function recordMark(type: HealthRecordType): string {

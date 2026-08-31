@@ -47,6 +47,15 @@ export function validatePayload(payload: HealthPayload) {
       if (!inRange(payload.distanceKm, 0, 500)) errors.push(fieldError("distanceKm", "거리는 0~500km 사이여야 합니다."));
       if (!inRange(payload.durationMinutes, 0, 1440)) errors.push(fieldError("durationMinutes", "시간은 0~1,440분 사이여야 합니다."));
       break;
+    case "exercise":
+      if (!payload.exerciseName.trim()) errors.push(fieldError("exerciseName", "운동명을 입력해 주세요."));
+      if (payload.weightKg !== undefined && !inRange(payload.weightKg, 0, 1000)) errors.push(fieldError("weightKg", "무게는 0~1,000kg 사이여야 합니다."));
+      if (payload.reps !== undefined && !inRange(payload.reps, 1, 10000)) errors.push(fieldError("reps", "횟수는 1~10,000회 사이여야 합니다."));
+      if (payload.sets !== undefined && !inRange(payload.sets, 1, 1000)) errors.push(fieldError("sets", "세트는 1~1,000세트 사이여야 합니다."));
+      break;
+    case "medication":
+      if (!payload.medicationName.trim()) errors.push(fieldError("medicationName", "약물명을 입력해 주세요."));
+      break;
     case "note":
       if (!payload.text.trim()) errors.push(fieldError("text", "내용을 입력해 주세요."));
       if (payload.text.length > 20000) errors.push(fieldError("text", "내용은 20,000자 이하여야 합니다."));

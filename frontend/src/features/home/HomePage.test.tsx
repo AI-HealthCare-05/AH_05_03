@@ -29,10 +29,8 @@ describe("HomePage", () => {
     await user.click(screen.getByRole("button", { name: "프로필 저장" }));
 
     expect(await screen.findByRole("heading", { name: "나님의 건강기록" })).toBeInTheDocument();
-    expect(screen.getByText("암호화 로컬 저장")).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "나님의 3D 인체" })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "머리" }));
-    expect(screen.getByText("선택한 부위").parentElement).toHaveTextContent("머리");
+    expect(screen.getByText("프로필 상태")).toBeInTheDocument();
+    expect(screen.getByText("저장된 기록")).toBeInTheDocument();
   });
 
   it("가족 구성원 프로필 정보를 수정한다", async () => {
@@ -78,7 +76,8 @@ describe("HomePage", () => {
     await createProfile(user, "아빠", "부모");
 
     await user.click(screen.getAllByRole("button", { name: "건강기록 작성" })[0]);
-    await user.type(screen.getByRole("textbox", { name: "기록 내용" }), "정기 검진 메모");
+    await user.type(screen.getByRole("textbox", { name: "통증 부위" }), "허리");
+    await user.type(screen.getByRole("textbox", { name: "추가 메모" }), "정기 검진 메모");
     await user.click(screen.getByRole("button", { name: "기록 저장" }));
     expect(await screen.findByText("1건")).toBeInTheDocument();
 
@@ -97,7 +96,8 @@ describe("HomePage", () => {
     renderHomePage();
     await createProfile(user, "나", "본인");
     await user.click(screen.getAllByRole("button", { name: "건강기록 작성" })[0]);
-    await user.type(screen.getByRole("textbox", { name: "기록 내용" }), "수정 전 기록");
+    await user.type(screen.getByRole("textbox", { name: "통증 부위" }), "어깨");
+    await user.type(screen.getByRole("textbox", { name: "추가 메모" }), "수정 전 기록");
     await user.click(screen.getByRole("button", { name: "기록 저장" }));
     expect(await screen.findByText("수정 전 기록")).toBeInTheDocument();
 

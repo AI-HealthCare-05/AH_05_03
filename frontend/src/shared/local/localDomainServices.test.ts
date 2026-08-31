@@ -61,6 +61,46 @@ describe("로컬 수직 기능", () => {
     repository.close();
   });
 
+  it("AI가 만든 건강기록은 암호화 저장 직전에 도메인 범위를 검증한다", async () => {
+    const repository = new IndexedDbEncryptedRecordRepository(
+      "ieobom-ai-validation-" + crypto.randomUUID(),
+      indexedDB,
+    );
+    const cipher = await AesGcmJsonCipher.create();
+    const profiles = new LocalProfileService(repository, cipher);
+    const records = new LocalHealthRecordService(repository, cipher);
+    const householdId = crypto.randomUUID();
+    const profile = await profiles.create({ householdId, displayName: "검증 대상", relationship: "본인" });
+    if (!profile.ok) throw new Error(profile.error.message);
+
+    const invalidBloodPressure = await records.create({
+      householdId,
+      profileId: profile.value.id,
+      recordType: "blood_pressure",
+      recordedAt: "2026-08-31T09:00:00.000Z",
+      source: "local_ai",
+      payload: { type: "blood_pressure", systolicMmHg: 80, diastolicMmHg: 120 },
+    });
+    expect(invalidBloodPressure).toEqual(expect.objectContaining({
+      ok: false,
+      error: expect.objectContaining({ code: "VALIDATION_ERROR" }),
+    }));
+
+    const invalidExercise = await records.create({
+      householdId,
+      profileId: profile.value.id,
+      recordType: "exercise",
+      recordedAt: "2026-08-31T09:00:00.000Z",
+      source: "local_ai",
+      payload: { type: "exercise", exerciseName: "랫풀다운", weightKg: -20 },
+    });
+    expect(invalidExercise.ok).toBe(false);
+
+    const stored = await records.query({ profileId: profile.value.id });
+    expect(stored.ok && stored.value).toHaveLength(0);
+    repository.close();
+  });
+
   it("건강기록을 수정하고 소프트 삭제한 뒤 복원한다", async () => {
     const repository = new IndexedDbEncryptedRecordRepository(
       "ieobom-health-lifecycle-" + crypto.randomUUID(),

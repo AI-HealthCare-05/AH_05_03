@@ -82,6 +82,8 @@ export type HealthRecordType =
   | "health_screening"
   | "pain"
   | "walking"
+  | "exercise"
+  | "medication"
   | "note";
 
 export interface HealthRecord<TPayload extends object = Record<string, unknown>> {
