@@ -131,6 +131,14 @@ export function DataManagementPage() {
     }
   }
 
+  async function viewDocument(document: LocalDocument) {
+    if (!runtime?.documents) return;
+    const result = await runtime.documents.read(document);
+    if (!result.ok) return setError(result.error.message);
+    const url = URL.createObjectURL(result.value);
+    window.open(url, "_blank");
+  }
+
   async function downloadDocument(document: LocalDocument) {
     if (!runtime?.documents) return;
     const result = await runtime.documents.read(document);
@@ -319,7 +327,12 @@ export function DataManagementPage() {
               {documents.map((document) => (
                 <article key={document.id}>
                   <div><strong>{document.fileName}</strong><small>{profiles.find((profile) => profile.id === document.profileId)?.displayName ?? "알 수 없는 구성원"} · {(document.byteSize / 1024).toFixed(1)}KB</small></div>
-                  <div className="record-row-actions"><button type="button" onClick={() => void downloadDocument(document)}>내려받기</button><button type="button" disabled={!(document.mimeType.startsWith("image/") || document.mimeType === "application/pdf") || working} onClick={() => void runOcr(document)}>로컬 OCR</button><button type="button" onClick={() => setDeletingDocument(document)}>삭제</button></div>
+                  <div className="record-row-actions">
+                    <button type="button" onClick={() => void viewDocument(document)}>보기</button>
+                    <button type="button" onClick={() => void downloadDocument(document)}>내려받기</button>
+                    <button type="button" disabled={!(document.mimeType.startsWith("image/") || document.mimeType === "application/pdf") || working} onClick={() => void runOcr(document)}>로컬 OCR</button>
+                    <button type="button" onClick={() => setDeletingDocument(document)}>삭제</button>
+                  </div>
                 </article>
               ))}
               {documents.length === 0 ? <div className="compact-empty"><strong>저장된 원본 문서가 없습니다.</strong></div> : null}

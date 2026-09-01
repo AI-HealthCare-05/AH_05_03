@@ -36,20 +36,25 @@ async def test_gemini_client_generates_response(monkeypatch) -> None:
         text = fake_json
 
     class FakeModels:
-        def generate_content(self, *args, **kwargs):
+        async def generate_content(self, *args, **kwargs):
             return FakeResponse()
+
+    class FakeAio:
+        def __init__(self):
+            self.models = FakeModels()
 
     class FakeClient:
         def __init__(self, *args, **kwargs):
-            self.models = FakeModels()
+            self.aio = FakeAio()
 
     import google.genai as genai
     monkeypatch.setattr(genai, "Client", FakeClient)
 
+    from app.dtos.health_assistant import ChatMessage
     client = GeminiLLMClient(api_key="fake_key")
     response = await client.generate_structured_response(
         system_instruction="안녕",
-        messages=["User: 안녕"],
+        messages=[ChatMessage(role="user", content="안녕")],
         response_schema=HealthAssistantResponse,
     )
 

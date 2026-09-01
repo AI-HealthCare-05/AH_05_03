@@ -11,7 +11,7 @@ from app.services.health_assistant_safety import HealthAssistantSafetyService
 
 class HealthAssistantService:
     """통합 건강 어시스턴트 (봄이) 서비스.
-    
+
     자연어 입력을 분석하여 건강기록(운동, 혈압, 혈당, 복약, 통증 등) 추출,
     기록 조회 의도 분류, 안전 가이드라인 기반 상담 응답을 생성합니다.
     """
@@ -36,5 +36,5 @@ class HealthAssistantService:
 
         # 안전 검증 및 후처리
         validated_response = self.safety_service.validate_response(response)
-        
+
         return validated_response

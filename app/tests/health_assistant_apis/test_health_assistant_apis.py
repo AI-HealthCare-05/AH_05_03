@@ -1,4 +1,3 @@
-import pytest
 from httpx import AsyncClient
 from starlette import status
 
@@ -33,12 +32,16 @@ class TestHealthAssistantApi:
             text = fake_json
 
         class FakeModels:
-            def generate_content(self, *args, **kwargs):
+            async def generate_content(self, *args, **kwargs):
                 return FakeResponse()
+
+        class FakeAio:
+            def __init__(self):
+                self.models = FakeModels()
 
         class FakeClient:
             def __init__(self, *args, **kwargs):
-                self.models = FakeModels()
+                self.aio = FakeAio()
 
         import google.genai as genai
         monkeypatch.setattr(genai, "Client", FakeClient)

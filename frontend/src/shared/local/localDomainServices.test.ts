@@ -96,6 +96,19 @@ describe("로컬 수직 기능", () => {
     });
     expect(invalidExercise.ok).toBe(false);
 
+    const invalidExerciseDistance = await records.create({
+      householdId,
+      profileId: profile.value.id,
+      recordType: "exercise",
+      recordedAt: "2026-08-31T09:00:00.000Z",
+      source: "local_ai",
+      payload: { type: "exercise", exerciseName: "달리기", distanceKm: 501 },
+    });
+    expect(invalidExerciseDistance).toEqual(expect.objectContaining({
+      ok: false,
+      error: expect.objectContaining({ code: "VALIDATION_ERROR" }),
+    }));
+
     const stored = await records.query({ profileId: profile.value.id });
     expect(stored.ok && stored.value).toHaveLength(0);
     repository.close();

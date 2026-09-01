@@ -5,6 +5,7 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
+from app.dtos.health_assistant import ChatMessage
 from app.exceptions import AppError
 from app.integrations.llm.protocol import LLMClientProtocol
 
@@ -29,15 +30,24 @@ class GeminiLLMClient(LLMClientProtocol):
     async def generate_structured_response(
         self,
         system_instruction: str,
-        messages: list[str],
+        messages: list[ChatMessage],
         response_schema: type[T],
     ) -> T:
+        gemini_contents = []
+        for m in messages:
+            role = "user" if m.role == "user" else "model"
+            gemini_contents.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=m.content)],
+                )
+            )
+
         try:
             response = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self.client.models.generate_content,
+                self.client.aio.models.generate_content(
                     model=self.model_name,
-                    contents=messages,
+                    contents=gemini_contents,
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,
                         response_mime_type="application/json",
@@ -59,4 +69,3 @@ class GeminiLLMClient(LLMClientProtocol):
             return response_schema.model_validate_json(response.text)
         except Exception as error:
             raise AppError("건강 대화 응답 구조화에 실패했습니다.", status_code=503) from error
-

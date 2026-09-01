@@ -1,5 +1,4 @@
 import asyncio
-import json
 
 from fastapi import UploadFile
 from google import genai
@@ -36,7 +35,7 @@ class DevOcrService:
             raise OcrUnavailableError("Gemini API 키가 설정되지 않았습니다.")
 
         client = genai.Client(api_key=api_key)
-        
+
         try:
             parts = await self._prepare_parts(file_list)
             return await self._call_gemini_api(client, parts)

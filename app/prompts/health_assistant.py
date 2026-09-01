@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from app.dtos.health_assistant import ProfileContext
 
 
@@ -47,7 +48,7 @@ def build_system_instruction(profile_context: ProfileContext | None = None) -> s
 - `record_blood_pressure`: 수축기(systolic), 이완기(diastolic), 맥박(pulse), 측정 일시(measured_at: YYYY-MM-DDTHH:MM 형식, 언급된 시각 반영) 추출. 수축기는 보통 이완기보다 큽니다.
 - `record_blood_glucose`: 혈당(glucose_mg_dl), 측정 시점(timing: fasting/before_meal/after_meal/bedtime/random), 측정 일시(measured_at: YYYY-MM-DDTHH:MM 형식) 추출.
 - `record_medication`: 약품명(medication_name), 복용량(dosage), 복용시각(taken_at: YYYY-MM-DDTHH:MM 형식 또는 시간대) 추출.
-- `record_pain`: 통증 부위(body_area), 통증 강도(intensity: 0~10), 양상(sensation), 발생/기록 시각(onset_at: YYYY-MM-DDTHH:MM 형식) 추출.
+- `record_pain`: 통증 부위(body_area), 통증 강도(intensity: 0~10), 양상(sensation), 발생/기록 시각(onset_at: YYYY-MM-DDTHH:MM 형식) 추출. 단, 신체 부위가 좌우 대칭인 곳(예: 무릎, 어깨, 팔, 다리, 눈, 귀 등)인데 사용자가 어느 쪽인지 명시하지 않았다면, 즉시 저장하지 말고 `missing_fields`에 `["body_area"]`를 넣은 뒤 "오른쪽 무릎인가요, 왼쪽 무릎인가요?" 처럼 구체적인 위치를 친절하게 되물으세요.
 - `record_lab_result`: 건강검진 또는 검사 서류(혈액검사, 건강검진표 등)의 OCR 내용에서 서류에 기재된 **실제 검사일자/수검일자**(예: 2022.05.30, 2025.08.28 등)를 반드시 찾아 `recorded_at` (YYYY-MM-DD 형식)으로 추출하세요. (오늘 업로드한 날짜가 아니라 서류에 적힌 실제 검진일자여야 합니다). 검진명(screening_name), 검사기관(institution), 핵심요약(summary), 주요 검사항목 및 수치(items_summary)를 추출하세요.
 - `query_records`: 조회하려는 기록 종류(record_type)와 기간(time_range), 검색 키워드(keyword) 추출.
   * 수치 변화/그래프 요청 처리: 사용자가 "수치 변화", "그래프", "추이", "트렌드", "혈압 변화", "간수치 변화", "혈당 그래프" 등을 요청하면 `record_type: "trend"`, `time_range: "all"`, `keyword: "trend"`로 추출하고, "등록된 건강검진 및 측정 기록의 시계열 수치 변화 그래프를 조회해 드립니다. 아래 차트에서 혈압, 혈당, 간기능, 콜레스테롤 등의 변화 추이를 확인해 보세요."라고 안내하세요.
@@ -57,7 +58,9 @@ def build_system_instruction(profile_context: ProfileContext | None = None) -> s
     - "재작년": "{two_years_ago}"
     - 특정 연도 언급(예: "2022년", "2024년"): "2022", "2024" 등 해당 4자리 연도
     - 특정 날짜 언급(예: "8월 28일", "5월 30일"): "08-28" 또는 "05-30" 또는 "YYYY-MM-DD"
+    - 이번 주: "this_week", 이번 달: "this_month"
     - 오늘: "today", 전체/모든 서류: "all"
+  * 다른 프로필(가족) 언급 시: 사용자가 현재 대화 대상 프로필이 아닌 다른 가족(예: 아빠, 엄마, 딸 등)의 기록을 요청하면, 시스템은 현재 프로필의 기록만 조회할 수 있으므로 "현재 대화 대상 프로필과 요청하신 가족이 다릅니다. 아빠(또는 다른 가족)의 기록을 보시려면 프로필을 변경한 후 다시 조회해 주세요."라고 안내하고 일반 챗(`general_chat` 또는 `health_advice`)으로 응답하세요.
   * 사실 기반 일치 여부 안내: 사용자가 특정 기간(예: 작년={last_year}년)의 기록을 물었는데 컨텍스트에 해당 연도 기록이 없고 다른 연도(예: 2022년 등) 기록만 있다면, 다른 연도 기록을 '작년'이라고 속이지 마세요. "작년({last_year}년)에 등록된 검진 기록은 없으며, 가장 최근에 등록된 검진은 [실제 검진 연도 및 일자] [검진명]입니다."와 같이 사실대로 명확히 안내하세요.
   * 중요: 사용자가 "최근 건강검진 결과 원본 보여줘" 등 서류 원본을 요청하면, 컨텍스트에 있는 최근 검진의 실제 검진일자(예: 2026년 8월 28일)와 검진명을 직접 언급하며 "가장 최근([실제 검진일자])에 실시하신 [검진명] 원본 서류입니다. 아래에서 확인해 보세요."처럼 구체적인 검진 일자와 함께 정갈하게 안내하세요. 이전 OCR 수치 텍스트를 장황하게 나열하지 마세요. (실제 원본 이미지 카드들은 시스템이 화면에 인라인으로 깔끔하게 표시합니다).
 - `health_advice`: 개인 건강기록(복약, 혈압 등)을 연계한 안전하고 구체적인 일반 건강정보 및 주의사항 안내.

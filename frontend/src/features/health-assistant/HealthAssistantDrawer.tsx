@@ -141,7 +141,14 @@ export function filterRecordsByTimeRange(records: HealthRecord[], timeRange?: st
 
   const now = new Date();
   const currentYear = now.getFullYear();
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = `${currentYear}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  const getLocalDateStr = (isoStr: string) => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(isoStr)) return isoStr;
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return isoStr.slice(0, 10);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
 
   // 최근 (가장 최근 등록된 일자의 기록)
   if (tr === "recent" || tr === "최근" || tr === "latest" || tr === "마지막") {
@@ -149,48 +156,65 @@ export function filterRecordsByTimeRange(records: HealthRecord[], timeRange?: st
     const sorted = [...records].sort(
       (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime(),
     );
-    const latestDate = sorted[0].recordedAt.slice(0, 10);
-    return sorted.filter((r) => r.recordedAt.startsWith(latestDate));
+    const latestDate = getLocalDateStr(sorted[0].recordedAt);
+    return sorted.filter((r) => getLocalDateStr(r.recordedAt) === latestDate);
   }
 
   // 오늘
   if (tr === "today" || tr === "오늘") {
-    return records.filter((r) => r.recordedAt.startsWith(todayStr));
+    return records.filter((r) => getLocalDateStr(r.recordedAt) === todayStr);
+  }
+
+  // 이번 주
+  if (tr === "this_week" || tr === "이번 주") {
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()); // Sunday
+    const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6); // Saturday
+    const startStr = `${startOfWeek.getFullYear()}-${String(startOfWeek.getMonth() + 1).padStart(2, "0")}-${String(startOfWeek.getDate()).padStart(2, "0")}`;
+    const endStr = `${endOfWeek.getFullYear()}-${String(endOfWeek.getMonth() + 1).padStart(2, "0")}-${String(endOfWeek.getDate()).padStart(2, "0")}`;
+    return records.filter((r) => {
+      const dStr = getLocalDateStr(r.recordedAt);
+      return dStr >= startStr && dStr <= endStr;
+    });
+  }
+
+  // 이번 달
+  if (tr === "this_month" || tr === "이번 달") {
+    const monthStr = `${currentYear}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    return records.filter((r) => getLocalDateStr(r.recordedAt).startsWith(monthStr));
   }
 
   // 어제
   if (tr === "yesterday" || tr === "어제") {
-    const yDate = new Date(now);
-    yDate.setDate(yDate.getDate() - 1);
-    const yesterdayStr = yDate.toISOString().slice(0, 10);
-    return records.filter((r) => r.recordedAt.startsWith(yesterdayStr));
+    const yDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const yesterdayStr = `${yDate.getFullYear()}-${String(yDate.getMonth() + 1).padStart(2, "0")}-${String(yDate.getDate()).padStart(2, "0")}`;
+    return records.filter((r) => getLocalDateStr(r.recordedAt) === yesterdayStr);
   }
 
   // 올해
   if (tr === "this_year" || tr === "올해" || tr === "금년" || tr === String(currentYear)) {
-    return records.filter((r) => r.recordedAt.startsWith(String(currentYear)));
+    return records.filter((r) => getLocalDateStr(r.recordedAt).startsWith(String(currentYear)));
   }
 
   // 작년
   if (tr === "last_year" || tr === "작년" || tr === "지난해" || tr === String(currentYear - 1)) {
-    return records.filter((r) => r.recordedAt.startsWith(String(currentYear - 1)));
+    return records.filter((r) => getLocalDateStr(r.recordedAt).startsWith(String(currentYear - 1)));
   }
 
   // 재작년
   if (tr === "year_before_last" || tr === "재작년" || tr === String(currentYear - 2)) {
-    return records.filter((r) => r.recordedAt.startsWith(String(currentYear - 2)));
+    return records.filter((r) => getLocalDateStr(r.recordedAt).startsWith(String(currentYear - 2)));
   }
 
   // 특정 4자리 연도 (예: "2022", "2024", "2022년")
   const yearMatch = tr.match(/\b(19\d{2}|20\d{2})\b/);
   if (yearMatch && !tr.includes("-") && !tr.includes("/") && !tr.includes("월")) {
-    return records.filter((r) => r.recordedAt.startsWith(yearMatch[1]));
+    return records.filter((r) => getLocalDateStr(r.recordedAt).startsWith(yearMatch[1]));
   }
 
   // 특정 YYYY-MM-DD 전체 일자
   const fullDateParsed = parseExamDateFromText(tr);
   if (fullDateParsed) {
-    return records.filter((r) => r.recordedAt.startsWith(fullDateParsed));
+    return records.filter((r) => getLocalDateStr(r.recordedAt) === fullDateParsed);
   }
 
   // 특정 월/일 (예: "8/28", "5/30", "08-28")
@@ -198,7 +222,7 @@ export function filterRecordsByTimeRange(records: HealthRecord[], timeRange?: st
   if (parts.length === 2) {
     const m = parts[0].padStart(2, "0");
     const d = parts[1].padStart(2, "0");
-    return records.filter((r) => r.recordedAt.includes(`-${m}-${d}`));
+    return records.filter((r) => getLocalDateStr(r.recordedAt).includes(`-${m}-${d}`));
   }
 
   return records;
@@ -739,7 +763,10 @@ export function HealthAssistantDrawer({
       setMessages((prev) => [...prev, assistantMsg]);
 
       // 조회 질의이거나 질문인 경우 IndexedDB에서 데이터 조회 수행
-      if ((res.intent === "query_records" || /(?:원본|서류|사진|스캔|문서|이미지|보여줘|그래프|변화|추이|트렌드|수치)/.test(textToSend)) && runtime) {
+      const isRegexMatch = /(?:원본|서류|사진|스캔|문서|이미지|보여줘|그래프|변화|추이|트렌드|수치)/.test(textToSend);
+      const isBlocked = res.intent === "general_chat" || res.intent === "health_advice";
+
+      if ((res.intent === "query_records" || (isRegexMatch && !isBlocked)) && runtime) {
         await executeLocalQuery(
           res.query_draft?.record_type,
           res.query_draft?.time_range,
@@ -875,11 +902,17 @@ export function HealthAssistantDrawer({
         }
 
         if (assistantMsgId) {
+          const emptyOriginalDocumentMessage =
+            "저장된 원본 검진 서류를 찾지 못했습니다. 먼저 검진표 이미지를 업로드하고 저장해 주세요.";
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsgId
                 ? {
                     ...m,
+                    content:
+                      isExplicitOriginalDocRequest && attachedDocs.length === 0
+                        ? emptyOriginalDocumentMessage
+                        : m.content,
                     attachedDocuments: attachedDocs.length > 0 ? attachedDocs : undefined,
                     showTrendChart: Boolean(isTrendQuery && metrics.length > 0),
                     trendMetrics: metrics.length > 0 ? metrics : undefined,
@@ -2167,16 +2200,56 @@ function QueriedRecordsView({
         <div className="queried-table-wrapper">
           <table className="queried-records-table">
             <thead>
-              <tr>
-                <th scope="col" style={{ width: "28%" }}>기록 일시</th>
-                <th scope="col" style={{ width: "16%" }}>종류</th>
-                <th scope="col">상세 내용 및 수치</th>
-                <th scope="col" style={{ width: "20%" }}>서류/관리</th>
-              </tr>
+              {records.length > 0 && records.every(r => r.recordType === "exercise") ? (
+                <tr>
+                  <th scope="col" style={{ width: "25%" }}>기록 일시</th>
+                  <th scope="col" style={{ width: "25%" }}>종목</th>
+                  <th scope="col" style={{ width: "30%" }}>횟수/무게/거리</th>
+                  <th scope="col" style={{ width: "20%" }}>세트/시간</th>
+                </tr>
+              ) : (
+                <tr>
+                  <th scope="col" style={{ width: "28%" }}>기록 일시</th>
+                  <th scope="col" style={{ width: "16%" }}>종류</th>
+                  <th scope="col">상세 내용 및 수치</th>
+                  <th scope="col" style={{ width: "20%" }}>서류/관리</th>
+                </tr>
+              )}
             </thead>
             <tbody>
               {records.slice(0, 10).map((rec) => {
                 const p = rec.payload as Record<string, unknown>;
+                const isAllExercise = records.every((r) => r.recordType === "exercise");
+
+                if (isAllExercise) {
+                  const exerciseName = String(p.exerciseName ?? p.note ?? "운동");
+                  const weightDist: string[] = [];
+                  if (p.weightKg) weightDist.push(`${p.weightKg}kg`);
+                  if (p.distanceKm) weightDist.push(`${p.distanceKm}km`);
+
+                  const repsSetsTime: string[] = [];
+                  if (p.reps) repsSetsTime.push(`${p.reps}회`);
+                  if (p.sets) repsSetsTime.push(`${p.sets}세트`);
+                  if (p.durationMinutes) repsSetsTime.push(`${p.durationMinutes}분`);
+
+                  return (
+                    <tr key={rec.id} className="queried-row">
+                      <td className="cell-datetime">
+                        <span className="datetime-badge">{formatTargetDateTime(rec.recordedAt)}</span>
+                      </td>
+                      <td className="cell-content">
+                        <span className="content-main">{exerciseName}</span>
+                      </td>
+                      <td className="cell-content">
+                        <span className="content-main">{weightDist.length > 0 ? weightDist.join(" · ") : "-"}</span>
+                      </td>
+                      <td className="cell-content">
+                        <span className="content-main">{repsSetsTime.length > 0 ? repsSetsTime.join(" · ") : "-"}</span>
+                      </td>
+                    </tr>
+                  );
+                }
+
                 const typeLabel = RECORD_TYPE_LABELS[rec.recordType] || rec.recordType;
 
                 let contentText = "";

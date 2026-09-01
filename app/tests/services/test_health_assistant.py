@@ -1,6 +1,5 @@
 import pytest
 
-from app.core import config
 from app.dtos.health_assistant import (
     ChatMessage,
     HealthAssistantChatRequest,
@@ -46,7 +45,7 @@ async def test_health_assistant_service_extracts_exercise_draft() -> None:
     }"""
     mock_client = MockLLMClient(fake_json)
     service = HealthAssistantService(llm_client=mock_client)
-    
+
     request = HealthAssistantChatRequest(
         messages=[ChatMessage(role="user", content="오늘 랫풀다운 20kg 10개 3세트 했어")],
         profile_context=ProfileContext(profile_name="홍길동", relationship="본인")

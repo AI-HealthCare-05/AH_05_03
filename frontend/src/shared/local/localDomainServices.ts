@@ -645,6 +645,7 @@ function validateAiHealthRecordPayload(
   switch (recordType) {
     case "exercise":
       if (!nonEmptyString(payload.exerciseName)) return "운동명이 필요합니다.";
+      if (!optionalNumberInRange(payload.distanceKm, 0, 500)) return "운동 거리는 0~500km 사이여야 합니다.";
       if (!optionalNumberInRange(payload.weightKg, 0, 1000)) return "운동 중량은 0~1,000kg 사이여야 합니다.";
       if (!optionalNumberInRange(payload.reps, 1, 10000)) return "운동 횟수는 1~10,000회 사이여야 합니다.";
       if (!optionalNumberInRange(payload.sets, 1, 1000)) return "운동 세트는 1~1,000세트 사이여야 합니다.";
