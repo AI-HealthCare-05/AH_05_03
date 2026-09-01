@@ -428,7 +428,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       { id: "1", recordedAt: "2022-05-30T09:00:00Z" },
       { id: "2", recordedAt: `${currentYear - 1}-08-28T09:00:00Z` }, // 작년
       { id: "3", recordedAt: `${currentYear}-01-10T09:00:00Z` }, // 올해
-    ] as any[];
+    ] as unknown as HealthRecord[];
 
     // 작년 조회 -> 2번만
     const lastYearRes = filterRecordsByTimeRange(records, "작년");

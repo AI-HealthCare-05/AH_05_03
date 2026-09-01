@@ -13,7 +13,6 @@ import {
   FloatingHealthTools,
   HealthRecordComposer,
   HealthRecordHistoryDialog,
-  PainChatDialog,
 } from "../health-record/HealthRecordWorkspace";
 import { HealthAssistantDrawer } from "../health-assistant/HealthAssistantDrawer";
 
@@ -52,7 +51,6 @@ export function HomePage() {
     hideProfile,
     restoreProfile,
     deleteEmptyProfile,
-    createHealthRecord,
     updateHealthRecord,
     deleteHealthRecord,
     restoreHealthRecord,
@@ -68,7 +66,6 @@ export function HomePage() {
   const [hiddenProfilesDialogOpen, setHiddenProfilesDialogOpen] = useState(false);
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
   const [recordHistoryDialogOpen, setRecordHistoryDialogOpen] = useState(false);
-  const [painChatDialogOpen, setPainChatDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<HealthRecord>();
   const [deletingRecord, setDeletingRecord] = useState<HealthRecord>();
   const [deletedRecordsDialogOpen, setDeletedRecordsDialogOpen] = useState(false);
@@ -141,30 +138,6 @@ export function HomePage() {
       formElement.reset();
     } catch (caught) {
       setActionError(messageFrom(caught, "구성원을 저장하지 못했습니다."));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function submitHealthRecord(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedProfile) return;
-    setSaving(true);
-    setActionError(undefined);
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    try {
-      await createHealthRecord({
-        profileId: selectedProfile.id,
-        recordType: String(form.get("recordType")) as HealthRecordType,
-        recordedAt: new Date(String(form.get("recordedAt"))).toISOString(),
-        note: String(form.get("note") ?? ""),
-      });
-      await refreshDashboard(selectedProfile.id);
-      setRecordDialogOpen(false);
-      formElement.reset();
-    } catch (caught) {
-      setActionError(messageFrom(caught, "건강기록을 저장하지 못했습니다."));
     } finally {
       setSaving(false);
     }
@@ -830,12 +803,6 @@ function formatDate(value: string): string {
 
 function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
-}
-
-function currentLocalDateTime(): string {
-  const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
 }
 
 function toLocalDateTime(value: string): string {

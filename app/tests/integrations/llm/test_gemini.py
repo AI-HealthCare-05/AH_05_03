@@ -48,9 +48,11 @@ async def test_gemini_client_generates_response(monkeypatch) -> None:
             self.aio = FakeAio()
 
     import google.genai as genai
+
     monkeypatch.setattr(genai, "Client", FakeClient)
 
     from app.dtos.health_assistant import ChatMessage
+
     client = GeminiLLMClient(api_key="fake_key")
     response = await client.generate_structured_response(
         system_instruction="안녕",
@@ -60,4 +62,3 @@ async def test_gemini_client_generates_response(monkeypatch) -> None:
 
     assert response.intent == "general_chat"
     assert response.assistant_message == "안녕하세요!"
-

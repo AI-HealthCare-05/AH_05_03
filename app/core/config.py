@@ -61,7 +61,16 @@ class Config(BaseSettings):
     FAMILY_INVITATION_DELIVERY_TTL_SECONDS: int = 5 * 60
     FAMILY_INVITATION_DELIVERY_STREAM_MAXLEN: int = 10_000
     INVITATION_EMAIL_STREAM_GROUP: str = "ieobom_email_worker_group"
+    INVITATION_EMAIL_STREAM_BLOCK_MS: int = 5_000
     INVITATION_WEB_ORIGIN: str = "http://localhost:5173"
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025
+    SMTP_FROM_EMAIL: str = "no-reply@ieobom.local"
+    SMTP_FROM_NAME: str = "이어봄"
+    SMTP_USE_TLS: bool = False
+    SMTP_USE_STARTTLS: bool = False
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
     FAMILY_INVITATION_USED_TOKEN_TTL_SECONDS: int = 7 * 24 * 60 * 60
     FAMILY_INVITATION_ACCOUNT_RATE_LIMIT: int = 10
     FAMILY_INVITATION_ACCOUNT_RATE_WINDOW_SECONDS: int = 60

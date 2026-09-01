@@ -16,11 +16,15 @@ class ProfileContext(BaseModel):
 
 
 class ExerciseDraft(BaseModel):
-    exercise_name: str = Field(description="운동 종목명 (예: 랫풀다운, 벤치프레스, 스쿼트, 달리기, 러닝, 자전거, 걷기 등)")
+    exercise_name: str = Field(
+        description="운동 종목명 (예: 랫풀다운, 벤치프레스, 스쿼트, 달리기, 러닝, 자전거, 걷기 등)"
+    )
     weight_kg: float | None = Field(default=None, description="중량 (kg, 근력운동용)")
     reps: int | None = Field(default=None, description="반복 횟수 (회, 근력운동용)")
     sets: int | None = Field(default=None, description="세트 수 (근력운동용)")
-    distance_km: float | None = Field(default=None, ge=0.0, le=500.0, description="운동 거리 (km, 예: 5.0, 12.5 - 러닝, 자전거, 걷기 등 유산소용)")
+    distance_km: float | None = Field(
+        default=None, ge=0.0, le=500.0, description="운동 거리 (km, 예: 5.0, 12.5 - 러닝, 자전거, 걷기 등 유산소용)"
+    )
     duration_minutes: int | None = Field(default=None, description="운동 시간 (분)")
     date_str: str | None = Field(default=None, description="운동 일자 (YYYY-MM-DD, 없으면 오늘)")
     note: str | None = Field(default=None, description="추가 특이사항")
@@ -94,16 +98,12 @@ HealthIntent = Literal[
 
 class HealthAssistantChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(description="대화 이력 리스트")
-    profile_context: ProfileContext | None = Field(
-        default=None, description="현재 선택된 가족 구성원의 컨텍스트 정보"
-    )
+    profile_context: ProfileContext | None = Field(default=None, description="현재 선택된 가족 구성원의 컨텍스트 정보")
 
 
 class HealthAssistantResponse(BaseModel):
     intent: HealthIntent = Field(description="사용자의 자연어 의도 분류")
-    assistant_message: str = Field(
-        description="사용자에게 전달할 정갈하고 친절한 답변 (이모티콘 사용 금지)"
-    )
+    assistant_message: str = Field(description="사용자에게 전달할 정갈하고 친절한 답변 (이모티콘 사용 금지)")
     exercise_draft: ExerciseDraft | None = Field(default=None, description="운동 기록 초안")
     blood_pressure_draft: BloodPressureDraft | None = Field(default=None, description="혈압 기록 초안")
     blood_glucose_draft: BloodGlucoseDraft | None = Field(default=None, description="혈당 기록 초안")
@@ -114,17 +114,12 @@ class HealthAssistantResponse(BaseModel):
     missing_fields: list[str] = Field(
         default_factory=list, description="초안 완성을 위해 사용자에게 추가 확인이 필요한 필드 목록"
     )
-    needs_confirmation: bool = Field(
-        default=False, description="사용자에게 저장 전 확인 카드를 노출해야 하는지 여부"
-    )
+    needs_confirmation: bool = Field(default=False, description="사용자에게 저장 전 확인 카드를 노출해야 하는지 여부")
     suggested_quick_replies: list[str] = Field(
         default_factory=list, description="사용자가 누르기 편한 추천 빠른 답변 목록"
     )
-    emergency_notice: str | None = Field(
-        default=None, description="응급 증상 감지 시 119 또는 응급실 안내 메시지"
-    )
+    emergency_notice: str | None = Field(default=None, description="응급 증상 감지 시 119 또는 응급실 안내 메시지")
     safety_disclaimer: str | None = Field(
         default="본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요.",
         description="비진단 안전 고지문구",
     )
-

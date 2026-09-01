@@ -15,6 +15,7 @@ health_assistant_router = APIRouter(prefix="/health-assistant", tags=["health-as
 def get_health_assistant_service() -> HealthAssistantService:
     return HealthAssistantService()
 
+
 @health_assistant_router.post(
     "/chat",
     response_model=ApiResponse[HealthAssistantResponse],
@@ -26,4 +27,3 @@ async def chat_with_assistant(
 ) -> ApiResponse[HealthAssistantResponse]:
     data = await service.respond(request)
     return ApiResponse(data=data, message="건강 어시스턴트 응답을 처리했습니다.")
-

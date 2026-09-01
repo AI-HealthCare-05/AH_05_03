@@ -39,6 +39,7 @@ async def test_dev_ocr_bridge_uses_gemini_single_and_multi_file(monkeypatch, tmp
             self.models = FakeModels()
 
     import google.genai as genai
+
     monkeypatch.setattr(genai, "Client", FakeClient)
 
     monkeypatch.setattr(config, "ENABLE_DEV_OCR_BRIDGE", True)
@@ -63,4 +64,3 @@ async def test_dev_ocr_bridge_rejects_invalid_file_type(monkeypatch, tmp_path) -
 
     with pytest.raises(OcrUnavailableError, match="JPEG, PNG, WEBP 이미지만 지원"):
         await DevOcrService().recognize(upload)
-

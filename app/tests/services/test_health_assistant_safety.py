@@ -63,4 +63,3 @@ def test_safety_service_check_input_safety_ignores_normal_input() -> None:
     result = HealthAssistantSafetyService.check_input_safety(messages)
 
     assert result is None
-

@@ -28,4 +28,3 @@ async def recognize_document(
         raise OcrUnavailableError("인식할 파일이 제공되지 않았습니다.")
     result = await service.recognize(target_files)
     return ApiResponse(data=RawOcrData(**result), message="원시 OCR 결과를 불러왔습니다.")
-

@@ -68,4 +68,3 @@ def build_system_instruction(profile_context: ProfileContext | None = None) -> s
 
 반드시 지정된 JSON 스키마 형식으로 응답하세요."""
     return system_instruction
-

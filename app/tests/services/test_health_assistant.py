@@ -48,7 +48,7 @@ async def test_health_assistant_service_extracts_exercise_draft() -> None:
 
     request = HealthAssistantChatRequest(
         messages=[ChatMessage(role="user", content="오늘 랫풀다운 20kg 10개 3세트 했어")],
-        profile_context=ProfileContext(profile_name="홍길동", relationship="본인")
+        profile_context=ProfileContext(profile_name="홍길동", relationship="본인"),
     )
     response = await service.respond(request)
 
@@ -88,9 +88,7 @@ async def test_health_assistant_service_extracts_blood_pressure_and_missing_fiel
     mock_client = MockLLMClient(fake_json)
     service = HealthAssistantService(llm_client=mock_client)
 
-    request = HealthAssistantChatRequest(
-        messages=[ChatMessage(role="user", content="오늘 혈압 130 나왔어")]
-    )
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 혈압 130 나왔어")])
     response = await service.respond(request)
 
     assert response.intent == "record_blood_pressure"
@@ -158,10 +156,8 @@ async def test_health_assistant_service_advises_on_alcohol_with_medication_conte
     request = HealthAssistantChatRequest(
         messages=[ChatMessage(role="user", content="나 오늘 술마셔도 됨?")],
         profile_context=ProfileContext(
-            profile_name="다원",
-            relationship="본인",
-            recent_records_summary="[2026-08-31 복약] 타이레놀 1알"
-        )
+            profile_name="다원", relationship="본인", recent_records_summary="[2026-08-31 복약] 타이레놀 1알"
+        ),
     )
     response = await service.respond(request)
 

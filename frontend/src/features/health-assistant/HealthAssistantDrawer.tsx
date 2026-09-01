@@ -218,7 +218,7 @@ export function filterRecordsByTimeRange(records: HealthRecord[], timeRange?: st
   }
 
   // 특정 월/일 (예: "8/28", "5/30", "08-28")
-  const parts = tr.split(/[\/\-.]/);
+  const parts = tr.split(/[/.-]/);
   if (parts.length === 2) {
     const m = parts[0].padStart(2, "0");
     const d = parts[1].padStart(2, "0");
@@ -296,7 +296,7 @@ export function extractMetricsFromRecords(records: HealthRecord[]): MetricSeries
         bpPoints.push({ date, value: sys, secondaryValue: dia > 0 ? dia : undefined });
       }
     } else {
-      const bpMatch = fullText.match(/(?:혈압|고혈압)[^0-9]*(\d{2,3})\s*[\/|\~]\s*(\d{2,3})/);
+      const bpMatch = fullText.match(/(?:혈압|고혈압)[^0-9]*(\d{2,3})\s*[/|~]\s*(\d{2,3})/);
       if (bpMatch) {
         bpPoints.push({ date, value: Number(bpMatch[1]), secondaryValue: Number(bpMatch[2]) });
       }
@@ -455,9 +455,6 @@ export function HealthAssistantDrawer({
   const [sourcePreviewModal, setSourcePreviewModal] = useState<{ url: string; name: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // 원본 서류 크게 보기 모달 상태
-  const [previewDocumentId, setPreviewDocumentId] = useState<string | null>(null);
 
   // 서류 OCR 상세 검토 및 저장 모달 상태
   const [ocrModalOpen, setOcrModalOpen] = useState(false);
@@ -817,7 +814,6 @@ export function HealthAssistantDrawer({
 
       if (qRes.ok) {
         let list = filterRecordsByTimeRange(qRes.value, timeRange);
-        const isAllQuery = !timeRange || timeRange === "all" || timeRange === "모든" || timeRange === "전체" || timeRange === "여태" || timeRange === "all_time";
         const validKeyword = isValidContentKeyword(keyword);
 
         if (validKeyword) {
@@ -2252,7 +2248,7 @@ function QueriedRecordsView({
 
                 const typeLabel = RECORD_TYPE_LABELS[rec.recordType] || rec.recordType;
 
-                let contentText = "";
+                let contentText: string;
                 if (rec.recordType === "exercise" || p.exerciseName) {
                   const details: string[] = [];
                   if (p.distanceKm) details.push(`${p.distanceKm}km`);

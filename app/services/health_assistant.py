@@ -16,7 +16,9 @@ class HealthAssistantService:
     기록 조회 의도 분류, 안전 가이드라인 기반 상담 응답을 생성합니다.
     """
 
-    def __init__(self, llm_client: LLMClientProtocol | None = None, safety_service: HealthAssistantSafetyService | None = None):
+    def __init__(
+        self, llm_client: LLMClientProtocol | None = None, safety_service: HealthAssistantSafetyService | None = None
+    ):
         self.llm_client = llm_client or GeminiLLMClient(api_key=config.GEMINI_API_KEY)
         self.safety_service = safety_service or HealthAssistantSafetyService()
 

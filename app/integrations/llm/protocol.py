@@ -13,5 +13,4 @@ class LLMClientProtocol(Protocol):
         system_instruction: str,
         messages: list[ChatMessage],
         response_schema: type[T],
-    ) -> T:
-        ...
+    ) -> T: ...

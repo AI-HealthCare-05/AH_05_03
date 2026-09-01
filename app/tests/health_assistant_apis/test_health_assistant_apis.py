@@ -44,19 +44,18 @@ class TestHealthAssistantApi:
                 self.aio = FakeAio()
 
         import google.genai as genai
+
         monkeypatch.setattr(genai, "Client", FakeClient)
         monkeypatch.setattr(config, "GEMINI_API_KEY", "fake_gemini_key")
 
         payload = {
-            "messages": [
-                {"role": "user", "content": "혈압 120에 80 나왔어"}
-            ],
+            "messages": [{"role": "user", "content": "혈압 120에 80 나왔어"}],
             "profile_context": {
                 "profile_name": "엄마",
                 "relationship": "부모",
                 "birth_year": 1960,
-                "recent_records_summary": "최근 혈압: 125/82 (3일 전)"
-            }
+                "recent_records_summary": "최근 혈압: 125/82 (3일 전)",
+            },
         }
 
         response = await client.post("/api/v1/health-assistant/chat", json=payload)

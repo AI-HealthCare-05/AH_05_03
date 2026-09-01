@@ -23,10 +23,7 @@ missing_fields may only contain 'body_area' or 'intensity'.
 If the user mentions severe chest pain, breathing difficulty, loss of consciousness, stroke-like symptoms, severe bleeding, or self-harm, set emergency_notice to a short Korean emergency-care instruction; still do not diagnose.
 Return the structured JSON output."""
 
-        contents = [
-            f"{'User' if m.role == 'user' else 'Assistant'}: {m.content}"
-            for m in messages
-        ]
+        contents = [f"{'User' if m.role == 'user' else 'Assistant'}: {m.content}" for m in messages]
 
         try:
             response = await asyncio.wait_for(
@@ -41,7 +38,9 @@ Return the structured JSON output."""
                         temperature=0.0,
                     ),
                 ),
-                timeout=config.OPENAI_PAIN_CHAT_TIMEOUT_SECONDS if hasattr(config, "OPENAI_PAIN_CHAT_TIMEOUT_SECONDS") else 10.0
+                timeout=config.OPENAI_PAIN_CHAT_TIMEOUT_SECONDS
+                if hasattr(config, "OPENAI_PAIN_CHAT_TIMEOUT_SECONDS")
+                else 10.0,
             )
         except asyncio.TimeoutError as ex:
             raise AppError("응답 시간이 초과되었습니다.", status_code=504) from ex

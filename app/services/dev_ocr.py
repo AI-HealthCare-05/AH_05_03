@@ -106,7 +106,7 @@ class DevOcrService:
                         temperature=0.0,
                     ),
                 ),
-                timeout=30.0
+                timeout=30.0,
             )
         except asyncio.TimeoutError as e:
             raise OcrUnavailableError("문서 분석 시간이 초과되었습니다. (30초 제한)") from e
