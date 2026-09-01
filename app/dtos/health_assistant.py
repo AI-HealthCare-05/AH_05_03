@@ -15,10 +15,11 @@ class ProfileContext(BaseModel):
 
 
 class ExerciseDraft(BaseModel):
-    exercise_name: str = Field(description="운동 종목명 (예: 랫풀다운, 벤치프레스, 스쿼트 등)")
-    weight_kg: float | None = Field(default=None, description="중량 (kg)")
-    reps: int | None = Field(default=None, description="반복 횟수 (회)")
-    sets: int | None = Field(default=None, description="세트 수")
+    exercise_name: str = Field(description="운동 종목명 (예: 랫풀다운, 벤치프레스, 스쿼트, 달리기, 러닝, 자전거, 걷기 등)")
+    weight_kg: float | None = Field(default=None, description="중량 (kg, 근력운동용)")
+    reps: int | None = Field(default=None, description="반복 횟수 (회, 근력운동용)")
+    sets: int | None = Field(default=None, description="세트 수 (근력운동용)")
+    distance_km: float | None = Field(default=None, ge=0.0, le=500.0, description="운동 거리 (km, 예: 5.0, 12.5 - 러닝, 자전거, 걷기 등 유산소용)")
     duration_minutes: int | None = Field(default=None, description="운동 시간 (분)")
     date_str: str | None = Field(default=None, description="운동 일자 (YYYY-MM-DD, 없으면 오늘)")
     note: str | None = Field(default=None, description="추가 특이사항")

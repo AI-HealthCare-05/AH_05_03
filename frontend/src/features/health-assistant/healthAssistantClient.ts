@@ -15,6 +15,7 @@ export interface ExerciseDraft {
   weight_kg?: number | null;
   reps?: number | null;
   sets?: number | null;
+  distance_km?: number | null;
   duration_minutes?: number | null;
   date_str?: string | null;
   note?: string | null;

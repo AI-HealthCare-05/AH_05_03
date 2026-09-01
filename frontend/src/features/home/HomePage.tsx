@@ -852,6 +852,7 @@ function recordNote(record: HealthRecord): string {
   if (record.recordType === "exercise" || p.exerciseName) {
     const parts = [
       p.exerciseName,
+      p.distanceKm ? `${p.distanceKm}km` : "",
       p.durationMinutes ? `${p.durationMinutes}분` : "",
       p.weightKg ? `${p.weightKg}kg` : "",
       p.reps ? `${p.reps}회` : "",

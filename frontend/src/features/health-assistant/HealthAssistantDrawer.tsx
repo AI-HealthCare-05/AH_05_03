@@ -99,17 +99,59 @@ export function parseExamDateFromText(text: string): string | undefined {
   return undefined;
 }
 
+// 조회 요청된 recordType을 도메인 HealthRecordType 배열로 정규화
+export function normalizeRecordTypes(recordType?: string | null): HealthRecordType[] | undefined {
+  if (!recordType) return undefined;
+  const rt = recordType.trim().toLowerCase();
+  if (rt === "all" || rt === "trend" || rt === "전체" || rt === "모든" || rt === "total") return undefined;
+  if (rt === "health_screening" || rt === "screening" || rt === "검진" || rt === "건강검진" || rt === "검진이력" || rt === "검진기록") {
+    return ["health_screening", "lab_result"];
+  }
+  if (rt === "lab_result" || rt === "검사" || rt === "혈액검사" || rt === "검사결과") {
+    return ["lab_result", "health_screening"];
+  }
+  if (rt === "blood_pressure" || rt === "혈압") return ["blood_pressure"];
+  if (rt === "blood_glucose" || rt === "혈당") return ["blood_glucose"];
+  if (rt === "exercise" || rt === "운동") return ["exercise", "walking"];
+  if (rt === "walking" || rt === "걸음" || rt === "걷기") return ["walking", "exercise"];
+  if (rt === "medication" || rt === "복약" || rt === "약") return ["medication"];
+  if (rt === "pain" || rt === "통증") return ["pain"];
+  return [recordType as HealthRecordType];
+}
+
+// 메타/조회성 키워드가 아닌 실제 본문 검색용 유효 키워드만 필터링
+export function isValidContentKeyword(keyword?: string | null): string | null {
+  if (!keyword) return null;
+  const k = keyword.trim().toLowerCase();
+  const metaKeywords = new Set([
+    "all", "trend", "전체", "모든", "여태", "검진", "건강검진", "이력", "기록", "조회", "내역", "목록", "원본", "보여줘", "서류", "결과", "전체 검진", "검진 이력", "검진 기록"
+  ]);
+  if (metaKeywords.has(k)) return null;
+  if (/^(?:전체|모든)?\s*(?:검진|기록|이력|내역|목록)\s*(?:조회|보기)?$/.test(k)) return null;
+  return keyword.trim();
+}
+
 // 기간(time_range) 기반 건강기록 필터링 헬퍼 함수
 export function filterRecordsByTimeRange(records: HealthRecord[], timeRange?: string | null): HealthRecord[] {
   if (!timeRange) return records;
   const tr = timeRange.trim().toLowerCase();
-  if (tr === "all" || tr === "모든" || tr === "전체" || tr === "여태") {
+  if (tr === "all" || tr === "모든" || tr === "전체" || tr === "여태" || tr === "all_time" || tr === "entire") {
     return records;
   }
 
   const now = new Date();
   const currentYear = now.getFullYear();
   const todayStr = now.toISOString().slice(0, 10);
+
+  // 최근 (가장 최근 등록된 일자의 기록)
+  if (tr === "recent" || tr === "최근" || tr === "latest" || tr === "마지막") {
+    if (records.length === 0) return [];
+    const sorted = [...records].sort(
+      (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime(),
+    );
+    const latestDate = sorted[0].recordedAt.slice(0, 10);
+    return sorted.filter((r) => r.recordedAt.startsWith(latestDate));
+  }
 
   // 오늘
   if (tr === "today" || tr === "오늘") {
@@ -185,6 +227,19 @@ export function formatTargetDateTime(isoString: string): string {
   } catch {
     return isoString;
   }
+}
+
+// 사용자 질의 텍스트에서 포커싱할 지표 키 감지 (예: "혈당" -> "glucose", "혈압" -> "bp")
+export function detectMetricKeyFromQuery(queryText: string): string {
+  if (!queryText) return "bp";
+  const t = queryText.toLowerCase();
+  if (t.includes("혈당") || t.includes("당뇨") || t.includes("glucose")) return "glucose";
+  if (t.includes("간") || t.includes("ast") || t.includes("alt") || t.includes("liver")) return "liver";
+  if (t.includes("콜레스테롤") || t.includes("지질") || t.includes("chol")) return "chol";
+  if (t.includes("신장") || t.includes("크레아티닌") || t.includes("gfr") || t.includes("creatinine")) return "creatinine";
+  if (t.includes("빈혈") || t.includes("혈색소") || t.includes("헤모글로빈") || t.includes("hb")) return "hb";
+  if (t.includes("체중") || t.includes("몸무게") || t.includes("비만") || t.includes("bmi") || t.includes("weight")) return "weight";
+  return "bp";
 }
 
 // -------------------------------------------------------------
@@ -684,11 +739,12 @@ export function HealthAssistantDrawer({
       setMessages((prev) => [...prev, assistantMsg]);
 
       // 조회 질의이거나 질문인 경우 IndexedDB에서 데이터 조회 수행
-      if ((res.intent === "query_records" || textToSend.includes("원본") || textToSend.includes("보여줘") || textToSend.includes("문서")) && runtime) {
+      if ((res.intent === "query_records" || /(?:원본|서류|사진|스캔|문서|이미지|보여줘|그래프|변화|추이|트렌드|수치)/.test(textToSend)) && runtime) {
         await executeLocalQuery(
           res.query_draft?.record_type,
           res.query_draft?.time_range,
-          res.query_draft?.keyword || (textToSend.includes("원본") ? "원본" : undefined),
+          res.query_draft?.keyword,
+          textToSend,
           assistantMsgId,
         );
       }
@@ -703,6 +759,7 @@ export function HealthAssistantDrawer({
     recordType?: string | null,
     timeRange?: string | null,
     keyword?: string | null,
+    rawQueryText?: string,
     assistantMsgId?: string,
   ) {
     if (!runtime || !profile) return;
@@ -710,50 +767,108 @@ export function HealthAssistantDrawer({
       const isTrendQuery =
         recordType === "trend" ||
         keyword === "trend" ||
-        (keyword && (keyword.includes("그래프") || keyword.includes("변화") || keyword.includes("추이") || keyword.includes("수치")));
+        (keyword && (keyword.includes("그래프") || keyword.includes("변화") || keyword.includes("추이") || keyword.includes("수치"))) ||
+        Boolean(rawQueryText && (rawQueryText.includes("그래프") || rawQueryText.includes("변화") || rawQueryText.includes("추이") || rawQueryText.includes("트렌드") || rawQueryText.includes("수치")));
+
+      // 사용자가 "원본", "서류", "사진", "스캔", "문서", "이미지" 등을 명시적으로 요구했을 때만 원본 이미지 노출
+      const isExplicitOriginalDocRequest =
+        Boolean(rawQueryText && /(?:원본|서류|사진|스캔|문서|이미지)/.test(rawQueryText)) ||
+        keyword === "원본";
+
+      // 사용자가 "모든 서류", "여태 올린 서류 전부", "전체 문서"처럼 전체 목록을 명시적으로 요구했는지 여부
+      const isExplicitAllDocsRequest =
+        isExplicitOriginalDocRequest &&
+        Boolean(rawQueryText && /(?:전체|모든|여태|전부|모두|다\s*보여)/.test(rawQueryText));
+
+      const targetTypes = normalizeRecordTypes(recordType);
 
       const qRes = await runtime.healthRecords.query({
         profileId: profile.id,
-        recordTypes: (recordType && recordType !== "trend") ? [recordType as HealthRecordType] : undefined,
+        recordTypes: targetTypes,
         includeDeleted: false,
       });
 
       if (qRes.ok) {
         let list = filterRecordsByTimeRange(qRes.value, timeRange);
-        const isAllQuery = !timeRange || timeRange === "all" || timeRange === "모든" || timeRange === "전체" || timeRange === "여태";
+        const isAllQuery = !timeRange || timeRange === "all" || timeRange === "모든" || timeRange === "전체" || timeRange === "여태" || timeRange === "all_time";
+        const validKeyword = isValidContentKeyword(keyword);
 
-        if (keyword && keyword !== "원본" && keyword !== "trend") {
-          list = list.filter((r) => JSON.stringify(r.payload).includes(keyword));
+        if (validKeyword) {
+          list = list.filter((r) => JSON.stringify(r.payload).includes(validKeyword));
         }
 
-        setQueriedRecords(list);
+        // 1) 트렌드 질의이거나, 2) 명시적 원본 서류 요청인 경우에는 하단 OCR 텍스트 테이블을 숨김
+        if (isTrendQuery || isExplicitOriginalDocRequest) {
+          setQueriedRecords(null);
+        } else {
+          setQueriedRecords(list);
+        }
 
         // 시계열 그래프용 지표 추출 (전체 기록 또는 조회 기록 대상)
         const metrics = extractMetricsFromRecords(qRes.value);
+        const trendInitialKey = rawQueryText ? detectMetricKeyFromQuery(rawQueryText) : "bp";
 
-        // 조회된 기록 중 연결된 모든 원본 서류(sourceDocumentId) 수집
-        const docIds = new Set<string>();
+        // 사용자가 명시적으로 원본 서류를 요청한 경우에만 attachedDocs 수집
         const attachedDocs: Array<{ id: string; fileName?: string }> = [];
+        if (isExplicitOriginalDocRequest) {
+          const docIds = new Set<string>();
 
-        for (const r of list) {
-          if (r.sourceDocumentId && !docIds.has(r.sourceDocumentId)) {
-            docIds.add(r.sourceDocumentId);
-            const p = r.payload as Record<string, unknown>;
-            attachedDocs.push({
-              id: r.sourceDocumentId,
-              fileName: (p.screeningName as string) || (p.testName as string) || undefined,
-            });
-          }
-        }
+          // timeRange가 적용된 list를 기준으로 서류 ID가 있는 기록들을 검진일자(recordedAt) 최신순으로 정렬
+          const allScreeningsWithDoc = [...list]
+            .filter((r) => r.sourceDocumentId)
+            .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
 
-        // 만약 사용자가 "전체 문서", "여태 올린 서류"를 요청하여 기록 매칭 외에 서류함 전체를 조회해야 하는 경우
-        if (isAllQuery && attachedDocs.length === 0 && runtime.documents) {
-          const docListRes = await runtime.documents.list(profile.id);
-          if (docListRes.ok) {
-            for (const doc of docListRes.value) {
-              if (!docIds.has(doc.id)) {
-                docIds.add(doc.id);
-                attachedDocs.push({ id: doc.id, fileName: doc.fileName });
+          if (isExplicitAllDocsRequest) {
+            // "모든/전체 서류"를 요청한 경우: 전체 검진 서류를 수집
+            for (const r of allScreeningsWithDoc) {
+              if (r.sourceDocumentId && !docIds.has(r.sourceDocumentId)) {
+                docIds.add(r.sourceDocumentId);
+                const p = r.payload as Record<string, unknown>;
+                attachedDocs.push({
+                  id: r.sourceDocumentId,
+                  fileName: (p.screeningName as string) || (p.testName as string) || undefined,
+                });
+              }
+            }
+            // 서류함 전체도 필요하다면 조회
+            if (attachedDocs.length === 0 && runtime.documents) {
+              const docListRes = await runtime.documents.list(profile.id);
+              if (docListRes.ok) {
+                for (const doc of docListRes.value) {
+                  if (!docIds.has(doc.id)) {
+                    docIds.add(doc.id);
+                    attachedDocs.push({ id: doc.id, fileName: doc.fileName });
+                  }
+                }
+              }
+            }
+          } else {
+            // "최근 건강검진 결과 원본 보여줘" 등 단수/최신 서류 요청인 경우:
+            // 가장 최신 검진 레코드 1건(또는 동일한 최근 검진 일자의 서류들)만 타겟팅!
+            if (allScreeningsWithDoc.length > 0) {
+              const latestScreening = allScreeningsWithDoc[0];
+              const targetRecordedAtDay = latestScreening.recordedAt.slice(0, 10);
+              // 같은 검진 이벤트(동일 날짜)에 속한 서류 페이지만 수집 (단일 장 또는 여러 페이지)
+              for (const r of allScreeningsWithDoc) {
+                if (
+                  r.sourceDocumentId &&
+                  r.recordedAt.startsWith(targetRecordedAtDay) &&
+                  !docIds.has(r.sourceDocumentId)
+                ) {
+                  docIds.add(r.sourceDocumentId);
+                  const p = r.payload as Record<string, unknown>;
+                  attachedDocs.push({
+                    id: r.sourceDocumentId,
+                    fileName: (p.screeningName as string) || (p.testName as string) || undefined,
+                  });
+                }
+              }
+            } else if (runtime.documents) {
+              // 레코드 연결이 없더라도 서류함의 가장 최신 서류 1건만 반환
+              const docListRes = await runtime.documents.list(profile.id);
+              if (docListRes.ok && docListRes.value.length > 0) {
+                const latestDoc = docListRes.value[0];
+                attachedDocs.push({ id: latestDoc.id, fileName: latestDoc.fileName });
               }
             }
           }
@@ -765,9 +880,10 @@ export function HealthAssistantDrawer({
               m.id === assistantMsgId
                 ? {
                     ...m,
-                    attachedDocuments: attachedDocs.length > 0 ? attachedDocs : m.attachedDocuments,
+                    attachedDocuments: attachedDocs.length > 0 ? attachedDocs : undefined,
                     showTrendChart: Boolean(isTrendQuery && metrics.length > 0),
                     trendMetrics: metrics.length > 0 ? metrics : undefined,
+                    trendInitialKey: isTrendQuery ? trendInitialKey : undefined,
                   }
                 : m,
             ),
@@ -797,7 +913,14 @@ export function HealthAssistantDrawer({
     if (!runtime || !profile) return;
     setLoading(true);
     try {
-      const summaryText = `${draft.exercise_name}${draft.weight_kg ? ` ${draft.weight_kg}kg` : ""}${draft.reps ? ` ${draft.reps}회` : ""}${draft.sets ? ` ${draft.sets}세트` : ""}${draft.duration_minutes ? ` (${draft.duration_minutes}분)` : ""}`.trim();
+      const details: string[] = [];
+      if (draft.distance_km) details.push(`${draft.distance_km}km`);
+      if (draft.duration_minutes) details.push(`${draft.duration_minutes}분`);
+      if (draft.weight_kg) details.push(`${draft.weight_kg}kg`);
+      if (draft.reps) details.push(`${draft.reps}회`);
+      if (draft.sets) details.push(`${draft.sets}세트`);
+      const summaryText = `${draft.exercise_name}${details.length > 0 ? ` (${details.join(" · ")})` : ""}`.trim();
+
       const result = await runtime.healthRecords.create({
         householdId: PRIMARY_HOUSEHOLD_ID,
         profileId: profile.id,
@@ -807,6 +930,7 @@ export function HealthAssistantDrawer({
         payload: {
           type: "exercise",
           exerciseName: draft.exercise_name,
+          distanceKm: draft.distance_km ?? undefined,
           weightKg: draft.weight_kg ?? undefined,
           reps: draft.reps ?? undefined,
           sets: draft.sets ?? undefined,
@@ -1459,20 +1583,30 @@ function ExerciseConfirmationCard({
   onSave: (updated: ExerciseDraft) => void;
 }) {
   const [exerciseName, setExerciseName] = useState(draft.exercise_name);
+  const [distanceKm, setDistanceKm] = useState<number | undefined>(draft.distance_km ?? undefined);
   const [durationMinutes, setDurationMinutes] = useState<number | undefined>(draft.duration_minutes ?? undefined);
   const [weightKg, setWeightKg] = useState<number | undefined>(draft.weight_kg ?? undefined);
   const [reps, setReps] = useState<number | undefined>(draft.reps ?? undefined);
   const [sets, setSets] = useState<number | undefined>(draft.sets ?? undefined);
+  const [showWeightFields, setShowWeightFields] = useState<boolean>(
+    Boolean(draft.weight_kg || draft.reps || draft.sets),
+  );
   const [dateStr, setDateStr] = useState<string>(
     draft.date_str || new Date().toISOString().slice(0, 16),
   );
+
+  const isCardio =
+    Boolean(draft.distance_km) ||
+    /(?:달리기|러닝|조깅|자전거|사이클|라이딩|걷기|산책|마라톤|트레킹|하이킹|유산소|run|cycle|bike|walk)/i.test(
+      exerciseName,
+    );
 
   if (saved) {
     return (
       <div className="draft-confirm-card is-saved">
         <span className="saved-badge">안전하게 저장되었습니다.</span>
         <p>
-          <strong>{exerciseName}</strong>: {durationMinutes ? `시간 ${durationMinutes}분 · ` : ""}{weightKg ? `${weightKg}kg ` : ""}{reps ? `${reps}회 ` : ""}{sets ? `${sets}세트` : ""}
+          <strong>{exerciseName}</strong>: {distanceKm ? `거리 ${distanceKm}km · ` : ""}{durationMinutes ? `시간 ${durationMinutes}분 · ` : ""}{weightKg ? `${weightKg}kg ` : ""}{reps ? `${reps}회 ` : ""}{sets ? `${sets}세트` : ""}
           <small style={{ display: "block", color: "#64748b", marginTop: "2px" }}>
             {formatTargetDateTime(dateStr)}
           </small>
@@ -1485,57 +1619,109 @@ function ExerciseConfirmationCard({
     <div className="draft-confirm-card">
       <div className="card-header">
         <strong>운동 기록 확인</strong>
-        <small>운동 시간 및 일시를 확인하고 저장할 수 있습니다</small>
+        <small>{isCardio ? "운동 거리, 시간 및 일시를 확인하고 저장할 수 있습니다" : "운동 종목, 시간 및 일시를 확인하고 저장할 수 있습니다"}</small>
       </div>
       <div className="card-inputs">
         <div className="input-row">
-          <label>
+          <label style={{ flex: 1.2 }}>
             종목
             <input
               value={exerciseName}
               onChange={(e) => setExerciseName(e.target.value)}
-              placeholder="운동명"
+              placeholder="예: 러닝, 자전거, 랫풀다운"
             />
           </label>
-          <label>
-            운동 시간 (분)
-            <input
-              type="number"
-              value={durationMinutes ?? ""}
-              onChange={(e) => setDurationMinutes(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-              placeholder="예: 30 (분)"
-            />
-          </label>
+          {isCardio ? (
+            <>
+              <label style={{ flex: 0.9 }}>
+                거리 (km)
+                <input
+                  type="number"
+                  step="0.1"
+                  value={distanceKm ?? ""}
+                  onChange={(e) => setDistanceKm(e.target.value ? parseFloat(e.target.value) : undefined)}
+                  placeholder="예: 5.0 (km)"
+                />
+              </label>
+              <label style={{ flex: 0.9 }}>
+                시간 (분)
+                <input
+                  type="number"
+                  value={durationMinutes ?? ""}
+                  onChange={(e) => setDurationMinutes(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                  placeholder="예: 30 (분)"
+                />
+              </label>
+            </>
+          ) : (
+            <label style={{ flex: 1 }}>
+              운동 시간 (분)
+              <input
+                type="number"
+                value={durationMinutes ?? ""}
+                onChange={(e) => setDurationMinutes(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                placeholder="예: 30 (분)"
+              />
+            </label>
+          )}
         </div>
-        <div className="input-row">
-          <label>
-            무게 (kg)
-            <input
-              type="number"
-              value={weightKg ?? ""}
-              onChange={(e) => setWeightKg(e.target.value ? parseFloat(e.target.value) : undefined)}
-              placeholder="kg"
-            />
-          </label>
-          <label>
-            횟수 (회)
-            <input
-              type="number"
-              value={reps ?? ""}
-              onChange={(e) => setReps(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-              placeholder="회"
-            />
-          </label>
-          <label>
-            세트
-            <input
-              type="number"
-              value={sets ?? ""}
-              onChange={(e) => setSets(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-              placeholder="세트"
-            />
-          </label>
-        </div>
+
+        {/* 유산소가 아니거나, 근력 필드를 보려는 경우 */}
+        {(!isCardio || showWeightFields) && (
+          <div className="input-row">
+            {!isCardio && (
+              <label>
+                거리 (km)
+                <input
+                  type="number"
+                  step="0.1"
+                  value={distanceKm ?? ""}
+                  onChange={(e) => setDistanceKm(e.target.value ? parseFloat(e.target.value) : undefined)}
+                  placeholder="km (옵션)"
+                />
+              </label>
+            )}
+            <label>
+              무게 (kg)
+              <input
+                type="number"
+                value={weightKg ?? ""}
+                onChange={(e) => setWeightKg(e.target.value ? parseFloat(e.target.value) : undefined)}
+                placeholder="kg"
+              />
+            </label>
+            <label>
+              횟수 (회)
+              <input
+                type="number"
+                value={reps ?? ""}
+                onChange={(e) => setReps(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                placeholder="회"
+              />
+            </label>
+            <label>
+              세트
+              <input
+                type="number"
+                value={sets ?? ""}
+                onChange={(e) => setSets(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                placeholder="세트"
+              />
+            </label>
+          </div>
+        )}
+
+        {isCardio && !showWeightFields && (
+          <button
+            type="button"
+            className="secondary-toggle-btn"
+            style={{ fontSize: "0.78rem", color: "#64748b", background: "none", border: "none", textAlign: "left", cursor: "pointer", padding: "2px 0", marginBottom: "4px" }}
+            onClick={() => setShowWeightFields(true)}
+          >
+            + 중량/세트 추가 입력하기
+          </button>
+        )}
+
         <label>
           운동 일시
           <input
@@ -1549,7 +1735,18 @@ function ExerciseConfirmationCard({
         type="button"
         className="confirm-save-btn"
         disabled={!exerciseName}
-        onClick={() => onSave({ ...draft, exercise_name: exerciseName, duration_minutes: durationMinutes, weight_kg: weightKg, reps, sets, date_str: dateStr })}
+        onClick={() =>
+          onSave({
+            ...draft,
+            exercise_name: exerciseName,
+            distance_km: distanceKm,
+            duration_minutes: durationMinutes,
+            weight_kg: weightKg,
+            reps,
+            sets,
+            date_str: dateStr,
+          })
+        }
       >
         운동 기록에 저장하기
       </button>
@@ -1984,7 +2181,13 @@ function QueriedRecordsView({
 
                 let contentText = "";
                 if (rec.recordType === "exercise" || p.exerciseName) {
-                  contentText = `${p.exerciseName ?? "운동"}${p.durationMinutes ? ` (${p.durationMinutes}분)` : ""}${p.weightKg ? ` ${p.weightKg}kg` : ""}${p.reps ? ` ${p.reps}회` : ""}${p.sets ? ` ${p.sets}세트` : ""}`;
+                  const details: string[] = [];
+                  if (p.distanceKm) details.push(`${p.distanceKm}km`);
+                  if (p.durationMinutes) details.push(`${p.durationMinutes}분`);
+                  if (p.weightKg) details.push(`${p.weightKg}kg`);
+                  if (p.reps) details.push(`${p.reps}회`);
+                  if (p.sets) details.push(`${p.sets}세트`);
+                  contentText = `${p.exerciseName ?? "운동"}${details.length > 0 ? ` (${details.join(" · ")})` : ""}`;
                 } else if (rec.recordType === "blood_pressure" || p.systolicMmHg) {
                   contentText = `${p.systolicMmHg}/${p.diastolicMmHg} mmHg${p.pulseBpm ? ` (맥박 ${p.pulseBpm})` : ""}`;
                 } else if (rec.recordType === "blood_glucose" || p.valueMgDl) {

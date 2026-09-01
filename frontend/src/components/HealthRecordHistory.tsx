@@ -19,7 +19,7 @@ function summary(payload: HealthPayload): string {
     case "health_screening": return payload.screeningName;
     case "pain": return `${payload.bodyArea} · 강도 ${payload.intensity}/10${payload.sensation ? ` · ${payload.sensation}` : ""}`;
     case "walking": return [`${payload.steps ?? "-"}걸음`, `${payload.distanceKm ?? "-"}km`, `${payload.durationMinutes ?? "-"}분`].join(" · ");
-    case "exercise": return `${payload.exerciseName}${payload.weightKg ? ` · ${payload.weightKg}kg` : ""}${payload.reps ? ` · ${payload.reps}회` : ""}${payload.sets ? ` · ${payload.sets}세트` : ""}${payload.durationMinutes ? ` · ${payload.durationMinutes}분` : ""}`;
+    case "exercise": return `${payload.exerciseName}${payload.distanceKm ? ` · ${payload.distanceKm}km` : ""}${payload.durationMinutes ? ` · ${payload.durationMinutes}분` : ""}${payload.weightKg ? ` · ${payload.weightKg}kg` : ""}${payload.reps ? ` · ${payload.reps}회` : ""}${payload.sets ? ` · ${payload.sets}세트` : ""}`;
     case "medication": return `${payload.medicationName}${payload.dosage ? ` · ${payload.dosage}` : ""}${payload.takenAt ? ` · ${payload.takenAt}` : ""}`;
     case "note": return payload.title || payload.text.slice(0, 60);
   }

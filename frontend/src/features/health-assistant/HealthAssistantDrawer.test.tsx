@@ -754,5 +754,294 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
         expect(mockOnRecordSaved).toHaveBeenCalled();
       });
     });
+
+    it("야외 유산소 운동(러닝/자전거) 시 거리(km)와 시간이 정상적으로 확인 및 저장된다", async () => {
+      vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+        intent: "record_exercise",
+        assistant_message: "오늘 아침에 달린 5.5km 러닝 기록을 저장할까요?",
+        exercise_draft: {
+          exercise_name: "러닝",
+          distance_km: 5.5,
+          duration_minutes: 32,
+          date_str: "2026-09-01T07:30",
+        },
+        missing_fields: [],
+        needs_confirmation: true,
+        suggested_quick_replies: [],
+      });
+
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={mockRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+          onRecordSaved={mockOnRecordSaved}
+        />,
+      );
+
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+      fireEvent.change(input, { target: { value: "오늘 아침 7시 30분에 한강에서 러닝 5.5km 32분 달렸어" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("운동 기록 확인")).toBeInTheDocument();
+        expect(screen.getByDisplayValue("러닝")).toBeInTheDocument();
+        expect(screen.getByDisplayValue("5.5")).toBeInTheDocument();
+        expect(screen.getByDisplayValue("32")).toBeInTheDocument();
+      });
+
+      // 저장 버튼 클릭
+      fireEvent.click(screen.getByRole("button", { name: "운동 기록에 저장하기" }));
+
+      await waitFor(() => {
+        expect(mockCreateRecord).toHaveBeenCalledWith(
+          expect.objectContaining({
+            recordType: "exercise",
+            payload: expect.objectContaining({
+              type: "exercise",
+              exerciseName: "러닝",
+              distanceKm: 5.5,
+              durationMinutes: 32,
+            }),
+          }),
+        );
+        expect(mockOnRecordSaved).toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe("검진 수치 변화 그래프 및 원본 서류 분리 노출", () => {
+    it("'검진수치변화그래프' 질의 시 원본 사진 없이 수치 변화 그래프 카드만 단독 노출된다", async () => {
+      const runtimeWithDoc = {
+        healthRecords: {
+          create: vi.fn(),
+          query: vi.fn().mockResolvedValue({
+            ok: true,
+            value: [
+              {
+                id: "r-screening",
+                profileId: "profile-1",
+                recordType: "health_screening",
+                recordedAt: "2026-08-28T09:00:00Z",
+                source: "ocr",
+                sourceDocumentId: "doc-123",
+                payload: {
+                  screeningName: "2026 건강검진",
+                  note: "혈압 120/80 mmHg, 공복혈당 95 mg/dL",
+                },
+              },
+            ],
+          }),
+        },
+        documents: {
+          readById: vi.fn().mockResolvedValue({
+            ok: true,
+            value: {
+              file: new Blob(["fake-img"], { type: "image/jpeg" }),
+              fileName: "검진서류.jpeg",
+            },
+          }),
+          save: vi.fn(),
+          list: vi.fn(),
+        },
+      } as unknown as LocalDomainRuntime;
+
+      vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+        intent: "query_records",
+        assistant_message: "등록된 건강검진 및 측정 기록의 시계열 수치 변화 그래프를 조회해 드립니다.",
+        query_draft: {
+          record_type: "trend",
+          time_range: "all",
+          keyword: "trend",
+        },
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: [],
+      });
+
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={runtimeWithDoc}
+          isOpen={true}
+          onClose={mockOnClose}
+          onRecordSaved={mockOnRecordSaved}
+        />,
+      );
+
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+      fireEvent.change(input, { target: { value: "검진수치변화그래프" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      await waitFor(() => {
+        // 수치 변화 그래프는 렌더링되어야 함
+        expect(screen.getByText("수치 변화 그래프")).toBeInTheDocument();
+        // 원본 서류 이미지 미리보기 컨테이너(.attached-docs-container)는 존재하지 않아야 함
+        expect(screen.queryByText("원본 서류")).not.toBeInTheDocument();
+        expect(screen.queryByAltText("원본 서류")).not.toBeInTheDocument();
+      });
+    });
+
+    it("'최근 건강검진 결과 원본 보여줘' 질의 시 가장 최신 1건의 서류만 노출되고 하단 OCR 표는 숨겨진다", async () => {
+      const runtimeWithMultipleDocs = {
+        healthRecords: {
+          create: vi.fn(),
+          query: vi.fn().mockResolvedValue({
+            ok: true,
+            value: [
+              {
+                id: "r-2022",
+                profileId: "profile-1",
+                recordType: "health_screening",
+                recordedAt: "2022-05-30T09:00:00Z",
+                source: "ocr",
+                sourceDocumentId: "doc-2022",
+                payload: {
+                  screeningName: "2022년 건강검진",
+                  note: "혈압 110/70, 요검사 정상",
+                },
+              },
+              {
+                id: "r-2026",
+                profileId: "profile-1",
+                recordType: "health_screening",
+                recordedAt: "2026-08-28T09:00:00Z",
+                source: "ocr",
+                sourceDocumentId: "doc-2026",
+                payload: {
+                  screeningName: "2026년 최신건강검진",
+                  note: "혈압 120/80, 공복혈당 95",
+                },
+              },
+            ],
+          }),
+        },
+        documents: {
+          readById: vi.fn().mockImplementation((id: string) => {
+            return Promise.resolve({
+              ok: true,
+              value: {
+                file: new Blob(["fake-img"], { type: "image/jpeg" }),
+                fileName: id === "doc-2026" ? "2026검진.jpeg" : "2022검진.jpeg",
+              },
+            });
+          }),
+          save: vi.fn(),
+          list: vi.fn(),
+        },
+      } as unknown as LocalDomainRuntime;
+
+      vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+        intent: "query_records",
+        assistant_message: "가장 최근에 등록된 2026년 8월 28일 건강검진 원본 서류입니다.",
+        query_draft: {
+          record_type: "health_screening",
+          time_range: "recent",
+          keyword: "원본",
+        },
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: [],
+      });
+
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={runtimeWithMultipleDocs}
+          isOpen={true}
+          onClose={mockOnClose}
+          onRecordSaved={mockOnRecordSaved}
+        />,
+      );
+
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+      fireEvent.change(input, { target: { value: "최근 건강검진 결과 원본 보여줘" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      await waitFor(() => {
+        // 최신 서류(2026검진.jpeg)는 노출되어야 함
+        expect(screen.getByText("2026검진.jpeg")).toBeInTheDocument();
+        // 과거 서류(2022검진.jpeg)는 첨부되지 않아야 함
+        expect(screen.queryByText("2022검진.jpeg")).not.toBeInTheDocument();
+        // 하단 OCR 텍스트 표("조회된 건강 기록")는 닫혀있어야 함
+        expect(screen.queryByText(/조회된 건강 기록/)).not.toBeInTheDocument();
+      });
+    });
+
+    it("'전체 검진 이력 조회' 질의 시 저장된 모든 검진 기록이 0건이 아니라 정상적으로 표에 렌더링된다", async () => {
+      const mockScreeningRuntime = {
+        healthRecords: {
+          create: vi.fn(),
+          query: vi.fn().mockResolvedValue({
+            ok: true,
+            value: [
+              {
+                id: "rec-scr-1",
+                profileId: "profile-1",
+                recordType: "health_screening",
+                recordedAt: "2022-05-30T09:00:00Z",
+                source: "ocr",
+                payload: {
+                  type: "health_screening",
+                  screeningName: "2022년 종합검진",
+                  summary: "혈압 정상, 간기능 양호",
+                },
+              },
+              {
+                id: "rec-scr-2",
+                profileId: "profile-1",
+                recordType: "health_screening",
+                recordedAt: "2026-08-28T09:00:00Z",
+                source: "ocr",
+                payload: {
+                  type: "health_screening",
+                  screeningName: "2026년 일반건강검진",
+                  summary: "혈압 120/80, 공복혈당 95",
+                },
+              },
+            ],
+          }),
+        },
+        documents: {
+          readById: vi.fn(),
+          save: vi.fn(),
+          list: vi.fn(),
+        },
+      } as unknown as LocalDomainRuntime;
+
+      vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+        intent: "query_records",
+        assistant_message: "등록된 모든 검진 이력을 조회해 드립니다. 아래에서 상세 내용을 확인해 보세요.",
+        query_draft: {
+          record_type: "health_screening",
+          time_range: "all",
+          keyword: "검진 이력",
+        },
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: ["최근 검진 원본 보기", "수치 변화 그래프", "혈압 기록하기"],
+      });
+
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={mockScreeningRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+          onRecordSaved={mockOnRecordSaved}
+        />,
+      );
+
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+      fireEvent.change(input, { target: { value: "전체 검진 이력 조회" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/조회된 건강 기록/)).toBeInTheDocument();
+        expect(screen.getByText(/2022년 종합검진/)).toBeInTheDocument();
+        expect(screen.getByText(/2026년 일반건강검진/)).toBeInTheDocument();
+      });
+    });
   });
 });

@@ -42,7 +42,7 @@ export type HealthPayload =
   | { type: "health_screening"; screeningName: string; institution?: string; summary?: string }
   | { type: "pain"; bodyArea: string; intensity: number; sensation?: string; onsetAt?: ISODateTime; aggravatingFactors?: string; note?: string }
   | { type: "walking"; steps?: number; distanceKm?: number; durationMinutes?: number; sourceName?: string; note?: string }
-  | { type: "exercise"; exerciseName: string; weightKg?: number; reps?: number; sets?: number; durationMinutes?: number; note?: string }
+  | { type: "exercise"; exerciseName: string; weightKg?: number; reps?: number; sets?: number; distanceKm?: number; durationMinutes?: number; note?: string }
   | { type: "medication"; medicationName: string; dosage?: string; takenAt?: string; note?: string }
   | { type: "note"; title?: string; text: string };
 
