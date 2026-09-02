@@ -9,7 +9,7 @@ export function selectContextRecordTypes(message: string): HealthRecordType[] {
   const normalized = message.trim().toLowerCase();
   const selected = new Set<HealthRecordType>();
   const looksLikeAdvice =
-    /(괜찮|해도\s*돼|해도\s*됨|먹어도|마셔도|피해야|주의|위험|문제|추천|어떻게\s*해야)/.test(normalized);
+    /(괜찮|도\s*돼|도\s*됨|먹어도|마셔도|피워도|피해야|주의|위험|문제|추천|어떻게\s*해야)/.test(normalized);
 
   if (!looksLikeAdvice) return [];
   if (/(술|음주|알코올|약|복용|타이레놀|진통제|항생제)/.test(normalized)) selected.add("medication");

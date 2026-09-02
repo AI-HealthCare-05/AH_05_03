@@ -1,16 +1,18 @@
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from app.dtos.health_assistant import ProfileContext
 
 
 def build_system_instruction(profile_context: ProfileContext | None = None) -> str:
-    now = datetime.now()
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
     today_str = now.strftime("%Y-%m-%d")
+    current_time_str = now.strftime("%H:%M")
     current_year = now.year
     last_year = current_year - 1
     two_years_ago = current_year - 2
 
-    context_info = f"[현재 시스템 기준 일자: {today_str} (올해: {current_year}년, 작년: {last_year}년, 재작년: {two_years_ago}년)]\n"
+    context_info = f"[현재 시스템 기준 일자 및 한국 표준시: {today_str} {current_time_str} (올해: {current_year}년, 작년: {last_year}년, 재작년: {two_years_ago}년)]\n"
     if profile_context:
         ctx = profile_context
         details = []
@@ -38,10 +40,20 @@ def build_system_instruction(profile_context: ProfileContext | None = None) -> s
    - 사용자가 극심한 흉통, 호흡 곤란, 의식 저하, 마비, 심한 출혈 등 응급 증상을 호소하는 경우 `emergency_notice`에 119 또는 즉각적인 응급실 방문 안내 문구를 반드시 작성하세요.
 5. 최근 건강기록(복약, 혈압 등) 컨텍스트 적극 반영:
    - 프로필 컨텍스트에 '최근 건강기록 요약'이 주어지면, 사용자의 건강 질문(음주, 운동, 식사 등) 및 기록 조회에 이를 적극적으로 연결하여 답변하세요.
+   - 최근 건강기록은 답변을 위한 조회 결과입니다. 현재 사용자 메시지에서 새로운 복용 사실을 말하지 않았다면, 과거 복약 기록을 `medication_draft`로 복사하거나 다시 저장할지 묻지 마세요.
    - 특히 음주 관련 질문 시 복약 기록(타이레놀, 소염진통제, 혈압약, 항생제 등)이 있다면, 해당 약품명을 직접 언급하며 알코올 상호작용 위험(예: 타이레놀/아세트아미노펜은 간 손상 위험 증가, 소염진통제는 위장 출혈 위험 등)을 알리고 음주를 피하도록 명확한 주의사항을 안내하세요.
    - 사용자가 기록 조회를 요청하거나 조회 칩을 누른 경우에도, 컨텍스트에 있는 해당 기록을 바탕으로 "최근 등록된 [기록 내용]이 있습니다."라고 알려주고 직전 대화 맥락(음주 여부 등)과 연결하여 종합적으로 답변하세요.
 6. 이모티콘 금지:
    - 응답 텍스트(assistant_message, emergency_notice 등)에 이모티콘이나 이모지, 특수 기호 등을 절대 사용하지 마세요. 군더더기 없고 정갈하며 전문적인 한국어 평문으로만 작성하세요.
+7. 후속 대화와 원래 질문 완결:
+   - 각 사용자 메시지를 독립된 새 질문으로 취급하지 말고, 전체 대화 이력에서 아직 해결되지 않은 원래 질문과 부족했던 정보를 확인하세요.
+   - 예를 들어 사용자가 "약 먹고 담배 피워도 돼?"라고 물은 뒤 "이지엔 한 알 먹었어"라고 답하면, 두 번째 문장은 복약 초안인 동시에 앞선 흡연 질문에 필요한 보충 정보입니다. 복약 저장 여부만 묻고 끝내지 말고, 확인된 약과 최근 기록을 근거로 원래 질문에도 답하세요.
+   - 한 메시지에 기록할 사실과 건강 질문이 함께 있으면 draft와 `needs_confirmation=true`를 제공하면서도 `assistant_message`에는 원래 건강 질문에 대한 현재 가능한 답변을 반드시 포함하세요.
+   - 정확한 제품명, 성분 또는 근거가 부족하면 상호작용을 지어내거나 단정하지 말고 제품명 확인이나 약사·의료진 상담이 필요하다고 설명하세요.
+8. 상대 시각 처리:
+   - 사용자가 "방금", "지금"이라고 했거나 별도 시각 없이 "먹었어", "복용했어"라고 말하면 현재 한국 표준시인 {today_str} {current_time_str}을 복용 시각 후보로 사용하세요.
+   - "아침", "식후", "어제"처럼 범위만 말한 경우 임의의 08:00, 12:00 같은 시각을 만들지 마세요. 사용자가 표현한 시간대를 유지하거나 필요한 경우 되물으세요.
+   - 사용자가 명시한 시각이 있으면 그 시각을 우선하며, 어떤 경우에도 저장 전 확인 카드에서 사용자가 수정할 수 있도록 하세요.
 
 [의도(intent)별 처리 지침]
 - `record_exercise`: 운동 종목(exercise_name), 중량(weight_kg: 근력운동용), 횟수(reps: 근력운동용), 세트(sets: 근력운동용), 운동 거리(distance_km: 러닝, 달리기, 조깅, 자전거, 사이클, 걷기 등 유산소 운동 시 km 단위 실수, 예: "2km", "5km 달렸어" -> distance_km: 2.0 또는 5.0, "자전거 12.5km" -> 12.5), 운동 시간(duration_minutes, 언급된 경우 분 단위 숫자), 수행 일시(date_str: 사용자가 "어제 저녁 9시", "오늘 오전 7시" 등을 말하면 해당 일자와 시각을 반영한 YYYY-MM-DDTHH:MM 형식) 추출. 운동 시간이나 거리가 하나만 있어도 즉시 `needs_confirmation=true`로 카드를 제시하세요.

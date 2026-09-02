@@ -1,6 +1,13 @@
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { HealthAssistantDrawer, extractMetricsFromRecords, HealthMetricsTrendCard, formatTargetDateTime } from "./HealthAssistantDrawer";
+import {
+  HealthAssistantDrawer,
+  extractMetricsFromRecords,
+  HealthMetricsTrendCard,
+  containsNewMedicationRecord,
+  formatTargetDateTime,
+  resolveMedicationTakenAt,
+} from "./HealthAssistantDrawer";
 import type { FamilyProfile, HealthRecord } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 import * as clientModule from "./healthAssistantClient";
@@ -99,6 +106,27 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     expect(screen.getByText(/안녕하세요! 홍길동님의 건강 비서/)).toBeInTheDocument();
   });
 
+  it("복용 시각을 말하지 않으면 임의 시각 대신 현재 시각을 후보로 사용한다", () => {
+    const now = new Date(2026, 8, 2, 15, 27);
+
+    expect(resolveMedicationTakenAt("이지엔 한 알 먹었어", "2026-09-02T12:00", now)).toBe(
+      "2026-09-02T15:27",
+    );
+    expect(resolveMedicationTakenAt("오늘 아침 8시에 이지엔 먹었어", "2026-09-02T08:00", now)).toBe(
+      "2026-09-02T08:00",
+    );
+    expect(resolveMedicationTakenAt("어제 이지엔 먹었어", "2026-09-01T12:00", now)).toBe(
+      "2026-09-01",
+    );
+  });
+
+  it("새 복약 기록과 복약 관련 질문을 구분한다", () => {
+    expect(containsNewMedicationRecord("이지엔 한 알 먹었어")).toBe(true);
+    expect(containsNewMedicationRecord("8시에 타이레놀 1알")).toBe(true);
+    expect(containsNewMedicationRecord("나 담배 피워도 돼?")).toBe(false);
+    expect(containsNewMedicationRecord("타이레놀 먹어도 돼?")).toBe(false);
+  });
+
   it("자연어 입력 후 AI가 운동 초안을 제시하면 확인 카드가 렌더링되고, 승인 전에는 저장되지 않는다", async () => {
     vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_exercise",
@@ -172,6 +200,70 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     await waitFor(() => {
       expect(screen.getByText(/안전하게 저장되었습니다/)).toBeInTheDocument();
     });
+  });
+
+  it("운동을 저장하면 오늘 운동 전체 기록을 자동으로 다시 보여준다", async () => {
+    const today = new Date();
+    const firstRecordedAt = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10, 0).toISOString();
+    const secondRecordedAt = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 10, 10).toISOString();
+    const query = vi.fn().mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          id: "exercise-2",
+          householdId: "household-1",
+          profileId: "profile-1",
+          recordType: "exercise",
+          recordedAt: secondRecordedAt,
+          source: "local_ai",
+          payload: { type: "exercise", exerciseName: "레버로우", weightKg: 35, reps: 5, sets: 3 },
+          version: 1,
+        },
+        {
+          id: "exercise-1",
+          householdId: "household-1",
+          profileId: "profile-1",
+          recordType: "exercise",
+          recordedAt: firstRecordedAt,
+          source: "local_ai",
+          payload: { type: "exercise", exerciseName: "랫풀다운", weightKg: 20, reps: 10, sets: 3 },
+          version: 1,
+        },
+      ],
+    });
+    const runtimeWithExercises = {
+      healthRecords: { create: mockCreateRecord, query },
+      documents: { readById: mockReadDocById, save: mockSaveDoc },
+    } as unknown as LocalDomainRuntime;
+
+    vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "record_exercise",
+      assistant_message: "레버로우 기록을 저장할까요?",
+      exercise_draft: { exercise_name: "레버로우", weight_kg: 35, reps: 5, sets: 3 },
+      missing_fields: [],
+      needs_confirmation: true,
+      suggested_quick_replies: [],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={mockProfile}
+        runtime={runtimeWithExercises}
+        isOpen={true}
+        onClose={mockOnClose}
+        onRecordSaved={mockOnRecordSaved}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), {
+      target: { value: "레버로우 35kg 5개 3세트" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+    fireEvent.click(await screen.findByRole("button", { name: "운동 기록에 저장하기" }));
+
+    expect(await screen.findByText("오늘 운동 기록 (2건)")).toBeInTheDocument();
+    expect(screen.getByText("랫풀다운")).toBeInTheDocument();
+    expect(screen.getAllByText("레버로우").length).toBeGreaterThanOrEqual(1);
   });
 
   it("응급 상황 메시지가 오면 붉은색 응급 주의 배너를 렌더링한다", async () => {
@@ -320,6 +412,42 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     await waitFor(() => {
       expect(screen.getByText(/최근 복약 기록에 타이레놀 복용 내역이 있습니다/)).toBeInTheDocument();
     });
+  });
+
+  it("최근 복약 기록을 근거로 답할 때 동일한 복약 저장 카드를 다시 만들지 않는다", async () => {
+    vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "health_advice",
+      assistant_message:
+        "방금 타이레놀 1알을 복용하셨습니다. 흡연은 피하시는 것이 좋습니다. 오늘 복용하신 타이레놀 기록을 저장할까요?",
+      medication_draft: {
+        medication_name: "타이레놀",
+        dosage: "1알",
+        taken_at: "2026-09-02T10:43",
+      },
+      missing_fields: [],
+      needs_confirmation: true,
+      suggested_quick_replies: ["네, 저장해 주세요", "아니요, 저장 안 할래요"],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={mockProfile}
+        runtime={mockRuntime}
+        isOpen={true}
+        onClose={mockOnClose}
+        onRecordSaved={mockOnRecordSaved}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), {
+      target: { value: "나 담배 피워도 돼?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    expect(await screen.findByText(/흡연은 피하시는 것이 좋습니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/기록을 저장할까요/)).not.toBeInTheDocument();
+    expect(screen.queryByText("복약 기록 확인")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "복약 기록에 저장하기" })).not.toBeInTheDocument();
   });
 
   it("조회된 건강검진 기록에 sourceDocumentId가 있을 때 원본 서류 보기 버튼이 노출되고 클릭 시 모달이 뜬다", async () => {

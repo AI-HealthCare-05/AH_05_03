@@ -56,6 +56,56 @@ interface ExtendedChatMessage extends ChatMessage {
 
 const PRIMARY_HOUSEHOLD_ID = "household-local-primary";
 
+function toLocalMinuteString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+/**
+ * 사용자가 복용 시각을 말하지 않은 단순 과거형("한 알 먹었어")은
+ * LLM이 임의 시각을 만들지 못하도록 요청을 받은 현재 시각을 후보로 사용한다.
+ */
+export function resolveMedicationTakenAt(
+  userMessage: string,
+  extractedTakenAt?: string | null,
+  now = new Date(),
+): string {
+  const hasExplicitClockOrPeriod =
+    /(?:아침|점심|저녁|밤|새벽|오전|오후|식전|식후|취침|기상|\d{1,2}\s*(?:시|:)|\d+\s*분\s*전)/.test(
+      userMessage,
+    );
+  if (hasExplicitClockOrPeriod && extractedTakenAt) return extractedTakenAt;
+
+  if (/(?:어제|그제)/.test(userMessage) && extractedTakenAt) {
+    return extractedTakenAt.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? extractedTakenAt;
+  }
+
+  return toLocalMinuteString(now);
+}
+
+export function containsNewMedicationRecord(message: string): boolean {
+  const normalized = message.trim().toLowerCase();
+  const isHypothetical = /(?:먹어도|복용해도|먹을까|복용할까|먹으면|복용하면)/.test(normalized);
+  if (isHypothetical) return false;
+
+  const statesCompletedIntake = /(?:먹었|복용했|복용함|먹음|투약했|삼켰)/.test(normalized);
+  const hasDoseWithoutQuestion = /\d+(?:\.\d+)?\s*(?:알|정|캡슐|포|mg|ml|밀리그램|밀리리터)/i.test(normalized) &&
+    !/(?:\?|？|돼|괜찮|가능)/.test(normalized);
+  return statesCompletedIntake || hasDoseWithoutQuestion;
+}
+
+function removeMedicationSavePrompt(message: string): string {
+  return message
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !/(?:약|복약|복용).*(?:기록|저장).*(?:저장|할까요|하시겠)/.test(sentence))
+    .join(" ")
+    .trim();
+}
+
 // 텍스트/OCR 결과에서 실제 검사일자(YYYY-MM-DD) 추출
 export function parseExamDateFromText(text: string): string | undefined {
   if (!text) return undefined;
@@ -450,6 +500,7 @@ export function HealthAssistantDrawer({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [queriedRecords, setQueriedRecords] = useState<HealthRecord[] | null>(null);
+  const [queriedRecordsTitle, setQueriedRecordsTitle] = useState<string>();
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [sourcePreviewModal, setSourcePreviewModal] = useState<{ url: string; name: string } | null>(null);
@@ -516,6 +567,7 @@ export function HealthAssistantDrawer({
         },
       ]);
       setQueriedRecords(null);
+      setQueriedRecordsTitle(undefined);
       setSelectedImage(null);
       setImagePreview(null);
     }
@@ -714,11 +766,16 @@ export function HealthAssistantDrawer({
     setLoading(true);
     setError(undefined);
     setQueriedRecords(null);
+    setQueriedRecordsTitle(undefined);
 
     try {
       // 일반 대화/기록 입력에는 과거 건강정보를 보내지 않는다.
       // 개인 기록이 실제로 필요한 건강 질문에 한해 관련 종류만 선별한다.
-      const contextRecordTypes = selectContextRecordTypes(textToSend);
+      const recentConversationText = nextMessages
+        .slice(-6)
+        .map((message) => message.content)
+        .join("\n");
+      const contextRecordTypes = selectContextRecordTypes(recentConversationText);
       const recentSummary = await fetchRecentRecordsSummary(contextRecordTypes);
 
       // AI 전송용 메시지 배열 구성 (OCR 텍스트가 있으면 함께 포함)
@@ -746,6 +803,31 @@ export function HealthAssistantDrawer({
       // OCR에서 추출된 날짜가 있고 AI가 날짜를 채우지 않았거나 오늘로 채운 경우 보정
       if (res.lab_result_draft && extractedExamDate && (!res.lab_result_draft.recorded_at || res.lab_result_draft.recorded_at === new Date().toISOString().slice(0, 10))) {
         res.lab_result_draft.recorded_at = extractedExamDate;
+      }
+      if (res.medication_draft && containsNewMedicationRecord(textToSend)) {
+        res.medication_draft.taken_at = resolveMedicationTakenAt(
+          textToSend,
+          res.medication_draft.taken_at,
+        );
+      } else if (res.medication_draft) {
+        // 최근 복약 기록은 답변 근거일 뿐, 현재 사용자가 새 복약 사실을 말하지 않았다면
+        // 다시 저장할 초안으로 취급하지 않는다.
+        res.medication_draft = null;
+        const hasAnotherDraft = Boolean(
+          res.exercise_draft ||
+          res.blood_pressure_draft ||
+          res.blood_glucose_draft ||
+          res.pain_draft ||
+          res.lab_result_draft,
+        );
+        if (!hasAnotherDraft) {
+          res.needs_confirmation = false;
+          res.missing_fields = [];
+        }
+        res.assistant_message = removeMedicationSavePrompt(res.assistant_message);
+        res.suggested_quick_replies = res.suggested_quick_replies.filter(
+          (reply) => !/(?:기록|저장)/.test(reply),
+        );
       }
 
       const assistantMsgId = `assistant-${Date.now()}`;
@@ -823,8 +905,10 @@ export function HealthAssistantDrawer({
         // 1) 트렌드 질의이거나, 2) 명시적 원본 서류 요청인 경우에는 하단 OCR 텍스트 테이블을 숨김
         if (isTrendQuery || isExplicitOriginalDocRequest) {
           setQueriedRecords(null);
+          setQueriedRecordsTitle(undefined);
         } else {
           setQueriedRecords(list);
+          setQueriedRecordsTitle(undefined);
         }
 
         // 시계열 그래프용 지표 추출 (전체 기록 또는 조회 기록 대상)
@@ -974,6 +1058,17 @@ export function HealthAssistantDrawer({
         prev.map((m) => (m.id === msgId ? { ...m, saved: true } : m)),
       );
       if (onRecordSaved) await onRecordSaved();
+
+      const todayResult = await runtime.healthRecords.query({
+        profileId: profile.id,
+        recordTypes: ["exercise"],
+        includeDeleted: false,
+      });
+      if (todayResult.ok) {
+        const todayExercises = filterRecordsByTimeRange(todayResult.value, "today");
+        setQueriedRecords(todayExercises);
+        setQueriedRecordsTitle(`오늘 운동 기록 (${todayExercises.length}건)`);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "운동 기록 저장에 실패했습니다.");
     } finally {
@@ -1313,6 +1408,7 @@ export function HealthAssistantDrawer({
           {queriedRecords && (
             <QueriedRecordsView
               records={queriedRecords}
+              title={queriedRecordsTitle}
               onNavigate={onNavigateToRecords}
               onOpenDocument={openSourceDocument}
             />
@@ -2142,10 +2238,12 @@ function LabResultConfirmationCard({
 
 function QueriedRecordsView({
   records,
+  title,
   onNavigate,
   onOpenDocument,
 }: {
   records: HealthRecord[];
+  title?: string;
   onNavigate?: () => void;
   onOpenDocument?: (documentId: string) => void;
 }) {
@@ -2169,7 +2267,7 @@ function QueriedRecordsView({
   return (
     <div className="queried-records-card">
       <div className="query-header">
-        <strong>조회된 건강 기록 ({records.length}건)</strong>
+        <strong>{title ?? `조회된 건강 기록 (${records.length}건)`}</strong>
         <div className="query-header-actions">
           {trendMetrics.length > 0 && (
             <button
