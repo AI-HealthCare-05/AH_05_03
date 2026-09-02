@@ -175,6 +175,7 @@ async def test_label_defining_measurements_are_not_model_inputs(authorized_clien
         "dm 번들이 혈압을 다시 쓰기 시작했다. 누출은 아니지만 문서의 설명과 어긋나므로 확인이 필요하다"
     )
 
+
 @pytest.mark.parametrize("bundle_name", ALL_BUNDLES or ["dm"])
 def test_pure_python_matches_sklearn(bundle_name: str) -> None:
     """내보낸 JSON 채점 결과가 sklearn 파이프라인과 같은지 확인한다.
