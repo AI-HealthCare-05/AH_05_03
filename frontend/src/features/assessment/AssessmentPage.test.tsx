@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -120,9 +120,9 @@ const RESPONSE: AssessmentSummaryData = {
 };
 
 
-function renderPage() {
+function renderPage(state?: unknown) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[{ pathname: "/assessment", state }]}>
       <LocalDomainProvider databaseName={`ieobom-assess-test-${crypto.randomUUID()}`}>
         <AssessmentPage />
       </LocalDomainProvider>
@@ -144,13 +144,54 @@ describe("AssessmentPage", () => {
     const spy = vi.spyOn(serverApiClient, "assessSummary");
     renderPage();
 
+    // 버튼은 잠기지 않는다 — 눌러야 어디가 비었는지 알려 줄 수 있다.
     const button = screen.getByRole("button", { name: /판정하기/ });
-    expect(button).toBeDisabled();
-    expect(screen.getByText(/필수 5개가 남았습니다/)).toBeInTheDocument();
+    expect(button).toBeEnabled();
+    await user.click(button);
+    expect(spy).not.toHaveBeenCalled();
 
     await fillRequired(user);
     expect(button).toBeEnabled();
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("비어 있는 필수 칸을 이름으로 세우고 첫 칸으로 커서를 옮긴다", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/필수 항목 5개가 비어 있어요/);
+    // 몇 개인지가 아니라 **어느 칸인지**를 말한다.
+    expect(within(alert).getByRole("button", { name: "전반적 건강" })).toBeInTheDocument();
+    // 첫 칸에 커서가 가 있다.
+    expect(screen.getByRole("spinbutton", { name: /나이/ })).toHaveFocus();
+  });
+
+  it("경고문의 칸 이름을 누르면 그 칸으로 옮겨 간다", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+    await user.click(within(screen.getByRole("alert")).getByRole("button", { name: "체중" }));
+
+    expect(screen.getByRole("spinbutton", { name: /체중/ })).toHaveFocus();
+  });
+
+  it("채우면 경고가 그 칸부터 사라진다", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+    expect(screen.getByRole("spinbutton", { name: /나이/ })).toHaveAttribute("aria-invalid", "true");
+
+    await user.type(screen.getByRole("spinbutton", { name: /나이/ }), "54");
+    expect(screen.getByRole("spinbutton", { name: /나이/ })).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByRole("alert")).toHaveTextContent(/필수 항목 4개가 비어 있어요/);
+
+    await fillRequired(user);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("어느 엔진이 왜 답했는지를 카드에 적는다", async () => {
@@ -161,15 +202,59 @@ describe("AssessmentPage", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
-    expect(await screen.findByRole("heading", { name: "고혈압" })).toBeInTheDocument();
-    expect(screen.getByText("고혈압 1기")).toBeInTheDocument();
-    // 엔진 배지와 사유가 둘 다 있어야 한다.
-    expect(screen.getByText(/E1 규칙 엔진/)).toBeInTheDocument();
-    expect(screen.getByText(/측정값이 있어 규칙 엔진이 정본입니다/)).toBeInTheDocument();
-    // ML 이 답한 칸은 무엇을 넣으면 답이 나오는지 적는다. 폼에도 "혈색소" 라벨이
-    // 있으므로 안내 문구 쪽을 집어서 본다.
-    const missing = screen.getByText(/넣으면 답이 나온다/).closest("p");
-    expect(missing).toHaveTextContent("혈색소");
+    const card = (await screen.findByRole("heading", { name: "고혈압" })).closest("article");
+    expect(card).not.toBeNull();
+    // 훑을 때 보이는 것: 단계 이름과 등급 막대.
+    expect(within(card as HTMLElement).getByText("고혈압 1기")).toBeInTheDocument();
+    // 카드에는 어느 엔진인지만. 사유는 근거 모달 안이다.
+    expect(within(card as HTMLElement).getByText("규칙 엔진")).toBeInTheDocument();
+    expect(screen.queryByText(/측정값이 있어 규칙 엔진이 정본입니다/)).not.toBeInTheDocument();
+
+    await user.click(within(card as HTMLElement).getByRole("button", { name: /고혈압 판정 근거/ }));
+    const modal = await screen.findByRole("dialog");
+    expect(within(modal).getByText(/측정값이 있어 규칙 엔진이 정본입니다/)).toBeInTheDocument();
+    expect(within(modal).getByText(/대한고혈압학회 진료지침/)).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // ML 이 답한 칸은 무엇을 넣으면 정확해지는지 적는다.
+    const anemia = screen.getByRole("heading", { name: "빈혈" }).closest("article");
+    expect(within(anemia as HTMLElement).getByText(/넣으면 정확해져요/)).toHaveTextContent("혈색소");
+  });
+
+  it("근거 모달을 닫으면 열었던 버튼으로 포커스가 돌아온다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE as never);
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const opener = await screen.findByRole("button", { name: /고혈압 판정 근거/ });
+    await user.click(opener);
+    await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "닫기" }));
+
+    // 안 돌려주면 키보드 사용자는 탭을 처음부터 다시 밟아야 한다.
+    expect(opener).toHaveFocus();
+  });
+
+  it("검사값을 넣은 카드는 그 수치를, 추정한 카드는 확률을 크게 띄운다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE as never);
+    renderPage();
+
+    await fillRequired(user);
+    await user.type(screen.getByRole("spinbutton", { name: /수축기/ }), "148");
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    // 고혈압은 값을 넣었으므로 그 값을 그대로 보여 준다 — 판정 문장에서 뽑아 오지 않는다.
+    const htn = (await screen.findByRole("heading", { name: "고혈압" })).closest("article");
+    expect(within(htn as HTMLElement).getByText("148")).toBeInTheDocument();
+
+    // 빈혈은 혈색소를 안 넣었으므로 추정 확률을 띄운다. `~` 가 추정임을 알린다.
+    const anemia = screen.getByRole("heading", { name: "빈혈" }).closest("article");
+    expect(within(anemia as HTMLElement).getByText(/^~\d+%$/)).toBeInTheDocument();
   });
 
   it("밀려난 ML 확률을 지우지 않는다", async () => {
@@ -180,14 +265,21 @@ describe("AssessmentPage", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
-    expect(await screen.findByText(/밀려난 ML 추정/)).toBeInTheDocument();
-    expect(screen.getByText("80.0%")).toBeInTheDocument();
-    // ML 이 정본인 칸은 "밀려난" 이 아니라 "근거" 로 적는다.
-    expect(screen.getByText(/ML 추정 근거/)).toBeInTheDocument();
+    // 규칙이 정본이라 밀려난 칸.
+    await user.click(await screen.findByRole("button", { name: /고혈압 판정 근거/ }));
+    let modal = screen.getByRole("dialog");
+    expect(within(modal).getByText(/밀려난 ML 추정/)).toBeInTheDocument();
+    expect(within(modal).getByText("80.0%")).toBeInTheDocument();
     // AUROC 를 "정확도"로 읽지 않게 하는 문구가 확률 있는 칸마다 붙는다.
-    expect(screen.getAllByText(/100명 중 몇 명을 맞힌다/)).toHaveLength(2);
+    expect(within(modal).getByText(/100명 중 몇 명을 맞힌다/)).toBeInTheDocument();
     // 경보 적중률이 AUROC 옆에 같이 나온다 — 사용자가 실제로 겪는 값이다.
-    expect(screen.getByText(/71%/)).toBeInTheDocument();
+    expect(within(modal).getByText(/71%/)).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+
+    // ML 이 정본인 칸은 "밀려난" 이 아니라 "근거" 로 적는다.
+    await user.click(screen.getByRole("button", { name: /빈혈 판정 근거/ }));
+    modal = screen.getByRole("dialog");
+    expect(within(modal).getByText(/ML 추정 근거/)).toBeInTheDocument();
   });
 
   it("구성원이 없으면 기록 대신 등록을 안내한다", async () => {
@@ -232,7 +324,7 @@ describe("AssessmentPage", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
-    expect(await screen.findByRole("heading", { name: /수치가 가리키는 질환/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /수치가 가리키는 앞날/ })).toBeInTheDocument();
     // 심혈관질환은 열세 칸에 없고 이 축에만 있다.
     expect(screen.getByRole("heading", { name: "심혈관질환" })).toBeInTheDocument();
     expect(screen.getByText("혈압 140/90 이상")).toBeInTheDocument();
@@ -255,5 +347,44 @@ describe("toRequestBody", () => {
 
   it("불리언은 참·거짓으로 바꾼다", () => {
     expect(toRequestBody({ has_diabetes: "false" })).toEqual({ has_diabetes: false });
+  });
+});
+
+describe("건강자료에서 넘어온 수치", () => {
+  it("판정 폼에 미리 채워지고, 몇 개인지 알려 준다", () => {
+    renderPage({ prefill: { fasting_glucose: 113, hdl: 52, sbp: 128 } });
+
+    expect(screen.getByRole("spinbutton", { name: /공복혈당/ })).toHaveValue(113);
+    expect(screen.getByRole("spinbutton", { name: /^HDL/ })).toHaveValue(52);
+    expect(screen.getByRole("spinbutton", { name: /수축기/ })).toHaveValue(128);
+    // 사용자가 "이건 내가 안 적었는데" 하고 놀라지 않도록 출처를 밝힌다.
+    expect(screen.getByText(/건강자료에서 읽은 수치/)).toBeInTheDocument();
+  });
+
+  it("지난 기록에서 넘어왔으면 그 사실을 밝히고, 숫자 아닌 값도 채운다", () => {
+    // `sex` 를 못 받으면 필수 다섯 중 하나가 비어 값이 다 있는데도 경고부터 뜬다.
+    renderPage({
+      prefill: { age: 54, sex: "M", sbp: 128, has_diabetes: false },
+      prefillSource: "record",
+    });
+
+    expect(screen.getByRole("combobox", { name: /성별/ })).toHaveValue("M");
+    expect(screen.getByRole("spinbutton", { name: /나이/ })).toHaveValue(54);
+    expect(screen.getByRole("combobox", { name: /당뇨 진단/ })).toHaveValue("false");
+    expect(screen.getByText(/지난 기록의 값/)).toBeInTheDocument();
+    expect(screen.queryByText(/건강자료에서 읽은 수치/)).not.toBeInTheDocument();
+  });
+
+  it("넘어온 수치가 없으면 안내도 없다", () => {
+    renderPage();
+    expect(screen.queryByText(/건강자료에서 읽은 수치/)).not.toBeInTheDocument();
+  });
+
+  it("숫자가 아닌 값은 채우지 않는다", () => {
+    // 서버는 관문에 걸린 행의 값을 NaN 으로 내보낸다. 그게 폼에 들어가면 안 된다.
+    renderPage({ prefill: { fasting_glucose: Number.NaN, hdl: 52 } });
+
+    expect(screen.getByRole("spinbutton", { name: /공복혈당/ })).toHaveValue(null);
+    expect(screen.getByRole("spinbutton", { name: /^HDL/ })).toHaveValue(52);
   });
 });

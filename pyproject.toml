@@ -59,7 +59,10 @@ app = [
     "fastapi[standard]>=0.128.0",
     "httpx>=0.28.1",
     "openai>=1.0",
-    "orjson>=3.11.5",
+    # orjson 을 뺐다. 들어와 있던 이유는 `ORJSONResponse` 하나뿐이었는데 FastAPI 가
+    # 그걸 deprecate 했고(2026-08-28 마이그레이션), 저장소 어디에서도 직접 import 하지
+    # 않는다. 서빙 이미지에 남길 이유가 없다 — 위 `[project] dependencies` 주석의 기준
+    # 그대로 "서빙이 실제로 import 하는가"에 걸린다.
     "passlib[bcrypt]>=1.7.4",
     "pyjwt>=2.10.1",
     "sqlalchemy[asyncio]>=2.0.36",
@@ -90,6 +93,10 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.pytest.ini_options]
+# 테스트는 전부 `app/` 아래에 있다. 범위를 안 묶으면 저장소 루트의 일회성 스크립트를
+# 테스트로 착각해 import 하고, 그 안의 모듈 레벨 코드가 수집 단계에서 터진다
+# (NAVER OCR 탐침이 실제로 그랬다). CI 는 `pytest app` 이라 안 걸렸고 로컬만 죽었다.
+testpaths = ["app"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 # 세션 스코프 엔진과 루프를 맞추지 않으면 asyncpg가

@@ -1,10 +1,13 @@
 import { type ChangeEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
+import { Modal } from "../../shared/ui/Modal";
 import { detectLocalCapabilities } from "../../shared/local/capabilities";
 import type { BackupPreview } from "../../shared/local/localBackupService";
 import type { LocalDocument } from "../../shared/local/domainContracts";
-import { GeminiOcrAdapter } from "../../shared/api/geminiOcrAdapter";
+import { GeminiOcrAdapter, type OcrMeasurements } from "../../shared/api/geminiOcrAdapter";
+import { FIELD_META } from "../assessment/fields";
 
 export function DataManagementPage() {
   const { runtime, profiles, refreshProfiles } = useLocalDomain();
@@ -22,7 +25,11 @@ export function DataManagementPage() {
   const [ocrDocument, setOcrDocument] = useState<LocalDocument>();
   const [ocrText, setOcrText] = useState("");
   const [ocrProgress, setOcrProgress] = useState<string>();
+  // 표에서 옮겨 낸 수치. 예전에는 `tables` 를 받아 놓고 아무도 읽지 않아서,
+  // 검진표를 올린 사용자가 판정 화면에서 같은 숫자를 손으로 다시 쳤다.
+  const [ocrMeasurements, setOcrMeasurements] = useState<OcrMeasurements>();
   const [deletingDocument, setDeletingDocument] = useState<LocalDocument>();
+  const navigate = useNavigate();
 
   const effectiveProfileId = selectedProfileId || profiles[0]?.id || "";
 
@@ -149,6 +156,7 @@ export function DataManagementPage() {
     resetFeedback();
     setOcrDocument(document);
     setOcrText("");
+    setOcrMeasurements(undefined);
     try {
       const source = await runtime.documents.read(document);
       if (!source.ok) throw new Error(source.error.message);
@@ -164,6 +172,8 @@ export function DataManagementPage() {
       // 스트리밍이 보여 준 것은 `text` 뿐이다. 표까지 담긴 완성본으로 덮어써야
       // 저장되는 내용이 폴링 경로와 같아진다.
       setOcrText(result.text);
+      // 서버가 표를 읽어 수치로 옮겨 준 결과. 관문을 통과한 것만 `values` 에 있다.
+      setOcrMeasurements(result.measurements ?? undefined);
       setOcrProgress(undefined);
     } catch (caught) {
       setError(errorMessage(caught, "건강자료 내용을 불러오지 못했어요."));
@@ -190,6 +200,7 @@ export function DataManagementPage() {
       setMessage("확인한 내용을 구성원의 건강기록으로 저장했어요.");
       setOcrDocument(undefined);
       setOcrText("");
+      setOcrMeasurements(undefined);
     } catch (caught) {
       setError(errorMessage(caught, "확인한 내용을 건강기록으로 저장하지 못했어요."));
     } finally {
@@ -336,23 +347,30 @@ export function DataManagementPage() {
       </section>
 
       {ocrDocument ? (
-        <div className="modal-backdrop" role="presentation">
-          <section className="modal-panel ocr-review-modal" role="dialog" aria-modal="true" aria-labelledby="ocr-review-title">
-            <div className="modal-heading"><div><p className="section-kicker">사용자 확인 단계</p><h2 id="ocr-review-title">불러온 내용 확인</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={() => setOcrDocument(undefined)}>×</button></div>
+        <Modal
+          kicker="사용자 확인 단계"
+          title="불러온 내용 확인"
+          className="ocr-review-modal"
+          onClose={() => setOcrDocument(undefined)}
+        >
             {ocrProgress ? <p className="form-notice">{ocrProgress}</p> : null}
             <label className="ocr-review-field">불러온 내용<textarea rows={14} value={ocrText} onChange={(event) => setOcrText(event.currentTarget.value)} placeholder="건강자료에서 불러온 내용이 여기에 표시됩니다." /></label>
-            <div className="form-actions"><button className="secondary-button" type="button" onClick={() => setOcrDocument(undefined)}>취소</button><button className="primary-button" type="button" disabled={working || !ocrText.trim()} onClick={() => void saveOcrResult()}>확인하고 건강기록에 저장</button></div>
-          </section>
-        </div>
+            <MeasurementPanel
+              measurements={ocrMeasurements}
+              onUse={(values) => {
+                setOcrDocument(undefined);
+                setOcrMeasurements(undefined);
+                void navigate("/assessment", { state: { prefill: values } });
+              }}
+            />
+            <div className="form-actions"><button className="secondary-button" type="button" onClick={() => { setOcrDocument(undefined); setOcrMeasurements(undefined); }}>취소</button><button className="primary-button" type="button" disabled={working || !ocrText.trim()} onClick={() => void saveOcrResult()}>확인하고 건강기록에 저장</button></div>
+        </Modal>
       ) : null}
 
       {deletingDocument ? (
-        <div className="modal-backdrop" role="presentation">
-          <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="delete-document-title">
-            <div className="modal-heading"><div><p className="section-kicker">건강자료 삭제</p><h2 id="delete-document-title">{deletingDocument.fileName}</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={() => setDeletingDocument(undefined)}>×</button></div>
+        <Modal kicker="건강자료 삭제" title={deletingDocument.fileName} onClose={() => setDeletingDocument(undefined)}>
             <div className="profile-confirmation"><p>이 브라우저에 암호화해 저장한 파일을 삭제합니다. 이미 생성한 건강기록은 자동으로 삭제하지 않습니다.</p><div className="form-actions"><button className="secondary-button" type="button" onClick={() => setDeletingDocument(undefined)}>취소</button><button className="danger-button" type="button" disabled={working} onClick={() => void confirmDeleteDocument()}>파일 삭제</button></div></div>
-          </section>
-        </div>
+        </Modal>
       ) : null}
     </div>
   );
@@ -360,4 +378,77 @@ export function DataManagementPage() {
 
 function errorMessage(caught: unknown, fallback: string): string {
   return caught instanceof Error ? caught.message : fallback;
+}
+
+/**
+ * 표에서 읽어 낸 수치를 보여 주고, 확실한 것만 판정 폼으로 넘긴다.
+ *
+ * **`values` 와 `review` 를 섞어 보여 주지 않는다.** 섞으면 사용자가 "인식됐다" 로
+ * 한 덩어리로 읽고 그대로 넘긴다. 걸러 낸 이유(단위·참고치·중복)를 옆에 붙여야
+ * 확인할 마음이 생긴다 — 검사명 오독은 숫자만 보면 멀쩡해 보인다.
+ */
+function MeasurementPanel({
+  measurements,
+  onUse,
+}: {
+  measurements?: OcrMeasurements;
+  onUse: (values: Record<string, number>) => void;
+}) {
+  if (!measurements) return null;
+
+  const accepted = Object.entries(measurements.values);
+  const review = measurements.review;
+  if (accepted.length === 0 && review.length === 0) {
+    return <p className="form-notice">표에서 판정에 쓸 수치를 찾지 못했어요. 위 내용은 그대로 기록에 저장할 수 있어요.</p>;
+  }
+
+  return (
+    <div className="ocr-measurements">
+      {accepted.length > 0 ? (
+        <>
+          <h3>바로 쓸 수 있는 수치 {accepted.length}개</h3>
+          <ul className="ocr-measurement-list">
+            {accepted.map(([name, value]) => (
+              <li key={name}>
+                <span className="ocr-measurement-label">{FIELD_META[name]?.label ?? name}</span>
+                <span className="ocr-measurement-value">
+                  {value}
+                  {FIELD_META[name]?.unit ? ` ${FIELD_META[name].unit}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {review.length > 0 ? (
+        <>
+          <h3>확인이 필요한 항목 {review.length}개</h3>
+          <p className="form-notice">
+            아래는 판정에 넣지 않았어요. 검사명을 잘못 읽었을 수 있어서, 원본과 맞는지 확인한 뒤 판정 화면에서 직접
+            입력해 주세요.
+          </p>
+          <ul className="ocr-measurement-list ocr-measurement-review">
+            {review.map((row, index) => (
+              <li key={`${row.field}-${index}`}>
+                <span className="ocr-measurement-label">{row.label}</span>
+                <span className="ocr-measurement-value">
+                  {Number.isFinite(row.value) ? row.value : "—"} {row.unit}
+                </span>
+                <span className="ocr-measurement-reason">{row.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {accepted.length > 0 ? (
+        <div className="form-actions">
+          <button className="secondary-button" type="button" onClick={() => onUse(measurements.values)}>
+            이 수치로 판정하러 가기
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
 }

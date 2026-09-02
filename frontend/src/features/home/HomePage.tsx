@@ -2,12 +2,17 @@ import { lazy, Suspense, type FormEvent, useCallback, useEffect, useMemo, useSta
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
+import { Modal } from "../../shared/ui/Modal";
+import { RecordDetail, RecordSummary } from "./RecordDetail";
 import type {
   DashboardSummary,
   FamilyProfile,
   HealthRecord,
   HealthRecordType,
 } from "../../shared/local/domainContracts";
+import { LEVEL_LABEL } from "../assessment/contracts";
+import type { RiskLevel } from "../assessment/contracts";
+import { type LatestSummary, listLatestByProfile } from "../assessment/snapshots";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
 import { ChallengeDashboardCard } from "../challenge/ChallengeDashboardCard";
 
@@ -55,6 +60,13 @@ export function HomePage() {
   const [records, setRecords] = useState<HealthRecord[]>([]);
   const [deletedRecords, setDeletedRecords] = useState<HealthRecord[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(false);
+  // "건강기록 작성" 을 누르면 바로 폼이 아니라 갈림길이 먼저 뜬다. 손으로 적는 것과
+  // 검진표를 올리는 것은 하는 일이 전혀 달라서, 한 폼에 욱여넣으면 둘 다 어색해진다.
+  const [recordChoiceOpen, setRecordChoiceOpen] = useState(false);
+  // 구성원별 최근 판정. 카드 위에 얹어 "누구를 열어 봐야 하나"를 한눈에 준다.
+  const [verdicts, setVerdicts] = useState<Record<string, LatestSummary>>({});
+  // 자세히 볼 판정 기록. 판정은 수정·삭제 대상이 아니라 열어 보는 대상이다.
+  const [openRecord, setOpenRecord] = useState<HealthRecord>();
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [profileEditDialogOpen, setProfileEditDialogOpen] = useState(false);
   const [profileLifecycleAction, setProfileLifecycleAction] = useState<"hide" | "delete">();
@@ -112,6 +124,22 @@ export function HomePage() {
     const timeout = window.setTimeout(() => void refreshDashboard(selectedProfile.id), 0);
     return () => window.clearTimeout(timeout);
   }, [refreshDashboard, selectedProfile]);
+
+  // 판정 요약은 구성원 목록이 바뀔 때만 다시 읽는다. 판정 화면에서 돌아오면 라우트가
+  // 갈리면서 이 화면이 다시 서므로 최신값이 따라온다.
+  // 취소 깃발을 두는 이유는 구성원을 빠르게 더했을 때 **먼저 띄운 조회가 늦게 돌아와**
+  // 지운 사람의 요약을 되살리는 것을 막기 위해서다.
+  const profileIds = useMemo(() => profiles.map((profile) => profile.id).join(","), [profiles]);
+  useEffect(() => {
+    if (!runtime || !profileIds) return;
+    let cancelled = false;
+    void listLatestByProfile(runtime, profileIds.split(",")).then((found) => {
+      if (!cancelled) setVerdicts(found);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [runtime, profileIds]);
 
   async function submitProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -352,7 +380,7 @@ export function HomePage() {
                   <strong>{profile.displayName}</strong>
                   <small>{profile.relationship}{profile.birthDate ? ` · ${profile.birthDate.slice(0, 4)}년생` : ""}</small>
                 </span>
-                <span className="member-storage-label">로컬 프로필</span>
+                <MemberVerdict summary={verdicts[profile.id]} />
               </button>
             ))}
             <button
@@ -386,7 +414,7 @@ export function HomePage() {
                 }}>
                   프로필 관리
                 </button>
-                <button className="primary-button" type="button" onClick={() => setRecordDialogOpen(true)}>
+                <button className="primary-button" type="button" onClick={() => setRecordChoiceOpen(true)}>
                   건강기록 작성
                 </button>
               </div>
@@ -428,7 +456,9 @@ export function HomePage() {
                 <div className="compact-empty">
                   <strong>아직 건강기록이 없습니다.</strong>
                   <p>검진 결과, 통증 변화나 건강 메모부터 남겨보세요.</p>
-                  <button className="text-button" type="button" onClick={() => setRecordDialogOpen(true)}>
+                  {/* 기록으로 들어가는 문 셋이 모두 같은 갈림길을 지난다. 하나만
+                      곧장 폼을 열면 어느 버튼을 눌렀느냐에 따라 다른 일이 벌어진다. */}
+                  <button className="text-button" type="button" onClick={() => setRecordChoiceOpen(true)}>
                     첫 기록 작성하기
                   </button>
                 </div>
@@ -439,15 +469,21 @@ export function HomePage() {
                       <span className="record-type-mark" aria-hidden="true">{recordMark(record.recordType)}</span>
                       <div>
                         <strong>{RECORD_LABELS[record.recordType]}</strong>
-                        <p>{recordNote(record)}</p>
+                        <RecordSummary record={record} />
                       </div>
                       <time dateTime={record.recordedAt}>{formatDateTime(record.recordedAt)}</time>
                       <div className="record-row-actions">
-                        <button type="button" onClick={() => {
-                          setActionError(undefined);
-                          setEditingRecord(record);
-                          void navigate(`/members/${selectedProfile.id}/records/${record.id}`);
-                        }}>수정</button>
+                        {/* 판정은 그날 화면에 뜬 값을 그대로 남긴 것이라 고칠 것이 아니다.
+                            손으로 고치면 그날 본 것과 기록이 어긋난다. 그래서 열어 보기만 한다. */}
+                        {record.recordType === "assessment" ? (
+                          <button type="button" onClick={() => setOpenRecord(record)}>자세히</button>
+                        ) : (
+                          <button type="button" onClick={() => {
+                            setActionError(undefined);
+                            setEditingRecord(record);
+                            void navigate(`/members/${selectedProfile.id}/records/${record.id}`);
+                          }}>수정</button>
+                        )}
                         <button type="button" onClick={() => {
                           setActionError(undefined);
                           setDeletingRecord(record);
@@ -463,9 +499,9 @@ export function HomePage() {
           <aside className="quick-actions-panel">
             <p className="section-kicker">빠른 작업</p>
             <h2>무엇을 기록할까요?</h2>
-            <button type="button" onClick={() => setRecordDialogOpen(true)}>
+            <button type="button" onClick={() => setRecordChoiceOpen(true)}>
               <strong>건강기록 작성</strong>
-              <small>검진·통증·수치·메모</small>
+              <small>직접 적거나, 검진표를 올려 판정까지</small>
             </button>
             <button type="button" onClick={() => {
               setFamilyHistoryDialogOpen(true);
@@ -483,7 +519,7 @@ export function HomePage() {
       ) : null}
 
       {profileDialogOpen ? (
-        <Modal title="가족 구성원 로컬 프로필 만들기" onClose={() => setProfileDialogOpen(false)}>
+        <Modal kicker="이 기기에 저장" title="가족 구성원 로컬 프로필 만들기" onClose={() => setProfileDialogOpen(false)}>
           <form className="product-form" onSubmit={submitProfile}>
             <p className="form-notice">입력한 정보는 이 브라우저에 암호화해 저장하며 서버로 보내지 않습니다.</p>
             <label>
@@ -509,8 +545,52 @@ export function HomePage() {
         </Modal>
       ) : null}
 
+      {openRecord ? <RecordDetail record={openRecord} onClose={() => setOpenRecord(undefined)} /> : null}
+
+      {recordChoiceOpen && selectedProfile ? (
+        <Modal kicker="이 기기에 저장" title={`${selectedProfile.displayName}님의 기록을 어떻게 남길까요?`} onClose={() => setRecordChoiceOpen(false)}>
+          <div className="record-choice">
+            <button
+              className="record-choice-card"
+              type="button"
+              onClick={() => {
+                setRecordChoiceOpen(false);
+                setRecordDialogOpen(true);
+              }}
+            >
+              <strong>직접 작성</strong>
+              <small>혈압을 재거나 통증이 있었던 날처럼, 짧게 적어 두는 기록이에요.</small>
+              <span className="record-choice-meta">종류 · 시각 · 내용</span>
+            </button>
+
+            <button
+              className="record-choice-card is-primary"
+              type="button"
+              onClick={() => {
+                setRecordChoiceOpen(false);
+                // 판정 화면이 문서 패널을 열고, 이 구성원을 골라 둔 채로 시작한다.
+                void navigate("/assessment", {
+                  state: { withDocument: true, profileId: selectedProfile.id },
+                });
+              }}
+            >
+              <strong>검진표 올려서 판정</strong>
+              <small>
+                건강검진 결과지를 올리면 표에서 수치를 읽어 판정 폼을 채워요. 원본을 옆에 두고 고친 뒤 예측하면
+                결과와 수치가 함께 기록으로 남습니다.
+              </small>
+              <span className="record-choice-meta">이미지 · PDF · 7~20초</span>
+            </button>
+          </div>
+          <p className="form-notice">
+            검진표 원본은 이 브라우저에 암호화해 보관합니다. 읽는 동안에만 서버를 거치고, 서버 데이터베이스에는
+            남지 않습니다.
+          </p>
+        </Modal>
+      ) : null}
+
       {recordDialogOpen && selectedProfile ? (
-        <Modal title={`${selectedProfile.displayName}님의 건강기록 작성`} onClose={() => setRecordDialogOpen(false)}>
+        <Modal kicker="이 기기에 저장" title={`${selectedProfile.displayName}님의 건강기록 작성`} onClose={() => setRecordDialogOpen(false)}>
           <form className="product-form" onSubmit={submitHealthRecord}>
             <p className="form-notice">이 기록은 서버 API를 거치지 않고 현재 브라우저에 바로 암호화됩니다.</p>
             <label>
@@ -536,7 +616,7 @@ export function HomePage() {
       ) : null}
 
       {editingRecord ? (
-        <Modal title="건강기록 수정" onClose={() => {
+        <Modal kicker="이 기기에 저장" title="건강기록 수정" onClose={() => {
           setEditingRecord(undefined);
           if (selectedProfile) void navigate(`/members/${selectedProfile.id}/records`);
         }}>
@@ -567,7 +647,7 @@ export function HomePage() {
       ) : null}
 
       {deletingRecord ? (
-        <Modal title="건강기록을 삭제할까요?" onClose={() => setDeletingRecord(undefined)}>
+        <Modal kicker="이 기기에 저장" title="건강기록을 삭제할까요?" onClose={() => setDeletingRecord(undefined)}>
           <div className="profile-confirmation">
             <p>기록은 즉시 영구 삭제되지 않고 삭제 목록으로 이동합니다. 필요하면 다시 복원할 수 있습니다.</p>
             {actionError ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
@@ -582,7 +662,7 @@ export function HomePage() {
       ) : null}
 
       {deletedRecordsDialogOpen ? (
-        <Modal title="삭제된 건강기록" onClose={() => setDeletedRecordsDialogOpen(false)}>
+        <Modal kicker="이 기기에 저장" title="삭제된 건강기록" onClose={() => setDeletedRecordsDialogOpen(false)}>
           <div className="hidden-profiles-content">
             <p className="form-notice">삭제한 기록은 대시보드 집계에서 제외되며 이 브라우저에서 복원할 수 있습니다.</p>
             {actionError ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
@@ -599,7 +679,7 @@ export function HomePage() {
       ) : null}
 
       {profileEditDialogOpen && selectedProfile ? (
-        <Modal title={`${selectedProfile.displayName} 프로필 관리`} onClose={() => setProfileEditDialogOpen(false)}>
+        <Modal kicker="이 기기에 저장" title={`${selectedProfile.displayName} 프로필 관리`} onClose={() => setProfileEditDialogOpen(false)}>
           <form className="product-form" onSubmit={submitProfileUpdate}>
             <p className="form-notice">프로필 정보와 건강기록은 계속 이 브라우저에만 저장됩니다.</p>
             <label>
@@ -679,7 +759,7 @@ export function HomePage() {
       ) : null}
 
       {hiddenProfilesDialogOpen ? (
-        <Modal title="숨긴 프로필 관리" onClose={() => setHiddenProfilesDialogOpen(false)}>
+        <Modal kicker="이 기기에 저장" title="숨긴 프로필 관리" onClose={() => setHiddenProfilesDialogOpen(false)}>
           <div className="hidden-profiles-content">
             <p className="form-notice">숨긴 프로필과 연결된 건강기록은 삭제되지 않았습니다. 복원하면 가족 목록에서 다시 확인할 수 있습니다.</p>
             {actionError ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
@@ -716,6 +796,34 @@ export function HomePage() {
   );
 }
 
+const LEVEL_TONE: Record<string, string> = {
+  VERY_HIGH: "tone-very-high",
+  HIGH: "tone-high",
+  CAUTION: "tone-caution",
+  NORMAL: "tone-normal",
+  INSUFFICIENT_DATA: "tone-unknown",
+};
+
+/**
+ * 구성원 카드 아래 한 줄 — 가장 최근 판정.
+ *
+ * **판정이 없는 사람도 자리를 비우지 않는다.** 빈 칸으로 두면 카드 높이가 들쭉날쭉해
+ * 목록이 흔들리고, "아직 안 했다"는 사실 자체가 사용자가 봐야 할 정보다.
+ */
+function MemberVerdict({ summary }: { summary?: LatestSummary }) {
+  if (!summary) {
+    return <span className="member-verdict is-empty">판정 기록 없음</span>;
+  }
+  const level = summary.highestLevel as RiskLevel;
+  return (
+    <span className={`member-verdict ${LEVEL_TONE[summary.highestLevel] ?? "tone-unknown"}`}>
+      <strong>{LEVEL_LABEL[level] ?? summary.highestLevel}</strong>
+      {summary.needsAttention > 0 ? <span>주의 {summary.needsAttention}개</span> : <span>주의 없음</span>}
+      <small>{formatDate(summary.recordedAt)}</small>
+    </span>
+  );
+}
+
 function EmptyHousehold({ disabled, onCreate }: { disabled: boolean; onCreate: () => void }) {
   return (
     <div className="empty-household">
@@ -747,22 +855,6 @@ function MetricCard({ label, value, helper, tone }: { label: string; value: stri
       <strong>{value}</strong>
       <small>{helper}</small>
     </article>
-  );
-}
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose();
-    }}>
-      <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div className="modal-heading">
-          <div><p className="section-kicker">이 기기에 저장</p><h2 id="modal-title">{title}</h2></div>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="닫기">×</button>
-        </div>
-        {children}
-      </section>
-    </div>
   );
 }
 

@@ -22,6 +22,9 @@ export const ChallengePage = lazy(() =>
 export const ChallengeSetupPage = lazy(() =>
   import("../features/challenge/ChallengeSetupPage").then((m) => ({ default: m.ChallengeSetupPage })),
 );
+export const InsightsPage = lazy(() =>
+  import("../features/insights/InsightsPage").then((m) => ({ default: m.InsightsPage })),
+);
 export const DataManagementPage = lazy(() =>
   import("../features/data/DataManagementPage").then((m) => ({ default: m.DataManagementPage })),
 );

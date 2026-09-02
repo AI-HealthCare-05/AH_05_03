@@ -155,13 +155,6 @@ main {
 }
 
 .primary-navigation a,
-.navigation-future {
-  padding: 10px 14px;
-  border-radius: 11px;
-  color: var(--muted-strong);
-  font-size: 0.92rem;
-  font-weight: 700;
-}
 
 .primary-navigation a.active {
   color: var(--blue-700);
@@ -758,14 +751,6 @@ main {
   white-space: nowrap;
 }
 
-.member-storage-label {
-  position: absolute;
-  right: 12px;
-  bottom: 9px;
-  color: #718099;
-  font-size: 0.63rem;
-  font-weight: 700;
-}
 
 .member-dashboard-actions {
   display: flex;
@@ -2884,22 +2869,7 @@ main {
 
 /* SPA 밖으로 나가는 링크(예측 데모). 같은 내비게이션에 있지만 클릭하면 페이지가
    통째로 바뀌므로, 눌러 보기 전에 그 사실이 보여야 한다 — 화살표가 그 신호다. */
-.primary-navigation a.navigation-external {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--muted-strong);
-}
 
-.primary-navigation a.navigation-external i {
-  font-size: 0.78em;
-  font-style: normal;
-  opacity: 0.65;
-}
-
-.primary-navigation a.navigation-external:hover {
-  color: var(--blue-600);
-}
 
 /* ── 위험 판정 화면 (features/assessment) ─────────────────────────────
    카드 색이 등급이다. 배지만으로는 스무 장 넘는 카드에서 눈에 안 들어온다.
@@ -2921,6 +2891,26 @@ main {
 .assess-hint { color: var(--muted); font-size: 0.75rem; }
 .assess-field input, .assess-field select { padding: 0.45rem 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
 
+/* 눌러 본 뒤에만 붙는다. 폼을 열자마자 붉으면 아직 아무것도 안 했는데 틀린 것처럼 읽힌다. */
+.assess-field.is-blank input,
+.assess-field.is-blank select { border-color: var(--danger); background: var(--danger-soft); }
+.assess-blank-hint { color: var(--danger); font-size: 0.75rem; }
+
+/* 비어 있는 칸을 이름으로 세우고, 누르면 그리로 옮겨 준다. */
+.assess-required-alert p { margin: 0; }
+.assess-required-alert ul { margin: 0.5rem 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.assess-required-alert button {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.assess-required-alert button:hover { background: var(--surface); }
+
 .assess-submit { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .assess-submit button { padding: 0.65rem 1.4rem; border-radius: 10px; border: 0; background: var(--blue-600); color: #fff; font-weight: 600; cursor: pointer; }
 .assess-submit button:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; }
@@ -2938,15 +2928,13 @@ main {
 .assess-card h3 { margin: 0; font-size: 1rem; }
 .assess-substatus { margin: 0; font-weight: 600; font-size: 0.9rem; }
 .assess-label { margin: 0; font-size: 0.9rem; }
-.assess-reason, .assess-recommend { margin: 0; font-size: 0.83rem; color: var(--muted-strong); }
-.assess-source { margin: 0; font-size: 0.75rem; color: var(--muted); }
+.assess-recommend { margin: 0; font-size: 0.83rem; color: var(--muted-strong); }
 .assess-missing { margin: 0; font-size: 0.8rem; color: var(--blue-700); }
 .assess-flag { margin: 0; font-size: 0.78rem; color: var(--muted); }
 .assess-muted { color: var(--muted); font-weight: 400; font-size: 0.85em; }
 .assess-fineprint { margin: 0.5rem 0 0; font-size: 0.72rem; color: var(--muted); line-height: 1.5; }
 
 .assess-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
-.assess-engine { margin: 0; font-size: 0.8rem; color: var(--muted-strong); display: flex; flex-direction: column; gap: 0.25rem; }
 .assess-engine-tag { align-self: flex-start; padding: 0.1rem 0.45rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700; border: 1px solid var(--line); }
 .engine-e1 { background: var(--safe-soft); color: var(--safe); }
 .engine-e2 { background: var(--blue-50); color: var(--blue-700); }
@@ -3633,3 +3621,422 @@ main {
   border-radius: 9999px;
   background: var(--garden-leaf-deep);
 }
+
+/* 인식한 수치 — 채택한 것과 확인이 필요한 것을 **눈으로 갈라 놓는다.**
+   섞어 놓으면 사용자가 한 덩어리로 읽고 그대로 넘긴다. 검사명 오독은 숫자만
+   보면 멀쩡해 보이기 때문에, 걸러 낸 이유가 값 옆에 붙어 있어야 한다. */
+.ocr-measurements {
+  margin-top: 20px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 16px;
+}
+
+.ocr-measurements h3 {
+  margin: 14px 0 8px;
+  font-size: 0.86rem;
+  font-weight: 750;
+  color: var(--muted-strong);
+}
+
+.ocr-measurements h3:first-child {
+  margin-top: 0;
+}
+
+.ocr-measurement-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ocr-measurement-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 4px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.ocr-measurement-label {
+  font-weight: 700;
+}
+
+.ocr-measurement-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-strong);
+}
+
+/* 사유는 값 아래 한 줄을 통째로 쓴다 — 줄여 쓰면 안 읽힌다. */
+.ocr-measurement-reason {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.ocr-measurement-review li {
+  border-color: color-mix(in srgb, var(--line) 60%, transparent);
+  background: color-mix(in srgb, var(--line-soft) 35%, transparent);
+}
+
+.assess-prefilled {
+  margin-bottom: 18px;
+}
+
+/* ── 검진표를 폼 옆에 두는 판정 화면 ─────────────────────────────────────────
+ *
+ * 두 칸으로 가르는 이유는 하나다 — 사용자가 확인해야 하는 것이 "이 숫자가 저 표의
+ * 그 줄과 같은가" 라서, 둘이 동시에 보여야 대조가 성립한다. 세로로 쌓으면 스크롤로
+ * 오가며 기억에 의존하게 된다.
+ *
+ * 문서 칸을 왼쪽에 고정(sticky)하는 이유도 같다. 폼은 36칸이라 길고, 스크롤이
+ * 내려가면 원본이 화면 밖으로 나간다.
+ */
+.assess-workspace { display: block; }
+
+.assess-workspace.has-document {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.checkup-pane {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  background: var(--surface);
+  /* 원본이 길어도 왼쪽 칸만 스크롤한다. 화면 전체가 밀리면 폼이 따라 올라간다. */
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.checkup-pane-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.checkup-pane-head h2 { margin: 0; font-size: 1rem; }
+
+.checkup-zoom { display: flex; gap: 4px; flex: none; }
+.checkup-zoom button {
+  min-width: 40px;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.checkup-zoom button.is-active { border-color: var(--blue-600); color: var(--blue-600); background: var(--blue-50); }
+
+.checkup-picker { display: block; }
+.checkup-picker input { display: block; width: 100%; font-size: 0.84rem; }
+.checkup-picker span { display: block; margin-top: 6px; color: var(--muted); font-size: 0.78rem; }
+
+.checkup-privacy { margin: 0; color: var(--muted); font-size: 0.75rem; line-height: 1.6; }
+.checkup-progress { margin: 0; color: var(--blue-600); font-size: 0.82rem; }
+
+/* 확대는 이미지 폭으로 준다. `transform: scale` 은 둘러싼 칸의 스크롤 범위를 안
+ * 늘려서, 키운 만큼이 잘려 나가고 그 부분을 볼 방법이 없다. */
+.checkup-viewer {
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--blue-50);
+}
+.checkup-viewer img { display: block; max-width: none; }
+
+.checkup-filled {
+  margin: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--safe);
+  background: var(--safe-soft);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.checkup-review { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 0.8rem; }
+.checkup-review summary { cursor: pointer; color: var(--danger); font-weight: 600; }
+.checkup-review p { margin: 8px 0; color: var(--muted); line-height: 1.6; }
+.checkup-review ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.checkup-review li { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line-soft); padding-top: 8px; }
+.checkup-review-label { font-weight: 600; }
+.checkup-review-reason { color: var(--muted); font-size: 0.75rem; }
+.checkup-review code { color: var(--muted-strong); font-size: 0.72rem; word-break: break-all; }
+
+/* 검진표에서 읽어 온 칸. 사람이 고치면 즉시 사라진다. */
+.assess-field.is-from-document input,
+.assess-field.is-from-document select { border-color: var(--blue-600); background: var(--blue-50); }
+.assess-read-mark {
+  margin-left: 6px;
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: var(--blue-600);
+  background: var(--blue-100);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+/* 좁은 화면에서는 대조가 어차피 안 되므로 세로로 쌓고 sticky 를 푼다. */
+@media (max-width: 900px) {
+  .assess-workspace.has-document { grid-template-columns: 1fr; }
+  .checkup-pane { position: static; max-height: none; }
+}
+
+/* ── 구성원 카드의 최근 판정 한 줄 ─────────────────────────────────────────
+ *
+ * 등급 색은 판정 카드(.assess-badge)와 같은 값을 쓴다. 같은 등급이 화면마다 다른
+ * 색이면 사용자가 색으로 등급을 읽는 법을 배우지 못한다.
+ */
+.member-verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+.member-verdict strong { font-weight: 700; }
+.member-verdict small { color: inherit; opacity: 0.72; }
+.member-verdict.is-empty { color: var(--muted); background: var(--line-soft); }
+.member-verdict.tone-very-high { color: var(--surface); background: var(--danger); }
+.member-verdict.tone-high { color: var(--danger); background: var(--danger-soft); }
+.member-verdict.tone-caution { color: #8a5a12; background: #fdf3e2; }
+.member-verdict.tone-normal { color: var(--safe); background: var(--safe-soft); }
+.member-verdict.tone-unknown { color: var(--muted); background: var(--line-soft); }
+
+/* ── 기록 작성 갈림길 ──────────────────────────────────────────────────── */
+.record-choice { display: grid; gap: 12px; margin-bottom: 14px; }
+.record-choice-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.record-choice-card:hover { border-color: var(--blue-600); background: var(--blue-50); }
+.record-choice-card.is-primary { border-color: var(--blue-600); background: var(--blue-50); }
+.record-choice-card strong { font-size: 0.98rem; }
+.record-choice-card small { color: var(--muted); font-size: 0.82rem; line-height: 1.6; }
+.record-choice-meta { color: var(--muted); font-size: 0.72rem; }
+
+@media (min-width: 640px) {
+  .record-choice { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── 로그인 관문 ───────────────────────────────────────────────────────────
+ *
+ * 헤더도 내비게이션도 없는 화면이라 여기서 브랜드를 한 번 보여 준다. 그게 없으면
+ * 사용자는 자기가 어느 서비스에 로그인하는지 모른 채 비밀번호를 넣게 된다.
+ */
+.signin-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: var(--blue-50);
+}
+
+.signin-panel {
+  width: min(480px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.signin-brand { display: flex; align-items: center; gap: 10px; }
+.signin-brand strong { display: block; font-size: 1rem; }
+.signin-brand small { color: var(--muted); font-size: 0.78rem; }
+
+.signin-panel h1 { margin: 0; font-size: 1.5rem; }
+.signin-lead { margin: 0; color: var(--muted-strong); font-size: 0.88rem; line-height: 1.7; }
+
+.signin-notes { margin: 0; padding-left: 1.1rem; color: var(--muted); font-size: 0.78rem; line-height: 1.8; }
+
+/* ── 건강 현황 ─────────────────────────────────────────────────────────── */
+.insights-picker { display: flex; align-items: center; gap: 8px; font-size: 0.84rem; color: var(--muted-strong); }
+.insights-picker select {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* ── 질환 카드 v2 — 훑을 수 있게 ────────────────────────────────────────────
+ *
+ * 카드 열세 장을 놓고 사용자가 하는 일은 "급한 게 어느 것인가" 하나다. 예전 카드는
+ * 그 답이 오른쪽 위 작은 배지에만 있었고 나머지를 문단 일곱 개가 채웠다. 이제
+ * **등급 막대 → 큰 숫자 → 한 줄** 까지만 펼쳐 두고 나머지는 접는다.
+ */
+.assess-cards { grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 12px; }
+.assess-card { gap: 0.55rem; padding: 1rem 1.1rem; }
+.assess-card h3 { font-size: 1.05rem; font-weight: 700; }
+
+/* 네 칸을 항상 그리고 해당 칸만 채운다. 위치가 색보다 먼저 읽혀서 색을 구분하기
+ * 어려운 사람도 훑을 수 있다. */
+.level-bar { display: flex; flex-direction: column; gap: 4px; }
+.level-bar-track { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+.level-bar-cell { height: 7px; border-radius: 999px; background: var(--line-soft); }
+.level-bar-cell.is-at.level-normal { background: var(--safe); }
+.level-bar-cell.is-at.level-caution { background: #d98324; }
+.level-bar-cell.is-at.level-high { background: var(--danger); }
+.level-bar-cell.is-at.level-very-high { background: #8c2c34; }
+.level-bar-labels { display: grid; grid-template-columns: repeat(4, 1fr); font-size: 0.66rem; color: var(--muted); text-align: center; }
+.level-bar-labels .is-at { color: var(--ink); font-weight: 700; }
+
+/* 큰 숫자. 검사값을 넣었으면 그 값, 안 넣었으면 추정 확률. 둘을 같은 크기로 두면
+ * 구분이 안 되므로 추정 쪽은 색을 죽이고 `~` 를 붙인다. */
+.assess-figures { display: flex; flex-wrap: wrap; gap: 14px; }
+.assess-figure { display: flex; flex-direction: column; line-height: 1.15; }
+.assess-figure b { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.assess-figure small { color: var(--muted); font-size: 0.7rem; }
+.assess-figure.is-estimate b { color: var(--muted-strong); font-weight: 600; }
+
+.assess-need { margin: 0; color: var(--muted-strong); font-size: 0.76rem; line-height: 1.6; }
+.assess-need strong { color: var(--ink); }
+
+/* 근거로 들어가는 문. 카드 안에서 펼치지 않고 모달을 연다 — 격자에서 한 장이
+ * 부풀면 같은 줄 카드까지 키가 늘고 아래가 통째로 밀린다. */
+.assess-why-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: auto;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0;
+  padding: 0.55rem 0 0;
+  background: transparent;
+  color: var(--muted-strong);
+  font: inherit;
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+}
+.assess-why-button::after { content: "›"; margin-left: auto; font-size: 1rem; color: var(--muted); }
+.assess-why-button:hover { color: var(--blue-600); }
+.assess-why-button:hover::after { color: var(--blue-600); }
+
+/* 근거 모달. 카드보다 넓어서 나열 대신 항목으로 가른다. */
+.verdict-modal { width: min(600px, 100%); }
+.verdict-modal-top { display: flex; align-items: center; gap: 10px; margin: 14px 0 10px; }
+.verdict-modal-top strong { font-size: 1.05rem; }
+.verdict-modal .assess-figures { margin: 12px 0; }
+.verdict-modal .assess-label { margin: 12px 0; font-size: 0.95rem; line-height: 1.7; }
+
+.verdict-facts { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 16px 0 0; font-size: 0.85rem; }
+.verdict-facts dt { color: var(--muted); white-space: nowrap; }
+.verdict-facts dd { margin: 0; line-height: 1.7; }
+
+.verdict-modal .assess-reference { margin-top: 18px; border-top: 1px solid var(--line-soft); padding-top: 14px; font-size: 0.83rem; }
+.verdict-modal .assess-reference h4 { margin: 0 0 10px; font-size: 0.88rem; font-weight: 600; }
+
+/* ── 건강기록 한 줄 — 판정은 메모가 아니다 ──────────────────────────────────
+ *
+ * 판정 스냅샷에는 `note` 가 없다. 담긴 것은 그날 넣은 수치와 질환별 등급이라,
+ * 메모 자리에 그대로 두면 "저장된 건강기록"만 반복된다.
+ * 등급 색은 구성원 카드(.member-verdict)와 같은 값을 쓴다.
+ */
+.record-assessment { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.record-assessment-meta { color: var(--muted); font-size: 0.78rem; }
+.record-assessment-values { flex: 1 1 100%; color: var(--muted-strong); font-size: 0.78rem; line-height: 1.6; }
+
+.record-level {
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.record-level.tone-very-high { color: var(--surface); background: var(--danger); }
+.record-level.tone-high { color: var(--danger); background: var(--danger-soft); }
+.record-level.tone-caution { color: #8a5a12; background: #fdf3e2; }
+.record-level.tone-normal { color: var(--safe); background: var(--safe-soft); }
+.record-level.tone-unknown { color: var(--muted); background: var(--line-soft); }
+
+/* 판정 기록 모달 */
+.record-detail-top { display: flex; align-items: center; gap: 10px; margin: 14px 0 6px; font-size: 0.86rem; color: var(--muted-strong); }
+.record-detail-heading { margin: 20px 0 8px; font-size: 0.88rem; font-weight: 600; }
+
+.record-level-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.record-level-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); padding-bottom: 6px; font-size: 0.85rem; }
+
+/* 값이 서른 개 넘게 올 수 있어 두 칸으로 접는다. */
+.record-input-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; margin: 0; font-size: 0.82rem; }
+.record-input-list > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--line-soft); padding-bottom: 4px; }
+.record-input-list dt { color: var(--muted); }
+.record-input-list dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+@media (max-width: 560px) {
+  .record-input-list { grid-template-columns: 1fr; }
+}
+
+/* ── 헤더 계정 영역 ────────────────────────────────────────────────────────
+ *
+ * "내 계정" 링크를 뺀 자리. 주 메뉴에 이미 "계정" 이 있어서 같은 곳으로 가는 문이
+ * 둘이었다. 헤더에는 지금 누구로 들어와 있는지와 나가는 문만 둔다.
+ */
+.header-account {
+  max-width: 18ch;
+  overflow: hidden;
+  color: var(--muted) !important;
+  font-weight: 500 !important;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-signout {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--muted-strong);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.header-signout:hover { border-color: var(--blue-600); color: var(--blue-600); }
+
+/* 가입/로그인 전환 */
+.auth-hint { color: var(--muted); font-size: 0.75rem; }
+.auth-switch { margin: 14px 0 0; color: var(--muted); font-size: 0.82rem; }
+.auth-switch button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--blue-600);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 좁은 화면에서는 이메일을 접는다. 로그아웃 버튼이 밀려나면 안 된다. */
+@media (max-width: 720px) {
+  .header-account { display: none; }
+}
+
+/* 판정 기록 모달은 카드를 담아서 근거 모달보다 넓어야 한다. */
+.record-detail-modal { width: min(880px, 100%); }
+.record-detail-modal .assess-cards { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.record-detail-modal .form-actions { margin-top: 20px; }

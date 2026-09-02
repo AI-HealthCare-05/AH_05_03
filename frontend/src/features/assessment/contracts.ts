@@ -111,3 +111,30 @@ export const ENGINE_SHORT: Record<EngineCode, string> = {
   E2: "ML 추정",
   E3: "공개 공식",
 };
+
+/**
+ * 질환 키 → 이름.
+ *
+ * 판정 화면은 응답의 `verdicts[].name` 을 그대로 쓰므로 이 표가 필요 없다. 필요한
+ * 곳은 **판정 응답 없이 스냅샷만 들고 있는 화면**이다 — 건강 현황의 추이 그래프가
+ * 그렇다. 스냅샷 payload 는 `levels` 를 질환 키로만 담고 이름을 남기지 않는다.
+ *
+ * 서버 `app/services/assessment.py` 의 `SPECS` 와 순서·표기를 맞춘다. 서버가 질환을
+ * 더하면 여기 없는 키가 오는데, 부르는 쪽이 키를 그대로 보여 주게 두었다 —
+ * 화면에서 빈칸이 되는 것보다 낫다.
+ */
+export const DISEASE_NAMES: Record<string, string> = {
+  dm: "당뇨병",
+  htn: "고혈압",
+  dlp: "이상지질혈증",
+  hyperchol: "고콜레스테롤혈증",
+  hypertg: "고중성지방혈증",
+  low_hdl: "낮은 HDL 콜레스테롤",
+  obesity: "비만",
+  mets: "대사증후군",
+  ckd: "만성콩팥병",
+  fatty_liver: "지방간",
+  liver: "간기능",
+  anemia: "빈혈",
+  uric_acid: "요산",
+};

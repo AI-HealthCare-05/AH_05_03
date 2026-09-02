@@ -184,14 +184,16 @@ class Config(BaseSettings):
     # {"filename", "file_data"}}` 로 base64 PDF 를 직접 받는다(공식 문서 pdf-files 가이드).
     # gpt-4o 계열은 PDF 에서 **텍스트와 페이지 이미지를 함께** 뽑는다.
     #
-    # **지금은 PDF 를 빼 둔다.** OpenAI 단독 전환을 되돌리면서(위 `DEV_OCR_MODELS` 참조)
-    # PDF 는 다시 Gemini 가 받는다. `_part()` 에 PDF 분기는 남겨 뒀으니, OpenAI 를 단독으로
-    # 쓸 때 이 목록에 `"application/pdf"` 만 도로 넣으면 살아난다.
-    #
-    # **단독으로 쓸 거면 반드시 같이 넣어라.** `dev_ocr.py` 는 업로드 단계에서 PDF 를
-    # 허용하므로 사용자는 올릴 수 있고, 여기 없으면 인식 단계에서 "지원하지 않습니다" 를
-    # 받는다 — 올릴 수는 있는데 절대 처리되지 않는 조합이 된다.
-    OPENAI_SUPPORTED_MIME_TYPES: list[str] = ["image/jpeg", "image/png", "image/webp"]
+    # **2026-08-28 PDF 를 도로 넣었다.** OpenAI 단독으로 다시 전환하면서
+    # (아래 `DEV_OCR_MODELS` 참조) PDF 를 받아 줄 다른 공급자가 없어졌기 때문이다.
+    # 바로 위 주석이 요구한 그대로다 — `dev_ocr.py` 는 업로드 단계에서 PDF 를 허용하므로
+    # 여기 없으면 **올릴 수는 있는데 절대 처리되지 않는 조합**이 된다.
+    OPENAI_SUPPORTED_MIME_TYPES: list[str] = [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "application/pdf",
+    ]
     #: 이미지 파트의 `detail`. **기본값 `auto` 로 두면 안 된다.**
     #:
     #: 공식 문서(images-vision) — `low`/`auto` 는 이미지를 줄여서 본다. 검진표는
@@ -209,6 +211,23 @@ class Config(BaseSettings):
     # 한 계정이 조용히 할당량을 태우는 것을 막는다.
     DEV_OCR_RATE_LIMIT: int = 20
     DEV_OCR_RATE_WINDOW_SECONDS: int = 60
+    # 건강 어시스턴트·통증 대화. 같은 이유로 같은 모양의 상한을 건다. OCR 보다
+    # 한 번 호출이 싸므로 창은 같고 횟수만 넉넉하다.
+    LLM_CHAT_RATE_LIMIT: int = 30
+    LLM_CHAT_RATE_WINDOW_SECONDS: int = 60
+    #: 대화 경로가 쓰는 Gemini 모델.
+    #:
+    #: **원 PR(#27)이 세 곳에 하드코딩해 둔 값을 여기로 모았다.** 세 곳 모두
+    #: 테스트가 클라이언트를 목킹하므로 CI 가 이 문자열의 유효성을 증명하지
+    #: 못한다 — 모델명이 틀리면 배포 후 첫 호출에서야 드러난다. 설정으로 빼
+    #: 두면 재배포 없이 환경변수로 고칠 수 있다. 값 자체는 원 PR 을 그대로
+    #: 따랐고, 실제 호출로 확인하기 전에는 검증되지 않은 상태다.
+    GEMINI_CHAT_MODEL: str = "gemini-3.5-flash-lite"
+    #: 대화 경로 제한 시간. 원 PR 은 어시스턴트 12 초 / 통증 2.2 초로 갈라 뒀는데,
+    #: 통증 쪽 상수(`OPENAI_PAIN_CHAT_TIMEOUT_SECONDS`)가 이 저장소에 없어 실제로는
+    #: `hasattr` 폴백인 10 초로 돌고 있었다. 구조화 JSON 생성에 2.2 초는 짧아
+    #: 한 값으로 모으고 12 초로 둔다.
+    LLM_CHAT_TIMEOUT_SECONDS: float = 12.0
     # 문서 인식 작업 큐. 예측 큐와 같은 구조지만 흐르는 것이 수치가 아니라 검진
     # 결과지 원본이라 상한을 더 좁게 잡았다.
     DEV_OCR_JOB_STREAM_GROUP: str = "ocr-workers"
@@ -321,14 +340,18 @@ class Config(BaseSettings):
     # 다시 켜려면 이 목록을 `["openai:gpt-4o-mini"]` 로 바꾸고 compose 의 같은 항목도
     # 맞추면 된다. 그때 `OPENAI_SUPPORTED_MIME_TYPES` 에 `application/pdf` 를 같이
     # 넣어야 PDF 가 막히지 않는다 — 아래 주석 참조.
-    DEV_OCR_MODELS: list[str] = [
-        "gemini-3.5-flash-lite",
-        "gemini-3.1-flash-lite",
-        "gemini-3-flash-preview",
-        "gemini-3.5-flash",
-        "gemini-3.7-flash",
-        "openai:gpt-4o-mini",
-    ]
+    # ## 2026-08-28 — OpenAI 단독으로 다시 전환했다 (팀 결정)
+    #
+    # 바로 위에 되돌린 기록이 있는 그 전환이다. 되돌린 이유였던 **검사명·참고치 오독은
+    # 사라지지 않았다** — 대신 그 오독을 받는 쪽에 방어선을 세웠다.
+    # `ocr_measurements.py` 가 이름을 그대로 믿지 않고 단위·참고치·값 범위로
+    # 교차검증해서, 어긋나면 수치로 채택하지 않고 사용자 검토로 돌린다.
+    # `크레아티닌`→`크레아틴` 이나 `요소질소`→`요산` 이 그 관문에서 걸린다.
+    #
+    # **fallback 이 없다는 것을 알고 쓴다.** `OPENAI_ALLOWED_MODELS` 가 사실상
+    # `gpt-4o-mini` 하나라 이 항목이 막히면 인식 경로 전체가 멈춘다. Gemini 다섯을
+    # 예비로 두던 때와 다르다. 더 정확한 모델을 쓰려면 허용 목록을 먼저 늘려야 한다.
+    DEV_OCR_MODELS: list[str] = ["openai:gpt-4o-mini"]
     # 첫 청크까지의 상한. 스트리밍에서는 이 값이 실질적인 "이 모델이 응답하는가" 판정이다.
     # 503(용량 부족)은 여기서 걸리고, 걸리면 곧장 다음 모델로 넘어간다.
     #

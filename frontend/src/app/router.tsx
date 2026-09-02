@@ -11,6 +11,7 @@ import {
   ChallengePage,
   ChallengeSetupPage,
   DataManagementPage,
+  InsightsPage,
   UiPreviewPage,
 } from "./lazyRoutes";
 import { RootLayout } from "./RootLayout";
@@ -49,8 +50,7 @@ export const router = createBrowserRouter([
         element: <HomePage />,
       },
       {
-        // 판정 화면. 지금까지 서버만 답하고 받을 자리가 없던 곳이다 —
-        // `/api/demo` 의 서버 렌더 데모를 SPA 경로로 올렸다.
+        // 판정 화면. 검진표를 옆에 두고 수치를 고쳐 예측까지 한 화면에서 한다.
         path: "assessment",
         element: <AssessmentPage />,
       },
@@ -66,6 +66,11 @@ export const router = createBrowserRouter([
         element: <ChallengePage />,
       },
       {
+        // 챌린지와 수치를 모아 보는 곳. 가족 홈이 "관리", 여기가 "현황" 이다.
+        path: "insights",
+        element: <InsightsPage />,
+      },
+      {
         path: "data",
         element: <DataManagementPage />,
       },
@@ -78,7 +83,7 @@ export const router = createBrowserRouter([
         element: <ArchitecturePage />,
       },
       // 레이아웃 안에서 잡는 404. 헤더와 내비게이션이 남아 있어야 사용자가
-      // 막다른 길에 서지 않는다. `/demo` 처럼 서버 쪽 경로를 잘못 친 경우도 여기로 온다.
+      // 막다른 길에 서지 않는다. 주소를 잘못 친 경우도 여기로 온다.
       {
         path: "*",
         element: <ErrorPage />,

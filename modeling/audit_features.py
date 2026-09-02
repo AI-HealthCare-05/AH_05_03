@@ -18,11 +18,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from data import schema
+
+# schema.py 는 로더들 옆(`data/`)에 산다. 나머지 modeling 스크립트가 전부 쓰는 방식이다.
+#
+# **여기만 `from data import schema` 였다.** 런타임에는 둘 다 돌지만, 그 한 줄 때문에
+# mypy 가 같은 파일을 `schema` 와 `data.schema` 두 이름으로 보고
+# "Source file found twice under different module names" 로 **검사 전체를 포기**했다
+# (`errors prevented further checking`). 저장소 어디에 타입 오류가 나도 안 보이는 상태였다.
+sys.path.insert(0, str(Path(__file__).resolve().parent / "data"))
+
+import schema
 from splits import make_split
 from targets import BASIC_FEATURES, CATEGORICAL, DERIVED, LAB_FEATURES, TARGETS
 

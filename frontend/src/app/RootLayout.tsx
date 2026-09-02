@@ -1,29 +1,37 @@
 import { Suspense } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
+import { SignInPage } from "../features/account/SignInPage";
 import { useUiStore } from "../stores/uiStore";
+import { useAuth } from "./authContext";
 
+// 가족 홈이 "관리"(구성원·기록·검진표), 건강 현황이 "지금 어떤가"(챌린지·수치) 다.
+// 판정과 데이터 관리는 주소로 살아 있지만 메뉴에서는 뺐다 — 둘 다 가족 홈과
+// 건강 현황 안에서 이어지는 화면이라, 메뉴에 또 세우면 같은 곳으로 가는 문이
+// 두 개가 된다.
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
-  { to: "/assessment", label: "위험 판정", end: false },
-  { to: "/challenge", label: "챌린지", end: false },
-  { to: "/data", label: "데이터 관리", end: false },
-  { to: "/ui-preview", label: "UI 미리보기", end: false },
+  { to: "/insights", label: "건강 현황", end: false },
   { to: "/account", label: "계정", end: false },
 ] as const;
 
-// 예측 데모는 FastAPI 가 직접 내는 화면이라 SPA 라우트가 아니다. NavLink 로 걸면
-// react-router 가 클라이언트 라우팅을 시도하고 404 로 떨어진다 — 일반 앵커여야 한다.
-// 규칙 엔진 화면(`/api/demo/rules`)은 데모 안에서 스위치로 바꿀 수 있으므로
-// 내비게이션에는 입구를 하나만 둔다. 주소는 문서에 남아 있어 그대로 살아 있다.
-const DEMO_PAGES = [
-  { href: "/api/demo", label: "예측 데모", hint: "ML 모델과 규칙 엔진을 한 화면에서 비교합니다" },
-] as const;
-
 export function RootLayout() {
+  const { status, email, signOut } = useAuth();
   const navigationOpen = useUiStore((state) => state.navigationOpen);
   const toggleNavigation = useUiStore((state) => state.toggleNavigation);
   const closeNavigation = useUiStore((state) => state.closeNavigation);
+
+  // 갱신 토큰으로 세션을 되살리는 동안 아무것도 그리지 않는다. 로그인 화면을 먼저
+  // 띄우면 **이미 로그인한 사용자에게 로그인 화면이 한 번 깜빡인다.**
+  if (status === "checking") {
+    return <div className="route-loading">불러오는 중…</div>;
+  }
+
+  // 리다이렉트가 아니라 `Outlet` 자리를 대신 채운다. 주소가 그대로 남아서 로그인하면
+  // 원래 가려던 화면이 그대로 뜬다 — 돌아갈 곳을 따로 기억할 필요가 없다.
+  if (status === "signed-out") {
+    return <SignInPage />;
+  }
 
   return (
     <div className="app-shell">
@@ -57,23 +65,17 @@ export function RootLayout() {
                 {item.label}
               </NavLink>
             ))}
-            {DEMO_PAGES.map((item) => (
-              <a
-                key={item.href}
-                className="navigation-external"
-                href={item.href}
-                title={item.hint}
-                onClick={closeNavigation}
-              >
-                {item.label}
-                <i aria-hidden="true">↗</i>
-              </a>
-            ))}
           </nav>
 
+          {/* 예전에는 여기가 `/account` 로 가는 "내 계정" 링크였는데, 주 메뉴에 이미
+              "계정" 이 있어서 같은 곳으로 가는 문이 둘이었다. 헤더에서 실제로 필요한
+              것은 **지금 누구로 들어와 있는가** 와 나가는 문이다. */}
           <div className="header-status">
             <span title="현재 버전은 공용 브라우저의 사용자별 보관함 잠금을 지원하지 않습니다."><i aria-hidden="true" /> 기기 로컬</span>
-            <NavLink to="/account">내 계정</NavLink>
+            {email ? <span className="header-account" title={email}>{email}</span> : null}
+            <button type="button" className="header-signout" onClick={() => void signOut()}>
+              로그아웃
+            </button>
           </div>
         </div>
       </header>
