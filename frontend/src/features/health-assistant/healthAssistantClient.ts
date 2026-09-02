@@ -65,6 +65,27 @@ export interface QueryDraft {
   keyword?: string | null;
 }
 
+export interface ChallengeTaskDraft {
+  week: number;
+  day_of_week: number;
+  type: "exercise" | "sleep" | "check_in";
+  title: string;
+  target_minutes?: number | null;
+  target_distance_km?: number | null;
+  note?: string | null;
+}
+
+export interface ChallengeDraft {
+  action: "propose" | "create" | "adjust" | "complete";
+  title: string;
+  goal: string;
+  weeks?: number;
+  start_date?: string | null;
+  tasks: ChallengeTaskDraft[];
+  adjusted_minutes?: number | null;
+  set_rest_day?: boolean;
+}
+
 export interface HealthAssistantResponse {
   intent:
     | "record_exercise"
@@ -74,6 +95,9 @@ export interface HealthAssistantResponse {
     | "record_pain"
     | "record_lab_result"
     | "query_records"
+    | "create_challenge"
+    | "adjust_challenge"
+    | "complete_challenge"
     | "health_advice"
     | "general_chat"
     | "unknown";
@@ -84,6 +108,7 @@ export interface HealthAssistantResponse {
   medication_draft?: MedicationDraft | null;
   pain_draft?: PainDraft | null;
   lab_result_draft?: LabResultDraft | null;
+  challenge_draft?: ChallengeDraft | null;
   query_draft?: QueryDraft | null;
   missing_fields: string[];
   needs_confirmation: boolean;

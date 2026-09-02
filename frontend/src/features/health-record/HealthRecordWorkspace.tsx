@@ -19,6 +19,8 @@ const LABELS: Record<HealthRecordType, string> = {
   walking: "걷기",
   exercise: "운동",
   medication: "복약",
+  sleep: "수면",
+  daily_condition: "컨디션",
   note: "건강 메모",
 };
 

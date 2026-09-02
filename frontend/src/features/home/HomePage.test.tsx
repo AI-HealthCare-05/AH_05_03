@@ -29,6 +29,8 @@ describe("HomePage", () => {
     await user.click(screen.getByRole("button", { name: "프로필 저장" }));
 
     expect(await screen.findByRole("heading", { name: "나님의 건강기록" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "가족 구성원" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "기록 대상" })).toBeInTheDocument();
     expect(screen.getByText("프로필 상태")).toBeInTheDocument();
     expect(screen.getByText("저장된 기록")).toBeInTheDocument();
   });

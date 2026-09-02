@@ -7,8 +7,10 @@ import type {
   FamilyProfile,
   HealthRecord,
   HealthRecordType,
+  TodayChallengeSummary,
 } from "../../shared/local/domainContracts";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
+import { TodayChallengeCard } from "../challenge/TodayChallengeCard";
 import {
   FloatingHealthTools,
   HealthRecordComposer,
@@ -31,6 +33,8 @@ const RECORD_LABELS: Record<HealthRecordType, string> = {
   walking: "걷기",
   exercise: "운동",
   medication: "복약",
+  sleep: "수면",
+  daily_condition: "컨디션",
   note: "건강 메모",
 };
 
@@ -71,9 +75,35 @@ export function HomePage() {
   const [deletedRecordsDialogOpen, setDeletedRecordsDialogOpen] = useState(false);
   const [familyHistoryDialogOpen, setFamilyHistoryDialogOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [challengeSummary, setChallengeSummary] = useState<TodayChallengeSummary>();
+  const [challengeLoading, setChallengeLoading] = useState(false);
   const [actionError, setActionError] = useState<string>();
   const [saving, setSaving] = useState(false);
   const localStorageReady = Boolean(runtime);
+
+  const selectedProfile = useMemo(
+    () => profiles.find((profile) => profile.id === (routeProfileId ?? selectedProfileId)) ?? profiles[0],
+    [profiles, routeProfileId, selectedProfileId],
+  );
+
+  const refreshChallenge = useCallback(
+    async (profileId: string) => {
+      if (!runtime) return;
+      setChallengeSummary(undefined);
+      setChallengeLoading(true);
+      try {
+        const result = await runtime.challenges.getTodaySummary(profileId);
+        if (result.ok) {
+          setChallengeSummary(result.value);
+        }
+      } catch (err) {
+        console.error("Failed to load challenge summary:", err);
+      } finally {
+        setChallengeLoading(false);
+      }
+    },
+    [runtime],
+  );
 
   const refreshDashboard = useCallback(
     async (profileId: string) => {
@@ -99,10 +129,41 @@ export function HomePage() {
     [runtime],
   );
 
-  const selectedProfile = useMemo(
-    () => profiles.find((profile) => profile.id === (routeProfileId ?? selectedProfileId)) ?? profiles[0],
-    [profiles, routeProfileId, selectedProfileId],
+  const handleToggleChallengeTask = useCallback(
+    async (taskId: string) => {
+      if (!runtime || !challengeSummary?.plan || !selectedProfile) return;
+      try {
+        const result = await runtime.challenges.toggleTaskComplete(
+          challengeSummary.plan.id,
+          selectedProfile.id,
+          taskId,
+          challengeSummary.todayDate,
+        );
+        if (result.ok) {
+          await refreshChallenge(selectedProfile.id);
+        }
+      } catch (err) {
+        console.error("Failed to toggle task complete:", err);
+      }
+    },
+    [challengeSummary, refreshChallenge, runtime, selectedProfile],
   );
+
+  const handleCompleteAllChallenge = useCallback(async () => {
+    if (!runtime || !challengeSummary?.plan || !selectedProfile) return;
+    try {
+      const result = await runtime.challenges.completeAllToday(
+        challengeSummary.plan.id,
+        selectedProfile.id,
+        challengeSummary.todayDate,
+      );
+      if (result.ok) {
+        await refreshChallenge(selectedProfile.id);
+      }
+    } catch (err) {
+      console.error("Failed to complete all challenge tasks:", err);
+    }
+  }, [challengeSummary, refreshChallenge, runtime, selectedProfile]);
 
   useEffect(() => {
     if (!runtime || !routeRecordId) return;
@@ -116,9 +177,12 @@ export function HomePage() {
 
   useEffect(() => {
     if (!selectedProfile) return;
-    const timeout = window.setTimeout(() => void refreshDashboard(selectedProfile.id), 0);
+    const timeout = window.setTimeout(() => {
+      void refreshDashboard(selectedProfile.id);
+      void refreshChallenge(selectedProfile.id);
+    }, 0);
     return () => window.clearTimeout(timeout);
-  }, [refreshDashboard, selectedProfile]);
+  }, [refreshChallenge, refreshDashboard, selectedProfile]);
 
   async function submitProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -285,72 +349,6 @@ export function HomePage() {
       {error ? <div className="alert error-alert" role="alert">{error}</div> : null}
       {actionError && !profileLifecycleAction && !hiddenProfilesDialogOpen ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
 
-      <section className="dashboard-section" aria-labelledby="members-heading">
-        <div className="section-title-row">
-          <div>
-            <p className="section-kicker">가족 구성원</p>
-            <h2 id="members-heading">누구의 기록을 볼까요?</h2>
-          </div>
-          <div className="member-section-actions">
-            {hiddenProfiles.length > 0 ? (
-              <button className="secondary-button compact-button" type="button" onClick={() => {
-                setActionError(undefined);
-                setHiddenProfilesDialogOpen(true);
-              }}>
-                숨긴 프로필 {hiddenProfiles.length}명
-              </button>
-            ) : null}
-            <span className="section-count">{profiles.length}명</span>
-          </div>
-        </div>
-
-        {loading ? <DashboardSkeleton /> : null}
-        {!loading && profiles.length === 0 ? (
-          <EmptyHousehold
-            disabled={!localStorageReady}
-            onCreate={() => setProfileDialogOpen(true)}
-          />
-        ) : null}
-        {profiles.length > 0 ? (
-          <div className="member-list" role="list">
-            {profiles.map((profile, index) => (
-              <button
-                className={profile.id === selectedProfile?.id ? "member-card is-selected" : "member-card"}
-                key={profile.id}
-                type="button"
-                role="listitem"
-                aria-pressed={profile.id === selectedProfile?.id}
-                onClick={() => {
-                  setSelectedProfileId(profile.id);
-                  void navigate(`/members/${profile.id}`);
-                }}
-              >
-                <span className={`member-avatar avatar-tone-${index % 4}`} aria-hidden="true">
-                  {profile.displayName.slice(0, 1)}
-                </span>
-                <span className="member-card-copy">
-                  <strong>{profile.displayName}</strong>
-                  <small>{profile.relationship}{profile.birthDate ? ` · ${profile.birthDate.slice(0, 4)}년생` : ""}</small>
-                </span>
-                <span className="member-storage-label">로컬 프로필</span>
-              </button>
-            ))}
-            <button
-              className="member-card add-member-card"
-              type="button"
-              disabled={!localStorageReady}
-              onClick={() => setProfileDialogOpen(true)}
-            >
-              <span className="add-member-mark" aria-hidden="true">+</span>
-              <span className="member-card-copy">
-                <strong>구성원 추가</strong>
-                <small>이 브라우저에 새 프로필 만들기</small>
-              </span>
-            </button>
-          </div>
-        ) : null}
-      </section>
-
       {selectedProfile ? (
         <section className="member-dashboard" aria-labelledby="selected-member-heading">
           <div className="member-dashboard-main">
@@ -366,12 +364,29 @@ export function HomePage() {
                 }}>
                   프로필 관리
                 </button>
+                <button className="secondary-button" type="button" onClick={() => {
+                  setFamilyHistoryDialogOpen(true);
+                  void navigate(`/members/${selectedProfile.id}/family-history`);
+                }}>
+                  가족력 관리
+                </button>
                 <button className="primary-button" type="button" onClick={() => setRecordDialogOpen(true)}>
                   건강기록 작성
                 </button>
               </div>
             </div>
 
+            {/* 1. 오늘의 챌린지 카드 (Hero Section) */}
+            <TodayChallengeCard
+              profileName={selectedProfile.displayName}
+              summary={challengeSummary}
+              loading={challengeLoading}
+              onToggleTask={handleToggleChallengeTask}
+              onCompleteAll={handleCompleteAllChallenge}
+              onOpenAssistantForChallenge={() => setAssistantOpen(true)}
+            />
+
+            {/* 2. 건강 지표 요약 카드 */}
             <div className="metric-grid">
               <button className="metric-card-button" type="button" onClick={() => setRecordHistoryDialogOpen(true)}>
                 <MetricCard label="저장된 기록" value={`${summary?.totalRecords ?? 0}건`} helper="눌러서 전체 기록 보기" />
@@ -384,27 +399,24 @@ export function HomePage() {
               <MetricCard label="프로필 상태" value="안전" helper="서버 전송 없음" tone="safe" />
             </div>
 
-            <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
-              <VanatomeBodyMap profileName={selectedProfile.displayName} />
-            </Suspense>
-
+            {/* 3. 최근 건강기록 목록 */}
             <div className="records-panel">
               <div className="panel-heading">
-              <div>
-                <h3>최근 건강기록</h3>
-                <p>최신 기록부터 보여줍니다.</p>
-              </div>
-              <div className="panel-heading-actions">
-                {deletedRecords.length > 0 ? (
-                  <button className="text-button" type="button" onClick={() => {
-                    setActionError(undefined);
-                    setDeletedRecordsDialogOpen(true);
-                  }}>
-                    삭제된 기록 {deletedRecords.length}건
-                  </button>
-                ) : null}
-                {dashboardLoading ? <span className="subtle-status">불러오는 중…</span> : null}
-              </div>
+                <div>
+                  <h3>최근 건강기록</h3>
+                  <p>최신 기록부터 보여줍니다.</p>
+                </div>
+                <div className="panel-heading-actions">
+                  {deletedRecords.length > 0 ? (
+                    <button className="text-button" type="button" onClick={() => {
+                      setActionError(undefined);
+                      setDeletedRecordsDialogOpen(true);
+                    }}>
+                      삭제된 기록 {deletedRecords.length}건
+                    </button>
+                  ) : null}
+                  {dashboardLoading ? <span className="subtle-status">불러오는 중…</span> : null}
+                </div>
               </div>
               {records.length === 0 ? (
                 <div className="compact-empty">
@@ -440,37 +452,100 @@ export function HomePage() {
                 </ul>
               )}
             </div>
+
+            {/* 4. 3D 인체 모델 */}
+            <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
+              <VanatomeBodyMap profileName={selectedProfile.displayName} />
+            </Suspense>
           </div>
 
-          <aside className="quick-actions-panel">
-            <p className="section-kicker">빠른 작업</p>
-            <h2>무엇을 기록할까요?</h2>
-            <button type="button" onClick={() => setAssistantOpen(true)}>
-              <strong>봄이 건강 비서</strong>
-              <small>자연어로 운동·혈압·복약 대화 기록</small>
-            </button>
-            <button type="button" onClick={() => setRecordDialogOpen(true)}>
-              <strong>건강기록 작성</strong>
-              <small>검진·통증·수치·메모</small>
-            </button>
-            <NavLink to="/data">
-              <strong>서류 관리 · OCR</strong>
-              <small>등록·열람·OCR 결과 확인</small>
-            </NavLink>
-            <button type="button" onClick={() => {
-              setFamilyHistoryDialogOpen(true);
-              void navigate(`/members/${selectedProfile.id}/family-history`);
-            }}>
-              <strong>가족력 관리</strong>
-              <small>구성원별 질환·친족 정보</small>
-            </button>
-            <NavLink to="/data">
-              <strong>암호화 백업</strong>
-              <small>파일로 내보내기·가져오기</small>
-            </NavLink>
+          <aside className="family-switcher-panel" aria-label="가족 구성원">
+            <div className="family-switcher-header">
+              <div>
+                <p className="section-kicker">가족 구성원</p>
+                <h2 id="members-heading">기록 대상</h2>
+              </div>
+              <span className="section-count">{profiles.length}명</span>
+            </div>
+
+            <p className="family-switcher-description">구성원을 선택하면 해당 프로필의 건강기록과 챌린지로 전환됩니다.</p>
+
+            <div className="family-switcher-list" role="list">
+              {profiles.map((profile, index) => {
+                const isSelected = profile.id === selectedProfile.id;
+                return (
+                  <button
+                    className={isSelected ? "family-switcher-card is-selected" : "family-switcher-card"}
+                    key={profile.id}
+                    type="button"
+                    role="listitem"
+                    aria-pressed={isSelected}
+                    onClick={() => {
+                      setSelectedProfileId(profile.id);
+                      void navigate(`/members/${profile.id}`);
+                    }}
+                  >
+                    <span className={`member-avatar avatar-tone-${index % 4}`} aria-hidden="true">
+                      {profile.displayName.slice(0, 1)}
+                    </span>
+                    <span className="family-switcher-copy">
+                      <strong>{profile.displayName}</strong>
+                      <small>{profile.relationship}{profile.birthDate ? ` · ${profile.birthDate.slice(0, 4)}년생` : ""}</small>
+                    </span>
+                    {isSelected ? <span className="family-switcher-current">현재</span> : null}
+                  </button>
+                );
+              })}
+
+              <button
+                className="family-switcher-card family-switcher-add"
+                type="button"
+                disabled={!localStorageReady}
+                onClick={() => setProfileDialogOpen(true)}
+              >
+                <span className="add-member-mark" aria-hidden="true">+</span>
+                <span className="family-switcher-copy">
+                  <strong>구성원 추가</strong>
+                  <small>새 프로필 만들기</small>
+                </span>
+              </button>
+            </div>
+
+            {hiddenProfiles.length > 0 ? (
+              <button className="family-switcher-hidden" type="button" onClick={() => {
+                setActionError(undefined);
+                setHiddenProfilesDialogOpen(true);
+              }}>
+                숨긴 프로필 {hiddenProfiles.length}명 관리
+              </button>
+            ) : null}
           </aside>
         </section>
-      ) : null}
+      ) : (
+        <section className="dashboard-section" aria-labelledby="members-heading">
+          <div className="section-title-row">
+            <div>
+              <p className="section-kicker">가족 구성원</p>
+              <h2 id="members-heading">첫 건강 프로필을 만들어 주세요</h2>
+            </div>
+            {hiddenProfiles.length > 0 ? (
+              <button className="secondary-button compact-button" type="button" onClick={() => {
+                setActionError(undefined);
+                setHiddenProfilesDialogOpen(true);
+              }}>
+                숨긴 프로필 {hiddenProfiles.length}명
+              </button>
+            ) : null}
+          </div>
+          {loading ? <DashboardSkeleton /> : null}
+          {!loading ? (
+          <EmptyHousehold
+            disabled={!localStorageReady}
+            onCreate={() => setProfileDialogOpen(true)}
+          />
+          ) : null}
+        </section>
+      )}
 
       {profileDialogOpen ? (
         <Modal title="가족 구성원 로컬 프로필 만들기" onClose={() => setProfileDialogOpen(false)}>
@@ -725,6 +800,10 @@ export function HomePage() {
             isOpen={assistantOpen}
             onClose={() => setAssistantOpen(false)}
             onRecordSaved={() => refreshDashboard(selectedProfile.id)}
+            onChallengeSaved={async () => {
+              await refreshDashboard(selectedProfile.id);
+              await refreshChallenge(selectedProfile.id);
+            }}
             onNavigateToRecords={() => setRecordHistoryDialogOpen(true)}
           />
         </>
@@ -855,6 +934,16 @@ function recordNote(record: HealthRecord): string {
     const summary = p.summary || p.itemsSummary || "";
     return `${name}${summary ? `: ${summary}` : ""}`.slice(0, 120);
   }
+  if (record.recordType === "sleep" || p.durationHours !== undefined) {
+    const hours = p.durationHours ? `${p.durationHours}시간` : "";
+    const quality = p.quality ? ` (수면 질: ${p.quality})` : "";
+    return `수면 ${hours}${quality}`.trim();
+  }
+  if (record.recordType === "daily_condition" || p.condition) {
+    const cond = p.condition ? `컨디션: ${p.condition}` : "컨디션 기록";
+    const raw = p.rawText ? ` (${p.rawText})` : "";
+    return `${cond}${raw}`;
+  }
   return "저장된 건강기록";
 }
 
@@ -862,5 +951,7 @@ function recordMark(type: HealthRecordType): string {
   if (type === "health_screening" || type === "lab_result") return "검";
   if (type === "pain") return "통";
   if (type === "blood_pressure" || type === "blood_glucose") return "수";
+  if (type === "sleep") return "잠";
+  if (type === "daily_condition") return "상";
   return "기";
 }

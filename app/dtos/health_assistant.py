@@ -70,6 +70,32 @@ class LabResultDraft(BaseModel):
     items_summary: str | None = Field(default=None, description="주요 검사항목 및 수치 목록")
 
 
+class ChallengeTaskDraft(BaseModel):
+    week: int = Field(default=1, ge=1, le=52, description="주차 (1~52)")
+    day_of_week: int = Field(ge=0, le=6, description="요일 (0:일, 1:월, 2:화, 3:수, 4:목, 5:금, 6:토)")
+    type: Literal["exercise", "sleep", "check_in"] = Field(
+        default="exercise", description="과제 유형 (exercise, sleep, check_in)"
+    )
+    title: str = Field(description="과제 제목 (예: 가벼운 20분 걷기, 7시간 수면 등)")
+    target_minutes: int | None = Field(default=None, description="목표 시간 (분)")
+    target_distance_km: float | None = Field(default=None, description="목표 거리 (km)")
+    note: str | None = Field(default=None, description="과제 메모")
+
+
+class ChallengeDraft(BaseModel):
+    action: Literal["propose", "create", "adjust", "complete"] = Field(
+        default="propose",
+        description="챌린지 액션: propose(제안/초안), create(시작/확정), adjust(일정/시간 조정/회복일), complete(과제 완료)",
+    )
+    title: str = Field(description="챌린지 제목 (예: 다원님의 4주 혈압·생활습관 개선 챌린지)")
+    goal: str = Field(description="챌린지 목표 (예: 매일 20분 걷기 및 규칙적인 수면)")
+    weeks: int = Field(default=4, ge=1, le=52, description="챌린지 기간 (주 단위, 기본 4)")
+    start_date: str | None = Field(default=None, description="시작일자 (YYYY-MM-DD)")
+    tasks: list[ChallengeTaskDraft] = Field(default_factory=list, description="주차별/요일별 실천 과제 목록")
+    adjusted_minutes: int | None = Field(default=None, description="단축 또는 조정된 오늘 과제 시간 (분)")
+    set_rest_day: bool = Field(default=False, description="오늘을 회복일(휴식)로 설정할지 여부")
+
+
 class QueryDraft(BaseModel):
     record_type: str | None = Field(
         default=None,
@@ -90,6 +116,9 @@ HealthIntent = Literal[
     "record_pain",
     "record_lab_result",
     "query_records",
+    "create_challenge",
+    "adjust_challenge",
+    "complete_challenge",
     "health_advice",
     "general_chat",
     "unknown",
@@ -110,6 +139,7 @@ class HealthAssistantResponse(BaseModel):
     medication_draft: MedicationDraft | None = Field(default=None, description="복약 기록 초안")
     pain_draft: PainDraft | None = Field(default=None, description="통증 기록 초안")
     lab_result_draft: LabResultDraft | None = Field(default=None, description="검사/검진 서류 결과 초안")
+    challenge_draft: ChallengeDraft | None = Field(default=None, description="챌린지 생성·조정·완료 초안")
     query_draft: QueryDraft | None = Field(default=None, description="기록 조회 조건 초안")
     missing_fields: list[str] = Field(
         default_factory=list, description="초안 완성을 위해 사용자에게 추가 확인이 필요한 필드 목록"

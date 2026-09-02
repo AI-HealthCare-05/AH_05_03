@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from "react";
-import type { FamilyProfile, HealthRecord, HealthRecordType } from "../../shared/local/domainContracts";
+import type { FamilyProfile, HealthRecord, HealthRecordType, ISODate } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 import { DevServerOcrAdapter } from "../../ocr/ocr-adapter";
 import {
@@ -11,6 +11,7 @@ import {
   type MedicationDraft,
   type PainDraft,
   type LabResultDraft,
+  type ChallengeDraft,
 } from "./healthAssistantClient";
 import { selectContextRecordTypes } from "./healthAssistantContext";
 import "./healthAssistantDrawer.css";
@@ -21,9 +22,9 @@ interface HealthAssistantDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onRecordSaved?: () => Promise<void> | void;
+  onChallengeSaved?: () => Promise<void> | void;
   onNavigateToRecords?: () => void;
 }
-
 export interface MetricDataPoint {
   date: string; // YYYY-MM-DD
   value: number;
@@ -493,6 +494,7 @@ export function HealthAssistantDrawer({
   isOpen,
   onClose,
   onRecordSaved,
+  onChallengeSaved,
   onNavigateToRecords,
 }: HealthAssistantDrawerProps) {
   const [messages, setMessages] = useState<ExtendedChatMessage[]>([]);
@@ -840,6 +842,36 @@ export function HealthAssistantDrawer({
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
+
+      // 챌린지 일정 조정 또는 완료 인텐트 자동 처리
+      if (runtime && profile) {
+        if (res.intent === "adjust_challenge" && res.challenge_draft) {
+          const activePlan = await runtime.challenges.getActivePlan(profile.id);
+          if (activePlan.ok && activePlan.value) {
+            if (res.challenge_draft.set_rest_day) {
+              await runtime.challenges.setRestDay(activePlan.value.id, profile.id);
+            } else if (res.challenge_draft.adjusted_minutes) {
+              const todaySummary = await runtime.challenges.getTodaySummary(profile.id);
+              if (todaySummary.ok && todaySummary.value.tasks.length > 0) {
+                const taskId = todaySummary.value.tasks[0].task.id;
+                await runtime.challenges.adjustTaskMinutes(
+                  activePlan.value.id,
+                  profile.id,
+                  taskId,
+                  res.challenge_draft.adjusted_minutes,
+                );
+              }
+            }
+            if (onChallengeSaved) await onChallengeSaved();
+          }
+        } else if (res.intent === "complete_challenge" && res.challenge_draft) {
+          const activePlan = await runtime.challenges.getActivePlan(profile.id);
+          if (activePlan.ok && activePlan.value) {
+            await runtime.challenges.completeAllToday(activePlan.value.id, profile.id);
+            if (onChallengeSaved) await onChallengeSaved();
+          }
+        }
+      }
 
       // 조회 질의이거나 질문인 경우 IndexedDB에서 데이터 조회 수행
       const isRegexMatch = /(?:원본|서류|사진|스캔|문서|이미지|보여줘|그래프|변화|추이|트렌드|수치)/.test(textToSend);
@@ -1234,6 +1266,62 @@ export function HealthAssistantDrawer({
     }
   }
 
+  // 챌린지 초안 로컬 암호화 저장
+  async function saveChallenge(draft: ChallengeDraft, msgId: string) {
+    if (!runtime || !profile) return;
+    setLoading(true);
+    try {
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+      const tasks = draft.tasks.map((t, idx) => ({
+        id: `task-${Date.now()}-${idx}-${crypto.randomUUID().slice(0, 4)}`,
+        week: t.week || 1,
+        dayOfWeek: t.day_of_week,
+        type: t.type,
+        title: t.title,
+        targetMinutes: t.target_minutes ?? undefined,
+        targetDistanceKm: t.target_distance_km ?? undefined,
+        note: t.note ?? undefined,
+      }));
+
+      const planRes = await runtime.challenges.createPlan({
+        householdId: PRIMARY_HOUSEHOLD_ID,
+        profileId: profile.id,
+        title: draft.title || `${profile.displayName}님의 ${draft.weeks ?? 4}주 맞춤 챌린지`,
+        goal: draft.goal || "매일 꾸준한 생활습관 실천하기",
+        weeks: draft.weeks ?? 4,
+        startDate: (draft.start_date || todayStr) as ISODate,
+        tasks,
+        createdBy: "health_assistant",
+      });
+
+      if (!planRes.ok) {
+        throw new Error(planRes.error.message);
+      }
+
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msgId ? { ...m, saved: true } : m)),
+      );
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `🎉 '${planRes.value.title}'이(가) 시작되었습니다!\n홈 화면의 '오늘의 챌린지' 카드에서 오늘의 실천 과제를 확인하고 원클릭으로 완료를 기록해 보세요.`,
+        },
+      ]);
+
+      if (onChallengeSaved) await onChallengeSaved();
+      if (onRecordSaved) await onRecordSaved();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "챌린지 저장에 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const quickPrompts = [
     "검진 수치 변화 그래프",
     "최근 건강검진 결과 원본 보여줘",
@@ -1375,6 +1463,17 @@ export function HealthAssistantDrawer({
                     draft={msg.responseDraft.lab_result_draft}
                     saved={Boolean(msg.saved)}
                     onSave={(updated) => saveLabResult(updated, msg.id, msg.imageFile)}
+                  />
+                )}
+
+                {/* 챌린지 초안 확인 카드 */}
+                {msg.responseDraft?.challenge_draft &&
+                  msg.responseDraft.needs_confirmation &&
+                  msg.role === "assistant" && (
+                  <ChallengeConfirmationCard
+                    draft={msg.responseDraft.challenge_draft}
+                    saved={Boolean(msg.saved)}
+                    onSave={(updated) => saveChallenge(updated, msg.id)}
                   />
                 )}
 
@@ -2644,6 +2743,84 @@ export function HealthMetricsTrendCard({
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+const CHALLENGE_DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
+
+function ChallengeConfirmationCard({
+  draft,
+  saved,
+  onSave,
+}: {
+  draft: ChallengeDraft;
+  saved: boolean;
+  onSave: (updated: ChallengeDraft) => void;
+}) {
+  const [title, setTitle] = useState(draft.title);
+  const [goal, setGoal] = useState(draft.goal);
+
+  if (saved) {
+    return (
+      <div className="draft-confirm-card is-saved">
+        <span className="saved-badge">챌린지가 시작되었습니다!</span>
+        <p>
+          <strong>{title}</strong>
+        </p>
+        <small>홈 화면의 '오늘의 챌린지' 카드에서 실천 상태를 확인해 보세요.</small>
+      </div>
+    );
+  }
+
+  return (
+    <div className="draft-confirm-card challenge-confirm-card">
+      <div className="card-header">
+        <strong>🏆 {draft.weeks ?? 4}주 맞춤 챌린지 제안</strong>
+        <small>계획을 확인하고 '챌린지 시작하기'를 눌러 홈 화면에 등록하세요</small>
+      </div>
+      <div className="card-inputs">
+        <label>
+          챌린지 제목
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="예: 4주 혈압·생활습관 개선 챌린지"
+          />
+        </label>
+        <label>
+          실천 목표
+          <input
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            placeholder="예: 매일 20분 걷기 및 규칙적인 수면"
+          />
+        </label>
+        {draft.tasks && draft.tasks.length > 0 && (
+          <div className="challenge-draft-tasks">
+            <span className="tasks-preview-label">주요 실천 과제 미리보기</span>
+            <ul className="draft-task-list">
+              {draft.tasks.map((task, idx) => (
+                <li key={idx} className="draft-task-preview-item">
+                  <span className="draft-day-tag">{CHALLENGE_DAY_NAMES[task.day_of_week]}요일</span>
+                  <span className="draft-task-name">{task.title}</span>
+                  {task.target_minutes ? (
+                    <span className="draft-minutes-tag">{task.target_minutes}분</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        className="confirm-save-btn"
+        disabled={!title.trim() || !goal.trim()}
+        onClick={() => onSave({ ...draft, title, goal })}
+      >
+        🚀 이 챌린지 시작하기 (홈 화면 등록)
+      </button>
     </div>
   );
 }

@@ -18,7 +18,6 @@
   z-index: 999;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-
 .health-assistant-launcher-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5), 0 3px 8px rgba(0, 0, 0, 0.12);
@@ -1381,4 +1380,96 @@
   color: #64748b;
   font-size: 11px;
   line-height: 1.4;
+}
+
+/* 챌린지 제안 카드 스타일 */
+.challenge-draft-card {
+  border-left: 4px solid #3b82f6;
+  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+}
+
+.challenge-badge {
+  background: #dbeafe;
+  color: #1e40af;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.draft-weeks-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #059669;
+  background: #ecfdf5;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #a7f3d0;
+}
+
+.challenge-draft-tasks {
+  margin-top: 10px;
+}
+
+.draft-task-list {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.draft-task-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.draft-day-tag {
+  font-weight: 700;
+  color: #2563eb;
+  background: #eff6ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.draft-task-name {
+  flex: 1;
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.draft-minutes-tag {
+  font-size: 11px;
+  color: #475569;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.save-draft-btn.primary-action-btn {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  font-weight: 700;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.save-draft-btn.primary-action-btn:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  transform: translateY(-1px);
 }
