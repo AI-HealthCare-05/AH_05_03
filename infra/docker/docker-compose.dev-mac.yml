@@ -55,7 +55,7 @@ services:
 
   migrate:
     image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
-    command: ["uv", "run", "--no-sync", "alembic", "upgrade", "head"]
+    command: ["alembic", "upgrade", "head"]
     environment: &app_environment
       ENV: dev
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
@@ -108,7 +108,7 @@ services:
 
   email-worker:
     image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
-    command: ["uv", "run", "--no-sync", "python", "-m", "app.workers.invitation_email_worker"]
+    command: ["python", "-m", "app.workers.invitation_email_worker"]
     restart: unless-stopped
     environment:
       REDIS_URL: redis://redis:6379/0
