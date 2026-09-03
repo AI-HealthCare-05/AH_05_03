@@ -22,7 +22,6 @@ nginx 설정을 건드리지 않고 배포된 스택에서도 같은 경로로 �
 않는다(§2 대비 규칙).
 """
 
-
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -160,6 +159,15 @@ __CSS__
   </form>
 
   <div class="actions">
+    <div id="auth" style="width:100%;border-top:1px solid #e5e7eb;padding-top:12px;margin-top:4px">
+      <label for="demo_email">데모 로그인 (예측 API 가 인증을 요구한다)</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="demo_email" type="email" placeholder="이메일" style="flex:1;min-width:180px" />
+        <input id="demo_password" type="password" placeholder="비밀번호" style="flex:1;min-width:140px" />
+        <button id="login" class="secondary" type="button">로그인</button>
+        <span id="auth_state" style="font-size:13px;color:#6b7280">로그인 필요</span>
+      </div>
+    </div>
     <button id="submit" type="button">예측하기</button>
     <button id="sample" class="secondary" type="button">임의값 채우기</button>
     <button id="clear" class="secondary" type="button">전체 비우기</button>
@@ -573,13 +581,49 @@ document.getElementById("clear").addEventListener("click", () => {
   document.getElementById("err").innerHTML = "";
 });
 
+// 접근 토큰은 **메모리에만** 둔다. localStorage 에 넣으면 XSS 한 방에 털리고,
+// 이 페이지는 건강 수치를 다루는 화면이라 그 습관을 여기서 만들면 안 된다.
+// 새로고침하면 다시 로그인해야 하는 것이 그 대가다.
+let accessToken = null;
+
+async function login() {
+  const email = document.getElementById("demo_email").value.trim();
+  const password = document.getElementById("demo_password").value;
+  const state = document.getElementById("auth_state");
+  state.textContent = "로그인 중...";
+  try {
+    const response = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({email, password}),
+    });
+    const json = await response.json();
+    if (!response.ok || json.success === false) {
+      accessToken = null;
+      state.textContent = json.message || "로그인 실패";
+      state.style.color = "#b91c1c";
+      return;
+    }
+    accessToken = json.data.access_token;
+    state.textContent = "로그인됨";
+    state.style.color = "#15803d";
+  } catch (e) {
+    accessToken = null;
+    state.textContent = "서버에 연결하지 못했습니다";
+    state.style.color = "#b91c1c";
+  }
+}
+
 async function call(kind) {
   const path = kind === "ml" ? "/api/v1/predictions/risk" : "/api/v1/assessments/rules";
   const body = kind === "ml" ? mlPayload() : rulePayload();
+  if (!accessToken) {
+    return {kind, error: "먼저 로그인하세요. 예측 API 는 인증을 요구합니다 (ADR-009 §10)."};
+  }
   try {
     const response = await fetch(path, {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: {"Content-Type": "application/json", "Authorization": "Bearer " + accessToken},
       body: JSON.stringify(body),
     });
     const json = await response.json();
@@ -793,6 +837,7 @@ function section(kind, note, inner) {
   return `<div class="engine"><h3>${title}</h3><span>${note}</span></div>${inner}`;
 }
 
+document.getElementById("login").addEventListener("click", login);
 document.getElementById("submit").addEventListener("click", async () => {
   const out = document.getElementById("out");
   const err = document.getElementById("err");

@@ -55,9 +55,7 @@ class ChallengeRepository:
 
     async def list_checks(self, account_id: uuid.UUID) -> list[ChallengeCheck]:
         result = await self.session.scalars(
-            select(ChallengeCheck)
-            .where(ChallengeCheck.account_id == account_id)
-            .order_by(ChallengeCheck.checked_on)
+            select(ChallengeCheck).where(ChallengeCheck.account_id == account_id).order_by(ChallengeCheck.checked_on)
         )
         return list(result)
 
@@ -72,7 +70,12 @@ class ChallengeRepository:
             return
         await self.session.execute(
             pg_insert(ChallengeAward)
-            .values([{"account_id": account_id, "animal_id": animal_id, "awarded_on": awarded_on} for animal_id in animal_ids])
+            .values(
+                [
+                    {"account_id": account_id, "animal_id": animal_id, "awarded_on": awarded_on}
+                    for animal_id in animal_ids
+                ]
+            )
             .on_conflict_do_nothing(constraint="uq_challenge_awards_account_id_animal_id")
         )
 
@@ -98,9 +101,7 @@ class ChallengeRepository:
         if not account_ids:
             return {}
         result = await self.session.scalars(
-            select(ChallengeCheck)
-            .where(ChallengeCheck.account_id.in_(account_ids))
-            .order_by(ChallengeCheck.checked_on)
+            select(ChallengeCheck).where(ChallengeCheck.account_id.in_(account_ids)).order_by(ChallengeCheck.checked_on)
         )
         grouped: dict[uuid.UUID, list[ChallengeCheck]] = {account_id: [] for account_id in account_ids}
         for check in result:
@@ -110,9 +111,7 @@ class ChallengeRepository:
     async def count_awards_for_accounts(self, account_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
         if not account_ids:
             return {}
-        result = await self.session.scalars(
-            select(ChallengeAward).where(ChallengeAward.account_id.in_(account_ids))
-        )
+        result = await self.session.scalars(select(ChallengeAward).where(ChallengeAward.account_id.in_(account_ids)))
         counts: dict[uuid.UUID, int] = {account_id: 0 for account_id in account_ids}
         for award in result:
             counts[award.account_id] += 1

@@ -111,8 +111,8 @@ def parse(text: str, cycle: str) -> pd.DataFrame:
     for column in ("subject_id", "eligstat", "mortstat", "permth_int", "permth_exm"):
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
     for column in ("death_diabetes", "death_hypertension"):
-        frame[column] = pd.to_numeric(frame[column], errors="coerce").eq(1).astype("boolean").where(
-            frame[column].notna()
+        frame[column] = (
+            pd.to_numeric(frame[column], errors="coerce").eq(1).astype("boolean").where(frame[column].notna())
         )
     frame["cause"] = frame["ucod_leading"].map(CAUSE_LABELS)
     # 연계 대상이 아닌 사람은 생존·사망 어느 쪽으로도 세면 안 된다.
@@ -157,7 +157,9 @@ def main() -> int:
     pooled.to_csv(args.out, index=False)
 
     eligible = pooled["deceased"].notna()
-    print(f"\n합계 {len(pooled):,}행 / 연계대상 {int(eligible.sum()):,} / 사망 {int(pooled['deceased'].sum(skipna=True)):,}")
+    print(
+        f"\n합계 {len(pooled):,}행 / 연계대상 {int(eligible.sum()):,} / 사망 {int(pooled['deceased'].sum(skipna=True)):,}"
+    )
     causes = pooled.loc[pooled["deceased"].eq(True), "cause"].value_counts()
     print("주요 사인")
     for name, count in causes.items():

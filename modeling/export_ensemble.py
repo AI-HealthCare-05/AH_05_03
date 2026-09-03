@@ -41,12 +41,13 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent / "data"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import bundle_io  # noqa: E402
 from ensemble import SEEDS, apply_calibrator, fit_calibrator_from
 from export_multi import ARTIFACTS, DATA, EXPANSION, LIMITS, REQUIRED, build_reference, prepare, tree_payload
 from metrics import evaluate
 from splits import cv_folds, make_split
 from targets import CATEGORICAL, DERIVED, TARGETS, Target
-from train_multi import make_pipeline, monotone_vector
+from train_multi import make_pipeline, monotone_direction, monotone_for
 
 MEMBERS = ("xgboost", "catboost")
 
@@ -87,12 +88,13 @@ def member_payload(
     categorical: list[str],
     model: str,
     seeds: tuple[int, ...],
+    target_key: str,
 ) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
     """한 멤버의 직렬화·out-of-fold 확률·홀드아웃 확률.
 
     돌려주는 확률은 **멤버 보정까지 끝난** 값이다. 앙상블 보정은 밖에서 한 번 더 건다.
     """
-    monotone = monotone_vector(frame, numeric, categorical) if model == "xgboost" else None
+    monotone = monotone_for(model, frame, numeric, categorical, target_key)
     x_train, y_train = frame.loc[split.train_index], y.loc[split.train_index]
 
     # 보정기는 첫 시드의 out-of-fold 로 적합한다. `ensemble.py` 와 같은 규칙이다.
@@ -117,7 +119,9 @@ def member_payload(
             seed_payloads.append({"trees": serialised["trees"], "base_margin": serialised["base_margin"]})
         else:
             serialised = oblivious_payload(pipeline)
-            seed_payloads.append({"trees": serialised["trees"], "scale": serialised["scale"], "bias": serialised["bias"]})
+            seed_payloads.append(
+                {"trees": serialised["trees"], "scale": serialised["scale"], "bias": serialised["bias"]}
+            )
         seed_probability.append(pipeline.predict_proba(frame)[:, 1])
 
     kind = "gradient_boosted_trees" if model == "xgboost" else "oblivious_trees"
@@ -140,7 +144,7 @@ def build(data: pd.DataFrame, target: Target, tier: str, seeds: tuple[int, ...])
 
     members, member_everywhere = [], []
     for model in MEMBERS:
-        payload, everywhere, _ = member_payload(frame, y, split, numeric, categorical, model, seeds)
+        payload, everywhere, _ = member_payload(frame, y, split, numeric, categorical, model, seeds, target.key)
         members.append(payload)
         member_everywhere.append(everywhere)
 
@@ -154,7 +158,7 @@ def build(data: pd.DataFrame, target: Target, tier: str, seeds: tuple[int, ...])
     for fold_train, fold_valid in cv_folds(y_train).split(x_train, y_train):
         fold_members = []
         for model, member in zip(MEMBERS, members, strict=True):
-            monotone = monotone_vector(frame, numeric, categorical) if model == "xgboost" else None
+            monotone = monotone_for(model, frame, numeric, categorical, target.key)
             per_seed = [
                 make_pipeline(numeric, categorical, model, monotone, seed=seed)
                 .fit(x_train.iloc[fold_train], y_train.iloc[fold_train])
@@ -165,9 +169,7 @@ def build(data: pd.DataFrame, target: Target, tier: str, seeds: tuple[int, ...])
         combined_oof[fold_valid] = np.mean(fold_members, axis=0)
     ensemble_calibrator = fit_calibrator_from(combined_oof, y_train.to_numpy())
 
-    reference_probability = pd.Series(
-        apply_calibrator(combined_everywhere, ensemble_calibrator), index=frame.index
-    )
+    reference_probability = pd.Series(apply_calibrator(combined_everywhere, ensemble_calibrator), index=frame.index)
     holdout = reference_probability.loc[split.holdout_index].to_numpy()
     y_holdout = y.loc[split.holdout_index].to_numpy()
 
@@ -214,6 +216,17 @@ def build(data: pd.DataFrame, target: Target, tier: str, seeds: tuple[int, ...])
         "optional_inputs": [c for c in inputs if c not in REQUIRED],
         "numeric_features": numeric,
         "categorical_features": categorical,
+        # 이 번들에 걸린 단조 제약. **서빙 쪽 방향 계약 테스트가 이걸 읽는다.**
+        #
+        # 번들 밖에 표로 두면 학습과 테스트가 갈라진다 — 실제로 갈라졌다. 평균동맥압을
+        # 전 타깃 +1 로 걸었다가 빈혈에서 −1 로 뒤집었는데, 테스트가 그 예외를 모르면
+        # "혈압이 오르면 위험이 올라야 한다"를 빈혈에도 강제해서 옳은 모델을 떨어뜨린다.
+        # 방향은 학습이 정하고 테스트는 읽기만 한다.
+        "monotone": {
+            name: direction
+            for name, direction in ((n, monotone_direction(target.key, n)) for n in numeric)
+            if direction
+        },
         "medians": [float(v) for v in imputer.statistics_],
         "scaler_mean": [float(v) for v in scaler.mean_],
         "scaler_scale": [float(v) for v in scaler.scale_],
@@ -324,7 +337,7 @@ def equivalence_from_bundle(bundle: dict[str, Any], data: pd.DataFrame, target: 
     # 다시 눌려 1e-8 아래로 내려간다. 검사는 실제로 배포되는 값을 봐야 한다.
     per_member = []
     for model, member in zip(bundle["member_models"], bundle["members"], strict=True):
-        monotone = monotone_vector(frame, numeric, categorical) if model == "xgboost" else None
+        monotone = monotone_for(model, frame, numeric, categorical, target.key)
         per_seed = [
             make_pipeline(numeric, categorical, model, monotone, seed=seed)
             .fit(x_train, y_train)
@@ -369,8 +382,12 @@ def main() -> int:
 
             name = f"risk_{key}.json" if tier == "basic" else f"risk_{key}_lab.json"
             path = args.out / name
+            # 사후 주입된 `rule_anchor` 를 덮어쓰지 않는다 — 이유는 `bundle_io` 참조.
+            carried = bundle_io.carry_over(path, bundle)
             text = json.dumps(bundle, ensure_ascii=False, separators=(",", ":"))
             path.write_text(text, encoding="utf-8")
+            if carried:
+                print(f"  {path.name}{bundle_io.note(carried)}")
             plain = len(text.encode("utf-8"))
             packed = len(gzip.compress(text.encode("utf-8"), 9))
             total_plain += plain

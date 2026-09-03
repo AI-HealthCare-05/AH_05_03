@@ -36,7 +36,10 @@ class RiskPredictionRequest(BaseRequestModel):
     vigorous_min_per_week: float | None = Field(default=None, ge=0, le=5000)
     sedentary_min_per_day: float | None = Field(default=None, ge=0, le=1440)
     sleep_hours: float | None = Field(default=None, ge=0, le=24)
-    veg_fruit_daily: bool | None = Field(default=None, description="채소·과일을 매일 먹는가")
+    # `veg_fruit_daily` 를 여기서 뺐다. 서빙 번들 20개 어디에도 그 특징이 없어서
+    # 받아도 채점에 안 들어갔다 — 켜고 끈 결과 차이가 0.0%p 였다. 물어보면
+    # 사용자는 답이 반영된다고 믿는다. 학습 쪽 실험 코드에는 남아 있다
+    # (modeling/minimal_features.py 의 후보 목록). 번들에 들어오면 다시 받는다.
     sbp: float | None = Field(default=None, ge=60, le=260, description="수축기 혈압")
     dbp: float | None = Field(default=None, ge=30, le=200, description="이완기 혈압")
     education_level: int | None = Field(default=None, ge=1, le=5, description="1=중학교 미만 ... 5=대졸 이상")
@@ -116,7 +119,6 @@ class RiskPredictionRequest(BaseRequestModel):
             "vigorous_min_per_week": self.vigorous_min_per_week,
             "sedentary_min_per_day": self.sedentary_min_per_day,
             "sleep_hours": self.sleep_hours,
-            "veg_fruit_daily": self.veg_fruit_daily,
             "sbp": self.sbp,
             "dbp": self.dbp,
             "education_level": self.education_level,

@@ -29,6 +29,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # 컨테이너에서는 이미지 안에 구운 경로, 로컬에서는 저장소의 빌드 산출물.
 # 둘 다 없으면 정적 서빙을 통째로 건너뛴다 — 프런트를 빌드하지 않은 개발 환경과
@@ -111,8 +112,14 @@ def mount(app: FastAPI) -> bool:
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa(request: Request, full_path: str) -> Response:
         # API 는 절대 가리지 않는다. 오타 난 요청은 HTML 이 아니라 404 를 받아야 한다.
+        #
+        # **`Response(status_code=404)` 를 직접 돌려주면 안 된다.** 그러면 예외
+        # 핸들러를 건너뛰어 본문 없는 404 가 나가고, `{"success": false, "error_code":
+        # "NOT_FOUND", ...}` 봉투 규약이 깨진다. 클라이언트는 응답을 파싱하려다
+        # `JSONDecodeError` 를 받는다. 이 경로는 **SPA 가 마운트될 때만** 타므로
+        # 로컬 개발(빌드 산출물 없음)에서는 드러나지 않고 운영에서만 드러난다.
         if full_path.startswith("api/"):
-            return Response(status_code=404)
+            raise StarletteHTTPException(status_code=404)
 
         # 데모 화면은 `/api/` 아래 있는데 사람은 `/demo` 를 친다. 실제로 그렇게 치고
         # SPA 404 를 받은 적이 있어서 짧은 주소를 살려 둔다. 정본은 `/api/demo` 다.

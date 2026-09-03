@@ -1,75 +1,31 @@
 """만성질환 위험도 예측 엔드포인트.
 
-인증을 요구하지 않고 아무것도 저장하지 않는다. 요청 본문의 건강정보는 응답을
-만든 뒤 버려지며 DB·Redis·로그에 남기지 않는다. docs/adr/0002 의 "건강정보를
-서버에 저장하지 않는다"를 지키는 방식이 여기서는 무상태 계산이다.
+**인증을 요구하고 계정 단위로 속도를 제한한다.** 저장은 하지 않는다 — 요청 본문의
+건강정보는 응답을 만든 뒤 버려지며 DB·Redis·로그에 남기지 않는다. docs/adr/0002 의
+"건강정보를 서버에 저장하지 않는다"를 지키는 방식이 여기서는 무상태 계산이다.
 
-무인증 정책은 검토가 필요한 결정이다. 저장이 없으니 개인정보 위험은 낮지만,
-공개 엔드포인트라 속도 제한이 필요하다. docs/03_api_spec.md 에 반영 전이다.
+인증을 붙인 경위: 전에는 무인증이었다. 저장이 없으니 개인정보 위험은 낮지만 공개
+엔드포인트가 건강 수치를 본문으로 받고 있었고, `docs/adr/0009` §10 이 이 경로를
+`/api/v1` 에 공개하는 선행조건으로 인증·레이트리밋을 걸었다.
 """
 
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
+from app.core import config
 from app.core.errors import ErrorCode
+from app.dependencies.security import require_active_account
+from app.dependencies.services import get_rate_limiter
 from app.dtos.envelope import ApiResponse, error_responses
-from app.dtos.predictions import (
-    ConditionRisk,
-    MedicalRisk,
-    ModelAccuracy,
-    RiskFactor,
-    RiskPredictionData,
-    RiskPredictionRequest,
-    RuleAnchor,
-    ThresholdJudgement,
-)
+from app.dtos.predictions import RiskPredictionData, RiskPredictionRequest
 from app.exceptions import AppError
+from app.models import ServiceAccount
+from app.services.prediction import build_prediction
+from app.services.rate_limit import RateLimiter
 from app.services.risk import RiskModelRegistry, registry
 
 prediction_router = APIRouter(prefix="/predictions", tags=["predictions"])
-
-# 화면에 반드시 함께 보여야 하는 문구. docs/20_prediction_inputs_and_levers.md 8절.
-DISCLAIMERS = [
-    "의료 진단이 아닙니다. 수치가 높게 나오면 재측정 후 의료기관 상담을 권합니다.",
-    "미국 공개 데이터(NHANES·BRFSS·Framingham)로 학습했으며 한국인 보정을 하지 않았습니다.",
-    "발병 예측이 아니라 현재 측정 기준을 넘을 가능성에 대한 선별 안내입니다.",
-    "입력한 값은 저장하지 않습니다.",
-]
-
-TOP_FACTOR_COUNT = 4
-
-# 카드 순서. 레지스트리에 있는 것 중 여기 적힌 것만, 이 순서로 내보낸다.
-# 알파벳 순으로 두면 빈혈이 맨 위에 오고 당뇨가 중간에 묻힌다.
-DISPLAY_ORDER = (
-    "dm",
-    "htn",
-    "dlp",
-    "hyperchol",
-    "hypertg",
-    "low_hdl",
-    "mets",
-    "ckd",
-    "fatty_liver",
-    "anemia",
-)
-
-# 비교 집단 표시 문구. 모델 참조표의 연령 구간과 같아야 한다.
-PEER_AGE_LABELS = {
-    "19_30": "20대",
-    "30_40": "30대",
-    "40_50": "40대",
-    "50_60": "50대",
-    "60_70": "60대",
-    "70_200": "70대 이상",
-}
-
-
-def peer_group_label(age: int, sex: str) -> str:
-    from app.services.risk import peer_cell
-
-    _, band = peer_cell(age, sex).split(":")
-    return f"{PEER_AGE_LABELS.get(band, band)} {'남성' if sex == 'M' else '여성'}"
 
 
 class ModelUnavailableError(AppError):
@@ -101,65 +57,23 @@ def get_registry() -> RiskModelRegistry:
 async def predict_risk(
     payload: RiskPredictionRequest,
     models: Annotated[RiskModelRegistry, Depends(get_registry)],
+    account: Annotated[ServiceAccount, Depends(require_active_account)],
+    limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
 ) -> ApiResponse[RiskPredictionData]:
+    await limiter.hit(
+        "predict",
+        str(account.id),
+        config.PREDICTION_RATE_LIMIT,
+        config.PREDICTION_RATE_WINDOW_SECONDS,
+    )
     if not models.available:
         raise ModelUnavailableError(
             "위험도 모델이 적재되지 않았습니다. modeling/export_model.py 실행 후 모델 파일을 마운트하세요."
         )
 
-    features = payload.to_features()
-    # 검사값을 냈으면 정밀형 번들을 쓴다. 그 질환의 정밀형이 없으면 레지스트리가
-    # 알아서 일반형으로 내려가고, 응답의 tier 가 무엇을 썼는지 알려 준다.
-    tier = "lab" if payload.labs_provided else "basic"
-
-    conditions = []
-    for target in [t for t in DISPLAY_ORDER if t in models.targets()]:
-        model = models.get(target, tier)
-        if model is None:
-            continue
-
-        probability = model.probability(features)
-        percentile = model.peer_percentile(probability, payload.age, payload.sex)
-        anchor = model.interpret(probability)
-        judgement = model.judge(features)
-        median = model.peer_median(payload.age, payload.sex)
-        factors = [
-            RiskFactor(feature=name, contribution=round(value, 4))
-            for name, value in model.contributions(features)[:TOP_FACTOR_COUNT]
-        ]
-        conditions.append(
-            ConditionRisk(
-                target=target,
-                description=model.description,
-                name=model.name,
-                tier=model.tier,  # type: ignore[arg-type]
-                label_definition=model.definition,
-                threshold_source=model.threshold_source,
-                probability=round(probability, 4),
-                medical=MedicalRisk(**model.medical_band(probability)),
-                judgement=ThresholdJudgement(**judgement) if judgement else None,
-                band=model.band(probability, percentile),  # type: ignore[arg-type]
-                peer_group=peer_group_label(payload.age, payload.sex),
-                peer_percentile=percentile,
-                peer_median=round(median, 4) if median is not None else None,
-                peer_ratio=(round(probability / median, 2) if median and median > 0 else None),
-                alert=percentile is not None and percentile >= 90,
-                model_auroc=round(model.holdout["auroc_nhanes"], 3),
-                accuracy=ModelAccuracy(**model.accuracy()),
-                rule_anchor=RuleAnchor(**anchor) if anchor else None,
-                top_factors=factors,
-            )
-        )
-
-    provided = len(payload.model_dump(exclude_none=True)) - 2  # height/weight -> bmi 하나로 센다
+    data = build_prediction(payload, models)
     return ApiResponse(
-        data=RiskPredictionData(
-            bmi=payload.bmi,
-            conditions=conditions,
-            disclaimers=DISCLAIMERS,
-            inputs_provided=provided,
-            inputs_total=len(RiskPredictionRequest.model_fields),
-        ),
+        data=data,
         message="위험도를 산출했습니다. 입력값은 저장하지 않았습니다.",
     )
 

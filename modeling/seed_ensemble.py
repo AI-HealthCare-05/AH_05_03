@@ -66,7 +66,10 @@ def fit_variants(
     """
     x_train, y_train = frame.loc[train_index], y.loc[train_index]
     x_holdout = frame.loc[holdout_index]
-    # `train_multi.run_one` 과 같은 규칙 — 단조 제약은 XGBoost 에만.
+    # **여기만 XGBoost 에만 제약을 건다.** 제품 경로(`ensemble.py`·`export_ensemble.py`)는
+    # 2026-08-25 에 `monotone_for()` 로 바뀌어 CatBoost 에도 걸지만, 이 파일의 표(29번 문서)는
+    # 무제약 조건에서 낸 것이라 조건을 바꾸면 기존 수치와 나란히 놓을 수 없다.
+    # 이 파일을 다시 돌려 표를 갱신할 때 `monotone_for()` 로 함께 옮긴다.
     monotone = monotone_vector(frame, numeric, categorical) if model == "xgboost" else None
 
     oof = np.zeros(len(y_train))
@@ -104,7 +107,9 @@ def fit_variants(
     }
 
 
-def run_cell(data: pd.DataFrame, target: Target, tier: str, seeds: tuple[int, ...], rounds: int) -> dict[str, Any] | None:
+def run_cell(  # noqa: C901
+    data: pd.DataFrame, target: Target, tier: str, seeds: tuple[int, ...], rounds: int
+) -> dict[str, Any] | None:
     lab_only = [c for c in target.features("lab") if c not in set(target.features("basic")) and c not in DERIVED]
     label = data[target.label].astype("boolean")
     usable = label.notna()
@@ -176,7 +181,9 @@ def run_cell(data: pd.DataFrame, target: Target, tier: str, seeds: tuple[int, ..
     # 시드 앙상블끼리의 맞대결. 여기가 이 파일이 답하려는 질문이다.
     entry["head_to_head"] = {}
     for a, b in combinations(MODELS, 2):
-        entry["head_to_head"][f"{a} vs {b}"] = paired_bootstrap(y_holdout, variants[b]["시드"], variants[a]["시드"], rounds)
+        entry["head_to_head"][f"{a} vs {b}"] = paired_bootstrap(
+            y_holdout, variants[b]["시드"], variants[a]["시드"], rounds
+        )
 
     # 게이트를 통과한 것들 중 순위 1 위.
     ranked = {
@@ -188,6 +195,20 @@ def run_cell(data: pd.DataFrame, target: Target, tier: str, seeds: tuple[int, ..
     if ranked:
         entry["selected"] = max(ranked, key=lambda k: tuple(ranked[k]["rank_key"]))
     return entry
+
+
+def _cell(cells: dict[str, Any], variant: str) -> tuple[str, str]:
+    """표 한 칸의 (AUROC, Δ) 문자열. 없는 변형은 대시로 채운다.
+
+    원래 이 함수는 출력 루프 안에 중첩돼 `cells` 를 클로저로 잡았다. 즉시 호출하므로
+    사고는 안 났지만 루프 변수를 늦게 묶는 형태라 나중에 지연 호출로 바뀌면 마지막
+    모델의 값이 모든 행에 찍힌다. 인자로 받아 그 여지를 없앤다.
+    """
+    if variant not in cells:
+        return "  —", "  —"
+    value = cells[variant]
+    mark = "*" if value.get("verdict") == "유의" else " "
+    return f"{value['auroc']:.4f}", f"{value['delta_auroc']:+.4f}{mark}"
 
 
 def main() -> int:
@@ -218,14 +239,8 @@ def main() -> int:
             print(f"  {'모델':<11}{'단일':>8}{'시드':>8}{'Δ':>9}{'배깅':>8}{'Δ':>9}{'시드SD':>9}{'최대편차':>10}")
             for model, record in entry["models"].items():
                 cells = record["variants"]
-                def show(variant: str) -> tuple[str, str]:
-                    if variant not in cells:
-                        return "  —", "  —"
-                    v = cells[variant]
-                    mark = "*" if v.get("verdict") == "유의" else " "
-                    return f"{v['auroc']:.4f}", f"{v['delta_auroc']:+.4f}{mark}"
-                seed_a, seed_d = show("시드")
-                bag_a, bag_d = show("배깅")
+                seed_a, seed_d = _cell(cells, "시드")
+                bag_a, bag_d = _cell(cells, "배깅")
                 single = cells.get("단일", {}).get("auroc", float("nan"))
                 print(
                     f"  {model:<11}{single:>8.4f}{seed_a:>8}{seed_d:>9}{bag_a:>8}{bag_d:>9}"
@@ -233,7 +248,9 @@ def main() -> int:
                 )
             for pair, result in entry["head_to_head"].items():
                 mark = "*" if result["verdict"] == "유의" else " "
-                print(f"    {pair:<26}{result['delta_auroc']:+.4f}{mark} [{result['ci_low']:+.4f}, {result['ci_high']:+.4f}]")
+                print(
+                    f"    {pair:<26}{result['delta_auroc']:+.4f}{mark} [{result['ci_low']:+.4f}, {result['ci_high']:+.4f}]"
+                )
             print(f"  선택: {entry.get('selected', '없음')}\n")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)

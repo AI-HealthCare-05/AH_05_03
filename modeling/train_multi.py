@@ -78,7 +78,7 @@ TG_MG_TO_MMOL = 88.57
 CHOL_MG_TO_MMOL = 38.67
 
 
-def add_clinical_indices(frame: pd.DataFrame, columns: list[str]) -> None:
+def add_clinical_indices(frame: pd.DataFrame, columns: list[str]) -> None:  # noqa: C901
     """학회·코호트에서 검증된 지수. 재료가 없으면 `columns` 에 애초에 안 들어온다.
 
     어느 지수가 이 타깃에서 허용되는지는 `targets.DERIVED` 와 각 타깃의 ``blocked``
@@ -189,10 +189,75 @@ def build_frame(source: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
 # 나이·BMI 는 넣지 않는다. 방향이 뚜렷해 보이지만 타깃마다 다르다 — 빈혈은 BMI 가
 # 높을수록 유병률이 낮고, 지방간은 고령에서 오히려 떨어진다. 틀린 제약은 제약이
 # 없느니만 못하다.
-MONOTONE: dict[str, int] = {"self_rated_health": 1}
+#
+# 혈압 파생 둘은 방향이 타깃과 무관하게 정해져 있다. 평균동맥압이 오르면 위험이
+# 올라가고, 맥압이 커지면(혈관이 굳으면) 위험이 올라간다. 어느 질환에서도 반대로
+# 말할 근거가 없다. `sbp`·`dbp` 원값에는 이 제약을 걸 수 없었다 — dbp 의 임상적
+# 방향이 sbp 를 고정했을 때와 함께 올릴 때 서로 반대이기 때문이다. 그래서
+# `targets.SUBSTITUTED_MATERIALS` 로 원값을 빼고 파생으로 갈아 끼운 다음 제약을 건다.
+MONOTONE: dict[str, int] = {
+    "self_rated_health": 1,
+    "mean_arterial_pressure": 1,
+    "pulse_pressure": 1,
+}
+
+# 타깃별 예외. `MONOTONE` 을 이 값으로 덮는다. `0` 은 제약 해제.
+#
+# **평균동맥압을 전 타깃에 +1 로 걸었던 것이 틀렸다.** 위 주석이 나이·BMI 를 두고
+# "방향이 뚜렷해 보이지만 타깃마다 다르다 — 틀린 제약은 제약이 없느니만 못하다"고
+# 적어 뒀는데, 평균동맥압도 같은 부류였다.
+#
+# 빈혈이 그 자리다. 실측으로 `anemia` 만 AUROC −0.0157 떨어졌다(다른 하락 최대치가
+# −0.0047 이니 3 배 넘는다). 이유는 생리다 — 빈혈은 혈액 점도를 낮추고 말초저항을
+# 떨어뜨려서 **평균동맥압을 낮춘다.** 맥압은 반대로 넓어지므로(26번 문서 §6 의
+# 빈혈 일반형 +0.0055 가 그 관찰이다) 맥압 +1 은 맞고 MAP +1 만 거꾸로였다.
+#
+# 새 타깃을 넣을 때 방향을 모르면 `0` 으로 둔다. 추측한 제약은 판별력만 깎는다.
+MONOTONE_OVERRIDES: dict[str, dict[str, int]] = {
+    "anemia": {"mean_arterial_pressure": -1},
+}
 
 
-def monotone_vector(frame: pd.DataFrame, numeric: list[str], categorical: list[str]) -> tuple[int, ...] | None:
+#: 단조 제약을 받는 모델. 로지스틱은 계수 부호 검사로 따로 다룬다.
+#
+# 원래는 XGBoost 만이었고 그 판단이 `ensemble.py`·`export_ensemble.py` 에 네 벌 복사돼
+# 있었다. 한 곳만 고쳤더니 학습 경로는 바뀌고 내보내기 경로는 그대로여서 AUROC 가
+# 소수 넷째 자리까지 똑같이 나왔다 — 바뀐 줄 알았는데 안 바뀐 것이다. 그래서 모았다.
+MONOTONE_MODELS: tuple[str, ...] = ("xgboost", "catboost")
+
+
+def monotone_direction(target_key: str | None, feature: str) -> int:
+    """이 타깃에서 이 특징에 걸린 방향. 제약이 없으면 0.
+
+    번들에 실어 보내려고 만들었다. 방향을 학습 쪽 한 곳에서만 정하고 서빙 테스트는
+    번들에 적힌 값을 읽게 해야, 예외를 추가할 때 테스트가 조용히 어긋나지 않는다.
+    """
+    rules = dict(MONOTONE)
+    if target_key:
+        rules.update(MONOTONE_OVERRIDES.get(target_key, {}))
+    return rules.get(feature, 0)
+
+
+def monotone_for(
+    model: str,
+    frame: pd.DataFrame,
+    numeric: list[str],
+    categorical: list[str],
+    target_key: str | None = None,
+) -> tuple[int, ...] | None:
+    """모델별 단조 제약 벡터. 제약을 안 받는 모델이면 None.
+
+    `target_key` 를 넘기면 `MONOTONE_OVERRIDES` 가 적용된다. 안 넘기면 전역 기본값만
+    쓰므로, 새 호출부를 만들 때 넘기는 것을 잊으면 타깃 예외가 조용히 사라진다.
+    """
+    if model not in MONOTONE_MODELS:
+        return None
+    return monotone_vector(frame, numeric, categorical, target_key)
+
+
+def monotone_vector(
+    frame: pd.DataFrame, numeric: list[str], categorical: list[str], target_key: str | None = None
+) -> tuple[int, ...] | None:
     """설계 행렬 순서에 맞춘 단조 제약 벡터.
 
     XGBoost 는 열 이름이 아니라 위치로 제약을 읽고, 벡터가 특징 수보다 길면
@@ -204,7 +269,7 @@ def monotone_vector(frame: pd.DataFrame, numeric: list[str], categorical: list[s
     전부 numeric 블록(설계 행렬 앞쪽)에 있으므로 원핫 자리에는 닿지 않는다.
     """
     _ = frame, categorical
-    directions = [MONOTONE.get(name, 0) for name in numeric]
+    directions = [monotone_direction(target_key, name) for name in numeric]
     if not any(directions):
         return None
     last = max(index for index, value in enumerate(directions) if value)

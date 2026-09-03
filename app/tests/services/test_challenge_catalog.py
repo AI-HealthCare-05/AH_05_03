@@ -99,9 +99,7 @@ class TestWeekCompletion:
     def test_week_in_progress_is_never_penalised(self) -> None:
         """수요일에 미달이라고 영양을 깎으면 남은 나흘을 채울 이유가 사라진다."""
         history = _perfect_weeks(5)
-        partial = [
-            CheckRecord(cid, MONDAY + timedelta(days=35 + day)) for day in range(3) for cid in DAILY_IDS
-        ]
+        partial = [CheckRecord(cid, MONDAY + timedelta(days=35 + day)) for day in range(3) for cid in DAILY_IDS]
         wednesday = MONDAY + timedelta(days=37)
 
         state = build_garden(history + partial, wednesday)
@@ -171,7 +169,9 @@ class TestScoreHasNoHealthValues:
         assert signature == {"challenge_id", "checked_on"}
 
     def test_only_catalog_ids_score(self) -> None:
-        known = {item.id for item in (*DAILY_CHALLENGES, *MEASURE_CHALLENGES)}
+        # 두 튜플을 한 번에 펼치면 mypy 가 원소 타입을 `object` 로 합쳐 `.id` 를 잃는다
+        # (`DailyChallenge` 와 `MeasureChallenge` 에 공통 조상이 없다). 따로 모아 합집합을 낸다.
+        known = {item.id for item in DAILY_CHALLENGES} | {item.id for item in MEASURE_CHALLENGES}
         state = build_garden([CheckRecord("systolic_142", MONDAY)], MONDAY)
 
         assert "systolic_142" not in known

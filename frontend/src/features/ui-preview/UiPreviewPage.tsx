@@ -17,6 +17,7 @@ const RECORD_LABELS: Record<HealthRecordType, string> = {
   health_screening: "건강검진",
   pain: "통증 기록",
   walking: "걷기",
+  assessment: "위험 판정",
   note: "건강 메모",
 };
 

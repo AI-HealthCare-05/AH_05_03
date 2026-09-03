@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import math
 import struct
+import time
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,15 @@ DEFAULT_MODEL_DIR = Path("/app/models")
 REPO_MODEL_DIR = Path(__file__).resolve().parents[2] / "modeling" / "artifacts" / "models"
 
 MISSING_CATEGORY = "__missing__"
+
+#: 부스팅 트리의 노드 하나.
+#:
+#: ``[feature, threshold, left, right, value]`` 인데 **원소 타입이 섞인다.** JSON 은 수를
+#: 전부 float 으로 싣지만 `SeedEnsembleRiskModel._freeze_indices` 가 인덱스 자리
+#: (0·2·3)를 정수로 굳힌다 — 순회할 때마다 `int()` 를 부르지 않으려는 것이다.
+#: 임계값과 잎값은 float32 반올림 규칙이 걸려 있어 그대로 둔다.
+TreeNode = list[Any]
+Tree = list[TreeNode]
 
 # 특징 확장 경계. modeling/refine.py 가 측정한 "+bins" 구성이다. AUROC는 거의
 # 그대로인데 ECE가 절반 이하로 떨어진다 — 화면에 확률을 띄우려면 순위보다
@@ -96,6 +106,36 @@ def derive_ratios(payload: dict[str, Any]) -> dict[str, float]:
         elif right > 0:
             out[name] = left / right
     return out
+
+
+#: 혈압 파생 -> 재료. 학습 쪽 `targets.SUBSTITUTED_MATERIALS` 와 같아야 한다.
+BLOOD_PRESSURE_DERIVED: dict[str, tuple[str, str]] = {
+    "pulse_pressure": ("sbp", "dbp"),
+    "mean_arterial_pressure": ("sbp", "dbp"),
+}
+
+
+def derive_blood_pressure(payload: dict[str, Any]) -> dict[str, float]:
+    """맥압과 평균동맥압. 둘 다 있을 때만 만든다.
+
+    학습에서 `sbp`·`dbp` 원값을 특징에서 빼고 이 둘로 갈아 끼웠다. 이유는 성능이
+    아니라 방향이다 — sbp 를 고정하고 dbp 만 올리면 당뇨 확률이 8.3%p 내려갔고,
+    혈압 쌍을 임상 진행 경로대로 함께 올려도 `dm_lab` 에서 12.14% → 9.25% 로
+    내려갔다. 맥압·평균동맥압으로 바꾸면 두 특징 모두 "높을수록 위험"으로
+    단조 제약을 걸 수 있다.
+
+    한쪽만 들어오면 키를 넣지 않는다. 학습 때도 그 행은 결측이었고 중앙값으로
+    대치됐으므로 서빙도 같아야 한다.
+    """
+    systolic, diastolic = payload.get("sbp"), payload.get("dbp")
+    if systolic is None or diastolic is None:
+        return {}
+    systolic, diastolic = float(systolic), float(diastolic)
+    pulse = systolic - diastolic
+    return {
+        "pulse_pressure": pulse,
+        "mean_arterial_pressure": diastolic + pulse / 3.0,
+    }
 
 
 def egfr_ckd_epi_2021(creatinine: float, age: float, sex: str) -> float:
@@ -171,12 +211,35 @@ def expand_features(payload: dict[str, Any], expansion: str = "+bins") -> dict[s
         if creatinine is not None and age_value is not None and sex in ("M", "F"):
             out["egfr"] = egfr_ckd_epi_2021(float(creatinine), float(age_value), str(sex))
 
+    # 혈압 파생. 학습에서 `sbp`·`dbp` 원값을 빼고 이 둘로 갈아 끼웠으므로
+    # (`modeling/targets.py` 의 `SUBSTITUTED_MATERIALS`) 서빙도 같이 만들어야 한다.
+    # 안 만들면 번들의 특징 자리가 조용히 중앙값으로 채워지고, 사용자가 입력한
+    # 혈압이 결과에 하나도 반영되지 않는다.
+    #
+    # 식은 `modeling/train_multi.py` 의 `add_clinical_indices` 와 한 글자도 달라선 안 된다.
+    out.update(derive_blood_pressure(payload))
+
     out.update(derive_ratios(payload))
     return out
 
 
 def peer_cell(age: float, sex: str) -> str:
     return f"{sex}:{_band_label(PEER_AGE_EDGES, float(age))}"
+
+
+#: 참조표의 연령 구간 라벨. `peer_cell` 이 만드는 것과 같은 순서다.
+PEER_AGE_BANDS: list[str] = [f"{low}_{high}" for low, high in zip(PEER_AGE_EDGES[:-1], PEER_AGE_EDGES[1:], strict=True)]
+
+#: 마지막 구간 `70_200` 은 상한이 열려 있다. 중앙값을 그대로 쓰면 135 세가 대표
+#: 연령이 되어 보간이 무너진다. 실제 응답자가 몰려 있는 폭으로 자른다.
+PEER_TOP_BAND_SPAN = 15
+
+
+def peer_band_center(band: str) -> float:
+    """`19_30` 같은 구간 라벨의 대표 연령. 백분위 보간의 기준점이다."""
+    low_text, high_text = band.split("_")
+    low, high = float(low_text), float(high_text)
+    return (low + min(high, low + PEER_TOP_BAND_SPAN)) / 2.0
 
 
 class BaseRiskModel:
@@ -296,14 +359,9 @@ class BaseRiskModel:
         """Calibrated probability — the number a screen may show."""
         return self._sigmoid(self.platt["a"] * self.raw_logit(payload) + self.platt["b"])
 
-    def peer_percentile(self, probability: float, age: float, sex: str) -> float | None:
-        """동일 연령·성별 집단에서 이 확률이 몇 번째인가 (0~100).
-
-        고혈압 유병률이 42%라 절대 확률은 누구나 40~60% 근처에 앉는다. 그 숫자를
-        그대로 보여주면 "동전 던지기"로 읽히지만 실제 뜻은 "평균 수준"이다.
-        같은 나이·성별과 비교한 위치가 사용자가 실제로 알고 싶은 값이다.
-        """
-        quantiles = self.reference.get(peer_cell(age, sex))
+    def _percentile_in_cell(self, probability: float, cell: str) -> float | None:
+        """한 참조 셀 안에서의 백분위. 반올림하지 않는다 — 보간의 재료다."""
+        quantiles = self.reference.get(cell)
         if not quantiles:
             return None
         step = 100.0 / (len(quantiles) - 1)
@@ -314,8 +372,49 @@ class BaseRiskModel:
                 low, high = quantiles[index - 1], quantiles[index]
                 span = high - low
                 inside = 0.0 if span <= 0 else (probability - low) / span
-                return round((index - 1 + inside) * step, 1)
+                return (index - 1 + inside) * step
         return 100.0
+
+    def peer_percentile(self, probability: float, age: float, sex: str) -> float | None:
+        """동일 연령·성별 집단에서 이 확률이 몇 번째인가 (0~100).
+
+        고혈압 유병률이 42%라 절대 확률은 누구나 40~60% 근처에 앉는다. 그 숫자를
+        그대로 보여주면 "동전 던지기"로 읽히지만 실제 뜻은 "평균 수준"이다.
+        같은 나이·성별과 비교한 위치가 사용자가 실제로 알고 싶은 값이다.
+
+        **참조 셀을 그대로 쓰면 생일 하나에 백분위가 뛴다.** 셀이 10년 단위라
+        29 세와 30 세가 다른 표를 읽는다. 실측으로 당뇨 남성 BMI 26 에서 확률은
+        1.51% 로 소수점까지 같은데 백분위가 70.0 에서 20.0 으로, 등급이 moderate
+        에서 low 로 떨어졌다. 사용자 입력이 하나도 안 바뀌었는데 화면이 뒤집힌다.
+
+        그래서 인접 셀과 대표 연령 사이 거리로 섞는다. 경계 양쪽에서 가중치가
+        연속이므로 절벽이 사라진다. 셀을 더 잘게 쪼개는 방법도 있지만 셀당 표본이
+        줄어 분위 자체가 흔들린다 — 표를 늘리지 않고 읽는 방식만 고친다.
+        """
+        age_value = float(age)
+        cell = peer_cell(age_value, str(sex))
+        here = self._percentile_in_cell(probability, cell)
+        if here is None:
+            return None
+
+        label = cell.split(":", 1)[-1]
+        if label not in PEER_AGE_BANDS:
+            return round(here, 1)
+
+        index = PEER_AGE_BANDS.index(label)
+        center = peer_band_center(label)
+        neighbor_index = index - 1 if age_value < center else index + 1
+        if not 0 <= neighbor_index < len(PEER_AGE_BANDS):
+            return round(here, 1)
+
+        neighbor_label = PEER_AGE_BANDS[neighbor_index]
+        there = self._percentile_in_cell(probability, f"{sex}:{neighbor_label}")
+        if there is None:
+            return round(here, 1)
+
+        span = abs(peer_band_center(neighbor_label) - center)
+        weight = 0.0 if span <= 0 else min(1.0, abs(age_value - center) / span)
+        return round(here * (1.0 - weight) + there * weight, 1)
 
     def peer_median(self, age: float, sex: str) -> float | None:
         quantiles = self.reference.get(peer_cell(age, sex))
@@ -653,24 +752,63 @@ class SeedEnsembleRiskModel(BaseRiskModel):
         if bundle.get("combine", "mean") != "mean":
             raise ValueError(f"{self.target}: 아는 결합 규칙은 mean 뿐입니다")
 
+        self._freeze_indices()
+
+    def _freeze_indices(self) -> None:
+        """트리의 인덱스를 적재 시점에 **정수로 굳히고** 경계를 검사한다.
+
+        JSON 은 수를 전부 float 으로 싣는다. 그대로 두면 순회할 때마다
+        `int(node[0])`·`int(node[2])`·`int(node[3])` 가 돌고, 요청 하나에 그 호출이
+        30 만 번을 넘는다. 어차피 경계 검사로 전 노드를 훑어야 하므로 같은 자리에서
+        바꿔 둔다 — 순회 코드는 비교만 하면 된다.
+
+        **임계값(`node[1]`)과 잎값(`node[4]`)은 손대지 않는다.** 그쪽은 float32 반올림
+        규칙이 걸려 있어(`to_float32` 참조) 한 글자만 바뀌어도 예측이 갈라진다.
+        """
         width = self.design_width()
+
+        def check(index: int) -> None:
+            if index != self.LEAF and not 0 <= index < width:
+                raise ValueError(f"{self.target}: 특징 인덱스 {index} 가 설계 행렬 {width}열을 벗어납니다")
+
         for member in self.members:
-            for sub in member["seeds"]:
-                if member["kind"] == "gradient_boosted_trees":
-                    indices = (int(node[0]) for tree in sub["trees"] for node in tree)
-                else:
-                    indices = (int(split[0]) for tree in sub["trees"] for split in tree["splits"])
-                for index in indices:
-                    if index != self.LEAF and not 0 <= index < width:
-                        raise ValueError(f"{self.target}: 특징 인덱스 {index} 가 설계 행렬 {width}열을 벗어납니다")
+            trees = [tree for sub in member["seeds"] for tree in sub["trees"]]
+            if member["kind"] == "gradient_boosted_trees":
+                for tree in trees:
+                    for node in tree:
+                        node[0], node[2], node[3] = int(node[0]), int(node[2]), int(node[3])
+                        check(node[0])
+            else:
+                for tree in trees:
+                    for split in tree["splits"]:
+                        split[0] = int(split[0])
+                        check(split[0])
 
     @staticmethod
-    def _walk_nodes(trees: list[list[list[float]]], base_margin: float, row: list[float]) -> float:
+    def _walk_nodes(
+        trees: list[Tree],
+        base_margin: float,
+        row: list[float],
+        deltas: list[float] | None = None,
+    ) -> float:
+        """노드 배열 트리를 걷는다. `deltas` 를 주면 경로 기여도를 함께 누적한다.
+
+        원래 확률과 기여도가 이 트리를 각각 한 번씩 걸었다. 같은 경로를 두 번 타는
+        것이라 프로파일에서 `contributions` 가 요청 시간의 24% 를 먹었다. 누적을
+        선택 인자로 받아 한 번에 끝낸다 — **분기 조건과 잎값 합산은 한 글자도 바뀌지
+        않으므로 확률이 달라질 수 없다.** 실제로 번들 20개 x 케이스 36개를 대조했다.
+        """
+        leaf = SeedEnsembleRiskModel.LEAF
         total = base_margin
         for tree in trees:
             node = tree[0]
-            while int(node[0]) != SeedEnsembleRiskModel.LEAF:
-                node = tree[int(node[2])] if row[int(node[0])] < node[1] else tree[int(node[3])]
+            index = node[0]
+            while index != leaf:
+                child = tree[node[2]] if row[index] < node[1] else tree[node[3]]
+                if deltas is not None:
+                    deltas[index] += child[4] - node[4]
+                node = child
+                index = node[0]
             total += node[4]
         return total
 
@@ -679,9 +817,11 @@ class SeedEnsembleRiskModel(BaseRiskModel):
         total = 0.0
         for tree in trees:
             index = 0
-            for position, (feature, border) in enumerate(tree["splits"]):
-                if row[int(feature)] > border:
-                    index |= 1 << position
+            bit = 1
+            for feature, border in tree["splits"]:
+                if row[feature] > border:
+                    index |= bit
+                bit <<= 1
             total += tree["leaves"][index]
         return total * scale + bias
 
@@ -749,35 +889,46 @@ class SeedEnsembleRiskModel(BaseRiskModel):
         probability = min(max(self.raw_probability(payload), 1e-6), 1 - 1e-6)
         return math.log(probability / (1 - probability))
 
-    def contributions(self, raw_payload: dict[str, Any]) -> list[tuple[str, float]]:
-        """경로 기여도. XGBoost 멤버에서만 모은다.
+    def score_with_contributions(self, raw_payload: dict[str, Any]) -> tuple[float, list[tuple[str, float]]]:
+        """확률과 경로 기여도를 **한 번의 트리 순회로** 낸다.
 
-        대칭 트리는 모든 깊이가 같은 분할을 쓰므로 경로 기여를 특징에 배분하는
-        의미가 달라진다. 둘을 섞으면 화면에 나가는 숫자의 뜻이 흐려지므로,
-        기여도는 노드 배열 멤버만 쓰고 그 사실을 여기 적어 둔다.
+        `probability()` 와 `contributions()` 를 따로 부르면 XGBoost 트리를 두 번 걷는다.
+        프로파일에서 `contributions` 가 요청 시간의 24% 를 먹던 이유가 그것이다.
+        화면은 늘 둘을 함께 쓰므로 한 번에 내는 편이 맞다.
+
+        기여도를 XGBoost 멤버에서만 모으는 규칙은 그대로다 — 대칭 트리는 모든 깊이가
+        같은 분할을 쓰므로 경로 기여를 특징에 배분하는 의미가 달라진다. 둘을 섞으면
+        화면에 나가는 숫자의 뜻이 흐려진다.
         """
         row = [to_float32(value) for value in self.design_row(raw_payload)]
         names = self.design_names()
         totals = [0.0] * len(names)
         walked = 0
 
+        member_probabilities = []
         for member in self.members:
-            if member["kind"] != "gradient_boosted_trees":
-                continue
+            accumulate = member["kind"] == "gradient_boosted_trees"
+            values = []
             for sub in member["seeds"]:
-                walked += 1
-                for tree in sub["trees"]:
-                    node = tree[0]
-                    while int(node[0]) != self.LEAF:
-                        index = int(node[0])
-                        child = tree[int(node[2])] if row[index] < node[1] else tree[int(node[3])]
-                        totals[index] += child[4] - node[4]
-                        node = child
+                if accumulate:
+                    walked += 1
+                    margin = self._walk_nodes(sub["trees"], sub["base_margin"], row, totals)
+                else:
+                    margin = self._walk_oblivious(sub["trees"], sub["scale"], sub["bias"], row)
+                values.append(self._sigmoid(margin))
+            member_probabilities.append(self._apply_calibration(sum(values) / len(values), member["calibration"]))
+
+        combined = sum(member_probabilities) / len(member_probabilities)
+        probability = self._apply_calibration(combined, self.calibration)
+
         if walked:
             totals = [value / walked for value in totals]
-
         pairs = [(name, value) for name, value in zip(names, totals, strict=True) if abs(value) > 1e-9]
-        return sorted(pairs, key=lambda item: abs(item[1]), reverse=True)
+        return probability, sorted(pairs, key=lambda item: abs(item[1]), reverse=True)
+
+    def contributions(self, raw_payload: dict[str, Any]) -> list[tuple[str, float]]:
+        """경로 기여도만. 확률까지 필요하면 `score_with_contributions()` 를 쓴다."""
+        return self.score_with_contributions(raw_payload)[1]
 
 
 #: 번들의 ``model`` 필드 -> 클래스. 새 모델 종류는 여기에만 추가한다.
@@ -808,6 +959,11 @@ class RiskModelRegistry:
         self.directory = self._resolve(directory)
         self.models: dict[str, BaseRiskModel] = {}
         self._stamps: dict[str, float] = {}
+        # 마지막으로 파일 mtime 을 확인한 시각. `__init__` 이 `_load()` 로 이미 읽었으므로
+        # 그 시점을 확인 시각으로 삼는다. **None 을 쓰지 않는 이유**: 0.0 으로 두면
+        # "한 번도 확인 안 함"과 "0 초에 확인함"이 같아져, 단조 시계가 큰 값이라는
+        # 우연에 기대게 된다. 테스트가 `now=0.0` 을 넘기는 순간 그 우연이 깨진다.
+        self._checked_at: float | None = None
         self._load()
 
     def _load(self) -> None:
@@ -821,10 +977,36 @@ class RiskModelRegistry:
             self.models[model.model_id] = model
             self._stamps[path.name] = path.stat().st_mtime
 
-    def refresh(self) -> bool:
-        """Reload if any bundle's mtime moved. Returns True when it did."""
+    #: mtime 을 다시 확인하기까지 기다리는 최소 간격(초).
+    #
+    #: `refresh()` 는 glob 한 번과 stat 20 번이다. 재학습 반영이 최대 이 간격만큼
+    #: 늦어지는 대신 그 비용을 초당 한 번으로 묶는다 — 배포는 초 단위 사건이고
+    #: 요청은 밀리초 단위 사건이라 교환이 맞는다.
+    #:
+    #: **이 간격을 줄이기 전에 실측해라. 파일시스템에 따라 비용이 10 배 넘게 다르다.**
+    #: 예전 주석은 1.4ms(채점의 5%)라고 적었는데 그건 네이티브 파일시스템 기준이다.
+    #: 2026-08-27 로컬(Windows 바인드 마운트를 리눅스 컨테이너가 읽는 구성)에서
+    #: 다시 재니 **17.6ms** 로 채점 1 회(23ms)의 **76%** 였다. 지금은 1 초 간격이
+    #: 흡수하지만(초당 1 회만 실제 stat), 간격을 요청마다로 되돌리면 처리량이 반토막 난다.
+    #:
+    #: mtime 이 실제로 바뀌면 `_load()` 가 번들 20 개를 다시 읽고 파싱한다 — **1.1 초** 다.
+    #: 그 1.1 초는 async 경로 위에서 도는 동기 작업이라 그동안 이 워커의 이벤트 루프가
+    #: 멈춘다. 재학습 직후 첫 요청 하나가 그 값을 치르는 구조다.
+    STAT_INTERVAL_SECONDS = 1.0
+
+    def refresh(self, now: float | None = None) -> bool:
+        """Reload if any bundle's mtime moved. Returns True when it did.
+
+        `STAT_INTERVAL_SECONDS` 안에 다시 불리면 파일시스템을 건드리지 않고 바로
+        돌아온다. 테스트는 `now` 를 넘겨 그 창을 건너뛸 수 있다.
+        """
         if self.directory is None or not self.directory.is_dir():
             return False
+        moment = time.monotonic() if now is None else now
+        # 한 번도 확인한 적이 없으면 간격과 무관하게 확인한다.
+        if self._checked_at is not None and moment - self._checked_at < self.STAT_INTERVAL_SECONDS:
+            return False
+        self._checked_at = moment
         current = {p.name: p.stat().st_mtime for p in self.directory.glob("risk_*.json")}
         if current == self._stamps:
             return False

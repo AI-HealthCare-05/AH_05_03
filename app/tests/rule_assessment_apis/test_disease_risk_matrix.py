@@ -96,11 +96,27 @@ class TestInsufficientData:
 
     def test_full_input_leaves_nothing_unread(self) -> None:
         complete = {
-            "sex": "F", "age": 61, "height_cm": 158.0, "weight_kg": 68.0, "waist_cm": 92.0,
-            "systolic_bp": 145.0, "diastolic_bp": 92.0, "fasting_glucose": 118.0, "is_fasting": True,
-            "hba1c": 6.0, "ldl_c": 172.0, "hdl_c": 38.0, "triglycerides": 260.0,
-            "creatinine": 1.4, "urine_acr": 380.0, "alt": 31.0, "ggt": 55.0, "uric_acid": 7.2,
-            "smoking": True, "has_diabetes": False, "has_hypertension": False,
+            "sex": "F",
+            "age": 61,
+            "height_cm": 158.0,
+            "weight_kg": 68.0,
+            "waist_cm": 92.0,
+            "systolic_bp": 145.0,
+            "diastolic_bp": 92.0,
+            "fasting_glucose": 118.0,
+            "is_fasting": True,
+            "hba1c": 6.0,
+            "ldl_c": 172.0,
+            "hdl_c": 38.0,
+            "triglycerides": 260.0,
+            "creatinine": 1.4,
+            "urine_acr": 380.0,
+            "alt": 31.0,
+            "ggt": 55.0,
+            "uric_acid": 7.2,
+            "smoking": True,
+            "has_diabetes": False,
+            "has_hypertension": False,
         }
         for disease, result in assess_disease_risks(complete).items():
             assert not result["missing_fields"], f"{disease} 가 {result['missing_fields']} 를 못 읽었다"

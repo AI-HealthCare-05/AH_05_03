@@ -12,9 +12,14 @@ ML 예측 엔드포인트(`/predictions/risk`)와의 차이:
 무인증·무저장 정책은 ML 엔드포인트와 같다.
 """
 
-from fastapi import APIRouter
+from typing import Annotated
 
+from fastapi import APIRouter, Depends
+
+from app.core import config
 from app.core.errors import ErrorCode
+from app.dependencies.security import require_active_account
+from app.dependencies.services import get_rate_limiter
 from app.dtos.envelope import ApiResponse, error_responses
 from app.dtos.rule_assessment import (
     DiseaseRiskAssessment,
@@ -22,6 +27,8 @@ from app.dtos.rule_assessment import (
     RuleAssessmentData,
     RuleAssessmentRequest,
 )
+from app.models import ServiceAccount
+from app.services.rate_limit import RateLimiter
 
 rule_assessment_router = APIRouter(prefix="/assessments", tags=["assessments"])
 
@@ -48,12 +55,24 @@ ENGINE_SOURCE = "chronic_disease_engine (AH_05_03 PR #4, ts04042-cell, c6943b14)
         "- 요청 본문은 응답 생성 후 폐기한다."
     ),
 )
-async def assess_by_rules(payload: RuleAssessmentRequest) -> ApiResponse[RuleAssessmentData]:
-    # 엔진을 함수 안에서 불러온다. 앱 기동이 이 패키지 존재에 묶이지 않게 한다.
-    from chronic_disease_engine import assess_chronic_disease_risk
+async def assess_by_rules(
+    payload: RuleAssessmentRequest,
+    account: Annotated[ServiceAccount, Depends(require_active_account)],
+    limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
+) -> ApiResponse[RuleAssessmentData]:
+    # 예측 경로와 같은 조건이다. 이쪽도 건강 수치를 본문으로 받으므로
+    # 무인증으로 열어 둘 이유가 없다 (ADR-009 §10).
+    await limiter.hit(
+        "assess-rules",
+        str(account.id),
+        config.PREDICTION_RATE_LIMIT,
+        config.PREDICTION_RATE_WINDOW_SECONDS,
+    )
 
+    # 엔진을 함수 안에서 불러온다. 앱 기동이 이 패키지 존재에 묶이지 않게 한다.
     from app.services.disease_risk_matrix import assess_disease_risks
     from app.services.lab_staging import assess_extra_domains
+    from chronic_disease_engine import assess_chronic_disease_risk
 
     profile = payload.to_profile()
     # 벤더 엔진 넷과 우리가 붙인 다섯을 같은 모양으로 합친다. 화면은 둘을 구분하지 않는다 —
@@ -64,9 +83,7 @@ async def assess_by_rules(payload: RuleAssessmentRequest) -> ApiResponse[RuleAss
 
     # 같은 프로필을 반대 방향으로 한 번 더 읽는다. 위쪽이 장기별 현재 상태라면
     # 이쪽은 수치 하나가 여러 질환에 걸쳐 무엇을 가리키는지다.
-    disease_risks = {
-        name: DiseaseRiskAssessment(**result) for name, result in assess_disease_risks(profile).items()
-    }
+    disease_risks = {name: DiseaseRiskAssessment(**result) for name, result in assess_disease_risks(profile).items()}
 
     return ApiResponse(
         data=RuleAssessmentData(

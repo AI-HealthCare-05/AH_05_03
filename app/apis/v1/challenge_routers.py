@@ -118,9 +118,7 @@ async def get_household_garden(
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     service: Annotated[ChallengeService, Depends(ChallengeService)],
 ) -> ApiResponse[HouseholdGardenData]:
-    return ApiResponse(
-        data=await service.household_garden(household_id, account), message="가정 정원을 조회했습니다."
-    )
+    return ApiResponse(data=await service.household_garden(household_id, account), message="가정 정원을 조회했습니다.")
 
 
 @challenge_router.get(

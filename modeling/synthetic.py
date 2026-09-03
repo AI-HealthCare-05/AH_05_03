@@ -45,7 +45,9 @@ ARTIFACTS = ROOT / "artifacts"
 # ---------------------------------------------------------------------------
 
 
-def smote(x: np.ndarray, y: np.ndarray, *, k: int = 5, ratio: float = 1.0, seed: int = SEED) -> tuple[np.ndarray, np.ndarray]:
+def smote(
+    x: np.ndarray, y: np.ndarray, *, k: int = 5, ratio: float = 1.0, seed: int = SEED
+) -> tuple[np.ndarray, np.ndarray]:
     """소수 클래스를 이웃 사이 직선 위에서 보간해 늘린다 (Chawla 2002).
 
     범주형은 이미 원-핫으로 펼쳐진 뒤라 보간하면 0.37 같은 값이 나온다. 트리에는
@@ -136,7 +138,9 @@ def run_augment(data: pd.DataFrame, key: str, tier: str, model: str, ratios: lis
     weighted = make_pipeline(numeric, categorical, model, monotone)
     weight = float((y_train == 0).sum()) / max(float((y_train == 1).sum()), 1.0)
     try:
-        weighted.fit(x_train, y_train, **{f"{weighted.steps[-1][0]}__sample_weight": np.where(y_train == 1, weight, 1.0)})
+        weighted.fit(
+            x_train, y_train, **{f"{weighted.steps[-1][0]}__sample_weight": np.where(y_train == 1, weight, 1.0)}
+        )
         entry["arms"]["클래스가중"] = evaluate(y_holdout, weighted.predict_proba(x_holdout)[:, 1])
     except (TypeError, ValueError):
         pass

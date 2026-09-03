@@ -19,7 +19,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "data"))
@@ -78,7 +77,9 @@ def main() -> int:
         for tier in args.tiers:
             if tier not in target.tiers:
                 continue
-            lab_only = [c for c in target.features("lab") if c not in set(target.features("basic")) and c not in DERIVED]
+            lab_only = [
+                c for c in target.features("lab") if c not in set(target.features("basic")) and c not in DERIVED
+            ]
             label = data[target.label].astype("boolean")
             usable = label.notna()
             if tier == "lab":
@@ -143,7 +144,7 @@ def main() -> int:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\n현재 배포 번들 전체 2.4MB, risk_dm.json 131KB 기준으로 환산하면 배수를 그대로 곱하면 된다.")
+    print("\n현재 배포 번들 전체 2.4MB, risk_dm.json 131KB 기준으로 환산하면 배수를 그대로 곱하면 된다.")
     print(f"→ {args.out}")
     return 0
 

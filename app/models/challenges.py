@@ -18,7 +18,7 @@ from app.core.db.base import Base, TimestampMixin
 
 
 class ChallengeCheck(TimestampMixin, Base):
-    """"오늘 이걸 했다" 한 건. 무엇을 했는지와 언제인지만 남는다."""
+    """ "오늘 이걸 했다" 한 건. 무엇을 했는지와 언제인지만 남는다."""
 
     __tablename__ = "challenge_checks"
 

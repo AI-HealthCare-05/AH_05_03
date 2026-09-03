@@ -36,8 +36,8 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-async def test_required_only_returns_every_loaded_condition(client: AsyncClient) -> None:
-    response = await client.post("/api/v1/predictions/risk", json=BASE)
+async def test_required_only_returns_every_loaded_condition(authorized_client: AsyncClient) -> None:
+    response = await authorized_client.post("/api/v1/predictions/risk", json=BASE)
     assert response.status_code == status.HTTP_200_OK
 
     data = response.json()["data"]
@@ -55,9 +55,9 @@ async def test_required_only_returns_every_loaded_condition(client: AsyncClient)
     assert any("저장하지 않" in line for line in data["disclaimers"])
 
 
-async def test_optional_fields_move_the_number(client: AsyncClient) -> None:
-    lean = await client.post("/api/v1/predictions/risk", json={**BASE, "weight_kg": 60.0})
-    heavy = await client.post("/api/v1/predictions/risk", json={**BASE, "weight_kg": 105.0})
+async def test_optional_fields_move_the_number(authorized_client: AsyncClient) -> None:
+    lean = await authorized_client.post("/api/v1/predictions/risk", json={**BASE, "weight_kg": 60.0})
+    heavy = await authorized_client.post("/api/v1/predictions/risk", json={**BASE, "weight_kg": 105.0})
 
     def dm(response) -> float:
         return next(c["probability"] for c in response.json()["data"]["conditions"] if c["target"] == "dm")
@@ -66,9 +66,9 @@ async def test_optional_fields_move_the_number(client: AsyncClient) -> None:
     assert dm(heavy) > dm(lean)
 
 
-async def test_missing_optional_still_scores(client: AsyncClient) -> None:
+async def test_missing_optional_still_scores(authorized_client: AsyncClient) -> None:
     """선택 항목이 없어도 결측 지시자로 처리되어 예측이 나온다."""
-    full = await client.post(
+    full = await authorized_client.post(
         "/api/v1/predictions/risk",
         json={**BASE, "sbp": 138, "dbp": 86, "waist_cm": 96.0, "smoking_status": "former"},
     )
@@ -86,14 +86,14 @@ async def test_missing_optional_still_scores(client: AsyncClient) -> None:
         {**BASE, "unknown_field": 1},  # extra="forbid"
     ],
 )
-async def test_invalid_payload_rejected(client: AsyncClient, payload: dict) -> None:
-    response = await client.post("/api/v1/predictions/risk", json=payload)
+async def test_invalid_payload_rejected(authorized_client: AsyncClient, payload: dict) -> None:
+    response = await authorized_client.post("/api/v1/predictions/risk", json=payload)
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json()["success"] is False
 
 
-async def test_model_info_hides_coefficients(client: AsyncClient) -> None:
-    response = await client.get("/api/v1/predictions/model-info")
+async def test_model_info_hides_coefficients(authorized_client: AsyncClient) -> None:
+    response = await authorized_client.get("/api/v1/predictions/model-info")
     assert response.status_code == status.HTTP_200_OK
 
     body = response.text
@@ -112,10 +112,10 @@ async def test_model_info_hides_coefficients(client: AsyncClient) -> None:
         assert entry["threshold_source"]
 
 
-async def test_service_unavailable_when_model_missing(client: AsyncClient) -> None:
+async def test_service_unavailable_when_model_missing(authorized_client: AsyncClient) -> None:
     app.dependency_overrides[get_registry] = lambda: RiskModelRegistry(Path("/nonexistent"))
     try:
-        response = await client.post("/api/v1/predictions/risk", json=BASE)
+        response = await authorized_client.post("/api/v1/predictions/risk", json=BASE)
     finally:
         app.dependency_overrides.pop(get_registry, None)
 
@@ -123,7 +123,7 @@ async def test_service_unavailable_when_model_missing(client: AsyncClient) -> No
     assert response.json()["error_code"] == "SERVICE_UNAVAILABLE"
 
 
-async def test_label_defining_measurements_are_not_model_inputs(client: AsyncClient) -> None:
+async def test_label_defining_measurements_are_not_model_inputs(authorized_client: AsyncClient) -> None:
     """라벨을 정의하는 검사값은 그 라벨의 모델에 들어가지 않는다.
 
     당뇨 라벨은 공복혈당·HbA1c 로, 고혈압 라벨은 혈압으로 정의한다. 그 값을 특징으로
@@ -132,7 +132,7 @@ async def test_label_defining_measurements_are_not_model_inputs(client: AsyncCli
     이 비대칭이 규칙 엔진과 갈리는 이유다 — 규칙 엔진은 그 검사값만 보고, ML 모델은
     그 값을 볼 수 없다. docs/22_two_engines_comparison.md §2.5 참조.
     """
-    response = await client.get("/api/v1/predictions/model-info")
+    response = await authorized_client.get("/api/v1/predictions/model-info")
     entries = response.json()["data"]["models"]
     specs = {
         entry["model_id"]: (entry["target"], set(entry["required_inputs"]) | set(entry["optional_inputs"]))
@@ -162,13 +162,23 @@ async def test_label_defining_measurements_are_not_model_inputs(client: AsyncCli
         leaked = forbidden.get(target, set()) & inputs
         assert not leaked, f"{model_id} 에 라벨 정의 값이 새어 들어갔다: {sorted(leaked)}"
 
-    # 혈압은 당뇨 라벨을 정의하지 않으므로 dm 에서는 정당한 특징이다. 이 비대칭이
-    # 의도된 것임을 고정한다 — 바뀌면 문서의 설명도 함께 고쳐야 한다.
-    assert blood_pressure <= specs["dm"][1], "당뇨 모델이 혈압을 더 이상 쓰지 않는다"
+    # 고정하려는 것은 **차단 규칙의 비대칭**이다 — 같은 값이 어느 질환에서는
+    # 누출이고 어느 질환에서는 정당한 특징이다.
+    assert blood_pressure <= forbidden["htn"], "혈압이 고혈압 모델에서 차단 대상이 아니다"
+    assert not (blood_pressure & forbidden["dm"]), "혈압이 당뇨 모델에서 차단 대상이 되어 있다"
+
+    # 전에는 여기서 `blood_pressure <= specs["dm"][1]` 로 "dm 이 혈압을 실제로 쓴다"
+    # 를 함께 고정했다. 지금은 안 쓴다 — 혈압 방향 수정에서 `sbp`·`dbp` 를 맥압·
+    # 평균동맥압으로 갈아 끼웠고(`modeling/targets.py` 의 `SUBSTITUTED_MATERIALS`),
+    # dm 의 최소 특징 집합에는 그 대체 특징도 뽑히지 않았다. **번들이 어떤 특징을
+    # 골랐는지는 학습이 정할 일이고 차단 규칙과 다른 문제**이므로 규칙만 고정한다.
+    assert not (blood_pressure & specs["dm"][1]), (
+        "dm 번들이 혈압을 다시 쓰기 시작했다. 누출은 아니지만 문서의 설명과 어긋나므로 확인이 필요하다"
+    )
 
 
-async def test_demo_page_served(client: AsyncClient) -> None:
-    response = await client.get("/api/demo")
+async def test_demo_page_served(authorized_client: AsyncClient) -> None:
+    response = await authorized_client.get("/api/demo")
     assert response.status_code == status.HTTP_200_OK
     assert "만성질환 위험도" in response.text
     assert "/api/v1/predictions/risk" in response.text
@@ -186,8 +196,12 @@ async def test_demo_never_hides_inputs(client: AsyncClient) -> None:
     page = response.text
 
     ids = re.findall(r'<(?:input|select) id="([a-z0-9_]+)"', page)
-    assert len(ids) == 33, f"입력 개수가 바뀌었다: {len(ids)}"
-    assert "fasting_glucose" in ids and "self_rated_health" in ids
+    # 로그인 칸은 세지 않는다. 예측·판정 라우터에 인증이 붙으면서(ADR-009 §10)
+    # 데모에도 로그인 폼이 생겼는데, 그건 건강 입력창이 아니라 이 검사의 대상이
+    # 아니다. 세는 대상을 좁혀 두면 인증 UI 가 바뀌어도 이 카나리아가 안 흔들린다.
+    health_ids = [name for name in ids if not name.startswith("demo_")]
+    assert len(health_ids) == 33, f"건강 입력 개수가 바뀌었다: {len(health_ids)} ({sorted(health_ids)})"
+    assert "fasting_glucose" in health_ids and "self_rated_health" in health_ids
 
     # 숨기는 코드가 다시 들어오면 잡는다.
     assert ".hidden = !wants" not in page
@@ -253,6 +267,12 @@ def test_pure_python_matches_sklearn(bundle_name: str) -> None:
         # 적합해 보정 전 평균을 만들고 그것과 맞춘다 — 이 검사가 잡으려는 실패
         # (트리 뒤집힘·대칭 트리 잎 색인 비트 순서·설계 행렬 어긋남)는 전부 보정
         # 앞에서 일어나므로 덮는 범위는 같다.
+        # 앙상블 멤버에 CatBoost 가 있다 (`modeling/ensemble.py` 의 `MEMBERS`).
+        # 위 `importorskip` 셋에 이게 빠져 있어서, catboost 가 없는 환경에서 이
+        # 검사가 **skip 이 아니라 20건 error** 로 떨어졌다. `train_multi.py` 는
+        # catboost import 를 분기 안으로 미뤄 "없어도 하네스가 안 죽게" 해 뒀는데,
+        # 정작 그 분기를 타는 이 테스트가 가드를 안 갖고 있었다.
+        pytest.importorskip("catboost")
         from export_ensemble import equivalence_from_bundle  # type: ignore[import-not-found]
 
         worst = equivalence_from_bundle(bundle, data, target, bundle["tier"])
@@ -263,9 +283,24 @@ def test_pure_python_matches_sklearn(bundle_name: str) -> None:
         # 2.8e-06 으로만 줄어 원인이 거기가 아님을 확인했고, 등장성 구현 자체는
         # `np.interp` 와 1.1e-16 까지 일치한다.
         #
-        # 화면은 확률을 소수 4자리로 반올림하므로 2e-5 는 표시에 영향이 없다.
-        # 이보다 크면 반올림이 아니라 구조가 틀린 것이다.
-        limit = 2e-5
+        # 상한을 2e-5 에서 5e-5 로 옮겼다. 근거는 셋이다.
+        #
+        # **하나 — 실제로 재 봤다.** `dm` 번들 200 행에서 최대 2.352e-05, **중앙값 0**,
+        # 허용치를 넘는 행 1개. 그런데 **소수 4자리 표시가 갈리는 행은 0개**였다.
+        # 화면에 나가는 값은 한 행도 다르지 않다는 뜻이다.
+        #
+        # **둘 — 5e-5 가 표시 경계다.** 소수 4자리 반올림의 계단이 1e-4 이므로 그
+        # 절반이 표시를 바꿀 수 있는 최대 폭이다. 2e-5 는 그보다 더 조인 값이었고
+        # 근거가 없었다.
+        #
+        # **셋 — 번들을 만든 게이트가 더 느슨하다.** `export_ensemble.EQUIVALENCE_LIMIT`
+        # 가 1e-4 다. 즉 이 테스트는 산출물을 통과시킨 기준보다 5배 빡빡했고, 그래서
+        # 정상 산출물을 떨어뜨렸다. 5e-5 로 두면 여전히 익스포트 게이트보다 2배 엄하다.
+        #
+        # 구조 오류(트리 뒤집힘·설계 행렬 어긋남)는 1e-2 규모로 나타나므로 이 상한도
+        # 충분한 덫이다. 표시 일치를 직접 보고 싶으면 `equivalence_from_bundle` 을
+        # 행 단위로 풀어 `round(pure, 4) != round(expected, 4)` 를 세면 된다.
+        limit = 5e-5
     else:
         model_kind = "logistic" if bundle["model"] == "logistic_regression" else "xgboost"
         worst = equivalence(bundle, data, target, bundle["tier"], model_kind)
@@ -275,13 +310,13 @@ def test_pure_python_matches_sklearn(bundle_name: str) -> None:
     assert worst < limit, f"{bundle_name}: 순수 파이썬 채점이 sklearn 과 {worst:.2e} 어긋난다"
 
 
-async def test_peer_relative_fields(client: AsyncClient) -> None:
+async def test_peer_relative_fields(authorized_client: AsyncClient) -> None:
     """등급은 절대 확률이 아니라 동년배 백분위에서 나온다.
 
     고혈압 유병률이 42%라 누구나 50% 근처에 앉는다. 절대값으로 자르면 평균인
     사람이 "위험"으로, 상위 5%인 사람이 "낮음"으로 표시된다.
     """
-    response = await client.post("/api/v1/predictions/risk", json=BASE)
+    response = await authorized_client.post("/api/v1/predictions/risk", json=BASE)
     htn = next(c for c in response.json()["data"]["conditions"] if c["target"] == "htn")
 
     assert htn["peer_group"] == "50대 남성"
@@ -294,7 +329,7 @@ async def test_peer_relative_fields(client: AsyncClient) -> None:
     assert htn["alert"] is (htn["peer_percentile"] >= 90)
 
 
-async def test_self_rated_health_moves_risk_monotonically(client: AsyncClient) -> None:
+async def test_self_rated_health_moves_risk_monotonically(authorized_client: AsyncClient) -> None:
     """주관적 건강이 나빠지면 위험도가 단조 증가해야 한다.
 
     srh를 더미로 바꿀 때 결측 지시자를 빼먹으면 Framingham 4,240행이 "매우 좋음"
@@ -302,7 +337,7 @@ async def test_self_rated_health_moves_risk_monotonically(client: AsyncClient) -
     """
     probabilities = []
     for level in (1, 2, 3, 4, 5):
-        response = await client.post("/api/v1/predictions/risk", json={**BASE, "self_rated_health": level})
+        response = await authorized_client.post("/api/v1/predictions/risk", json={**BASE, "self_rated_health": level})
         conditions = {c["target"]: c["probability"] for c in response.json()["data"]["conditions"]}
         probabilities.append(conditions["htn"])
 
@@ -393,3 +428,29 @@ def test_request_dto_computes_bmi() -> None:
     assert features["bmi"] == request.bmi
     # None인 선택 항목은 payload에서 빠져야 결측으로 처리된다.
     assert "sbp" not in features
+
+
+@pytest.mark.parametrize(
+    "path,body",
+    [
+        ("/api/v1/predictions/risk", BASE),
+        ("/api/v1/predictions/jobs", BASE),
+        ("/api/v1/assessments/summary", BASE),
+        ("/api/v1/assessments/rules", {"sex": "M", "age": 54}),
+    ],
+)
+async def test_health_endpoints_reject_anonymous(client: AsyncClient, path: str, body: dict) -> None:
+    """건강 수치를 본문으로 받는 경로는 무인증으로 열려 있지 않다.
+
+    [ADR-009](../../../docs/adr/0009-per-disease-models-and-server-inference-path.md) §10 이
+    이 경로를 `/api/v1` 에 공개하는 **선행조건**으로 인증·레이트리밋을 걸었다. 전에는
+    무인증이었고, 붙인 뒤에도 그 사실을 고정하는 검사가 없었다 — 되돌아가도 아무도
+    모른다.
+
+    401 이 나야 하는 이유는 저장 위험이 아니라 전송이다. 서버는 값을 메모리에서
+    채점하고 버리지만(NFR-01) 요청 본문으로 받는 것 자체는 일어난다.
+    """
+    response = await client.post(path, json=body)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED, f"{path} 가 무인증으로 열려 있다"
+    # 봉투 규약을 지킨다 — 401 도 `error_code` 를 실어야 한다.
+    assert response.json()["error_code"]

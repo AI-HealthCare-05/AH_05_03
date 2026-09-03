@@ -40,9 +40,10 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent / "data"))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import bundle_io  # noqa: E402
 from metrics import evaluate  # noqa: E402
 from splits import cv_folds, make_split  # noqa: E402
-from targets import CATEGORICAL, DERIVED, TARGETS, Target  # noqa: E402
+from targets import CATEGORICAL, DERIVED, TARGETS, Target, substituted_materials  # noqa: E402
 from train_multi import (  # noqa: E402
     DATA,
     MONOTONE,
@@ -116,7 +117,13 @@ def prepare(
     # 확장이 만든 컬럼 중 이 타깃이 쓸 수 있는 것만 남긴다. 확장은 원본에 없던
     # 이름(srh 더미, 연령·BMI 구간, 파생 비율)을 만들지만 차단된 재료에서 나온
     # 것은 애초에 raw 에 없으므로 여기 나타나지 않는다.
-    design_columns = list(frame.columns)
+    #
+    # **갈아 끼운 원재료는 여기서 빼야 한다.** 위 `raw_columns` 가 파생을 계산하려고
+    # 재료를 다시 붙였으므로 `raw` 에는 `sbp`·`dbp` 가 있고 확장 결과에도 따라온다.
+    # 그대로 두면 맥압·평균동맥압과 완전 공선이 되어, 제약 없는 원값 쪽으로 단조
+    # 제약이 우회된다. 실제로 우회했다 — 평균동맥압을 올리는데 확률이 내려갔다.
+    dropped = substituted_materials(columns)
+    design_columns = [c for c in frame.columns if c not in dropped]
     frame = frame[design_columns]
     for column in design_columns:
         if column in CATEGORICAL:
@@ -482,7 +489,11 @@ def main() -> int:
 
             suffix = "" if tier == "basic" else f"_{tier}"
             destination = args.out / f"risk_{key}{suffix}.json"
+            # 사후 주입된 `rule_anchor` 를 덮어쓰지 않는다 — 이유는 `bundle_io` 참조.
+            carried = bundle_io.carry_over(destination, bundle)
             destination.write_text(json.dumps(bundle, ensure_ascii=False), encoding="utf-8")
+            if carried:
+                print(f"  {destination.name}{bundle_io.note(carried)}")
 
             gap = "-" if args.skip_equivalence else f"{equivalence(bundle, data, target, tier, model_kind):.2e}"
             performance = bundle["performance"]

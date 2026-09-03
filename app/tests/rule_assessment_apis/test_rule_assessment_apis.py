@@ -46,8 +46,8 @@ STAGING_DOMAINS = {"kidney", "liver", "fatty_liver", "uric_acid", "anemia"}
 DOMAINS = VENDOR_DOMAINS | STAGING_DOMAINS
 
 
-async def test_full_profile_evaluates_all_domains(client: AsyncClient) -> None:
-    response = await client.post("/api/v1/assessments/rules", json=FULL)
+async def test_full_profile_evaluates_all_domains(authorized_client: AsyncClient) -> None:
+    response = await authorized_client.post("/api/v1/assessments/rules", json=FULL)
     assert response.status_code == status.HTTP_200_OK
 
     data = response.json()["data"]
@@ -64,13 +64,13 @@ async def test_full_profile_evaluates_all_domains(client: AsyncClient) -> None:
         assert domain["disclaimer"]
 
 
-async def test_missing_labs_are_refused_not_guessed(client: AsyncClient) -> None:
+async def test_missing_labs_are_refused_not_guessed(authorized_client: AsyncClient) -> None:
     """검사값이 없으면 추정하지 않는다.
 
     ML 엔드포인트와 정반대의 행동이고, 그 차이가 두 방식을 비교하는 이유다.
     """
     body = {k: FULL[k] for k in ("sex", "age", "height_cm", "weight_kg", "waist_cm")}
-    response = await client.post("/api/v1/assessments/rules", json=body)
+    response = await authorized_client.post("/api/v1/assessments/rules", json=body)
     assert response.status_code == status.HTTP_200_OK
 
     data = response.json()["data"]
@@ -82,9 +82,9 @@ async def test_missing_labs_are_refused_not_guessed(client: AsyncClient) -> None
         assert data["domains"][name]["missing_fields"]
 
 
-async def test_empty_body_is_accepted(client: AsyncClient) -> None:
+async def test_empty_body_is_accepted(authorized_client: AsyncClient) -> None:
     """모든 항목이 선택이므로 빈 요청도 유효하다. 전부 판정 불가로 돌아온다."""
-    response = await client.post("/api/v1/assessments/rules", json={})
+    response = await authorized_client.post("/api/v1/assessments/rules", json={})
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["data"]["evaluated"] == 0
 
@@ -98,18 +98,18 @@ async def test_empty_body_is_accepted(client: AsyncClient) -> None:
         {**FULL, "unknown_field": 1},  # extra="forbid"
     ],
 )
-async def test_invalid_payload_rejected(client: AsyncClient, payload: dict) -> None:
-    response = await client.post("/api/v1/assessments/rules", json=payload)
+async def test_invalid_payload_rejected(authorized_client: AsyncClient, payload: dict) -> None:
+    response = await authorized_client.post("/api/v1/assessments/rules", json=payload)
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json()["success"] is False
 
 
-async def test_engine_value_error_does_not_leak_as_500(client: AsyncClient) -> None:
+async def test_engine_value_error_does_not_leak_as_500(authorized_client: AsyncClient) -> None:
     """엔진도 혈압 순서를 검사하지만 그쪽 ValueError는 500이 된다.
 
     경계에서 먼저 막아 422 봉투로 돌려주는지 확인한다.
     """
-    response = await client.post("/api/v1/assessments/rules", json={"systolic_bp": 90, "diastolic_bp": 90})
+    response = await authorized_client.post("/api/v1/assessments/rules", json={"systolic_bp": 90, "diastolic_bp": 90})
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert response.json()["error_code"] == "VALIDATION_ERROR"
 
@@ -120,9 +120,8 @@ def test_dto_fields_are_subset_of_engine_schema() -> None:
     PR #4 가 필드 이름을 바꾸면 우리 값이 조용히 무시된다 — 엔진 쪽 스키마가
     extra="ignore" 라서 예외도 나지 않는다.
     """
-    from chronic_disease_engine import HealthProfileInput
-
     from app.services.lab_staging import STAGING_FIELDS
+    from chronic_disease_engine import HealthProfileInput
 
     ours = set(RuleAssessmentRequest.model_fields)
     theirs = set(HealthProfileInput.model_fields)
@@ -177,13 +176,13 @@ def test_vendored_engine_is_unmodified() -> None:
         )
 
 
-async def test_one_demo_page_drives_both_engines(client: AsyncClient) -> None:
+async def test_one_demo_page_drives_both_engines(authorized_client: AsyncClient) -> None:
     """비교는 한 화면에서 되어야 한다.
 
     화면이 둘이면 엔진을 바꿀 때 입력값이 날아가고, 그러면 같은 사람으로 두 결과를
     나란히 놓을 수가 없다.
     """
-    response = await client.get("/api/demo")
+    response = await authorized_client.get("/api/demo")
     assert response.status_code == status.HTTP_200_OK
     page = response.text
 
@@ -261,9 +260,9 @@ def test_demo_risk_order_matches_the_matrix() -> None:
     assert labelled == set(DISEASES), f"이름이 없는 질환이 있다: {labelled ^ set(DISEASES)}"
 
 
-async def test_rules_response_carries_the_disease_risks(client: AsyncClient) -> None:
+async def test_rules_response_carries_the_disease_risks(authorized_client: AsyncClient) -> None:
     """봉투에 전치 판정이 실려 나가는지. 라우터에서 빠뜨려도 도메인 판정은 멀쩡해서 안 들킨다."""
-    response = await client.post("/api/v1/assessments/rules", json=FULL)
+    response = await authorized_client.post("/api/v1/assessments/rules", json=FULL)
     assert response.status_code == status.HTTP_200_OK
 
     risks = response.json()["data"]["disease_risks"]
