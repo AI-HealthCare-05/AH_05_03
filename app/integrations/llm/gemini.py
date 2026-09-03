@@ -9,6 +9,7 @@
 """
 
 import asyncio
+from collections.abc import AsyncIterator
 from typing import TypeVar
 
 from google import genai
@@ -84,3 +85,39 @@ class GeminiLLMClient(LLMClientProtocol):
             return response_schema.model_validate_json(response.text)
         except Exception as ex:
             raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex
+
+    async def stream_structured_response(
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        response_schema: type[T],
+    ) -> AsyncIterator[str]:
+        """같은 요청을 스트리밍으로. 조각은 **원본 JSON 문자열**이다.
+
+        해독은 호출부가 한다 — 어느 필드를 화면에 흘릴지는 공급자가 알 일이 아니다.
+        타임아웃은 여기서 걸지 않는다. 스트림은 "첫 조각까지" 와 "조각 사이" 를 갈라
+        재야 하는데(`dev_ocr._stream_once` 참조) 그 판단도 호출부에 있다.
+        """
+        gemini_contents: list[types.ContentUnion] = [
+            types.Content(
+                role="user" if m.role == "user" else "model",
+                parts=[types.Part.from_text(text=m.content)],
+            )
+            for m in messages
+        ]
+        try:
+            stream = await self.client.aio.models.generate_content_stream(
+                model=self.model_name,
+                contents=gemini_contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    response_mime_type="application/json",
+                    response_schema=response_schema,
+                    temperature=self.temperature,
+                ),
+            )
+            async for chunk in stream:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as ex:
+            raise LlmProviderFailedError(f"Gemini 스트리밍 실패: {type(ex).__name__}") from ex

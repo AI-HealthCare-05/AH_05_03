@@ -18,6 +18,7 @@ JSON 을 내지 못한다. Gemini 의 `response_schema` 와 같은 자리다. Op
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from typing import Any, TypeVar, cast
 
 from openai import AsyncOpenAI
@@ -122,3 +123,40 @@ class OpenAIChatClient(LLMClientProtocol):
             return response_schema.model_validate_json(text)
         except Exception as ex:
             raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex
+
+    async def stream_structured_response(
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        response_schema: type[T],
+    ) -> AsyncIterator[str]:
+        """같은 요청을 스트리밍으로. 조각은 원본 JSON 문자열이다."""
+        payload: list[dict[str, str]] = [{"role": "system", "content": system_instruction}]
+        payload += [
+            {"role": "assistant" if message.role == "assistant" else "user", "content": message.content}
+            for message in messages
+        ]
+        try:
+            stream = await self.client.chat.completions.create(
+                model=self.model_name,
+                messages=cast(Any, payload),
+                temperature=self.temperature,
+                stream=True,
+                response_format=cast(
+                    Any,
+                    {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": response_schema.__name__,
+                            "strict": True,
+                            "schema": _strictify(response_schema.model_json_schema()),
+                        },
+                    },
+                ),
+            )
+            async for chunk in stream:
+                piece = chunk.choices[0].delta.content if chunk.choices else None
+                if piece:
+                    yield piece
+        except Exception as ex:
+            raise LlmProviderFailedError(f"OpenAI 스트리밍 실패: {type(ex).__name__}") from ex

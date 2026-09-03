@@ -40,11 +40,17 @@ class FakeClient:
             raise self.fails
         return response_schema(text=self.text)
 
+    async def stream_structured_response(self, system_instruction, messages, response_schema):  # type: ignore[no-untyped-def]
+        self.calls += 1
+        if self.fails:
+            raise self.fails
+        yield f'{{"text": "{self.text}"}}'
+
 
 def chain(*clients: FakeClient) -> FallbackChatClient:
     """생성자를 우회해 가짜 목록을 심는다 — 키가 없어도 돌아야 한다."""
     built = FallbackChatClient.__new__(FallbackChatClient)
-    built.available = [(f"fake-{i}", client) for i, client in enumerate(clients)]  # type: ignore[attr-defined]
+    built.available = [(f"fake-{i}", client) for i, client in enumerate(clients)]  # type: ignore[attr-defined, misc]
     return built
 
 

@@ -6,9 +6,12 @@
 `require_active_account` 를 거는 것과도 같은 규칙이다.
 """
 
+import json
+from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 
 from app.core import config
 from app.core.errors import ErrorCode
@@ -62,3 +65,56 @@ async def chat_with_assistant(
     )
     data = await service.respond(request)
     return ApiResponse(data=data, message="건강 어시스턴트 응답을 처리했습니다.")
+
+
+@health_assistant_router.post(
+    "/chat/stream",
+    responses=error_responses(*_ERRORS),
+    summary="같은 대화를 SSE 로 흘린다 — 글자가 오는 대로 보여 주기 위해",
+)
+async def stream_chat_with_assistant(
+    request: HealthAssistantChatRequest,
+    account: Annotated[ServiceAccount, Depends(require_active_account)],
+    limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
+    service: Annotated[HealthAssistantService, Depends(get_health_assistant_service)],
+) -> StreamingResponse:
+    """`text/event-stream`. 두 이벤트를 보낸다.
+
+    - `delta` — `assistant_message` 의 **새로 온 부분만**.
+    - `result` — 완성된 구조화 응답 한 벌. 기록 초안·빠른답장·응급 안내가 여기 있다.
+
+    왜 둘로 가르나. 초안은 JSON 이 끝나야 유효해지고 안전 검증도 완성본에만 걸 수
+    있다 — 덜 온 문장으로 응급 판정을 하면 "가슴이 아" 에서 119 를 띄우거나 반대로
+    놓친다.
+
+    `EventSource` 는 헤더를 못 붙이므로 프런트는 `fetch` + `ReadableStream` 으로
+    읽는다. 그래야 `Authorization` 이 실린다 (`/dev/ocr/jobs/{id}/stream` 과 같은 규칙).
+    """
+    await limiter.hit(
+        "health-assistant",
+        str(account.id),
+        config.LLM_CHAT_RATE_LIMIT,
+        config.LLM_CHAT_RATE_WINDOW_SECONDS,
+    )
+
+    async def frames() -> AsyncIterator[str]:
+        try:
+            async for name, payload in service.stream(request):
+                body = json.dumps(payload, ensure_ascii=False)
+                yield f"event: {name}\ndata: {body}\n\n"
+        except Exception as error:  # noqa: BLE001 - 이미 200 이라 프레임으로 알린다
+            # 200 으로 열린 뒤에는 오류 봉투를 쓸 수 없다. 프런트가 읽을 수 있게
+            # `error` 프레임으로 알리고 끊는다 — 조용히 끝나면 화면이 영영 기다린다.
+            body = json.dumps({"message": str(error)}, ensure_ascii=False)
+            yield f"event: error\ndata: {body}\n\n"
+
+    return StreamingResponse(
+        frames(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            # nginx 가 응답을 모아 두면 조각이 한꺼번에 나가 스트리밍이 뜻을 잃는다.
+            "X-Accel-Buffering": "no",
+        },
+    )

@@ -23,6 +23,7 @@ Gemini 무료 등급은 **모델마다 하루 할당량을 따로** 센다. 소�
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from typing import TypeVar
 
 from pydantic import BaseModel
@@ -101,6 +102,44 @@ class FallbackChatClient(LLMClientProtocol):
                     entry,
                     type(error).__name__,
                     remaining,
+                )
+        assert last is not None
+        raise LlmProviderFailedError(
+            f"대화 공급자 {len(self.available)}개가 모두 실패했습니다: {type(last).__name__}"
+        ) from last
+
+    async def stream_structured_response(
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        response_schema: type[T],
+    ) -> AsyncIterator[str]:
+        """스트리밍도 같은 순서로 넘긴다.
+
+        **첫 조각을 받은 뒤에는 넘기지 않는다.** 화면에 이미 글자가 나가 있는데 다음
+        공급자로 넘어가면 앞의 문장을 지우고 다시 쓰게 된다 — 사용자에게는 답이
+        번복되는 것으로 보인다. 넘길지 말지를 첫 조각으로 가르는 이유다.
+        """
+        last: Exception | None = None
+        for index, (entry, client) in enumerate(self.available):
+            started = False
+            try:
+                async for piece in client.stream_structured_response(
+                    system_instruction=system_instruction,
+                    messages=messages,
+                    response_schema=response_schema,
+                ):
+                    started = True
+                    yield piece
+                return
+            except Exception as error:  # noqa: BLE001 - 첫 조각 전이면 다음 공급자로
+                last = error
+                if started or index == len(self.available) - 1:
+                    raise
+                logger.warning(
+                    "대화 공급자 %s 스트리밍 실패(%s) — 다음으로 넘어간다",
+                    entry,
+                    type(error).__name__,
                 )
         assert last is not None
         raise LlmProviderFailedError(

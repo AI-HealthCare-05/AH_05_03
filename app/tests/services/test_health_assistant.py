@@ -10,11 +10,21 @@ from app.services.health_assistant import HealthAssistantService
 
 
 class MockLLMClient:
+    """`LLMClientProtocol` 의 두 메서드를 다 흉내 낸다.
+
+    스트리밍은 **한 글자씩** 흘린다 — 실제 모델도 토큰 단위로 오고, 덩어리로 주면
+    부분 JSON 해독기가 경계를 밟을 일이 없어 시험이 되지 않는다.
+    """
+
     def __init__(self, fake_json: str):
         self.fake_json = fake_json
 
     async def generate_structured_response(self, *args, **kwargs):
         return HealthAssistantResponse.model_validate_json(self.fake_json)
+
+    async def stream_structured_response(self, *args, **kwargs):
+        for character in self.fake_json:
+            yield character
 
 
 @pytest.mark.asyncio
@@ -165,3 +175,57 @@ async def test_health_assistant_service_advises_on_alcohol_with_medication_conte
     assert "타이레놀" in response.assistant_message
     assert "간 손상" in response.assistant_message or "간" in response.assistant_message
     assert response.needs_confirmation is False
+
+
+@pytest.mark.asyncio
+async def test_streaming_emits_message_deltas_then_the_whole_response() -> None:
+    """글자는 흐르고 초안은 마지막에 한 번.
+
+    두 벌인 이유가 있다. 기록 초안은 JSON 이 끝나야 유효해지고, 안전 검증도 완성본에만
+    걸 수 있다 — 덜 온 문장으로 응급 판정을 하면 "가슴이 아" 에서 119 를 띄우거나
+    반대로 놓친다.
+    """
+    fake_json = """{
+        "intent": "record_blood_pressure",
+        "assistant_message": "아침 혈압 130에 85로 기록할까요?",
+        "blood_pressure_draft": {"systolic": 130, "diastolic": 85},
+        "missing_fields": [],
+        "needs_confirmation": true,
+        "suggested_quick_replies": ["네", "아니요"]
+    }"""
+    service = HealthAssistantService(llm_client=MockLLMClient(fake_json))
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="아침 혈압 130에 85")])
+
+    events = [event async for event in service.stream(request)]
+    deltas = [payload["text"] for name, payload in events if name == "delta"]
+    results = [payload for name, payload in events if name == "result"]
+
+    # 한 글자씩 흘렸으므로 조각이 여럿이어야 한다 — 한 덩어리면 스트리밍이 아니다.
+    assert len(deltas) > 1
+    assert "".join(deltas) == "아침 혈압 130에 85로 기록할까요?"
+    # 초안은 마지막 한 번에만 실린다.
+    assert len(results) == 1
+    assert results[0]["blood_pressure_draft"]["systolic"] == 130
+    assert results[0]["intent"] == "record_blood_pressure"
+
+
+@pytest.mark.asyncio
+async def test_streaming_answers_emergencies_without_calling_the_model() -> None:
+    """응급 표현은 모델을 부르기 전에 잡는다. 그때도 화면 계약은 같다."""
+
+    class Exploding:
+        async def generate_structured_response(self, *args, **kwargs):
+            raise AssertionError("모델을 부르면 안 된다")
+
+        async def stream_structured_response(self, *args, **kwargs):
+            raise AssertionError("모델을 부르면 안 된다")
+            yield ""  # pragma: no cover - 제너레이터로 만들기 위한 줄
+
+    service = HealthAssistantService(llm_client=Exploding())
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="심한 흉통이 있고 호흡곤란도 와요")]
+    )
+    events = [event async for event in service.stream(request)]
+    names = [name for name, _ in events]
+    assert names == ["delta", "result"]
+    assert "119" in events[0][1]["text"]

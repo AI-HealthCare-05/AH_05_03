@@ -177,6 +177,31 @@ export class ServerApiClient {
     await readServerSentEvents(response.body, onEvent);
   }
 
+  /**
+   * 건강 비서 대화를 SSE 로 받는다. `delta` 로 글자가 흐르고 `result` 로 완성본이 온다.
+   *
+   * `EventSource` 를 안 쓰는 이유는 문서 인식 쪽과 같다 — 헤더를 못 붙여서
+   * `Authorization` 을 쿼리스트링에 실어야 하고, 그러면 토큰이 nginx 액세스 로그와
+   * 브라우저 히스토리에 남는다.
+   */
+  public async streamHealthAssistantChat(
+    body: Record<string, unknown>,
+    onEvent: (event: string, data: Record<string, unknown>) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const response = await this.send("/health-assistant/chat/stream", {
+      method: "POST",
+      authenticated: true,
+      headers: { Accept: "text/event-stream" },
+      body: JSON.stringify(body),
+      signal,
+    });
+    if (!response.body) {
+      throw new ServerApiError(response.status, "STREAM_UNSUPPORTED", "이 브라우저는 스트리밍을 지원하지 않습니다.");
+    }
+    await readServerSentEvents(response.body, onEvent);
+  }
+
   public getChallengeSettings<T>(): Promise<T> {
     return this.request<T>("/challenges/settings", { authenticated: true });
   }

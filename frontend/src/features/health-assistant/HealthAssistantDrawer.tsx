@@ -7,7 +7,7 @@ import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 import { GeminiOcrAdapter } from "../../shared/api/geminiOcrAdapter";
 
 import {
-  sendHealthAssistantMessage,
+  streamHealthAssistantMessage,
   type HealthAssistantResponse,
   type ExerciseDraft,
   type BloodPressureDraft,
@@ -363,9 +363,20 @@ export function HealthAssistantDrawer({
         return { role: m.role, content: m.content };
       });
 
-      // 대화 API 호출
-      const res = await sendHealthAssistantMessage(
+      // 대화 API 를 **스트리밍으로** 부른다.
+      //
+      // 빈 답변 거품을 먼저 세우고 글자가 오는 대로 채운다. 예전에는 응답이 다 올
+      // 때까지(느리면 15초) 점 세 개만 돌았다 — 기다리는 동안 아무 일도 일어나지
+      // 않는 것처럼 보인다. 기록 초안·빠른답장은 완성본이 온 뒤에 한 번에 붙는다.
+      const streamingId = messageId("assistant");
+      let streamed = "";
+      setMessages((prev) => [...prev, { id: streamingId, role: "assistant", content: "" }]);
+      const res = await streamHealthAssistantMessage(
         promptMessages,
+        (delta) => {
+          streamed += delta;
+          setMessages((prev) => prev.map((m) => (m.id === streamingId ? { ...m, content: streamed } : m)));
+        },
         {
           profile_name: profile.displayName,
           relationship: profile.relationship,
@@ -373,6 +384,9 @@ export function HealthAssistantDrawer({
           recent_records_summary: recentSummary,
         },
       );
+      // 흘리며 세운 거품은 지운다. 아래에서 완성본으로 다시 세운다 — 초안과 빠른답장이
+      // 붙어야 저장 버튼이 생기고, 그 계약을 두 곳에서 만들면 갈라진다.
+      setMessages((prev) => prev.filter((m) => m.id !== streamingId));
 
       // OCR에서 추출된 날짜가 있고 AI가 날짜를 채우지 않았거나 오늘로 채운 경우 보정
       if (res.lab_result_draft && extractedExamDate && (!res.lab_result_draft.recorded_at || res.lab_result_draft.recorded_at === new Date().toISOString().slice(0, 10))) {

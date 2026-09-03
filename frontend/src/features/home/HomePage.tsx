@@ -64,6 +64,7 @@ export function HomePage() {
     updateHealthRecord,
     deleteHealthRecord,
     restoreHealthRecord,
+    purgeHealthRecord,
   } = useLocalDomain();
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [summary, setSummary] = useState<DashboardSummary>();
@@ -81,6 +82,9 @@ export function HomePage() {
   // 남아야 하기 때문이다 — 모달을 닫는 동작은 "그만 볼래" 지 "선택을 풀래" 가 아니다.
   const [bodyRecord, setBodyRecord] = useState<HealthRecord>();
   const [assistantOpen, setAssistantOpen] = useState(false);
+  // 영구 삭제를 물어볼 대상. **한 번 더 누르게 한다** — 되돌릴 수 없는데 복원 버튼
+  // 바로 옆이라, 한 번에 지워지면 누르려던 것과 다른 것이 사라진다.
+  const [purgingRecord, setPurgingRecord] = useState<HealthRecord>();
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [profileEditDialogOpen, setProfileEditDialogOpen] = useState(false);
   const [profileLifecycleAction, setProfileLifecycleAction] = useState<"hide" | "delete">();
@@ -284,6 +288,21 @@ export function HomePage() {
       setDeletingRecord(undefined);
     } catch (caught) {
       setActionError(messageFrom(caught, "건강기록을 삭제하지 못했습니다."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function purgeDeletedHealthRecord(record: HealthRecord) {
+    setActionError(undefined);
+    setSaving(true);
+    try {
+      await purgeHealthRecord(record.id, record.version);
+      setPurgingRecord(undefined);
+      await refreshDashboard(record.profileId);
+      if (deletedRecords.length === 1) setDeletedRecordsDialogOpen(false);
+    } catch (caught) {
+      setActionError(messageFrom(caught, "건강기록을 영구 삭제하지 못했습니다."));
     } finally {
       setSaving(false);
     }
@@ -748,7 +767,22 @@ export function HomePage() {
               {deletedRecords.map((record) => (
                 <article className="hidden-profile-row" key={record.id}>
                   <div><strong>{RECORD_LABELS[record.recordType]}</strong><small>{formatDateTime(record.recordedAt)} · {recordNote(record)}</small></div>
-                  <button className="secondary-button" type="button" disabled={saving} onClick={() => void restoreDeletedHealthRecord(record)}>복원</button>
+                  {purgingRecord?.id === record.id ? (
+                    <div className="record-purge-confirm">
+                      <span>되돌릴 수 없어요.</span>
+                      <button className="danger-button" type="button" disabled={saving} onClick={() => void purgeDeletedHealthRecord(record)}>
+                        영구 삭제
+                      </button>
+                      <button className="text-button" type="button" disabled={saving} onClick={() => setPurgingRecord(undefined)}>
+                        취소
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="record-row-actions">
+                      <button className="secondary-button" type="button" disabled={saving} onClick={() => void restoreDeletedHealthRecord(record)}>복원</button>
+                      <button className="text-button" type="button" disabled={saving} onClick={() => setPurgingRecord(record)}>영구 삭제</button>
+                    </div>
+                  )}
                 </article>
               ))}
             </div>

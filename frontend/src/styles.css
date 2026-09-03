@@ -4359,3 +4359,51 @@ main {
   align-items: center;
   justify-content: center;
 }
+
+/* 지난 판정으로 채우기 — 폼 맨 위. 수치 하나만 바꿔 다시 돌려 보는 것이 이 화면에서
+   가장 자주 하는 일인데, 예전에는 그때마다 가족 홈을 거쳐야 했다. */
+.assess-history {
+  margin: 0 0 1.2rem;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--blue-50);
+}
+.assess-history h3 { margin: 0 0 0.2rem; font-size: 0.95rem; }
+.assess-history p { margin: 0 0 0.7rem; font-size: 0.78rem; }
+.assess-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.assess-history-list button {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.assess-history-list button:hover { border-color: var(--blue-500); }
+.assess-history-list time { font-size: 0.8rem; font-weight: 600; }
+.assess-history-list small { grid-column: 1 / -1; font-size: 0.72rem; color: var(--muted); }
+
+/* 영구 삭제 확인. 복원 버튼 바로 옆이라 한 번에 지워지면 안 된다 — 누르려던 것과
+   다른 것이 사라지고, 그건 되돌릴 수 없다. */
+.record-purge-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.record-purge-confirm > span { font-size: 0.75rem; color: var(--danger); font-weight: 600; }

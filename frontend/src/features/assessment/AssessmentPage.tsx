@@ -71,6 +71,29 @@ function byLevel<T>(items: T[], level: (item: T) => RiskLevel): T[] {
  * 라우터 state 로 받는 이유는 이 값이 **한 번 쓰고 버리는 것**이기 때문이다.
  * 전역 스토어에 두면 새로고침 뒤에도 남아, 사용자가 지운 값이 되살아난다.
  */
+/**
+ * 지난 판정의 입력값을 폼 상태로. `prefillFrom` 과 **같은 규칙**을 쓴다 —
+ * 폼은 전부 문자열로 들고 있고, 빈 값은 키째 빼야 `toRequestBody` 가 안 보낸다.
+ */
+function valuesFromInputs(inputs: Record<string, number | string | boolean>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(inputs)
+      .filter(([, value]) => value !== null && value !== undefined && value !== "")
+      .filter(([, value]) => typeof value !== "number" || Number.isFinite(value))
+      .map(([name, value]) => [name, String(value)]),
+  );
+}
+
+/** 목록에 쓰는 짧은 날짜. 초는 안 쓴다 — 한 줄에 등급과 같이 들어가야 한다. */
+function shortDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("ko-KR", {
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function prefillFrom(state: unknown): Record<string, string> {
   const prefill = (
     state as { prefill?: Record<string, number | string | boolean> } | null
@@ -419,6 +442,49 @@ export function AssessmentPage() {
         ) : null}
 
         <div className="assess-form-column">
+          {/* **지난 판정을 눌러 값을 되불러온다.**
+              예전에는 가족 홈으로 돌아가 기록을 열고 "이 값으로 다시 판정" 을 눌러야
+              여기로 왔다. 수치 하나만 바꿔 다시 돌려 보는 것이 이 화면에서 가장 자주
+              하는 일인데, 그때마다 화면을 두 번 옮겨야 했다. */}
+          {snapshots.length > 0 && (
+            <section className="assess-history" aria-labelledby="assess-history-heading">
+              <h3 id="assess-history-heading">지난 판정으로 채우기</h3>
+              <p className="assess-muted">
+                누르면 그날 넣은 값이 폼에 들어와요. 수치를 고쳐 다시 판정하면 새 기록으로 남습니다.
+              </p>
+              <ul className="assess-history-list">
+                {[...snapshots].reverse().slice(0, 8).map((snapshot) => {
+                  const restored = valuesFromInputs(snapshot.payload.inputs ?? {});
+                  const level = snapshot.payload.highestLevel as RiskLevel;
+                  return (
+                    <li key={snapshot.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setValues(restored);
+                          // 앞의 결과를 지운다. 안 지우면 새로 채운 값 옆에 지난 판정이
+                          // 남아 어느 쪽이 지금 것인지 알 수 없다.
+                          setResult(undefined);
+                          setError(undefined);
+                          setRejected({});
+                          setAttempted(false);
+                          setSaved(undefined);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                      >
+                        <time dateTime={snapshot.recordedAt}>{shortDateTime(snapshot.recordedAt)}</time>
+                        <LevelBadge level={level} />
+                        <small>
+                          입력 {Object.keys(restored).length}칸 · BMI {snapshot.payload.bmi}
+                        </small>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+
           {flagged.length > 0 && (
             <div
               className="alert error-alert assess-required-alert"
