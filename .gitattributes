@@ -1,0 +1,28 @@
+# 줄바꿈을 저장소가 정한다. 팀원이 윈도우·맥을 섞어 쓰고 `core.autocrlf` 설정도
+# 사람마다 달라서, 이게 없으면 같은 파일이 사람에 따라 통째로 바뀐 것처럼 보인다.
+#
+# 2026-09-03 에 pre-commit 의 줄바꿈 훅을 켰다가 400여 파일이 한꺼번에 다시 쓰였다.
+# 훅으로 고칠 문제가 아니라 여기서 정할 문제다 — 훅은 이미 체크아웃된 것을 건드리고,
+# 이 파일은 **저장소에 무엇이 들어가는지**를 정한다.
+* text=auto eol=lf
+#
+# **기존 파일을 지금 바꾸지는 않는다.** 이 규칙은 앞으로 들어오는 것에 적용되고,
+# 이미 커밋된 CRLF 를 정리하려면 `git add --renormalize .` 를 **별도 커밋**으로
+# 내야 한다. 그 커밋은 수백 파일을 건드리므로 팀이 같은 시점에 합의하고 해야 한다.
+
+# 바이너리. 줄바꿈을 건드리면 깨진다.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.glb binary
+*.woff binary
+*.woff2 binary
+*.xlsx binary
+
+# 산출물·잠금 파일은 디프에서 접는다. 리뷰에서 읽을 것이 아니다.
+uv.lock linguist-generated=true
+package-lock.json linguist-generated=true
+modeling/artifacts/**/*.json linguist-generated=true
