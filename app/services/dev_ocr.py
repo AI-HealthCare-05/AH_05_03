@@ -15,7 +15,7 @@ from app.exceptions import (
     OcrUnavailableError,
     OcrUnsupportedTypeError,
 )
-from app.services import ocr_providers
+from app.services import ocr_measurements, ocr_providers
 from app.services.ocr_partial import PartialJsonTextReader
 
 # **`logging.getLogger` 로는 부족하다.** 그러면 이 로거에 핸들러가 없어 레코드가 root
@@ -260,14 +260,35 @@ def _require_bridge(files: list[tuple[bytes, str]]) -> None:
         raise OcrUnavailableError("개발용 OCR 브리지가 비활성화되어 있습니다.")
     if not files:
         raise OcrNoFileError("인식할 파일이 제공되지 않았습니다.")
-    if not config.GEMINI_API_KEY:
-        raise OcrUnavailableError("Gemini API 키가 설정되지 않았습니다.")
+    # **`GEMINI_API_KEY` 를 직접 보지 않는다.** 목록이 `["openai:gpt-4o-mini"]` 여도
+    # 여기서 Gemini 키를 요구하면 쓰지도 않는 공급자 때문에 인식이 막힌다.
+    # 실제로 쓸 항목이 하나라도 서는지만 묻는다 — 판정은 `ocr_providers` 가 한다.
+    ocr_providers.require_any(_MODELS)
 
 
 def _finalize(result: dict) -> dict:
-    """API 계약(Contract) 충족을 위한 기본값 고정."""
+    """API 계약(Contract) 충족을 위한 기본값 고정 + **표를 수치로 옮긴다.**
+
+    `measurements` 를 여기서 붙이는 이유는 경로가 셋이기 때문이다 — 동기 호출,
+    큐 워커, SSE 의 `done` 이벤트가 전부 이 함수를 지난다. 호출부마다 따로 부르면
+    같은 문서에 다른 수치가 나올 수 있고, 그건 사용자가 두 번 올렸을 때 설명할 수
+    없는 동작이 된다.
+
+    **모델에게 시키지 않는다.** 표를 읽는 규칙은 `ocr_measurements` 에 있고,
+    거기서 단위·참고치·범위로 교차검증한다. 모델이 스스로 "이건 공복혈당입니다" 라고
+    말하게 두면 검사명 오독이 그대로 수치가 된다 — 되돌린 적이 있는 실패다.
+    """
     result["status"] = "raw"
     result["automatically_confirmed"] = False
+    extraction = ocr_measurements.extract(result.get("tables"))
+    result["measurements"] = extraction.to_payload()
+    logger.info(
+        "수치 매핑 · 채택=%d 검토=%d 미사용=%d 미매칭=%d",
+        len(extraction.values),
+        len(extraction.review),
+        len(extraction.unused),
+        len(extraction.unmatched),
+    )
     return result
 
 

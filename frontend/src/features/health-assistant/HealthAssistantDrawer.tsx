@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from "react";
-import type { FamilyProfile, HealthRecord, HealthRecordType, ISODate } from "../../shared/local/domainContracts";
+import type { FamilyProfile, HealthRecord, HealthRecordType } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
-import { DevServerOcrAdapter, type RawOcrTable } from "../../ocr/ocr-adapter";
+// PR 은 전용 `DevServerOcrAdapter` 를 썼는데, project 에는 같은 응답을 큐·스트리밍으로
+// 받는 `GeminiOcrAdapter` 가 이미 있다(`text`·`tables` 가 같은 모양이고 `measurements`
+// 가 더 붙는다). 어댑터를 둘 두면 인식 경로가 갈라지므로 있는 쪽으로 모은다.
+import { GeminiOcrAdapter } from "../../shared/api/geminiOcrAdapter";
+
 import {
-  sendHealthAssistantMessage,
-  type ChatMessage,
+  streamHealthAssistantMessage,
   type HealthAssistantResponse,
   type ExerciseDraft,
   type BloodPressureDraft,
@@ -15,7 +18,40 @@ import {
   type ChallengeDraft,
 } from "./healthAssistantClient";
 import { selectContextRecordTypes } from "./healthAssistantContext";
+import {
+  containsNewMedicationRecord,
+  detectMetricKeyFromQuery,
+  extractMetricsFromRecords,
+  filterRecordsByTimeRange,
+  formatTargetDateTime,
+  isValidContentKeyword,
+  type MetricSeries,
+  normalizeRecordTypes,
+  parseExamDateFromText,
+  resolveHealthRecordDateTime,
+  resolveMedicationTakenAt,
+  shouldAutoSaveHealthRecord,
+  type ExtendedChatMessage,
+  type OcrReviewItem,
+  PRIMARY_HOUSEHOLD_ID,
+  buildAutoSaveAssistantMessage,
+  extractReviewItems,
+  normalizeBloodGlucoseTiming,
+  removeMedicationSavePrompt,
+  reviewItemsToText,
+} from "./healthAssistantLogic";
 import "./healthAssistantDrawer.css";
+
+/**
+ * 대화 메시지 id.
+ *
+ * `Date.now()` 를 컴포넌트 안에서 직접 부르면 리액트 컴파일러 규칙이 **렌더 단계의
+ * 불순 호출**로 잡는다(이벤트 핸들러 안이어도 컴포넌트 본문 스코프다). 모듈 수준
+ * 함수로 빼면 그 판정에서 벗어나고, 부르는 쪽도 무엇을 만드는지가 이름으로 보인다.
+ */
+function messageId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 interface HealthAssistantDrawerProps {
   profile?: FamilyProfile;
@@ -26,563 +62,6 @@ interface HealthAssistantDrawerProps {
   onChallengeSaved?: () => Promise<void> | void;
   onNavigateToRecords?: () => void;
 }
-export interface MetricDataPoint {
-  date: string; // YYYY-MM-DD
-  value: number;
-  secondaryValue?: number; // 혈압의 경우 diastolic, 간수치의 경우 ALT
-  note?: string;
-}
-
-export interface MetricSeries {
-  key: string;
-  name: string;
-  unit: string;
-  color: string;
-  secondaryColor?: string;
-  secondaryName?: string;
-  normalRange?: { min?: number; max?: number; label: string };
-  points: MetricDataPoint[];
-}
-
-interface ExtendedChatMessage extends ChatMessage {
-  id: string;
-  responseDraft?: HealthAssistantResponse;
-  saved?: boolean;
-  imageBlobUrl?: string;
-  imageFile?: File;
-  attachedDocuments?: Array<{ id: string; fileName?: string }>;
-  showTrendChart?: boolean;
-  trendMetrics?: MetricSeries[];
-  trendInitialKey?: string;
-}
-
-interface OcrReviewItem {
-  testName: string;
-  value: string;
-  unit: string;
-  judgment: string;
-}
-
-const PRIMARY_HOUSEHOLD_ID = "household-local-primary";
-
-function toLocalMinuteString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-/**
- * 사용자가 복용 시각을 말하지 않은 단순 과거형("한 알 먹었어")은
- * LLM이 임의 시각을 만들지 못하도록 요청을 받은 현재 시각을 후보로 사용한다.
- */
-export function resolveMedicationTakenAt(
-  userMessage: string,
-  extractedTakenAt?: string | null,
-  now = new Date(),
-): string {
-  const hasExplicitClockOrPeriod =
-    /(?:아침|점심|저녁|밤|새벽|오전|오후|식전|식후|취침|기상|\d{1,2}\s*(?:시|:)|\d+\s*분\s*전)/.test(
-      userMessage,
-    );
-  if (hasExplicitClockOrPeriod && extractedTakenAt) return extractedTakenAt;
-
-  if (/(?:어제|그제)/.test(userMessage) && extractedTakenAt) {
-    return extractedTakenAt.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? extractedTakenAt;
-  }
-
-  return toLocalMinuteString(now);
-}
-
-/**
- * 완료한 건강기록의 시각이 생략됐거나 오늘 날짜만 추출된 경우에는
- * UTC 자정(한국 시각 09:00)으로 저장하지 않고 실제 입력 시각을 사용한다.
- */
-export function resolveHealthRecordDateTime(
-  userMessage: string,
-  extractedDateTime?: string | null,
-  now = new Date(),
-): string {
-  const localNow = toLocalMinuteString(now);
-  if (!extractedDateTime) return localNow;
-
-  const value = extractedDateTime.trim();
-  const dateOnly = value.match(/^(\d{4}-\d{2}-\d{2})$/)?.[1];
-  if (dateOnly === localNow.slice(0, 10)) return localNow;
-
-  const hasExplicitClock =
-    /(?:아침|점심|저녁|밤|새벽|오전|오후|정오|자정|\d{1,2}\s*(?:시|:)|\d+\s*분\s*전)/.test(
-      userMessage,
-    );
-  const refersToPastDate = /(?:어제|그제|지난|\d+\s*일\s*전|\d{4}\s*년|\d{1,2}\s*월\s*\d{1,2}\s*일)/.test(
-    userMessage,
-  );
-
-  if (!hasExplicitClock && !refersToPastDate) return localNow;
-  return value;
-}
-
-export function containsNewMedicationRecord(message: string): boolean {
-  const normalized = message.trim().toLowerCase();
-  const isHypothetical = /(?:먹어도|복용해도|먹을까|복용할까|먹으면|복용하면)/.test(normalized);
-  if (isHypothetical) return false;
-
-  const statesCompletedIntake = /(?:먹었|복용했|복용함|먹음|투약했|삼켰)/.test(normalized);
-  const hasDoseWithoutQuestion = /\d+(?:\.\d+)?\s*(?:알|정|캡슐|포|mg|ml|밀리그램|밀리리터)/i.test(normalized) &&
-    !/(?:\?|？|돼|괜찮|가능)/.test(normalized);
-  return statesCompletedIntake || hasDoseWithoutQuestion;
-}
-
-function removeMedicationSavePrompt(message: string): string {
-  return message
-    .split(/(?<=[.!?])\s+/)
-    .filter((sentence) => !/(?:약|복약|복용).*(?:기록|저장).*(?:저장|할까요|하시겠)/.test(sentence))
-    .join(" ")
-    .trim();
-}
-
-export function shouldAutoSaveHealthRecord(response: HealthAssistantResponse, userMessage: string): boolean {
-  if (response.emergency_notice || response.missing_fields.length > 0) return false;
-  if (!["record_exercise", "record_blood_pressure", "record_blood_glucose", "record_medication", "record_pain"].includes(response.intent)) return false;
-  if (response.auto_save === true) return true;
-
-  const normalized = userMessage.trim().toLowerCase();
-  if (/(?:할\s*거|할게|하려고|예정|먹을\s*거|복용할\s*거|측정할\s*거)/.test(normalized)) return false;
-  return /(?:했어|했어요|했다|했습니다|완료|먹었|복용했|나왔|측정했|쟀|뛰었|달렸|걸었|마셨|잤어|잤어요)/.test(normalized);
-}
-
-function buildAutoSaveAssistantMessage(response: HealthAssistantResponse): string {
-  let confirmation = "건강 기록에 저장했습니다.";
-  if (response.intent === "record_exercise" && response.exercise_draft) {
-    const draft = response.exercise_draft;
-    const details = [
-      draft.distance_km ? `${draft.distance_km}km` : "",
-      draft.duration_minutes ? `${draft.duration_minutes}분` : "",
-      draft.weight_kg ? `${draft.weight_kg}kg` : "",
-      draft.reps ? `${draft.reps}회` : "",
-      draft.sets ? `${draft.sets}세트` : "",
-    ].filter(Boolean).join(" · ");
-    confirmation = `${draft.exercise_name}${details ? ` ${details}` : ""} 운동을 기록했습니다.`;
-  } else if (response.intent === "record_blood_pressure" && response.blood_pressure_draft) {
-    confirmation = `혈압 ${response.blood_pressure_draft.systolic}/${response.blood_pressure_draft.diastolic}mmHg를 기록했습니다.`;
-  } else if (response.intent === "record_blood_glucose" && response.blood_glucose_draft) {
-    confirmation = `혈당 ${response.blood_glucose_draft.value}mg/dL를 기록했습니다.`;
-  } else if (response.intent === "record_medication" && response.medication_draft) {
-    confirmation = `${response.medication_draft.medication_name}${response.medication_draft.dosage ? ` ${response.medication_draft.dosage}` : ""} 복용 기록을 저장했습니다.`;
-  } else if (response.intent === "record_pain" && response.pain_draft) {
-    confirmation = `${response.pain_draft.body_area} 통증 강도 ${response.pain_draft.intensity}/10을 기록했습니다.`;
-  }
-
-  if (/(?:저장했습니다|기록했습니다)/.test(response.assistant_message)) return response.assistant_message;
-  const remaining = response.assistant_message
-    .split(/(?<=[.!?])\s+/)
-    .filter((sentence) => !/(?:기록|저장).*(?:확인|할까요|하시겠|저장)/.test(sentence))
-    .join(" ")
-    .trim();
-  return remaining ? `${confirmation}\n\n${remaining}` : confirmation;
-}
-
-function normalizeBloodGlucoseTiming(value?: string | null): "fasting" | "before_meal" | "after_meal" | "bedtime" | "random" {
-  if (value === "fasting" || value === "before_meal" || value === "after_meal" || value === "bedtime") return value;
-  return "random";
-}
-
-// 텍스트/OCR 결과에서 실제 검사일자(YYYY-MM-DD) 추출
-export function parseExamDateFromText(text: string): string | undefined {
-  if (!text) return undefined;
-
-  // 1-A. 최우선: '판정일', '검진일자' 등의 레이블 뒤에 오는 8자리 연속 숫자 (예: 판정일 20191228)
-  const priority8DigitMatch = text.match(
-    /(?:판정일|검진일자|수검일자|검사일자|진료일자|수검일|검진일|검사일|판정일자)\s*[:：]?\s*(19\d{2}|20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/i,
-  );
-  if (priority8DigitMatch) {
-    const [, y, m, d] = priority8DigitMatch;
-    return `${y}-${m}-${d}`;
-  }
-
-  // 1-B. '판정일', '검진일자' 등의 레이블 뒤에 오는 구분자 있는 날짜 (예: 검진일자: 2022-05-30, 판정일: 2019.12.28)
-  const priorityDelimMatch = text.match(
-    /(?:판정일|검진일자|수검일자|검사일자|진료일자|수검일|검진일|검사일|판정일자|일자)\s*[:：]?\s*(19\d{2}|20\d{2})[-.년/\s]+(0?[1-9]|1[0-2])[-.월/\s]+(3[01]|[12]\d|0?[1-9])/i,
-  );
-  if (priorityDelimMatch) {
-    const y = priorityDelimMatch[1];
-    const m = priorityDelimMatch[2].padStart(2, "0");
-    const d = priorityDelimMatch[3].padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-
-  // 2. 일반 날짜 패턴 매칭 (YYYY-MM-DD, YYYY.MM.DD, YYYY년 MM월 DD일, YYYY/MM/DD)
-  const match = text.match(/\b(19\d{2}|20\d{2})[-.년/\s]+(0?[1-9]|1[0-2])[-.월/\s]+(3[01]|[12]\d|0?[1-9])/);
-  if (match) {
-    const y = match[1];
-    const m = match[2].padStart(2, "0");
-    const d = match[3].padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-
-  // 3. 일반 8자리 연속 숫자 (예: 20191228)
-  const general8DigitMatch = text.match(/\b(19\d{2}|20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b/);
-  if (general8DigitMatch) {
-    const [, y, m, d] = general8DigitMatch;
-    return `${y}-${m}-${d}`;
-  }
-
-  return undefined;
-}
-
-function extractReviewItems(tables: RawOcrTable[]): OcrReviewItem[] {
-  return tables.flatMap((table) => table.rows.flatMap((row) => {
-    const cells = row.map((cell) => cell.trim());
-    const testName = cells[0] ?? "";
-    const value = cells[1] ?? "";
-    if (!testName || !value || /검사\s*항목|항목명|결과값|검사명/.test(testName)) return [];
-    return [{ testName, value, unit: cells[2] ?? "", judgment: cells.slice(3).join(" ") }];
-  }));
-}
-
-function reviewItemsToText(items: OcrReviewItem[]): string {
-  return items.map((item) => [item.testName, item.value, item.unit, item.judgment].filter(Boolean).join(" | ")).join("\n");
-}
-
-// 조회 요청된 recordType을 도메인 HealthRecordType 배열로 정규화
-export function normalizeRecordTypes(recordType?: string | null): HealthRecordType[] | undefined {
-  if (!recordType) return undefined;
-  const rt = recordType.trim().toLowerCase();
-  if (rt === "all" || rt === "trend" || rt === "전체" || rt === "모든" || rt === "total") return undefined;
-  if (rt === "health_screening" || rt === "screening" || rt === "검진" || rt === "건강검진" || rt === "검진이력" || rt === "검진기록") {
-    return ["health_screening", "lab_result"];
-  }
-  if (rt === "lab_result" || rt === "검사" || rt === "혈액검사" || rt === "검사결과") {
-    return ["lab_result", "health_screening"];
-  }
-  if (rt === "blood_pressure" || rt === "혈압") return ["blood_pressure"];
-  if (rt === "blood_glucose" || rt === "혈당") return ["blood_glucose"];
-  if (rt === "exercise" || rt === "운동") return ["exercise", "walking"];
-  if (rt === "walking" || rt === "걸음" || rt === "걷기") return ["walking", "exercise"];
-  if (rt === "medication" || rt === "복약" || rt === "약") return ["medication"];
-  if (rt === "pain" || rt === "통증") return ["pain"];
-  return [recordType as HealthRecordType];
-}
-
-// 메타/조회성 키워드가 아닌 실제 본문 검색용 유효 키워드만 필터링
-export function isValidContentKeyword(keyword?: string | null): string | null {
-  if (!keyword) return null;
-  const k = keyword.trim().toLowerCase();
-  const metaKeywords = new Set([
-    "all", "trend", "전체", "모든", "여태", "검진", "건강검진", "이력", "기록", "조회", "내역", "목록", "원본", "보여줘", "서류", "결과", "전체 검진", "검진 이력", "검진 기록"
-  ]);
-  if (metaKeywords.has(k)) return null;
-  if (/^(?:전체|모든)?\s*(?:검진|기록|이력|내역|목록)\s*(?:조회|보기)?$/.test(k)) return null;
-  return keyword.trim();
-}
-
-// 기간(time_range) 기반 건강기록 필터링 헬퍼 함수
-export function filterRecordsByTimeRange(records: HealthRecord[], timeRange?: string | null): HealthRecord[] {
-  if (!timeRange) return records;
-  const tr = timeRange.trim().toLowerCase();
-  if (tr === "all" || tr === "모든" || tr === "전체" || tr === "여태" || tr === "all_time" || tr === "entire") {
-    return records;
-  }
-
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const todayStr = `${currentYear}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-
-  const getLocalDateStr = (isoStr: string) => {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(isoStr)) return isoStr;
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return isoStr.slice(0, 10);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-
-  // 최근 (가장 최근 등록된 일자의 기록)
-  if (tr === "recent" || tr === "최근" || tr === "latest" || tr === "마지막") {
-    if (records.length === 0) return [];
-    const sorted = [...records].sort(
-      (a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime(),
-    );
-    const latestDate = getLocalDateStr(sorted[0].recordedAt);
-    return sorted.filter((r) => getLocalDateStr(r.recordedAt) === latestDate);
-  }
-
-  // 오늘
-  if (tr === "today" || tr === "오늘") {
-    return records.filter((r) => getLocalDateStr(r.recordedAt) === todayStr);
-  }
-
-  // 이번 주
-  if (tr === "this_week" || tr === "이번 주") {
-    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()); // Sunday
-    const endOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + 6); // Saturday
-    const startStr = `${startOfWeek.getFullYear()}-${String(startOfWeek.getMonth() + 1).padStart(2, "0")}-${String(startOfWeek.getDate()).padStart(2, "0")}`;
-    const endStr = `${endOfWeek.getFullYear()}-${String(endOfWeek.getMonth() + 1).padStart(2, "0")}-${String(endOfWeek.getDate()).padStart(2, "0")}`;
-    return records.filter((r) => {
-      const dStr = getLocalDateStr(r.recordedAt);
-      return dStr >= startStr && dStr <= endStr;
-    });
-  }
-
-  // 이번 달
-  if (tr === "this_month" || tr === "이번 달") {
-    const monthStr = `${currentYear}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    return records.filter((r) => getLocalDateStr(r.recordedAt).startsWith(monthStr));
-  }
-
-  // 어제
-  if (tr === "yesterday" || tr === "어제") {
-    const yDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
-    const yesterdayStr = `${yDate.getFullYear()}-${String(yDate.getMonth() + 1).padStart(2, "0")}-${String(yDate.getDate()).padStart(2, "0")}`;
-    return records.filter((r) => getLocalDateStr(r.recordedAt) === yesterdayStr);
-  }
-
-  // 올해
-  if (tr === "this_year" || tr === "올해" || tr === "금년" || tr === String(currentYear)) {
-    return records.filter((r) => getLocalDateStr(r.recordedAt).startsWith(String(currentYear)));
-  }
-
-  // 작년
-  if (tr === "last_year" || tr === "작년" || tr === "지난해" || tr === String(currentYear - 1)) {
-    return records.filter((r) => getLocalDateStr(r.recordedAt).startsWith(String(currentYear - 1)));
-  }
-
-  // 재작년
-  if (tr === "year_before_last" || tr === "재작년" || tr === String(currentYear - 2)) {
-    return records.filter((r) => getLocalDateStr(r.recordedAt).startsWith(String(currentYear - 2)));
-  }
-
-  // 특정 4자리 연도 (예: "2022", "2024", "2022년")
-  const yearMatch = tr.match(/\b(19\d{2}|20\d{2})\b/);
-  if (yearMatch && !tr.includes("-") && !tr.includes("/") && !tr.includes("월")) {
-    return records.filter((r) => getLocalDateStr(r.recordedAt).startsWith(yearMatch[1]));
-  }
-
-  // 특정 YYYY-MM-DD 전체 일자
-  const fullDateParsed = parseExamDateFromText(tr);
-  if (fullDateParsed) {
-    return records.filter((r) => getLocalDateStr(r.recordedAt) === fullDateParsed);
-  }
-
-  // 특정 월/일 (예: "8/28", "5/30", "08-28")
-  const parts = tr.split(/[/.-]/);
-  if (parts.length === 2) {
-    const m = parts[0].padStart(2, "0");
-    const d = parts[1].padStart(2, "0");
-    return records.filter((r) => getLocalDateStr(r.recordedAt).includes(`-${m}-${d}`));
-  }
-
-  return records;
-}
-
-// 기록 일시를 시, 분까지 친절하고 깔끔하게 포맷팅 (예: "8월 30일 21시 00분")
-export function formatTargetDateTime(isoString: string): string {
-  if (!isoString) return "-";
-  try {
-    // 날짜만 있는 YYYY-MM-DD 형식인 경우
-    if (/^\d{4}-\d{2}-\d{2}$/.test(isoString)) {
-      const [, m, d] = isoString.split("-");
-      return `${parseInt(m, 10)}월 ${parseInt(d, 10)}일`;
-    }
-
-    const d = new Date(isoString);
-    if (isNaN(d.getTime())) return isoString;
-
-    const month = d.getMonth() + 1;
-    const date = d.getDate();
-    const hours = d.getHours();
-    const minutes = d.getMinutes();
-    const minStr = String(minutes).padStart(2, "0");
-
-    return `${month}월 ${date}일 ${hours}시 ${minStr}분`;
-  } catch {
-    return isoString;
-  }
-}
-
-// 사용자 질의 텍스트에서 포커싱할 지표 키 감지 (예: "혈당" -> "glucose", "혈압" -> "bp")
-export function detectMetricKeyFromQuery(queryText: string): string {
-  if (!queryText) return "bp";
-  const t = queryText.toLowerCase();
-  if (t.includes("혈당") || t.includes("당뇨") || t.includes("glucose")) return "glucose";
-  if (t.includes("간") || t.includes("ast") || t.includes("alt") || t.includes("liver")) return "liver";
-  if (t.includes("콜레스테롤") || t.includes("지질") || t.includes("chol")) return "chol";
-  if (t.includes("신장") || t.includes("크레아티닌") || t.includes("gfr") || t.includes("creatinine")) return "creatinine";
-  if (t.includes("빈혈") || t.includes("혈색소") || t.includes("헤모글로빈") || t.includes("hb")) return "hb";
-  if (t.includes("체중") || t.includes("몸무게") || t.includes("비만") || t.includes("bmi") || t.includes("weight")) return "weight";
-  return "bp";
-}
-
-// -------------------------------------------------------------
-// 건강기록(검진/측정)에서 시계열 수치 추출 헬퍼 함수
-// -------------------------------------------------------------
-export function extractMetricsFromRecords(records: HealthRecord[]): MetricSeries[] {
-  // 날짜 오름차순 정렬
-  const sorted = [...records].sort(
-    (a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime(),
-  );
-
-  const bpPoints: MetricDataPoint[] = [];
-  const glucosePoints: MetricDataPoint[] = [];
-  const astAltPoints: MetricDataPoint[] = [];
-  const cholPoints: MetricDataPoint[] = [];
-  const creatininePoints: MetricDataPoint[] = [];
-  const hbPoints: MetricDataPoint[] = [];
-  const weightPoints: MetricDataPoint[] = [];
-
-  for (const rec of sorted) {
-    const p = rec.payload as Record<string, unknown>;
-    const date = rec.recordedAt.slice(0, 10);
-    const fullText = `${p.note ?? ""} ${p.summary ?? ""} ${p.itemsSummary ?? ""} ${p.screeningName ?? ""} ${JSON.stringify(p)}`;
-
-    // 1. 혈압
-    if (rec.recordType === "blood_pressure" || p.systolicMmHg || p.systolic) {
-      const sys = Number(p.systolicMmHg ?? p.systolic);
-      const dia = Number(p.diastolicMmHg ?? p.diastolic);
-      if (sys > 0) {
-        bpPoints.push({ date, value: sys, secondaryValue: dia > 0 ? dia : undefined });
-      }
-    } else {
-      const bpMatch = fullText.match(/(?:혈압|고혈압)[^0-9]*(\d{2,3})\s*[/|~]\s*(\d{2,3})/);
-      if (bpMatch) {
-        bpPoints.push({ date, value: Number(bpMatch[1]), secondaryValue: Number(bpMatch[2]) });
-      }
-    }
-
-    // 2. 혈당
-    if (rec.recordType === "blood_glucose" || p.valueMgDl || p.glucose) {
-      const g = Number(p.valueMgDl ?? p.glucose ?? p.value);
-      if (g > 0) glucosePoints.push({ date, value: g });
-    } else {
-      const gMatch = fullText.match(/(?:공복혈당|당검사|식전|혈당)[^0-9]*(\d{2,3})/i);
-      if (gMatch && Number(gMatch[1]) >= 40 && Number(gMatch[1]) <= 400) {
-        glucosePoints.push({ date, value: Number(gMatch[1]) });
-      }
-    }
-
-    // 3. 간기능 (AST / ALT)
-    const astMatch = fullText.match(/AST(?:[^\d]*)(\d{1,3})/i);
-    const altMatch = fullText.match(/ALT(?:[^\d]*)(\d{1,3})/i);
-    if (astMatch || altMatch) {
-      const ast = astMatch ? Number(astMatch[1]) : 0;
-      const alt = altMatch ? Number(altMatch[1]) : 0;
-      if (ast > 0 || alt > 0) {
-        astAltPoints.push({ date, value: ast, secondaryValue: alt > 0 ? alt : undefined });
-      }
-    }
-
-    // 4. 총콜레스테롤
-    const cholMatch = fullText.match(/(?:총콜레스테롤|콜레스테롤)(?:[^\d]*)(\d{2,3})/i);
-    if (cholMatch && Number(cholMatch[1]) >= 80 && Number(cholMatch[1]) <= 500) {
-      cholPoints.push({ date, value: Number(cholMatch[1]) });
-    }
-
-    // 5. 신장기능 (e-GFR / 크레아티닌)
-    const egfrMatch = fullText.match(/(?:e-GFR|신사구체여과율)(?:[^\d]*)(\d{2,3})/i);
-    const crMatch = fullText.match(/(?:혈청크레아티닌|크레아티닌)(?:[^\d]*)(\d(?:\.\d+)?)/i);
-    if (egfrMatch || crMatch) {
-      const val = egfrMatch ? Number(egfrMatch[1]) : (crMatch ? Number(crMatch[1]) : 0);
-      if (val > 0) {
-        creatininePoints.push({ date, value: val });
-      }
-    }
-
-    // 6. 혈색소 (Hb)
-    const hbMatch = fullText.match(/(?:혈색소|헤모글로빈)(?:[^\d]*)(\d{1,2}(?:\.\d+)?)/i);
-    if (hbMatch && Number(hbMatch[1]) >= 5 && Number(hbMatch[1]) <= 25) {
-      hbPoints.push({ date, value: Number(hbMatch[1]) });
-    }
-
-    // 7. 체중
-    if (rec.recordType === "body_measurement" && p.weightKg) {
-      weightPoints.push({ date, value: Number(p.weightKg) });
-    }
-  }
-
-  const series: MetricSeries[] = [];
-
-  if (bpPoints.length > 0) {
-    series.push({
-      key: "bp",
-      name: "혈압 (수축기/이완기)",
-      unit: "mmHg",
-      color: "#10b981",
-      secondaryColor: "#3b82f6",
-      secondaryName: "이완기",
-      normalRange: { max: 120, label: "정상 수축기: 120 이하" },
-      points: bpPoints,
-    });
-  }
-
-  if (glucosePoints.length > 0) {
-    series.push({
-      key: "glucose",
-      name: "공복 혈당",
-      unit: "mg/dL",
-      color: "#8b5cf6",
-      normalRange: { max: 100, label: "정상 공복: 100 미만" },
-      points: glucosePoints,
-    });
-  }
-
-  if (astAltPoints.length > 0) {
-    series.push({
-      key: "liver",
-      name: "간수치 (AST / ALT)",
-      unit: "U/L",
-      color: "#f59e0b",
-      secondaryColor: "#ef4444",
-      secondaryName: "ALT",
-      normalRange: { max: 40, label: "정상: 40 이하" },
-      points: astAltPoints,
-    });
-  }
-
-  if (cholPoints.length > 0) {
-    series.push({
-      key: "chol",
-      name: "총콜레스테롤",
-      unit: "mg/dL",
-      color: "#ec4899",
-      normalRange: { max: 200, label: "정상: 200 미만" },
-      points: cholPoints,
-    });
-  }
-
-  if (creatininePoints.length > 0) {
-    series.push({
-      key: "kidney",
-      name: "신장기능 (e-GFR)",
-      unit: "mL/min",
-      color: "#06b6d4",
-      normalRange: { min: 60, label: "정상: 60 이상" },
-      points: creatininePoints,
-    });
-  }
-
-  if (hbPoints.length > 0) {
-    series.push({
-      key: "hb",
-      name: "혈색소 (헤모글로빈)",
-      unit: "g/dL",
-      color: "#e11d48",
-      normalRange: { min: 13, max: 17, label: "정상(남): 13~17" },
-      points: hbPoints,
-    });
-  }
-
-  if (weightPoints.length > 0) {
-    series.push({
-      key: "weight",
-      name: "체중",
-      unit: "kg",
-      color: "#14b8a6",
-      points: weightPoints,
-    });
-  }
-
-  return series;
-}
 
 export function HealthAssistantDrawer({
   profile,
@@ -590,7 +69,6 @@ export function HealthAssistantDrawer({
   isOpen,
   onClose,
   onRecordSaved,
-  onChallengeSaved,
   onNavigateToRecords,
 }: HealthAssistantDrawerProps) {
   const [messages, setMessages] = useState<ExtendedChatMessage[]>([]);
@@ -656,28 +134,41 @@ export function HealthAssistantDrawer({
     }
   }
 
-  // 프로필이 바뀔 때 기본 인사말 초기화
-  useEffect(() => {
-    if (profile) {
-      setMessages([
-        {
-          id: "welcome",
-          role: "assistant",
-          content: `안녕하세요! ${profile.displayName}님의 건강 비서 '봄이'입니다.\n\n평소 운동, 혈압, 복약 정보를 편하게 말씀해 주시거나, 하단 + 버튼으로 검진표/서류 사진을 올리시면 기록과 조회를 도와드릴게요!`,
-        },
-      ]);
-      setQueriedRecords(null);
-      setQueriedRecordsTitle(undefined);
-      setSelectedImage(null);
-      setImagePreview(null);
+  // 인사말은 초기 상태에서 만든다(위 `useState` 참조). effect 로 넣으면 첫 렌더 뒤
+  // 한 번 더 그리게 되고 그 사이 한 프레임 동안 빈 대화가 보인다.
+
+  const scrollToBottom = () => {
+    if (typeof messagesEndRef.current?.scrollIntoView === "function") {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [profile?.id, profile?.displayName]);
+  };
 
   useEffect(() => {
     if (isOpen) {
       scrollToBottom();
     }
   }, [messages, loading, isOpen]);
+
+  // 구성원이 바뀌면 대화를 처음으로 되돌린다. 안 되돌리면 아버지 화면에 내 통증
+  // 이야기가 그대로 남는다 — 같은 서랍을 두 사람이 쓰는 꼴이다. 첫 인사말은 이
+  // 서랍이 무엇을 받아 주는지 알려 주는 유일한 안내이기도 하다.
+  useEffect(() => {
+    if (!profile) return;
+    setMessages([
+      {
+        id: "welcome",
+        role: "assistant",
+        content: `안녕하세요! ${profile.displayName}님의 건강 비서 '봄이'입니다.
+
+평소 운동, 혈압, 복약 정보를 편하게 말씀해 주시거나, 하단 + 버튼으로 검진표/서류 사진을 올리시면 기록과 조회를 도와드릴게요!`,
+      },
+    ]);
+    setQueriedRecords(null);
+    setQueriedRecordsTitle(undefined);
+    setSelectedImage(null);
+    setImagePreview(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id, profile?.displayName]);
 
   // 이미지 미리보기 메모리 정리
   useEffect(() => {
@@ -687,11 +178,6 @@ export function HealthAssistantDrawer({
     };
   }, [imagePreview, sourcePreviewModal]);
 
-  const scrollToBottom = () => {
-    if (typeof messagesEndRef.current?.scrollIntoView === "function") {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  };
 
   if (!isOpen || !profile) return null;
 
@@ -721,8 +207,8 @@ export function HealthAssistantDrawer({
     setOcrModalError(undefined);
 
     try {
-      const ocrAdapter = new DevServerOcrAdapter();
-      const ocrResult = await ocrAdapter.recognize(file);
+      const ocrAdapter = new GeminiOcrAdapter();
+      const ocrResult = await ocrAdapter.recognize(file, file.name);
       const items = extractReviewItems(ocrResult.tables);
       const structuredText = reviewItemsToText(items);
       const extractedText = ocrResult.text.trim() || structuredText;
@@ -798,7 +284,7 @@ export function HealthAssistantDrawer({
 
       // 대화창에 사용자 메시지와 어시스턴트 완료 메시지 추가
       const userMsg: ExtendedChatMessage = {
-        id: `user-${Date.now()}`,
+        id: messageId("user"),
         role: "user",
         content: `검사 서류(${ocrImageFile.name})를 업로드하여 기록했습니다.`,
         imageBlobUrl: ocrImagePreviewUrl ?? undefined,
@@ -806,7 +292,7 @@ export function HealthAssistantDrawer({
       };
 
       const assistantMsg: ExtendedChatMessage = {
-        id: `assistant-${Date.now()}`,
+        id: messageId("assistant"),
         role: "assistant",
         content: `${draft.recorded_at}에 실시된 ${draft.screening_name || "건강검진"} 결과가 나의 건강기록에 안전하게 저장되었습니다. 원본 서류는 언제든 확인하실 수 있습니다.`,
         attachedDocuments: primaryDocumentId ? [{
@@ -845,8 +331,8 @@ export function HealthAssistantDrawer({
       setLoading(true);
       setError(undefined);
       try {
-        const ocrAdapter = new DevServerOcrAdapter();
-        const ocrResult = await ocrAdapter.recognize(currentImage);
+        const ocrAdapter = new GeminiOcrAdapter();
+        const ocrResult = await ocrAdapter.recognize(currentImage, currentImage.name);
         ocrAttachedText = ocrResult.text;
         extractedExamDate = parseExamDateFromText(ocrResult.text);
 
@@ -862,7 +348,7 @@ export function HealthAssistantDrawer({
     }
 
     const userMsg: ExtendedChatMessage = {
-      id: `user-${Date.now()}`,
+      id: messageId("user"),
       role: "user",
       content: userContent,
       imageBlobUrl: currentImagePreview ?? undefined,
@@ -898,9 +384,20 @@ export function HealthAssistantDrawer({
         return { role: m.role, content: m.content };
       });
 
-      // 대화 API 호출
-      const res = await sendHealthAssistantMessage(
+      // 대화 API 를 **스트리밍으로** 부른다.
+      //
+      // 빈 답변 거품을 먼저 세우고 글자가 오는 대로 채운다. 예전에는 응답이 다 올
+      // 때까지(느리면 15초) 점 세 개만 돌았다 — 기다리는 동안 아무 일도 일어나지
+      // 않는 것처럼 보인다. 기록 초안·빠른답장은 완성본이 온 뒤에 한 번에 붙는다.
+      const streamingId = messageId("assistant");
+      let streamed = "";
+      setMessages((prev) => [...prev, { id: streamingId, role: "assistant", content: "" }]);
+      const res = await streamHealthAssistantMessage(
         promptMessages,
+        (delta) => {
+          streamed += delta;
+          setMessages((prev) => prev.map((m) => (m.id === streamingId ? { ...m, content: streamed } : m)));
+        },
         {
           profile_name: profile.displayName,
           relationship: profile.relationship,
@@ -908,6 +405,9 @@ export function HealthAssistantDrawer({
           recent_records_summary: recentSummary,
         },
       );
+      // 흘리며 세운 거품은 지운다. 아래에서 완성본으로 다시 세운다 — 초안과 빠른답장이
+      // 붙어야 저장 버튼이 생기고, 그 계약을 두 곳에서 만들면 갈라진다.
+      setMessages((prev) => prev.filter((m) => m.id !== streamingId));
 
       // OCR에서 추출된 날짜가 있고 AI가 날짜를 채우지 않았거나 오늘로 채운 경우 보정
       if (res.lab_result_draft && extractedExamDate && (!res.lab_result_draft.recorded_at || res.lab_result_draft.recorded_at === new Date().toISOString().slice(0, 10))) {
@@ -964,7 +464,7 @@ export function HealthAssistantDrawer({
         );
       }
 
-      const assistantMsgId = `assistant-${Date.now()}`;
+      const assistantMsgId = messageId("assistant");
       const shouldAutoSave = shouldAutoSaveHealthRecord(res, textToSend);
       if (shouldAutoSave) {
         res.auto_save = true;
@@ -994,35 +494,17 @@ export function HealthAssistantDrawer({
         }
       }
 
-      // 챌린지 일정 조정 또는 완료 인텐트 자동 처리
-      if (runtime && profile) {
-        if (res.intent === "adjust_challenge" && res.challenge_draft) {
-          const activePlan = await runtime.challenges.getActivePlan(profile.id);
-          if (activePlan.ok && activePlan.value) {
-            if (res.challenge_draft.set_rest_day) {
-              await runtime.challenges.setRestDay(activePlan.value.id, profile.id);
-            } else if (res.challenge_draft.adjusted_minutes) {
-              const todaySummary = await runtime.challenges.getTodaySummary(profile.id);
-              if (todaySummary.ok && todaySummary.value.tasks.length > 0) {
-                const taskId = todaySummary.value.tasks[0].task.id;
-                await runtime.challenges.adjustTaskMinutes(
-                  activePlan.value.id,
-                  profile.id,
-                  taskId,
-                  res.challenge_draft.adjusted_minutes,
-                );
-              }
-            }
-            if (onChallengeSaved) await onChallengeSaved();
-          }
-        } else if (res.intent === "complete_challenge" && res.challenge_draft) {
-          const activePlan = await runtime.challenges.getActivePlan(profile.id);
-          if (activePlan.ok && activePlan.value) {
-            await runtime.challenges.completeAllToday(activePlan.value.id, profile.id);
-            if (onChallengeSaved) await onChallengeSaved();
-          }
-        }
-      }
+      // 챌린지 인텐트는 **여기서 실행하지 않는다.**
+      //
+      // PR 원본은 주차별 계획 모델(`runtime.challenges` — 활성 계획·과제·휴식일)을
+      // 전제로 `adjust_challenge`·`complete_challenge` 를 자동 처리했다. project 의
+      // 챌린지는 그 모델이 아니다 — 서버가 도는 **일일 체크**(`/challenges/today` ·
+      // `/challenges/checks` · `/challenges/garden`)이고 "계획"·"과제 분"·"휴식일"
+      // 이라는 개념 자체가 없다.
+      //
+      // 없는 개념에 억지로 매핑하면 대화로 바꾼 것과 챌린지 화면이 보여 주는 것이
+      // 어긋난다. 모델을 맞추기 전까지 비서는 말로 안내하고, 실제 변경은 챌린지
+      // 화면에서 한다.
 
       // 조회 질의이거나 질문인 경우 IndexedDB에서 데이터 조회 수행
       const isRegexMatch = /(?:원본|서류|사진|스캔|문서|이미지|보여줘|그래프|변화|추이|트렌드|수치)/.test(textToSend);
@@ -1464,60 +946,20 @@ export function HealthAssistantDrawer({
     }
   }
 
-  // 챌린지 초안 로컬 암호화 저장
-  async function saveChallenge(draft: ChallengeDraft, msgId: string) {
-    if (!runtime || !profile) return;
-    setLoading(true);
-    try {
-      const now = new Date();
-      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-
-      const tasks = draft.tasks.map((t, idx) => ({
-        id: `task-${Date.now()}-${idx}-${crypto.randomUUID().slice(0, 4)}`,
-        week: t.week || 1,
-        dayOfWeek: t.day_of_week,
-        type: t.type,
-        title: t.title,
-        targetMinutes: t.target_minutes ?? undefined,
-        targetDistanceKm: t.target_distance_km ?? undefined,
-        note: t.note ?? undefined,
-      }));
-
-      const planRes = await runtime.challenges.createPlan({
-        householdId: PRIMARY_HOUSEHOLD_ID,
-        profileId: profile.id,
-        title: draft.title || `${profile.displayName}님의 ${draft.weeks ?? 4}주 맞춤 챌린지`,
-        goal: draft.goal || "매일 꾸준한 생활습관 실천하기",
-        weeks: draft.weeks ?? 4,
-        startDate: (draft.start_date || todayStr) as ISODate,
-        tasks,
-        createdBy: "health_assistant",
-      });
-
-      if (!planRes.ok) {
-        throw new Error(planRes.error.message);
-      }
-
-      setMessages((prev) =>
-        prev.map((m) => (m.id === msgId ? { ...m, saved: true } : m)),
-      );
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: `'${planRes.value.title}'이(가) 시작되었습니다!\n홈 화면의 '오늘의 챌린지' 카드에서 오늘의 실천 과제를 확인하고 원클릭으로 완료를 기록해 보세요.`,
-        },
-      ]);
-
-      if (onChallengeSaved) await onChallengeSaved();
-      if (onRecordSaved) await onRecordSaved();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "챌린지 저장에 실패했습니다.");
-    } finally {
-      setLoading(false);
-    }
+  /**
+   * 챌린지 초안 저장 — **project 에서는 아직 막혀 있다.**
+   *
+   * PR 원본은 주차별 계획(`runtime.challenges.createPlan` — 활성 계획·주차별 과제·
+   * 휴식일)을 로컬 암호화 보관함에 저장했다. project 의 챌린지는 그 모델이 아니다 —
+   * 서버가 도는 **일일 체크**(`/challenges/today` · `/challenges/checks` ·
+   * `/challenges/garden`)이고 "계획"·"과제 분"·"휴식일" 이라는 개념이 없다.
+   *
+   * 없는 개념에 억지로 매핑하면 대화로 만든 챌린지와 챌린지 화면이 서로 다른 것을
+   * 보여 준다. 그래서 만들지 않고 어디서 만들면 되는지를 말한다. 모델을 맞추는 것이
+   * 이 기능의 남은 일이다.
+   */
+  async function saveChallenge() {
+    setError("챌린지는 챌린지 화면에서 만들어 주세요. 대화로 만드는 것은 아직 준비 중이에요.");
   }
 
   const quickPrompts = [
@@ -1671,7 +1113,7 @@ export function HealthAssistantDrawer({
                   <ChallengeConfirmationCard
                     draft={msg.responseDraft.challenge_draft}
                     saved={Boolean(msg.saved)}
-                    onSave={(updated) => saveChallenge(updated, msg.id)}
+                    onSave={() => saveChallenge()}
                   />
                 )}
 
@@ -1824,6 +1266,12 @@ export function HealthAssistantDrawer({
       {/* 건강 서류 상세 검토 및 건강기록 확정 저장 모달 */}
       {ocrModalOpen && ocrImagePreviewUrl && (
         <OcrReviewModal
+          // 인식 결과가 바뀌면 새로 마운트한다. 모달 안의 편집 상태를 effect 로
+          // 되맞추는 대신 이 한 줄로 끝낸다.
+          // 초안이 늦게 도착하면 **새로 마운트**한다. 예전에는 effect 로 상태를
+          // 되맞췄는데 그게 렌더 연쇄를 만들었다. 초안이 오기 전에는 채울 값이
+          // 기본값뿐이라 잃을 편집도 없다.
+          key={`${ocrImagePreviewUrl}:${ocrReviewDraft ? "draft" : "empty"}`}
           profileName={profile.displayName}
           imageUrl={ocrImagePreviewUrl}
           fileName={ocrImageFile?.name ?? "검진 서류"}
@@ -1871,22 +1319,10 @@ function OcrReviewModal({
   const [institution, setInstitution] = useState(draft?.institution ?? "");
   const [itemsSummary, setItemsSummary] = useState(draft?.items_summary ?? "");
   const [summary, setSummary] = useState(draft?.summary ?? "");
+  // 사용자가 표의 값을 고칠 수 있어서 상태로 둔다. **초기값으로만 받고 effect 로
+  // 다시 맞추지 않는다** — 그 동기화 effect 가 렌더 연쇄를 만들었다. 대신 호출부가
+  // 인식 결과마다 `key` 를 바꿔 새로 마운트시키므로 초기값이 항상 최신이다.
   const [reviewItems, setReviewItems] = useState<OcrReviewItem[]>(items);
-
-  // draft가 비동기로 로드되었을 때 상태 동기화
-  useEffect(() => {
-    if (draft) {
-      if (draft.recorded_at) setRecordedAt(draft.recorded_at);
-      if (draft.screening_name) setScreeningName(draft.screening_name);
-      if (draft.institution) setInstitution(draft.institution);
-      if (draft.items_summary) setItemsSummary(draft.items_summary);
-      if (draft.summary) setSummary(draft.summary);
-    }
-  }, [draft]);
-
-  useEffect(() => {
-    setReviewItems(items);
-  }, [items]);
 
   return (
     <div className="modal-backdrop ocr-split-modal-backdrop" role="presentation" onMouseDown={onClose}>

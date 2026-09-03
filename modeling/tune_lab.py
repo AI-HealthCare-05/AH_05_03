@@ -17,8 +17,20 @@ AUROC 최대가 아니다. `metrics.py` 의 보정 게이트를 먼저 통과해
 것들 사이에서 AUPRC 리프트로 고른다 — 서빙 선택 규칙과 같은 기준이어야 튜닝
 결과를 그대로 배포할 수 있다.
 
+**어디서 고르나 — 이게 더 중요하다.**
+`--select holdout` 은 격자 24 개를 홀드아웃에서 전부 채점하고 최고를 고른다.
+진단용으로는 쓸모가 있지만 **그렇게 고른 숫자를 성능으로 보고하면 안 된다** —
+시험지를 보고 답을 고른 것이라 배포 성능보다 높게 나온다. 24 번 고르면 우연히
+좋아 보이는 설정이 하나쯤 나오기 마련이다.
+
+`--select validation`(기본값) 은 학습 주기의 **마지막 주기를 검증으로 떼어** 거기서
+고르고, 홀드아웃은 고른 뒤 한 번만 본다. 무작위 CV 가 아니라 시간 순인 이유는
+배포가 그렇게 일어나기 때문이다 — 과거 주기로 배워서 다음 주기를 맞힌다.
+현행 설정도 같은 방식으로 한 번 재서 나란히 놓고, 차이는 짝지은 부트스트랩으로 본다.
+
     ../.venv/Scripts/python.exe tune_lab.py
-    ../.venv/Scripts/python.exe tune_lab.py --target dm ckd --out artifacts/tune_lab.json
+    ../.venv/Scripts/python.exe tune_lab.py --target dm anemia --tiers lab basic
+    ../.venv/Scripts/python.exe tune_lab.py --select holdout   # 진단용 전수 스캔
 """
 
 from __future__ import annotations
@@ -34,14 +46,19 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "data"))
 
+from compare_tiers import paired_bootstrap  # noqa: E402
 from metrics import evaluate, selection_score  # noqa: E402
-from sklearn.compose import ColumnTransformer  # noqa: E402
-from sklearn.impute import SimpleImputer  # noqa: E402
-from sklearn.pipeline import Pipeline  # noqa: E402
-from sklearn.preprocessing import OneHotEncoder, StandardScaler  # noqa: E402
-from splits import SEED, make_split  # noqa: E402
+from splits import make_split  # noqa: E402
 from targets import CATEGORICAL, DERIVED, TARGETS  # noqa: E402
-from train_multi import DATA, apply_calibrator, build_frame, fit_calibrator, lab_present, monotone_vector  # noqa: E402
+from train_multi import (  # noqa: E402
+    DATA,
+    apply_calibrator,
+    build_frame,
+    fit_calibrator,
+    lab_present,
+    make_pipeline,
+    monotone_vector,
+)  # noqa: E402
 
 ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
 
@@ -62,43 +79,124 @@ DEFAULT_TARGETS = ["dm", "htn", "dlp", "ckd", "anemia"]
 
 
 def build_pipeline(numeric, categorical, params, monotone):
-    from xgboost import XGBClassifier
+    """`train_multi.make_pipeline` 에 위임한다.
 
-    return Pipeline(
-        [
-            (
-                "preprocess",
-                ColumnTransformer(
-                    [
-                        (
-                            "numeric",
-                            Pipeline(
-                                [
-                                    ("impute", SimpleImputer(strategy="median", add_indicator=False)),
-                                    ("scale", StandardScaler()),
-                                ]
-                            ),
-                            numeric,
-                        ),
-                        ("categorical", OneHotEncoder(handle_unknown="ignore", drop="first"), categorical),
-                    ]
-                ),
-            ),
-            (
-                "model",
-                XGBClassifier(
-                    subsample=0.8,
-                    colsample_bytree=0.8,
-                    reg_lambda=1.0,
-                    eval_metric="logloss",
-                    random_state=SEED,
-                    n_jobs=4,
-                    **params,
-                    **({"monotone_constraints": monotone} if monotone else {}),
-                ),
-            ),
-        ]
+    예전에는 전처리 블록(중앙값 대치 → 표준화 → 원핫)을 여기 복사해 갖고 있었다.
+    복사본은 학습 경로가 바뀌어도 안 따라가므로, 여기서 고른 하이퍼파라미터가 실제
+    배포되는 파이프라인의 것이라는 보장이 사라진다. 한 곳에서만 만든다.
+    """
+    return make_pipeline(numeric, categorical, "xgboost", monotone, params=params)
+
+
+def prepare(data: pd.DataFrame, key: str, tier: str):
+    """(frame, y, split, numeric, categorical, monotone). 두 선택 경로가 같이 쓴다."""
+    target = TARGETS[key]
+    columns = target.features(tier)
+    basic = set(target.features("basic"))
+    lab_columns = [c for c in target.features("lab") if c not in basic and c not in DERIVED]
+
+    label = data[target.label].astype("boolean")
+    usable = label.notna()
+    if tier == "lab":
+        usable = usable & lab_present(data, lab_columns)
+    subset = data.loc[usable]
+    frame = build_frame(subset, columns)
+    y = label[usable].astype(int)
+
+    cycle = subset["cycle"].astype(str)
+    cycle.index = frame.index
+    split = make_split(cycle, target.holdout_cycle)
+
+    numeric = [c for c in columns if c not in CATEGORICAL]
+    categorical = [c for c in columns if c in CATEGORICAL]
+    monotone = monotone_vector(frame, numeric, categorical, key)
+    return frame, y, split, cycle, numeric, categorical, monotone, columns
+
+
+def grid_points() -> list[dict[str, Any]]:
+    return [
+        {"max_depth": d, "min_child_weight": m, "n_estimators": n, "learning_rate": r}
+        for d, m, n, r in product(
+            GRID["max_depth"], GRID["min_child_weight"], GRID["n_estimators"], GRID["learning_rate"]
+        )
+    ]
+
+
+def score_config(frame, y, train_index, score_index, numeric, categorical, monotone, params):
+    """한 설정을 fit 하고 채점한다. 보정은 걸지 않는다 — 선택은 순위·리프트로 한다."""
+    pipeline = build_pipeline(numeric, categorical, params, monotone).fit(frame.loc[train_index], y.loc[train_index])
+    probability = pipeline.predict_proba(frame.loc[score_index])[:, 1]
+    return probability, evaluate(y.loc[score_index].to_numpy(), probability)
+
+
+def pick(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """서빙 선택 규칙과 같다 — 보정 게이트 먼저, 통과한 것들 사이에서 AUPRC 리프트."""
+    passed = [r for r in rows if r["gate"]["calibration_ok"]] or rows
+    return max(passed, key=lambda r: (r["auprc_lift"], r["auroc"]))
+
+
+def run_validation(data: pd.DataFrame, key: str, tier: str, rounds: int) -> dict[str, Any] | None:
+    """검증 주기에서 고르고 홀드아웃은 한 번만 본다."""
+    target = TARGETS[key]
+    frame, y, split, cycle, numeric, categorical, monotone, columns = prepare(data, key, tier)
+    train_cycles = sorted(split.train_cycles)
+    if len(train_cycles) < 3:
+        return None
+    validation_cycle = train_cycles[-1]
+    inner_train = frame.index[cycle.isin(train_cycles[:-1]).to_numpy()]
+    inner_valid = frame.index[cycle.eq(validation_cycle).to_numpy()]
+    if int(y.loc[inner_valid].sum()) < 30 or int(y.loc[inner_train].sum()) < 100:
+        return None
+
+    picked_rows = []
+    for params in grid_points():
+        _, scored = score_config(frame, y, inner_train, inner_valid, numeric, categorical, monotone, params)
+        if scored is None:
+            continue
+        picked_rows.append({**params, **scored, "gate": selection_score(scored)})
+    if not picked_rows:
+        return None
+    chosen = pick(picked_rows)
+    chosen_params = {k: chosen[k] for k in ("max_depth", "min_child_weight", "n_estimators", "learning_rate")}
+
+    # 여기서부터가 홀드아웃이다. 두 설정을 한 번씩만 본다.
+    y_holdout = y.loc[split.holdout_index].to_numpy()
+    p_chosen, s_chosen = score_config(
+        frame, y, split.train_index, split.holdout_index, numeric, categorical, monotone, chosen_params
     )
+    p_current, s_current = score_config(
+        frame, y, split.train_index, split.holdout_index, numeric, categorical, monotone, CURRENT
+    )
+    comparison = paired_bootstrap(y_holdout, p_current, p_chosen, rounds)
+
+    entry = {
+        "target": key,
+        "name": target.name,
+        "tier": tier,
+        "select": "validation",
+        "validation_cycle": validation_cycle,
+        "holdout_cycle": target.holdout_cycle,
+        "n_features": len(columns),
+        "grid": len(picked_rows),
+        "chosen": chosen_params,
+        "chosen_validation_auroc": round(chosen["auroc"], 4),
+        "current": CURRENT,
+        "holdout_auroc_current": round(s_current["auroc"], 4),
+        "holdout_auroc_chosen": round(s_chosen["auroc"], 4),
+        "holdout_ece_current": round(s_current["ece"], 4),
+        "holdout_ece_chosen": round(s_chosen["ece"], 4),
+        "gate_chosen": selection_score(s_chosen),
+        **{f"delta_{k}": v for k, v in comparison.items()},
+    }
+    same = chosen_params == CURRENT
+    print(
+        f"  {target.name:<10}{tier:<7}검증 {validation_cycle}  선택 d{chosen_params['max_depth']}"
+        f"/mcw{chosen_params['min_child_weight']}/n{chosen_params['n_estimators']}"
+        + ("  (현행과 같음)" if same else "")
+        + f"   홀드아웃 {s_current['auroc']:.4f} -> {s_chosen['auroc']:.4f} "
+        f"({comparison['delta_auroc']:+.4f}, {comparison['verdict']})"
+    )
+    return entry
 
 
 def run(data: pd.DataFrame, key: str, calibrate: bool) -> list[dict[str, Any]]:
@@ -119,7 +217,7 @@ def run(data: pd.DataFrame, key: str, calibrate: bool) -> list[dict[str, Any]]:
 
     numeric = [c for c in columns if c not in CATEGORICAL]
     categorical = [c for c in columns if c in CATEGORICAL]
-    monotone = monotone_vector(frame, numeric, categorical)
+    monotone = monotone_vector(frame, numeric, categorical, key)
     y_holdout = y.loc[split.holdout_index].to_numpy()
 
     print("=" * 104)
@@ -188,20 +286,34 @@ def main() -> int:
     parser.add_argument("--data", type=Path, default=DATA)
     parser.add_argument("--target", nargs="*", default=DEFAULT_TARGETS)
     parser.add_argument("--calibrate", action="store_true", help="격자마다 보정까지 (5배 느리다)")
-    parser.add_argument("--out", type=Path, default=ARTIFACTS / "tune_lab.json")
+    parser.add_argument("--select", default="validation", choices=("validation", "holdout"))
+    parser.add_argument("--tiers", nargs="*", default=["lab"])
+    parser.add_argument("--rounds", type=int, default=1000)
+    parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
 
     data = pd.read_csv(args.data, low_memory=False)
     combos = len(GRID["max_depth"]) * len(GRID["min_child_weight"]) * len(GRID["n_estimators"])
-    print(f"data {args.data.name}  격자 {combos}개 × 타깃 {len(args.target)}개\n")
+    default_out = ARTIFACTS / ("tune_lab.json" if args.select == "holdout" else "tune_validation.json")
+    out = args.out or default_out
+    print(f"data {args.data.name}  격자 {combos}개  선택 {args.select}  타깃 {len(args.target)}개\n")
 
     rows: list[dict[str, Any]] = []
-    for key in args.target:
-        rows += run(data, key, args.calibrate)
+    if args.select == "validation":
+        for key in args.target:
+            for tier in args.tiers:
+                if tier not in TARGETS[key].tiers:
+                    continue
+                entry = run_validation(data, key, tier, args.rounds)
+                if entry is not None:
+                    rows.append(entry)
+    else:
+        for key in args.target:
+            rows += run(data, key, args.calibrate)
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"wrote {args.out}")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"wrote {out}")
     return 0
 
 

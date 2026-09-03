@@ -1,5 +1,10 @@
 .DS_Store
+# `.env` 만 적으면 정확히 그 이름 하나만 걸린다. `.env.local`·`.env.production`
+# 처럼 뒤에 뭐가 붙으면 그대로 추적 대상이었다. 아래 `.*.env` 도 `.dev.env` 같은
+# **앞에** 점이 붙은 꼴만 잡아서 사이가 비어 있었다.
+# `envs/example.*.env` 는 basename 이 `.env` 로 시작하지 않으므로 계속 추적된다.
 .env
+.env.*
 __pycache__/
 work/
 *.py[oc]

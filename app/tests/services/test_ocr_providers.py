@@ -52,14 +52,58 @@ def test_unknown_provider_is_refused() -> None:
         ocr_providers.build("anthropic:claude")
 
 
+def test_openai_now_takes_pdf_because_nothing_else_will() -> None:
+    """**전제가 뒤집혔다.** 예전에는 PDF 를 Gemini 에게 넘겼다.
+
+    2026-08-28 OpenAI 단독으로 전환하면서 넘길 상대가 없어졌다. `_part()` 는 원래
+    PDF 분기를 갖고 있었고 막고 있던 것은 `OPENAI_SUPPORTED_MIME_TYPES` 뿐이라,
+    거기에 `application/pdf` 를 넣어 살렸다. 이게 빠지면 사용자는 PDF 를 **올릴 수는
+    있는데 절대 처리되지 않는** 조합을 만난다.
+    """
+    assert "application/pdf" in ocr_providers.config.OPENAI_SUPPORTED_MIME_TYPES
+    part = ocr_providers._part(b"%PDF-1.4 dummy", "application/pdf")
+    assert part["type"] == "file"
+    # 확장자로 형식을 판단하므로 `filename` 이 빠지면 400 이다.
+    assert part["file"]["filename"].endswith(".pdf")
+    assert part["file"]["file_data"].startswith("data:application/pdf;base64,")
+
+
+def test_images_carry_high_detail() -> None:
+    """`detail` 이 기본 `auto` 면 이미지를 줄여 봐서 검사명을 지어낸다 — config 주석 참조."""
+    part = ocr_providers._part(b"\x89PNG", "image/png")
+    assert part["type"] == "image_url"
+    assert part["image_url"]["detail"] == "high"
+
+
 @pytest.mark.asyncio
-async def test_openai_refuses_pdf_so_gemini_can_take_it(monkeypatch) -> None:
-    """OpenAI 는 PDF 를 인라인으로 못 받는다. 예외로 알려 다음 항목이 처리하게 한다."""
+async def test_openai_still_refuses_a_type_it_cannot_read(monkeypatch) -> None:
+    """지원 목록 밖 형식은 여전히 예외다. 다음 항목이 받게 하려는 신호다."""
     monkeypatch.setattr(ocr_providers.config, "OPENAI_API_KEY", "sk-test")
     provider = ocr_providers.OpenAIProvider("gpt-4o-mini")
-    with pytest.raises(OcrUnsupportedTypeError, match="application/pdf"):
-        async for _ in provider.stream([(b"%PDF-1.4", "application/pdf")], "prompt"):
+    with pytest.raises(OcrUnsupportedTypeError, match="image/tiff"):
+        async for _ in provider.stream([(b"II*\x00", "image/tiff")], "prompt"):
             pass
+
+
+def test_require_any_passes_when_one_entry_stands(monkeypatch) -> None:
+    """Gemini 키가 없어도 OpenAI 항목 하나가 서면 인식 경로는 열려 있어야 한다.
+
+    예전에는 `dev_ocr._require_bridge` 가 `GEMINI_API_KEY` 를 무조건 요구해서,
+    목록을 `["openai:gpt-4o-mini"]` 로 바꿔도 **쓰지도 않는 공급자의 키** 때문에
+    막혔다.
+    """
+    monkeypatch.setattr(ocr_providers.config, "OPENAI_API_KEY", "sk-test")
+    monkeypatch.setattr(ocr_providers.config, "GEMINI_API_KEY", None)
+    ocr_providers.require_any(["openai:gpt-4o-mini"])
+
+
+def test_require_any_reports_every_reason_when_none_stands(monkeypatch) -> None:
+    monkeypatch.setattr(ocr_providers.config, "OPENAI_API_KEY", None)
+    monkeypatch.setattr(ocr_providers.config, "GEMINI_API_KEY", None)
+    with pytest.raises(OcrUnavailableError, match="쓸 수 있는 문서 인식 공급자가 없습니다") as raised:
+        ocr_providers.require_any(["gemini-3.5-flash-lite", "openai:gpt-4o-mini"])
+    assert "Gemini API 키" in raised.value.message
+    assert "OpenAI API 키" in raised.value.message
 
 
 # -- 기동 시점 검증 ----------------------------------------------------

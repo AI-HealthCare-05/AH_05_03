@@ -581,6 +581,27 @@ export class LocalHealthRecordService {
     return this.changeDeletedState(recordId, expectedVersion, null);
   }
 
+  /**
+   * 되돌릴 수 없는 삭제. 보관함에서 실제로 지운다.
+   *
+   * `softDelete` 는 `deletedAt` 만 찍어 집계에서 빼고 복원할 길을 남긴다. 그런데
+   * 지운 기록이 계속 쌓이면 **보관함이 커지고 백업 파일도 같이 커진다** — 기기 안
+   * 암호화 저장이라 용량이 곧 사용자 부담이다. 되돌릴 수 없으므로 **이미 삭제된
+   * 것만** 받는다. 실수로 살아 있는 기록이 사라지지 않게 하는 문턱이다.
+   */
+  public async purge(recordId: string, expectedVersion: number): Promise<LocalResult<{ deleted: true }>> {
+    const current = await this.get(recordId);
+    if (!current.ok) return current;
+    if (current.value.version !== expectedVersion) {
+      return failure("VERSION_CONFLICT", "건강기록이 다른 화면에서 변경되었습니다.");
+    }
+    if (current.value.deletedAt === null) {
+      return failure("VALIDATION_ERROR", "먼저 삭제한 기록만 영구 삭제할 수 있습니다.");
+    }
+    await this.repository.delete(recordId);
+    return success({ deleted: true });
+  }
+
   private async changeDeletedState(
     recordId: string,
     expectedVersion: number,

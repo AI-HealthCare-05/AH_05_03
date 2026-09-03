@@ -4,15 +4,23 @@ from pydantic import BaseModel, Field
 
 
 class ChatMessage(BaseModel):
-    role: Literal["user", "assistant", "system"]
-    content: str
+    # `system` 을 받지 않는다. `gemini.py` 가 user 가 아닌 role 을 전부 `model` 로
+    # 접으므로, system 을 허용하면 클라이언트가 어시스턴트 턴을 위조할 수 있다.
+    # `pain_chat.PainChatMessage` 가 같은 이유로 둘만 둔다.
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=2000)
 
 
 class ProfileContext(BaseModel):
-    profile_name: str
-    relationship: str | None = None
-    birth_year: int | None = None
-    recent_records_summary: str | None = None
+    """클라이언트가 채워 보내는 값. **시스템 지시문에 그대로 삽입된다**
+    (`prompts.health_assistant.build_system_instruction`). 로컬 우선 구조라
+    서버가 기록을 갖고 있지 않아 클라이언트가 보내는 것은 맞지만, 그만큼
+    길이를 묶어 두지 않으면 지시문을 통째로 덮어쓸 수 있다."""
+
+    profile_name: str = Field(max_length=100)
+    relationship: str | None = Field(default=None, max_length=50)
+    birth_year: int | None = Field(default=None, ge=1900, le=2100)
+    recent_records_summary: str | None = Field(default=None, max_length=2000)
 
 
 class ExerciseDraft(BaseModel):
@@ -116,17 +124,17 @@ HealthIntent = Literal[
     "record_pain",
     "record_lab_result",
     "query_records",
+    "health_advice",
     "create_challenge",
     "adjust_challenge",
     "complete_challenge",
-    "health_advice",
     "general_chat",
     "unknown",
 ]
 
 
 class HealthAssistantChatRequest(BaseModel):
-    messages: list[ChatMessage] = Field(description="대화 이력 리스트")
+    messages: list[ChatMessage] = Field(min_length=1, max_length=12, description="대화 이력 리스트")
     profile_context: ProfileContext | None = Field(default=None, description="현재 선택된 가족 구성원의 컨텍스트 정보")
 
 
@@ -139,8 +147,8 @@ class HealthAssistantResponse(BaseModel):
     medication_draft: MedicationDraft | None = Field(default=None, description="복약 기록 초안")
     pain_draft: PainDraft | None = Field(default=None, description="통증 기록 초안")
     lab_result_draft: LabResultDraft | None = Field(default=None, description="검사/검진 서류 결과 초안")
-    challenge_draft: ChallengeDraft | None = Field(default=None, description="챌린지 생성·조정·완료 초안")
     query_draft: QueryDraft | None = Field(default=None, description="기록 조회 조건 초안")
+    challenge_draft: ChallengeDraft | None = Field(default=None, description="챌린지 생성·조정·완료 초안")
     missing_fields: list[str] = Field(
         default_factory=list, description="초안 완성을 위해 사용자에게 추가 확인이 필요한 필드 목록"
     )

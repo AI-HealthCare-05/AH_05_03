@@ -10,26 +10,41 @@
 #
 # SPA 는 담지 않는다. 워커는 HTTP 를 서빙하지 않으므로 `app/Dockerfile` 의 node
 # 스테이지가 필요 없고, 그만큼 이미지가 작고 빌드가 빠르다.
+#
+# **의존성 단계는 `app/Dockerfile` 과 글자 그대로 같다.** 같아야 두 이미지가 같은
+# 패키지 집합으로 같은 채점 코드를 돌린다. 다르게 만들 이유가 생기면 그때는
+# 채점 결과가 갈릴 수 있다는 뜻이므로 먼저 그쪽을 의심해야 한다.
+
+FROM python:3.13-slim AS deps
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:0.12.7 /uv /bin/uv
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_CACHE=1
+
+COPY pyproject.toml uv.lock ./
+RUN uv sync --group app --no-dev --frozen
+
 
 FROM python:3.13-slim
 
 WORKDIR /app
 
-# 1. uv 설치 (공식 이미지에서 복사해오는 가장 깔끔한 방법)
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+ENV PATH="/app/.venv/bin:$PATH" \
+    VIRTUAL_ENV=/app/.venv \
+    PYTHONUNBUFFERED=1
 
-# 2. 의존성 패키지 관리 파일을 컨테이너 내부에 복사합니다.
-COPY pyproject.toml uv.lock ./
+COPY --from=deps /app/.venv /app/.venv
 
-# 3. FastAPI 와 같은 의존성 집합. 채점 코드를 공유하므로 그룹도 같아야 한다.
-RUN uv sync --group app --no-dev --frozen
-
-# 4. 소스. `app` 은 채점·큐 계약, `ai_worker` 는 소비자 루프,
-#    `chronic_disease_engine` 은 규칙 판정(수정 금지 이식본)이다.
+# 소스. `app` 은 채점·큐 계약, `ai_worker` 는 소비자 루프,
+# `chronic_disease_engine` 은 규칙 판정(수정 금지 이식본)이다.
 COPY ./app ./app
 COPY ./ai_worker ./ai_worker
 COPY ./chronic_disease_engine ./chronic_disease_engine
 
-# 5. 소비자 루프. `--scale ai-worker=3` 으로 여러 대를 띄워도 같은 명령이다 —
-#    소비자 그룹이 작업을 나눠 주므로 코드에 분배 로직이 없다.
-CMD ["uv", "run", "--no-sync", "python", "-m", "ai_worker.main"]
+# 소비자 루프. `--scale ai-worker=3` 으로 여러 대를 띄워도 같은 명령이다 —
+# 소비자 그룹이 작업을 나눠 주므로 코드에 분배 로직이 없다.
+CMD ["python", "-m", "ai_worker.main"]

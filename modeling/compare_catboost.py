@@ -143,7 +143,7 @@ def run(data: pd.DataFrame, key: str, rounds: int) -> dict[str, Any] | None:
 
     numeric = [c for c in columns if c not in CATEGORICAL]
     categorical = [c for c in columns if c in CATEGORICAL]
-    monotone = monotone_vector(frame, numeric, categorical)
+    monotone = monotone_vector(frame, numeric, categorical, target.key)
     y_holdout = y.loc[split.holdout_index].to_numpy()
 
     scored: dict[str, np.ndarray] = {}

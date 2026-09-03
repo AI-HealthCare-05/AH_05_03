@@ -1,12 +1,24 @@
+"""Gemini 구조화 응답 클라이언트. **대화 경로의 유일한 Gemini 진입점이다.**
+
+원 PR(#27)은 `health_assistant` · `pain_chat` · `dev_ocr` 세 곳이 각자 클라이언트를
+만들고 모델명·타임아웃·예외 처리를 따로 적었다. 그중 `dev_ocr` 은 이 저장소에 이미
+더 완성된 구현(`services/ocr_providers`)이 있어 받지 않았고, 나머지 둘을 여기로 모았다.
+
+**모델명을 코드에 두지 않는다.** 테스트가 클라이언트를 목킹하므로 CI 는 모델
+문자열의 유효성을 증명하지 못한다. 설정으로 빼야 틀렸을 때 재배포 없이 고칠 수 있다.
+"""
+
 import asyncio
+from collections.abc import AsyncIterator
 from typing import TypeVar
 
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
+from app.core import config
 from app.dtos.health_assistant import ChatMessage
-from app.exceptions import AppError
+from app.exceptions import LlmProviderFailedError, LlmTimeoutError, LlmUnavailableError
 from app.integrations.llm.protocol import LLMClientProtocol
 
 T = TypeVar("T", bound=BaseModel)
@@ -16,16 +28,16 @@ class GeminiLLMClient(LLMClientProtocol):
     def __init__(
         self,
         api_key: str | None,
-        model_name: str = "gemini-3.5-flash-lite",
+        model_name: str | None = None,
         temperature: float = 0.0,
-        timeout: float = 12.0,
+        timeout: float | None = None,
     ):
         if not api_key:
-            raise AppError("Gemini API 키가 설정되지 않았습니다.", status_code=503)
+            raise LlmUnavailableError("Gemini API 키가 설정되지 않았습니다.")
         self.client = genai.Client(api_key=api_key)
-        self.model_name = model_name
+        self.model_name = model_name or config.GEMINI_CHAT_MODEL
         self.temperature = temperature
-        self.timeout = timeout
+        self.timeout = timeout if timeout is not None else config.LLM_CHAT_TIMEOUT_SECONDS
 
     async def generate_structured_response(
         self,
@@ -33,15 +45,17 @@ class GeminiLLMClient(LLMClientProtocol):
         messages: list[ChatMessage],
         response_schema: type[T],
     ) -> T:
-        gemini_contents = []
-        for m in messages:
-            role = "user" if m.role == "user" else "model"
-            gemini_contents.append(
-                types.Content(
-                    role=role,
-                    parts=[types.Part.from_text(text=m.content)],
-                )
+        # `list[Content]` 그대로 넘기면 mypy 가 막는다. SDK 가 받는 타입이
+        # `list[Content | str | Part | ...]` 인데 리스트는 불변(invariant)이라
+        # `list[Content]` 가 그 하위 타입이 아니다 — 런타임에는 문제가 없고
+        # 타입 검사에서만 걸린다. 원소 타입을 넓혀 선언해 푼다.
+        gemini_contents: list[types.ContentUnion] = [
+            types.Content(
+                role="user" if m.role == "user" else "model",
+                parts=[types.Part.from_text(text=m.content)],
             )
+            for m in messages
+        ]
 
         try:
             response = await asyncio.wait_for(
@@ -58,14 +72,52 @@ class GeminiLLMClient(LLMClientProtocol):
                 timeout=self.timeout,
             )
         except asyncio.TimeoutError as ex:
-            raise AppError("응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.", status_code=504) from ex
+            raise LlmTimeoutError() from ex
         except Exception as ex:
-            raise AppError("건강 어시스턴트 대화 처리 중 오류가 발생했습니다.", status_code=503) from ex
+            # 모델명 오류·인증 실패·레이트리밋이 여기 모인다. 전부 업스트림 사정이라
+            # 502 다 — 우리 쪽이 죽은 것처럼 503 으로 덮으면 원인을 못 찾는다.
+            raise LlmProviderFailedError(f"Gemini 호출 실패: {type(ex).__name__}") from ex
 
         if not response or not response.text:
-            raise AppError("건강 어시스턴트 응답을 생성하지 못했습니다.", status_code=503)
+            raise LlmProviderFailedError("Gemini 가 빈 응답을 돌려줬습니다.")
 
         try:
             return response_schema.model_validate_json(response.text)
-        except Exception as error:
-            raise AppError("건강 대화 응답 구조화에 실패했습니다.", status_code=503) from error
+        except Exception as ex:
+            raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex
+
+    async def stream_structured_response(
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        response_schema: type[T],
+    ) -> AsyncIterator[str]:
+        """같은 요청을 스트리밍으로. 조각은 **원본 JSON 문자열**이다.
+
+        해독은 호출부가 한다 — 어느 필드를 화면에 흘릴지는 공급자가 알 일이 아니다.
+        타임아웃은 여기서 걸지 않는다. 스트림은 "첫 조각까지" 와 "조각 사이" 를 갈라
+        재야 하는데(`dev_ocr._stream_once` 참조) 그 판단도 호출부에 있다.
+        """
+        gemini_contents: list[types.ContentUnion] = [
+            types.Content(
+                role="user" if m.role == "user" else "model",
+                parts=[types.Part.from_text(text=m.content)],
+            )
+            for m in messages
+        ]
+        try:
+            stream = await self.client.aio.models.generate_content_stream(
+                model=self.model_name,
+                contents=gemini_contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_instruction,
+                    response_mime_type="application/json",
+                    response_schema=response_schema,
+                    temperature=self.temperature,
+                ),
+            )
+            async for chunk in stream:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as ex:
+            raise LlmProviderFailedError(f"Gemini 스트리밍 실패: {type(ex).__name__}") from ex

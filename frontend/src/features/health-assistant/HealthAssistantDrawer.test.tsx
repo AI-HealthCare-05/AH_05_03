@@ -1,15 +1,16 @@
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { HealthAssistantDrawer, HealthMetricsTrendCard } from "./HealthAssistantDrawer";
+// 순수 헬퍼는 컴포넌트에서 갈라 놓았다 — 화면 없이 시험할 수 있고, 컴포넌트 파일에서
+// 함수를 내보내면 fast refresh 가 꺼진다.
 import {
-  HealthAssistantDrawer,
-  extractMetricsFromRecords,
-  HealthMetricsTrendCard,
   containsNewMedicationRecord,
+  extractMetricsFromRecords,
   formatTargetDateTime,
   resolveHealthRecordDateTime,
   resolveMedicationTakenAt,
   shouldAutoSaveHealthRecord,
-} from "./HealthAssistantDrawer";
+} from "./healthAssistantLogic";
 import type { FamilyProfile, HealthRecord } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 import * as clientModule from "./healthAssistantClient";
@@ -144,7 +145,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
   });
 
   it("이미 수행한 운동 정보가 명확하면 확인 카드 없이 즉시 저장한다", async () => {
-    vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_exercise",
       assistant_message: "랫풀다운 20kg 10회 3세트 기록을 오늘 날짜로 저장할까요?",
       exercise_draft: {
@@ -259,7 +260,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       documents: { readById: mockReadDocById, save: mockSaveDoc },
     } as unknown as LocalDomainRuntime;
 
-    vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_exercise",
       assistant_message: "레버로우 기록을 저장할까요?",
       exercise_draft: { exercise_name: "레버로우", weight_kg: 35, reps: 5, sets: 3 },
@@ -290,7 +291,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
   });
 
   it("응급 상황 메시지가 오면 붉은색 응급 주의 배너를 렌더링한다", async () => {
-    vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "health_advice",
       assistant_message: "가슴 흉통은 위험할 수 있습니다.",
       missing_fields: [],
@@ -320,7 +321,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
   });
 
   it("통증 대화 입력 시 PainConfirmationCard가 표시되고 저장을 누르면 pain 레코드가 생성된다", async () => {
-    vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_pain",
       assistant_message: "오른쪽 무릎 통증 기록을 저장할까요?",
       pain_draft: {
@@ -400,7 +401,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       },
     } as unknown as LocalDomainRuntime;
 
-    const spySend = vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+    const spySend = vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "health_advice",
       assistant_message: "최근 복약 기록에 타이레놀 복용 내역이 있습니다. 타이레놀은 간 손상 위험이 있어 음주를 피하셔야 합니다.",
       missing_fields: [],
@@ -425,6 +426,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     await waitFor(() => {
       expect(spySend).toHaveBeenCalledWith(
         expect.any(Array),
+        expect.any(Function),
         expect.objectContaining({
           profile_name: "홍길동",
           recent_records_summary: expect.stringContaining("타이레놀"),
@@ -438,7 +440,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
   });
 
   it("최근 복약 기록을 근거로 답할 때 동일한 복약 저장 카드를 다시 만들지 않는다", async () => {
-    vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "health_advice",
       assistant_message:
         "방금 타이레놀 1알을 복용하셨습니다. 흡연은 피하시는 것이 좋습니다. 오늘 복용하신 타이레놀 기록을 저장할까요?",
@@ -505,7 +507,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       },
     } as unknown as LocalDomainRuntime;
 
-    vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "query_records",
       assistant_message: "8월 28일 건강검진 결과입니다.",
       query_draft: { record_type: "health_screening", time_range: "8/28" },
@@ -555,7 +557,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
   });
 
   it("parseExamDateFromText 헬퍼 함수가 서류 텍스트 내 검사일자를 정확히 추출한다", async () => {
-    const { parseExamDateFromText } = await import("./HealthAssistantDrawer");
+    const { parseExamDateFromText } = await import("./healthAssistantLogic");
     expect(parseExamDateFromText("검진일자: 2025-08-28 (서울병원)")).toBe("2025-08-28");
     expect(parseExamDateFromText("수검일: 2025.8.28 판정")).toBe("2025-08-28");
     expect(parseExamDateFromText("2025년 8월 28일 종합건강검진표")).toBe("2025-08-28");
@@ -573,7 +575,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
   });
 
   it("filterRecordsByTimeRange 함수가 작년, 특정 연도, 오늘 등을 정확히 필터링한다", async () => {
-    const { filterRecordsByTimeRange } = await import("./HealthAssistantDrawer");
+    const { filterRecordsByTimeRange } = await import("./healthAssistantLogic");
     const currentYear = new Date().getFullYear();
     const records = [
       { id: "1", recordedAt: "2022-05-30T09:00:00Z" },
@@ -641,7 +643,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
   });
 
   it("일반 대화와 기록 입력에는 최근 건강기록 요약을 외부 AI로 보내지 않는다", async () => {
-    const spySend = vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+    const spySend = vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "general_chat",
       assistant_message: "안녕하세요.",
       missing_fields: [],
@@ -665,6 +667,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     await waitFor(() => {
       expect(spySend).toHaveBeenCalledWith(
         expect.any(Array),
+        expect.any(Function),
         expect.objectContaining({ recent_records_summary: undefined }),
       );
     });
@@ -672,7 +675,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
   });
 
   it("누락 필드가 있거나 확인 준비가 되지 않은 초안에는 저장 카드를 표시하지 않는다", async () => {
-    vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_exercise",
       assistant_message: "몇 회 진행했는지 알려주세요.",
       exercise_draft: { exercise_name: "랫풀다운", weight_kg: 20 },
@@ -847,7 +850,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
 
   describe("운동 시간 및 수행 일시 기록", () => {
     it("운동 시간과 수행 일시가 포함된 완료 기록을 즉시 저장한다", async () => {
-      vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+      vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
         intent: "record_exercise",
         assistant_message: "어제 저녁 9시에 하신 랫풀다운 운동 기록을 저장할까요?",
         exercise_draft: {
@@ -897,7 +900,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     });
 
     it("야외 유산소 완료 기록의 거리와 시간을 즉시 저장한다", async () => {
-      vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+      vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
         intent: "record_exercise",
         assistant_message: "오늘 아침에 달린 5.5km 러닝 기록을 저장할까요?",
         exercise_draft: {
@@ -979,7 +982,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
         },
       } as unknown as LocalDomainRuntime;
 
-      vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+      vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
         intent: "query_records",
         assistant_message: "등록된 건강검진 및 측정 기록의 시계열 수치 변화 그래프를 조회해 드립니다.",
         query_draft: {
@@ -1064,7 +1067,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
         },
       } as unknown as LocalDomainRuntime;
 
-      vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+      vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
         intent: "query_records",
         assistant_message: "가장 최근에 등록된 2026년 8월 28일 건강검진 원본 서류입니다.",
         query_draft: {
@@ -1142,7 +1145,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
         },
       } as unknown as LocalDomainRuntime;
 
-      vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
+      vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
         intent: "query_records",
         assistant_message: "등록된 모든 검진 이력을 조회해 드립니다. 아래에서 상세 내용을 확인해 보세요.",
         query_draft: {

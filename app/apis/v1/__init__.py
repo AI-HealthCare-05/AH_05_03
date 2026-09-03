@@ -30,8 +30,8 @@ v1_routers.include_router(rule_assessment_router)
 v1_routers.include_router(assessment_summary_router)
 # 생활습관 챌린지. Talos 필수 셋 중 마지막 칸 (docs/37 §14~§16).
 v1_routers.include_router(challenge_router)
+# 대화 경로 둘. 외부 유료 API 를 부르므로 인증 + 계정별 상한이 붙어 있다.
+v1_routers.include_router(health_assistant_router)
+v1_routers.include_router(pain_chat_router)
 # Gemini 문서 인식 개발 브리지 (PR #24). 기본 꺼짐 — `ENABLE_DEV_OCR_BRIDGE`.
 v1_routers.include_router(dev_ocr_router)
-# 건강 어시스턴트·통증 문진 (PR #27).
-v1_routers.include_router(pain_chat_router)
-v1_routers.include_router(health_assistant_router)

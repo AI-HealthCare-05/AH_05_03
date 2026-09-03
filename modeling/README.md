@@ -48,11 +48,15 @@
 | 앙상블의 번들 비용 | [`ensemble_cost.py`](ensemble_cost.py) | 이득만 보고 3배 무거운 구성을 고르는 것 |
 | 모델별 시드 앙상블 맞대결 | [`seed_ensemble.py`](seed_ensemble.py) | AUROC 는 그대로인데 같은 사람 확률이 시드마다 달라지는 것 |
 | 앙상블 번들 내보내기 | [`export_ensemble.py`](export_ensemble.py) | 대칭 트리 잎 색인이 뒤집혀도 AUROC 는 멀쩡한 것 |
+| **발병 궤적 기준 위험표** | [`fit_trajectory.py`](fit_trajectory.py) | 표가 없으면 2단계가 통째로 조용히 빠지는 것. `trajectory.json` 을 만든다 |
+| **발병 궤적 검증** | [`validate_trajectory.py`](validate_trajectory.py) | 유병 곡선을 뒤집은 숫자가 진짜 코호트·사망연계와 얼마나 어긋나는지 |
 
 `validate_mortality.py` 는 [`data/load_mortality.py`](data/load_mortality.py) 가 받아 온
 NCHS 사망연계(59,064명·사망 9,249건·추적 최대 19.5년)를 쓴다. 신청 절차가 없다.
 2021-2023 주기는 연계본이 아직 없어서 **홀드아웃 평가에는 쓸 수 없고** 학습을
 2005-2010 으로 앞당긴 별도 분할로 잰다.
+
+`fit_trajectory.py` 와 `validate_trajectory.py` 는 2단계 **발병 궤적**의 재료다. 표는 단면 유병률을 illness-death 모형으로 뒤집고 사망연계 초과사망으로 보정한 것이라 **하한에 가깝다**. 정리는 [41번 문서](../docs/41_onset_trajectory.md).
 
 `experiment_features.py` 는 프리셋 셋으로 돈다. `legacy` 는 가족력처럼 2018 년까지만
 있는 변수를 재려고 홀드아웃을 `2017_2018` 로 옮기고, `onboarding` 과 `indices` 는

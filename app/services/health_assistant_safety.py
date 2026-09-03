@@ -42,6 +42,8 @@ class HealthAssistantSafetyService:
         if response.emergency_notice:
             # 응급 상황 시 확인 카드 등 부가 동작 차단
             response.needs_confirmation = False
+            # 응급 상황에서는 자동 저장도 막는다. 확인 카드를 끄면서 자동 저장만
+            # 남겨 두면 확인 없이 기록이 들어간다 — 막으려던 것이 그대로 통과한다.
             response.auto_save = False
             response.missing_fields = []
             response.suggested_quick_replies = []

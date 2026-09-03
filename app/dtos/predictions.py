@@ -7,7 +7,7 @@
 예측은 항상 나온다. 다만 값이 없으면 그만큼 그 사람에 대한 정보가 없다.
 """
 
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import Field, computed_field, model_validator
 
@@ -30,7 +30,10 @@ class RiskPredictionRequest(BaseRequestModel):
     # --- 선택 -------------------------------------------------------
     waist_cm: float | None = Field(default=None, gt=40, lt=200)
     smoking_status: SmokingStatus | None = None
-    difficulty_walking: bool | None = Field(default=None, description="걷는 데 불편이 있는가")
+    # `difficulty_walking` 을 2026-09-03 에 뺐다. NHANES 가 2021-2023 주기에 PFQ 를
+    # 발간하지 않아 **홀드아웃 커버리지가 정확히 0%** 였다 — 번들에 들어 있었지만 기여를
+    # 측정할 방법이 애초에 없었다. 빼도 손실이 없고(두 홀드아웃에서 확인) 미진단자
+    # 부분집합에서는 6/6 칸 양수다. `docs/42_ml_evaluation_strategy.md` §5.
     alcohol_days_per_year: float | None = Field(default=None, ge=0, le=365)
     moderate_min_per_week: float | None = Field(default=None, ge=0, le=5000)
     vigorous_min_per_week: float | None = Field(default=None, ge=0, le=5000)
@@ -40,9 +43,13 @@ class RiskPredictionRequest(BaseRequestModel):
     # 받아도 채점에 안 들어갔다 — 켜고 끈 결과 차이가 0.0%p 였다. 물어보면
     # 사용자는 답이 반영된다고 믿는다. 학습 쪽 실험 코드에는 남아 있다
     # (modeling/minimal_features.py 의 후보 목록). 번들에 들어오면 다시 받는다.
+    # `education_level` 도 2026-09-03 에 같은 이유로 뺐다. 다만 근거가 다르다 —
+    # 저건 채점에 안 들어가서였고, 이건 **묻지 않기로 한 것**이다. 건강 앱이 학력을
+    # 묻는 것이 사용자에게 어떻게 읽히는지가 이유고, 대가는 재고 받아들였다(등급이
+    # 바뀐 칸 1.5%, 지방간만 컸다). 폼에서만 빼면 모두가 중앙값 대치를 받으므로
+    # 학습(`modeling/targets.py`)과 번들에서도 같이 뺐다.
     sbp: float | None = Field(default=None, ge=60, le=260, description="수축기 혈압")
     dbp: float | None = Field(default=None, ge=30, le=200, description="이완기 혈압")
-    education_level: int | None = Field(default=None, ge=1, le=5, description="1=중학교 미만 ... 5=대졸 이상")
 
     # --- 검사값 (전부 선택) ------------------------------------------
     #
@@ -113,7 +120,6 @@ class RiskPredictionRequest(BaseRequestModel):
         optional: dict[str, float | bool | str | None] = {
             "waist_cm": self.waist_cm,
             "smoking_status": self.smoking_status,
-            "difficulty_walking": self.difficulty_walking,
             "alcohol_days_per_year": self.alcohol_days_per_year,
             "moderate_min_per_week": self.moderate_min_per_week,
             "vigorous_min_per_week": self.vigorous_min_per_week,
@@ -121,7 +127,6 @@ class RiskPredictionRequest(BaseRequestModel):
             "sleep_hours": self.sleep_hours,
             "sbp": self.sbp,
             "dbp": self.dbp,
-            "education_level": self.education_level,
             **{name: getattr(self, name) for name in self.LAB_FIELDS},
         }
         for name, value in optional.items():
@@ -215,6 +220,79 @@ class ModelAccuracy(BaseSerializerModel):
     holdout_cycle: str | None = Field(default=None, description="홀드아웃 주기")
 
 
+class OnsetTrajectory(BaseSerializerModel):
+    """2단계 — "지금 이 질환이 없다면 앞으로 t년 안에 생길 확률".
+
+    1단계 카드의 `probability` 가 "지금 기준을 넘을 가능성" 이라면 이쪽은 그 뒤의
+    시간축이다. 단면 자료의 나이 기울기에서 유도했고 사망연계로 초과사망을 보정했다.
+    수식·가정·검증은 `app/services/trajectory.py` 와 41번 문서.
+    """
+
+    horizons_years: list[int] = Field(description="지평(년). 80세 상한에 걸린 지평은 빠진다")
+    onset_probability: list[float] = Field(description="이 사람의 각 지평까지 누적 발병 확률 0~1. 단조 증가")
+    population_onset_probability: list[float] = Field(
+        description="같은 나이·성별 동년배(상대위험 1)의 누적 발병 확률. 화면에서 '나'와 나란히 놓는다"
+    )
+    relative_hazard: float = Field(description="동년배 대비 상대 누적위험 R = ln(1-p)/ln(1-m). 1이면 평균")
+    reference_prevalence: float = Field(description="같은 나이·성별의 기준 유병률 m")
+    conditional_on: str = Field(description="이 숫자가 서 있는 가정. 화면에 그대로 띄운다")
+    mortality_corrected: bool = Field(description="사망연계 초과사망률 δ 를 넣었는가")
+    truncated_at_age: int | None = Field(default=None, description="지평이 잘렸으면 그 나이 상한")
+    method: str
+    evidence: dict[str, Any] | None = Field(default=None, description="검증 요약 — 사망연계·Framingham 대조")
+    caveats: list[str]
+
+
+TrajectoryStatus = Literal[
+    "projected",  # 궤적을 냈다
+    "not_applicable",  # 이 질환은 궤적을 내지 않는다 (가역·비단조·검증 없음)
+    "below_gate",  # 1단계가 의심하지 않았다
+    "already_met",  # 검사값이 이미 기준을 넘었다 — "지금 없다면" 전제가 무너진다
+    "already_present",  # 규칙·공식 엔진이 이미 있다고 판정했다 (중재 단계에서 붙는다)
+    "withheld",  # 검사값 없이는 ML 을 표시하지 않는 질환이라 궤적도 내리지 않는다 (중재 단계)
+    "age_out_of_range",  # 80세 상한 안에 지평이 하나도 안 든다
+    "unavailable",  # trajectory.json 이 없다
+]
+
+
+class PrevalenceTrajectory(BaseSerializerModel):
+    """ "그 나이가 됐을 때 기준을 넘고 있을 확률". 발병 궤적과 다른 질문이다.
+
+    발병 궤적은 "지금 없다면 새로 생길 확률" 이라 비가역 질환에만 붙는다. 이쪽은
+    1단계 모델을 나이만 옮겨 다시 채점한 것이라 **열 질환 전부에 붙는다.**
+    """
+
+    horizons_years: list[int]
+    prevalence_probability: list[float] = Field(description="각 지평 나이에서 기준을 넘고 있을 확률 0~1")
+    current_probability: float = Field(description="지금 나이의 값. 카드 확률과 같아야 한다")
+    direction: str = Field(description="상승 | 유지 | 하락")
+    conditional_on: str
+    irreversible: bool = Field(default=False, description="비가역 질환이라 곡선을 내려가지 않게 접었는가")
+    truncated_at_age: int | None = None
+    caveats: list[str]
+
+
+class SuspectCard(BaseSerializerModel):
+    """1단계가 고른 의심 질환 한 장. 2단계 곡선이 여기 붙는다."""
+
+    target: str
+    name: str
+    rank: int = Field(description="1 이 가장 의심된다")
+    score: float = Field(description="등급가중 × 근거가중 × 동년배배수")
+    suspected: bool = Field(description="False 면 자리를 채우려고 올라온 것이지 의심이 아니다")
+    probability: float | None = None
+    level: str
+    basis: str = Field(
+        default="추정", description="측정 | 추정 — 규칙 엔진이 검사값으로 준 판정인가, ML 이 추정한 것인가"
+    )
+    peer_ratio: float | None = None
+    evidence_weight: float = Field(description="사망연계 검증에서 유도한 이 카드의 신뢰도 0.4~1.0")
+    reason: str = Field(description="왜 뽑혔는가. 화면이 그대로 읽는다")
+    prevalence_trajectory: PrevalenceTrajectory | None = None
+    onset_trajectory: OnsetTrajectory | None = None
+    onset_status: str | None = Field(default=None, description="발병 궤적이 없으면 왜 없는지")
+
+
 class ConditionRisk(BaseSerializerModel):
     target: str
     description: str
@@ -246,11 +324,18 @@ class ConditionRisk(BaseSerializerModel):
     # 지방간·빈혈)에서는 None 이고, 화면은 그때 백분위만 보여준다.
     rule_anchor: RuleAnchor | None = None
     top_factors: list[RiskFactor]
+    # 2단계. 1단계가 의심한 질환에만 붙는다. 상태가 이유를 말한다 — 궤적이 없는 카드가
+    # "고장" 이 아니라 "안 내는 것" 임을 화면이 설명할 수 있어야 한다.
+    trajectory: OnsetTrajectory | None = None
+    trajectory_status: TrajectoryStatus = "unavailable"
 
 
 class RiskPredictionData(BaseSerializerModel):
     bmi: float
     conditions: list[ConditionRisk]
+    # 1단계가 고른 의심 상위 세 개. 카드 열 장을 다 훑지 않아도 "그래서 뭘 봐야 하나" 에
+    # 답한다. 각 장에 2단계 곡선이 붙는다.
+    top_suspects: list[SuspectCard] = []
     # 화면에 그대로 띄워야 하는 문구. 모델 카드의 한계와 같은 내용이다.
     disclaimers: list[str]
     inputs_provided: int

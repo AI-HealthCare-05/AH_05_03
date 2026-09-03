@@ -38,23 +38,28 @@ STATIC_DIR = Path(os.environ.get("FRONTEND_DIST", "/app/static"))
 REPO_STATIC_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 # `frontend/nginx.conf` 의 add_header 를 그대로 옮긴 것. 값은 한 글자도 바꾸지 않는다.
+#
+# 예외가 하나 생겼다 — `img-src` 의 `blob:`.
+# 판정 화면이 **올린 검진표를 폼 옆에 띄워** 사용자가 원본과 대조하게 한다. 그 원본은
+# 암호화되어 OPFS 에 있으므로 주소가 없고, 복호화한 `Blob` 을 `createObjectURL` 로
+# 걸 수밖에 없다. `blob:` 이 빠져 있으면 **아무 오류 없이 이미지만 안 뜬다** —
+# CSP 위반은 예외를 던지지 않아서, 화면에 빈 칸이 남는 것으로만 드러난다.
+# `blob:` URL 은 스크립트가 만들고 같은 출처에서만 살아 있어서 외부 유입 통로가 아니다.
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Content-Security-Policy": (
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; "
         "connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; "
         "frame-ancestors 'none'"
     ),
 }
 
-# 사람이 칠 법한 짧은 주소 -> 정본. 데모 화면이 `/api/` 아래 있는 것은 nginx 가
+# 사람이 칠 법한 짧은 주소 -> 정본. `/api/docs` 가 `/api/` 아래 있는 것은 nginx 가
 # `/api/` 만 프록시하던 시절의 흔적인데, 주소를 옮기면 기존 링크가 깨지므로
 # 짧은 쪽을 리다이렉트로 살려 둔다.
 SHORTCUTS = {
-    "/demo": "/api/demo",
-    "/demo/rules": "/api/demo/rules",
     "/docs": "/api/docs",
 }
 
@@ -121,8 +126,8 @@ def mount(app: FastAPI) -> bool:
         if full_path.startswith("api/"):
             raise StarletteHTTPException(status_code=404)
 
-        # 데모 화면은 `/api/` 아래 있는데 사람은 `/demo` 를 친다. 실제로 그렇게 치고
-        # SPA 404 를 받은 적이 있어서 짧은 주소를 살려 둔다. 정본은 `/api/demo` 다.
+        # Swagger 는 `/api/docs` 에 있는데 사람은 `/docs` 를 친다. 실제로 그렇게 치고
+        # SPA 404 를 받은 적이 있어서 짧은 주소를 살려 둔다. 정본은 `/api/docs` 다.
         redirect = SHORTCUTS.get(f"/{full_path}".rstrip("/") or "/")
         if redirect:
             return RedirectResponse(redirect, status_code=307)

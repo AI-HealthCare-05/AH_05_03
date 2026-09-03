@@ -33,6 +33,13 @@ class ErrorCode(StrEnum):
     OCR_FILE_TOO_LARGE = "OCR_FILE_TOO_LARGE"
     OCR_JOB_NOT_FOUND = "OCR_JOB_NOT_FOUND"
     OCR_PROVIDER_FAILED = "OCR_PROVIDER_FAILED"
+    # --- llm 대화 ---------------------------------------------------
+    # OCR 과 같은 이유로 처음부터 나눠 둔다. 원 PR(#27)은 타임아웃만 504 로 가르고
+    # 나머지를 통째로 503 + "오류가 발생했습니다" 로 덮었다. 그러면 키 누락과
+    # 모델명 오류와 레이트리밋이 화면에서 구분되지 않는다.
+    LLM_UNAVAILABLE = "LLM_UNAVAILABLE"
+    LLM_PROVIDER_FAILED = "LLM_PROVIDER_FAILED"
+    LLM_TIMEOUT = "LLM_TIMEOUT"
     # --- auth ------------------------------------------------------
     AUTH_REQUIRED = "AUTH_REQUIRED"
     CREDENTIALS_INVALID = "CREDENTIALS_INVALID"
@@ -89,6 +96,9 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     ErrorCode.OCR_JOB_NOT_FOUND: status.HTTP_404_NOT_FOUND,
     # 외부 공급자가 실패한 것이지 우리가 죽은 게 아니다.
     ErrorCode.OCR_PROVIDER_FAILED: status.HTTP_502_BAD_GATEWAY,
+    ErrorCode.LLM_UNAVAILABLE: status.HTTP_503_SERVICE_UNAVAILABLE,
+    ErrorCode.LLM_PROVIDER_FAILED: status.HTTP_502_BAD_GATEWAY,
+    ErrorCode.LLM_TIMEOUT: status.HTTP_504_GATEWAY_TIMEOUT,
     ErrorCode.AUTH_REQUIRED: status.HTTP_401_UNAUTHORIZED,
     ErrorCode.CREDENTIALS_INVALID: status.HTTP_401_UNAUTHORIZED,
     ErrorCode.EMAIL_ALREADY_REGISTERED: status.HTTP_409_CONFLICT,
@@ -139,6 +149,9 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.OCR_FILE_TOO_LARGE: "파일이 너무 큽니다. 크기를 줄여서 다시 올려 주세요.",
     ErrorCode.OCR_JOB_NOT_FOUND: "문서 인식 작업을 찾을 수 없습니다. 시간이 지나 정리됐을 수 있습니다.",
     ErrorCode.OCR_PROVIDER_FAILED: "문서 인식에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    ErrorCode.LLM_UNAVAILABLE: "대화 기능을 사용할 수 없습니다.",
+    ErrorCode.LLM_PROVIDER_FAILED: "대화 응답을 받지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    ErrorCode.LLM_TIMEOUT: "응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.",
     ErrorCode.AUTH_REQUIRED: "로그인이 필요합니다.",
     ErrorCode.CREDENTIALS_INVALID: "이메일 또는 비밀번호가 올바르지 않습니다.",
     ErrorCode.EMAIL_ALREADY_REGISTERED: "이미 사용중인 이메일입니다.",

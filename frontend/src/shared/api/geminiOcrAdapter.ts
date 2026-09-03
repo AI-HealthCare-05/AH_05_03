@@ -13,11 +13,36 @@
 
 import { serverApiClient } from "./serverApiClient";
 
+/** 표에서 읽어 낸 행 하나. `source` 는 원문 4열이라 화면이 원본과 대조할 수 있다. */
+export interface OcrMeasurementRow {
+  field: string;
+  label: string;
+  value: number;
+  unit: string;
+  source: string[];
+  reason: string | null;
+}
+
+/**
+ * 표를 예측 입력 수치로 옮긴 결과. 판정 규칙은 서버(`app/services/ocr_measurements.py`)에 있다.
+ *
+ * **`values` 만 판정 폼으로 넘긴다.** `review` 는 단위·참고치·범위 관문에 걸린 행이라
+ * 사람이 눈으로 확인하기 전에는 수치로 취급하지 않는다 — 검사명 오독이 그대로 수치가
+ * 되면 사용자는 자기가 적지도 않은 숫자로 판정받는다.
+ */
+export interface OcrMeasurements {
+  values: Record<string, number>;
+  review: OcrMeasurementRow[];
+  unused: OcrMeasurementRow[];
+  unmatched: string[][];
+}
+
 export interface GeminiOcrResult {
   text: string;
   tables: Array<{ table_index: number; rows: string[][] }>;
   status: "raw";
   automatically_confirmed: false;
+  measurements?: OcrMeasurements | null;
 }
 
 interface JobAccepted {

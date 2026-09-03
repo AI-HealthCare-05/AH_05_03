@@ -94,11 +94,11 @@ def test_to_features_drops_none_and_casts_bools() -> None:
         height_cm=173.0,
         weight_kg=78.0,
         self_rated_health=3,
-        difficulty_walking=True,
     )
     features = request.to_features()
 
-    assert features["difficulty_walking"] == 1.0
+    # 예전에는 `difficulty_walking=True` 로 불리언 변환을 봤는데 그 입력을 뺐다.
+    # 남은 불리언 입력이 없으므로 여기서는 비운 항목이 빠지는 것만 본다.
     assert "waist_cm" not in features, "비운 선택 항목이 0 으로 채워지면 결측과 구분이 안 된다"
     assert "veg_fruit_daily" not in features
     assert features["sex"] == "M"

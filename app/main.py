@@ -4,11 +4,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import ORJSONResponse
 from redis.exceptions import RedisError
 
 from app.apis import spa
-from app.apis.demo_routers import demo_router
 from app.apis.exception_handlers import register_exception_handlers
 from app.apis.v1 import v1_routers
 from app.core import config
@@ -36,8 +34,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await dispose_engine()
 
 
+# `default_response_class=ORJSONResponse` 를 걷어냈다. FastAPI 가 이 클래스를
+# deprecate 했고(테스트 한 번에 경고 124건), 이제는 **반환 타입이나 response_model 이
+# 있으면 Pydantic 이 Rust 쪽에서 곧장 JSON 바이트로 직렬화한다** — 커스텀 응답
+# 클래스보다 빠르다. 우리 라우트는 전부 봉투 DTO 를 선언하고 있으므로 그 경로를 탄다.
 app = FastAPI(
-    default_response_class=ORJSONResponse,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
@@ -64,7 +65,6 @@ app.include_router(v1_routers)
 # 예측 API를 사람이 눌러 확인하는 데모 화면. /api/ 아래 두는 규칙은 그대로 지킨다 —
 # 아래 SPA 폴백이 /api 로 시작하는 경로를 건드리지 않기 때문이다.
 # ML 모델과 규칙 엔진을 한 화면에서 스위치로 바꿔 돌린다.
-app.include_router(demo_router)
 
 
 # 빌드된 프런트엔드. 별도 nginx 컨테이너가 하던 일을 여기로 옮겼다.

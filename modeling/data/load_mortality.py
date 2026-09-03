@@ -156,14 +156,17 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     pooled.to_csv(args.out, index=False)
 
-    eligible = pooled["deceased"].notna()
+    # 위 루프의 `eligible` 은 주기별 int 다. 여기서 같은 이름에 마스크(Series)를 담고
+    # 있어서 두 의미가 한 이름에 겹쳐 있었다.
+    eligible_mask = pooled["deceased"].notna()
     print(
-        f"\n합계 {len(pooled):,}행 / 연계대상 {int(eligible.sum()):,} / 사망 {int(pooled['deceased'].sum(skipna=True)):,}"
+        f"\n합계 {len(pooled):,}행 / 연계대상 {int(eligible_mask.sum()):,} / 사망 {int(pooled['deceased'].sum(skipna=True)):,}"
     )
     causes = pooled.loc[pooled["deceased"].eq(True), "cause"].value_counts()
     print("주요 사인")
-    for name, count in causes.items():
-        print(f"  {name:<16}{count:>6,}")
+    # `name` 은 위에서 `for cycle, name in CYCLES` 로 이미 잡힌 이름이다.
+    for cause_name, count in causes.items():
+        print(f"  {cause_name!s:<16}{count:>6,}")
     print(f"\n→ {args.out}")
     return 0
 

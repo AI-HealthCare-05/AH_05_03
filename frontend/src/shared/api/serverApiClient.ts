@@ -116,6 +116,20 @@ export class ServerApiClient {
   }
 
   /**
+   * 건강 비서 대화. **인증이 붙는다.**
+   *
+   * PR #27 의 클라이언트는 맨 `fetch` 로 불렀는데 project 의 이 경로는 401 을 낸다 —
+   * 대화 본문에 증상과 수치가 실리므로 그게 맞는 동작이다. 토큰 갱신도 여기로 모은다.
+   */
+  public healthAssistantChat<T>(body: Record<string, unknown>): Promise<T> {
+    return this.request<T>("/health-assistant/chat", {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
    * 챌린지. 요청·응답 어디에도 측정값이 실리지 않는다 — 서버는 "쟀다" 와 날짜만 안다.
    * 응답 타입을 기능 폴더(`features/challenge/contracts.ts`)에서 받는 이유는
    * `assessSummary` 와 같다: 계정 도메인이 아니다.
@@ -155,6 +169,31 @@ export class ServerApiClient {
     const response = await this.send(`/dev/ocr/jobs/${encodeURIComponent(jobId)}/stream`, {
       authenticated: true,
       headers: { Accept: "text/event-stream" },
+      signal,
+    });
+    if (!response.body) {
+      throw new ServerApiError(response.status, "STREAM_UNSUPPORTED", "이 브라우저는 스트리밍을 지원하지 않습니다.");
+    }
+    await readServerSentEvents(response.body, onEvent);
+  }
+
+  /**
+   * 건강 비서 대화를 SSE 로 받는다. `delta` 로 글자가 흐르고 `result` 로 완성본이 온다.
+   *
+   * `EventSource` 를 안 쓰는 이유는 문서 인식 쪽과 같다 — 헤더를 못 붙여서
+   * `Authorization` 을 쿼리스트링에 실어야 하고, 그러면 토큰이 nginx 액세스 로그와
+   * 브라우저 히스토리에 남는다.
+   */
+  public async streamHealthAssistantChat(
+    body: Record<string, unknown>,
+    onEvent: (event: string, data: Record<string, unknown>) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const response = await this.send("/health-assistant/chat/stream", {
+      method: "POST",
+      authenticated: true,
+      headers: { Accept: "text/event-stream" },
+      body: JSON.stringify(body),
       signal,
     });
     if (!response.body) {

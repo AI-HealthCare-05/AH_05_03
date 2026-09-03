@@ -162,8 +162,11 @@ def _blood_pressure(directory: Path, suffix: str, index: pd.Index) -> tuple[pd.S
     # 부동소수(~5.4e-79)로 저장해서 등호 비교를 빠져나가고, 그 값이 평균에 섞이면
     # 이완기 80 인 사람이 26.7 로 기록된다. EDA 에서 30 미만 329 행으로 잡혔다.
     diastolic_raw = source[diastolic_columns].apply(lambda column: _blank(column, set()))
-    systolic = source[systolic_columns].apply(lambda column: _blank(column, set()))
-    systolic = systolic.mask(systolic <= 0).mean(axis=1, skipna=True)
+    # 이완기 쪽 `_raw` 와 이름을 맞춘다. 원래는 `systolic` 하나가 DataFrame 이었다가
+    # 다음 줄에서 Series 로 덮여 있었고, 그래서 이 함수의 반환 타입이 실제로는
+    # `tuple[DataFrame, Series, str]` 인 것처럼 읽혔다.
+    systolic_raw = source[systolic_columns].apply(lambda column: _blank(column, set()))
+    systolic = systolic_raw.mask(systolic_raw <= 0).mean(axis=1, skipna=True)
     diastolic = diastolic_raw.mask(diastolic_raw <= 0).mean(axis=1, skipna=True)
     return systolic.reindex(index), diastolic.reindex(index), style
 

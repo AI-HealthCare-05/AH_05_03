@@ -282,11 +282,17 @@ def make_pipeline(
     model: str,
     monotone: tuple[int, ...] | None = None,
     seed: int = SEED,
+    params: dict[str, Any] | None = None,
 ) -> Pipeline:
     """결측 지시자를 쓰지 않는다.
 
     "이 질문을 건너뛰었다"가 특징이 되면, 사용자가 선택 항목 하나를 비우는
     행위만으로 확률이 튄다. 빈칸은 '평균이라고 가정'이라는 뜻이어야 한다.
+
+    `params` 는 모델 하이퍼파라미터를 덮어쓴다. **튜닝 스크립트가 파이프라인을 따로
+    만들지 않게 하려고 있다.** `tune_lab.py` 가 전처리 블록을 통째로 복사해 갖고
+    있었는데, 그러면 전처리를 한쪽에서 고치는 순간 "튜닝해서 고른 설정" 과 "실제로
+    배포되는 파이프라인" 이 조용히 달라진다 — 34번 문서 §0 의 사고 1 과 같은 모양이다.
     """
     steps: list[tuple[str, Any]] = [
         (
@@ -320,16 +326,19 @@ def make_pipeline(
             (
                 "model",
                 XGBClassifier(
-                    n_estimators=200,
-                    max_depth=3,
-                    min_child_weight=50,
-                    learning_rate=0.05,
-                    subsample=0.8,
-                    colsample_bytree=0.8,
-                    reg_lambda=1.0,
-                    eval_metric="logloss",
-                    random_state=seed,
-                    n_jobs=4,
+                    **{
+                        "n_estimators": 200,
+                        "max_depth": 3,
+                        "min_child_weight": 50,
+                        "learning_rate": 0.05,
+                        "subsample": 0.8,
+                        "colsample_bytree": 0.8,
+                        "reg_lambda": 1.0,
+                        "eval_metric": "logloss",
+                        "random_state": seed,
+                        "n_jobs": 4,
+                        **(params or {}),
+                    },
                     **({"monotone_constraints": monotone} if monotone else {}),
                 ),
             )
@@ -343,13 +352,16 @@ def make_pipeline(
             (
                 "model",
                 CatBoostClassifier(
-                    iterations=400,
-                    depth=6,
-                    learning_rate=0.05,
-                    l2_leaf_reg=3.0,
-                    random_seed=seed,
-                    verbose=0,
-                    allow_writing_files=False,
+                    **{
+                        "iterations": 400,
+                        "depth": 6,
+                        "learning_rate": 0.05,
+                        "l2_leaf_reg": 3.0,
+                        "random_seed": seed,
+                        "verbose": 0,
+                        "allow_writing_files": False,
+                        **(params or {}),
+                    },
                     **({"monotone_constraints": list(monotone)} if monotone else {}),
                 ),
             )
@@ -509,7 +521,7 @@ def run_one(
     numeric = [c for c in columns if c not in CATEGORICAL]
     categorical = [c for c in columns if c in CATEGORICAL]
 
-    monotone = monotone_vector(frame, numeric, categorical) if model == "xgboost" else None
+    monotone = monotone_for(model, frame, numeric, categorical, target.key)
     pipeline = make_pipeline(numeric, categorical, model, monotone)
     pipeline.fit(frame.loc[split.train_index], y.loc[split.train_index])
     raw = pipeline.predict_proba(frame.loc[split.holdout_index])[:, 1]

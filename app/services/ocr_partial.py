@@ -76,15 +76,20 @@ class PartialJsonTextReader:
     (`tables` 가 먼저 올 수도 있다) 나오는 시점부터 따라간다.
     """
 
-    __slots__ = ("_raw", "_emitted", "_closed")
+    __slots__ = ("_raw", "_emitted", "_closed", "_key")
 
-    # 스키마의 필드명. 바뀌면 여기도 바꿔야 한다 — `RawOcrData.text` 와 같아야 한다.
-    KEY = '"text"'
+    #: 기본 필드명. `RawOcrData.text` 와 같아야 한다.
+    #:
+    #: 대화 응답도 같은 방식으로 흘린다(`assistant_message`). 구조는 똑같고 뽑아낼
+    #: 키만 다르므로 인자로 받는다 — 해독기를 두 벌 두면 이스케이프·안전 경계 같은
+    #: 까다로운 부분이 두 곳에서 갈라진다.
+    KEY = "text"
 
-    def __init__(self) -> None:
+    def __init__(self, key: str = KEY) -> None:
         self._raw = ""
         self._emitted = 0
         self._closed = False
+        self._key = f'"{key}"'
 
     def push(self, delta: str) -> str:
         """원본 JSON 청크를 먹이고 **새로 해독된 텍스트만** 돌려준다."""
@@ -100,11 +105,11 @@ class PartialJsonTextReader:
 
     def _decode(self) -> str | None:
         """지금까지 받은 것으로 `text` 값을 최대한 해독한다. 아직이면 None."""
-        key_at = self._raw.find(self.KEY)
+        key_at = self._raw.find(self._key)
         if key_at == -1:
             return None
-        # `"text"` 다음의 콜론과 여는 따옴표를 찾는다. 공백이 끼어 있을 수 있다.
-        colon = self._raw.find(":", key_at + len(self.KEY))
+        # 키 다음의 콜론과 여는 따옴표를 찾는다. 공백이 끼어 있을 수 있다.
+        colon = self._raw.find(":", key_at + len(self._key))
         if colon == -1:
             return None
         open_quote = self._raw.find('"', colon + 1)

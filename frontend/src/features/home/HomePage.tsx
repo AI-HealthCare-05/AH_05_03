@@ -2,22 +2,27 @@ import { lazy, Suspense, type FormEvent, useCallback, useEffect, useMemo, useSta
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
+import { Modal } from "../../shared/ui/Modal";
+// 모달은 눌러야 뜬다. 정적으로 두면 판정 카드 일체가 홈의 첫 청크에 실린다.
+const RecordDetail = lazy(() => import("./RecordDetail").then((m) => ({ default: m.RecordDetail })));
+// 건강 비서. 3,000줄 + CSS 1,500줄이라 홈의 첫 청크에 넣지 않는다 — 대화를 한 번도
+// 열지 않는 사용자가 그걸 다 받아 갈 이유가 없다.
+const HealthAssistantDrawer = lazy(() =>
+  import("../health-assistant/HealthAssistantDrawer").then((m) => ({ default: m.HealthAssistantDrawer })),
+);
+import { RecordSummary } from "./RecordSummary";
 import type {
   DashboardSummary,
   FamilyProfile,
   HealthRecord,
   HealthRecordType,
-  TodayChallengeSummary,
 } from "../../shared/local/domainContracts";
+import { LEVEL_LABEL } from "../assessment/contracts";
+import type { RiskLevel } from "../assessment/contracts";
+import { type LatestSummary, listLatestByProfile } from "../assessment/snapshots";
+import { regionRisks, type RegionRisk } from "./bodyRisk";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
-import { TodayChallengeCard } from "../challenge/TodayChallengeCard";
-import {
-  FloatingHealthTools,
-  HealthRecordComposer,
-  HealthRecordHistoryDialog,
-} from "../health-record/HealthRecordWorkspace";
-import { HealthAssistantDrawer } from "../health-assistant/HealthAssistantDrawer";
-import { FamilyProfileSidebar } from "../family/FamilyProfileSidebar";
+import { ChallengeDashboardCard } from "../challenge/ChallengeDashboardCard";
 
 const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
   default: module.VanatomeBodyMap,
@@ -57,55 +62,43 @@ export function HomePage() {
     hideProfile,
     restoreProfile,
     deleteEmptyProfile,
+    createHealthRecord,
     updateHealthRecord,
     deleteHealthRecord,
     restoreHealthRecord,
+    purgeHealthRecord,
   } = useLocalDomain();
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [summary, setSummary] = useState<DashboardSummary>();
   const [records, setRecords] = useState<HealthRecord[]>([]);
   const [deletedRecords, setDeletedRecords] = useState<HealthRecord[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(false);
+  // "건강기록 작성" 을 누르면 바로 폼이 아니라 갈림길이 먼저 뜬다. 손으로 적는 것과
+  // 검진표를 올리는 것은 하는 일이 전혀 달라서, 한 폼에 욱여넣으면 둘 다 어색해진다.
+  const [recordChoiceOpen, setRecordChoiceOpen] = useState(false);
+  // 구성원별 최근 판정. 카드 위에 얹어 "누구를 열어 봐야 하나"를 한눈에 준다.
+  const [verdicts, setVerdicts] = useState<Record<string, LatestSummary>>({});
+  // 자세히 볼 판정 기록. 판정은 수정·삭제 대상이 아니라 열어 보는 대상이다.
+  const [openRecord, setOpenRecord] = useState<HealthRecord>();
+  // 3D 인체에 색을 입힐 판정. `openRecord` 와 따로 두는 이유는 모달을 닫아도 색은
+  // 남아야 하기 때문이다 — 모달을 닫는 동작은 "그만 볼래" 지 "선택을 풀래" 가 아니다.
+  const [bodyRecord, setBodyRecord] = useState<HealthRecord>();
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  // 영구 삭제를 물어볼 대상. **한 번 더 누르게 한다** — 되돌릴 수 없는데 복원 버튼
+  // 바로 옆이라, 한 번에 지워지면 누르려던 것과 다른 것이 사라진다.
+  const [purgingRecord, setPurgingRecord] = useState<HealthRecord>();
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [profileEditDialogOpen, setProfileEditDialogOpen] = useState(false);
   const [profileLifecycleAction, setProfileLifecycleAction] = useState<"hide" | "delete">();
   const [hiddenProfilesDialogOpen, setHiddenProfilesDialogOpen] = useState(false);
   const [recordDialogOpen, setRecordDialogOpen] = useState(false);
-  const [recordHistoryDialogOpen, setRecordHistoryDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<HealthRecord>();
   const [deletingRecord, setDeletingRecord] = useState<HealthRecord>();
   const [deletedRecordsDialogOpen, setDeletedRecordsDialogOpen] = useState(false);
   const [familyHistoryDialogOpen, setFamilyHistoryDialogOpen] = useState(false);
-  const [assistantOpen, setAssistantOpen] = useState(false);
-  const [challengeSummary, setChallengeSummary] = useState<TodayChallengeSummary>();
-  const [challengeLoading, setChallengeLoading] = useState(false);
   const [actionError, setActionError] = useState<string>();
   const [saving, setSaving] = useState(false);
   const localStorageReady = Boolean(runtime);
-
-  const selectedProfile = useMemo(
-    () => profiles.find((profile) => profile.id === (routeProfileId ?? selectedProfileId)) ?? profiles[0],
-    [profiles, routeProfileId, selectedProfileId],
-  );
-
-  const refreshChallenge = useCallback(
-    async (profileId: string) => {
-      if (!runtime) return;
-      setChallengeSummary(undefined);
-      setChallengeLoading(true);
-      try {
-        const result = await runtime.challenges.getTodaySummary(profileId);
-        if (result.ok) {
-          setChallengeSummary(result.value);
-        }
-      } catch (err) {
-        console.error("Failed to load challenge summary:", err);
-      } finally {
-        setChallengeLoading(false);
-      }
-    },
-    [runtime],
-  );
 
   const refreshDashboard = useCallback(
     async (profileId: string) => {
@@ -131,41 +124,38 @@ export function HomePage() {
     [runtime],
   );
 
-  const handleToggleChallengeTask = useCallback(
-    async (taskId: string) => {
-      if (!runtime || !challengeSummary?.plan || !selectedProfile) return;
-      try {
-        const result = await runtime.challenges.toggleTaskComplete(
-          challengeSummary.plan.id,
-          selectedProfile.id,
-          taskId,
-          challengeSummary.todayDate,
-        );
-        if (result.ok) {
-          await refreshChallenge(selectedProfile.id);
-        }
-      } catch (err) {
-        console.error("Failed to toggle task complete:", err);
-      }
-    },
-    [challengeSummary, refreshChallenge, runtime, selectedProfile],
+  /**
+   * 인체에 색을 입힐 판정 **한 장**.
+   *
+   * 여러 판정을 합치지 않는다. 합치면 "언제 잰 몸인가" 가 사라진다 — 3월의 콩팥과
+   * 9월의 심장을 한 인체에 얹으면 그건 아무 시점의 몸도 아니다. 고르지 않았으면
+   * 가장 최근 판정을 쓴다. 색이 무엇을 근거로 하는지는 화면에 날짜로 적는다.
+   */
+  const activeBodyRecord = useMemo(
+    () => bodyRecord ?? records.find((record) => record.recordType === "assessment"),
+    [bodyRecord, records],
   );
 
-  const handleCompleteAllChallenge = useCallback(async () => {
-    if (!runtime || !challengeSummary?.plan || !selectedProfile) return;
-    try {
-      const result = await runtime.challenges.completeAllToday(
-        challengeSummary.plan.id,
-        selectedProfile.id,
-        challengeSummary.todayDate,
-      );
-      if (result.ok) {
-        await refreshChallenge(selectedProfile.id);
-      }
-    } catch (err) {
-      console.error("Failed to complete all challenge tasks:", err);
-    }
-  }, [challengeSummary, refreshChallenge, runtime, selectedProfile]);
+  // 고른 판정 -> 부위별 위험. 판정이 없는 기록(수치만 적은 것)이면 색을 안 칠한다.
+  const bodyRisks: RegionRisk[] | undefined = useMemo(() => {
+    if (!activeBodyRecord || activeBodyRecord.recordType !== "assessment") return undefined;
+    const payload = activeBodyRecord.payload as unknown as {
+      verdicts?: { key: string; name?: string; risk_level: string }[];
+      levels?: Record<string, string>;
+    };
+    // `verdicts` 가 생기기 전에 남긴 기록도 있다. 그때는 등급만 남아 있으므로
+    // 그걸로 만든다 — 이름이 없어도 부위는 키로 정해진다.
+    const verdicts =
+      payload.verdicts ??
+      Object.entries(payload.levels ?? {}).map(([key, risk_level]) => ({ key, risk_level }));
+    const risks = regionRisks(verdicts);
+    return risks.length > 0 ? risks : undefined;
+  }, [activeBodyRecord]);
+
+  const selectedProfile = useMemo(
+    () => profiles.find((profile) => profile.id === (routeProfileId ?? selectedProfileId)) ?? profiles[0],
+    [profiles, routeProfileId, selectedProfileId],
+  );
 
   useEffect(() => {
     if (!runtime || !routeRecordId) return;
@@ -179,12 +169,33 @@ export function HomePage() {
 
   useEffect(() => {
     if (!selectedProfile) return;
-    const timeout = window.setTimeout(() => {
-      void refreshDashboard(selectedProfile.id);
-      void refreshChallenge(selectedProfile.id);
-    }, 0);
+    const timeout = window.setTimeout(() => void refreshDashboard(selectedProfile.id), 0);
     return () => window.clearTimeout(timeout);
-  }, [refreshChallenge, refreshDashboard, selectedProfile]);
+  }, [refreshDashboard, selectedProfile]);
+
+  // 판정 요약은 구성원 목록이 바뀔 때만 다시 읽는다. 판정 화면에서 돌아오면 라우트가
+  // 갈리면서 이 화면이 다시 서므로 최신값이 따라온다.
+  // 취소 깃발을 두는 이유는 구성원을 빠르게 더했을 때 **먼저 띄운 조회가 늦게 돌아와**
+  // 지운 사람의 요약을 되살리는 것을 막기 위해서다.
+  const profileIds = useMemo(() => profiles.map((profile) => profile.id).join(","), [profiles]);
+  useEffect(() => {
+    if (!runtime || !profileIds) return;
+    let cancelled = false;
+    void listLatestByProfile(runtime, profileIds.split(","))
+      .then((found) => {
+        if (!cancelled) setVerdicts(found);
+      })
+      .catch((caught: unknown) => {
+        // 카드 위 요약이 못 뜨는 것뿐이라 화면 전체를 막지 않는다. 다만 조용히
+        // 넘기지도 않는다 — 보관함이 깨졌다는 신호일 수 있다.
+        if (!cancelled) {
+          setActionError(messageFrom(caught, "구성원별 최근 판정을 불러오지 못했습니다."));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [runtime, profileIds]);
 
   async function submitProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -204,6 +215,30 @@ export function HomePage() {
       formElement.reset();
     } catch (caught) {
       setActionError(messageFrom(caught, "구성원을 저장하지 못했습니다."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitHealthRecord(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedProfile) return;
+    setSaving(true);
+    setActionError(undefined);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    try {
+      await createHealthRecord({
+        profileId: selectedProfile.id,
+        recordType: String(form.get("recordType")) as HealthRecordType,
+        recordedAt: new Date(String(form.get("recordedAt"))).toISOString(),
+        note: String(form.get("note") ?? ""),
+      });
+      await refreshDashboard(selectedProfile.id);
+      setRecordDialogOpen(false);
+      formElement.reset();
+    } catch (caught) {
+      setActionError(messageFrom(caught, "건강기록을 저장하지 못했습니다."));
     } finally {
       setSaving(false);
     }
@@ -263,6 +298,21 @@ export function HomePage() {
       setDeletingRecord(undefined);
     } catch (caught) {
       setActionError(messageFrom(caught, "건강기록을 삭제하지 못했습니다."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function purgeDeletedHealthRecord(record: HealthRecord) {
+    setActionError(undefined);
+    setSaving(true);
+    try {
+      await purgeHealthRecord(record.id, record.version);
+      setPurgingRecord(undefined);
+      await refreshDashboard(record.profileId);
+      if (deletedRecords.length === 1) setDeletedRecordsDialogOpen(false);
+    } catch (caught) {
+      setActionError(messageFrom(caught, "건강기록을 영구 삭제하지 못했습니다."));
     } finally {
       setSaving(false);
     }
@@ -345,11 +395,80 @@ export function HomePage() {
           <strong>민감한 건강정보는 이 기기 안에서 처리합니다.</strong>
           <p>현재 버전은 같은 브라우저 프로필의 사용자별 보관함 잠금을 아직 지원하지 않습니다. 공용 PC에서는 각자 다른 OS·브라우저 프로필을 사용하세요.</p>
         </div>
-        <NavLink to="/health-files">건강 파일 관리</NavLink>
+        <NavLink to="/data">백업 관리</NavLink>
       </section>
 
       {error ? <div className="alert error-alert" role="alert">{error}</div> : null}
       {actionError && !profileLifecycleAction && !hiddenProfilesDialogOpen ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
+
+      {/* 챌린지 요약. 로그인 전이거나 서버가 안 붙으면 스스로 아무것도 안 그린다. */}
+      <ChallengeDashboardCard />
+
+      <section className="dashboard-section" aria-labelledby="members-heading">
+        <div className="section-title-row">
+          <div>
+            <p className="section-kicker">가족 구성원</p>
+            <h2 id="members-heading">누구의 기록을 볼까요?</h2>
+          </div>
+          <div className="member-section-actions">
+            {hiddenProfiles.length > 0 ? (
+              <button className="secondary-button compact-button" type="button" onClick={() => {
+                setActionError(undefined);
+                setHiddenProfilesDialogOpen(true);
+              }}>
+                숨긴 프로필 {hiddenProfiles.length}명
+              </button>
+            ) : null}
+            <span className="section-count">{profiles.length}명</span>
+          </div>
+        </div>
+
+        {loading ? <DashboardSkeleton /> : null}
+        {!loading && profiles.length === 0 ? (
+          <EmptyHousehold
+            disabled={!localStorageReady}
+            onCreate={() => setProfileDialogOpen(true)}
+          />
+        ) : null}
+        {profiles.length > 0 ? (
+          <div className="member-list" role="list">
+            {profiles.map((profile, index) => (
+              <button
+                className={profile.id === selectedProfile?.id ? "member-card is-selected" : "member-card"}
+                key={profile.id}
+                type="button"
+                role="listitem"
+                aria-pressed={profile.id === selectedProfile?.id}
+                onClick={() => {
+                  setSelectedProfileId(profile.id);
+                  void navigate(`/members/${profile.id}`);
+                }}
+              >
+                <span className={`member-avatar avatar-tone-${index % 4}`} aria-hidden="true">
+                  {profile.displayName.slice(0, 1)}
+                </span>
+                <span className="member-card-copy">
+                  <strong>{profile.displayName}</strong>
+                  <small>{profile.relationship}{profile.birthDate ? ` · ${profile.birthDate.slice(0, 4)}년생` : ""}</small>
+                </span>
+                <MemberVerdict summary={verdicts[profile.id]} />
+              </button>
+            ))}
+            <button
+              className="member-card add-member-card"
+              type="button"
+              disabled={!localStorageReady}
+              onClick={() => setProfileDialogOpen(true)}
+            >
+              <span className="add-member-mark" aria-hidden="true">+</span>
+              <span className="member-card-copy">
+                <strong>구성원 추가</strong>
+                <small>이 브라우저에 새 프로필 만들기</small>
+              </span>
+            </button>
+          </div>
+        ) : null}
+      </section>
 
       {selectedProfile ? (
         <section className="member-dashboard" aria-labelledby="selected-member-heading">
@@ -366,33 +485,14 @@ export function HomePage() {
                 }}>
                   프로필 관리
                 </button>
-                <button className="secondary-button" type="button" onClick={() => {
-                  setFamilyHistoryDialogOpen(true);
-                  void navigate(`/members/${selectedProfile.id}/family-history`);
-                }}>
-                  가족력 관리
-                </button>
-                <button className="primary-button" type="button" onClick={() => setRecordDialogOpen(true)}>
+                <button className="primary-button" type="button" onClick={() => setRecordChoiceOpen(true)}>
                   건강기록 작성
                 </button>
               </div>
             </div>
 
-            {/* 1. 오늘의 챌린지 카드 (Hero Section) */}
-            <TodayChallengeCard
-              profileName={selectedProfile.displayName}
-              summary={challengeSummary}
-              loading={challengeLoading}
-              onToggleTask={handleToggleChallengeTask}
-              onCompleteAll={handleCompleteAllChallenge}
-              onOpenAssistantForChallenge={() => setAssistantOpen(true)}
-            />
-
-            {/* 2. 건강 지표 요약 카드 */}
             <div className="metric-grid">
-              <button className="metric-card-button" type="button" onClick={() => setRecordHistoryDialogOpen(true)}>
-                <MetricCard label="저장된 기록" value={`${summary?.totalRecords ?? 0}건`} helper="눌러서 전체 기록 보기" />
-              </button>
+              <MetricCard label="저장된 기록" value={`${summary?.totalRecords ?? 0}건`} helper="암호화 로컬 저장" />
               <MetricCard
                 label="최근 기록"
                 value={summary?.latestRecordedAt ? formatDate(summary.latestRecordedAt) : "아직 없음"}
@@ -401,30 +501,39 @@ export function HomePage() {
               <MetricCard label="프로필 상태" value="안전" helper="서버 전송 없음" tone="safe" />
             </div>
 
-            {/* 3. 최근 건강기록 목록 */}
+            <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
+              <VanatomeBodyMap
+                profileName={selectedProfile.displayName}
+                risks={bodyRisks}
+                risksAt={activeBodyRecord ? formatDateTime(activeBodyRecord.recordedAt) : undefined}
+              />
+            </Suspense>
+
             <div className="records-panel">
               <div className="panel-heading">
-                <div>
-                  <h3>최근 건강기록</h3>
-                  <p>최신 기록부터 보여줍니다.</p>
-                </div>
-                <div className="panel-heading-actions">
-                  {deletedRecords.length > 0 ? (
-                    <button className="text-button" type="button" onClick={() => {
-                      setActionError(undefined);
-                      setDeletedRecordsDialogOpen(true);
-                    }}>
-                      삭제된 기록 {deletedRecords.length}건
-                    </button>
-                  ) : null}
-                  {dashboardLoading ? <span className="subtle-status">불러오는 중…</span> : null}
-                </div>
+              <div>
+                <h3>최근 건강기록</h3>
+                <p>최신 기록부터 보여줍니다.</p>
+              </div>
+              <div className="panel-heading-actions">
+                {deletedRecords.length > 0 ? (
+                  <button className="text-button" type="button" onClick={() => {
+                    setActionError(undefined);
+                    setDeletedRecordsDialogOpen(true);
+                  }}>
+                    삭제된 기록 {deletedRecords.length}건
+                  </button>
+                ) : null}
+                {dashboardLoading ? <span className="subtle-status">불러오는 중…</span> : null}
+              </div>
               </div>
               {records.length === 0 ? (
                 <div className="compact-empty">
                   <strong>아직 건강기록이 없습니다.</strong>
                   <p>검진 결과, 통증 변화나 건강 메모부터 남겨보세요.</p>
-                  <button className="text-button" type="button" onClick={() => setRecordDialogOpen(true)}>
+                  {/* 기록으로 들어가는 문 셋이 모두 같은 갈림길을 지난다. 하나만
+                      곧장 폼을 열면 어느 버튼을 눌렀느냐에 따라 다른 일이 벌어진다. */}
+                  <button className="text-button" type="button" onClick={() => setRecordChoiceOpen(true)}>
                     첫 기록 작성하기
                   </button>
                 </div>
@@ -435,15 +544,30 @@ export function HomePage() {
                       <span className="record-type-mark" aria-hidden="true">{recordMark(record.recordType)}</span>
                       <div>
                         <strong>{RECORD_LABELS[record.recordType]}</strong>
-                        <p>{recordNote(record)}</p>
+                        <RecordSummary record={record} />
                       </div>
                       <time dateTime={record.recordedAt}>{formatDateTime(record.recordedAt)}</time>
                       <div className="record-row-actions">
-                        <button type="button" onClick={() => {
-                          setActionError(undefined);
-                          setEditingRecord(record);
-                          void navigate(`/members/${selectedProfile.id}/records/${record.id}`);
-                        }}>수정</button>
+                        {/* 판정은 그날 화면에 뜬 값을 그대로 남긴 것이라 고칠 것이 아니다.
+                            손으로 고치면 그날 본 것과 기록이 어긋난다. 그래서 열어 보기만 한다. */}
+                        {record.recordType === "assessment" ? (
+                          <button
+                            type="button"
+                            aria-pressed={activeBodyRecord?.id === record.id}
+                            onClick={() => {
+                              setBodyRecord(record);
+                              setOpenRecord(record);
+                            }}
+                          >
+                            자세히
+                          </button>
+                        ) : (
+                          <button type="button" onClick={() => {
+                            setActionError(undefined);
+                            setEditingRecord(record);
+                            void navigate(`/members/${selectedProfile.id}/records/${record.id}`);
+                          }}>수정</button>
+                        )}
                         <button type="button" onClick={() => {
                           setActionError(undefined);
                           setDeletingRecord(record);
@@ -454,58 +578,32 @@ export function HomePage() {
                 </ul>
               )}
             </div>
-
-            {/* 4. 3D 인체 모델 */}
-            <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
-              <VanatomeBodyMap profileName={selectedProfile.displayName} />
-            </Suspense>
           </div>
 
-          <FamilyProfileSidebar
-            profiles={profiles}
-            selectedProfileId={selectedProfile.id}
-            onSelect={(profileId) => {
-              setSelectedProfileId(profileId);
-              void navigate(`/members/${profileId}`);
-            }}
-            onAdd={() => setProfileDialogOpen(true)}
-            addDisabled={!localStorageReady}
-            hiddenCount={hiddenProfiles.length}
-            onManageHidden={() => {
-              setActionError(undefined);
-              setHiddenProfilesDialogOpen(true);
-            }}
-            description="구성원을 선택하면 해당 프로필의 건강기록과 챌린지로 전환됩니다."
-          />
+          <aside className="quick-actions-panel">
+            <p className="section-kicker">빠른 작업</p>
+            <h2>무엇을 기록할까요?</h2>
+            <button type="button" onClick={() => setRecordChoiceOpen(true)}>
+              <strong>건강기록 작성</strong>
+              <small>직접 적거나, 검진표를 올려 판정까지</small>
+            </button>
+            <button type="button" onClick={() => {
+              setFamilyHistoryDialogOpen(true);
+              void navigate(`/members/${selectedProfile.id}/family-history`);
+            }}>
+              <strong>가족력 관리</strong>
+              <small>구성원별 질환·친족 정보</small>
+            </button>
+            <NavLink to="/data">
+              <strong>암호화 백업</strong>
+              <small>파일로 내보내기·가져오기</small>
+            </NavLink>
+          </aside>
         </section>
-      ) : (
-        <section className="dashboard-section" aria-labelledby="members-heading">
-          <div className="section-title-row">
-            <div>
-              <p className="section-kicker">가족 구성원</p>
-              <h2 id="members-heading">첫 건강 프로필을 만들어 주세요</h2>
-            </div>
-            {hiddenProfiles.length > 0 ? (
-              <button className="secondary-button compact-button" type="button" onClick={() => {
-                setActionError(undefined);
-                setHiddenProfilesDialogOpen(true);
-              }}>
-                숨긴 프로필 {hiddenProfiles.length}명
-              </button>
-            ) : null}
-          </div>
-          {loading ? <DashboardSkeleton /> : null}
-          {!loading ? (
-          <EmptyHousehold
-            disabled={!localStorageReady}
-            onCreate={() => setProfileDialogOpen(true)}
-          />
-          ) : null}
-        </section>
-      )}
+      ) : null}
 
       {profileDialogOpen ? (
-        <Modal title="가족 구성원 로컬 프로필 만들기" onClose={() => setProfileDialogOpen(false)}>
+        <Modal kicker="이 기기에 저장" title="가족 구성원 로컬 프로필 만들기" onClose={() => setProfileDialogOpen(false)}>
           <form className="product-form" onSubmit={submitProfile}>
             <p className="form-notice">입력한 정보는 이 브라우저에 암호화해 저장하며 서버로 보내지 않습니다.</p>
             <label>
@@ -531,40 +629,101 @@ export function HomePage() {
         </Modal>
       ) : null}
 
-      {recordDialogOpen && selectedProfile ? (
-        <Modal title={`${selectedProfile.displayName}님의 건강기록 작성`} onClose={() => setRecordDialogOpen(false)}>
-          <HealthRecordComposer
-            profile={selectedProfile}
-            runtime={runtime}
-            onClose={() => setRecordDialogOpen(false)}
-            onSaved={() => refreshDashboard(selectedProfile.id)}
-            onOpenPainChat={() => {
-              setRecordDialogOpen(false);
-              setAssistantOpen(true);
-            }}
-          />
+      {openRecord ? (
+        <Suspense fallback={null}>
+          <RecordDetail record={openRecord} onClose={() => setOpenRecord(undefined)} />
+        </Suspense>
+      ) : null}
+
+      {recordChoiceOpen && selectedProfile ? (
+        <Modal kicker="이 기기에 저장" title={`${selectedProfile.displayName}님의 기록을 어떻게 남길까요?`} onClose={() => setRecordChoiceOpen(false)}>
+          <div className="record-choice">
+            <button
+              className="record-choice-card"
+              type="button"
+              onClick={() => {
+                setRecordChoiceOpen(false);
+                setRecordDialogOpen(true);
+              }}
+            >
+              <strong>직접 작성</strong>
+              <small>혈압을 재거나 통증이 있었던 날처럼, 짧게 적어 두는 기록이에요.</small>
+              <span className="record-choice-meta">종류 · 시각 · 내용</span>
+            </button>
+
+            <button
+              className="record-choice-card is-primary"
+              type="button"
+              onClick={() => {
+                setRecordChoiceOpen(false);
+                // 판정 화면이 문서 패널을 열고, 이 구성원을 골라 둔 채로 시작한다.
+                void navigate("/assessment", {
+                  state: { withDocument: true, profileId: selectedProfile.id },
+                });
+              }}
+            >
+              <strong>검진표 올려서 판정</strong>
+              <small>
+                건강검진 결과지를 올리면 표에서 수치를 읽어 판정 폼을 채워요. 원본을 옆에 두고 고친 뒤 예측하면
+                결과와 수치가 함께 기록으로 남습니다.
+              </small>
+              <span className="record-choice-meta">이미지 · PDF · 7~20초</span>
+            </button>
+
+            {/* 대화로 남기는 길. 앞의 둘과 성격이 다르다 — 무엇을 적을지 정하지 않고
+                "어제 30분 걸었어" 처럼 말하면 비서가 종류와 칸을 골라 준다. 폼을
+                채우기 어려운 사람에게는 이쪽이 유일하게 끝까지 가는 길이다. */}
+            <button
+              className="record-choice-card"
+              type="button"
+              onClick={() => {
+                setRecordChoiceOpen(false);
+                setAssistantOpen(true);
+              }}
+            >
+              <strong>봄이와 대화로</strong>
+              <small>
+                “어제 30분 걸었어”, “아침 혈압 130에 85” 처럼 말하면 비서가 종류를 고르고 빠진 칸을 되물어 기록으로
+                남겨요. 검진표 사진도 대화 안에서 올릴 수 있어요.
+              </small>
+              <span className="record-choice-meta">운동 · 혈압 · 혈당 · 복약 · 통증</span>
+            </button>
+          </div>
+          <p className="form-notice">
+            검진표 원본은 이 브라우저에 암호화해 보관합니다. 읽는 동안에만 서버를 거치고, 서버 데이터베이스에는
+            남지 않습니다.
+          </p>
         </Modal>
       ) : null}
 
-      {recordHistoryDialogOpen ? (
-        <Modal title={`${selectedProfile?.displayName ?? ""}님의 저장된 건강기록`} onClose={() => setRecordHistoryDialogOpen(false)}>
-          <HealthRecordHistoryDialog
-            records={records}
-            onEdit={(record) => {
-              setRecordHistoryDialogOpen(false);
-              setEditingRecord(record);
-              if (selectedProfile) void navigate(`/members/${selectedProfile.id}/records/${record.id}`);
-            }}
-            onDelete={(record) => {
-              setRecordHistoryDialogOpen(false);
-              setDeletingRecord(record);
-            }}
-          />
+      {recordDialogOpen && selectedProfile ? (
+        <Modal kicker="이 기기에 저장" title={`${selectedProfile.displayName}님의 건강기록 작성`} onClose={() => setRecordDialogOpen(false)}>
+          <form className="product-form" onSubmit={submitHealthRecord}>
+            <p className="form-notice">이 기록은 서버 API를 거치지 않고 현재 브라우저에 바로 암호화됩니다.</p>
+            <label>
+              기록 종류
+              <select name="recordType" defaultValue="note" required>
+                {Object.entries(RECORD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <label>
+              기록 시각
+              <input name="recordedAt" type="datetime-local" required defaultValue={currentLocalDateTime()} />
+            </label>
+            <label>
+              기록 내용
+              <textarea name="note" rows={5} required placeholder="변화, 수치 또는 확인할 내용을 적어주세요." />
+            </label>
+            <div className="form-actions">
+              <button className="secondary-button" type="button" onClick={() => setRecordDialogOpen(false)}>취소</button>
+              <button className="primary-button" type="submit" disabled={saving}>{saving ? "암호화 중…" : "기록 저장"}</button>
+            </div>
+          </form>
         </Modal>
       ) : null}
 
       {editingRecord ? (
-        <Modal title="건강기록 수정" onClose={() => {
+        <Modal kicker="이 기기에 저장" title="건강기록 수정" onClose={() => {
           setEditingRecord(undefined);
           if (selectedProfile) void navigate(`/members/${selectedProfile.id}/records`);
         }}>
@@ -595,7 +754,7 @@ export function HomePage() {
       ) : null}
 
       {deletingRecord ? (
-        <Modal title="건강기록을 삭제할까요?" onClose={() => setDeletingRecord(undefined)}>
+        <Modal kicker="이 기기에 저장" title="건강기록을 삭제할까요?" onClose={() => setDeletingRecord(undefined)}>
           <div className="profile-confirmation">
             <p>기록은 즉시 영구 삭제되지 않고 삭제 목록으로 이동합니다. 필요하면 다시 복원할 수 있습니다.</p>
             {actionError ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
@@ -610,7 +769,7 @@ export function HomePage() {
       ) : null}
 
       {deletedRecordsDialogOpen ? (
-        <Modal title="삭제된 건강기록" onClose={() => setDeletedRecordsDialogOpen(false)}>
+        <Modal kicker="이 기기에 저장" title="삭제된 건강기록" onClose={() => setDeletedRecordsDialogOpen(false)}>
           <div className="hidden-profiles-content">
             <p className="form-notice">삭제한 기록은 대시보드 집계에서 제외되며 이 브라우저에서 복원할 수 있습니다.</p>
             {actionError ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
@@ -618,7 +777,22 @@ export function HomePage() {
               {deletedRecords.map((record) => (
                 <article className="hidden-profile-row" key={record.id}>
                   <div><strong>{RECORD_LABELS[record.recordType]}</strong><small>{formatDateTime(record.recordedAt)} · {recordNote(record)}</small></div>
-                  <button className="secondary-button" type="button" disabled={saving} onClick={() => void restoreDeletedHealthRecord(record)}>복원</button>
+                  {purgingRecord?.id === record.id ? (
+                    <div className="record-purge-confirm">
+                      <span>되돌릴 수 없어요.</span>
+                      <button className="danger-button" type="button" disabled={saving} onClick={() => void purgeDeletedHealthRecord(record)}>
+                        영구 삭제
+                      </button>
+                      <button className="text-button" type="button" disabled={saving} onClick={() => setPurgingRecord(undefined)}>
+                        취소
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="record-row-actions">
+                      <button className="secondary-button" type="button" disabled={saving} onClick={() => void restoreDeletedHealthRecord(record)}>복원</button>
+                      <button className="text-button" type="button" disabled={saving} onClick={() => setPurgingRecord(record)}>영구 삭제</button>
+                    </div>
+                  )}
                 </article>
               ))}
             </div>
@@ -627,7 +801,7 @@ export function HomePage() {
       ) : null}
 
       {profileEditDialogOpen && selectedProfile ? (
-        <Modal title={`${selectedProfile.displayName} 프로필 관리`} onClose={() => setProfileEditDialogOpen(false)}>
+        <Modal kicker="이 기기에 저장" title={`${selectedProfile.displayName} 프로필 관리`} onClose={() => setProfileEditDialogOpen(false)}>
           <form className="product-form" onSubmit={submitProfileUpdate}>
             <p className="form-notice">프로필 정보와 건강기록은 계속 이 브라우저에만 저장됩니다.</p>
             <label>
@@ -707,7 +881,7 @@ export function HomePage() {
       ) : null}
 
       {hiddenProfilesDialogOpen ? (
-        <Modal title="숨긴 프로필 관리" onClose={() => setHiddenProfilesDialogOpen(false)}>
+        <Modal kicker="이 기기에 저장" title="숨긴 프로필 관리" onClose={() => setHiddenProfilesDialogOpen(false)}>
           <div className="hidden-profiles-content">
             <p className="form-notice">숨긴 프로필과 연결된 건강기록은 삭제되지 않았습니다. 복원하면 가족 목록에서 다시 확인할 수 있습니다.</p>
             {actionError ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
@@ -740,7 +914,10 @@ export function HomePage() {
           void navigate(`/members/${selectedProfile.id}`);
         }} />
       ) : null}
-      {selectedProfile ? (
+
+      {/* 건강 비서 "봄이". 대화로 기록을 남기고 서류를 읽는다. 프로필이 있어야
+          누구의 기록인지 정해지므로 그때만 띄운다. */}
+      {selectedProfile && runtime ? (
         <>
           <button
             type="button"
@@ -751,26 +928,52 @@ export function HomePage() {
             <span className="launcher-icon" aria-hidden="true">봄</span>
             <span>봄이 대화</span>
           </button>
-          <HealthAssistantDrawer
-            profile={selectedProfile}
-            runtime={runtime}
-            isOpen={assistantOpen}
-            onClose={() => setAssistantOpen(false)}
-            onRecordSaved={() => refreshDashboard(selectedProfile.id)}
-            onChallengeSaved={async () => {
-              await refreshDashboard(selectedProfile.id);
-              await refreshChallenge(selectedProfile.id);
-            }}
-            onNavigateToRecords={() => setRecordHistoryDialogOpen(true)}
-          />
+          {assistantOpen ? (
+            <Suspense fallback={null}>
+              <HealthAssistantDrawer
+                // 구성원을 바꾸면 대화를 새로 연다. 인사말이 초기 상태라 effect 로
+                // 되맞추지 않고 이 한 줄로 끝낸다 — 남의 대화가 남아 있으면 안 된다.
+                key={selectedProfile.id}
+                profile={selectedProfile}
+                runtime={runtime}
+                isOpen={assistantOpen}
+                onClose={() => setAssistantOpen(false)}
+                onRecordSaved={() => refreshDashboard(selectedProfile.id)}
+                onNavigateToRecords={() => setDeletedRecordsDialogOpen(false)}
+              />
+            </Suspense>
+          ) : null}
         </>
       ) : null}
-      <FloatingHealthTools
-        profile={selectedProfile}
-        runtime={runtime}
-        onSaved={() => selectedProfile ? refreshDashboard(selectedProfile.id) : Promise.resolve()}
-      />
     </div>
+  );
+}
+
+const LEVEL_TONE: Record<string, string> = {
+  VERY_HIGH: "tone-very-high",
+  HIGH: "tone-high",
+  CAUTION: "tone-caution",
+  NORMAL: "tone-normal",
+  INSUFFICIENT_DATA: "tone-unknown",
+};
+
+/**
+ * 구성원 카드 아래 한 줄 — 가장 최근 판정.
+ *
+ * **판정이 없는 사람도 자리를 비우지 않는다.** 빈 칸으로 두면 카드 높이가 들쭉날쭉해
+ * 목록이 흔들리고, "아직 안 했다"는 사실 자체가 사용자가 봐야 할 정보다.
+ */
+function MemberVerdict({ summary }: { summary?: LatestSummary }) {
+  if (!summary) {
+    return <span className="member-verdict is-empty">판정 기록 없음</span>;
+  }
+  const level = summary.highestLevel as RiskLevel;
+  return (
+    <span className={`member-verdict ${LEVEL_TONE[summary.highestLevel] ?? "tone-unknown"}`}>
+      <strong>{LEVEL_LABEL[level] ?? summary.highestLevel}</strong>
+      {summary.needsAttention > 0 ? <span>주의 {summary.needsAttention}개</span> : <span>주의 없음</span>}
+      <small>{formatDate(summary.recordedAt)}</small>
+    </span>
   );
 }
 
@@ -808,22 +1011,6 @@ function MetricCard({ label, value, helper, tone }: { label: string; value: stri
   );
 }
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose();
-    }}>
-      <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-        <div className="modal-heading">
-          <div><p className="section-kicker">이 기기에 저장</p><h2 id="modal-title">{title}</h2></div>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="닫기">×</button>
-        </div>
-        {children}
-      </section>
-    </div>
-  );
-}
-
 function optionalDate(value: FormDataEntryValue | null): `${number}-${number}-${number}` | undefined {
   const date = String(value ?? "");
   return date ? (date as `${number}-${number}-${number}`) : undefined;
@@ -841,6 +1028,12 @@ function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
+function currentLocalDateTime(): string {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
 function toLocalDateTime(value: string): string {
   const date = new Date(value);
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
@@ -848,67 +1041,13 @@ function toLocalDateTime(value: string): string {
 }
 
 function recordNote(record: HealthRecord): string {
-  const p = record.payload as Record<string, unknown>;
-  if (typeof p.note === "string" && p.note.trim()) {
-    return p.note.trim();
-  }
-  if (record.recordType === "exercise" || p.exerciseName) {
-    const parts = [
-      p.exerciseName,
-      p.distanceKm ? `${p.distanceKm}km` : "",
-      p.durationMinutes ? `${p.durationMinutes}분` : "",
-      p.weightKg ? `${p.weightKg}kg` : "",
-      p.reps ? `${p.reps}회` : "",
-      p.sets ? `${p.sets}세트` : "",
-    ].filter(Boolean);
-    return parts.join(" ") || "운동 기록";
-  }
-  if (record.recordType === "blood_pressure" || p.systolic || p.systolicMmHg) {
-    const sys = p.systolic ?? p.systolicMmHg;
-    const dia = p.diastolic ?? p.diastolicMmHg;
-    const pulse = p.pulse ?? p.pulseBpm;
-    return `혈압 ${sys}/${dia} mmHg${pulse ? ` (맥박 ${pulse})` : ""}`;
-  }
-  if (record.recordType === "blood_glucose" || p.glucose || p.valueMgDl || p.value) {
-    const val = p.glucose ?? p.valueMgDl ?? p.value;
-    const timing = p.timing ? ` (${p.timing})` : "";
-    return `혈당 ${val} mg/dL${timing}`;
-  }
-  if (record.recordType === "medication" || p.medicationName) {
-    const name = p.medicationName;
-    const dosage = p.dosage ? ` ${p.dosage}` : "";
-    const taken = p.takenAt ? ` (${p.takenAt})` : "";
-    return `복약: ${name}${dosage}${taken}`;
-  }
-  if (record.recordType === "pain" || p.bodyArea) {
-    const area = p.bodyArea || "통증";
-    const intensity = p.intensity !== undefined ? ` (강도 ${p.intensity})` : "";
-    const sensation = p.sensation ? ` - ${p.sensation}` : "";
-    return `${area}${intensity}${sensation}`;
-  }
-  if (record.recordType === "health_screening" || record.recordType === "lab_result") {
-    const name = p.screeningName || p.testName || "건강검진";
-    const summary = p.summary || p.itemsSummary || "";
-    return `${name}${summary ? `: ${summary}` : ""}`.slice(0, 120);
-  }
-  if (record.recordType === "sleep" || p.durationHours !== undefined) {
-    const hours = p.durationHours ? `${p.durationHours}시간` : "";
-    const quality = p.quality ? ` (수면 질: ${p.quality})` : "";
-    return `수면 ${hours}${quality}`.trim();
-  }
-  if (record.recordType === "daily_condition" || p.condition) {
-    const cond = p.condition ? `컨디션: ${p.condition}` : "컨디션 기록";
-    const raw = p.rawText ? ` (${p.rawText})` : "";
-    return `${cond}${raw}`;
-  }
-  return "저장된 건강기록";
+  const note = record.payload.note;
+  return typeof note === "string" ? note : "저장된 건강기록";
 }
 
 function recordMark(type: HealthRecordType): string {
   if (type === "health_screening" || type === "lab_result") return "검";
   if (type === "pain") return "통";
   if (type === "blood_pressure" || type === "blood_glucose") return "수";
-  if (type === "sleep") return "잠";
-  if (type === "daily_condition") return "상";
   return "기";
 }

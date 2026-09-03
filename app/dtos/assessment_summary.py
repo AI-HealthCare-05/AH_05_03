@@ -26,7 +26,14 @@ from typing import Any, ClassVar, Literal
 from pydantic import Field
 
 from app.dtos.base import BaseSerializerModel
-from app.dtos.predictions import ModelAccuracy, RiskFactor, RiskPredictionRequest, RuleAnchor
+from app.dtos.predictions import (
+    ModelAccuracy,
+    OnsetTrajectory,
+    RiskFactor,
+    RiskPredictionRequest,
+    RuleAnchor,
+    SuspectCard,
+)
 from app.dtos.rule_assessment import DiseaseRiskAssessment
 
 
@@ -56,13 +63,11 @@ class AssessmentSummaryRequest(RiskPredictionRequest):
     ML_ONLY: ClassVar[frozenset[str]] = frozenset(
         {
             "self_rated_health",
-            "difficulty_walking",
             "alcohol_days_per_year",
             "moderate_min_per_week",
             "vigorous_min_per_week",
             "sedentary_min_per_day",
             "sleep_hours",
-            "education_level",
             "albumin",
             "smoking_status",
         }
@@ -125,6 +130,10 @@ class VerdictReference(BaseSerializerModel):
             "금연·절주가 당뇨 위험을 올리는 방향으로 나온다. 설명 재료로만 쓴다"
         ),
     )
+    trajectory: OnsetTrajectory | None = Field(
+        default=None, description="2단계 발병 궤적. 1단계가 의심한 비가역 질환(당뇨·고혈압·신기능)에만 있다"
+    )
+    trajectory_status: str | None = Field(default=None, description="궤적이 없으면 왜 없는지. `TrajectoryStatus` 값")
 
 
 class DiseaseVerdictOut(BaseSerializerModel):
@@ -178,6 +187,13 @@ class AssessmentSummaryData(BaseSerializerModel):
             "**심혈관질환은 이 축에만 있다** — 규칙 엔진에도 ML 번들에도 심혈관 타깃이 없다. "
             "각 항목의 `contributors` 가 어떤 값이 왜 위험을 올렸는지와 그 효과크기·출처·"
             "인과 여부를 담는다."
+        ),
+    )
+    top_suspects: list[SuspectCard] = Field(
+        default=[],
+        description=(
+            "1단계가 고른 의심 상위 세 개. 규칙 엔진이 이미 '있다' 고 판정한 질환은 빠진다 — "
+            "사용자가 이미 아는 것을 다시 의심으로 올리지 않는다. 각 장에 2단계 곡선이 붙는다"
         ),
     )
     disclaimers: list[str]

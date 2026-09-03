@@ -18,6 +18,67 @@ export interface ModelAccuracy {
   holdout_n: number | null;
 }
 
+/**
+ * 2단계 발병 궤적. 서버 `OnsetTrajectory` 의 사본.
+ *
+ * `onset_probability[i]` 는 `horizons_years[i]` 년 안에 이 질환이 생길 누적 확률이고
+ * `population_onset_probability` 는 같은 나이·성별 동년배의 값이다. 둘을 같이 그려야
+ * "27%" 가 높은 건지 보통인 건지 읽힌다.
+ */
+export interface OnsetTrajectory {
+  horizons_years: number[];
+  onset_probability: number[];
+  population_onset_probability: number[];
+  relative_hazard: number;
+  reference_prevalence: number;
+  conditional_on: string;
+  mortality_corrected: boolean;
+  truncated_at_age?: number | null;
+  method: string;
+  caveats: string[];
+}
+
+export type TrajectoryStatus =
+  | "projected"
+  | "not_applicable"
+  | "below_gate"
+  | "already_met"
+  | "already_present"
+  | "withheld"
+  | "age_out_of_range"
+  | "unavailable";
+
+/** "그 나이가 됐을 때 기준을 넘고 있을 확률". 발병 궤적과 다른 질문이다. */
+export interface PrevalenceTrajectory {
+  horizons_years: number[];
+  prevalence_probability: number[];
+  current_probability: number;
+  direction: string;
+  conditional_on: string;
+  irreversible: boolean;
+  truncated_at_age?: number | null;
+  caveats: string[];
+}
+
+/** 1단계가 고른 의심 질환 한 장. 2단계 곡선이 붙는다. */
+export interface SuspectCard {
+  target: string;
+  name: string;
+  rank: number;
+  score: number;
+  suspected: boolean;
+  probability?: number | null;
+  level: string;
+  /** "측정" 이면 규칙 엔진이 검사값으로 준 판정, "추정" 이면 ML 확률 */
+  basis: string;
+  peer_ratio?: number | null;
+  evidence_weight: number;
+  reason: string;
+  prevalence_trajectory?: PrevalenceTrajectory | null;
+  onset_trajectory?: OnsetTrajectory | null;
+  onset_status?: string | null;
+}
+
 export interface VerdictReference {
   probability?: number | null;
   peer_percentile?: number | null;
@@ -28,6 +89,8 @@ export interface VerdictReference {
   tier?: string | null;
   accuracy?: ModelAccuracy | null;
   top_factors?: { feature: string; contribution: number }[];
+  trajectory?: OnsetTrajectory | null;
+  trajectory_status?: TrajectoryStatus | null;
 }
 
 export interface DiseaseVerdict {
@@ -89,6 +152,7 @@ export interface AssessmentSummaryData {
   summary: AssessmentSummary;
   verdicts: DiseaseVerdict[];
   disease_risks: Record<string, DiseaseRisk>;
+  top_suspects: SuspectCard[];
   disclaimers: string[];
   inputs_provided: number;
   inputs_total: number;
@@ -110,4 +174,31 @@ export const ENGINE_SHORT: Record<EngineCode, string> = {
   E1: "규칙 엔진",
   E2: "ML 추정",
   E3: "공개 공식",
+};
+
+/**
+ * 질환 키 → 이름.
+ *
+ * 판정 화면은 응답의 `verdicts[].name` 을 그대로 쓰므로 이 표가 필요 없다. 필요한
+ * 곳은 **판정 응답 없이 스냅샷만 들고 있는 화면**이다 — 건강 현황의 추이 그래프가
+ * 그렇다. 스냅샷 payload 는 `levels` 를 질환 키로만 담고 이름을 남기지 않는다.
+ *
+ * 서버 `app/services/assessment.py` 의 `SPECS` 와 순서·표기를 맞춘다. 서버가 질환을
+ * 더하면 여기 없는 키가 오는데, 부르는 쪽이 키를 그대로 보여 주게 두었다 —
+ * 화면에서 빈칸이 되는 것보다 낫다.
+ */
+export const DISEASE_NAMES: Record<string, string> = {
+  dm: "당뇨병",
+  htn: "고혈압",
+  dlp: "이상지질혈증",
+  hyperchol: "고콜레스테롤혈증",
+  hypertg: "고중성지방혈증",
+  low_hdl: "낮은 HDL 콜레스테롤",
+  obesity: "비만",
+  mets: "대사증후군",
+  ckd: "만성콩팥병",
+  fatty_liver: "지방간",
+  liver: "간기능",
+  anemia: "빈혈",
+  uric_acid: "요산",
 };

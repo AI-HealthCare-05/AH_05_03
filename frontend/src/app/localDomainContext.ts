@@ -45,6 +45,8 @@ export interface LocalDomainContextValue {
   updateHealthRecord(recordId: string, input: UpdateHealthRecordInput): Promise<HealthRecord>;
   deleteHealthRecord(recordId: string, expectedVersion: number): Promise<HealthRecord>;
   restoreHealthRecord(recordId: string, expectedVersion: number): Promise<HealthRecord>;
+  /** 되돌릴 수 없는 삭제. 이미 삭제된 기록만 받는다. */
+  purgeHealthRecord(recordId: string, expectedVersion: number): Promise<void>;
 }
 
 export const LocalDomainContext = createContext<LocalDomainContextValue | undefined>(undefined);

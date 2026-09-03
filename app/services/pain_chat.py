@@ -1,56 +1,33 @@
-import asyncio
+"""대화형 통증 기록.
 
-from google import genai
-from google.genai import types
+**Gemini 호출을 직접 하지 않는다.** 원 PR(#27)은 여기에 클라이언트 생성·타임아웃·
+예외 처리를 `integrations/llm/gemini.py` 와 거의 같은 모양으로 한 벌 더 적어 뒀다.
+두 벌이면 모델명이나 오류 분류를 한쪽만 고치는 순간 두 경로의 동작이 갈린다.
+그래서 클라이언트는 하나만 두고 여기서는 지시문과 스키마만 정한다.
+"""
 
-from app.core import config
+from app.dtos.health_assistant import ChatMessage
 from app.dtos.pain_chat import PainChatData, PainChatMessage
-from app.exceptions import AppError
+from app.integrations.llm.chain import shared_chat_client
+from app.integrations.llm.protocol import LLMClientProtocol
+from app.prompts.pain_chat import PAIN_CHAT_INSTRUCTION
 
 
 class PainChatService:
+    def __init__(self, llm_client: LLMClientProtocol | None = None):
+        self._llm_client = llm_client
+
+    @property
+    def llm_client(self) -> LLMClientProtocol:
+        # 키가 없으면 생성자에서 바로 터지므로, 실제로 부를 때 만든다. 그래야
+        # 라우터 의존성 주입 단계가 아니라 요청 처리 중에 503 이 난다.
+        if self._llm_client is None:
+            self._llm_client = shared_chat_client()
+        return self._llm_client
+
     async def respond(self, messages: list[PainChatMessage]) -> PainChatData:
-        api_key = config.GEMINI_API_KEY
-        if not api_key:
-            raise AppError("Gemini API 키가 설정되지 않았습니다.", status_code=503)
-
-        client = genai.Client(api_key=api_key)
-
-        instructions = """You support a Korean health-recording form. Do not diagnose, prescribe, or reassure medically.
-Extract only facts explicitly stated by the user into the draft.
-Ask one concise Korean follow-up question for missing body_area or intensity.
-missing_fields may only contain 'body_area' or 'intensity'.
-If the user mentions severe chest pain, breathing difficulty, loss of consciousness, stroke-like symptoms, severe bleeding, or self-harm, set emergency_notice to a short Korean emergency-care instruction; still do not diagnose.
-Return the structured JSON output."""
-
-        contents = [f"{'User' if m.role == 'user' else 'Assistant'}: {m.content}" for m in messages]
-
-        try:
-            response = await asyncio.wait_for(
-                asyncio.to_thread(
-                    client.models.generate_content,
-                    model="gemini-3.5-flash-lite",
-                    contents=contents,
-                    config=types.GenerateContentConfig(
-                        system_instruction=instructions,
-                        response_mime_type="application/json",
-                        response_schema=PainChatData,
-                        temperature=0.0,
-                    ),
-                ),
-                timeout=config.OPENAI_PAIN_CHAT_TIMEOUT_SECONDS
-                if hasattr(config, "OPENAI_PAIN_CHAT_TIMEOUT_SECONDS")
-                else 10.0,
-            )
-        except asyncio.TimeoutError as ex:
-            raise AppError("응답 시간이 초과되었습니다.", status_code=504) from ex
-        except Exception as ex:
-            raise AppError("통증 대화 처리 중 오류가 발생했습니다.", status_code=503) from ex
-
-        if not response or not response.text:
-            raise AppError("통증 기록 응답을 생성하지 못했습니다.", status_code=503)
-
-        try:
-            return PainChatData.model_validate_json(response.text)
-        except Exception as error:
-            raise AppError("통증 대화 응답 데이터 구조화에 실패했습니다.", status_code=503) from error
+        return await self.llm_client.generate_structured_response(
+            system_instruction=PAIN_CHAT_INSTRUCTION,
+            messages=[ChatMessage(role=m.role, content=m.content) for m in messages],
+            response_schema=PainChatData,
+        )

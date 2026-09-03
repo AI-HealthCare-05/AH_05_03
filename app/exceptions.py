@@ -72,6 +72,30 @@ class OcrProviderFailedError(AppError):
     error_code = ErrorCode.OCR_PROVIDER_FAILED
 
 
+# --- llm 대화 -------------------------------------------------------------
+class LlmUnavailableError(AppError):
+    """우리 쪽 사정. 키가 없거나 기능이 꺼져 있다. 503."""
+
+    error_code = ErrorCode.LLM_UNAVAILABLE
+
+
+class LlmProviderFailedError(AppError):
+    """공급자가 답을 못 줬다. 502 — 죽은 것은 우리가 아니라 업스트림이다.
+
+    모델명 오류(404)·인증 실패·레이트리밋이 여기 모인다. 셋을 더 가르려면
+    SDK 예외 타입에 기대야 하는데, 그건 `google-genai` 버전에 묶이므로
+    원인 예외를 `__cause__` 로 남기고 상태 코드만 정직하게 둔다.
+    """
+
+    error_code = ErrorCode.LLM_PROVIDER_FAILED
+
+
+class LlmTimeoutError(AppError):
+    """제한 시간 안에 못 받았다. 504."""
+
+    error_code = ErrorCode.LLM_TIMEOUT
+
+
 # --- auth ----------------------------------------------------------------
 class AuthRequiredError(AppError):
     error_code = ErrorCode.AUTH_REQUIRED

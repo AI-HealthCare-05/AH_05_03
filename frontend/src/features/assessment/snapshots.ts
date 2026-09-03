@@ -16,9 +16,14 @@
  */
 
 import { PRIMARY_HOUSEHOLD_ID } from "../../app/localDomainContext";
-import type { AssessmentSnapshotPayload, HealthRecord } from "../../shared/local/domainContracts";
+import type {
+  AssessmentSnapshotPayload,
+  HealthRecord,
+  StoredRisk,
+  StoredVerdict,
+} from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
-import type { AssessmentSummaryData } from "./contracts";
+import type { AssessmentSummaryData, DiseaseRisk, DiseaseVerdict } from "./contracts";
 import { toRequestBody } from "./fields";
 
 export type Snapshot = HealthRecord<AssessmentSnapshotPayload>;
@@ -48,12 +53,64 @@ export const TREND_SERIES: { key: string; label: string; unit: string }[] = [
   { key: "waist_cm", label: "허리둘레", unit: "cm" },
 ];
 
+/**
+ * 서버 응답을 저장용으로 줄인다.
+ *
+ * `reliability`(구간 10개)와 `top_factors` 는 화면이 안 쓰는데 기록마다 쌓인다.
+ * 상한이 없는 목록이라 몇 년 치가 모이면 보관함이 그만큼 커진다.
+ */
+function storeVerdict(verdict: DiseaseVerdict): StoredVerdict {
+  const reference = verdict.reference;
+  return {
+    key: verdict.key,
+    name: verdict.name,
+    engine: verdict.engine,
+    engine_label: verdict.engine_label,
+    engine_reason: verdict.engine_reason,
+    risk_level: verdict.risk_level,
+    sub_status: verdict.sub_status,
+    display_label: verdict.display_label,
+    reason: verdict.reason,
+    criteria_reference: verdict.criteria_reference,
+    recommendation: verdict.recommendation,
+    missing_fields: verdict.missing_fields,
+    flags: verdict.flags,
+    superseded_by: verdict.superseded_by,
+    disclaimer: verdict.disclaimer,
+    reference: reference
+      ? {
+          probability: reference.probability,
+          peer_percentile: reference.peer_percentile,
+          peer_group: reference.peer_group,
+          peer_ratio: reference.peer_ratio,
+          accuracy: reference.accuracy,
+        }
+      : null,
+  };
+}
+
+function storeRisk(risk: DiseaseRisk): StoredRisk {
+  return {
+    category: risk.category,
+    risk_level: risk.risk_level,
+    sub_status: risk.sub_status,
+    display_label: risk.display_label,
+    reason: risk.reason,
+    criteria_reference: risk.criteria_reference,
+    recommendation: risk.recommendation,
+    missing_fields: risk.missing_fields,
+    contributors: risk.contributors,
+    score: risk.score,
+  };
+}
+
 export async function saveSnapshot(
   runtime: LocalDomainRuntime,
   profileId: string,
   values: Record<string, string>,
   result: AssessmentSummaryData,
   recordedAt: string = new Date().toISOString(),
+  source: "manual" | "ocr" = "manual",
 ): Promise<Snapshot> {
   const payload: AssessmentSnapshotPayload = {
     inputs: toRequestBody(values) as AssessmentSnapshotPayload["inputs"],
@@ -63,6 +120,10 @@ export async function saveSnapshot(
     evaluated: result.summary.evaluated,
     total: result.summary.total,
     highestLevel: result.summary.highest_level,
+    // 카드 원본. `levels` 만으로는 "고혈압 높음" 까지만 복원되고, 사용자가 그날
+    // 실제로 읽은 근거·엔진·밀려난 확률이 전부 사라진다.
+    verdicts: result.verdicts.map(storeVerdict),
+    matrix: Object.values(result.disease_risks ?? {}).map(storeRisk),
   };
 
   const created = await runtime.healthRecords.create<AssessmentSnapshotPayload>({
@@ -70,9 +131,9 @@ export async function saveSnapshot(
     profileId,
     recordType: "assessment",
     recordedAt,
-    // 값을 사용자가 직접 넣었으므로 `manual` 이다. OCR 이 붙으면 그때 `ocr` 로
-    // 갈라야 하고, 그 구분이 나중에 "어디서 온 값인가"를 설명할 재료가 된다.
-    source: "manual",
+    // 검진표에서 읽어 채운 값이면 `ocr`. 나중에 "이 숫자는 어디서 왔나"를 설명할
+    // 재료이자, 인식 품질을 되짚을 유일한 흔적이다.
+    source,
     payload,
   });
   if (!created.ok) {
@@ -151,4 +212,51 @@ export function buildLevelTracks(snapshots: Snapshot[]): LevelTrack[] {
     if (changed || engineChanges.length > 0) tracks.push({ key, levels, engines, engineChanges });
   }
   return tracks;
+}
+
+/**
+ * 가족 홈의 구성원 카드가 쓰는 한 줄 요약 — **가장 최근 판정만.**
+ *
+ * 카드에 추이를 그리지 않는 이유는 자리다. 카드 한 장이 아바타·이름·관계까지 이미
+ * 물고 있어서, 여기서 필요한 것은 "지금 이 사람을 열어 봐야 하나" 하나다.
+ */
+export interface LatestSummary {
+  recordedAt: string;
+  highestLevel: string;
+  evaluated: number;
+  total: number;
+  /** 주의 이상인 질환 수. 카드가 숫자 하나로 급한 정도를 말한다. */
+  needsAttention: number;
+}
+
+const ATTENTION = new Set(["CAUTION", "HIGH", "VERY_HIGH"]);
+
+export function summarizeLatest(snapshots: Snapshot[]): LatestSummary | undefined {
+  const last = snapshots.at(-1);
+  if (!last) return undefined;
+  return {
+    recordedAt: last.recordedAt,
+    highestLevel: last.payload.highestLevel,
+    evaluated: last.payload.evaluated,
+    total: last.payload.total,
+    needsAttention: Object.values(last.payload.levels ?? {}).filter((level) => ATTENTION.has(level)).length,
+  };
+}
+
+/**
+ * 구성원 전체의 최근 판정을 한 번에.
+ *
+ * 순차로 훑는다. 보관함 조회는 복호화를 끼고 있어 동시에 던지면 CPU 가 몰리는데,
+ * 가족 구성원은 많아야 대여섯이라 병렬로 얻을 이득이 없다.
+ */
+export async function listLatestByProfile(
+  runtime: LocalDomainRuntime,
+  profileIds: string[],
+): Promise<Record<string, LatestSummary>> {
+  const summaries: Record<string, LatestSummary> = {};
+  for (const profileId of profileIds) {
+    const found = summarizeLatest(await listSnapshots(runtime, profileId));
+    if (found) summaries[profileId] = found;
+  }
+  return summaries;
 }

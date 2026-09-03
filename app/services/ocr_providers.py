@@ -5,7 +5,7 @@
 
 ## 왜 조각이 JSON 인가
 
-두 공급자 모두 `RawOcrData` 스키마를 강제해 부른다. 그래서 흘러나오는 것은 문장이
+두 공급자 모두 `OcrDocumentContent` 스키마를 강제해 부른다. 그래서 흘러나오는 것은 문장이
 아니라 JSON 문서의 조각이고, 사람이 읽을 글로 바꾸는 일은 `ocr_partial.py` 가 맡는다.
 **그 파서는 공급자를 모른다** — JSON 조각만 보므로 공급자를 늘려도 손댈 것이 없다.
 
@@ -19,11 +19,11 @@
 from __future__ import annotations
 
 import base64
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from typing import Any, Protocol, cast
 
 from app.core import config
-from app.dtos.ocr import RawOcrData
+from app.dtos.ocr import OcrDocumentContent
 from app.exceptions import OcrUnavailableError, OcrUnsupportedTypeError
 
 #: 접두사가 없는 항목은 Gemini 다. 기존 표기(`gemini-3.5-flash`)를 그대로 받기 위한 것이다.
@@ -68,7 +68,7 @@ class GeminiProvider:
             contents=contents,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=RawOcrData,
+                response_schema=OcrDocumentContent,
                 temperature=0.0,
                 http_options=types.HttpOptions(
                     retry_options=types.HttpRetryOptions(attempts=config.DEV_OCR_SDK_RETRY_ATTEMPTS),
@@ -117,7 +117,7 @@ class OpenAIProvider:
         # **Gemini 와 같은 스키마를 강제한다.** 그래야 두 경로의 결과가 같은 모양이고,
         # `ocr_partial.PartialJsonTextReader` 가 공급자를 몰라도 된다.
         # `additionalProperties: false` 와 전체 required 는 strict 모드의 요구사항이다.
-        schema = RawOcrData.model_json_schema()
+        schema = OcrDocumentContent.model_json_schema()
         # SDK 의 `messages` 는 TypedDict 합집합이라 손으로 만든 dict 가 그대로는 안 들어간다.
         # 모양은 문서대로 맞췄으므로 여기서만 좁혀 준다.
         stream = await client.chat.completions.create(
@@ -180,6 +180,29 @@ def _strictify(schema: dict) -> dict:
     if isinstance(schema.get("items"), dict):
         out["items"] = _strictify(schema["items"])
     return out
+
+
+def require_any(entries: Sequence[str]) -> None:
+    """목록에 **쓸 수 있는 항목이 하나라도** 있는지 본다. 없으면 이유를 모아 올린다.
+
+    예전에는 호출부(`dev_ocr._require_bridge`)가 `GEMINI_API_KEY` 를 무조건 요구했다.
+    그래서 목록을 `["openai:gpt-4o-mini"]` 로 바꿔도 **Gemini 키가 없으면 인식이 죽었다** —
+    쓰지도 않는 공급자의 키가 없다고 막는 셈이었고, 공급자를 갈아 끼울 수 있게 만든
+    구조를 그 한 줄이 되돌리고 있었다.
+
+    판정은 `build` 하나에 맡긴다. 키·허용 목록·임베딩 모델 검사가 전부 거기 있으므로
+    같은 규칙을 두 벌로 적지 않는다.
+    """
+    reasons: list[str] = []
+    for entry in entries:
+        try:
+            build(entry)
+        except OcrUnavailableError as unusable:
+            reasons.append(f"{entry}: {unusable.message}")
+            continue
+        return
+    detail = " / ".join(reasons) if reasons else "인식 모델 목록이 비어 있습니다."
+    raise OcrUnavailableError(f"쓸 수 있는 문서 인식 공급자가 없습니다. ({detail})")
 
 
 def build(entry: str) -> OcrProvider:

@@ -6,7 +6,6 @@
 """
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -92,6 +91,27 @@ async def test_invalid_payload_rejected(authorized_client: AsyncClient, payload:
     assert response.json()["success"] is False
 
 
+async def test_model_info_reports_trajectory_table(authorized_client: AsyncClient) -> None:
+    """궤적 표의 적재 여부가 배포 점검에서 보여야 한다.
+
+    표가 빠지면 카드는 여전히 200 을 내고 `trajectory_status` 만 `unavailable` 로 바뀐다.
+    예측을 태워 보기 전에는 아무도 모르는 결손이라 점검 엔드포인트가 대신 말한다.
+    """
+    response = await authorized_client.get("/api/v1/predictions/model-info")
+    assert response.status_code == status.HTTP_200_OK
+
+    block = response.json()["data"]["trajectory"]
+    assert set(block) == {"available", "created_at", "source", "targets", "targets_with_evidence"}
+    if not block["available"]:
+        pytest.skip("trajectory.json 이 없다. `python modeling/fit_trajectory.py` 를 먼저 실행하라.")
+
+    from app.services.trajectory import TRAJECTORY_TARGETS
+
+    assert set(block["targets"]) == set(TRAJECTORY_TARGETS), "표에 있는 질환과 서빙이 켠 질환이 다르다"
+    assert set(block["targets_with_evidence"]) <= set(block["targets"])
+    assert block["created_at"] and block["source"]
+
+
 async def test_model_info_hides_coefficients(authorized_client: AsyncClient) -> None:
     response = await authorized_client.get("/api/v1/predictions/model-info")
     assert response.status_code == status.HTTP_200_OK
@@ -175,56 +195,6 @@ async def test_label_defining_measurements_are_not_model_inputs(authorized_clien
     assert not (blood_pressure & specs["dm"][1]), (
         "dm 번들이 혈압을 다시 쓰기 시작했다. 누출은 아니지만 문서의 설명과 어긋나므로 확인이 필요하다"
     )
-
-
-async def test_demo_page_served(authorized_client: AsyncClient) -> None:
-    response = await authorized_client.get("/api/demo")
-    assert response.status_code == status.HTTP_200_OK
-    assert "만성질환 위험도" in response.text
-    assert "/api/v1/predictions/risk" in response.text
-
-
-async def test_demo_never_hides_inputs(client: AsyncClient) -> None:
-    """입력창은 언제나 전부 보인다.
-
-    숨기면 사용자가 무엇이 빠졌는지 알 수 없다. 엔진을 고르던 시절에는 고른 쪽이
-    안 쓰는 항목을 흐리게 눌러 두는 것으로 그 규칙을 지켰는데, 화면이 늘 두 엔진을
-    같이 돌리게 되면서 흐릴 이유도 없어졌다. 규칙은 그대로고 더 세졌다 —
-    **아무것도 숨기지 않고 아무것도 흐리지 않는다.**
-    """
-    response = await client.get("/api/demo")
-    page = response.text
-
-    ids = re.findall(r'<(?:input|select) id="([a-z0-9_]+)"', page)
-    # 로그인 칸은 세지 않는다. 예측·판정 라우터에 인증이 붙으면서(ADR-009 §10)
-    # 데모에도 로그인 폼이 생겼는데, 그건 건강 입력창이 아니라 이 검사의 대상이
-    # 아니다. 세는 대상을 좁혀 두면 인증 UI 가 바뀌어도 이 카나리아가 안 흔들린다.
-    health_ids = [name for name in ids if not name.startswith("demo_")]
-    assert len(health_ids) == 33, f"건강 입력 개수가 바뀌었다: {len(health_ids)} ({sorted(health_ids)})"
-    assert "fasting_glucose" in health_ids and "self_rated_health" in health_ids
-
-    # 숨기는 코드가 다시 들어오면 잡는다.
-    assert ".hidden = !wants" not in page
-    assert 'classList.toggle("off"' not in page
-    # 엔진을 고르게 하면 화면이 다시 반쪽이 된다. 그 입구가 없어야 한다.
-    assert "engine-pick" not in page
-    # 모델이 무시한 항목은 숨기는 대신 결과에 적는다.
-    assert "mlIgnored" in page and "rulesIgnored" in page
-
-
-async def test_demo_starts_empty(client: AsyncClient) -> None:
-    """처음 열면 모든 칸이 비어 있다.
-
-    기본값이 박혀 있으면 "내가 넣은 값" 과 "화면이 넣어 둔 값" 이 섞인다. 데모를
-    보여 주는 자리에서 그 구분이 안 되면 결과를 설명할 수 없다.
-    """
-    page = (await client.get("/api/demo")).text
-    form = page[page.index('<form id="form"') : page.index("</form>")]
-
-    assert re.search(r'<input[^>]*value="', form) is None, "input 에 기본값이 박혀 있다"
-    selects = re.findall(r"<select ", form)
-    blank_defaults = re.findall(r'<option value=""[^>]*selected', form)
-    assert len(blank_defaults) == len(selects), "선택 항목의 기본값이 비어 있지 않다"
 
 
 @pytest.mark.parametrize("bundle_name", ALL_BUNDLES or ["dm"])
