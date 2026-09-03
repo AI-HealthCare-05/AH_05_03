@@ -3,7 +3,9 @@ import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
 import { Modal } from "../../shared/ui/Modal";
-import { RecordDetail, RecordSummary } from "./RecordDetail";
+// 모달은 눌러야 뜬다. 정적으로 두면 판정 카드 일체가 홈의 첫 청크에 실린다.
+const RecordDetail = lazy(() => import("./RecordDetail").then((m) => ({ default: m.RecordDetail })));
+import { RecordSummary } from "./RecordSummary";
 import type {
   DashboardSummary,
   FamilyProfile,
@@ -108,10 +110,22 @@ export function HomePage() {
     [runtime],
   );
 
+  /**
+   * 인체에 색을 입힐 판정 **한 장**.
+   *
+   * 여러 판정을 합치지 않는다. 합치면 "언제 잰 몸인가" 가 사라진다 — 3월의 콩팥과
+   * 9월의 심장을 한 인체에 얹으면 그건 아무 시점의 몸도 아니다. 고르지 않았으면
+   * 가장 최근 판정을 쓴다. 색이 무엇을 근거로 하는지는 화면에 날짜로 적는다.
+   */
+  const activeBodyRecord = useMemo(
+    () => bodyRecord ?? records.find((record) => record.recordType === "assessment"),
+    [bodyRecord, records],
+  );
+
   // 고른 판정 -> 부위별 위험. 판정이 없는 기록(수치만 적은 것)이면 색을 안 칠한다.
   const bodyRisks: RegionRisk[] | undefined = useMemo(() => {
-    if (!bodyRecord || bodyRecord.recordType !== "assessment") return undefined;
-    const payload = bodyRecord.payload as unknown as {
+    if (!activeBodyRecord || activeBodyRecord.recordType !== "assessment") return undefined;
+    const payload = activeBodyRecord.payload as unknown as {
       verdicts?: { key: string; name?: string; risk_level: string }[];
       levels?: Record<string, string>;
     };
@@ -122,7 +136,7 @@ export function HomePage() {
       Object.entries(payload.levels ?? {}).map(([key, risk_level]) => ({ key, risk_level }));
     const risks = regionRisks(verdicts);
     return risks.length > 0 ? risks : undefined;
-  }, [bodyRecord]);
+  }, [activeBodyRecord]);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === (routeProfileId ?? selectedProfileId)) ?? profiles[0],
@@ -451,7 +465,11 @@ export function HomePage() {
             </div>
 
             <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
-              <VanatomeBodyMap profileName={selectedProfile.displayName} risks={bodyRisks} />
+              <VanatomeBodyMap
+                profileName={selectedProfile.displayName}
+                risks={bodyRisks}
+                risksAt={activeBodyRecord ? formatDateTime(activeBodyRecord.recordedAt) : undefined}
+              />
             </Suspense>
 
             <div className="records-panel">
@@ -498,7 +516,7 @@ export function HomePage() {
                         {record.recordType === "assessment" ? (
                           <button
                             type="button"
-                            aria-pressed={bodyRecord?.id === record.id}
+                            aria-pressed={activeBodyRecord?.id === record.id}
                             onClick={() => {
                               setBodyRecord(record);
                               setOpenRecord(record);
@@ -574,7 +592,11 @@ export function HomePage() {
         </Modal>
       ) : null}
 
-      {openRecord ? <RecordDetail record={openRecord} onClose={() => setOpenRecord(undefined)} /> : null}
+      {openRecord ? (
+        <Suspense fallback={null}>
+          <RecordDetail record={openRecord} onClose={() => setOpenRecord(undefined)} />
+        </Suspense>
+      ) : null}
 
       {recordChoiceOpen && selectedProfile ? (
         <Modal kicker="이 기기에 저장" title={`${selectedProfile.displayName}님의 기록을 어떻게 남길까요?`} onClose={() => setRecordChoiceOpen(false)}>

@@ -1130,13 +1130,26 @@ main {
   display: grid;
   gap: 8px;
 }
-.vanatome-risk-legend li {
+.vanatome-risk-legend li { display: block; }
+.vanatome-risk-row {
   display: grid;
   grid-template-columns: 10px auto 1fr;
   align-items: baseline;
   gap: 2px 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
 }
+.vanatome-risk-row:hover:not(:disabled) { background: rgba(77, 228, 255, 0.09); }
+.vanatome-risk-row[aria-pressed="true"] { border-color: currentColor; background: rgba(77, 228, 255, 0.13); }
+.vanatome-risk-row:disabled { cursor: default; opacity: 0.6; }
 .vanatome-risk-dot {
   width: 10px;
   height: 10px;

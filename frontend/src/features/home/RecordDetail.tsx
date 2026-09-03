@@ -17,76 +17,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { DISEASE_NAMES, LEVEL_LABEL, LEVEL_ORDER, type RiskLevel } from "../assessment/contracts";
+import { DISEASE_NAMES, LEVEL_ORDER, type RiskLevel } from "../assessment/contracts";
+import { LEVEL_TONE, levelLabel, snapshot } from "./recordSummaryData";
 import type { DiseaseRisk, DiseaseVerdict } from "../assessment/contracts";
 import { MatrixCard, VerdictCard, VerdictDetail } from "../assessment/VerdictCards";
 import { FIELD_LABELS, FIELD_UNITS } from "../assessment/fields";
-import { TREND_SERIES } from "../assessment/snapshots";
-import type { AssessmentSnapshotPayload, HealthRecord } from "../../shared/local/domainContracts";
+import type { HealthRecord } from "../../shared/local/domainContracts";
 import { Modal } from "../../shared/ui/Modal";
-
-const LEVEL_TONE: Record<string, string> = {
-  VERY_HIGH: "tone-very-high",
-  HIGH: "tone-high",
-  CAUTION: "tone-caution",
-  NORMAL: "tone-normal",
-  INSUFFICIENT_DATA: "tone-unknown",
-};
-
-const ATTENTION = new Set(["CAUTION", "HIGH", "VERY_HIGH"]);
-
-function snapshot(record: HealthRecord): AssessmentSnapshotPayload {
-  return record.payload as unknown as AssessmentSnapshotPayload;
-}
-
-function levelLabel(level: string): string {
-  return LEVEL_LABEL[level as RiskLevel] ?? level;
-}
-
-/**
- * 목록에 띄울 수치 몇 개.
- *
- * `TREND_SERIES` 순서를 그대로 쓴다. 혈압·혈당이 앞에 있어서, 한 줄에 서넛만
- * 잘라도 사람이 가장 먼저 확인하는 값이 남는다.
- */
-function headline(inputs: AssessmentSnapshotPayload["inputs"], limit: number): { key: string; text: string }[] {
-  const out: { key: string; text: string }[] = [];
-  for (const spec of TREND_SERIES) {
-    const raw = inputs?.[spec.key];
-    if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
-    out.push({ key: spec.key, text: `${spec.label} ${raw}${spec.unit ? ` ${spec.unit}` : ""}` });
-    if (out.length >= limit) break;
-  }
-  return out;
-}
-
-/** 목록 한 줄. 판정이면 등급과 수치를, 나머지는 지금까지처럼 메모를 낸다. */
-export function RecordSummary({ record }: { record: HealthRecord }) {
-  if (record.recordType !== "assessment") {
-    const note = record.payload.note;
-    return <p>{typeof note === "string" && note.trim() ? note : "저장된 건강기록"}</p>;
-  }
-
-  const payload = snapshot(record);
-  const levels = Object.values(payload.levels ?? {});
-  const attention = levels.filter((level) => ATTENTION.has(level)).length;
-  const values = headline(payload.inputs, 3);
-
-  return (
-    <div className="record-assessment">
-      <span className={`record-level ${LEVEL_TONE[payload.highestLevel] ?? "tone-unknown"}`}>
-        {levelLabel(payload.highestLevel)}
-      </span>
-      <span className="record-assessment-meta">
-        {payload.evaluated}/{payload.total}개 판정 · 주의 {attention}개
-        {payload.bmi ? ` · BMI ${payload.bmi.toFixed(1)}` : ""}
-      </span>
-      {values.length > 0 ? (
-        <span className="record-assessment-values">{values.map((v) => v.text).join(" · ")}</span>
-      ) : null}
-    </div>
-  );
-}
 
 /**
  * 모달. **그날 화면에 뜬 판정을 그대로 재현한다.**

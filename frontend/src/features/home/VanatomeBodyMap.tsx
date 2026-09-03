@@ -26,10 +26,13 @@ const INTERNAL_SYSTEMS = new Set([
 export function VanatomeBodyMap({
   profileName,
   risks,
+  risksAt,
 }: {
   profileName: string;
   /** 고른 기록의 부위별 위험. 없으면 예전처럼 중립 색으로 둔다. */
   risks?: RegionRisk[];
+  /** 그 위험이 **언제 잰 몸**인가. 없으면 적지 않는다. */
+  risksAt?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const clearSelectionRef = useRef<() => void>(() => undefined);
@@ -37,6 +40,8 @@ export function VanatomeBodyMap({
   // 위험 색칠은 모델을 다시 읽지 않고 재질만 바꾼다. 기록을 바꿀 때마다 5MB 짜리
   // GLB 를 다시 내려받으면 화면이 매번 깜빡인다.
   const paintRisksRef = useRef<(risks: RegionRisk[] | undefined) => void>(() => undefined);
+  const focusRegionRef = useRef<(region: string) => void>(() => undefined);
+  const [focusedRegion, setFocusedRegion] = useState<string>();
   // 모델 적재는 한 번뿐인데(의존성 [isTestEnvironment]) 위험은 기록을 바꿀 때마다
   // 달라진다. 적재 완료 시점에 최신 값을 읽으려면 ref 여야 한다 — 클로저에 담으면
   // 로딩 중에 기록을 바꾼 사용자가 옛 색을 본다.
@@ -136,22 +141,34 @@ export function VanatomeBodyMap({
         },
       };
       const preset = presets[focus];
+      glideTo(preset.position, preset.target);
+    };
+
+    /** 카메라를 부드럽게 옮긴다. 프리셋과 부위 이동이 같은 움직임을 써야 한다. */
+    function glideTo(position: THREE.Vector3, target: THREE.Vector3) {
       const startPosition = camera.position.clone();
       const startTarget = controls.target.clone();
       const startedAt = performance.now();
       if (focusAnimationFrame !== undefined) window.cancelAnimationFrame(focusAnimationFrame);
-
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (reduceMotion) {
+        camera.position.copy(position);
+        controls.target.copy(target);
+        controls.update();
+        renderScene();
+        return;
+      }
       const animateFocus = (now: number) => {
         const elapsed = Math.min(1, (now - startedAt) / 420);
         const eased = 1 - Math.pow(1 - elapsed, 3);
-        camera.position.lerpVectors(startPosition, preset.position, eased);
-        controls.target.lerpVectors(startTarget, preset.target, eased);
+        camera.position.lerpVectors(startPosition, position, eased);
+        controls.target.lerpVectors(startTarget, target, eased);
         controls.update();
         renderScene();
         if (elapsed < 1) focusAnimationFrame = window.requestAnimationFrame(animateFocus);
       };
       focusAnimationFrame = window.requestAnimationFrame(animateFocus);
-    };
+    }
 
     const clearSelectedMaterial = () => {
       if (!selectedMesh) return;
@@ -291,6 +308,25 @@ export function VanatomeBodyMap({
         paintRisksRef.current = paintRisks;
         paintRisks(risksRef.current);
 
+        /**
+         * 그 장기가 화면 가운데 오도록 카메라를 옮긴다.
+         *
+         * 프리셋(머리·상반신…)과 달리 좌표를 **모델에서 구한다.** 장기 위치를 상수로
+         * 박아 두면 모델이 바뀌는 날 조용히 엉뚱한 곳을 비춘다.
+         */
+        focusRegionRef.current = (region) => {
+          const meshes = regionMeshes.get(region);
+          if (!meshes?.length) return;
+          const box = new THREE.Box3();
+          for (const mesh of meshes) box.expandByObject(mesh);
+          if (box.isEmpty()) return;
+          const center = box.getCenter(new THREE.Vector3());
+          const size = box.getSize(new THREE.Vector3());
+          // 장기가 화면을 꽉 채우면 어디에 붙어 있는지를 잃는다. 주변이 조금 보이게 뺀다.
+          const distance = Math.max(size.length() * 2.4, 0.9);
+          glideTo(new THREE.Vector3(center.x, center.y, center.z + distance), center);
+        };
+
         setLoadProgress(100);
         setLoadError(undefined);
         renderScene();
@@ -369,6 +405,8 @@ export function VanatomeBodyMap({
       renderer.dispose();
       clearSelectionRef.current = () => undefined;
       focusCameraRef.current = () => undefined;
+      paintRisksRef.current = () => undefined;
+      focusRegionRef.current = () => undefined;
     };
   }, [isTestEnvironment]);
 
@@ -398,21 +436,35 @@ export function VanatomeBodyMap({
         <h3 id="body-map-title">{profileName}님의 3D 인체</h3>
         <p>
           {risks && risks.length > 0
-            ? "고른 판정에서 위험이 실리는 장기를 등급 색으로 칠했어요. 돌려 보거나 구조를 눌러 이름을 확인하세요."
+            ? `${risksAt ? `${risksAt} 판정` : "고른 판정"} 기준입니다. 아래 부위를 누르면 그 장기로 이동해요.`
             : "인체를 돌려보거나 구조를 선택해 보세요. 아래 기록에서 판정을 고르면 해당 장기가 색으로 표시됩니다."}
         </p>
         {risks && risks.length > 0 ? (
           <ul className="vanatome-risk-legend">
             {risks.map((risk) => (
               <li key={risk.region}>
-                <span
-                  className="vanatome-risk-dot"
-                  style={{ background: `#${REGION_COLOR[risk.level].toString(16).padStart(6, "0")}` }}
-                  aria-hidden="true"
-                />
-                <b>{risk.label}</b>
-                <span className="vanatome-risk-level">{LEVEL_TEXT[risk.level]}</span>
-                <small>{risk.diseases.map((disease) => disease.name).join(" · ")}</small>
+                {/* 목록이 아니라 **이동 장치**다. 색만 칠해 두면 사용자가 그 장기를
+                    인체에서 직접 찾아 돌려야 한다 — 콩팥은 뒤쪽이라 기본 각도에서 안 보인다. */}
+                <button
+                  type="button"
+                  className="vanatome-risk-row"
+                  aria-pressed={focusedRegion === risk.region}
+                  disabled={loadProgress < 100}
+                  onClick={() => {
+                    setFocusedRegion(risk.region);
+                    setActiveFocus("full");
+                    focusRegionRef.current(risk.region);
+                  }}
+                >
+                  <span
+                    className="vanatome-risk-dot"
+                    style={{ background: `#${REGION_COLOR[risk.level].toString(16).padStart(6, "0")}` }}
+                    aria-hidden="true"
+                  />
+                  <b>{risk.label}</b>
+                  <span className="vanatome-risk-level">{LEVEL_TEXT[risk.level]}</span>
+                  <small>{risk.diseases.map((disease) => disease.name).join(" · ")}</small>
+                </button>
               </li>
             ))}
           </ul>
