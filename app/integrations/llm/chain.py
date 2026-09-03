@@ -40,6 +40,26 @@ T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
 
 
+#: 프로세스에 하나만 둔다.
+#:
+#: 예전에는 요청마다 `HealthAssistantService()` 가 새로 생기고 그 안에서
+#: `FallbackChatClient()` 도 새로 만들어졌다 — 요청마다 **새 HTTP 클라이언트**라
+#: TLS 핸드셰이크와 인증 왕복을 매번 다시 한다. 클라이언트는 상태가 없고
+#: (모델 이름과 키만 들고 있다) 스레드 안전하므로 나눠 쓰면 된다.
+#:
+#: 실측: 컨테이너 기동 후 첫 대화가 21 초, 그 뒤로는 1.3 초였다. 그 21 초가
+#: 첫 연결 비용이고, 재사용하면 첫 사용자만 겪던 것도 줄어든다.
+_shared: FallbackChatClient | None = None
+
+
+def shared_chat_client() -> FallbackChatClient:
+    """공유 클라이언트. 키가 하나도 없으면 그때 `LlmUnavailableError` 를 던진다."""
+    global _shared
+    if _shared is None:
+        _shared = FallbackChatClient()
+    return _shared
+
+
 def build_client(entry: str) -> LLMClientProtocol:
     """`"openai:gpt-4o-mini"` · `"gemini-3.1-flash-lite"` 한 항목을 클라이언트로.
 

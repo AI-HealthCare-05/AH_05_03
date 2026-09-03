@@ -8,7 +8,7 @@
 
 from app.dtos.health_assistant import ChatMessage
 from app.dtos.pain_chat import PainChatData, PainChatMessage
-from app.integrations.llm.chain import FallbackChatClient
+from app.integrations.llm.chain import shared_chat_client
 from app.integrations.llm.protocol import LLMClientProtocol
 from app.prompts.pain_chat import PAIN_CHAT_INSTRUCTION
 
@@ -22,7 +22,7 @@ class PainChatService:
         # 키가 없으면 생성자에서 바로 터지므로, 실제로 부를 때 만든다. 그래야
         # 라우터 의존성 주입 단계가 아니라 요청 처리 중에 503 이 난다.
         if self._llm_client is None:
-            self._llm_client = FallbackChatClient()
+            self._llm_client = shared_chat_client()
         return self._llm_client
 
     async def respond(self, messages: list[PainChatMessage]) -> PainChatData:

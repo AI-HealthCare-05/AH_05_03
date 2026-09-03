@@ -6,7 +6,7 @@ from app.dtos.health_assistant import (
     HealthAssistantResponse,
 )
 from app.exceptions import LlmProviderFailedError
-from app.integrations.llm.chain import FallbackChatClient
+from app.integrations.llm.chain import shared_chat_client
 from app.integrations.llm.protocol import LLMClientProtocol
 from app.prompts.health_assistant import build_system_instruction
 from app.services.health_assistant_safety import HealthAssistantSafetyService
@@ -33,7 +33,7 @@ class HealthAssistantService:
         # 하나가 아니라 **순서 목록**을 쓴다. Gemini 무료 등급은 할당량을 모델마다
         # 하루로 따로 세서, 하나만 걸어 두면 소진되는 날 대화가 통째로 멈춘다.
         if self._llm_client is None:
-            self._llm_client = FallbackChatClient()
+            self._llm_client = shared_chat_client()
         return self._llm_client
 
     async def respond(self, request: HealthAssistantChatRequest) -> HealthAssistantResponse:
