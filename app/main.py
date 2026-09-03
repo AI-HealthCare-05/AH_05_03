@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 
+from app.apis import spa
 from app.apis.demo_routers import demo_router
 from app.apis.exception_handlers import register_exception_handlers
 from app.apis.v1 import v1_routers
@@ -51,6 +52,11 @@ app.add_middleware(
 register_exception_handlers(app)
 
 app.include_router(v1_routers)
-# 예측 API를 사람이 눌러 확인하는 데모 화면. nginx가 /api/ 만 프록시하므로 그 아래 둔다.
+# 예측 API를 사람이 눌러 확인하는 데모 화면. /api/ 아래 두는 규칙은 그대로 지킨다 —
+# 아래 SPA 폴백이 /api 로 시작하는 경로를 건드리지 않기 때문이다.
 # ML 모델과 규칙 엔진을 한 화면에서 스위치로 바꿔 돌린다.
 app.include_router(demo_router)
+
+# 빌드된 프런트엔드. 별도 nginx 컨테이너가 하던 일을 여기로 옮겼다.
+# **반드시 마지막이다** — SPA 폴백이 catch-all 이라 먼저 붙으면 위 라우터를 다 가린다.
+spa.mount(app)

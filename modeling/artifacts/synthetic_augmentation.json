@@ -1,0 +1,314 @@
+[
+  {
+    "target": "hypertg",
+    "name": "고중성지방혈증",
+    "tier": "basic",
+    "model": "xgboost",
+    "train_rows": 14591,
+    "train_positives": 1730,
+    "positive_rate": 0.1186,
+    "arms": {
+      "원본": {
+        "auroc": 0.7232,
+        "auprc": 0.1758,
+        "lift_top5": 2.004
+      },
+      "클래스가중": {
+        "auroc": 0.717,
+        "auprc": 0.1727,
+        "lift_top5": 1.804
+      },
+      "SMOTE x0.5": {
+        "auroc": 0.7088,
+        "auprc": 0.174,
+        "lift_top5": 2.605,
+        "synthetic_rows": 865
+      },
+      "SMOTE x1": {
+        "auroc": 0.7005,
+        "auprc": 0.166,
+        "lift_top5": 2.204,
+        "synthetic_rows": 1730
+      },
+      "SMOTE x2": {
+        "auroc": 0.6844,
+        "auprc": 0.1556,
+        "lift_top5": 2.104,
+        "synthetic_rows": 3460
+      }
+    }
+  },
+  {
+    "target": "hypertg",
+    "name": "고중성지방혈증",
+    "tier": "lab",
+    "model": "xgboost",
+    "train_rows": 14547,
+    "train_positives": 1728,
+    "positive_rate": 0.1188,
+    "arms": {
+      "원본": {
+        "auroc": 0.7559,
+        "auprc": 0.2312,
+        "lift_top5": 3.719
+      },
+      "클래스가중": {
+        "auroc": 0.7589,
+        "auprc": 0.2444,
+        "lift_top5": 3.619
+      },
+      "SMOTE x0.5": {
+        "auroc": 0.7458,
+        "auprc": 0.2235,
+        "lift_top5": 2.915,
+        "synthetic_rows": 864
+      },
+      "SMOTE x1": {
+        "auroc": 0.7467,
+        "auprc": 0.2085,
+        "lift_top5": 3.116,
+        "synthetic_rows": 1728
+      },
+      "SMOTE x2": {
+        "auroc": 0.7408,
+        "auprc": 0.2076,
+        "lift_top5": 3.719,
+        "synthetic_rows": 3456
+      }
+    }
+  },
+  {
+    "target": "fatty_liver",
+    "name": "지방간",
+    "tier": "basic",
+    "model": "xgboost",
+    "train_rows": 4626,
+    "train_positives": 2023,
+    "positive_rate": 0.4373,
+    "arms": {
+      "원본": {
+        "auroc": 0.8164,
+        "auprc": 0.731,
+        "lift_top5": 2.184
+      },
+      "클래스가중": {
+        "auroc": 0.8172,
+        "auprc": 0.7319,
+        "lift_top5": 2.193
+      },
+      "SMOTE x0.5": {
+        "auroc": 0.8117,
+        "auprc": 0.7223,
+        "lift_top5": 2.165,
+        "synthetic_rows": 1011
+      },
+      "SMOTE x1": {
+        "auroc": 0.8056,
+        "auprc": 0.7058,
+        "lift_top5": 2.109,
+        "synthetic_rows": 2023
+      },
+      "SMOTE x2": {
+        "auroc": 0.8015,
+        "auprc": 0.6991,
+        "lift_top5": 2.063,
+        "synthetic_rows": 4046
+      }
+    }
+  },
+  {
+    "target": "fatty_liver",
+    "name": "지방간",
+    "tier": "lab",
+    "model": "xgboost",
+    "train_rows": 4376,
+    "train_positives": 1938,
+    "positive_rate": 0.4429,
+    "arms": {
+      "원본": {
+        "auroc": 0.8495,
+        "auprc": 0.7887,
+        "lift_top5": 2.36
+      },
+      "클래스가중": {
+        "auroc": 0.8507,
+        "auprc": 0.7912,
+        "lift_top5": 2.36
+      },
+      "SMOTE x0.5": {
+        "auroc": 0.8464,
+        "auprc": 0.7803,
+        "lift_top5": 2.288,
+        "synthetic_rows": 969
+      },
+      "SMOTE x1": {
+        "auroc": 0.8415,
+        "auprc": 0.7683,
+        "lift_top5": 2.247,
+        "synthetic_rows": 1938
+      },
+      "SMOTE x2": {
+        "auroc": 0.8378,
+        "auprc": 0.7614,
+        "lift_top5": 2.227,
+        "synthetic_rows": 3876
+      }
+    }
+  },
+  {
+    "target": "anemia",
+    "name": "빈혈",
+    "tier": "basic",
+    "model": "xgboost",
+    "train_rows": 36643,
+    "train_positives": 3664,
+    "positive_rate": 0.1,
+    "arms": {
+      "원본": {
+        "auroc": 0.7183,
+        "auprc": 0.2408,
+        "lift_top5": 3.385
+      },
+      "클래스가중": {
+        "auroc": 0.7214,
+        "auprc": 0.2448,
+        "lift_top5": 3.289
+      },
+      "SMOTE x0.5": {
+        "auroc": 0.7068,
+        "auprc": 0.2259,
+        "lift_top5": 2.805,
+        "synthetic_rows": 1832
+      },
+      "SMOTE x1": {
+        "auroc": 0.693,
+        "auprc": 0.2129,
+        "lift_top5": 2.773,
+        "synthetic_rows": 3664
+      },
+      "SMOTE x2": {
+        "auroc": 0.6911,
+        "auprc": 0.2043,
+        "lift_top5": 2.644,
+        "synthetic_rows": 7328
+      }
+    }
+  },
+  {
+    "target": "anemia",
+    "name": "빈혈",
+    "tier": "lab",
+    "model": "xgboost",
+    "train_rows": 36030,
+    "train_positives": 3587,
+    "positive_rate": 0.0996,
+    "arms": {
+      "원본": {
+        "auroc": 0.8163,
+        "auprc": 0.4072,
+        "lift_top5": 4.975
+      },
+      "클래스가중": {
+        "auroc": 0.8193,
+        "auprc": 0.4021,
+        "lift_top5": 5.078
+      },
+      "SMOTE x0.5": {
+        "auroc": 0.8139,
+        "auprc": 0.3821,
+        "lift_top5": 4.769,
+        "synthetic_rows": 1793
+      },
+      "SMOTE x1": {
+        "auroc": 0.8101,
+        "auprc": 0.3778,
+        "lift_top5": 4.804,
+        "synthetic_rows": 3587
+      },
+      "SMOTE x2": {
+        "auroc": 0.8018,
+        "auprc": 0.36,
+        "lift_top5": 4.461,
+        "synthetic_rows": 7174
+      }
+    }
+  },
+  {
+    "target": "dm",
+    "name": "당뇨",
+    "tier": "basic",
+    "model": "xgboost",
+    "train_rows": 40926,
+    "train_positives": 6937,
+    "positive_rate": 0.1695,
+    "arms": {
+      "원본": {
+        "auroc": 0.8167,
+        "auprc": 0.4695,
+        "lift_top5": 3.348
+      },
+      "클래스가중": {
+        "auroc": 0.8172,
+        "auprc": 0.4703,
+        "lift_top5": 3.406
+      },
+      "SMOTE x0.5": {
+        "auroc": 0.8143,
+        "auprc": 0.463,
+        "lift_top5": 3.362,
+        "synthetic_rows": 3468
+      },
+      "SMOTE x1": {
+        "auroc": 0.8106,
+        "auprc": 0.4496,
+        "lift_top5": 3.276,
+        "synthetic_rows": 6937
+      },
+      "SMOTE x2": {
+        "auroc": 0.8082,
+        "auprc": 0.4399,
+        "lift_top5": 3.232,
+        "synthetic_rows": 13874
+      }
+    }
+  },
+  {
+    "target": "dm",
+    "name": "당뇨",
+    "tier": "lab",
+    "model": "xgboost",
+    "train_rows": 36767,
+    "train_positives": 6346,
+    "positive_rate": 0.1726,
+    "arms": {
+      "원본": {
+        "auroc": 0.8702,
+        "auprc": 0.6267,
+        "lift_top5": 4.275
+      },
+      "클래스가중": {
+        "auroc": 0.8698,
+        "auprc": 0.6246,
+        "lift_top5": 4.333
+      },
+      "SMOTE x0.5": {
+        "auroc": 0.866,
+        "auprc": 0.6129,
+        "lift_top5": 4.217,
+        "synthetic_rows": 3173
+      },
+      "SMOTE x1": {
+        "auroc": 0.8608,
+        "auprc": 0.5965,
+        "lift_top5": 4.043,
+        "synthetic_rows": 6346
+      },
+      "SMOTE x2": {
+        "auroc": 0.8561,
+        "auprc": 0.5793,
+        "lift_top5": 3.849,
+        "synthetic_rows": 12692
+      }
+    }
+  }
+]

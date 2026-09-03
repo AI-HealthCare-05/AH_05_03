@@ -2778,3 +2778,113 @@ main {
     flex-direction: column;
   }
 }
+
+/* 라우터 오류 화면. 토큰은 :root 의 것을 그대로 쓴다 — 이 화면만 다른 색을
+   쓰면 "여기는 다른 서비스인가" 하는 인상을 준다. */
+.error-page {
+  padding: 72px 0 96px;
+}
+
+.error-card {
+  max-width: 640px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 36px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.error-card h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.6rem;
+  letter-spacing: -0.04em;
+}
+
+.error-lede {
+  margin: 12px 0 0;
+  color: var(--muted-strong);
+  line-height: 1.65;
+}
+
+.error-actions {
+  margin-top: 26px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.error-actions > a,
+.error-actions > button {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 10px 16px;
+  color: var(--muted-strong);
+  background: white;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.error-actions > .error-primary {
+  border-color: transparent;
+  color: white;
+  background: var(--blue-600);
+}
+
+.error-detail {
+  margin-top: 24px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 16px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.error-detail summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.error-detail p {
+  margin: 10px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.error-detail code {
+  border-radius: 6px;
+  padding: 2px 7px;
+  background: var(--blue-50);
+  color: var(--blue-700);
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .error-page {
+    padding: 48px 0 64px;
+  }
+
+  .error-card {
+    padding: 26px;
+  }
+}
+
+/* SPA 밖으로 나가는 링크(예측 데모). 같은 내비게이션에 있지만 클릭하면 페이지가
+   통째로 바뀌므로, 눌러 보기 전에 그 사실이 보여야 한다 — 화살표가 그 신호다. */
+.primary-navigation a.navigation-external {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted-strong);
+}
+
+.primary-navigation a.navigation-external i {
+  font-size: 0.78em;
+  font-style: normal;
+  opacity: 0.65;
+}
+
+.primary-navigation a.navigation-external:hover {
+  color: var(--blue-600);
+}

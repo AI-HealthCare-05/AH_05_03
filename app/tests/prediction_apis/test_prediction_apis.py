@@ -174,26 +174,43 @@ async def test_demo_page_served(client: AsyncClient) -> None:
     assert "/api/v1/predictions/risk" in response.text
 
 
-# 파라미터 이름을 engine 으로 두면 conftest 의 AsyncEngine 픽스처를 문자열로 덮어써
-# DB 연결이 깨진다. preselect 로 부른다.
-@pytest.mark.parametrize("preselect", ["ml", "rules", "both"])
-async def test_demo_never_hides_inputs(client: AsyncClient, preselect: str) -> None:
-    """어떤 엔진을 골라도 입력창은 그대로 다 보인다.
+async def test_demo_never_hides_inputs(client: AsyncClient) -> None:
+    """입력창은 언제나 전부 보인다.
 
-    숨기면 사용자가 무엇이 빠졌는지 알 수 없다. 흐리게만 두고 값은 남긴다.
+    숨기면 사용자가 무엇이 빠졌는지 알 수 없다. 엔진을 고르던 시절에는 고른 쪽이
+    안 쓰는 항목을 흐리게 눌러 두는 것으로 그 규칙을 지켰는데, 화면이 늘 두 엔진을
+    같이 돌리게 되면서 흐릴 이유도 없어졌다. 규칙은 그대로고 더 세졌다 —
+    **아무것도 숨기지 않고 아무것도 흐리지 않는다.**
     """
-    response = await client.get(f"/api/demo?engine={preselect}")
+    response = await client.get("/api/demo")
     page = response.text
 
     ids = re.findall(r'<(?:input|select) id="([a-z0-9_]+)"', page)
     assert len(ids) == 33, f"입력 개수가 바뀌었다: {len(ids)}"
     assert "fasting_glucose" in ids and "self_rated_health" in ids
 
-    # 흐림 처리로 알려주고, 숨기지 않는다.
-    assert 'classList.toggle("off"' in page
+    # 숨기는 코드가 다시 들어오면 잡는다.
     assert ".hidden = !wants" not in page
-    # 모델이 무시한 항목을 결과에 적는다.
+    assert 'classList.toggle("off"' not in page
+    # 엔진을 고르게 하면 화면이 다시 반쪽이 된다. 그 입구가 없어야 한다.
+    assert "engine-pick" not in page
+    # 모델이 무시한 항목은 숨기는 대신 결과에 적는다.
     assert "mlIgnored" in page and "rulesIgnored" in page
+
+
+async def test_demo_starts_empty(client: AsyncClient) -> None:
+    """처음 열면 모든 칸이 비어 있다.
+
+    기본값이 박혀 있으면 "내가 넣은 값" 과 "화면이 넣어 둔 값" 이 섞인다. 데모를
+    보여 주는 자리에서 그 구분이 안 되면 결과를 설명할 수 없다.
+    """
+    page = (await client.get("/api/demo")).text
+    form = page[page.index('<form id="form"') : page.index("</form>")]
+
+    assert re.search(r'<input[^>]*value="', form) is None, "input 에 기본값이 박혀 있다"
+    selects = re.findall(r"<select ", form)
+    blank_defaults = re.findall(r'<option value=""[^>]*selected', form)
+    assert len(blank_defaults) == len(selects), "선택 항목의 기본값이 비어 있지 않다"
 
 
 @pytest.mark.parametrize("bundle_name", ALL_BUNDLES or ["dm"])
@@ -231,11 +248,31 @@ def test_pure_python_matches_sklearn(bundle_name: str) -> None:
     target = MODEL_TARGETS[bundle["target"]]
     data = pandas.read_csv(pooled, low_memory=False)
 
-    model_kind = "logistic" if bundle["model"] == "logistic_regression" else "xgboost"
-    worst = equivalence(bundle, data, target, bundle["tier"], model_kind)
-    # 잎 값을 소수 8자리로 줄여 싣기 때문에 정확히 0 은 되지 않는다. 화면은
-    # 확률을 소수 4자리로 반올림하므로 1e-6 이면 표시에 영향이 없다.
-    assert worst < 1e-6, f"{bundle_name}: 순수 파이썬 채점이 sklearn 과 {worst:.2e} 어긋난다"
+    if bundle["model"] == "seed_ensemble":
+        # 앙상블은 모델이 여섯이라 단일 파이프라인과 맞댈 수 없다. 멤버를 전부 다시
+        # 적합해 보정 전 평균을 만들고 그것과 맞춘다 — 이 검사가 잡으려는 실패
+        # (트리 뒤집힘·대칭 트리 잎 색인 비트 순서·설계 행렬 어긋남)는 전부 보정
+        # 앞에서 일어나므로 덮는 범위는 같다.
+        from export_ensemble import equivalence_from_bundle  # type: ignore[import-not-found]
+
+        worst = equivalence_from_bundle(bundle, data, target, bundle["tier"])
+        # 앙상블은 바닥이 더 높다. 원인은 잎값 반올림이 아니라 `tree_payload` 의
+        # **base_margin 복원**이다 — 그 값을 실측 평균으로 되찾고 허용 산포를 1e-4 로
+        # 두는데, 시드 셋을 평균한 뒤 멤버 등장성 보정의 가파른 구간을 지나면서
+        # 확률 기준 1e-5 언저리로 커진다. 잎값을 8→10 자리로 늘려도 3.4e-06 이
+        # 2.8e-06 으로만 줄어 원인이 거기가 아님을 확인했고, 등장성 구현 자체는
+        # `np.interp` 와 1.1e-16 까지 일치한다.
+        #
+        # 화면은 확률을 소수 4자리로 반올림하므로 2e-5 는 표시에 영향이 없다.
+        # 이보다 크면 반올림이 아니라 구조가 틀린 것이다.
+        limit = 2e-5
+    else:
+        model_kind = "logistic" if bundle["model"] == "logistic_regression" else "xgboost"
+        worst = equivalence(bundle, data, target, bundle["tier"], model_kind)
+        # 잎 값을 소수 8자리로 줄여 싣기 때문에 정확히 0 은 되지 않는다. 화면은
+        # 확률을 소수 4자리로 반올림하므로 1e-6 이면 표시에 영향이 없다.
+        limit = 1e-6
+    assert worst < limit, f"{bundle_name}: 순수 파이썬 채점이 sklearn 과 {worst:.2e} 어긋난다"
 
 
 async def test_peer_relative_fields(client: AsyncClient) -> None:

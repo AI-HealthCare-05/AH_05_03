@@ -627,10 +627,164 @@ class TreeRiskModel(BaseRiskModel):
         return sorted(pairs, key=lambda item: abs(item[1]), reverse=True)
 
 
+class SeedEnsembleRiskModel(BaseRiskModel):
+    """시드 앙상블 여럿을 다시 평균하는 모델 (XGBoost 3시드 + CatBoost 3시드).
+
+    합치는 순서가 계약이다. **멤버 안에서는 확률을 평균하고 로짓을 평균하지 않는다.**
+    로짓 평균은 기하평균이라 값이 달라지고, 학습 쪽(`modeling/ensemble.py`)이 확률
+    평균으로 골라 놨기 때문에 여기서 바꾸면 실험에서 잰 수치가 서빙에서 안 나온다.
+
+        시드 평균(확률) -> 멤버 보정 -> 멤버 평균 -> 앙상블 보정
+
+    트리 표현이 둘이다. XGBoost 는 노드마다 분할이 달라 노드 배열을 순회하고,
+    CatBoost 는 대칭(oblivious) 트리라 깊이마다 분할이 하나뿐이다. 후자는 순회가
+    아니라 **비교 d 번 뒤 색인 한 번**이라 더 빠르고, 번들도 3 배 넘게 작다.
+    잎 색인은 LSB 우선 — j 번째 분할이 참이면 ``idx |= 1 << j``.
+    """
+
+    kind = "seed_ensemble"
+
+    LEAF = -1
+
+    def __init__(self, bundle: dict[str, Any]) -> None:
+        super().__init__(bundle)
+        self.members: list[dict[str, Any]] = bundle["members"]
+        self.calibration: dict[str, Any] = bundle.get("calibration", {"method": "none", "parameters": {}})
+        if bundle.get("combine", "mean") != "mean":
+            raise ValueError(f"{self.target}: 아는 결합 규칙은 mean 뿐입니다")
+
+        width = self.design_width()
+        for member in self.members:
+            for sub in member["seeds"]:
+                if member["kind"] == "gradient_boosted_trees":
+                    indices = (int(node[0]) for tree in sub["trees"] for node in tree)
+                else:
+                    indices = (int(split[0]) for tree in sub["trees"] for split in tree["splits"])
+                for index in indices:
+                    if index != self.LEAF and not 0 <= index < width:
+                        raise ValueError(f"{self.target}: 특징 인덱스 {index} 가 설계 행렬 {width}열을 벗어납니다")
+
+    @staticmethod
+    def _walk_nodes(trees: list[list[list[float]]], base_margin: float, row: list[float]) -> float:
+        total = base_margin
+        for tree in trees:
+            node = tree[0]
+            while int(node[0]) != SeedEnsembleRiskModel.LEAF:
+                node = tree[int(node[2])] if row[int(node[0])] < node[1] else tree[int(node[3])]
+            total += node[4]
+        return total
+
+    @staticmethod
+    def _walk_oblivious(trees: list[dict[str, Any]], scale: float, bias: float, row: list[float]) -> float:
+        total = 0.0
+        for tree in trees:
+            index = 0
+            for position, (feature, border) in enumerate(tree["splits"]):
+                if row[int(feature)] > border:
+                    index |= 1 << position
+            total += tree["leaves"][index]
+        return total * scale + bias
+
+    def _apply_calibration(self, probability: float, calibration: dict[str, Any]) -> float:
+        method = calibration.get("method", "none")
+        parameters = calibration.get("parameters", {})
+        if method == "platt":
+            clipped = min(max(probability, 1e-6), 1 - 1e-6)
+            logit = math.log(clipped / (1 - clipped))
+            return self._sigmoid(parameters["a"] * logit + parameters["b"])
+        if method == "isotonic":
+            xs, ys = parameters["x"], parameters["y"]
+            if probability <= xs[0]:
+                return float(ys[0])
+            if probability >= xs[-1]:
+                return float(ys[-1])
+            # 계단함수의 선형 보간. numpy.interp 와 같은 규칙이다.
+            low = 0
+            high = len(xs) - 1
+            while high - low > 1:
+                middle = (low + high) // 2
+                if xs[middle] <= probability:
+                    low = middle
+                else:
+                    high = middle
+            span = xs[high] - xs[low]
+            if span <= 0:
+                return float(ys[low])
+            weight = (probability - xs[low]) / span
+            return float(ys[low] + weight * (ys[high] - ys[low]))
+        return probability
+
+    def _member_probability(self, member: dict[str, Any], row: list[float]) -> float:
+        values = []
+        for sub in member["seeds"]:
+            if member["kind"] == "gradient_boosted_trees":
+                margin = self._walk_nodes(sub["trees"], sub["base_margin"], row)
+            else:
+                margin = self._walk_oblivious(sub["trees"], sub["scale"], sub["bias"], row)
+            values.append(self._sigmoid(margin))
+        return self._apply_calibration(sum(values) / len(values), member["calibration"])
+
+    def probability(self, payload: dict[str, Any]) -> float:
+        # 두 모델 다 특징을 float32 로 접어 두고 임계값과 비교한다. 서빙도 같이
+        # 접어야 경계에 걸린 값이 같은 쪽으로 간다 — `to_float32` 설명 참조.
+        row = [to_float32(value) for value in self.design_row(payload)]
+        combined = sum(self._member_probability(m, row) for m in self.members) / len(self.members)
+        return self._apply_calibration(combined, self.calibration)
+
+    def raw_probability(self, payload: dict[str, Any]) -> float:
+        """**앙상블 보정기가 받는 값** — 멤버별 보정까지 끝낸 뒤의 평균.
+
+        여섯 모델의 보정 전 평균이 아니다. 그 정의를 쓰면 `probability` 와의 관계가
+        단조가 아니게 된다 — 멤버마다 보정기가 다르므로 보정 전 평균에서 앞서던
+        사람이 보정 후 평균에서 뒤로 갈 수 있고, 실제로 `test_calibration_is_monotone`
+        이 20 개 번들 전부에서 그걸 잡았다.
+
+        멤버 보정은 **모델 내부**고 앙상블 보정만 '보정 단계'다. 그렇게 갈라야
+        단일 모델(raw = 시그모이드, probability = 보정기(raw))과 같은 계약이 된다.
+        """
+        row = [to_float32(value) for value in self.design_row(payload)]
+        return sum(self._member_probability(m, row) for m in self.members) / len(self.members)
+
+    def raw_logit(self, payload: dict[str, Any]) -> float:
+        probability = min(max(self.raw_probability(payload), 1e-6), 1 - 1e-6)
+        return math.log(probability / (1 - probability))
+
+    def contributions(self, raw_payload: dict[str, Any]) -> list[tuple[str, float]]:
+        """경로 기여도. XGBoost 멤버에서만 모은다.
+
+        대칭 트리는 모든 깊이가 같은 분할을 쓰므로 경로 기여를 특징에 배분하는
+        의미가 달라진다. 둘을 섞으면 화면에 나가는 숫자의 뜻이 흐려지므로,
+        기여도는 노드 배열 멤버만 쓰고 그 사실을 여기 적어 둔다.
+        """
+        row = [to_float32(value) for value in self.design_row(raw_payload)]
+        names = self.design_names()
+        totals = [0.0] * len(names)
+        walked = 0
+
+        for member in self.members:
+            if member["kind"] != "gradient_boosted_trees":
+                continue
+            for sub in member["seeds"]:
+                walked += 1
+                for tree in sub["trees"]:
+                    node = tree[0]
+                    while int(node[0]) != self.LEAF:
+                        index = int(node[0])
+                        child = tree[int(node[2])] if row[index] < node[1] else tree[int(node[3])]
+                        totals[index] += child[4] - node[4]
+                        node = child
+        if walked:
+            totals = [value / walked for value in totals]
+
+        pairs = [(name, value) for name, value in zip(names, totals, strict=True) if abs(value) > 1e-9]
+        return sorted(pairs, key=lambda item: abs(item[1]), reverse=True)
+
+
 #: 번들의 ``model`` 필드 -> 클래스. 새 모델 종류는 여기에만 추가한다.
 MODEL_KINDS: dict[str, type[BaseRiskModel]] = {
     RiskModel.kind: RiskModel,
     TreeRiskModel.kind: TreeRiskModel,
+    SeedEnsembleRiskModel.kind: SeedEnsembleRiskModel,
 }
 
 

@@ -1,3 +1,16 @@
+# 0. 프런트엔드 빌드. 별도 nginx 컨테이너를 두는 대신 산출물만 아래 단계로 옮긴다.
+#    멀티스테이지라 최종 이미지에 node 는 남지 않는다 — dist 만 들어간다.
+FROM node:22-alpine AS frontend
+
+WORKDIR /frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
+
 FROM python:3.13-slim
 
 WORKDIR /app
@@ -21,6 +34,9 @@ COPY ./app ./app
 # 규칙 기반 판정 엔진. AH_05_03 PR #4 에서 가져온 코드로 손대지 않는다.
 # chronic_disease_engine/PROVENANCE.md 참조.
 COPY ./chronic_disease_engine ./chronic_disease_engine
+
+# 4-1. 빌드된 SPA. `app/apis/spa.py` 의 FRONTEND_DIST 기본값과 같은 경로여야 한다.
+COPY --from=frontend /frontend/dist ./static
 
 # 5. 해당 이미지를 활용하여 도커컨테이너 실행시 실행되는 명령어입니다.
 # FastAPI를 uvicorn을 활용하여 비동기 환경으로 서버를 실행합니다.

@@ -200,7 +200,7 @@ def _flatten(node: dict, values: dict[int, float], nodes: list[list[float]], ind
     return position
 
 
-def tree_payload(pipeline, design: np.ndarray) -> dict[str, Any]:
+def tree_payload(pipeline, design: np.ndarray, digits: int = 8) -> dict[str, Any]:
     """부스팅 트리를 노드 배열로. base_margin 은 실측으로 되찾는다.
 
     XGBoost 버전마다 base_score 를 확률로 저장하기도 로짓으로 저장하기도 한다.
@@ -218,7 +218,11 @@ def tree_payload(pipeline, design: np.ndarray) -> dict[str, Any]:
         # 임계값(1번 칸)은 반올림하지 않는다. float32 를 8자리로 자르면 더는
         # float32 로 정확히 표현되는 수가 아니게 되고, 경계에 걸린 행이 다시
         # 갈라진다. 잎 값만 줄여서 파일 크기를 줄인다.
-        trees.append([[node[0], node[1], node[2], node[3], round(node[4], 8)] for node in nodes])
+        # 잎값 자릿수가 채점 오차의 바닥을 정한다. 트리 200 개를 더하면 자리당
+        # 오차가 쌓이고, 뒤에 등장성 보정이 붙으면 가파른 구간에서 더 부풀 수 있다.
+        # 단일 모델은 8 자리로 충분하지만(오차 2e-07) 앙상블은 모델이 여섯이라
+        # 여유가 필요하다 — `export_ensemble` 이 10 을 넘긴다.
+        trees.append([[node[0], node[1], node[2], node[3], round(node[4], digits)] for node in nodes])
 
     sample = design[: min(len(design), 512)]
     margin = pipeline.named_steps["model"].predict(sample, output_margin=True)

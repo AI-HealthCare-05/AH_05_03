@@ -157,16 +157,6 @@ services:
       - ws
 
   # 7. Frontend (Vite production build를 정적 제공)
-  frontend:
-    container_name: frontend
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    image: ieobom-frontend:local
-    restart: always
-    networks:
-      - ws
-
   # 8. Nginx (프론트엔드와 API 요청을 리버스 프록시로 전달)
   nginx:
     container_name: nginx
@@ -180,7 +170,6 @@ services:
       - ws
     depends_on:
       - fastapi
-      - frontend
 
 volumes:
   postgres_data:

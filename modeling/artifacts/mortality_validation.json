@@ -1,0 +1,2101 @@
+{
+  "train_cycles": [
+    "2005_2006",
+    "2007_2008",
+    "2009_2010"
+  ],
+  "score_cycles": [
+    "2011_2012",
+    "2013_2014",
+    "2015_2016",
+    "2017_2018"
+  ],
+  "results": [
+    {
+      "target": "dm",
+      "name": "당뇨",
+      "tier": "basic",
+      "model": "xgboost",
+      "n_linked": 23111,
+      "deaths": 1507,
+      "person_years": 111290.9,
+      "overall_rate_per_1000_py": 13.54,
+      "harrell_c_all_cause": 0.754,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 2312,
+          "deaths": 9,
+          "person_years": 12152.4,
+          "rate_per_1000_py": 0.74,
+          "mean_risk": 0.0065
+        },
+        {
+          "decile": 2,
+          "n": 2311,
+          "deaths": 22,
+          "person_years": 11756.0,
+          "rate_per_1000_py": 1.87,
+          "mean_risk": 0.0136
+        },
+        {
+          "decile": 3,
+          "n": 2311,
+          "deaths": 23,
+          "person_years": 11839.5,
+          "rate_per_1000_py": 1.94,
+          "mean_risk": 0.0246
+        },
+        {
+          "decile": 4,
+          "n": 2311,
+          "deaths": 49,
+          "person_years": 11563.3,
+          "rate_per_1000_py": 4.24,
+          "mean_risk": 0.0433
+        },
+        {
+          "decile": 5,
+          "n": 2311,
+          "deaths": 84,
+          "person_years": 11470.6,
+          "rate_per_1000_py": 7.32,
+          "mean_risk": 0.0721
+        },
+        {
+          "decile": 6,
+          "n": 2311,
+          "deaths": 133,
+          "person_years": 11103.8,
+          "rate_per_1000_py": 11.98,
+          "mean_risk": 0.114
+        },
+        {
+          "decile": 7,
+          "n": 2310,
+          "deaths": 189,
+          "person_years": 10780.0,
+          "rate_per_1000_py": 17.53,
+          "mean_risk": 0.1725
+        },
+        {
+          "decile": 8,
+          "n": 2312,
+          "deaths": 267,
+          "person_years": 10389.3,
+          "rate_per_1000_py": 25.7,
+          "mean_risk": 0.2519
+        },
+        {
+          "decile": 9,
+          "n": 2311,
+          "deaths": 348,
+          "person_years": 10120.4,
+          "rate_per_1000_py": 34.39,
+          "mean_risk": 0.3597
+        },
+        {
+          "decile": 10,
+          "n": 2311,
+          "deaths": 383,
+          "person_years": 10115.7,
+          "rate_per_1000_py": 37.86,
+          "mean_risk": 0.5565
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 51.16,
+      "within_age_band": {
+        "19-50": {
+          "n": 11770,
+          "deaths": 144,
+          "harrell_c": 0.6611
+        },
+        "50-65": {
+          "n": 5927,
+          "deaths": 287,
+          "harrell_c": 0.6531
+        },
+        "65+": {
+          "n": 5414,
+          "deaths": 1076,
+          "harrell_c": 0.5562
+        }
+      },
+      "cause_specific": {
+        "causes": [
+          "당뇨병"
+        ],
+        "events": 48,
+        "harrell_c": 0.8616,
+        "auroc_naive": 0.8479
+      }
+    },
+    {
+      "target": "dm",
+      "name": "당뇨",
+      "tier": "lab",
+      "model": "xgboost",
+      "n_linked": 20729,
+      "deaths": 1247,
+      "person_years": 100254.1,
+      "overall_rate_per_1000_py": 12.44,
+      "harrell_c_all_cause": 0.767,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 2073,
+          "deaths": 12,
+          "person_years": 10981.8,
+          "rate_per_1000_py": 1.09,
+          "mean_risk": 0.0061
+        },
+        {
+          "decile": 2,
+          "n": 2073,
+          "deaths": 17,
+          "person_years": 10669.5,
+          "rate_per_1000_py": 1.59,
+          "mean_risk": 0.0128
+        },
+        {
+          "decile": 3,
+          "n": 2073,
+          "deaths": 19,
+          "person_years": 10682.1,
+          "rate_per_1000_py": 1.78,
+          "mean_risk": 0.0233
+        },
+        {
+          "decile": 4,
+          "n": 2073,
+          "deaths": 37,
+          "person_years": 10477.7,
+          "rate_per_1000_py": 3.53,
+          "mean_risk": 0.0408
+        },
+        {
+          "decile": 5,
+          "n": 2073,
+          "deaths": 64,
+          "person_years": 10328.6,
+          "rate_per_1000_py": 6.2,
+          "mean_risk": 0.0677
+        },
+        {
+          "decile": 6,
+          "n": 2072,
+          "deaths": 104,
+          "person_years": 10216.0,
+          "rate_per_1000_py": 10.18,
+          "mean_risk": 0.1076
+        },
+        {
+          "decile": 7,
+          "n": 2073,
+          "deaths": 164,
+          "person_years": 9648.2,
+          "rate_per_1000_py": 17.0,
+          "mean_risk": 0.1672
+        },
+        {
+          "decile": 8,
+          "n": 2073,
+          "deaths": 194,
+          "person_years": 9444.3,
+          "rate_per_1000_py": 20.54,
+          "mean_risk": 0.2564
+        },
+        {
+          "decile": 9,
+          "n": 2073,
+          "deaths": 278,
+          "person_years": 9207.3,
+          "rate_per_1000_py": 30.19,
+          "mean_risk": 0.3894
+        },
+        {
+          "decile": 10,
+          "n": 2073,
+          "deaths": 358,
+          "person_years": 8598.6,
+          "rate_per_1000_py": 41.63,
+          "mean_risk": 0.6455
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 38.19,
+      "within_age_band": {
+        "19-50": {
+          "n": 10577,
+          "deaths": 124,
+          "harrell_c": 0.6583
+        },
+        "50-65": {
+          "n": 5394,
+          "deaths": 242,
+          "harrell_c": 0.6903
+        },
+        "65+": {
+          "n": 4758,
+          "deaths": 881,
+          "harrell_c": 0.6075
+        }
+      },
+      "cause_specific": {
+        "causes": [
+          "당뇨병"
+        ],
+        "events": 42,
+        "harrell_c": 0.8884,
+        "auroc_naive": 0.8846
+      }
+    },
+    {
+      "target": "htn",
+      "name": "고혈압",
+      "tier": "basic",
+      "model": "xgboost",
+      "n_linked": 23110,
+      "deaths": 1506,
+      "person_years": 111288.9,
+      "overall_rate_per_1000_py": 13.53,
+      "harrell_c_all_cause": 0.7921,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 2311,
+          "deaths": 8,
+          "person_years": 11992.0,
+          "rate_per_1000_py": 0.67,
+          "mean_risk": 0.0419
+        },
+        {
+          "decile": 2,
+          "n": 2311,
+          "deaths": 27,
+          "person_years": 11568.2,
+          "rate_per_1000_py": 2.33,
+          "mean_risk": 0.081
+        },
+        {
+          "decile": 3,
+          "n": 2311,
+          "deaths": 20,
+          "person_years": 11742.3,
+          "rate_per_1000_py": 1.7,
+          "mean_risk": 0.1395
+        },
+        {
+          "decile": 4,
+          "n": 2311,
+          "deaths": 23,
+          "person_years": 11923.4,
+          "rate_per_1000_py": 1.93,
+          "mean_risk": 0.2182
+        },
+        {
+          "decile": 5,
+          "n": 2311,
+          "deaths": 40,
+          "person_years": 11599.5,
+          "rate_per_1000_py": 3.45,
+          "mean_risk": 0.3245
+        },
+        {
+          "decile": 6,
+          "n": 2311,
+          "deaths": 86,
+          "person_years": 11180.0,
+          "rate_per_1000_py": 7.69,
+          "mean_risk": 0.4518
+        },
+        {
+          "decile": 7,
+          "n": 2311,
+          "deaths": 192,
+          "person_years": 10871.3,
+          "rate_per_1000_py": 17.66,
+          "mean_risk": 0.5745
+        },
+        {
+          "decile": 8,
+          "n": 2311,
+          "deaths": 279,
+          "person_years": 10397.5,
+          "rate_per_1000_py": 26.83,
+          "mean_risk": 0.6682
+        },
+        {
+          "decile": 9,
+          "n": 2311,
+          "deaths": 373,
+          "person_years": 10104.2,
+          "rate_per_1000_py": 36.92,
+          "mean_risk": 0.746
+        },
+        {
+          "decile": 10,
+          "n": 2311,
+          "deaths": 458,
+          "person_years": 9910.5,
+          "rate_per_1000_py": 46.21,
+          "mean_risk": 0.8314
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 68.97,
+      "within_age_band": {
+        "19-50": {
+          "n": 11770,
+          "deaths": 144,
+          "harrell_c": 0.6551
+        },
+        "50-65": {
+          "n": 5927,
+          "deaths": 287,
+          "harrell_c": 0.6329
+        },
+        "65+": {
+          "n": 5413,
+          "deaths": 1075,
+          "harrell_c": 0.5481
+        }
+      },
+      "cause_specific": {
+        "causes": [
+          "심장질환",
+          "뇌혈관질환"
+        ],
+        "events": 445,
+        "harrell_c": 0.8317,
+        "auroc_naive": 0.8125
+      }
+    },
+    {
+      "target": "htn",
+      "name": "고혈압",
+      "tier": "lab",
+      "model": "xgboost",
+      "n_linked": 20730,
+      "deaths": 1247,
+      "person_years": 100255.3,
+      "overall_rate_per_1000_py": 12.44,
+      "harrell_c_all_cause": 0.8054,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 2073,
+          "deaths": 12,
+          "person_years": 10834.1,
+          "rate_per_1000_py": 1.11,
+          "mean_risk": 0.0391
+        },
+        {
+          "decile": 2,
+          "n": 2073,
+          "deaths": 16,
+          "person_years": 10504.0,
+          "rate_per_1000_py": 1.52,
+          "mean_risk": 0.0776
+        },
+        {
+          "decile": 3,
+          "n": 2073,
+          "deaths": 18,
+          "person_years": 10576.3,
+          "rate_per_1000_py": 1.7,
+          "mean_risk": 0.1336
+        },
+        {
+          "decile": 4,
+          "n": 2073,
+          "deaths": 18,
+          "person_years": 10672.0,
+          "rate_per_1000_py": 1.69,
+          "mean_risk": 0.2134
+        },
+        {
+          "decile": 5,
+          "n": 2073,
+          "deaths": 36,
+          "person_years": 10419.7,
+          "rate_per_1000_py": 3.45,
+          "mean_risk": 0.3206
+        },
+        {
+          "decile": 6,
+          "n": 2073,
+          "deaths": 68,
+          "person_years": 10197.8,
+          "rate_per_1000_py": 6.67,
+          "mean_risk": 0.4466
+        },
+        {
+          "decile": 7,
+          "n": 2073,
+          "deaths": 120,
+          "person_years": 9777.4,
+          "rate_per_1000_py": 12.27,
+          "mean_risk": 0.569
+        },
+        {
+          "decile": 8,
+          "n": 2073,
+          "deaths": 189,
+          "person_years": 9421.6,
+          "rate_per_1000_py": 20.06,
+          "mean_risk": 0.675
+        },
+        {
+          "decile": 9,
+          "n": 2073,
+          "deaths": 283,
+          "person_years": 9173.4,
+          "rate_per_1000_py": 30.85,
+          "mean_risk": 0.7726
+        },
+        {
+          "decile": 10,
+          "n": 2073,
+          "deaths": 487,
+          "person_years": 8679.0,
+          "rate_per_1000_py": 56.11,
+          "mean_risk": 0.8768
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 50.55,
+      "within_age_band": {
+        "19-50": {
+          "n": 10577,
+          "deaths": 124,
+          "harrell_c": 0.658
+        },
+        "50-65": {
+          "n": 5395,
+          "deaths": 242,
+          "harrell_c": 0.694
+        },
+        "65+": {
+          "n": 4758,
+          "deaths": 881,
+          "harrell_c": 0.6378
+        }
+      },
+      "cause_specific": {
+        "causes": [
+          "심장질환",
+          "뇌혈관질환"
+        ],
+        "events": 383,
+        "harrell_c": 0.8585,
+        "auroc_naive": 0.8496
+      }
+    },
+    {
+      "target": "dlp",
+      "name": "이상지질혈증",
+      "tier": "basic",
+      "model": "xgboost",
+      "n_linked": 23088,
+      "deaths": 1505,
+      "person_years": 111128.5,
+      "overall_rate_per_1000_py": 13.54,
+      "harrell_c_all_cause": 0.6538,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 2309,
+          "deaths": 18,
+          "person_years": 12076.6,
+          "rate_per_1000_py": 1.49,
+          "mean_risk": 0.1568
+        },
+        {
+          "decile": 2,
+          "n": 2309,
+          "deaths": 30,
+          "person_years": 11885.2,
+          "rate_per_1000_py": 2.52,
+          "mean_risk": 0.2756
+        },
+        {
+          "decile": 3,
+          "n": 2309,
+          "deaths": 40,
+          "person_years": 11567.8,
+          "rate_per_1000_py": 3.46,
+          "mean_risk": 0.3815
+        },
+        {
+          "decile": 4,
+          "n": 2308,
+          "deaths": 114,
+          "person_years": 11225.3,
+          "rate_per_1000_py": 10.16,
+          "mean_risk": 0.4677
+        },
+        {
+          "decile": 5,
+          "n": 2309,
+          "deaths": 195,
+          "person_years": 10977.5,
+          "rate_per_1000_py": 17.76,
+          "mean_risk": 0.5381
+        },
+        {
+          "decile": 6,
+          "n": 2309,
+          "deaths": 207,
+          "person_years": 10954.5,
+          "rate_per_1000_py": 18.9,
+          "mean_risk": 0.5926
+        },
+        {
+          "decile": 7,
+          "n": 2308,
+          "deaths": 227,
+          "person_years": 10770.8,
+          "rate_per_1000_py": 21.08,
+          "mean_risk": 0.634
+        },
+        {
+          "decile": 8,
+          "n": 2309,
+          "deaths": 206,
+          "person_years": 10868.3,
+          "rate_per_1000_py": 18.95,
+          "mean_risk": 0.6692
+        },
+        {
+          "decile": 9,
+          "n": 2309,
+          "deaths": 206,
+          "person_years": 10439.1,
+          "rate_per_1000_py": 19.73,
+          "mean_risk": 0.7047
+        },
+        {
+          "decile": 10,
+          "n": 2309,
+          "deaths": 262,
+          "person_years": 10363.6,
+          "rate_per_1000_py": 25.28,
+          "mean_risk": 0.7588
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 16.97,
+      "within_age_band": {
+        "19-50": {
+          "n": 11755,
+          "deaths": 144,
+          "harrell_c": 0.623
+        },
+        "50-65": {
+          "n": 5924,
+          "deaths": 287,
+          "harrell_c": 0.6115
+        },
+        "65+": {
+          "n": 5409,
+          "deaths": 1074,
+          "harrell_c": 0.4344
+        }
+      },
+      "cause_specific": {
+        "causes": [
+          "심장질환",
+          "뇌혈관질환"
+        ],
+        "events": 445,
+        "harrell_c": 0.6716,
+        "auroc_naive": 0.6772
+      }
+    },
+    {
+      "target": "dlp",
+      "name": "이상지질혈증",
+      "tier": "lab",
+      "model": "xgboost",
+      "n_linked": 20729,
+      "deaths": 1247,
+      "person_years": 100254.1,
+      "overall_rate_per_1000_py": 12.44,
+      "harrell_c_all_cause": 0.6476,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 2073,
+          "deaths": 15,
+          "person_years": 10880.6,
+          "rate_per_1000_py": 1.38,
+          "mean_risk": 0.1435
+        },
+        {
+          "decile": 2,
+          "n": 2073,
+          "deaths": 29,
+          "person_years": 10555.3,
+          "rate_per_1000_py": 2.75,
+          "mean_risk": 0.259
+        },
+        {
+          "decile": 3,
+          "n": 2073,
+          "deaths": 64,
+          "person_years": 10430.7,
+          "rate_per_1000_py": 6.14,
+          "mean_risk": 0.3647
+        },
+        {
+          "decile": 4,
+          "n": 2073,
+          "deaths": 103,
+          "person_years": 10150.5,
+          "rate_per_1000_py": 10.15,
+          "mean_risk": 0.459
+        },
+        {
+          "decile": 5,
+          "n": 2073,
+          "deaths": 126,
+          "person_years": 9870.9,
+          "rate_per_1000_py": 12.76,
+          "mean_risk": 0.5371
+        },
+        {
+          "decile": 6,
+          "n": 2072,
+          "deaths": 153,
+          "person_years": 9877.7,
+          "rate_per_1000_py": 15.49,
+          "mean_risk": 0.5948
+        },
+        {
+          "decile": 7,
+          "n": 2073,
+          "deaths": 186,
+          "person_years": 9709.5,
+          "rate_per_1000_py": 19.16,
+          "mean_risk": 0.6429
+        },
+        {
+          "decile": 8,
+          "n": 2073,
+          "deaths": 186,
+          "person_years": 9654.6,
+          "rate_per_1000_py": 19.27,
+          "mean_risk": 0.6871
+        },
+        {
+          "decile": 9,
+          "n": 2073,
+          "deaths": 174,
+          "person_years": 9576.9,
+          "rate_per_1000_py": 18.17,
+          "mean_risk": 0.7322
+        },
+        {
+          "decile": 10,
+          "n": 2073,
+          "deaths": 211,
+          "person_years": 9547.5,
+          "rate_per_1000_py": 22.1,
+          "mean_risk": 0.7986
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 16.01,
+      "within_age_band": {
+        "19-50": {
+          "n": 10577,
+          "deaths": 124,
+          "harrell_c": 0.5921
+        },
+        "50-65": {
+          "n": 5394,
+          "deaths": 242,
+          "harrell_c": 0.5958
+        },
+        "65+": {
+          "n": 4758,
+          "deaths": 881,
+          "harrell_c": 0.4564
+        }
+      },
+      "cause_specific": {
+        "causes": [
+          "심장질환",
+          "뇌혈관질환"
+        ],
+        "events": 383,
+        "harrell_c": 0.6959,
+        "auroc_naive": 0.6859
+      }
+    },
+    {
+      "target": "hyperchol",
+      "name": "고LDL콜레스테롤혈증",
+      "tier": "basic",
+      "model": "xgboost",
+      "n_linked": 17221,
+      "deaths": 836,
+      "person_years": 84148.4,
+      "overall_rate_per_1000_py": 9.93,
+      "harrell_c_all_cause": 0.5671,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 1723,
+          "deaths": 17,
+          "person_years": 9072.9,
+          "rate_per_1000_py": 1.87,
+          "mean_risk": 0.0284
+        },
+        {
+          "decile": 2,
+          "n": 1722,
+          "deaths": 46,
+          "person_years": 8978.6,
+          "rate_per_1000_py": 5.12,
+          "mean_risk": 0.0594
+        },
+        {
+          "decile": 3,
+          "n": 1722,
+          "deaths": 109,
+          "person_years": 8350.9,
+          "rate_per_1000_py": 13.05,
+          "mean_risk": 0.0935
+        },
+        {
+          "decile": 4,
+          "n": 1722,
+          "deaths": 106,
+          "person_years": 8370.1,
+          "rate_per_1000_py": 12.66,
+          "mean_risk": 0.1207
+        },
+        {
+          "decile": 5,
+          "n": 1722,
+          "deaths": 87,
+          "person_years": 8430.5,
+          "rate_per_1000_py": 10.32,
+          "mean_risk": 0.1441
+        },
+        {
+          "decile": 6,
+          "n": 1722,
+          "deaths": 96,
+          "person_years": 8338.0,
+          "rate_per_1000_py": 11.51,
+          "mean_risk": 0.1668
+        },
+        {
+          "decile": 7,
+          "n": 1722,
+          "deaths": 104,
+          "person_years": 8329.8,
+          "rate_per_1000_py": 12.49,
+          "mean_risk": 0.1902
+        },
+        {
+          "decile": 8,
+          "n": 1722,
+          "deaths": 86,
+          "person_years": 8405.2,
+          "rate_per_1000_py": 10.23,
+          "mean_risk": 0.217
+        },
+        {
+          "decile": 9,
+          "n": 1722,
+          "deaths": 81,
+          "person_years": 8069.8,
+          "rate_per_1000_py": 10.04,
+          "mean_risk": 0.2504
+        },
+        {
+          "decile": 10,
+          "n": 1722,
+          "deaths": 104,
+          "person_years": 7802.6,
+          "rate_per_1000_py": 13.33,
+          "mean_risk": 0.3156
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 7.13,
+      "within_age_band": {
+        "19-50": {
+          "n": 10267,
+          "deaths": 115,
+          "harrell_c": 0.5707
+        },
+        "50-65": {
+          "n": 4080,
+          "deaths": 172,
+          "harrell_c": 0.5073
+        },
+        "65+": {
+          "n": 2874,
+          "deaths": 549,
+          "harrell_c": 0.3993
+        }
+      }
+    },
+    {
+      "target": "hyperchol",
+      "name": "고LDL콜레스테롤혈증",
+      "tier": "lab",
+      "model": "xgboost",
+      "n_linked": 17160,
+      "deaths": 832,
+      "person_years": 83836.4,
+      "overall_rate_per_1000_py": 9.92,
+      "harrell_c_all_cause": 0.5507,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 1716,
+          "deaths": 28,
+          "person_years": 9032.6,
+          "rate_per_1000_py": 3.1,
+          "mean_risk": 0.0268
+        },
+        {
+          "decile": 2,
+          "n": 1716,
+          "deaths": 53,
+          "person_years": 8654.9,
+          "rate_per_1000_py": 6.12,
+          "mean_risk": 0.0508
+        },
+        {
+          "decile": 3,
+          "n": 1716,
+          "deaths": 83,
+          "person_years": 8443.5,
+          "rate_per_1000_py": 9.83,
+          "mean_risk": 0.0743
+        },
+        {
+          "decile": 4,
+          "n": 1716,
+          "deaths": 100,
+          "person_years": 8247.8,
+          "rate_per_1000_py": 12.12,
+          "mean_risk": 0.0968
+        },
+        {
+          "decile": 5,
+          "n": 1716,
+          "deaths": 99,
+          "person_years": 8263.2,
+          "rate_per_1000_py": 11.98,
+          "mean_risk": 0.1204
+        },
+        {
+          "decile": 6,
+          "n": 1716,
+          "deaths": 96,
+          "person_years": 8382.6,
+          "rate_per_1000_py": 11.45,
+          "mean_risk": 0.1459
+        },
+        {
+          "decile": 7,
+          "n": 1716,
+          "deaths": 99,
+          "person_years": 8033.1,
+          "rate_per_1000_py": 12.32,
+          "mean_risk": 0.1745
+        },
+        {
+          "decile": 8,
+          "n": 1716,
+          "deaths": 86,
+          "person_years": 8154.1,
+          "rate_per_1000_py": 10.55,
+          "mean_risk": 0.2088
+        },
+        {
+          "decile": 9,
+          "n": 1716,
+          "deaths": 97,
+          "person_years": 8173.8,
+          "rate_per_1000_py": 11.87,
+          "mean_risk": 0.2557
+        },
+        {
+          "decile": 10,
+          "n": 1716,
+          "deaths": 91,
+          "person_years": 8450.9,
+          "rate_per_1000_py": 10.77,
+          "mean_risk": 0.3548
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 3.47,
+      "within_age_band": {
+        "19-50": {
+          "n": 10233,
+          "deaths": 115,
+          "harrell_c": 0.5759
+        },
+        "50-65": {
+          "n": 4063,
+          "deaths": 170,
+          "harrell_c": 0.4699
+        },
+        "65+": {
+          "n": 2864,
+          "deaths": 547,
+          "harrell_c": 0.3808
+        }
+      }
+    },
+    {
+      "target": "hypertg",
+      "name": "고중성지방혈증",
+      "tier": "basic",
+      "model": "xgboost",
+      "n_linked": 8070,
+      "deaths": 392,
+      "person_years": 39762.5,
+      "overall_rate_per_1000_py": 9.86,
+      "harrell_c_all_cause": 0.551,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 807,
+          "deaths": 11,
+          "person_years": 4272.7,
+          "rate_per_1000_py": 2.57,
+          "mean_risk": 0.0204
+        },
+        {
+          "decile": 2,
+          "n": 807,
+          "deaths": 28,
+          "person_years": 4154.8,
+          "rate_per_1000_py": 6.74,
+          "mean_risk": 0.0337
+        },
+        {
+          "decile": 3,
+          "n": 807,
+          "deaths": 40,
+          "person_years": 4089.6,
+          "rate_per_1000_py": 9.78,
+          "mean_risk": 0.0555
+        },
+        {
+          "decile": 4,
+          "n": 807,
+          "deaths": 42,
+          "person_years": 4072.1,
+          "rate_per_1000_py": 10.31,
+          "mean_risk": 0.0845
+        },
+        {
+          "decile": 5,
+          "n": 807,
+          "deaths": 47,
+          "person_years": 4044.6,
+          "rate_per_1000_py": 11.62,
+          "mean_risk": 0.112
+        },
+        {
+          "decile": 6,
+          "n": 807,
+          "deaths": 56,
+          "person_years": 3901.7,
+          "rate_per_1000_py": 14.35,
+          "mean_risk": 0.1367
+        },
+        {
+          "decile": 7,
+          "n": 807,
+          "deaths": 40,
+          "person_years": 3863.3,
+          "rate_per_1000_py": 10.35,
+          "mean_risk": 0.1625
+        },
+        {
+          "decile": 8,
+          "n": 807,
+          "deaths": 57,
+          "person_years": 3789.5,
+          "rate_per_1000_py": 15.04,
+          "mean_risk": 0.1919
+        },
+        {
+          "decile": 9,
+          "n": 807,
+          "deaths": 37,
+          "person_years": 3823.6,
+          "rate_per_1000_py": 9.68,
+          "mean_risk": 0.2332
+        },
+        {
+          "decile": 10,
+          "n": 807,
+          "deaths": 34,
+          "person_years": 3750.7,
+          "rate_per_1000_py": 9.07,
+          "mean_risk": 0.324
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 3.53,
+      "within_age_band": {
+        "19-50": {
+          "n": 4742,
+          "deaths": 50,
+          "harrell_c": 0.5671
+        },
+        "50-65": {
+          "n": 1937,
+          "deaths": 90,
+          "harrell_c": 0.5672
+        },
+        "65+": {
+          "n": 1391,
+          "deaths": 252,
+          "harrell_c": 0.5053
+        }
+      }
+    },
+    {
+      "target": "hypertg",
+      "name": "고중성지방혈증",
+      "tier": "lab",
+      "model": "xgboost",
+      "n_linked": 8046,
+      "deaths": 391,
+      "person_years": 39635.2,
+      "overall_rate_per_1000_py": 9.86,
+      "harrell_c_all_cause": 0.5786,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 805,
+          "deaths": 14,
+          "person_years": 4283.2,
+          "rate_per_1000_py": 3.27,
+          "mean_risk": 0.0158
+        },
+        {
+          "decile": 2,
+          "n": 805,
+          "deaths": 23,
+          "person_years": 4148.7,
+          "rate_per_1000_py": 5.54,
+          "mean_risk": 0.0286
+        },
+        {
+          "decile": 3,
+          "n": 804,
+          "deaths": 39,
+          "person_years": 4102.2,
+          "rate_per_1000_py": 9.51,
+          "mean_risk": 0.0435
+        },
+        {
+          "decile": 4,
+          "n": 805,
+          "deaths": 41,
+          "person_years": 4090.6,
+          "rate_per_1000_py": 10.02,
+          "mean_risk": 0.0625
+        },
+        {
+          "decile": 5,
+          "n": 804,
+          "deaths": 46,
+          "person_years": 3936.8,
+          "rate_per_1000_py": 11.68,
+          "mean_risk": 0.0846
+        },
+        {
+          "decile": 6,
+          "n": 805,
+          "deaths": 36,
+          "person_years": 3966.0,
+          "rate_per_1000_py": 9.08,
+          "mean_risk": 0.1108
+        },
+        {
+          "decile": 7,
+          "n": 804,
+          "deaths": 52,
+          "person_years": 3859.2,
+          "rate_per_1000_py": 13.47,
+          "mean_risk": 0.1419
+        },
+        {
+          "decile": 8,
+          "n": 805,
+          "deaths": 53,
+          "person_years": 3775.6,
+          "rate_per_1000_py": 14.04,
+          "mean_risk": 0.1829
+        },
+        {
+          "decile": 9,
+          "n": 804,
+          "deaths": 48,
+          "person_years": 3721.9,
+          "rate_per_1000_py": 12.9,
+          "mean_risk": 0.2461
+        },
+        {
+          "decile": 10,
+          "n": 805,
+          "deaths": 39,
+          "person_years": 3751.1,
+          "rate_per_1000_py": 10.4,
+          "mean_risk": 0.3879
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 3.18,
+      "within_age_band": {
+        "19-50": {
+          "n": 4730,
+          "deaths": 50,
+          "harrell_c": 0.5721
+        },
+        "50-65": {
+          "n": 1930,
+          "deaths": 90,
+          "harrell_c": 0.6234
+        },
+        "65+": {
+          "n": 1386,
+          "deaths": 251,
+          "harrell_c": 0.5077
+        }
+      }
+    },
+    {
+      "target": "low_hdl",
+      "name": "낮은 HDL 콜레스테롤",
+      "tier": "basic",
+      "model": "xgboost",
+      "n_linked": 17221,
+      "deaths": 836,
+      "person_years": 84148.4,
+      "overall_rate_per_1000_py": 9.93,
+      "harrell_c_all_cause": 0.5061,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 1723,
+          "deaths": 63,
+          "person_years": 8672.6,
+          "rate_per_1000_py": 7.26,
+          "mean_risk": 0.0284
+        },
+        {
+          "decile": 2,
+          "n": 1722,
+          "deaths": 73,
+          "person_years": 8670.9,
+          "rate_per_1000_py": 8.42,
+          "mean_risk": 0.0594
+        },
+        {
+          "decile": 3,
+          "n": 1722,
+          "deaths": 106,
+          "person_years": 8459.0,
+          "rate_per_1000_py": 12.53,
+          "mean_risk": 0.0877
+        },
+        {
+          "decile": 4,
+          "n": 1722,
+          "deaths": 83,
+          "person_years": 8451.1,
+          "rate_per_1000_py": 9.82,
+          "mean_risk": 0.1159
+        },
+        {
+          "decile": 5,
+          "n": 1722,
+          "deaths": 77,
+          "person_years": 8409.4,
+          "rate_per_1000_py": 9.16,
+          "mean_risk": 0.1465
+        },
+        {
+          "decile": 6,
+          "n": 1722,
+          "deaths": 88,
+          "person_years": 8310.2,
+          "rate_per_1000_py": 10.59,
+          "mean_risk": 0.184
+        },
+        {
+          "decile": 7,
+          "n": 1722,
+          "deaths": 110,
+          "person_years": 8197.6,
+          "rate_per_1000_py": 13.42,
+          "mean_risk": 0.2329
+        },
+        {
+          "decile": 8,
+          "n": 1722,
+          "deaths": 108,
+          "person_years": 8148.3,
+          "rate_per_1000_py": 13.25,
+          "mean_risk": 0.2985
+        },
+        {
+          "decile": 9,
+          "n": 1722,
+          "deaths": 80,
+          "person_years": 8351.1,
+          "rate_per_1000_py": 9.58,
+          "mean_risk": 0.3857
+        },
+        {
+          "decile": 10,
+          "n": 1722,
+          "deaths": 48,
+          "person_years": 8478.2,
+          "rate_per_1000_py": 5.66,
+          "mean_risk": 0.5406
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 0.78,
+      "within_age_band": {
+        "19-50": {
+          "n": 10267,
+          "deaths": 115,
+          "harrell_c": 0.5969
+        },
+        "50-65": {
+          "n": 4080,
+          "deaths": 172,
+          "harrell_c": 0.5909
+        },
+        "65+": {
+          "n": 2874,
+          "deaths": 549,
+          "harrell_c": 0.5252
+        }
+      }
+    },
+    {
+      "target": "low_hdl",
+      "name": "낮은 HDL 콜레스테롤",
+      "tier": "lab",
+      "model": "xgboost",
+      "n_linked": 17160,
+      "deaths": 832,
+      "person_years": 83836.4,
+      "overall_rate_per_1000_py": 9.92,
+      "harrell_c_all_cause": 0.5125,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 1716,
+          "deaths": 58,
+          "person_years": 9002.5,
+          "rate_per_1000_py": 6.44,
+          "mean_risk": 0.0291
+        },
+        {
+          "decile": 2,
+          "n": 1716,
+          "deaths": 78,
+          "person_years": 8735.6,
+          "rate_per_1000_py": 8.93,
+          "mean_risk": 0.0563
+        },
+        {
+          "decile": 3,
+          "n": 1716,
+          "deaths": 86,
+          "person_years": 8413.1,
+          "rate_per_1000_py": 10.22,
+          "mean_risk": 0.0823
+        },
+        {
+          "decile": 4,
+          "n": 1716,
+          "deaths": 89,
+          "person_years": 8408.7,
+          "rate_per_1000_py": 10.58,
+          "mean_risk": 0.1105
+        },
+        {
+          "decile": 5,
+          "n": 1716,
+          "deaths": 91,
+          "person_years": 8322.7,
+          "rate_per_1000_py": 10.93,
+          "mean_risk": 0.1417
+        },
+        {
+          "decile": 6,
+          "n": 1716,
+          "deaths": 87,
+          "person_years": 8220.1,
+          "rate_per_1000_py": 10.58,
+          "mean_risk": 0.1792
+        },
+        {
+          "decile": 7,
+          "n": 1716,
+          "deaths": 103,
+          "person_years": 8089.7,
+          "rate_per_1000_py": 12.73,
+          "mean_risk": 0.2273
+        },
+        {
+          "decile": 8,
+          "n": 1716,
+          "deaths": 116,
+          "person_years": 8200.7,
+          "rate_per_1000_py": 14.15,
+          "mean_risk": 0.2933
+        },
+        {
+          "decile": 9,
+          "n": 1716,
+          "deaths": 81,
+          "person_years": 8152.9,
+          "rate_per_1000_py": 9.94,
+          "mean_risk": 0.3845
+        },
+        {
+          "decile": 10,
+          "n": 1716,
+          "deaths": 43,
+          "person_years": 8290.4,
+          "rate_per_1000_py": 5.19,
+          "mean_risk": 0.553
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 0.81,
+      "within_age_band": {
+        "19-50": {
+          "n": 10233,
+          "deaths": 115,
+          "harrell_c": 0.5818
+        },
+        "50-65": {
+          "n": 4063,
+          "deaths": 170,
+          "harrell_c": 0.5863
+        },
+        "65+": {
+          "n": 2864,
+          "deaths": 547,
+          "harrell_c": 0.5347
+        }
+      }
+    },
+    {
+      "target": "mets",
+      "name": "대사증후군",
+      "tier": "basic",
+      "model": "xgboost",
+      "n_linked": 22558,
+      "deaths": 1401,
+      "person_years": 108812.1,
+      "overall_rate_per_1000_py": 12.88,
+      "harrell_c_all_cause": 0.7174,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 2256,
+          "deaths": 19,
+          "person_years": 11741.2,
+          "rate_per_1000_py": 1.62,
+          "mean_risk": 0.0209
+        },
+        {
+          "decile": 2,
+          "n": 2256,
+          "deaths": 32,
+          "person_years": 11710.1,
+          "rate_per_1000_py": 2.73,
+          "mean_risk": 0.0682
+        },
+        {
+          "decile": 3,
+          "n": 2256,
+          "deaths": 43,
+          "person_years": 11129.0,
+          "rate_per_1000_py": 3.86,
+          "mean_risk": 0.1482
+        },
+        {
+          "decile": 4,
+          "n": 2255,
+          "deaths": 97,
+          "person_years": 11228.6,
+          "rate_per_1000_py": 8.64,
+          "mean_risk": 0.2452
+        },
+        {
+          "decile": 5,
+          "n": 2256,
+          "deaths": 90,
+          "person_years": 11137.8,
+          "rate_per_1000_py": 8.08,
+          "mean_risk": 0.3495
+        },
+        {
+          "decile": 6,
+          "n": 2256,
+          "deaths": 109,
+          "person_years": 10848.4,
+          "rate_per_1000_py": 10.05,
+          "mean_risk": 0.4561
+        },
+        {
+          "decile": 7,
+          "n": 2255,
+          "deaths": 198,
+          "person_years": 10545.9,
+          "rate_per_1000_py": 18.78,
+          "mean_risk": 0.5599
+        },
+        {
+          "decile": 8,
+          "n": 2256,
+          "deaths": 232,
+          "person_years": 10413.0,
+          "rate_per_1000_py": 22.28,
+          "mean_risk": 0.6505
+        },
+        {
+          "decile": 9,
+          "n": 2256,
+          "deaths": 251,
+          "person_years": 10158.7,
+          "rate_per_1000_py": 24.71,
+          "mean_risk": 0.7374
+        },
+        {
+          "decile": 10,
+          "n": 2256,
+          "deaths": 330,
+          "person_years": 9899.5,
+          "rate_per_1000_py": 33.34,
+          "mean_risk": 0.8371
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 20.58,
+      "within_age_band": {
+        "19-50": {
+          "n": 11558,
+          "deaths": 140,
+          "harrell_c": 0.6375
+        },
+        "50-65": {
+          "n": 5809,
+          "deaths": 267,
+          "harrell_c": 0.594
+        },
+        "65+": {
+          "n": 5191,
+          "deaths": 994,
+          "harrell_c": 0.4802
+        }
+      },
+      "cause_specific": {
+        "causes": [
+          "심장질환",
+          "뇌혈관질환",
+          "당뇨병"
+        ],
+        "events": 457,
+        "harrell_c": 0.765,
+        "auroc_naive": 0.748
+      }
+    },
+    {
+      "target": "mets",
+      "name": "대사증후군",
+      "tier": "lab",
+      "model": "xgboost",
+      "n_linked": 20326,
+      "deaths": 1183,
+      "person_years": 98437.1,
+      "overall_rate_per_1000_py": 12.02,
+      "harrell_c_all_cause": 0.7219,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 2033,
+          "deaths": 16,
+          "person_years": 10651.8,
+          "rate_per_1000_py": 1.5,
+          "mean_risk": 0.0198
+        },
+        {
+          "decile": 2,
+          "n": 2033,
+          "deaths": 21,
+          "person_years": 10552.3,
+          "rate_per_1000_py": 1.99,
+          "mean_risk": 0.0609
+        },
+        {
+          "decile": 3,
+          "n": 2032,
+          "deaths": 38,
+          "person_years": 10157.0,
+          "rate_per_1000_py": 3.74,
+          "mean_risk": 0.135
+        },
+        {
+          "decile": 4,
+          "n": 2033,
+          "deaths": 85,
+          "person_years": 10256.4,
+          "rate_per_1000_py": 8.29,
+          "mean_risk": 0.2418
+        },
+        {
+          "decile": 5,
+          "n": 2032,
+          "deaths": 88,
+          "person_years": 10003.5,
+          "rate_per_1000_py": 8.8,
+          "mean_risk": 0.363
+        },
+        {
+          "decile": 6,
+          "n": 2033,
+          "deaths": 93,
+          "person_years": 9818.5,
+          "rate_per_1000_py": 9.47,
+          "mean_risk": 0.4838
+        },
+        {
+          "decile": 7,
+          "n": 2032,
+          "deaths": 120,
+          "person_years": 9694.9,
+          "rate_per_1000_py": 12.38,
+          "mean_risk": 0.5892
+        },
+        {
+          "decile": 8,
+          "n": 2033,
+          "deaths": 180,
+          "person_years": 9370.9,
+          "rate_per_1000_py": 19.21,
+          "mean_risk": 0.6803
+        },
+        {
+          "decile": 9,
+          "n": 2032,
+          "deaths": 225,
+          "person_years": 9040.9,
+          "rate_per_1000_py": 24.89,
+          "mean_risk": 0.7638
+        },
+        {
+          "decile": 10,
+          "n": 2033,
+          "deaths": 317,
+          "person_years": 8890.9,
+          "rate_per_1000_py": 35.65,
+          "mean_risk": 0.8582
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 23.77,
+      "within_age_band": {
+        "19-50": {
+          "n": 10386,
+          "deaths": 122,
+          "harrell_c": 0.6194
+        },
+        "50-65": {
+          "n": 5314,
+          "deaths": 229,
+          "harrell_c": 0.6379
+        },
+        "65+": {
+          "n": 4626,
+          "deaths": 832,
+          "harrell_c": 0.5239
+        }
+      },
+      "cause_specific": {
+        "causes": [
+          "심장질환",
+          "뇌혈관질환",
+          "당뇨병"
+        ],
+        "events": 404,
+        "harrell_c": 0.7803,
+        "auroc_naive": 0.7683
+      }
+    },
+    {
+      "target": "ckd",
+      "name": "신기능 확인 필요",
+      "tier": "basic",
+      "model": "xgboost",
+      "n_linked": 21926,
+      "deaths": 1364,
+      "person_years": 106008.5,
+      "overall_rate_per_1000_py": 12.87,
+      "harrell_c_all_cause": 0.8421,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 2193,
+          "deaths": 14,
+          "person_years": 11641.5,
+          "rate_per_1000_py": 1.2,
+          "mean_risk": 0.0284
+        },
+        {
+          "decile": 2,
+          "n": 2193,
+          "deaths": 16,
+          "person_years": 11197.5,
+          "rate_per_1000_py": 1.43,
+          "mean_risk": 0.0416
+        },
+        {
+          "decile": 3,
+          "n": 2192,
+          "deaths": 20,
+          "person_years": 11301.6,
+          "rate_per_1000_py": 1.77,
+          "mean_risk": 0.0534
+        },
+        {
+          "decile": 4,
+          "n": 2193,
+          "deaths": 23,
+          "person_years": 11145.7,
+          "rate_per_1000_py": 2.06,
+          "mean_risk": 0.0683
+        },
+        {
+          "decile": 5,
+          "n": 2192,
+          "deaths": 39,
+          "person_years": 11030.6,
+          "rate_per_1000_py": 3.54,
+          "mean_risk": 0.0883
+        },
+        {
+          "decile": 6,
+          "n": 2193,
+          "deaths": 49,
+          "person_years": 10720.4,
+          "rate_per_1000_py": 4.57,
+          "mean_risk": 0.1187
+        },
+        {
+          "decile": 7,
+          "n": 2192,
+          "deaths": 91,
+          "person_years": 10458.7,
+          "rate_per_1000_py": 8.7,
+          "mean_risk": 0.1653
+        },
+        {
+          "decile": 8,
+          "n": 2193,
+          "deaths": 162,
+          "person_years": 10162.2,
+          "rate_per_1000_py": 15.94,
+          "mean_risk": 0.2385
+        },
+        {
+          "decile": 9,
+          "n": 2192,
+          "deaths": 298,
+          "person_years": 9814.8,
+          "rate_per_1000_py": 30.36,
+          "mean_risk": 0.3577
+        },
+        {
+          "decile": 10,
+          "n": 2193,
+          "deaths": 652,
+          "person_years": 8535.6,
+          "rate_per_1000_py": 76.39,
+          "mean_risk": 0.5667
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 63.66,
+      "within_age_band": {
+        "19-50": {
+          "n": 11187,
+          "deaths": 134,
+          "harrell_c": 0.6449
+        },
+        "50-65": {
+          "n": 5679,
+          "deaths": 270,
+          "harrell_c": 0.7042
+        },
+        "65+": {
+          "n": 5060,
+          "deaths": 960,
+          "harrell_c": 0.709
+        }
+      },
+      "cause_specific": {
+        "causes": [
+          "신장염·신증후군"
+        ],
+        "events": 25,
+        "harrell_c": 0.8419,
+        "auroc_naive": 0.8969
+      }
+    },
+    {
+      "target": "ckd",
+      "name": "신기능 확인 필요",
+      "tier": "lab",
+      "model": "xgboost",
+      "n_linked": 20723,
+      "deaths": 1247,
+      "person_years": 100221.9,
+      "overall_rate_per_1000_py": 12.44,
+      "harrell_c_all_cause": 0.8385,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 2073,
+          "deaths": 16,
+          "person_years": 11046.5,
+          "rate_per_1000_py": 1.45,
+          "mean_risk": 0.0277
+        },
+        {
+          "decile": 2,
+          "n": 2072,
+          "deaths": 13,
+          "person_years": 10703.0,
+          "rate_per_1000_py": 1.21,
+          "mean_risk": 0.0391
+        },
+        {
+          "decile": 3,
+          "n": 2072,
+          "deaths": 19,
+          "person_years": 10541.6,
+          "rate_per_1000_py": 1.8,
+          "mean_risk": 0.0492
+        },
+        {
+          "decile": 4,
+          "n": 2072,
+          "deaths": 20,
+          "person_years": 10469.7,
+          "rate_per_1000_py": 1.91,
+          "mean_risk": 0.0609
+        },
+        {
+          "decile": 5,
+          "n": 2073,
+          "deaths": 40,
+          "person_years": 10385.5,
+          "rate_per_1000_py": 3.85,
+          "mean_risk": 0.0767
+        },
+        {
+          "decile": 6,
+          "n": 2072,
+          "deaths": 48,
+          "person_years": 10155.2,
+          "rate_per_1000_py": 4.73,
+          "mean_risk": 0.1022
+        },
+        {
+          "decile": 7,
+          "n": 2072,
+          "deaths": 79,
+          "person_years": 9892.2,
+          "rate_per_1000_py": 7.99,
+          "mean_risk": 0.1484
+        },
+        {
+          "decile": 8,
+          "n": 2072,
+          "deaths": 166,
+          "person_years": 9799.6,
+          "rate_per_1000_py": 16.94,
+          "mean_risk": 0.234
+        },
+        {
+          "decile": 9,
+          "n": 2072,
+          "deaths": 284,
+          "person_years": 9073.1,
+          "rate_per_1000_py": 31.3,
+          "mean_risk": 0.3711
+        },
+        {
+          "decile": 10,
+          "n": 2073,
+          "deaths": 562,
+          "person_years": 8155.4,
+          "rate_per_1000_py": 68.91,
+          "mean_risk": 0.6472
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 47.52,
+      "within_age_band": {
+        "19-50": {
+          "n": 10574,
+          "deaths": 124,
+          "harrell_c": 0.6281
+        },
+        "50-65": {
+          "n": 5392,
+          "deaths": 242,
+          "harrell_c": 0.7339
+        },
+        "65+": {
+          "n": 4757,
+          "deaths": 881,
+          "harrell_c": 0.704
+        }
+      },
+      "cause_specific": {
+        "causes": [
+          "신장염·신증후군"
+        ],
+        "events": 21,
+        "harrell_c": 0.9283,
+        "auroc_naive": 0.9392
+      }
+    },
+    {
+      "target": "anemia",
+      "name": "빈혈",
+      "tier": "basic",
+      "model": "xgboost",
+      "n_linked": 20877,
+      "deaths": 1286,
+      "person_years": 100977.2,
+      "overall_rate_per_1000_py": 12.74,
+      "harrell_c_all_cause": 0.7548,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 2088,
+          "deaths": 29,
+          "person_years": 10782.5,
+          "rate_per_1000_py": 2.69,
+          "mean_risk": 0.0125
+        },
+        {
+          "decile": 2,
+          "n": 2088,
+          "deaths": 23,
+          "person_years": 10508.7,
+          "rate_per_1000_py": 2.19,
+          "mean_risk": 0.022
+        },
+        {
+          "decile": 3,
+          "n": 2087,
+          "deaths": 56,
+          "person_years": 10289.1,
+          "rate_per_1000_py": 5.44,
+          "mean_risk": 0.0326
+        },
+        {
+          "decile": 4,
+          "n": 2088,
+          "deaths": 67,
+          "person_years": 10458.5,
+          "rate_per_1000_py": 6.41,
+          "mean_risk": 0.0442
+        },
+        {
+          "decile": 5,
+          "n": 2088,
+          "deaths": 83,
+          "person_years": 10121.5,
+          "rate_per_1000_py": 8.2,
+          "mean_risk": 0.0568
+        },
+        {
+          "decile": 6,
+          "n": 2087,
+          "deaths": 87,
+          "person_years": 9999.0,
+          "rate_per_1000_py": 8.7,
+          "mean_risk": 0.0709
+        },
+        {
+          "decile": 7,
+          "n": 2088,
+          "deaths": 104,
+          "person_years": 10023.6,
+          "rate_per_1000_py": 10.38,
+          "mean_risk": 0.0881
+        },
+        {
+          "decile": 8,
+          "n": 2087,
+          "deaths": 128,
+          "person_years": 10013.5,
+          "rate_per_1000_py": 12.78,
+          "mean_risk": 0.1095
+        },
+        {
+          "decile": 9,
+          "n": 2088,
+          "deaths": 182,
+          "person_years": 9802.0,
+          "rate_per_1000_py": 18.57,
+          "mean_risk": 0.1437
+        },
+        {
+          "decile": 10,
+          "n": 2088,
+          "deaths": 527,
+          "person_years": 8978.8,
+          "rate_per_1000_py": 58.69,
+          "mean_risk": 0.2633
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 21.82,
+      "within_age_band": {
+        "19-50": {
+          "n": 10492,
+          "deaths": 125,
+          "harrell_c": 0.4949
+        },
+        "50-65": {
+          "n": 5511,
+          "deaths": 249,
+          "harrell_c": 0.601
+        },
+        "65+": {
+          "n": 4874,
+          "deaths": 912,
+          "harrell_c": 0.6858
+        }
+      }
+    },
+    {
+      "target": "anemia",
+      "name": "빈혈",
+      "tier": "lab",
+      "model": "xgboost",
+      "n_linked": 20473,
+      "deaths": 1239,
+      "person_years": 98988.9,
+      "overall_rate_per_1000_py": 12.52,
+      "harrell_c_all_cause": 0.7607,
+      "deciles": [
+        {
+          "decile": 1,
+          "n": 2048,
+          "deaths": 33,
+          "person_years": 10880.9,
+          "rate_per_1000_py": 3.03,
+          "mean_risk": 0.0073
+        },
+        {
+          "decile": 2,
+          "n": 2047,
+          "deaths": 41,
+          "person_years": 10657.4,
+          "rate_per_1000_py": 3.85,
+          "mean_risk": 0.0138
+        },
+        {
+          "decile": 3,
+          "n": 2047,
+          "deaths": 50,
+          "person_years": 10474.2,
+          "rate_per_1000_py": 4.77,
+          "mean_risk": 0.0209
+        },
+        {
+          "decile": 4,
+          "n": 2047,
+          "deaths": 59,
+          "person_years": 10449.2,
+          "rate_per_1000_py": 5.65,
+          "mean_risk": 0.0295
+        },
+        {
+          "decile": 5,
+          "n": 2048,
+          "deaths": 73,
+          "person_years": 10225.2,
+          "rate_per_1000_py": 7.14,
+          "mean_risk": 0.0406
+        },
+        {
+          "decile": 6,
+          "n": 2047,
+          "deaths": 86,
+          "person_years": 10054.4,
+          "rate_per_1000_py": 8.55,
+          "mean_risk": 0.0559
+        },
+        {
+          "decile": 7,
+          "n": 2047,
+          "deaths": 105,
+          "person_years": 9832.7,
+          "rate_per_1000_py": 10.68,
+          "mean_risk": 0.0778
+        },
+        {
+          "decile": 8,
+          "n": 2047,
+          "deaths": 150,
+          "person_years": 9498.5,
+          "rate_per_1000_py": 15.79,
+          "mean_risk": 0.1137
+        },
+        {
+          "decile": 9,
+          "n": 2047,
+          "deaths": 209,
+          "person_years": 9019.7,
+          "rate_per_1000_py": 23.17,
+          "mean_risk": 0.183
+        },
+        {
+          "decile": 10,
+          "n": 2048,
+          "deaths": 433,
+          "person_years": 7896.7,
+          "rate_per_1000_py": 54.83,
+          "mean_risk": 0.4004
+        }
+      ],
+      "top_vs_bottom_rate_ratio": 18.1,
+      "within_age_band": {
+        "19-50": {
+          "n": 10340,
+          "deaths": 119,
+          "harrell_c": 0.5723
+        },
+        "50-65": {
+          "n": 5386,
+          "deaths": 241,
+          "harrell_c": 0.638
+        },
+        "65+": {
+          "n": 4747,
+          "deaths": 879,
+          "harrell_c": 0.71
+        }
+      }
+    }
+  ]
+}

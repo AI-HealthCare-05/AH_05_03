@@ -16,7 +16,12 @@ from fastapi import APIRouter
 
 from app.core.errors import ErrorCode
 from app.dtos.envelope import ApiResponse, error_responses
-from app.dtos.rule_assessment import DomainAssessment, RuleAssessmentData, RuleAssessmentRequest
+from app.dtos.rule_assessment import (
+    DiseaseRiskAssessment,
+    DomainAssessment,
+    RuleAssessmentData,
+    RuleAssessmentRequest,
+)
 
 rule_assessment_router = APIRouter(prefix="/assessments", tags=["assessments"])
 
@@ -36,6 +41,10 @@ ENGINE_SOURCE = "chronic_disease_engine (AH_05_03 PR #4, ts04042-cell, c6943b14)
         "- 값을 추정하지 않는다. 검사값이 없으면 그 영역은 판정하지 않는다.\n"
         "- 진단이 아니다. `sub_status`가 의학적 구간(예: 고혈압 1기)을 표기하지만 "
         "단일 시점 측정값의 참고 분류일 뿐이다.\n"
+        "- `domains`와 별개로 `disease_risks`를 함께 낸다. 영역 판정이 '여러 수치 → 이 장기의 "
+        "현재 상태'라면 이쪽은 '수치 하나 → 여러 질환의 앞날'이다. 예를 들어 γ-GTP는 간 영역에서 "
+        "읽히지만 제2형 당뇨 발생도 예측하고, 알부민뇨는 eGFR과 독립적으로 심혈관 사망을 예측한다. "
+        "각 항목의 `contributors`가 어떤 값이 왜 위험을 올렸는지와 그 근거를 담는다.\n"
         "- 요청 본문은 응답 생성 후 폐기한다."
     ),
 )
@@ -43,9 +52,21 @@ async def assess_by_rules(payload: RuleAssessmentRequest) -> ApiResponse[RuleAss
     # 엔진을 함수 안에서 불러온다. 앱 기동이 이 패키지 존재에 묶이지 않게 한다.
     from chronic_disease_engine import assess_chronic_disease_risk
 
-    results = assess_chronic_disease_risk(payload.to_profile())
+    from app.services.disease_risk_matrix import assess_disease_risks
+    from app.services.lab_staging import assess_extra_domains
+
+    profile = payload.to_profile()
+    # 벤더 엔진 넷과 우리가 붙인 다섯을 같은 모양으로 합친다. 화면은 둘을 구분하지 않는다 —
+    # 사용자에게 "이건 팀원 코드, 이건 우리 코드"는 아무 뜻이 없다.
+    results = {**assess_chronic_disease_risk(profile), **assess_extra_domains(profile)}
     domains = {name: DomainAssessment(**result) for name, result in results.items()}
     insufficient = [name for name, d in domains.items() if d.risk_level == "INSUFFICIENT_DATA"]
+
+    # 같은 프로필을 반대 방향으로 한 번 더 읽는다. 위쪽이 장기별 현재 상태라면
+    # 이쪽은 수치 하나가 여러 질환에 걸쳐 무엇을 가리키는지다.
+    disease_risks = {
+        name: DiseaseRiskAssessment(**result) for name, result in assess_disease_risks(profile).items()
+    }
 
     return ApiResponse(
         data=RuleAssessmentData(
@@ -53,6 +74,7 @@ async def assess_by_rules(payload: RuleAssessmentRequest) -> ApiResponse[RuleAss
             domains=domains,
             evaluated=len(domains) - len(insufficient),
             insufficient=insufficient,
+            disease_risks=disease_risks,
         ),
         message=(
             "국내 지침 기준으로 판정했습니다. 입력값은 저장하지 않았습니다."
