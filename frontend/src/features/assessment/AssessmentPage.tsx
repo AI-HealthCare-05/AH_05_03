@@ -46,6 +46,7 @@ import {
   LAB_FIELDS,
   REQUIRED_FIELDS,
   rejectedFields,
+  valuesFromInputs,
   toRequestBody,
 } from "./fields";
 import {
@@ -71,19 +72,6 @@ function byLevel<T>(items: T[], level: (item: T) => RiskLevel): T[] {
  * 라우터 state 로 받는 이유는 이 값이 **한 번 쓰고 버리는 것**이기 때문이다.
  * 전역 스토어에 두면 새로고침 뒤에도 남아, 사용자가 지운 값이 되살아난다.
  */
-/**
- * 지난 판정의 입력값을 폼 상태로. `prefillFrom` 과 **같은 규칙**을 쓴다 —
- * 폼은 전부 문자열로 들고 있고, 빈 값은 키째 빼야 `toRequestBody` 가 안 보낸다.
- */
-function valuesFromInputs(inputs: Record<string, number | string | boolean>): Record<string, string> {
-  return Object.fromEntries(
-    Object.entries(inputs)
-      .filter(([, value]) => value !== null && value !== undefined && value !== "")
-      .filter(([, value]) => typeof value !== "number" || Number.isFinite(value))
-      .map(([name, value]) => [name, String(value)]),
-  );
-}
-
 /** 목록에 쓰는 짧은 날짜. 초는 안 쓴다 — 한 줄에 등급과 같이 들어가야 한다. */
 function shortDateTime(iso: string): string {
   return new Date(iso).toLocaleString("ko-KR", {

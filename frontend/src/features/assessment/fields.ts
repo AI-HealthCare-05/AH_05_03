@@ -294,3 +294,16 @@ export function rejectedFields(message: string): Record<string, string> {
   }
   return out;
 }
+
+/**
+ * 지난 판정의 입력값을 폼 상태로. `prefillFrom` 과 **같은 규칙**을 쓴다 —
+ * 폼은 전부 문자열로 들고 있고, 빈 값은 키째 빼야 `toRequestBody` 가 안 보낸다.
+ */
+export function valuesFromInputs(inputs: Record<string, number | string | boolean>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(inputs)
+      .filter(([, value]) => value !== null && value !== undefined && value !== "")
+      .filter(([, value]) => typeof value !== "number" || Number.isFinite(value))
+      .map(([name, value]) => [name, String(value)]),
+  );
+}
