@@ -5,6 +5,11 @@ import { useLocalDomain } from "../../app/localDomainContext";
 import { Modal } from "../../shared/ui/Modal";
 // 모달은 눌러야 뜬다. 정적으로 두면 판정 카드 일체가 홈의 첫 청크에 실린다.
 const RecordDetail = lazy(() => import("./RecordDetail").then((m) => ({ default: m.RecordDetail })));
+// 건강 비서. 3,000줄 + CSS 1,500줄이라 홈의 첫 청크에 넣지 않는다 — 대화를 한 번도
+// 열지 않는 사용자가 그걸 다 받아 갈 이유가 없다.
+const HealthAssistantDrawer = lazy(() =>
+  import("../health-assistant/HealthAssistantDrawer").then((m) => ({ default: m.HealthAssistantDrawer })),
+);
 import { RecordSummary } from "./RecordSummary";
 import type {
   DashboardSummary,
@@ -32,6 +37,8 @@ const RECORD_LABELS: Record<HealthRecordType, string> = {
   health_screening: "건강검진",
   pain: "통증 기록",
   walking: "걷기",
+  exercise: "운동",
+  medication: "복약",
   assessment: "위험 판정",
   note: "건강 메모",
 };
@@ -73,6 +80,7 @@ export function HomePage() {
   // 3D 인체에 색을 입힐 판정. `openRecord` 와 따로 두는 이유는 모달을 닫아도 색은
   // 남아야 하기 때문이다 — 모달을 닫는 동작은 "그만 볼래" 지 "선택을 풀래" 가 아니다.
   const [bodyRecord, setBodyRecord] = useState<HealthRecord>();
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [profileEditDialogOpen, setProfileEditDialogOpen] = useState(false);
   const [profileLifecycleAction, setProfileLifecycleAction] = useState<"hide" | "delete">();
@@ -842,6 +850,37 @@ export function HomePage() {
           setFamilyHistoryDialogOpen(false);
           void navigate(`/members/${selectedProfile.id}`);
         }} />
+      ) : null}
+
+      {/* 건강 비서 "봄이". 대화로 기록을 남기고 서류를 읽는다. 프로필이 있어야
+          누구의 기록인지 정해지므로 그때만 띄운다. */}
+      {selectedProfile && runtime ? (
+        <>
+          <button
+            type="button"
+            className="health-assistant-launcher-btn"
+            onClick={() => setAssistantOpen(true)}
+            aria-label="건강 비서 봄이 열기"
+          >
+            <span className="launcher-icon" aria-hidden="true">봄</span>
+            <span>봄이 대화</span>
+          </button>
+          {assistantOpen ? (
+            <Suspense fallback={null}>
+              <HealthAssistantDrawer
+                // 구성원을 바꾸면 대화를 새로 연다. 인사말이 초기 상태라 effect 로
+                // 되맞추지 않고 이 한 줄로 끝낸다 — 남의 대화가 남아 있으면 안 된다.
+                key={selectedProfile.id}
+                profile={selectedProfile}
+                runtime={runtime}
+                isOpen={assistantOpen}
+                onClose={() => setAssistantOpen(false)}
+                onRecordSaved={() => refreshDashboard(selectedProfile.id)}
+                onNavigateToRecords={() => setDeletedRecordsDialogOpen(false)}
+              />
+            </Suspense>
+          ) : null}
+        </>
       ) : null}
     </div>
   );

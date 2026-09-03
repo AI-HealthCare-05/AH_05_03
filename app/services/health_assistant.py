@@ -1,9 +1,8 @@
-from app.core import config
 from app.dtos.health_assistant import (
     HealthAssistantChatRequest,
     HealthAssistantResponse,
 )
-from app.integrations.llm.gemini import GeminiLLMClient
+from app.integrations.llm.chain import FallbackChatClient
 from app.integrations.llm.protocol import LLMClientProtocol
 from app.prompts.health_assistant import build_system_instruction
 from app.services.health_assistant_safety import HealthAssistantSafetyService
@@ -26,8 +25,10 @@ class HealthAssistantService:
     def llm_client(self) -> LLMClientProtocol:
         # 키가 없으면 생성자에서 터진다. 의존성 주입 단계가 아니라 요청 처리 중에
         # 503 이 나야 오류 봉투가 정상적으로 실린다. `PainChatService` 와 같은 모양.
+        # 하나가 아니라 **순서 목록**을 쓴다. Gemini 무료 등급은 할당량을 모델마다
+        # 하루로 따로 세서, 하나만 걸어 두면 소진되는 날 대화가 통째로 멈춘다.
         if self._llm_client is None:
-            self._llm_client = GeminiLLMClient(api_key=config.GEMINI_API_KEY)
+            self._llm_client = FallbackChatClient()
         return self._llm_client
 
     async def respond(self, request: HealthAssistantChatRequest) -> HealthAssistantResponse:

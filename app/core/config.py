@@ -227,6 +227,24 @@ class Config(BaseSettings):
     #: 통증 쪽 상수(`OPENAI_PAIN_CHAT_TIMEOUT_SECONDS`)가 이 저장소에 없어 실제로는
     #: `hasattr` 폴백인 10 초로 돌고 있었다. 구조화 JSON 생성에 2.2 초는 짧아
     #: 한 값으로 모으고 12 초로 둔다.
+    OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
+
+    #: 대화 공급자를 **시도할 순서**. 앞이 막히면 다음으로 넘어간다.
+    #:
+    #: Gemini 무료 등급은 할당량을 모델마다 하루 단위로 따로 센다
+    #: (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`). 다 쓰면 그 모델은 그날
+    #: 끝이고, 하나만 걸어 두면 대화 화면이 통째로 멈춘다. 문서 인식은 이미 같은
+    #: 방식으로 넘어간다(`DEV_OCR_MODELS`) — 표기도 그쪽과 같게 맞춘다.
+    #:
+    #: 순서 기준은 인식 쪽과 같다. **싼 것을 앞에** 두고 무거운 것을 예비로 남긴다.
+    #: 접두어가 없으면 Gemini 다.
+    #:
+    #:     HEALTH_ASSISTANT_MODELS=["gemini-3.1-flash-lite","openai:gpt-4o-mini"]
+    #:
+    #: 키가 없는 공급자는 기동 때가 아니라 **클라이언트를 만들 때 조용히 빠진다** —
+    #: 둘을 같이 적어 두고 키 하나만 넣은 상태가 실제로 흔하다.
+    HEALTH_ASSISTANT_MODELS: list[str] = ["gemini-3.5-flash-lite", "openai:gpt-4o-mini"]
+
     LLM_CHAT_TIMEOUT_SECONDS: float = 12.0
     # 문서 인식 작업 큐. 예측 큐와 같은 구조지만 흐르는 것이 수치가 아니라 검진
     # 결과지 원본이라 상한을 더 좁게 잡았다.

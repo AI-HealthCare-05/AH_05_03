@@ -116,6 +116,20 @@ export class ServerApiClient {
   }
 
   /**
+   * 건강 비서 대화. **인증이 붙는다.**
+   *
+   * PR #27 의 클라이언트는 맨 `fetch` 로 불렀는데 project 의 이 경로는 401 을 낸다 —
+   * 대화 본문에 증상과 수치가 실리므로 그게 맞는 동작이다. 토큰 갱신도 여기로 모은다.
+   */
+  public healthAssistantChat<T>(body: Record<string, unknown>): Promise<T> {
+    return this.request<T>("/health-assistant/chat", {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify(body),
+    });
+  }
+
+  /**
    * 챌린지. 요청·응답 어디에도 측정값이 실리지 않는다 — 서버는 "쟀다" 와 날짜만 안다.
    * 응답 타입을 기능 폴더(`features/challenge/contracts.ts`)에서 받는 이유는
    * `assessSummary` 와 같다: 계정 도메인이 아니다.

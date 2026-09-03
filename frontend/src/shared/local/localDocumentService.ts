@@ -150,6 +150,23 @@ export class LocalDocumentService {
     }
   }
 
+  /**
+   * 문서 id 하나로 원본과 파일명을 함께 꺼낸다.
+   *
+   * `read()` 는 `LocalDocument` 를 받는다 — 목록을 이미 들고 있는 화면에는 그게 맞다.
+   * 그런데 대화에서 "그 서류 보여 줘" 로 들어오는 쪽은 **id 밖에 없다.** 그때마다
+   * 호출부가 `list()` 로 찾아 넘기게 두면 같은 코드가 화면마다 복사된다.
+   */
+  public async readById(documentId: string): Promise<LocalResult<{ file: Blob; fileName: string }>> {
+    const documents = await this.list();
+    if (!documents.ok) return documents;
+    const document = documents.value.find((candidate) => candidate.id === documentId);
+    if (!document) return failure("문서를 찾을 수 없습니다.", false, "NOT_FOUND");
+    const file = await this.read(document);
+    if (!file.ok) return file;
+    return { ok: true, value: { file: file.value, fileName: document.fileName } };
+  }
+
   public async delete(documentId: string): Promise<LocalResult<{ deleted: true }>> {
     await this.files.delete(documentId);
     await this.repository.delete(documentId);

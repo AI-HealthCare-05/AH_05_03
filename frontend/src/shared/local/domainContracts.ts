@@ -82,6 +82,11 @@ export type HealthRecordType =
   | "health_screening"
   | "pain"
   | "walking"
+  // 대화로 남기는 두 가지. 백엔드 건강 비서가 `exercise_draft`·`medication_draft` 를
+  // 내는데 프런트 타입에 자리가 없어 저장할 곳이 없었다. `walking` 은 걷기 전용이라
+  // 근력·수영을 담지 못하고, 복약은 어느 종류에도 안 들어간다.
+  | "exercise"
+  | "medication"
   // 판정 시점 스냅샷. 추적 대시보드가 "같은 사람의 다른 시점"을 그리려면 그 시점의
   // 입력값과 결과를 함께 남겨야 한다. 서버는 판정을 저장하지 않으므로(NFR-01)
   // 남길 자리는 여기, 암호화 로컬 보관함뿐이다.

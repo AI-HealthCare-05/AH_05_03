@@ -108,9 +108,9 @@ services:
       REFRESH_COOKIE_SECURE: "false"
       ENABLE_DEV_OCR_BRIDGE: ${ENABLE_DEV_OCR_BRIDGE:-false}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      # **주 공급자다 (2026-08-28 OpenAI 단독 전환).** 예비가 아니다 — 비어 있으면
-      # 문서 인식 경로 전체가 "쓸 수 있는 공급자가 없습니다" 로 막힌다.
-      # Gemini 로 되돌리려면 `DEV_OCR_MODELS` 를 gemini 항목으로 바꾸면 된다.
+      # **예비 공급자다 (2026-09-03).** Gemini 가 앞이고 이쪽이 뒤다 — 무료 등급
+      # 할당량은 모델마다 하루로 따로 세서, 소진되는 날 이게 없으면 인식이 멈춘다.
+      # 순서는 `DEV_OCR_MODELS` 가 정한다.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # 문서 인식 모델 시도 순서와 첫 청크 상한.
       #
@@ -119,7 +119,13 @@ services:
       # **아래 ai-worker 와 같은 값이어야 한다.** 두 경로가 다른 모델을 쓰면 같은
       # 문서에 다른 결과가 나오고, 그건 사용자에게 설명할 수 없는 동작이다.
       # JSON 배열이다 (`CORS_ALLOW_ORIGINS` 와 같은 규칙).
-      DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["openai:gpt-4o-mini"]}
+      #
+      # **가벼운 Gemini 를 앞에, gpt-4o-mini 를 예비로.** 어느 실패든 다음 항목으로
+      # 넘어간다(`dev_ocr._stream_once` 를 감싸는 루프). 할당량 소진은 공급자마다
+      # 알리는 방식이 달라 종류를 가리지 않는다.
+      DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["gemini-3.5-flash-lite","gemini-3.1-flash-lite","openai:gpt-4o-mini"]}
+      # 대화 공급자 시도 순서. 표기는 위와 같다.
+      HEALTH_ASSISTANT_MODELS: ${HEALTH_ASSISTANT_MODELS:-["gemini-3.5-flash-lite","openai:gpt-4o-mini"]}
       DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS: ${DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS:-25}
     # **이제 `uv` 를 부르지 않는다.** 예전에는 `uv run --no-sync ...` 였고, `--no-sync`
     # 를 한 번 빠뜨렸을 때 `uv run` 이 기동할 때마다 락파일과 환경을 맞추면서
@@ -211,13 +217,19 @@ services:
       # 워커가 Gemini 를 직접 부른다. fastapi 와 같은 값을 봐야 두 경로의 결과가 갈리지 않는다.
       ENABLE_DEV_OCR_BRIDGE: ${ENABLE_DEV_OCR_BRIDGE:-false}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      # **주 공급자다 (2026-08-28 OpenAI 단독 전환).** 예비가 아니다 — 비어 있으면
-      # 문서 인식 경로 전체가 "쓸 수 있는 공급자가 없습니다" 로 막힌다.
-      # Gemini 로 되돌리려면 `DEV_OCR_MODELS` 를 gemini 항목으로 바꾸면 된다.
+      # **예비 공급자다 (2026-09-03).** Gemini 가 앞이고 이쪽이 뒤다 — 무료 등급
+      # 할당량은 모델마다 하루로 따로 세서, 소진되는 날 이게 없으면 인식이 멈춘다.
+      # 순서는 `DEV_OCR_MODELS` 가 정한다.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # 위 fastapi 와 **같은 기본값**이어야 한다. 한쪽만 바꾸면 동기 경로와 큐 경로가
       # 다른 모델을 쓰게 되고, 두 경로의 결과가 같다는 계약이 조용히 깨진다.
-      DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["openai:gpt-4o-mini"]}
+      #
+      # **가벼운 Gemini 를 앞에, gpt-4o-mini 를 예비로.** 어느 실패든 다음 항목으로
+      # 넘어간다(`dev_ocr._stream_once` 를 감싸는 루프). 할당량 소진은 공급자마다
+      # 알리는 방식이 달라 종류를 가리지 않는다.
+      DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["gemini-3.5-flash-lite","gemini-3.1-flash-lite","openai:gpt-4o-mini"]}
+      # 대화 공급자 시도 순서. 표기는 위와 같다.
+      HEALTH_ASSISTANT_MODELS: ${HEALTH_ASSISTANT_MODELS:-["gemini-3.5-flash-lite","openai:gpt-4o-mini"]}
       DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS: ${DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS:-25}
     # FastAPI 와 같은 규칙으로 마운트한다. 재학습해도 이미지 재빌드 없이 반영되고,
     # 무엇보다 두 경로가 **같은 번들 파일**을 읽어야 결과가 갈리지 않는다.
