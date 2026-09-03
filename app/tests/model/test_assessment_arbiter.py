@@ -144,6 +144,69 @@ def test_threshold_check_beats_probability_when_no_rule_domain() -> None:
     # 확률이 아니라 대조가 정본이다.
     assert verdicts["hyperchol"].superseded_by == "E2"
     assert verdicts["hyperchol"].reference["probability"] == 0.4
+    # **엔진은 E2 지만 측정이다.** 이걸 놓치면 의심 패널이 카드와 다른 말을 한다.
+    assert verdicts["hyperchol"].measured is True
+
+
+def test_measured_flag_separates_the_two_kinds_of_e2() -> None:
+    """`E2` 안의 둘을 `measured` 가 가른다 — 대조는 측정, 확률은 아니다.
+
+    엔진 코드로 갈랐을 때 실측 140 프로파일에서 카드와 패널이 서로 다른 말을 한
+    경우가 12 건, 기준을 넘은 항목이 패널에서 자리채움에 밀린 경우가 25 건이었다.
+    """
+    judged = _by_key(
+        arbitrate(
+            {},
+            {
+                "low_hdl": _condition(
+                    judgement={
+                        "met": False,
+                        "checked": [
+                            {
+                                "label": "HDL 콜레스테롤",
+                                "unit": "mg/dL",
+                                "value": 62.0,
+                                "threshold": 40,
+                                "op": "<",
+                                "met": False,
+                            }
+                        ],
+                        "source": "한국지질동맥경화학회",
+                        "definition": "HDL 40 미만",
+                    }
+                )
+            },
+        )
+    )
+    assert judged["low_hdl"].engine == "E2"
+    assert judged["low_hdl"].measured is True, "검사값을 대조했으면 기준 이내여도 측정이다"
+
+    probability_only = _by_key(arbitrate({}, {"dm": _condition()}))
+    assert probability_only["dm"].engine == "E2"
+    assert probability_only["dm"].measured is False, "확률만으로 낸 판정은 측정이 아니다"
+
+
+def test_known_targets_covers_threshold_judged_diseases() -> None:
+    """`judge()` 가 기준 초과로 본 질환도 의심 후보에서 빠진다.
+
+    예전에는 `known_targets` 가 규칙 엔진 **도메인**만 봐서, 대응 영역이 없는 지질
+    하위유형 셋은 `HIGH` 여도 제외되지 않았다. 그런데 `MEASURED_WEIGHT` 에는 `HIGH`
+    가 없어 순위 점수도 이를 못 받았고, 결국 조용히 ML 추정으로 떨어졌다.
+    """
+    from app.services.assessment import known_targets
+
+    judgement = {
+        "met": True,
+        "checked": [{"label": "중성지방", "unit": "mg/dL", "value": 300.0, "threshold": 200, "op": ">=", "met": True}],
+        "source": "한국지질동맥경화학회",
+        "definition": "중성지방 200 이상",
+    }
+    verdicts = arbitrate({}, {"hypertg": _condition(judgement=judgement)})
+    assert "hypertg" in known_targets(verdicts)
+
+    # 확률만으로 높다고 한 것은 "아는 질환" 이 아니다 — 그건 의심이지 확진이 아니다.
+    high_probability = _condition(medical={"level": "높음", "rate": 0.6, "basis": "진단 기준 충족"})
+    assert known_targets(arbitrate({}, {"dm": high_probability})) == set()
 
 
 def test_formula_owned_disease_does_not_fall_back_to_probability() -> None:
@@ -293,7 +356,7 @@ def models() -> Any:
 def _assess(payload: dict[str, Any], models: Any) -> dict[str, Any]:
     from app.services.assessment import assess
 
-    verdicts, _, _, _ = assess(AssessmentSummaryRequest(**payload), models)
+    verdicts, _, _, _, _ = assess(AssessmentSummaryRequest(**payload), models)
     return _by_key(verdicts)
 
 
@@ -354,7 +417,7 @@ def test_matrix_axis_carries_cardiovascular_disease(models: Any) -> None:
     규칙 엔진에도 ML 번들에도 심혈관 타깃이 없다. 그래서 `verdicts` 에는 자리가 없고
     `disease_risks` 만 낸다. 만성질환 서비스에서 이 축이 빠지면 설명이 안 된다.
     """
-    verdicts, disease_risks, summary, _ = _assess_full(LABS, models)
+    verdicts, disease_risks, summary, _, _ = _assess_full(LABS, models)
 
     assert "cvd" not in {v.key for v in verdicts}
     assert "cvd_risk" in disease_risks
@@ -367,7 +430,7 @@ def test_matrix_axis_carries_cardiovascular_disease(models: Any) -> None:
 
 def test_matrix_contributors_carry_evidence(models: Any) -> None:
     """`contributors` 가 효과크기·출처·인과 여부를 싣는다. 이게 이 축의 값이다."""
-    _, disease_risks, _, _ = _assess_full(LABS, models)
+    _, disease_risks, _, _, _ = _assess_full(LABS, models)
 
     contributors = [c for result in disease_risks.values() for c in result.get("contributors", [])]
     assert contributors, "LABS 는 여러 신호를 넘기므로 기여 항목이 있어야 한다"
@@ -381,7 +444,7 @@ def test_matrix_contributors_carry_evidence(models: Any) -> None:
 
 def test_two_axes_are_not_merged(models: Any) -> None:
     """같은 질환이 양쪽에 나올 수 있고 뜻이 다르다. 합치면 같은 재료를 두 번 센다."""
-    verdicts, disease_risks, summary, _ = _assess_full(LABS, models)
+    verdicts, disease_risks, summary, _, _ = _assess_full(LABS, models)
 
     # 당뇨는 양쪽에 다 있다.
     assert "dm" in {v.key for v in verdicts}

@@ -88,7 +88,7 @@ async def assess_summary(
         config.PREDICTION_RATE_WINDOW_SECONDS,
     )
 
-    verdicts, disease_risks, summary, model_available = assess(payload, models)
+    verdicts, disease_risks, summary, model_available, top_suspects = assess(payload, models)
 
     # 입력을 몇 개 냈는지. `bmi` 는 계산 필드라 model_fields 에 없고, 키·체중 두
     # 개가 그 하나로 합쳐지므로 하나를 뺀다.
@@ -104,6 +104,7 @@ async def assess_summary(
             summary=AssessmentSummary(**summary),
             verdicts=[DiseaseVerdictOut(**vars(v)) for v in verdicts],
             disease_risks={name: DiseaseRiskAssessment(**result) for name, result in disease_risks.items()},
+            top_suspects=top_suspects,
             disclaimers=disclaimers,
             inputs_provided=provided,
             inputs_total=len(type(payload).model_fields),

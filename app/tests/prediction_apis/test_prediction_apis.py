@@ -91,6 +91,27 @@ async def test_invalid_payload_rejected(authorized_client: AsyncClient, payload:
     assert response.json()["success"] is False
 
 
+async def test_model_info_reports_trajectory_table(authorized_client: AsyncClient) -> None:
+    """궤적 표의 적재 여부가 배포 점검에서 보여야 한다.
+
+    표가 빠지면 카드는 여전히 200 을 내고 `trajectory_status` 만 `unavailable` 로 바뀐다.
+    예측을 태워 보기 전에는 아무도 모르는 결손이라 점검 엔드포인트가 대신 말한다.
+    """
+    response = await authorized_client.get("/api/v1/predictions/model-info")
+    assert response.status_code == status.HTTP_200_OK
+
+    block = response.json()["data"]["trajectory"]
+    assert set(block) == {"available", "created_at", "source", "targets", "targets_with_evidence"}
+    if not block["available"]:
+        pytest.skip("trajectory.json 이 없다. `python modeling/fit_trajectory.py` 를 먼저 실행하라.")
+
+    from app.services.trajectory import TRAJECTORY_TARGETS
+
+    assert set(block["targets"]) == set(TRAJECTORY_TARGETS), "표에 있는 질환과 서빙이 켠 질환이 다르다"
+    assert set(block["targets_with_evidence"]) <= set(block["targets"])
+    assert block["created_at"] and block["source"]
+
+
 async def test_model_info_hides_coefficients(authorized_client: AsyncClient) -> None:
     response = await authorized_client.get("/api/v1/predictions/model-info")
     assert response.status_code == status.HTTP_200_OK

@@ -22,7 +22,10 @@ import time
 from pathlib import Path
 from typing import Any
 
+from app.services.trajectory import TRAJECTORY_FILE, TrajectoryConfig
+
 # Where the compose file mounts modeling/artifacts/models.
+
 DEFAULT_MODEL_DIR = Path("/app/models")
 # Fallback for running uvicorn straight from the repo.
 REPO_MODEL_DIR = Path(__file__).resolve().parents[2] / "modeling" / "artifacts" / "models"
@@ -964,6 +967,9 @@ class RiskModelRegistry:
         # "한 번도 확인 안 함"과 "0 초에 확인함"이 같아져, 단조 시계가 큰 값이라는
         # 우연에 기대게 된다. 테스트가 `now=0.0` 을 넘기는 순간 그 우연이 깨진다.
         self._checked_at: float | None = None
+        # 2단계(발병 궤적) 보정 파일. 번들과 같은 디렉터리의 `trajectory.json` 이고
+        # 없으면 궤적을 내지 않는다 — `TrajectoryConfig` 독스트링 참조.
+        self.trajectory: TrajectoryConfig = TrajectoryConfig(None)
         self._load()
 
     def _load(self) -> None:
@@ -976,6 +982,10 @@ class RiskModelRegistry:
             # 기존 호출부의 get("dm") 이 계속 일반형을 가리키게 하려는 것이다.
             self.models[model.model_id] = model
             self._stamps[path.name] = path.stat().st_mtime
+        self.trajectory = TrajectoryConfig.load(self.directory)
+        extra = self.directory / TRAJECTORY_FILE
+        if extra.is_file():
+            self._stamps[extra.name] = extra.stat().st_mtime
 
     #: mtime 을 다시 확인하기까지 기다리는 최소 간격(초).
     #
@@ -1008,6 +1018,9 @@ class RiskModelRegistry:
             return False
         self._checked_at = moment
         current = {p.name: p.stat().st_mtime for p in self.directory.glob("risk_*.json")}
+        extra = self.directory / TRAJECTORY_FILE
+        if extra.is_file():
+            current[extra.name] = extra.stat().st_mtime
         if current == self._stamps:
             return False
         self.models = {}

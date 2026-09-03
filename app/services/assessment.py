@@ -46,9 +46,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from app.services.suspects import KNOWN_LEVELS
+from app.services.trajectory import STATUS_ALREADY_PRESENT, STATUS_WITHHELD
 from chronic_disease_engine.schemas import COMMON_DISCLAIMER, RiskLevel
 
 EngineCode = Literal["E1", "E2", "E3"]
@@ -60,6 +63,8 @@ ENGINE_LABELS: dict[str, str] = {
 }
 
 INSUFFICIENT = RiskLevel.INSUFFICIENT_DATA.value
+#: 결정론 엔진이 "이미 그 질환" 이라고 본 등급. 궤적의 전제("지금 없다면")가 성립하지 않는다.
+_PRESENT_LEVELS = frozenset({RiskLevel.HIGH.value, RiskLevel.VERY_HIGH.value})
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +196,13 @@ class DiseaseVerdict:
     # 정본이 아니어도 남기는 참고값. 화면이 "왜 이 답인가" 를 설명할 재료다.
     reference: dict[str, Any] = field(default_factory=dict)
     disclaimer: str = COMMON_DISCLAIMER
+    # 이 판정이 **사용자가 넣은 값을 기준과 대조해서** 나왔는가.
+    #
+    # `engine` 으로는 이걸 알 수 없다. `E2` 에 성격이 다른 둘이 들어 있기 때문이다 —
+    # 확률 추정(측정 아님)과 `model.judge()` 의 직접 대조(측정)다. 순위 점수와 후보
+    # 제외가 둘을 갈라야 해서 판정이 스스로 답하게 했다. `app/services/suspects.py`
+    # 의 `MEASURED_FLAG` 설명에 이걸 안 갈랐을 때 무엇이 났는지 적어 두었다.
+    measured: bool = False
 
 
 def level_str(value: Any) -> str:
@@ -252,6 +264,10 @@ def _ml_reference(condition: dict[str, Any] | None) -> dict[str, Any]:
         "accuracy": condition.get("accuracy"),
         "rule_anchor": condition.get("rule_anchor"),
         "top_factors": condition.get("top_factors"),
+        # 2단계 발병 궤적. 정본이 규칙 엔진이어도 "지금 없다면 앞으로" 는 별개 물음이라
+        # 참고 블록에 같이 싣는다. 이미 있다고 판정된 카드는 `arbitrate` 가 지운다.
+        "trajectory": condition.get("trajectory"),
+        "trajectory_status": condition.get("trajectory_status"),
     }
 
 
@@ -288,9 +304,16 @@ def arbitrate(
                 if condition
                 else f"측정값이 있어 {engine_name}이 판정했습니다.",
             )
+            verdict.measured = True
             if condition:
                 verdict.superseded_by = spec.deterministic_engine
                 verdict.reference = _ml_reference(condition)
+                # 측정값이 이미 질환 범위면 "지금 없다면 앞으로" 라는 전제가 무너진다.
+                # 궤적을 지우고 상태로 이유를 남긴다. CAUTION(전당뇨·고혈압 전단계) 은
+                # 아직 그 질환이 아니므로 궤적이 오히려 가장 쓸모 있는 자리라 남긴다.
+                if verdict.risk_level in _PRESENT_LEVELS and verdict.reference.get("trajectory") is not None:
+                    verdict.reference["trajectory"] = None
+                    verdict.reference["trajectory_status"] = STATUS_ALREADY_PRESENT
             verdicts.append(verdict)
             continue
 
@@ -330,6 +353,10 @@ def arbitrate(
                     input_values={c["label"]: c["value"] for c in checked},
                     # 확률이 아니라 대조가 정본이므로 확률 쪽이 밀렸다.
                     superseded_by="E2",
+                    # 엔진은 `E2` 지만 이건 확률이 아니라 **입력한 검사값을 기준과 대조한
+                    # 결과**다. 순위 점수가 이걸 추정으로 취급하면 카드와 패널이 같은
+                    # 화면에서 서로 다른 말을 한다.
+                    measured=True,
                     reference=_ml_reference(condition),
                 )
             )
@@ -365,6 +392,12 @@ def arbitrate(
         # 나오는지가 여기 적힌다. 화면이 접을지는 화면이 정한다.
         missing = list((domain or {}).get("missing_fields", []))
         blocked_by_policy = condition is not None and not spec.ml_fallback
+        reference = _ml_reference(condition)
+        # 확률을 표시하지 않기로 한 질환에서 궤적만 내보내면 같은 확률이 다른 이름으로
+        # 나가는 것이다. 카드가 "정보 부족" 이면 궤적도 없다 — 상태로 이유를 남긴다.
+        if blocked_by_policy and reference.get("trajectory") is not None:
+            reference["trajectory"] = None
+            reference["trajectory_status"] = STATUS_WITHHELD
         verdicts.append(
             DiseaseVerdict(
                 key=spec.key,
@@ -384,7 +417,7 @@ def arbitrate(
                 recommendation=(domain or {}).get("recommendation", ""),
                 missing_fields=missing,
                 superseded_by=None,
-                reference=_ml_reference(condition),
+                reference=reference,
             )
         )
 
@@ -469,6 +502,29 @@ def collect_domains(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
 
 
+def known_targets(verdicts: Iterable[DiseaseVerdict]) -> set[str]:
+    """**측정으로** "있다" 고 확정된 ML 타깃. 의심 순위에서 뺀다.
+
+    이미 아는 질환을 "의심됩니다" 로 다시 올리면 화면의 가장 좋은 자리를 사용자가
+    이미 아는 정보에 쓰게 된다.
+
+    도메인이 아니라 **판정**을 본다. 도메인만 보면 규칙 엔진에 대응 영역이 없는
+    질환(지질 하위유형 셋)이 통째로 빠지는데, 그 셋은 `model.judge()` 가 검사값을
+    직접 대조해 `HIGH` 를 내는 자리다. 그 판정이 여기 안 잡히면 `signal_strength`
+    에서도 안 잡혀(`MEASURED_WEIGHT` 에 `HIGH` 가 없다) 조용히 ML 추정으로 떨어졌고,
+    그게 2026-09-03 에 실측으로 확인한 25 건이다.
+    """
+    ml_target = {spec.key: spec.ml_target for spec in SPECS}
+    out: set[str] = set()
+    for verdict in verdicts:
+        if not verdict.measured or level_str(verdict.risk_level) not in KNOWN_LEVELS:
+            continue
+        target = ml_target.get(verdict.key)
+        if target:
+            out.add(target)
+    return out
+
+
 def collect_conditions(payload: Any, models: Any) -> dict[str, dict[str, Any]]:
     """ML 카드를 타깃 이름으로 담는다. 번들이 없으면 빈 사전이다.
 
@@ -507,7 +563,7 @@ def collect_disease_risks(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return assess_disease_risks(profile)
 
 
-def assess(payload: Any, models: Any) -> tuple[list[DiseaseVerdict], dict[str, Any], dict[str, Any], bool]:
+def assess(payload: Any, models: Any) -> tuple[list[DiseaseVerdict], dict[str, Any], dict[str, Any], bool, list[Any]]:
     """온보딩 입력 한 벌 → 질환별 판정 + 매트릭스 축 + 요약 + ML 적재 여부.
 
     `payload` 는 `AssessmentSummaryRequest` 다. 타입을 `Any` 로 둔 것은 이 모듈이
@@ -517,7 +573,38 @@ def assess(payload: Any, models: Any) -> tuple[list[DiseaseVerdict], dict[str, A
     profile = payload.to_rule_profile()
     domains = collect_domains(profile)
     available = models is not None and models.available
-    conditions = collect_conditions(payload.to_prediction_request(), models) if available else {}
+    suspects: list[Any] = []
+    conditions: dict[str, dict[str, Any]] = {}
+    cards: list[Any] = []
+    request = None
+    tier = "basic"
+    features: dict[str, Any] = {}
+    if available:
+        from app.services.prediction import score_conditions
+
+        request = payload.to_prediction_request()
+        cards, tier, features = score_conditions(request, models)
+        conditions = {c.target: c.model_dump() for c in cards}
+
     verdicts = arbitrate(domains, conditions)
+
+    # **순위는 중재 뒤에 매긴다.** 규칙 엔진이 측정값으로 준 판정을 신호로 합쳐야
+    # 하는데, 그 판정은 카드가 나온 뒤 중재를 거쳐야 나온다. 순서를 바꾸면 1 단계가
+    # 규칙 엔진을 못 보고 ML 확률만으로 고르게 된다.
+    if available and request is not None:
+        from app.services.prediction import rank_and_attach
+
+        suspects = rank_and_attach(
+            cards,
+            request,
+            models,
+            tier,
+            features,
+            verdicts={
+                v.key: {"engine": v.engine, "risk_level": v.risk_level, "measured": v.measured} for v in verdicts
+            },
+            known=known_targets(verdicts),
+        )
+
     disease_risks = collect_disease_risks(profile)
-    return verdicts, disease_risks, summarize(verdicts, disease_risks), available
+    return verdicts, disease_risks, summarize(verdicts, disease_risks), available, suspects

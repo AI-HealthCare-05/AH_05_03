@@ -88,9 +88,22 @@ async def model_info(models: Annotated[RiskModelRegistry, Depends(get_registry)]
     if not models.available:
         raise ModelUnavailableError("위험도 모델이 적재되지 않았습니다.")
 
+    # 2단계 발병 궤적의 기준 위험표. **여기 없으면 카드가 조용히 궤적을 안 낸다** —
+    # 파일이 빠져도 예측은 정상으로 보이고 `trajectory_status` 만 `unavailable` 이 된다.
+    # 배포 점검이 그 결손을 눈으로 확인할 수 있어야 한다 (docs/41 §4.2).
+    trajectory = models.trajectory
     return ApiResponse(
         data={
             "model_dir": str(models.directory),
+            "trajectory": {
+                "available": trajectory.available,
+                "created_at": trajectory.created_at,
+                "source": trajectory.source,
+                "targets": sorted(trajectory.targets),
+                # 검증(`validate_trajectory.py`)을 돌렸는지. 표만 있고 근거가 없으면
+                # 화면의 `evidence` 블록이 빈다.
+                "targets_with_evidence": sorted(key for key in trajectory.targets if trajectory.evidence(key)),
+            },
             "models": [
                 {
                     # target 은 질환, model_id 는 tier 까지 포함한 적재 키다.

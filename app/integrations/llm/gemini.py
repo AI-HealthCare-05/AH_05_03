@@ -44,7 +44,11 @@ class GeminiLLMClient(LLMClientProtocol):
         messages: list[ChatMessage],
         response_schema: type[T],
     ) -> T:
-        gemini_contents = [
+        # `list[Content]` 그대로 넘기면 mypy 가 막는다. SDK 가 받는 타입이
+        # `list[Content | str | Part | ...]` 인데 리스트는 불변(invariant)이라
+        # `list[Content]` 가 그 하위 타입이 아니다 — 런타임에는 문제가 없고
+        # 타입 검사에서만 걸린다. 원소 타입을 넓혀 선언해 푼다.
+        gemini_contents: list[types.ContentUnion] = [
             types.Content(
                 role="user" if m.role == "user" else "model",
                 parts=[types.Part.from_text(text=m.content)],
