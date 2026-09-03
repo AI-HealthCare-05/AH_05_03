@@ -131,3 +131,21 @@ export interface OcrService {
     rows: Array<{ itemCode: string; value: number }>,
   ): Promise<LocalResult<{ ocrResultId: UUID; healthRecordIds: UUID[] }>>;
 }
+
+/**
+ * tesseract.js 인식 결과 중 스크립트가 실제로 훑는 부분.
+ *
+ * SDK 가 내보내는 `Page` 는 블록 계층이 전부 nullable 이라 그대로 쓰면 접근할
+ * 때마다 좁히기가 필요하다. 벤치·검증 스크립트가 읽는 필드만 여기 적어 둔다.
+ */
+export interface TesseractBBox { x0: number; y0: number; x1: number; y1: number }
+export interface TesseractWord { text: string; confidence: number; bbox: TesseractBBox }
+export interface TesseractLine {
+  text?: string;
+  confidence?: number;
+  bbox: TesseractBBox;
+  words?: TesseractWord[];
+}
+export interface TesseractParagraph { lines?: TesseractLine[] }
+export interface TesseractBlock { paragraphs?: TesseractParagraph[] }
+export interface TesseractPage { blocks?: TesseractBlock[] | null }

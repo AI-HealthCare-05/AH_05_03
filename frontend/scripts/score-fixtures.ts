@@ -9,6 +9,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { OcrLine } from "../local-domain/ocr/line-extractor";
+import type { TesseractPage } from "../local-domain/ocr/types";
 import { extractRowsFromLines, findMeasuredDateInLines } from "../local-domain/ocr/line-extractor";
 import { findItem } from "../local-domain/ocr/checkup-lexicon";
 import { DEFAULT_REVIEW_THRESHOLD } from "../local-domain/ocr/table-extractor";
@@ -20,7 +21,7 @@ const SCALE = 2;
 interface ManifestEntry { id: string; title: string; file: string; measuredDate: string; truth: Record<string, number> }
 const manifest: ManifestEntry[] = JSON.parse(readFileSync(resolve(FIX, "manifest.json"), "utf8"));
 
-function lines(data: any, scale: number): OcrLine[] {
+function lines(data: TesseractPage, scale: number): OcrLine[] {
   const out: OcrLine[] = [];
   for (const b of data.blocks ?? [])
     for (const p of b.paragraphs ?? [])
@@ -44,7 +45,7 @@ for (const entry of manifest) {
   const all: OcrLine[] = [];
   for (const psm of ["6", "11"]) {
     await worker.setParameters({ tessedit_pageseg_mode: psm, tessedit_char_whitelist: "" });
-    all.push(...lines((await worker.recognize(buf, {}, { blocks: true })).data, SCALE));
+    all.push(...lines((await worker.recognize(buf, {}, { blocks: true })).data as TesseractPage, SCALE));
   }
   const ms = Date.now() - t0;
 

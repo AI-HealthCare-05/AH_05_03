@@ -10,8 +10,7 @@
 
 import { createWorker } from "tesseract.js";
 import sharp from "sharp";
-import type { OcrWord } from "../local-domain/ocr/types";
-import { mergeLines } from "../local-domain/ocr/table-extractor";
+import type { OcrWord, TesseractPage } from "../local-domain/ocr/types";
 import { CHECKUP_ITEMS, matchLabel, normalize } from "../local-domain/ocr/checkup-lexicon";
 
 const path = process.argv[2];
@@ -23,7 +22,7 @@ if (!path) {
 
 const SCALE = 3;
 
-function flatten(data: any): OcrWord[] {
+function flatten(data: TesseractPage): OcrWord[] {
   const out: OcrWord[] = [];
   for (const b of data.blocks ?? [])
     for (const p of b.paragraphs ?? [])
@@ -57,7 +56,7 @@ const { data } = await worker.recognize(buf, {}, { text: true, blocks: true });
 const elapsed = Date.now() - t0;
 await worker.terminate();
 
-const words = flatten(data);
+const words = flatten(data as TesseractPage);
 const lines = words.map((w) => ({ y: w.y, text: w.text, confidence: w.confidence }));
 
 // 1) 사전 항목이 인식 텍스트 안에 원형으로 존재하는가 (정규화 후 부분일치)

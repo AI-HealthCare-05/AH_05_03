@@ -13,7 +13,7 @@ import sharp from "sharp";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-import type { OcrWord, Rect } from "../local-domain/ocr/types";
+import type { OcrWord, TesseractPage, Rect } from "../local-domain/ocr/types";
 import { findMeasuredDate, pairRows, DEFAULT_REVIEW_THRESHOLD } from "../local-domain/ocr/table-extractor";
 import { findItem } from "../local-domain/ocr/checkup-lexicon";
 
@@ -44,7 +44,7 @@ async function prep(region: Rect, dropHighlight: boolean): Promise<Buffer> {
   return p.resize({ width: region.width * SCALE, kernel: "lanczos3" }).normalize().sharpen().png().toBuffer();
 }
 
-function flatten(data: any): OcrWord[] {
+function flatten(data: TesseractPage): OcrWord[] {
   const out: OcrWord[] = [];
   for (const b of data.blocks ?? [])
     for (const p of b.paragraphs ?? [])
@@ -66,11 +66,11 @@ const worker = await createWorker("kor+eng", 1);
 const t0 = Date.now();
 
 await worker.setParameters({ tessedit_pageseg_mode: "6", tessedit_char_whitelist: "" });
-const labelWords = flatten((await worker.recognize(await prep(REGIONS.label, false), {}, { blocks: true })).data);
-const dateWords = flatten((await worker.recognize(await prep(REGIONS.date, false), {}, { blocks: true })).data);
+const labelWords = flatten((await worker.recognize(await prep(REGIONS.label, false), {}, { blocks: true })).data as TesseractPage);
+const dateWords = flatten((await worker.recognize(await prep(REGIONS.date, false), {}, { blocks: true })).data as TesseractPage);
 
 await worker.setParameters({ tessedit_pageseg_mode: "6", tessedit_char_whitelist: "0123456789." });
-const valueWords = flatten((await worker.recognize(await prep(REGIONS.value, true), {}, { blocks: true })).data);
+const valueWords = flatten((await worker.recognize(await prep(REGIONS.value, true), {}, { blocks: true })).data as TesseractPage);
 
 await worker.terminate();
 const elapsed = Date.now() - t0;
