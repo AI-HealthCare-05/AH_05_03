@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import { SignInPage } from "../features/account/SignInPage";
-import { useUiStore } from "../stores/uiStore";
 import { useAuth } from "./authContext";
 
 // 가족 홈이 "관리"(구성원·기록·검진표), 건강 현황이 "지금 어떤가"(챌린지·수치) 다.
@@ -17,9 +16,6 @@ const NAVIGATION = [
 
 export function RootLayout() {
   const { status, email, signOut } = useAuth();
-  const navigationOpen = useUiStore((state) => state.navigationOpen);
-  const toggleNavigation = useUiStore((state) => state.toggleNavigation);
-  const closeNavigation = useUiStore((state) => state.closeNavigation);
 
   // 갱신 토큰으로 세션을 되살리는 동안 아무것도 그리지 않는다. 로그인 화면을 먼저
   // 띄우면 **이미 로그인한 사용자에게 로그인 화면이 한 번 깜빡인다.**
@@ -37,7 +33,7 @@ export function RootLayout() {
     <div className="app-shell">
       <header className="site-header">
         <div className="header-inner">
-          <NavLink className="brand" to="/" onClick={closeNavigation}>
+          <NavLink className="brand" to="/">
             <span className="brand-mark" aria-hidden="true">이</span>
             <span className="brand-copy">
               <strong>이어봄</strong>
@@ -45,23 +41,12 @@ export function RootLayout() {
             </span>
           </NavLink>
 
-          <button
-            className="menu-button"
-            type="button"
-            aria-expanded={navigationOpen}
-            aria-controls="primary-navigation"
-            onClick={toggleNavigation}
-          >
-            메뉴
-          </button>
-
-          <nav
-            id="primary-navigation"
-            className={navigationOpen ? "primary-navigation is-open" : "primary-navigation"}
-            aria-label="주 메뉴"
-          >
+          {/* 예전에는 좁은 화면에서 햄버거 버튼 뒤로 접혀 있었다. 항목이 셋뿐이라
+              접을 이유가 없고, 한 번 더 눌러야 보이는 메뉴는 그만큼 덜 눌린다.
+              언제나 탭으로 펼쳐 두고 좁은 화면에서는 헤더 아래 줄로 내린다. */}
+          <nav id="primary-navigation" className="primary-navigation" aria-label="주 메뉴">
             {NAVIGATION.map((item) => (
-              <NavLink key={`${item.to}-${item.label}`} to={item.to} end={item.end} onClick={closeNavigation}>
+              <NavLink key={`${item.to}-${item.label}`} to={item.to} end={item.end}>
                 {item.label}
               </NavLink>
             ))}

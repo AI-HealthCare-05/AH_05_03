@@ -13,7 +13,7 @@
  */
 
 import { Modal } from "../../shared/ui/Modal";
-import type { DiseaseRisk, DiseaseVerdict, RiskLevel } from "./contracts";
+import type { DiseaseRisk, DiseaseVerdict, OnsetTrajectory, RiskLevel } from "./contracts";
 import { ENGINE_SHORT, LEVEL_LABEL } from "./contracts";
 import { DISEASE_MEASURES, FIELD_LABELS, FIELD_UNITS } from "./fields";
 
@@ -30,6 +30,137 @@ export function LevelBadge({ level }: { level: RiskLevel }) {
     <span className={`assess-badge ${LEVEL_CLASS[level]}`}>
       {LEVEL_LABEL[level]}
     </span>
+  );
+}
+
+const percent = (value: number) => `${(value * 100).toFixed(0)}%`;
+
+/**
+ * 발병 궤적 — "지금 없다면 앞으로 t년 안에 생길 확률".
+ *
+ * 선 둘을 같이 그린다. 내 곡선 하나만 있으면 "10년 27%" 가 큰 수인지 보통인지 알 수
+ * 없다. 동년배 곡선이 자다. 표는 낭독기와 좁은 화면을 위한 같은 내용이다.
+ * 차트 라이브러리를 쓰지 않는 이유는 `TrendChart.tsx` 머리말과 같다.
+ */
+export function TrajectoryChart({ trajectory }: { trajectory: OnsetTrajectory }) {
+  const width = 260;
+  const height = 96;
+  const pad = { left: 30, right: 10, top: 8, bottom: 20 };
+  const years = trajectory.horizons_years;
+  const mine = trajectory.onset_probability;
+  const peers = trajectory.population_onset_probability;
+  const maxYear = years[years.length - 1] ?? 1;
+  const ceiling = Math.max(0.1, ...mine, ...peers);
+  const x = (year: number) => pad.left + ((width - pad.left - pad.right) * year) / maxYear;
+  const y = (value: number) => pad.top + (height - pad.top - pad.bottom) * (1 - value / ceiling);
+  const path = (values: number[]) =>
+    [`M ${x(0)} ${y(0)}`, ...values.map((v, i) => `L ${x(years[i])} ${y(v)}`)].join(" ");
+
+  return (
+    <figure className="assess-trajectory-figure">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="연도별 누적 발병 확률, 나와 동년배">
+        <line x1={pad.left} y1={y(0)} x2={width - pad.right} y2={y(0)} className="trajectory-axis" />
+        <text x={pad.left - 4} y={y(ceiling) + 4} textAnchor="end" className="trajectory-tick">
+          {percent(ceiling)}
+        </text>
+        <text x={pad.left - 4} y={y(0) + 4} textAnchor="end" className="trajectory-tick">
+          0%
+        </text>
+        <path d={path(peers)} className="trajectory-line is-peer" />
+        <path d={path(mine)} className="trajectory-line is-mine" />
+        {years.map((year, i) => (
+          <g key={year}>
+            <circle cx={x(year)} cy={y(mine[i])} r={2.5} className="trajectory-dot is-mine" />
+            <text x={x(year)} y={height - 6} textAnchor="middle" className="trajectory-tick">
+              {year}년
+            </text>
+          </g>
+        ))}
+      </svg>
+      <figcaption className="assess-trajectory-legend">
+        <span className="legend-mine">나</span>
+        <span className="legend-peer">동년배 평균</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+export function TrajectoryBlock({ verdict }: { verdict: DiseaseVerdict }) {
+  const trajectory = verdict.reference?.trajectory;
+  if (!trajectory || trajectory.horizons_years.length === 0) return null;
+  const last = trajectory.horizons_years.length - 1;
+  return (
+    <section className="assess-trajectory">
+      <h4>
+        앞으로의 발병 가능성{" "}
+        <span className="assess-muted">· 동년배의 {trajectory.relative_hazard.toFixed(1)}배</span>
+      </h4>
+      <TrajectoryChart trajectory={trajectory} />
+      <table className="assess-trajectory-table">
+        <thead>
+          <tr>
+            <th scope="col">기간</th>
+            {trajectory.horizons_years.map((year) => (
+              <th scope="col" key={year}>
+                {year}년
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">나</th>
+            {trajectory.onset_probability.map((value, i) => (
+              <td key={trajectory.horizons_years[i]}>{percent(value)}</td>
+            ))}
+          </tr>
+          <tr>
+            <th scope="row">동년배</th>
+            {trajectory.population_onset_probability.map((value, i) => (
+              <td key={trajectory.horizons_years[i]}>{percent(value)}</td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+      <p className="assess-fineprint">
+        {trajectory.conditional_on}.{" "}
+        {trajectory.truncated_at_age ? `${trajectory.truncated_at_age}세 이후는 자료가 없어 ${trajectory.horizons_years[last]}년까지만 보여요. ` : ""}
+        {trajectory.caveats[0]}
+      </p>
+    </section>
+  );
+}
+
+/**
+ * 카드 앞면의 앞날 한 칸. 궤적이 있는 카드만 — 없는 카드는 이유가 있어서 없는 것이다.
+ *
+ * 예전에는 **마지막 지평 하나만** 적었다(10년). 5년을 빼 두면 "당장은 어떤가" 를
+ * 물어볼 자리가 화면에 없고, 두 숫자 사이의 기울기 — 지금 손대면 달라지는 폭 —
+ * 도 사라진다. 지평이 둘뿐이라 둘 다 적어도 한 줄에 들어간다.
+ */
+export function TrajectoryLine({ verdict }: { verdict: DiseaseVerdict }) {
+  const trajectory = verdict.reference?.trajectory;
+  if (!trajectory || trajectory.horizons_years.length === 0) return null;
+  return (
+    <div className="assess-trajectory-line">
+      <span className="assess-trajectory-label">새로 생길 확률</span>
+      <span className="assess-trajectory-values">
+        {trajectory.horizons_years.map((year, i) => (
+          <span className="assess-trajectory-step" key={year}>
+            <b>{percent(trajectory.onset_probability[i])}</b>
+            <small>
+              {year}년 뒤
+              {trajectory.population_onset_probability?.[i] !== undefined && (
+                <span className="assess-muted">
+                  {" "}
+                  · 동년배 {percent(trajectory.population_onset_probability[i])}
+                </span>
+              )}
+            </small>
+          </span>
+        ))}
+      </span>
+    </div>
   );
 }
 
@@ -217,6 +348,7 @@ export function VerdictCard({
 
       <p className="assess-substatus">{short}</p>
       <KeyFigures verdict={verdict} values={values} />
+      <TrajectoryLine verdict={verdict} />
 
       {verdict.missing_fields.length > 0 && (
         <p className="assess-need">
@@ -249,6 +381,7 @@ export function VerdictDetail({ verdict, values, onClose }: { verdict: DiseaseVe
 
       {verdict.risk_level !== "INSUFFICIENT_DATA" ? <LevelBar level={verdict.risk_level} /> : null}
       <KeyFigures verdict={verdict} values={values} />
+      <TrajectoryBlock verdict={verdict} />
 
       <p className="assess-label">{verdict.display_label}</p>
 

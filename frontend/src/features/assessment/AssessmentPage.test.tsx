@@ -4,10 +4,10 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LocalDomainProvider } from "../../app/LocalDomainProvider";
-import { serverApiClient } from "../../shared/api/serverApiClient";
+import { ServerApiError, serverApiClient } from "../../shared/api/serverApiClient";
 import { AssessmentPage } from "./AssessmentPage";
 import type { AssessmentSummaryData } from "./contracts";
-import { toRequestBody } from "./fields";
+import { FIELD_LABELS, toRequestBody } from "./fields";
 
 afterEach(() => {
   cleanup();
@@ -85,7 +85,25 @@ const RESPONSE: AssessmentSummaryData = {
       missing_fields: ["혈색소"],
       flags: [],
       superseded_by: null,
-      reference: { probability: 0.0753, peer_percentile: 40, peer_group: "50대 남성" },
+      reference: {
+        probability: 0.0753,
+        peer_percentile: 40,
+        peer_group: "50대 남성",
+        // 실제로는 당뇨·고혈압·신기능에만 붙는다. 여기서는 그리는지만 본다.
+        trajectory: {
+          horizons_years: [5, 10],
+          onset_probability: [0.12, 0.27],
+          population_onset_probability: [0.07, 0.15],
+          relative_hazard: 1.8,
+          reference_prevalence: 0.21,
+          conditional_on: "현재 이 질환이 없다는 가정",
+          mortality_corrected: true,
+          truncated_at_age: null,
+          method: "baseline_hazard",
+          caveats: ["종단 추적이 아니라 단면 자료의 나이 기울기에서 유도한 추정입니다."],
+        },
+        trajectory_status: "projected",
+      },
       disclaimer: "의료 진단이 아닙니다.",
     },
   ],
@@ -113,6 +131,47 @@ const RESPONSE: AssessmentSummaryData = {
       score: 10,
     },
   },
+  top_suspects: [
+    {
+      target: "htn", name: "고혈압", rank: 1, score: 3.0, suspected: true, probability: 0.7998,
+      level: "주의", basis: "측정", peer_ratio: 1.5, evidence_weight: 1.0,
+      reason: "입력한 검사값으로 '주의' 판정 · 동년배 중간값의 1.5배 · 이 항목은 장기 추적에서 근거가 확인된 축.",
+      prevalence_trajectory: {
+        horizons_years: [5, 10],
+        prevalence_probability: [0.85, 0.88],
+        current_probability: 0.7998, direction: "상승",
+        conditional_on: "지금의 수치가 유지된다는 가정", irreversible: true,
+        truncated_at_age: null, caveats: ["새로 생길 확률과 다릅니다."],
+      },
+      onset_trajectory: {
+        horizons_years: [5, 10],
+        onset_probability: [0.24, 0.42],
+        population_onset_probability: [0.2, 0.36],
+        relative_hazard: 1.2, reference_prevalence: 0.42,
+        conditional_on: "현재 이 질환이 없다는 가정", mortality_corrected: true,
+        truncated_at_age: null, method: "baseline_hazard", caveats: ["추정입니다."],
+      },
+      onset_status: "projected",
+    },
+    {
+      target: "anemia", name: "빈혈", rank: 2, score: 1.0, suspected: true, probability: 0.0753,
+      level: "관심", basis: "추정", peer_ratio: 1.1, evidence_weight: 1.0, reason: "검사값 없이 추정한 등급이 '관심'.",
+      prevalence_trajectory: {
+        horizons_years: [5, 10],
+        prevalence_probability: [0.1, 0.13],
+        current_probability: 0.0753, direction: "상승",
+        conditional_on: "지금의 수치가 유지된다는 가정", irreversible: false,
+        truncated_at_age: null, caveats: ["새로 생길 확률과 다릅니다."],
+      },
+      onset_trajectory: null, onset_status: "not_applicable",
+    },
+    {
+      target: "ckd", name: "만성콩팥병", rank: 3, score: 0.0, suspected: false, probability: 0.05,
+      level: "낮음", basis: "추정", peer_ratio: 0.9, evidence_weight: 1.0,
+      reason: "의심 신호는 없지만 함께 볼 만한 항목이에요.",
+      prevalence_trajectory: null, onset_trajectory: null, onset_status: "below_gate",
+    },
+  ],
   disclaimers: ["의료 진단이 아닙니다.", "입력한 값은 저장하지 않습니다."],
   inputs_provided: 6,
   inputs_total: 36,
@@ -223,6 +282,113 @@ describe("AssessmentPage", () => {
     expect(within(anemia as HTMLElement).getByText(/넣으면 정확해져요/)).toHaveTextContent("혈색소");
   });
 
+  it("먼저 볼 세 가지를 맨 위에 놓고 측정·추정을 구분해 적는다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE as never);
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const panel = (await screen.findByRole("region", { name: /먼저 볼 세 가지/ })) as HTMLElement;
+
+    // 1순위는 검사값으로 판정한 것이라 "측정" 이라고 적힌다.
+    const first = within(panel).getByRole("heading", { name: /1순위 고혈압/ }).closest("article") as HTMLElement;
+    expect(within(first).getByText("측정")).toBeInTheDocument();
+    expect(within(first).getByText(/입력한 검사값으로/)).toBeInTheDocument();
+
+    // 지평은 5·10년 둘. 곡선이 아니라 숫자로 읽힌다.
+    expect(within(first).getAllByText("5년 뒤").length).toBeGreaterThan(0);
+    expect(within(first).getAllByText("10년 뒤").length).toBeGreaterThan(0);
+    expect(within(first).getByText("42%")).toBeInTheDocument();
+    expect(within(first).getByText(/동년배 36%/)).toBeInTheDocument();
+
+    // 2순위는 검사값 없이 추정한 것이다.
+    const second = within(panel).getByRole("heading", { name: /2순위 빈혈/ }).closest("article") as HTMLElement;
+    expect(within(second).getByText("추정")).toBeInTheDocument();
+
+    // 3순위는 의심이 아니라 자리를 채운 것이고, 예측이 없으면 그 사실을 적는다.
+    const third = within(panel).getByRole("heading", { name: /3순위 만성콩팥병/ }).closest("article") as HTMLElement;
+    expect(within(third).getByText(/의심 신호는 없/)).toBeInTheDocument();
+    expect(within(third).getByText(/자료 범위 밖/)).toBeInTheDocument();
+
+    // 두 숫자의 뜻은 카드마다가 아니라 패널에 한 번만 적는다.
+    expect(within(panel).getAllByText(/그 나이에 기준을 넘고 있을 확률/)).toHaveLength(1);
+  });
+
+  it("측정이 '기준 이내'라고 답한 카드에는 모델 확률을 덧붙이지 않는다", async () => {
+    const user = userEvent.setup();
+    // 라벨을 만드는 검사값은 그 질환의 ML 입력에서 차단된다. 그래서 이 모델은
+    // 사용자가 넣은 지질 넉 장을 보지 못한 채 74% 를 낸다. 규칙 엔진이 "기준 안에
+    // 있어요" 라고 한 카드 밑에 그 숫자가 붙는 것이 패널에서 가장 헷갈리는 지점이었다.
+    const settled = {
+      ...RESPONSE,
+      top_suspects: [
+        {
+          ...RESPONSE.top_suspects[0],
+          target: "dlp",
+          name: "이상지질혈증",
+          rank: 1,
+          score: 0,
+          suspected: false,
+          basis: "측정",
+          level: "정상 범위",
+          reason: "의심 신호는 없지만 함께 볼 만한 항목이에요.",
+          onset_trajectory: null,
+          onset_status: "not_applicable",
+          prevalence_trajectory: {
+            ...RESPONSE.top_suspects[0].prevalence_trajectory,
+            current_probability: 0.74,
+            prevalence_probability: [0.74, 0.75],
+          },
+        },
+      ],
+    };
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(settled as never);
+    renderPage();
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const panel = (await screen.findByRole("region", { name: /의심되는 항목은 없어요/ })) as HTMLElement;
+    const card = within(panel).getByRole("heading", { name: /이상지질혈증/ }).closest("article") as HTMLElement;
+    expect(within(card).getByText("정상 범위")).toBeInTheDocument();
+    expect(within(card).queryByText("74%")).not.toBeInTheDocument();
+    expect(within(card).getByText(/검사값이 기준 안에 있어/)).toBeInTheDocument();
+  });
+
+  it("발병 궤적이 있는 카드는 앞면에 한 줄, 모달에 동년배와 나란한 표를 그린다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE as never);
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const anemia = (await screen.findByRole("heading", { name: "빈혈" })).closest("article") as HTMLElement;
+    // **5년과 10년을 둘 다** 적는다. 마지막 하나만 적으면 "당장은 어떤가" 를 물어볼
+    // 자리가 없고 두 숫자 사이의 기울기도 사라진다.
+    expect(within(anemia).getByText("새로 생길 확률")).toBeInTheDocument();
+    expect(within(anemia).getByText("12%")).toBeInTheDocument();
+    expect(within(anemia).getByText("27%")).toBeInTheDocument();
+    expect(within(anemia).getByText(/5년 뒤/)).toHaveTextContent("동년배 7%");
+    expect(within(anemia).getByText(/10년 뒤/)).toHaveTextContent("동년배 15%");
+    // 궤적이 없는 카드에는 그 칸이 없다 — 규칙 엔진이 이미 HIGH 로 판정한 고혈압.
+    const htn = screen.getByRole("heading", { name: "고혈압" }).closest("article") as HTMLElement;
+    expect(within(htn).queryByText("새로 생길 확률")).not.toBeInTheDocument();
+
+    await user.click(within(anemia).getByRole("button", { name: /빈혈 판정 근거/ }));
+    const modal = await screen.findByRole("dialog");
+    expect(within(modal).getByText(/앞으로의 발병 가능성/)).toBeInTheDocument();
+    expect(within(modal).getByText(/동년배의 1\.8배/)).toBeInTheDocument();
+    expect(within(modal).getByRole("img", { name: /누적 발병 확률/ })).toBeInTheDocument();
+    const table = within(modal).getByRole("table");
+    expect(within(table).getByRole("columnheader", { name: "10년" })).toBeInTheDocument();
+    expect(within(table).getAllByRole("cell").map((cell) => cell.textContent)).toEqual(
+      expect.arrayContaining(["27%", "15%", "12%", "7%"]),
+    );
+    expect(within(modal).getByText(/현재 이 질환이 없다는 가정/)).toBeInTheDocument();
+  });
+
   it("근거 모달을 닫으면 열었던 버튼으로 포커스가 돌아온다", async () => {
     const user = userEvent.setup();
     vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE as never);
@@ -329,6 +495,68 @@ describe("AssessmentPage", () => {
     expect(screen.getByRole("heading", { name: "심혈관질환" })).toBeInTheDocument();
     expect(screen.getByText("혈압 140/90 이상")).toBeInTheDocument();
     expect(screen.getByText(/대한고혈압학회 진료지침 · 인과 근거 있음/)).toBeInTheDocument();
+  });
+
+  it("교육 수준은 묻지 않는다", () => {
+    renderPage();
+    expect(screen.queryByText("교육 수준")).not.toBeInTheDocument();
+    expect(FIELD_LABELS.education_level).toBeUndefined();
+  });
+
+  it("서버가 되돌려준 칸을 빨갛게 세우고 그 칸으로 커서를 옮긴다", async () => {
+    const user = userEvent.setup();
+    // 검진표에서 읽은 값이 범위를 벗어나 422 가 되는 상황. 사용자는 자기가 적지도
+    // 않은 값을 서른 몇 칸에서 찾아야 하므로, 어느 칸인지 말해 주지 않으면 못 고친다.
+    vi.spyOn(serverApiClient, "assessSummary").mockRejectedValue(
+      new ServerApiError(
+        422,
+        "VALIDATION_ERROR",
+        "hba1c: Input should be less than or equal to 20; hemoglobin: Input should be less than or equal to 25",
+      ),
+    );
+    renderPage();
+    await fillRequired(user);
+    await user.type(screen.getByRole("spinbutton", { name: /^당화혈색소/ }), "61");
+    await user.type(screen.getByRole("spinbutton", { name: /^혈색소/ }), "145");
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/값이 범위를 벗어난 칸이 2개/);
+    // 영어 원문이 아니라 **얼마까지 되는지**를 말한다.
+    expect(alert).toHaveTextContent(/2~20 % 사이여야 해요/);
+    expect(alert).not.toHaveTextContent(/Input should be/);
+
+    const hba1c = screen.getByRole("spinbutton", { name: /^당화혈색소/ });
+    expect(hba1c).toHaveAttribute("aria-invalid", "true");
+    expect(hba1c).toHaveFocus();
+  });
+
+  it("값을 고치면 그 칸의 표시만 즉시 풀린다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "assessSummary").mockRejectedValue(
+      new ServerApiError(
+        422,
+        "VALIDATION_ERROR",
+        "hba1c: Input should be less than or equal to 20; hemoglobin: Input should be less than or equal to 25",
+      ),
+    );
+    renderPage();
+    await fillRequired(user);
+    await user.type(screen.getByRole("spinbutton", { name: /^당화혈색소/ }), "61");
+    await user.type(screen.getByRole("spinbutton", { name: /^혈색소/ }), "145");
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const hba1c = screen.getByRole("spinbutton", { name: /^당화혈색소/ });
+    await user.clear(hba1c);
+    await user.type(hba1c, "6.1");
+
+    expect(hba1c).not.toHaveAttribute("aria-invalid");
+    // 아직 안 고친 칸은 그대로 남는다.
+    expect(screen.getByRole("spinbutton", { name: /^혈색소/ })).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/칸이 1개/);
   });
 });
 

@@ -18,6 +18,67 @@ export interface ModelAccuracy {
   holdout_n: number | null;
 }
 
+/**
+ * 2단계 발병 궤적. 서버 `OnsetTrajectory` 의 사본.
+ *
+ * `onset_probability[i]` 는 `horizons_years[i]` 년 안에 이 질환이 생길 누적 확률이고
+ * `population_onset_probability` 는 같은 나이·성별 동년배의 값이다. 둘을 같이 그려야
+ * "27%" 가 높은 건지 보통인 건지 읽힌다.
+ */
+export interface OnsetTrajectory {
+  horizons_years: number[];
+  onset_probability: number[];
+  population_onset_probability: number[];
+  relative_hazard: number;
+  reference_prevalence: number;
+  conditional_on: string;
+  mortality_corrected: boolean;
+  truncated_at_age?: number | null;
+  method: string;
+  caveats: string[];
+}
+
+export type TrajectoryStatus =
+  | "projected"
+  | "not_applicable"
+  | "below_gate"
+  | "already_met"
+  | "already_present"
+  | "withheld"
+  | "age_out_of_range"
+  | "unavailable";
+
+/** "그 나이가 됐을 때 기준을 넘고 있을 확률". 발병 궤적과 다른 질문이다. */
+export interface PrevalenceTrajectory {
+  horizons_years: number[];
+  prevalence_probability: number[];
+  current_probability: number;
+  direction: string;
+  conditional_on: string;
+  irreversible: boolean;
+  truncated_at_age?: number | null;
+  caveats: string[];
+}
+
+/** 1단계가 고른 의심 질환 한 장. 2단계 곡선이 붙는다. */
+export interface SuspectCard {
+  target: string;
+  name: string;
+  rank: number;
+  score: number;
+  suspected: boolean;
+  probability?: number | null;
+  level: string;
+  /** "측정" 이면 규칙 엔진이 검사값으로 준 판정, "추정" 이면 ML 확률 */
+  basis: string;
+  peer_ratio?: number | null;
+  evidence_weight: number;
+  reason: string;
+  prevalence_trajectory?: PrevalenceTrajectory | null;
+  onset_trajectory?: OnsetTrajectory | null;
+  onset_status?: string | null;
+}
+
 export interface VerdictReference {
   probability?: number | null;
   peer_percentile?: number | null;
@@ -28,6 +89,8 @@ export interface VerdictReference {
   tier?: string | null;
   accuracy?: ModelAccuracy | null;
   top_factors?: { feature: string; contribution: number }[];
+  trajectory?: OnsetTrajectory | null;
+  trajectory_status?: TrajectoryStatus | null;
 }
 
 export interface DiseaseVerdict {
@@ -89,6 +152,7 @@ export interface AssessmentSummaryData {
   summary: AssessmentSummary;
   verdicts: DiseaseVerdict[];
   disease_risks: Record<string, DiseaseRisk>;
+  top_suspects: SuspectCard[];
   disclaimers: string[];
   inputs_provided: number;
   inputs_total: number;

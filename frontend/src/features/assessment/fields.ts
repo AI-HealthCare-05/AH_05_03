@@ -135,19 +135,10 @@ export const FIELD_GROUPS: FieldGroup[] = [
       { name: "vigorous_min_per_week", label: "고강도 운동", kind: "number", unit: "분/주", min: 0, max: 5000 },
       { name: "sedentary_min_per_day", label: "앉아 있는 시간", kind: "number", unit: "분/일", min: 0, max: 1440 },
       { name: "sleep_hours", label: "수면", kind: "number", unit: "시간", min: 0, max: 24, step: 0.5 },
-      { name: "difficulty_walking", label: "걷는 데 불편이 있나", kind: "bool" },
-      {
-        name: "education_level",
-        label: "교육 수준",
-        kind: "select",
-        options: [
-          { value: "1", label: "1 · 중학교 미만" },
-          { value: "2", label: "2" },
-          { value: "3", label: "3" },
-          { value: "4", label: "4" },
-          { value: "5", label: "5 · 대졸 이상" },
-        ],
-      },
+      // `education_level` 은 2026-09-03 에 뺐다. 건강 앱이 학력을 묻는 것이
+      // 사용자에게 어떻게 읽히는지가 이유고, 정확도 손실은 재서 받아들였다 —
+      // 200명 표본에서 확률 평균 |Δ| 0.005, 등급이 바뀐 칸 1.5%(29/2000).
+      // 지방간만 컸다(평균 0.012, 최대 0.139). 서버 DTO 는 값을 계속 받는다.
     ],
   },
   {
@@ -163,7 +154,19 @@ export const FIELD_GROUPS: FieldGroup[] = [
 ];
 
 /** 서버가 숫자로 받는 선택 필드. `select` 인데 문자열로 보내면 422 가 된다. */
-const NUMERIC_SELECTS = new Set(["self_rated_health", "education_level"]);
+const NUMERIC_SELECTS = new Set(["self_rated_health"]);
+
+/**
+ * 필드 이름 → 허용 범위. 서버가 422 로 되돌려준 칸 옆에 **얼마까지 되는지**를
+ * 적어 주려고 쓴다. 서버 메시지는 "Input should be less than or equal to 20" 이라
+ * 그대로 띄우면 어느 칸인지도, 한국어도 아니다.
+ */
+export const FIELD_RANGES: Record<string, { min?: number; max?: number; unit?: string }> =
+  Object.fromEntries(
+    FIELD_GROUPS.flatMap((group) =>
+      group.fields.map((field) => [field.name, { min: field.min, max: field.max, unit: field.unit }]),
+    ),
+  );
 
 export const REQUIRED_FIELDS = FIELD_GROUPS.flatMap((g) => g.fields.filter((f) => f.required).map((f) => f.name));
 
@@ -265,3 +268,29 @@ export const DISEASE_MEASURES: Record<string, string[]> = {
 export const FIELD_UNITS: Record<string, string> = Object.fromEntries(
   FIELD_GROUPS.flatMap((g) => g.fields.filter((f) => f.unit).map((f) => [f.name, f.unit as string] as const)),
 );
+
+/**
+ * 서버가 되돌려준 422 메시지에서 **어느 칸이 왜 막혔는지**를 뽑는다.
+ *
+ * 메시지는 `"hba1c: Input should be less than or equal to 20; uric_acid: ..."`
+ * 꼴로 온다. 그대로 띄우면 세 가지가 동시에 나쁘다 — 영어고, 서른 몇 칸 중 어디인지
+ * 눈으로 찾아야 하고, 얼마까지 되는지는 끝내 말하지 않는다.
+ *
+ * 아무 `\w+:` 나 잡지 않고 **아는 필드 이름만** 찾는다. 메시지 문구가 바뀌어도
+ * 엉뚱한 칸을 빨갛게 칠하지 않으려는 것이다. 하나도 못 찾으면 빈 값을 돌려주고,
+ * 호출자는 원래 메시지를 그대로 띄운다.
+ */
+export function rejectedFields(message: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of Object.keys(FIELD_RANGES)) {
+    const hit = new RegExp(`(?:^|[;\\s])${name}:\\s*([^;]+)`).exec(message);
+    if (!hit) continue;
+    const { min, max, unit } = FIELD_RANGES[name];
+    const span =
+      min !== undefined && max !== undefined
+        ? `${min}~${max}${unit ? ` ${unit}` : ""} 사이여야 해요`
+        : hit[1].trim();
+    out[name] = span;
+  }
+  return out;
+}

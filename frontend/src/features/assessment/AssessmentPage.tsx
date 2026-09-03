@@ -38,8 +38,16 @@ import {
 import type { AssessmentSummaryData, RiskLevel } from "./contracts";
 import { LEVEL_ORDER } from "./contracts";
 import { DocumentPane, type DocumentReading } from "./DocumentPane";
+import { SuspectPanel } from "./SuspectPanel";
 import { LevelBadge, MatrixCard, VerdictCard, VerdictDetail } from "./VerdictCards";
-import { FIELD_GROUPS, FIELD_LABELS, LAB_FIELDS, REQUIRED_FIELDS, toRequestBody } from "./fields";
+import {
+  FIELD_GROUPS,
+  FIELD_LABELS,
+  LAB_FIELDS,
+  REQUIRED_FIELDS,
+  rejectedFields,
+  toRequestBody,
+} from "./fields";
 import {
   buildLevelTracks,
   buildSeries,
@@ -81,7 +89,7 @@ function prefillFrom(state: unknown): Record<string, string> {
 }
 
 /**
- * 비어 있는 필수 칸으로 화면을 옮기고 커서를 놓는다.
+ * 고쳐야 할 칸으로 화면을 옮기고 커서를 놓는다.
  *
  * `focus()` 도 스스로 스크롤하지만 그 칸을 **뷰포트 가장자리에 겨우 걸치게** 둔다.
  * 위쪽 `legend`(“기본”·“혈압” …)가 같이 보여야 어느 그룹의 무슨 칸인지 아니까,
@@ -140,6 +148,9 @@ export function AssessmentPage() {
   }, [values]);
   const [result, setResult] = useState<AssessmentSummaryData>();
   const [error, setError] = useState<string>();
+  // 서버가 되돌려준 칸. 값을 고치는 즉시 그 칸만 풀린다 — 다시 눌러 봐야
+  // 빨간색이 사라지면 사용자는 자기가 고친 게 맞는지 알 수 없다.
+  const [rejected, setRejected] = useState<Record<string, string>>({});
   const [working, setWorking] = useState(false);
   const [profileId, setProfileId] = useState<string>();
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
@@ -227,6 +238,14 @@ export function AssessmentPage() {
 
   const setField = useCallback((name: string, value: string) => {
     setValues((prev) => ({ ...prev, [name]: value }));
+    // 고치는 즉시 그 칸의 빨간 표시를 푼다. 다시 제출해야 풀리면 사용자는
+    // 자기가 고친 값이 이제 맞는지를 화면에서 확인할 방법이 없다.
+    setRejected((prev) => {
+      if (!(name in prev)) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
     // 사람이 손을 댄 순간 그 칸은 더 이상 "모델이 채운 값" 이 아니다.
     setReadFields((prev) => {
       if (!prev.has(name)) return prev;
@@ -264,6 +283,7 @@ export function AssessmentPage() {
     async (event: FormEvent) => {
       event.preventDefault();
       setError(undefined);
+      setRejected({});
       setAttempted(true);
 
       // **막지 않고 알려 준다.** 버튼을 비활성으로 두면 왜 못 누르는지 설명할 자리가
@@ -308,13 +328,23 @@ export function AssessmentPage() {
           }
         }
       } catch (cause) {
-        // 422 는 어느 필드가 왜 틀렸는지를 details 에 담아 온다. 통째로 "실패"라고
-        // 쓰면 사용자가 고칠 수 없다.
+        // 422 는 어느 필드가 왜 틀렸는지를 메시지에 담아 온다. 통째로 "실패"라고
+        // 쓰면 사용자가 고칠 수 없다. 칸을 집어내 빨갛게 세우고 커서를 옮긴다 —
+        // 값이 검진표에서 자동으로 들어온 경우가 많아, 어느 칸인지 말해 주지 않으면
+        // 사용자는 자기가 적지도 않은 값을 서른 몇 칸에서 찾아야 한다.
         if (cause instanceof ServerApiError) {
-          const detail = cause.details
-            ? ` (${JSON.stringify(cause.details)})`
-            : "";
-          setError(`${cause.message}${detail}`);
+          const bad = rejectedFields(cause.message);
+          const names = Object.keys(bad);
+          if (names.length > 0) {
+            setRejected(bad);
+            setError(undefined);
+            revealField(fieldRefs.current[names[0]]);
+          } else {
+            const detail = cause.details
+              ? ` (${JSON.stringify(cause.details)})`
+              : "";
+            setError(`${cause.message}${detail}`);
+          }
         } else {
           setError("판정 요청이 실패했습니다.");
         }
@@ -414,6 +444,34 @@ export function AssessmentPage() {
             </div>
           )}
 
+          {Object.keys(rejected).length > 0 && (
+            <div
+              className="alert error-alert assess-required-alert"
+              role="alert"
+            >
+              <p>
+                값이 범위를 벗어난 칸이{" "}
+                <strong>{Object.keys(rejected).length}개</strong> 있어요.
+                검진표에서 읽어 온 값이면 원본과 다시 맞춰 보세요.
+              </p>
+              <ul>
+                {Object.entries(rejected).map(([name, range]) => (
+                  <li key={name}>
+                    <button
+                      type="button"
+                      onClick={() => revealField(fieldRefs.current[name])}
+                    >
+                      {FIELD_LABELS[name]}
+                    </button>{" "}
+                    <span className="assess-muted">
+                      {values[name]} → {range}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/*
         **`noValidate` 로 브라우저 검사를 끈다.** 안 끄면 필수 칸이 비었을 때 브라우저가
         `submit` 이벤트 자체를 막아 아래 `submit` 이 실행되지 않는다 — 대신 뜨는 기본
@@ -430,6 +488,7 @@ export function AssessmentPage() {
                 <div className="assess-fields">
                   {group.fields.map((field) => {
                     const blank = flagged.includes(field.name);
+                    const outOfRange = rejected[field.name];
                     const fromDocument = readFields.has(field.name);
                     // 콜백 ref 는 **반드시 값을 반환하지 않아야 한다.** React 19 는 반환값을
                     // 정리 함수로 보고, 함수가 아니면 오류를 낸다. 그래서 중괄호 본문이다.
@@ -444,6 +503,7 @@ export function AssessmentPage() {
                         className={[
                           "assess-field",
                           blank ? "is-blank" : "",
+                          outOfRange ? "is-rejected" : "",
                           fromDocument ? "is-from-document" : "",
                         ]
                           .filter(Boolean)
@@ -478,7 +538,10 @@ export function AssessmentPage() {
                               setField(field.name, event.target.value)
                             }
                             required={field.required}
-                            aria-invalid={blank || undefined}
+                            aria-invalid={blank || Boolean(outOfRange) || undefined}
+                            aria-describedby={
+                              outOfRange ? `${field.name}-range` : undefined
+                            }
                           />
                         )}
                         {field.kind === "select" && (
@@ -489,7 +552,7 @@ export function AssessmentPage() {
                               setField(field.name, event.target.value)
                             }
                             required={field.required}
-                            aria-invalid={blank || undefined}
+                            aria-invalid={blank || Boolean(outOfRange) || undefined}
                           >
                             <option value="">선택 안 함</option>
                             {field.options?.map((option) => (
@@ -519,6 +582,14 @@ export function AssessmentPage() {
                         를 걸면 같은 말을 두 번 하게 된다. */}
                         {blank && (
                           <span className="assess-blank-hint">채워 주세요</span>
+                        )}
+                        {outOfRange && (
+                          <span
+                            className="assess-range-hint"
+                            id={`${field.name}-range`}
+                          >
+                            {outOfRange}
+                          </span>
                         )}
                       </label>
                     );
@@ -618,6 +689,8 @@ export function AssessmentPage() {
               {saved && <p className="alert success-alert">{saved}</p>}
             </div>
           </header>
+
+          <SuspectPanel suspects={result.top_suspects ?? []} />
 
           <h2 className="assess-axis-title">
             질환별 결과 <span className="assess-muted">지금 내 몸의 상태</span>
