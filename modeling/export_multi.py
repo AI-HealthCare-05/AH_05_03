@@ -51,7 +51,7 @@ from train_multi import (  # noqa: E402
     fit_calibrator,
     lab_present,
     make_pipeline,
-    monotone_vector,
+    monotone_for,
 )
 
 from app.services.risk import expand_features, peer_cell, to_float32  # noqa: E402
@@ -297,7 +297,7 @@ def build(data: pd.DataFrame, target: Target, tier: str, model: str) -> dict[str
 
     numeric = [c for c in frame.columns if c not in CATEGORICAL]
     categorical = [c for c in frame.columns if c in CATEGORICAL]
-    monotone = monotone_vector(frame, numeric, categorical) if model == "xgboost" else None
+    monotone = monotone_for(model, frame, numeric, categorical, target.key)
 
     pipeline = make_pipeline(numeric, categorical, model, monotone).fit(
         frame.loc[split.train_index], y.loc[split.train_index]
@@ -449,7 +449,7 @@ def equivalence(bundle: dict[str, Any], data: pd.DataFrame, target: Target, tier
     split = make_split(cycle, target.holdout_cycle)
 
     numeric, categorical = bundle["numeric_features"], bundle["categorical_features"]
-    monotone = monotone_vector(frame, numeric, categorical) if model_kind == "xgboost" else None
+    monotone = monotone_for(model_kind, frame, numeric, categorical, target.key)
     pipeline = make_pipeline(numeric, categorical, model_kind, monotone).fit(
         frame.loc[split.train_index], y.loc[split.train_index]
     )

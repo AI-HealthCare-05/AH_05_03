@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "data"))
 
 from sklearn.metrics import roc_auc_score
 from targets import CATEGORICAL, DERIVED, TARGETS
-from train_multi import DATA, build_frame, lab_present, make_pipeline, monotone_vector
+from train_multi import DATA, build_frame, lab_present, make_pipeline, monotone_for
 
 ROOT = Path(__file__).resolve().parent
 MORTALITY = ROOT / "data" / "processed" / "mortality.csv"
@@ -143,7 +143,7 @@ def run_target(data: pd.DataFrame, mortality: pd.DataFrame, key: str, tier: str,
 
     numeric = [c for c in columns if c not in CATEGORICAL]
     categorical = [c for c in columns if c in CATEGORICAL]
-    monotone = monotone_vector(frame, numeric, categorical) if model == "xgboost" else None
+    monotone = monotone_for(model, frame, numeric, categorical, target.key)
     pipeline = make_pipeline(numeric, categorical, model, monotone)
     pipeline.fit(frame.iloc[train_mask], y.iloc[train_mask])
     probability = pipeline.predict_proba(frame.iloc[score_mask])[:, 1]

@@ -1,0 +1,976 @@
+{
+  "preset": "onboarding",
+  "holdout": "2021_2023",
+  "results": [
+    {
+      "target": "dm",
+      "name": "당뇨",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8162,
+      "base": {
+        "n_features": 18,
+        "train_rows": 40926,
+        "train_positives": 6937,
+        "holdout_rows": 7966,
+        "added_coverage": {}
+      },
+      "arms": {
+        "−보행곤란": {
+          "delta_auroc": 0.0004,
+          "ci_low": -0.0004,
+          "ci_high": 0.0012,
+          "two_sided_crossing": 0.288,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8166,
+          "n_features": 17,
+          "train_rows": 40926,
+          "train_positives": 6937,
+          "holdout_rows": 7966,
+          "added_coverage": {},
+          "undiagnosed": {
+            "delta_auroc": -0.0016,
+            "ci_low": -0.0037,
+            "ci_high": 0.0004,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7854
+          }
+        },
+        "+폐경": {
+          "delta_auroc": 0.0001,
+          "ci_low": -0.0007,
+          "ci_high": 0.0009,
+          "two_sided_crossing": 0.874,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8162,
+          "n_features": 20,
+          "train_rows": 40926,
+          "train_positives": 6937,
+          "holdout_rows": 7966,
+          "added_coverage": {
+            "postmenopausal": 0.367,
+            "age_at_last_period": 0.228
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0007,
+            "ci_low": -0.0032,
+            "ci_high": 0.0017,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7863
+          }
+        },
+        "+체중변화": {
+          "delta_auroc": 0.0067,
+          "ci_low": 0.0039,
+          "ci_high": 0.0094,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.8228,
+          "n_features": 19,
+          "train_rows": 40926,
+          "train_positives": 6937,
+          "holdout_rows": 7966,
+          "added_coverage": {
+            "weight_change_1yr_pct": 0.972
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0028,
+            "ci_low": -0.0084,
+            "ci_high": 0.0027,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7842
+          }
+        },
+        "+신장질환문진": {
+          "delta_auroc": 0.0025,
+          "ci_low": 0.0009,
+          "ci_high": 0.0041,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.8186,
+          "n_features": 19,
+          "train_rows": 40926,
+          "train_positives": 6937,
+          "holdout_rows": 7966,
+          "added_coverage": {
+            "dx_kidney": 0.978
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0007,
+            "ci_low": -0.0035,
+            "ci_high": 0.002,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7863
+          }
+        },
+        "+기왕력": {
+          "delta_auroc": 0.0097,
+          "ci_low": 0.0065,
+          "ci_high": 0.0128,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.8259,
+          "n_features": 21,
+          "train_rows": 40926,
+          "train_positives": 6937,
+          "holdout_rows": 7966,
+          "added_coverage": {
+            "dx_stroke": 0.977,
+            "dx_heart_disease": 0.978,
+            "dx_hypertension": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0052,
+            "ci_low": -0.0127,
+            "ci_high": 0.0019,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7818
+          }
+        },
+        "+전부": {
+          "delta_auroc": 0.0144,
+          "ci_low": 0.0106,
+          "ci_high": 0.0186,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.8306,
+          "n_features": 24,
+          "train_rows": 40926,
+          "train_positives": 6937,
+          "holdout_rows": 7966,
+          "added_coverage": {
+            "postmenopausal": 0.367,
+            "age_at_last_period": 0.228,
+            "weight_change_1yr_pct": 0.972,
+            "dx_kidney": 0.978,
+            "dx_stroke": 0.977,
+            "dx_heart_disease": 0.978,
+            "dx_hypertension": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.01,
+            "ci_low": -0.0185,
+            "ci_high": -0.0021,
+            "verdict": "유의",
+            "auroc": 0.777
+          }
+        }
+      },
+      "undiagnosed": {
+        "n": 6780,
+        "positives": 201,
+        "base_auroc": 0.787
+      }
+    },
+    {
+      "target": "dm",
+      "name": "당뇨",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8681,
+      "base": {
+        "n_features": 42,
+        "train_rows": 36767,
+        "train_positives": 6346,
+        "holdout_rows": 5540,
+        "added_coverage": {}
+      },
+      "arms": {
+        "−보행곤란": {
+          "delta_auroc": 0.0008,
+          "ci_low": -0.0005,
+          "ci_high": 0.0022,
+          "two_sided_crossing": 0.242,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8689,
+          "n_features": 41,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {},
+          "undiagnosed": {
+            "delta_auroc": -0.0004,
+            "ci_low": -0.0033,
+            "ci_high": 0.0025,
+            "verdict": "구분 안 됨",
+            "auroc": 0.827
+          }
+        },
+        "+폐경": {
+          "delta_auroc": -0.0001,
+          "ci_low": -0.0012,
+          "ci_high": 0.0011,
+          "two_sided_crossing": 0.926,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8681,
+          "n_features": 44,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {
+            "postmenopausal": 0.474,
+            "age_at_last_period": 0.297
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0002,
+            "ci_low": -0.0026,
+            "ci_high": 0.003,
+            "verdict": "구분 안 됨",
+            "auroc": 0.8276
+          }
+        },
+        "+체중변화": {
+          "delta_auroc": 0.0042,
+          "ci_low": 0.0019,
+          "ci_high": 0.0065,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.8723,
+          "n_features": 43,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {
+            "weight_change_1yr_pct": 0.979
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0001,
+            "ci_low": -0.005,
+            "ci_high": 0.0051,
+            "verdict": "구분 안 됨",
+            "auroc": 0.8275
+          }
+        },
+        "+신장질환문진": {
+          "delta_auroc": 0.0011,
+          "ci_low": -0.0002,
+          "ci_high": 0.0024,
+          "two_sided_crossing": 0.084,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8692,
+          "n_features": 43,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {
+            "dx_kidney": 0.981
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0014,
+            "ci_low": -0.0016,
+            "ci_high": 0.0044,
+            "verdict": "구분 안 됨",
+            "auroc": 0.8289
+          }
+        },
+        "+기왕력": {
+          "delta_auroc": 0.0028,
+          "ci_low": 0.0008,
+          "ci_high": 0.0048,
+          "two_sided_crossing": 0.008,
+          "verdict": "유의",
+          "auroc": 0.8709,
+          "n_features": 45,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {
+            "dx_stroke": 0.981,
+            "dx_heart_disease": 0.981,
+            "dx_hypertension": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0017,
+            "ci_low": -0.0064,
+            "ci_high": 0.0028,
+            "verdict": "구분 안 됨",
+            "auroc": 0.8257
+          }
+        },
+        "+전부": {
+          "delta_auroc": 0.0047,
+          "ci_low": 0.002,
+          "ci_high": 0.0075,
+          "two_sided_crossing": 0.002,
+          "verdict": "유의",
+          "auroc": 0.8728,
+          "n_features": 48,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {
+            "postmenopausal": 0.474,
+            "age_at_last_period": 0.297,
+            "weight_change_1yr_pct": 0.979,
+            "dx_kidney": 0.981,
+            "dx_stroke": 0.981,
+            "dx_heart_disease": 0.981,
+            "dx_hypertension": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0071,
+            "ci_low": -0.0129,
+            "ci_high": -0.0013,
+            "verdict": "유의",
+            "auroc": 0.8203
+          }
+        }
+      },
+      "undiagnosed": {
+        "n": 4697,
+        "positives": 191,
+        "base_auroc": 0.8274
+      }
+    },
+    {
+      "target": "htn",
+      "name": "고혈압",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8005,
+      "base": {
+        "n_features": 16,
+        "train_rows": 40917,
+        "train_positives": 16836,
+        "holdout_rows": 7960,
+        "added_coverage": {}
+      },
+      "arms": {
+        "−보행곤란": {
+          "delta_auroc": -0.0,
+          "ci_low": -0.0006,
+          "ci_high": 0.0005,
+          "two_sided_crossing": 0.892,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8004,
+          "n_features": 15,
+          "train_rows": 40917,
+          "train_positives": 16836,
+          "holdout_rows": 7960,
+          "added_coverage": {},
+          "undiagnosed": {
+            "delta_auroc": 0.0005,
+            "ci_low": -0.001,
+            "ci_high": 0.0017,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7254
+          }
+        },
+        "+폐경": {
+          "delta_auroc": -0.0002,
+          "ci_low": -0.001,
+          "ci_high": 0.0007,
+          "two_sided_crossing": 0.742,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8003,
+          "n_features": 18,
+          "train_rows": 40917,
+          "train_positives": 16836,
+          "holdout_rows": 7960,
+          "added_coverage": {
+            "postmenopausal": 0.367,
+            "age_at_last_period": 0.228
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0001,
+            "ci_low": -0.0022,
+            "ci_high": 0.002,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7249
+          }
+        },
+        "+체중변화": {
+          "delta_auroc": 0.0012,
+          "ci_low": 0.0001,
+          "ci_high": 0.0024,
+          "two_sided_crossing": 0.034,
+          "verdict": "유의",
+          "auroc": 0.8017,
+          "n_features": 17,
+          "train_rows": 40917,
+          "train_positives": 16836,
+          "holdout_rows": 7960,
+          "added_coverage": {
+            "weight_change_1yr_pct": 0.972
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0007,
+            "ci_low": -0.0033,
+            "ci_high": 0.002,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7242
+          }
+        },
+        "+신장질환문진": {
+          "delta_auroc": 0.0019,
+          "ci_low": 0.0005,
+          "ci_high": 0.0033,
+          "two_sided_crossing": 0.01,
+          "verdict": "유의",
+          "auroc": 0.8024,
+          "n_features": 17,
+          "train_rows": 40917,
+          "train_positives": 16836,
+          "holdout_rows": 7960,
+          "added_coverage": {
+            "dx_kidney": 0.978
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0018,
+            "ci_low": -0.0041,
+            "ci_high": 0.0008,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7232
+          }
+        },
+        "+기왕력": {
+          "delta_auroc": 0.0059,
+          "ci_low": 0.0036,
+          "ci_high": 0.0083,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.8064,
+          "n_features": 19,
+          "train_rows": 40917,
+          "train_positives": 16836,
+          "holdout_rows": 7960,
+          "added_coverage": {
+            "dx_stroke": 0.977,
+            "dx_heart_disease": 0.978,
+            "dx_diabetes": 1.0
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0018,
+            "ci_low": -0.0053,
+            "ci_high": 0.0018,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7231
+          }
+        },
+        "+전부": {
+          "delta_auroc": 0.0077,
+          "ci_low": 0.0052,
+          "ci_high": 0.0104,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.8082,
+          "n_features": 22,
+          "train_rows": 40917,
+          "train_positives": 16836,
+          "holdout_rows": 7960,
+          "added_coverage": {
+            "postmenopausal": 0.367,
+            "age_at_last_period": 0.228,
+            "weight_change_1yr_pct": 0.972,
+            "dx_kidney": 0.978,
+            "dx_stroke": 0.977,
+            "dx_heart_disease": 0.978,
+            "dx_diabetes": 1.0
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0026,
+            "ci_low": -0.0073,
+            "ci_high": 0.0021,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7223
+          }
+        }
+      },
+      "undiagnosed": {
+        "n": 5010,
+        "positives": 388,
+        "base_auroc": 0.725
+      }
+    },
+    {
+      "target": "htn",
+      "name": "고혈압",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8125,
+      "base": {
+        "n_features": 44,
+        "train_rows": 36766,
+        "train_positives": 15187,
+        "holdout_rows": 5556,
+        "added_coverage": {}
+      },
+      "arms": {
+        "−보행곤란": {
+          "delta_auroc": -0.0005,
+          "ci_low": -0.0014,
+          "ci_high": 0.0005,
+          "two_sided_crossing": 0.326,
+          "verdict": "구분 안 됨",
+          "auroc": 0.812,
+          "n_features": 43,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {},
+          "undiagnosed": {
+            "delta_auroc": -0.0015,
+            "ci_low": -0.0036,
+            "ci_high": 0.0005,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7309
+          }
+        },
+        "+폐경": {
+          "delta_auroc": -0.0006,
+          "ci_low": -0.0017,
+          "ci_high": 0.0004,
+          "two_sided_crossing": 0.266,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8118,
+          "n_features": 46,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {
+            "postmenopausal": 0.474,
+            "age_at_last_period": 0.297
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0022,
+            "ci_low": -0.0046,
+            "ci_high": 0.0001,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7302
+          }
+        },
+        "+체중변화": {
+          "delta_auroc": 0.0003,
+          "ci_low": -0.001,
+          "ci_high": 0.0016,
+          "two_sided_crossing": 0.62,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8128,
+          "n_features": 45,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {
+            "weight_change_1yr_pct": 0.979
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0022,
+            "ci_low": -0.0049,
+            "ci_high": 0.0002,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7302
+          }
+        },
+        "+신장질환문진": {
+          "delta_auroc": 0.0005,
+          "ci_low": -0.0005,
+          "ci_high": 0.0016,
+          "two_sided_crossing": 0.286,
+          "verdict": "구분 안 됨",
+          "auroc": 0.813,
+          "n_features": 45,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {
+            "dx_kidney": 0.981
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0015,
+            "ci_low": -0.0039,
+            "ci_high": 0.0009,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7309
+          }
+        },
+        "+기왕력": {
+          "delta_auroc": 0.0012,
+          "ci_low": -0.0003,
+          "ci_high": 0.0027,
+          "two_sided_crossing": 0.132,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8137,
+          "n_features": 47,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {
+            "dx_stroke": 0.981,
+            "dx_heart_disease": 0.981,
+            "dx_diabetes": 1.0
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0025,
+            "ci_low": -0.0053,
+            "ci_high": 0.0001,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7299
+          }
+        },
+        "+전부": {
+          "delta_auroc": 0.0027,
+          "ci_low": 0.001,
+          "ci_high": 0.0044,
+          "two_sided_crossing": 0.004,
+          "verdict": "유의",
+          "auroc": 0.8151,
+          "n_features": 50,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {
+            "postmenopausal": 0.474,
+            "age_at_last_period": 0.297,
+            "weight_change_1yr_pct": 0.979,
+            "dx_kidney": 0.981,
+            "dx_stroke": 0.981,
+            "dx_heart_disease": 0.981,
+            "dx_diabetes": 1.0
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0015,
+            "ci_low": -0.0048,
+            "ci_high": 0.0016,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7309
+          }
+        }
+      },
+      "undiagnosed": {
+        "n": 3495,
+        "positives": 349,
+        "base_auroc": 0.7324
+      }
+    },
+    {
+      "target": "dlp",
+      "name": "이상지질혈증",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.7493,
+      "base": {
+        "n_features": 18,
+        "train_rows": 40265,
+        "train_positives": 19836,
+        "holdout_rows": 7962,
+        "added_coverage": {}
+      },
+      "arms": {
+        "−보행곤란": {
+          "delta_auroc": 0.0011,
+          "ci_low": 0.0002,
+          "ci_high": 0.002,
+          "two_sided_crossing": 0.016,
+          "verdict": "유의",
+          "auroc": 0.7504,
+          "n_features": 17,
+          "train_rows": 40265,
+          "train_positives": 19836,
+          "holdout_rows": 7962,
+          "added_coverage": {},
+          "undiagnosed": {
+            "delta_auroc": -0.0008,
+            "ci_low": -0.0024,
+            "ci_high": 0.0009,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6899
+          }
+        },
+        "+폐경": {
+          "delta_auroc": -0.0006,
+          "ci_low": -0.002,
+          "ci_high": 0.0007,
+          "two_sided_crossing": 0.346,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7486,
+          "n_features": 20,
+          "train_rows": 40265,
+          "train_positives": 19836,
+          "holdout_rows": 7962,
+          "added_coverage": {
+            "postmenopausal": 0.367,
+            "age_at_last_period": 0.228
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0012,
+            "ci_low": -0.0015,
+            "ci_high": 0.0039,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6919
+          }
+        },
+        "+체중변화": {
+          "delta_auroc": 0.0006,
+          "ci_low": -0.0003,
+          "ci_high": 0.0017,
+          "two_sided_crossing": 0.206,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7499,
+          "n_features": 19,
+          "train_rows": 40265,
+          "train_positives": 19836,
+          "holdout_rows": 7962,
+          "added_coverage": {
+            "weight_change_1yr_pct": 0.972
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0003,
+            "ci_low": -0.0016,
+            "ci_high": 0.0021,
+            "verdict": "구분 안 됨",
+            "auroc": 0.691
+          }
+        },
+        "+신장질환문진": {
+          "delta_auroc": 0.0005,
+          "ci_low": -0.0005,
+          "ci_high": 0.0016,
+          "two_sided_crossing": 0.302,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7498,
+          "n_features": 19,
+          "train_rows": 40265,
+          "train_positives": 19836,
+          "holdout_rows": 7962,
+          "added_coverage": {
+            "dx_kidney": 0.978
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0011,
+            "ci_low": -0.0029,
+            "ci_high": 0.001,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6896
+          }
+        },
+        "+기왕력": {
+          "delta_auroc": 0.0168,
+          "ci_low": 0.0124,
+          "ci_high": 0.0209,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.7661,
+          "n_features": 22,
+          "train_rows": 40265,
+          "train_positives": 19836,
+          "holdout_rows": 7962,
+          "added_coverage": {
+            "dx_stroke": 0.977,
+            "dx_heart_disease": 0.978,
+            "dx_diabetes": 1.0,
+            "dx_hypertension": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0066,
+            "ci_low": -0.0127,
+            "ci_high": 0.0002,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6841
+          }
+        },
+        "+전부": {
+          "delta_auroc": 0.0171,
+          "ci_low": 0.0128,
+          "ci_high": 0.0214,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.7663,
+          "n_features": 25,
+          "train_rows": 40265,
+          "train_positives": 19836,
+          "holdout_rows": 7962,
+          "added_coverage": {
+            "postmenopausal": 0.367,
+            "age_at_last_period": 0.228,
+            "weight_change_1yr_pct": 0.972,
+            "dx_kidney": 0.978,
+            "dx_stroke": 0.977,
+            "dx_heart_disease": 0.978,
+            "dx_diabetes": 1.0,
+            "dx_hypertension": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0062,
+            "ci_low": -0.0124,
+            "ci_high": 0.0004,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6845
+          }
+        }
+      },
+      "undiagnosed": {
+        "n": 4886,
+        "positives": 683,
+        "base_auroc": 0.6907
+      }
+    },
+    {
+      "target": "dlp",
+      "name": "이상지질혈증",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.7531,
+      "base": {
+        "n_features": 31,
+        "train_rows": 36765,
+        "train_positives": 18657,
+        "holdout_rows": 5540,
+        "added_coverage": {}
+      },
+      "arms": {
+        "−보행곤란": {
+          "delta_auroc": -0.0011,
+          "ci_low": -0.0024,
+          "ci_high": 0.0002,
+          "two_sided_crossing": 0.096,
+          "verdict": "구분 안 됨",
+          "auroc": 0.752,
+          "n_features": 30,
+          "train_rows": 36765,
+          "train_positives": 18657,
+          "holdout_rows": 5540,
+          "added_coverage": {},
+          "undiagnosed": {
+            "delta_auroc": -0.0009,
+            "ci_low": -0.0031,
+            "ci_high": 0.0015,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6797
+          }
+        },
+        "+폐경": {
+          "delta_auroc": -0.0009,
+          "ci_low": -0.0029,
+          "ci_high": 0.0009,
+          "two_sided_crossing": 0.33,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7521,
+          "n_features": 33,
+          "train_rows": 36765,
+          "train_positives": 18657,
+          "holdout_rows": 5540,
+          "added_coverage": {
+            "postmenopausal": 0.474,
+            "age_at_last_period": 0.297
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0023,
+            "ci_low": -0.0008,
+            "ci_high": 0.0053,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6829
+          }
+        },
+        "+체중변화": {
+          "delta_auroc": -0.0004,
+          "ci_low": -0.0019,
+          "ci_high": 0.0012,
+          "two_sided_crossing": 0.632,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7527,
+          "n_features": 32,
+          "train_rows": 36765,
+          "train_positives": 18657,
+          "holdout_rows": 5540,
+          "added_coverage": {
+            "weight_change_1yr_pct": 0.979
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0007,
+            "ci_low": -0.0029,
+            "ci_high": 0.0017,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6799
+          }
+        },
+        "+신장질환문진": {
+          "delta_auroc": -0.0005,
+          "ci_low": -0.0019,
+          "ci_high": 0.0009,
+          "two_sided_crossing": 0.512,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7526,
+          "n_features": 32,
+          "train_rows": 36765,
+          "train_positives": 18657,
+          "holdout_rows": 5540,
+          "added_coverage": {
+            "dx_kidney": 0.981
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0003,
+            "ci_low": -0.0019,
+            "ci_high": 0.0026,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6809
+          }
+        },
+        "+기왕력": {
+          "delta_auroc": 0.0026,
+          "ci_low": -0.0013,
+          "ci_high": 0.0062,
+          "two_sided_crossing": 0.214,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7557,
+          "n_features": 35,
+          "train_rows": 36765,
+          "train_positives": 18657,
+          "holdout_rows": 5540,
+          "added_coverage": {
+            "dx_stroke": 0.981,
+            "dx_heart_disease": 0.981,
+            "dx_diabetes": 1.0,
+            "dx_hypertension": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0073,
+            "ci_low": -0.0125,
+            "ci_high": -0.002,
+            "verdict": "유의",
+            "auroc": 0.6732
+          }
+        },
+        "+전부": {
+          "delta_auroc": 0.0031,
+          "ci_low": -0.0012,
+          "ci_high": 0.007,
+          "two_sided_crossing": 0.15,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7561,
+          "n_features": 38,
+          "train_rows": 36765,
+          "train_positives": 18657,
+          "holdout_rows": 5540,
+          "added_coverage": {
+            "postmenopausal": 0.474,
+            "age_at_last_period": 0.297,
+            "weight_change_1yr_pct": 0.979,
+            "dx_kidney": 0.981,
+            "dx_stroke": 0.981,
+            "dx_heart_disease": 0.981,
+            "dx_diabetes": 1.0,
+            "dx_hypertension": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0063,
+            "ci_low": -0.0114,
+            "ci_high": -0.0008,
+            "verdict": "유의",
+            "auroc": 0.6742
+          }
+        }
+      },
+      "undiagnosed": {
+        "n": 3276,
+        "positives": 678,
+        "base_auroc": 0.6805
+      }
+    }
+  ]
+}

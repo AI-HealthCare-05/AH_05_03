@@ -34,7 +34,7 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 from sklearn.neighbors import NearestNeighbors
 from splits import SEED, make_split
 from targets import CATEGORICAL, DERIVED, LAB_FEATURES, TARGETS
-from train_multi import DATA, build_frame, lab_present, make_pipeline, monotone_vector
+from train_multi import DATA, build_frame, lab_present, make_pipeline, monotone_for
 
 ROOT = Path(__file__).resolve().parent
 ARTIFACTS = ROOT / "artifacts"
@@ -112,7 +112,7 @@ def run_augment(data: pd.DataFrame, key: str, tier: str, model: str, ratios: lis
 
     numeric = [c for c in columns if c not in CATEGORICAL]
     categorical = [c for c in columns if c in CATEGORICAL]
-    monotone = monotone_vector(frame, numeric, categorical) if model == "xgboost" else None
+    monotone = monotone_for(model, frame, numeric, categorical, target.key)
 
     x_train = frame.loc[split.train_index]
     y_train = y.loc[split.train_index].to_numpy()

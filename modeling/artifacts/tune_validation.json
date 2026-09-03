@@ -1,0 +1,742 @@
+[
+  {
+    "target": "dm",
+    "name": "당뇨",
+    "tier": "basic",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 16,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 3,
+      "min_child_weight": 25,
+      "n_estimators": 400,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.8142,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.8159,
+    "holdout_auroc_chosen": 0.817,
+    "holdout_ece_current": 0.0107,
+    "holdout_ece_chosen": 0.0109,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        2.64,
+        0.817
+      ]
+    },
+    "delta_delta_auroc": 0.0011,
+    "delta_ci_low": -0.0003,
+    "delta_ci_high": 0.0025,
+    "delta_two_sided_crossing": 0.142,
+    "delta_verdict": "구분 안 됨"
+  },
+  {
+    "target": "dm",
+    "name": "당뇨",
+    "tier": "lab",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 32,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 400,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.8604,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.8691,
+    "holdout_auroc_chosen": 0.8715,
+    "holdout_ece_current": 0.0211,
+    "holdout_ece_chosen": 0.0236,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        3.37,
+        0.8715
+      ]
+    },
+    "delta_delta_auroc": 0.0024,
+    "delta_ci_low": 0.0007,
+    "delta_ci_high": 0.0042,
+    "delta_two_sided_crossing": 0.006,
+    "delta_verdict": "유의"
+  },
+  {
+    "target": "htn",
+    "name": "고혈압",
+    "tier": "basic",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 14,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 4,
+      "min_child_weight": 10,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.8245,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.8005,
+    "holdout_auroc_chosen": 0.8001,
+    "holdout_ece_current": 0.0332,
+    "holdout_ece_chosen": 0.0316,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        1.7,
+        0.8001
+      ]
+    },
+    "delta_delta_auroc": -0.0004,
+    "delta_ci_low": -0.0013,
+    "delta_ci_high": 0.0006,
+    "delta_two_sided_crossing": 0.464,
+    "delta_verdict": "구분 안 됨"
+  },
+  {
+    "target": "htn",
+    "name": "고혈압",
+    "tier": "lab",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 32,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 5,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.8483,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.8123,
+    "holdout_auroc_chosen": 0.8145,
+    "holdout_ece_current": 0.0335,
+    "holdout_ece_chosen": 0.0319,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        1.73,
+        0.8145
+      ]
+    },
+    "delta_delta_auroc": 0.0022,
+    "delta_ci_low": 0.0005,
+    "delta_ci_high": 0.0038,
+    "delta_two_sided_crossing": 0.008,
+    "delta_verdict": "유의"
+  },
+  {
+    "target": "dlp",
+    "name": "이상지질혈증",
+    "tier": "basic",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 16,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 4,
+      "min_child_weight": 25,
+      "n_estimators": 400,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.7385,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.7509,
+    "holdout_auroc_chosen": 0.7498,
+    "holdout_ece_current": 0.0356,
+    "holdout_ece_chosen": 0.0249,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        1.46,
+        0.7498
+      ]
+    },
+    "delta_delta_auroc": -0.0011,
+    "delta_ci_low": -0.0036,
+    "delta_ci_high": 0.0015,
+    "delta_two_sided_crossing": 0.42,
+    "delta_verdict": "구분 안 됨"
+  },
+  {
+    "target": "dlp",
+    "name": "이상지질혈증",
+    "tier": "lab",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 28,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 5,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.7464,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.7527,
+    "holdout_auroc_chosen": 0.7562,
+    "holdout_ece_current": 0.0335,
+    "holdout_ece_chosen": 0.0312,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        1.41,
+        0.7562
+      ]
+    },
+    "delta_delta_auroc": 0.0035,
+    "delta_ci_low": 0.0008,
+    "delta_ci_high": 0.0063,
+    "delta_two_sided_crossing": 0.006,
+    "delta_verdict": "유의"
+  },
+  {
+    "target": "hyperchol",
+    "name": "고LDL콜레스테롤혈증",
+    "tier": "basic",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 16,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 5,
+      "min_child_weight": 10,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.6828,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.6931,
+    "holdout_auroc_chosen": 0.6883,
+    "holdout_ece_current": 0.0163,
+    "holdout_ece_chosen": 0.0137,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        1.83,
+        0.6883
+      ]
+    },
+    "delta_delta_auroc": -0.0048,
+    "delta_ci_low": -0.0116,
+    "delta_ci_high": 0.002,
+    "delta_two_sided_crossing": 0.15,
+    "delta_verdict": "구분 안 됨"
+  },
+  {
+    "target": "hyperchol",
+    "name": "고LDL콜레스테롤혈증",
+    "tier": "lab",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 28,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 3,
+      "min_child_weight": 10,
+      "n_estimators": 400,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.7388,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.7388,
+    "holdout_auroc_chosen": 0.7391,
+    "holdout_ece_current": 0.0192,
+    "holdout_ece_chosen": 0.0134,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        2.18,
+        0.7391
+      ]
+    },
+    "delta_delta_auroc": 0.0003,
+    "delta_ci_low": -0.0048,
+    "delta_ci_high": 0.0049,
+    "delta_two_sided_crossing": 0.924,
+    "delta_verdict": "구분 안 됨"
+  },
+  {
+    "target": "hypertg",
+    "name": "고중성지방혈증",
+    "tier": "basic",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 16,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 3,
+      "min_child_weight": 10,
+      "n_estimators": 400,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.7198,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.722,
+    "holdout_auroc_chosen": 0.7149,
+    "holdout_ece_current": 0.0152,
+    "holdout_ece_chosen": 0.0178,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        1.99,
+        0.7149
+      ]
+    },
+    "delta_delta_auroc": -0.0071,
+    "delta_ci_low": -0.017,
+    "delta_ci_high": 0.0029,
+    "delta_two_sided_crossing": 0.166,
+    "delta_verdict": "구분 안 됨"
+  },
+  {
+    "target": "hypertg",
+    "name": "고중성지방혈증",
+    "tier": "lab",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 28,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 5,
+      "min_child_weight": 50,
+      "n_estimators": 400,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.776,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.7587,
+    "holdout_auroc_chosen": 0.7521,
+    "holdout_ece_current": 0.0154,
+    "holdout_ece_chosen": 0.0179,
+    "gate_chosen": {
+      "calibration_ok": false,
+      "rejected_for": [
+        "보정 기울기 0.78 가 [0.8, 1.25] 밖"
+      ],
+      "rank_key": [
+        false,
+        2.66,
+        0.7521
+      ]
+    },
+    "delta_delta_auroc": -0.0066,
+    "delta_ci_low": -0.0176,
+    "delta_ci_high": 0.0038,
+    "delta_two_sided_crossing": 0.196,
+    "delta_verdict": "구분 안 됨"
+  },
+  {
+    "target": "low_hdl",
+    "name": "낮은 HDL 콜레스테롤",
+    "tier": "basic",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 16,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 5,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.7621,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.7861,
+    "holdout_auroc_chosen": 0.7827,
+    "holdout_ece_current": 0.0456,
+    "holdout_ece_chosen": 0.0434,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        2.69,
+        0.7827
+      ]
+    },
+    "delta_delta_auroc": -0.0034,
+    "delta_ci_low": -0.0069,
+    "delta_ci_high": -0.0001,
+    "delta_two_sided_crossing": 0.042,
+    "delta_verdict": "유의"
+  },
+  {
+    "target": "low_hdl",
+    "name": "낮은 HDL 콜레스테롤",
+    "tier": "lab",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 28,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 4,
+      "min_child_weight": 25,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.7857,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.8074,
+    "holdout_auroc_chosen": 0.8095,
+    "holdout_ece_current": 0.0398,
+    "holdout_ece_chosen": 0.0384,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        3.0,
+        0.8095
+      ]
+    },
+    "delta_delta_auroc": 0.0021,
+    "delta_ci_low": -0.0013,
+    "delta_ci_high": 0.005,
+    "delta_two_sided_crossing": 0.216,
+    "delta_verdict": "구분 안 됨"
+  },
+  {
+    "target": "mets",
+    "name": "대사증후군",
+    "tier": "basic",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 12,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 5,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.825,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.8278,
+    "holdout_auroc_chosen": 0.8311,
+    "holdout_ece_current": 0.0274,
+    "holdout_ece_chosen": 0.0207,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        1.89,
+        0.8311
+      ]
+    },
+    "delta_delta_auroc": 0.0033,
+    "delta_ci_low": 0.0019,
+    "delta_ci_high": 0.0047,
+    "delta_two_sided_crossing": 0.0,
+    "delta_verdict": "유의"
+  },
+  {
+    "target": "mets",
+    "name": "대사증후군",
+    "tier": "lab",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 22,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 3,
+      "min_child_weight": 10,
+      "n_estimators": 400,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.8396,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.8316,
+    "holdout_auroc_chosen": 0.8322,
+    "holdout_ece_current": 0.016,
+    "holdout_ece_chosen": 0.0099,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        1.73,
+        0.8322
+      ]
+    },
+    "delta_delta_auroc": 0.0006,
+    "delta_ci_low": -0.0008,
+    "delta_ci_high": 0.0021,
+    "delta_two_sided_crossing": 0.37,
+    "delta_verdict": "구분 안 됨"
+  },
+  {
+    "target": "ckd",
+    "name": "신기능 확인 필요",
+    "tier": "basic",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 16,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 4,
+      "min_child_weight": 25,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.7766,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.791,
+    "holdout_auroc_chosen": 0.7913,
+    "holdout_ece_current": 0.0167,
+    "holdout_ece_chosen": 0.0137,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        2.66,
+        0.7913
+      ]
+    },
+    "delta_delta_auroc": 0.0003,
+    "delta_ci_low": -0.0015,
+    "delta_ci_high": 0.0022,
+    "delta_two_sided_crossing": 0.744,
+    "delta_verdict": "구분 안 됨"
+  },
+  {
+    "target": "ckd",
+    "name": "신기능 확인 필요",
+    "tier": "lab",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 31,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 4,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.8134,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.8214,
+    "holdout_auroc_chosen": 0.8224,
+    "holdout_ece_current": 0.0173,
+    "holdout_ece_chosen": 0.0146,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        3.21,
+        0.8224
+      ]
+    },
+    "delta_delta_auroc": 0.001,
+    "delta_ci_low": -0.0006,
+    "delta_ci_high": 0.0028,
+    "delta_two_sided_crossing": 0.226,
+    "delta_verdict": "구분 안 됨"
+  },
+  {
+    "target": "anemia",
+    "name": "빈혈",
+    "tier": "basic",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 16,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 5,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.758,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.7185,
+    "holdout_auroc_chosen": 0.7231,
+    "holdout_ece_current": 0.0227,
+    "holdout_ece_chosen": 0.0259,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        2.28,
+        0.7231
+      ]
+    },
+    "delta_delta_auroc": 0.0046,
+    "delta_ci_low": -0.0003,
+    "delta_ci_high": 0.0097,
+    "delta_two_sided_crossing": 0.062,
+    "delta_verdict": "구분 안 됨"
+  },
+  {
+    "target": "anemia",
+    "name": "빈혈",
+    "tier": "lab",
+    "select": "validation",
+    "validation_cycle": "2017_2018",
+    "holdout_cycle": "2021_2023",
+    "n_features": 33,
+    "grid": 24,
+    "chosen": {
+      "max_depth": 4,
+      "min_child_weight": 10,
+      "n_estimators": 400,
+      "learning_rate": 0.05
+    },
+    "chosen_validation_auroc": 0.8471,
+    "current": {
+      "max_depth": 3,
+      "min_child_weight": 50,
+      "n_estimators": 200,
+      "learning_rate": 0.05
+    },
+    "holdout_auroc_current": 0.8187,
+    "holdout_auroc_chosen": 0.8231,
+    "holdout_ece_current": 0.0128,
+    "holdout_ece_chosen": 0.0099,
+    "gate_chosen": {
+      "calibration_ok": true,
+      "rejected_for": [],
+      "rank_key": [
+        true,
+        3.96,
+        0.8231
+      ]
+    },
+    "delta_delta_auroc": 0.0044,
+    "delta_ci_low": -0.001,
+    "delta_ci_high": 0.0104,
+    "delta_two_sided_crossing": 0.098,
+    "delta_verdict": "구분 안 됨"
+  }
+]

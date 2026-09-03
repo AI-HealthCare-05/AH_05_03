@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "data"))
 from sklearn.metrics import roc_auc_score
 from splits import SEED, make_split
 from targets import CATEGORICAL, DERIVED, TARGETS, Target
-from train_multi import DATA, build_frame, lab_present, make_pipeline, monotone_vector
+from train_multi import DATA, build_frame, lab_present, make_pipeline, monotone_for
 
 ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
 
@@ -64,7 +64,7 @@ def fit_and_score(
 
     numeric = [c for c in columns if c not in CATEGORICAL]
     categorical = [c for c in columns if c in CATEGORICAL]
-    monotone = monotone_vector(frame, numeric, categorical) if model == "xgboost" else None
+    monotone = monotone_for(model, frame, numeric, categorical, target.key)
     pipeline = make_pipeline(numeric, categorical, model, monotone).fit(
         frame.loc[split.train_index], y.loc[split.train_index]
     )

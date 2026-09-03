@@ -97,7 +97,7 @@ def main() -> int:
 
             numeric = [c for c in columns if c not in CATEGORICAL]
             categorical = [c for c in columns if c in CATEGORICAL]
-            monotone = monotone_vector(frame, numeric, categorical)
+            monotone = monotone_vector(frame, numeric, categorical, target.key)
             x_train, y_train = frame.loc[split.train_index], y.loc[split.train_index]
             x_holdout = frame.loc[split.holdout_index]
 

@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "data"))
 from compare_tiers import paired_bootstrap
 from splits import make_split
 from targets import CATEGORICAL, DERIVED, NEW_INDICES, TARGETS, Target, enable_indices
-from train_multi import DATA, build_frame, lab_present, make_pipeline, monotone_vector
+from train_multi import DATA, build_frame, lab_present, make_pipeline, monotone_for
 
 ARTIFACTS = Path(__file__).resolve().parent / "artifacts"
 
@@ -99,6 +99,9 @@ PRESETS: dict[str, tuple[str, list[tuple[str, tuple[str, ...], tuple[str, ...]]]
             ("+체중변화", WEIGHT_CHANGE, ()),
             ("+신장질환문진", KIDNEY_DX, ()),
             ("+기왕력", COMORBIDITY, ()),
+            # 배포 후보. 25번 §8 의 1·2 번을 합친 것이고 **묻는 것이 안 늘어난다** —
+            # 체중변화는 이미 기록하는 값에서 계산하고 보행곤란은 문항을 하나 지운다.
+            ("−보행곤란+체중변화", WEIGHT_CHANGE, ("difficulty_walking",)),
             ("+전부", MENOPAUSE + WEIGHT_CHANGE + KIDNEY_DX + COMORBIDITY, ("difficulty_walking",)),
         ],
     ),
@@ -127,7 +130,7 @@ def arm_columns(target: Target, tier: str, add: tuple[str, ...], drop: tuple[str
 
 def fit_arm(
     data: pd.DataFrame, target: Target, tier: str, model: str, columns: list[str], rows: pd.Index
-) -> tuple[np.ndarray, np.ndarray, dict[str, Any]] | None:
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any], pd.Index] | None:
     subset = data.loc[rows]
     frame = build_frame(subset, columns)
     y = subset[target.label].astype("boolean").astype(int)
@@ -145,7 +148,7 @@ def fit_arm(
 
     numeric = [c for c in columns if c not in CATEGORICAL]
     categorical = [c for c in columns if c in CATEGORICAL]
-    monotone = monotone_vector(frame, numeric, categorical) if model == "xgboost" else None
+    monotone = monotone_for(model, frame, numeric, categorical, target.key)
     pipeline = make_pipeline(numeric, categorical, model, monotone).fit(
         frame.loc[split.train_index], y.loc[split.train_index]
     )
@@ -160,7 +163,81 @@ def fit_arm(
             c: round(float(subset.loc[split.holdout_index, c].notna().mean()), 3) for c in columns if c in ADDED
         },
     }
-    return y.loc[split.holdout_index].to_numpy(), probability, meta
+    # 홀드아웃 색인을 같이 돌려준다. 팔마다 같은 행을 채점하므로 미진단자 마스크를
+    # 한 번만 만들어 전 팔에 그대로 쓸 수 있다.
+    return y.loc[split.holdout_index].to_numpy(), probability, meta, split.holdout_index
+
+
+def undiagnosed_subset(
+    data: pd.DataFrame, target: Target, holdout_index: pd.Index, prevalent: np.ndarray
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """미진단자 채점용 (라벨, 마스크). 규칙은 `train_multi.run_one` 과 같아야 한다.
+
+    남기는 집합은 **음성 + 미진단 양성** 이고 진단받은 양성은 통째로 뺀다. 이미
+    진단받은 사람을 맞히는 것은 쉽고 제품에 값어치가 없다 — 찾아야 하는 사람은
+    자기가 그 질환인 줄 모르는 사람이다.
+
+    두 리포트의 숫자를 나란히 놓으려면 규칙이 한 글자도 달라지면 안 된다.
+    """
+    column = target.undiagnosed_label
+    if not column or column not in data.columns:
+        return None
+    undiagnosed = data.loc[holdout_index, column].astype("boolean")
+    keep = (undiagnosed.notna() & ~(pd.Series(prevalent, index=holdout_index).eq(1) & undiagnosed.ne(True))).to_numpy()
+    if keep.sum() < 500 or int(undiagnosed[keep].sum()) < MIN_HOLDOUT_POSITIVES:
+        return None
+    return undiagnosed[keep].astype(int).to_numpy(), keep
+
+
+def undiagnosed_header(
+    target: Target, undiagnosed: tuple[np.ndarray, np.ndarray] | None, base_probability: np.ndarray
+) -> dict[str, Any]:
+    """미진단자 축의 머리말. 없으면 왜 없는지를 남긴다 — 빈칸은 "재 봤더니 아무것도
+    없었다" 로도 읽힌다."""
+    from sklearn.metrics import roc_auc_score
+
+    if undiagnosed is None:
+        note = "이 타깃에는 미진단 라벨이 없다" if not target.undiagnosed_label else "미진단자 표본이 부족하다"
+        return {"undiagnosed": None, "undiagnosed_note": note}
+    labels, keep = undiagnosed
+    return {
+        "undiagnosed": {
+            "n": int(keep.sum()),
+            "positives": int(labels.sum()),
+            "base_auroc": round(float(roc_auc_score(labels, base_probability[keep])), 4),
+        }
+    }
+
+
+def compare_arm(
+    y: np.ndarray,
+    base_probability: np.ndarray,
+    probability: np.ndarray,
+    meta: dict[str, Any],
+    undiagnosed: tuple[np.ndarray, np.ndarray] | None,
+    rounds: int,
+) -> dict[str, Any]:
+    """한 팔을 전체 홀드아웃과 미진단자 부분집합 **두 곳에서** 잰다.
+
+    전체에서 오르는데 미진단자에서 안 오르면 그 피처는 이미 진단받은 사람을 다시
+    맞힌 것이다. 25번 문서 §8 이 기왕력·신장문진을 두고 남긴 물음이 이것이고,
+    성능이 오른다는 사실과 써도 된다는 판단은 별개라는 것이 그 문서의 결론이다.
+    """
+    from sklearn.metrics import roc_auc_score
+
+    comparison: dict[str, Any] = dict(paired_bootstrap(y, base_probability, probability, rounds))
+    comparison.update({"auroc": round(float(roc_auc_score(y, probability)), 4), **meta})
+    if undiagnosed is not None:
+        labels, keep = undiagnosed
+        inner = paired_bootstrap(labels, base_probability[keep], probability[keep], rounds)
+        comparison["undiagnosed"] = {
+            "delta_auroc": inner["delta_auroc"],
+            "ci_low": inner["ci_low"],
+            "ci_high": inner["ci_high"],
+            "verdict": inner["verdict"],
+            "auroc": round(float(roc_auc_score(labels, probability[keep])), 4),
+        }
+    return comparison
 
 
 def run_target(
@@ -184,7 +261,7 @@ def run_target(
         return None
     base_columns = arm_columns(target, tier, base_spec[1], base_spec[2])
 
-    scored: dict[str, tuple[np.ndarray, np.ndarray, dict[str, Any]]] = {}
+    scored: dict[str, tuple[np.ndarray, np.ndarray, dict[str, Any], pd.Index]] = {}
     for name, add, drop in arms:
         columns = arm_columns(target, tier, add, drop)
         # 이 타깃에서 base 와 같은 열이 되는 팔은 돌리지 않는다. 지수 프리셋에서는
@@ -197,8 +274,11 @@ def run_target(
     if "base" not in scored:
         return None
 
-    y, base_probability, base_meta = scored["base"]
+    y, base_probability, base_meta, holdout_index = scored["base"]
     from sklearn.metrics import roc_auc_score
+
+    # 미진단자 축. 없는 타깃(신기능·지방간 등)에서는 `None` 이고 그 사실이 응답에 남는다.
+    undiagnosed = undiagnosed_subset(data, target, holdout_index, y)
 
     entry: dict[str, Any] = {
         "target": target.key,
@@ -210,12 +290,11 @@ def run_target(
         "base": base_meta,
         "arms": {},
     }
-    for name, (_y, probability, meta) in scored.items():
+    entry.update(undiagnosed_header(target, undiagnosed, base_probability))
+    for name, (_y, probability, meta, _index) in scored.items():
         if name == "base":
             continue
-        comparison = paired_bootstrap(y, base_probability, probability, rounds)
-        comparison.update({"auroc": round(float(roc_auc_score(y, probability)), 4), **meta})
-        entry["arms"][name] = comparison
+        entry["arms"][name] = compare_arm(y, base_probability, probability, meta, undiagnosed, rounds)
     return entry
 
 
