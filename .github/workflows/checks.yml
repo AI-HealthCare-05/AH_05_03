@@ -239,6 +239,21 @@ jobs:
           fi
           echo "${docker_cli_dir}" >> "$GITHUB_PATH"
 
+      - name: Persist Gemini API key on the admin Mac
+        shell: bash
+        run: |
+          set -euo pipefail
+          env_file="${IEOBOM_ENV_FILE:-${HOME}/.config/ieobom/dev.env}"
+          mkdir -p "$(dirname "${env_file}")"
+          temp_file="$(mktemp "${env_file}.XXXXXX")"
+          if [[ -f "${env_file}" ]]; then
+            grep -v '^GEMINI_API_KEY=' "${env_file}" > "${temp_file}" || true
+          fi
+          printf 'GEMINI_API_KEY=%s\n' "${GEMINI_API_KEY}" >> "${temp_file}"
+          chmod 600 "${temp_file}"
+          mv "${temp_file}" "${env_file}"
+          echo "Gemini API key saved to the admin Mac deployment environment."
+
       - name: Deploy dev stack
         shell: bash
         timeout-minutes: 10
