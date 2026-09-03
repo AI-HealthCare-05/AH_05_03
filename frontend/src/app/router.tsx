@@ -11,6 +11,7 @@ import {
   ChallengePage,
   ChallengeSetupPage,
   DataManagementPage,
+  HealthDataPage,
   UiPreviewPage,
 } from "./lazyRoutes";
 import { RootLayout } from "./RootLayout";
@@ -64,6 +65,10 @@ export const router = createBrowserRouter([
       {
         path: "challenge/today",
         element: <ChallengePage />,
+      },
+      {
+        path: "health-data",
+        element: <HealthDataPage />,
       },
       {
         path: "data",

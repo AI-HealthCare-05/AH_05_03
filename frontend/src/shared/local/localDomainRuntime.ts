@@ -1,5 +1,6 @@
 import { IndexedDbEncryptedRecordRepository } from "./indexedDbEncryptedRecordRepository";
 import { LocalBackupService } from "./localBackupService";
+import { LocalChallengeService } from "./localChallengeService";
 import {
   LocalAccessGrantService,
   LocalDashboardService,
@@ -19,6 +20,7 @@ export interface LocalDomainRuntime {
   profiles: LocalProfileService;
   healthRecords: LocalHealthRecordService;
   dashboard: LocalDashboardService;
+  challenges: LocalChallengeService;
   familyHistories: LocalFamilyHistoryService;
   accessGrants: LocalAccessGrantService;
   profileMerges: LocalProfileMergeService;
@@ -58,6 +60,7 @@ export async function createLocalDomainRuntime(
     profiles,
     healthRecords,
     dashboard: new LocalDashboardService(healthRecords),
+    challenges: new LocalChallengeService(repository, cipher),
     familyHistories: new LocalFamilyHistoryService(repository, cipher),
     accessGrants: new LocalAccessGrantService(repository, cipher),
     profileMerges: new LocalProfileMergeService(repository, cipher),

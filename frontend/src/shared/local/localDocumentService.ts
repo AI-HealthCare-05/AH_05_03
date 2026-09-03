@@ -137,6 +137,25 @@ export class LocalDocumentService {
     return { ok: true, value: values.sort((left, right) => right.createdAt.localeCompare(left.createdAt)) };
   }
 
+  public async get(documentId: string): Promise<LocalResult<LocalDocument>> {
+    const record = await this.repository.get(documentId);
+    if (!record) return failure("문서 메타데이터를 찾을 수 없습니다.", false, "NOT_FOUND");
+    try {
+      const doc = await this.cipher.decrypt<LocalDocument>(record.encryptedPayload);
+      return { ok: true, value: doc };
+    } catch {
+      return failure("문서 메타데이터를 복호화하지 못했습니다.", false, "DECRYPTION_FAILED");
+    }
+  }
+
+  public async readById(documentId: string): Promise<LocalResult<{ file: Blob; fileName: string }>> {
+    const docRes = await this.get(documentId);
+    if (!docRes.ok) return docRes;
+    const blobRes = await this.read(docRes.value);
+    if (!blobRes.ok) return blobRes;
+    return { ok: true, value: { file: blobRes.value, fileName: docRes.value.fileName } };
+  }
+
   public async read(document: LocalDocument): Promise<LocalResult<Blob>> {
     const content = await this.files.read(document.id);
     if (!content) return failure("문서 원본을 찾을 수 없습니다.", false, "NOT_FOUND");

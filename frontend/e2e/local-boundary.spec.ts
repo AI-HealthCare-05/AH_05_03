@@ -17,8 +17,8 @@ test("프로필과 건강기록은 API 요청 없이 암호화 로컬 저장된�
 
   await expect(page.getByRole("heading", { name: "테스트 가족님의 건강기록" })).toBeVisible();
   await page.getByRole("button", { name: "건강기록 작성", exact: true }).first().click();
-  await page.getByRole("combobox", { name: "기록 종류" }).selectOption("note");
-  await page.getByRole("textbox", { name: "기록 내용" }).fill("오늘 컨디션이 좋음");
+  await page.getByRole("textbox", { name: "통증 부위" }).fill("어깨");
+  await page.getByRole("textbox", { name: "추가 메모" }).fill("오늘 컨디션이 좋음");
   await page.getByRole("button", { name: "기록 저장" }).click();
 
   await expect(page.getByText("오늘 컨디션이 좋음")).toBeVisible();

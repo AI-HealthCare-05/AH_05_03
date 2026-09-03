@@ -6,7 +6,9 @@ export type LocalRecordType =
   | "model-result"
   | "access-grant"
   | "merge-operation"
-  | "restore-point";
+  | "restore-point"
+  | "challenge-plan"
+  | "challenge-progress";
 
 export interface EncryptedValue {
   algorithm: "A256GCM";
