@@ -34,9 +34,6 @@ export function TodayChallengeCard({
     return (
       <div className="today-challenge-card is-empty">
         <div className="challenge-empty-content">
-          <div className="challenge-badge-icon" aria-hidden="true">
-            🌱
-          </div>
           <div className="challenge-empty-text">
             <span className="challenge-kicker">맞춤 생활습관 챌린지</span>
             <h2>{profileName}님의 맞춤 챌린지를 시작해 보세요</h2>
@@ -66,14 +63,14 @@ export function TodayChallengeCard({
             </span>
             {weeklyProgress && weeklyProgress.currentStreakDays > 0 ? (
               <span className="streak-badge" aria-label={`연속 달성 ${weeklyProgress.currentStreakDays}일`}>
-                🔥 {weeklyProgress.currentStreakDays}일 연속 달성
+                {weeklyProgress.currentStreakDays}일 연속 달성
               </span>
             ) : null}
-            {allCompleted ? <span className="today-done-badge">🎉 오늘 목표 달성!</span> : null}
+            {allCompleted ? <span className="today-done-badge">오늘 목표 달성!</span> : null}
           </div>
           <div className="challenge-title-group">
             <h2 id="today-challenge-heading">{plan.title}</h2>
-            <p className="challenge-goal">🎯 목표: {plan.goal}</p>
+            <p className="challenge-goal">목표: {plan.goal}</p>
           </div>
         </div>
 

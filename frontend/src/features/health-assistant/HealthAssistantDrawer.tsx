@@ -1507,7 +1507,7 @@ export function HealthAssistantDrawer({
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: `🎉 '${planRes.value.title}'이(가) 시작되었습니다!\n홈 화면의 '오늘의 챌린지' 카드에서 오늘의 실천 과제를 확인하고 원클릭으로 완료를 기록해 보세요.`,
+          content: `'${planRes.value.title}'이(가) 시작되었습니다!\n홈 화면의 '오늘의 챌린지' 카드에서 오늘의 실천 과제를 확인하고 원클릭으로 완료를 기록해 보세요.`,
         },
       ]);
 
@@ -3005,7 +3005,7 @@ function ChallengeConfirmationCard({
   return (
     <div className="draft-confirm-card challenge-confirm-card">
       <div className="card-header">
-        <strong>🏆 {draft.weeks ?? 4}주 맞춤 챌린지 제안</strong>
+        <strong>{draft.weeks ?? 4}주 맞춤 챌린지 제안</strong>
         <small>계획을 확인하고 '챌린지 시작하기'를 눌러 홈 화면에 등록하세요</small>
       </div>
       <div className="card-inputs">
