@@ -54,7 +54,7 @@ services:
       - app
 
   migrate:
-    image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
+    image: ieobom-dev-fastapi:current
     command: ["alembic", "upgrade", "head"]
     environment: &app_environment
       ENV: dev
@@ -82,7 +82,7 @@ services:
     restart: "no"
 
   fastapi:
-    image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
+    image: ieobom-dev-fastapi:current
     build:
       context: ../..
       dockerfile: app/Dockerfile
@@ -127,16 +127,16 @@ services:
       mailpit:
         condition: service_started
 
-  frontend:
-    image: ieobom-dev-frontend:${DEPLOY_VERSION:-local}
+  anatomy-assets:
+    image: ieobom-dev-anatomy-assets:current
     build:
-      context: ../..
-      dockerfile: frontend/Dockerfile
+      context: ../../frontend/public/vendor/vanatome
+      dockerfile: Dockerfile
     restart: unless-stopped
     networks:
       - app
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/healthz"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/vendor/vanatome/ATTRIBUTION.txt"]
       interval: 10s
       timeout: 3s
       retries: 12
@@ -153,7 +153,7 @@ services:
     depends_on:
       fastapi:
         condition: service_healthy
-      frontend:
+      anatomy-assets:
         condition: service_healthy
 
 volumes:
