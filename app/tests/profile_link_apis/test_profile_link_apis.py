@@ -157,23 +157,38 @@ class TestProfileLinkAPI:
         assert response.json()["error_code"] == "PROFILE_ALREADY_LINKED"
 
     async def test_profile_ref_is_claimed_by_one_account_only(self, client: AsyncClient, fake_redis: FakeRedis) -> None:
+        """한 참조값은 한 계정만 가져간다.
+
+        **막는 자리가 앞으로 옮겨졌다.** 예전에는 같은 참조값으로 둘을 초대해 둘 다
+        수락시킨 뒤 두 번째 `POST /profile-links` 를 `PROFILE_REF_ALREADY_CLAIMED`
+        로 막았다. 지금은 참조값이 가구당 1회용이라
+        (`uq_family_invitations_profile_ref_lifetime`) 두 번째 **초대**가 서지 않는다.
+
+        연결 단계의 `PROFILE_REF_ALREADY_CLAIMED` 검사는 그대로 남아 있다. 다만 초대를
+        거치는 이 경로로는 더 이상 닿지 않고, 받쳐 주는 것은
+        `uq_profile_links_one_active_account_per_profile` 유니크 제약이다.
+        """
         inviter = await _login(client, "claim-owner@example.com")
         first = await _login(client, "claim-first@example.com")
-        second = await _login(client, "claim-second@example.com")
         household_id = await _household(client, inviter)
         shared_ref = secrets.token_urlsafe(32)
         first_invitation = await _accepted_invitation(
             client, fake_redis, inviter, household_id, "claim-first@example.com", first, shared_ref
         )
-        second_invitation = await _accepted_invitation(
-            client, fake_redis, inviter, household_id, "claim-second@example.com", second, shared_ref
-        )
         await _link(client, first, first_invitation, shared_ref)
 
-        response = await _link(client, second, second_invitation, shared_ref)
+        response = await client.post(
+            "/api/v1/family-invitations",
+            headers=inviter,
+            json={
+                "household_id": household_id,
+                "invitee_email": "claim-second@example.com",
+                "target_profile_ref": shared_ref,
+            },
+        )
 
         assert response.status_code == status.HTTP_409_CONFLICT
-        assert response.json()["error_code"] == "PROFILE_REF_ALREADY_CLAIMED"
+        assert response.json()["error_code"] == "PROFILE_REFERENCE_ALREADY_USED"
 
     async def test_unlink_is_idempotent_and_keeps_local_data(self, client: AsyncClient, fake_redis: FakeRedis) -> None:
         inviter = await _login(client, "unlink-owner@example.com")
