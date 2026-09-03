@@ -8,39 +8,63 @@ ENV_FILE="${IEOBOM_ENV_FILE:-${HOME}/.config/ieobom/dev.env}"
 HTTP_PORT="${IEOBOM_HTTP_PORT:-8080}"
 STATE_DIR="${HOME}/.local/state/ieobom-cloudflare"
 LOG_FILE="${STATE_DIR}/quick-tunnel.log"
-TUNNEL_CONTAINER="ieobom-cloudflared"
-TUNNEL_DOCKER_CONFIG="${STATE_DIR}/docker-config"
+BIN_DIR="${STATE_DIR}/bin"
+CLOUDFLARED_BIN="${BIN_DIR}/cloudflared"
+PLIST_FILE="${HOME}/Library/LaunchAgents/com.ieobom.cloudflare-dev.plist"
+LABEL="com.ieobom.cloudflare-dev"
 
-mkdir -p "${STATE_DIR}" "${TUNNEL_DOCKER_CONFIG}"
-printf '{}\n' > "${TUNNEL_DOCKER_CONFIG}/config.json"
+mkdir -p "${STATE_DIR}" "${BIN_DIR}" "$(dirname "${PLIST_FILE}")"
 
-tunnel_docker() {
-  DOCKER_CONFIG="${TUNNEL_DOCKER_CONFIG}" docker "$@"
-}
-
-refresh_tunnel_log() {
-  tunnel_docker logs "${TUNNEL_CONTAINER}" > "${LOG_FILE}" 2>&1 || true
-}
+if [[ ! -x "${CLOUDFLARED_BIN}" ]]; then
+  case "$(uname -m)" in
+    arm64) cloudflared_arch="arm64" ;;
+    x86_64) cloudflared_arch="amd64" ;;
+    *) echo "Unsupported macOS architecture: $(uname -m)" >&2; exit 1 ;;
+  esac
+  archive="$(mktemp "${STATE_DIR}/cloudflared.XXXXXX.tgz")"
+  curl --fail --location --silent --show-error \
+    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-${cloudflared_arch}.tgz" \
+    --output "${archive}"
+  tar -xzf "${archive}" -C "${BIN_DIR}" cloudflared
+  rm -f "${archive}"
+  chmod 755 "${CLOUDFLARED_BIN}"
+fi
 
 existing_url=""
-if tunnel_docker inspect "${TUNNEL_CONTAINER}" >/dev/null 2>&1; then
-  refresh_tunnel_log
+if [[ -f "${LOG_FILE}" ]]; then
   existing_url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "${LOG_FILE}" | tail -1 || true)"
 fi
 
 if [[ -z "${existing_url}" ]] || ! curl --fail --silent --show-error --max-time 10 "${existing_url}/healthz" >/dev/null 2>&1; then
-  tunnel_docker rm --force "${TUNNEL_CONTAINER}" >/dev/null 2>&1 || true
+  launchctl bootout "gui/$(id -u)" "${PLIST_FILE}" >/dev/null 2>&1 || true
   : > "${LOG_FILE}"
-  tunnel_docker run --detach \
-    --name "${TUNNEL_CONTAINER}" \
-    --restart unless-stopped \
-    cloudflare/cloudflared:latest \
-    tunnel --no-autoupdate --url "http://host.docker.internal:${HTTP_PORT}" >/dev/null
+  cat > "${PLIST_FILE}" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>${LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${CLOUDFLARED_BIN}</string>
+    <string>tunnel</string>
+    <string>--no-autoupdate</string>
+    <string>--url</string>
+    <string>http://127.0.0.1:${HTTP_PORT}</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>${LOG_FILE}</string>
+  <key>StandardErrorPath</key><string>${LOG_FILE}</string>
+</dict>
+</plist>
+EOF
+  plutil -lint "${PLIST_FILE}"
+  launchctl bootstrap "gui/$(id -u)" "${PLIST_FILE}"
 fi
 
 tunnel_url=""
 for attempt in $(seq 1 30); do
-  refresh_tunnel_log
   tunnel_url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "${LOG_FILE}" | tail -1 || true)"
   if [[ -n "${tunnel_url}" ]] && curl --fail --silent --show-error --max-time 10 "${tunnel_url}/healthz" >/dev/null 2>&1; then
     break
