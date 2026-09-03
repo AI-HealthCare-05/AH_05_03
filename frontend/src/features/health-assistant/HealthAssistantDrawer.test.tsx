@@ -6,7 +6,9 @@ import {
   HealthMetricsTrendCard,
   containsNewMedicationRecord,
   formatTargetDateTime,
+  resolveHealthRecordDateTime,
   resolveMedicationTakenAt,
+  shouldAutoSaveHealthRecord,
 } from "./HealthAssistantDrawer";
 import type { FamilyProfile, HealthRecord } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
@@ -120,6 +122,20 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     );
   });
 
+  it("오늘 기록이 날짜만 추출되어도 UTC 자정이 아닌 실제 입력 시각을 사용한다", () => {
+    const now = new Date(2026, 8, 3, 14, 37);
+
+    expect(resolveHealthRecordDateTime("오늘 러닝머신 10분 했어", "2026-09-03", now)).toBe(
+      "2026-09-03T14:37",
+    );
+    expect(resolveHealthRecordDateTime("방금 혈압 120에 80 나왔어", null, now)).toBe(
+      "2026-09-03T14:37",
+    );
+    expect(resolveHealthRecordDateTime("어제 저녁 9시에 러닝했어", "2026-09-02T21:00", now)).toBe(
+      "2026-09-02T21:00",
+    );
+  });
+
   it("새 복약 기록과 복약 관련 질문을 구분한다", () => {
     expect(containsNewMedicationRecord("이지엔 한 알 먹었어")).toBe(true);
     expect(containsNewMedicationRecord("8시에 타이레놀 1알")).toBe(true);
@@ -127,7 +143,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     expect(containsNewMedicationRecord("타이레놀 먹어도 돼?")).toBe(false);
   });
 
-  it("자연어 입력 후 AI가 운동 초안을 제시하면 확인 카드가 렌더링되고, 승인 전에는 저장되지 않는다", async () => {
+  it("이미 수행한 운동 정보가 명확하면 확인 카드 없이 즉시 저장한다", async () => {
     vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_exercise",
       assistant_message: "랫풀다운 20kg 10회 3세트 기록을 오늘 날짜로 저장할까요?",
@@ -139,6 +155,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       },
       missing_fields: [],
       needs_confirmation: true,
+      auto_save: true,
       suggested_quick_replies: [],
     });
 
@@ -158,26 +175,11 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     fireEvent.change(input, { target: { value: "오늘 랫풀다운 20kg 10개 3세트 했어" } });
     fireEvent.click(sendBtn);
 
-    // AI 응답 확인
     await waitFor(() => {
-      expect(screen.getByText(/랫풀다운 20kg 10회 3세트 기록을 오늘 날짜로 저장할까요?/)).toBeInTheDocument();
+      expect(screen.getByText(/랫풀다운 20kg · 10회 · 3세트 운동을 기록했습니다/)).toBeInTheDocument();
     });
-
-    // 확인 카드 렌더링 확인
-    expect(screen.getByText(/운동 기록 확인/)).toBeInTheDocument();
-    expect(screen.getByDisplayValue("랫풀다운")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("20")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("10")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("3")).toBeInTheDocument();
-
-    // 승인 전에는 저장이 호출되지 않음
-    expect(mockCreateRecord).not.toHaveBeenCalled();
-
-    // 저장 버튼 클릭
-    const saveBtn = screen.getByRole("button", { name: /운동 기록에 저장하기/ });
-    fireEvent.click(saveBtn);
-
-    // 저장 함수가 올바른 파라미터로 호출되었는지 검증
+    expect(screen.queryByText(/운동 기록 확인/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /운동 기록에 저장하기/ })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalledTimes(1);
       expect(mockCreateRecord).toHaveBeenCalledWith(
@@ -196,10 +198,31 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       );
     });
 
-    // 완료 피드백 확인
-    await waitFor(() => {
-      expect(screen.getByText(/안전하게 저장되었습니다/)).toBeInTheDocument();
-    });
+  });
+
+  it("완료 사실과 예정 표현을 구분한다", () => {
+    const response = {
+      intent: "record_exercise" as const,
+      assistant_message: "운동 기록",
+      exercise_draft: { exercise_name: "스쿼트", reps: 29 },
+      missing_fields: [],
+      needs_confirmation: true,
+      suggested_quick_replies: [],
+    };
+    expect(shouldAutoSaveHealthRecord(response, "스쿼트 29회 했어")).toBe(true);
+    expect(shouldAutoSaveHealthRecord(response, "내일 스쿼트 29회 할 거야")).toBe(false);
+
+    const medicationResponse = {
+      intent: "record_medication" as const,
+      assistant_message: "복약 기록",
+      medication_draft: { medication_name: "타이레놀", dosage: "1알" },
+      missing_fields: [],
+      needs_confirmation: false,
+      suggested_quick_replies: [],
+    };
+    expect(shouldAutoSaveHealthRecord(medicationResponse, "타이레놀 1알 먹었어")).toBe(true);
+    expect(shouldAutoSaveHealthRecord(medicationResponse, "타이레놀 먹어도 돼?")).toBe(false);
+    expect(shouldAutoSaveHealthRecord({ ...response, missing_fields: ["reps"] }, "스쿼트 했어")).toBe(false);
   });
 
   it("운동을 저장하면 오늘 운동 전체 기록을 자동으로 다시 보여준다", async () => {
@@ -823,7 +846,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
   });
 
   describe("운동 시간 및 수행 일시 기록", () => {
-    it("운동 시간과 수행 일시가 포함된 운동 초안이 전달되면 정상적으로 확인 및 저장된다", async () => {
+    it("운동 시간과 수행 일시가 포함된 완료 기록을 즉시 저장한다", async () => {
       vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
         intent: "record_exercise",
         assistant_message: "어제 저녁 9시에 하신 랫풀다운 운동 기록을 저장할까요?",
@@ -855,17 +878,6 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       fireEvent.click(screen.getByRole("button", { name: "전송" }));
 
       await waitFor(() => {
-        expect(screen.getByText("운동 기록 확인")).toBeInTheDocument();
-        expect(screen.getByDisplayValue("랫풀다운")).toBeInTheDocument();
-        expect(screen.getByDisplayValue("40")).toBeInTheDocument();
-        expect(screen.getByDisplayValue("25")).toBeInTheDocument();
-        expect(screen.getByDisplayValue("2026-08-30T21:00")).toBeInTheDocument();
-      });
-
-      // 저장 버튼 클릭
-      fireEvent.click(screen.getByRole("button", { name: "운동 기록에 저장하기" }));
-
-      await waitFor(() => {
         expect(mockCreateRecord).toHaveBeenCalledWith(
           expect.objectContaining({
             recordType: "exercise",
@@ -881,9 +893,10 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
         );
         expect(mockOnRecordSaved).toHaveBeenCalled();
       });
+      expect(screen.queryByText("운동 기록 확인")).not.toBeInTheDocument();
     });
 
-    it("야외 유산소 운동(러닝/자전거) 시 거리(km)와 시간이 정상적으로 확인 및 저장된다", async () => {
+    it("야외 유산소 완료 기록의 거리와 시간을 즉시 저장한다", async () => {
       vi.spyOn(clientModule, "sendHealthAssistantMessage").mockResolvedValueOnce({
         intent: "record_exercise",
         assistant_message: "오늘 아침에 달린 5.5km 러닝 기록을 저장할까요?",
@@ -913,16 +926,6 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       fireEvent.click(screen.getByRole("button", { name: "전송" }));
 
       await waitFor(() => {
-        expect(screen.getByText("운동 기록 확인")).toBeInTheDocument();
-        expect(screen.getByDisplayValue("러닝")).toBeInTheDocument();
-        expect(screen.getByDisplayValue("5.5")).toBeInTheDocument();
-        expect(screen.getByDisplayValue("32")).toBeInTheDocument();
-      });
-
-      // 저장 버튼 클릭
-      fireEvent.click(screen.getByRole("button", { name: "운동 기록에 저장하기" }));
-
-      await waitFor(() => {
         expect(mockCreateRecord).toHaveBeenCalledWith(
           expect.objectContaining({
             recordType: "exercise",
@@ -936,6 +939,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
         );
         expect(mockOnRecordSaved).toHaveBeenCalled();
       });
+      expect(screen.queryByText("운동 기록 확인")).not.toBeInTheDocument();
     });
   });
 

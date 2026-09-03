@@ -4,7 +4,14 @@ import { useLocalDomain } from "../../app/localDomainContext";
 import { detectLocalCapabilities } from "../../shared/local/capabilities";
 import type { BackupPreview } from "../../shared/local/localBackupService";
 import type { LocalDocument } from "../../shared/local/domainContracts";
-import { BrowserOcrAdapter } from "../../shared/local/browserOcrAdapter";
+import type { OcrExamItem } from "../../local-domain/types";
+import { DevServerOcrAdapter } from "../../ocr/ocr-adapter";
+import { normalizeOcrResult } from "../../ocr/ocr-normalizer";
+
+export function filterDocumentsByProfile(documents: LocalDocument[], profileId: string): LocalDocument[] {
+  if (!profileId) return [];
+  return documents.filter((document) => document.profileId === profileId);
+}
 
 export function DataManagementPage() {
   const { runtime, profiles, refreshProfiles } = useLocalDomain();
@@ -21,10 +28,18 @@ export function DataManagementPage() {
   const [documents, setDocuments] = useState<LocalDocument[]>([]);
   const [ocrDocument, setOcrDocument] = useState<LocalDocument>();
   const [ocrText, setOcrText] = useState("");
+  const [ocrItems, setOcrItems] = useState<OcrExamItem[]>([]);
+  const [ocrExamDate, setOcrExamDate] = useState(todayValue);
+  const [ocrScreeningName, setOcrScreeningName] = useState("건강검진");
+  const [ocrInstitution, setOcrInstitution] = useState("");
   const [ocrProgress, setOcrProgress] = useState<string>();
   const [deletingDocument, setDeletingDocument] = useState<LocalDocument>();
 
   const effectiveProfileId = selectedProfileId || profiles[0]?.id || "";
+  const filteredDocuments = useMemo(
+    () => filterDocumentsByProfile(documents, effectiveProfileId),
+    [documents, effectiveProfileId],
+  );
 
   const refreshDocuments = useCallback(async () => {
     if (!runtime?.documents) return;
@@ -157,42 +172,58 @@ export function DataManagementPage() {
     resetFeedback();
     setOcrDocument(document);
     setOcrText("");
+    setOcrItems([]);
+    setOcrExamDate(todayValue());
+    setOcrScreeningName("건강검진");
+    setOcrInstitution("");
+    setOcrProgress("서류 내용을 읽고 항목별로 정리하고 있습니다…");
     try {
       const source = await runtime.documents.read(document);
       if (!source.ok) throw new Error(source.error.message);
-      const adapter = new BrowserOcrAdapter();
-      const text = await adapter.recognize(source.value, (progress) => {
-        setOcrProgress(`${progress.status} ${Math.round(progress.progress * 100)}%`);
-      });
-      setOcrText(text);
+      const file = new File([source.value], document.fileName, { type: document.mimeType });
+      const normalized = normalizeOcrResult(await new DevServerOcrAdapter().recognize(file));
+      if (!normalized.text.trim() && !normalized.examItems?.length) {
+        throw new Error("서류에서 확인할 수 있는 내용을 찾지 못했습니다. 더 선명한 파일로 다시 시도해 주세요.");
+      }
+      setOcrText(normalized.text);
+      setOcrItems(normalized.examItems ?? []);
+      setOcrExamDate(extractExamDate(normalized.text) ?? todayValue());
       setOcrProgress(undefined);
     } catch (caught) {
-      setError(errorMessage(caught, "로컬 OCR을 실행하지 못했습니다."));
+      setError(errorMessage(caught, "서류 내용을 읽지 못했습니다."));
+      setOcrProgress(undefined);
+      setOcrDocument(undefined);
     } finally {
       setWorking(false);
     }
   }
 
   async function saveOcrResult() {
-    if (!runtime || !ocrDocument || !ocrText.trim()) return;
+    if (!runtime || !ocrDocument || (!ocrText.trim() && ocrItems.length === 0)) return;
     setWorking(true);
     resetFeedback();
     try {
       const result = await runtime.healthRecords.create({
         householdId: ocrDocument.householdId,
         profileId: ocrDocument.profileId,
-        recordType: "lab_result",
-        recordedAt: new Date().toISOString(),
+        recordType: "health_screening",
+        recordedAt: new Date(`${ocrExamDate}T12:00:00`).toISOString(),
         source: "ocr",
         sourceDocumentId: ocrDocument.id,
-        payload: { note: ocrText.trim() },
+        payload: {
+          screeningName: ocrScreeningName.trim() || "건강검진",
+          institution: ocrInstitution.trim() || undefined,
+          summary: ocrText.trim(),
+          items: ocrItems.filter((item) => item.testName.trim() && item.value.trim()),
+        },
       });
       if (!result.ok) throw new Error(result.error.message);
-      setMessage("검토한 OCR 결과를 구성원의 로컬 건강기록으로 저장했습니다.");
+      setMessage("검토한 내용을 구성원의 로컬 건강기록으로 저장했습니다.");
       setOcrDocument(undefined);
       setOcrText("");
+      setOcrItems([]);
     } catch (caught) {
-      setError(errorMessage(caught, "OCR 결과를 저장하지 못했습니다."));
+      setError(errorMessage(caught, "분석 결과를 저장하지 못했습니다."));
     } finally {
       setWorking(false);
     }
@@ -219,12 +250,17 @@ export function DataManagementPage() {
     <div className="product-page data-page">
       <section className="dashboard-heading">
         <div>
-          <p className="page-kicker">데이터 관리</p>
-          <h1>건강정보를 직접 보관하고 옮기세요</h1>
-          <p>이어봄 서버가 아닌 사용자 파일을 통해 백업하고 복구합니다.</p>
+          <p className="page-kicker">건강 파일</p>
+          <h1>검진 서류와 건강 데이터를 한곳에서 관리하세요</h1>
+          <p>원본 서류를 안전하게 보관하고 전체 건강 데이터를 암호화해 백업·복원합니다.</p>
         </div>
         <span className="local-status-badge">등록 프로필 {profiles.length}명</span>
       </section>
+
+      <nav className="health-files-tabs" aria-label="건강 파일 바로가기">
+        <a href="#health-documents">건강 서류</a>
+        <a href="#health-backup">보관·백업</a>
+      </nav>
 
       <section className="data-boundary-card">
         <div>
@@ -233,7 +269,7 @@ export function DataManagementPage() {
           <p>브라우저 데이터 삭제나 기기 분실에 대비해 암호화 백업 파일을 정기적으로 내려받으세요.</p>
         </div>
         <dl>
-          <div><dt>브라우저 로컬</dt><dd>프로필·건강기록·가족력·OCR</dd></div>
+          <div><dt>브라우저 로컬</dt><dd>프로필·건강기록·가족력·건강 서류</dd></div>
           <div><dt>이어봄 서버</dt><dd>계정·구독·초대·연결 상태</dd></div>
         </dl>
       </section>
@@ -241,7 +277,7 @@ export function DataManagementPage() {
       {message ? <div className="alert success-alert" role="status">{message}</div> : null}
       {error ? <div className="alert error-alert" role="alert">{error}</div> : null}
 
-      <div className="data-action-grid">
+      <div className="data-action-grid" id="health-backup">
         <section className="data-action-card">
           <span className="data-card-number">01</span>
           <p className="section-kicker">내보내기</p>
@@ -310,9 +346,9 @@ export function DataManagementPage() {
         </div>
       </section>
 
-      <section className="document-panel">
+      <section className="document-panel" id="health-documents">
         <div className="section-title-row">
-          <div><p className="section-kicker">원본 문서·로컬 OCR</p><h2>건강서류를 이 브라우저에서 처리하세요</h2></div>
+          <div><p className="section-kicker">건강 서류</p><h2>검진 서류를 안전하게 보관하고 내용을 확인하세요</h2></div>
         </div>
         {!runtime?.documents ? (
           <div className="alert error-alert">이 브라우저에서는 OPFS 문서 저장을 사용할 수 없습니다.</div>
@@ -324,18 +360,18 @@ export function DataManagementPage() {
               <button className="primary-button" type="button" disabled={!documentFile || !effectiveProfileId || working} onClick={() => void saveDocument()}>암호화 저장</button>
             </div>
             <div className="document-list">
-              {documents.map((document) => (
+              {filteredDocuments.map((document) => (
                 <article key={document.id}>
                   <div><strong>{document.fileName}</strong><small>{profiles.find((profile) => profile.id === document.profileId)?.displayName ?? "알 수 없는 구성원"} · {(document.byteSize / 1024).toFixed(1)}KB</small></div>
                   <div className="record-row-actions">
                     <button type="button" onClick={() => void viewDocument(document)}>보기</button>
                     <button type="button" onClick={() => void downloadDocument(document)}>내려받기</button>
-                    <button type="button" disabled={!(document.mimeType.startsWith("image/") || document.mimeType === "application/pdf") || working} onClick={() => void runOcr(document)}>로컬 OCR</button>
+                    <button type="button" disabled={!(document.mimeType.startsWith("image/") || document.mimeType === "application/pdf") || working} onClick={() => void runOcr(document)}>서류 내용 읽기</button>
                     <button type="button" onClick={() => setDeletingDocument(document)}>삭제</button>
                   </div>
                 </article>
               ))}
-              {documents.length === 0 ? <div className="compact-empty"><strong>저장된 원본 문서가 없습니다.</strong></div> : null}
+              {filteredDocuments.length === 0 ? <div className="compact-empty"><strong>선택한 구성원에게 저장된 건강 서류가 없습니다.</strong></div> : null}
             </div>
           </>
         )}
@@ -344,10 +380,29 @@ export function DataManagementPage() {
       {ocrDocument ? (
         <div className="modal-backdrop" role="presentation">
           <section className="modal-panel ocr-review-modal" role="dialog" aria-modal="true" aria-labelledby="ocr-review-title">
-            <div className="modal-heading"><div><p className="section-kicker">서버 전송 없음</p><h2 id="ocr-review-title">OCR 결과 검토</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={() => setOcrDocument(undefined)}>×</button></div>
+            <div className="modal-heading"><div><p className="section-kicker">저장 전 검토</p><h2 id="ocr-review-title">서류 분석 결과 확인</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={() => setOcrDocument(undefined)}>×</button></div>
             {ocrProgress ? <p className="form-notice">{ocrProgress}</p> : null}
-            <label className="ocr-review-field">추출 결과<textarea rows={14} value={ocrText} onChange={(event) => setOcrText(event.currentTarget.value)} placeholder="OCR 처리 결과가 여기에 표시됩니다." /></label>
-            <div className="form-actions"><button className="secondary-button" type="button" onClick={() => setOcrDocument(undefined)}>취소</button><button className="primary-button" type="button" disabled={working || !ocrText.trim()} onClick={() => void saveOcrResult()}>검토 결과 저장</button></div>
+            <div className="ocr-review-meta-grid">
+              <label>실제 검사일<input type="date" value={ocrExamDate} onChange={(event) => setOcrExamDate(event.currentTarget.value)} /></label>
+              <label>검진·서류명<input value={ocrScreeningName} onChange={(event) => setOcrScreeningName(event.currentTarget.value)} /></label>
+              <label>검진 기관<input value={ocrInstitution} onChange={(event) => setOcrInstitution(event.currentTarget.value)} placeholder="선택 입력" /></label>
+            </div>
+            {ocrItems.length > 0 ? (
+              <div className="ocr-review-items" aria-label="검사 항목 확인">
+                <div className="ocr-review-item ocr-review-item-heading"><strong>검사항목</strong><strong>결과값</strong><strong>단위</strong><strong>판정</strong></div>
+                {ocrItems.map((item, index) => (
+                  <div className="ocr-review-item" key={`${item.testName}-${index}`}>
+                    <input aria-label={`${index + 1}번째 검사항목`} value={item.testName} onChange={(event) => setOcrItems(updateExamItem(ocrItems, index, "testName", event.currentTarget.value))} />
+                    <input aria-label={`${item.testName || index + 1} 결과값`} value={item.value} onChange={(event) => setOcrItems(updateExamItem(ocrItems, index, "value", event.currentTarget.value))} />
+                    <input aria-label={`${item.testName || index + 1} 단위`} value={item.unit} onChange={(event) => setOcrItems(updateExamItem(ocrItems, index, "unit", event.currentTarget.value))} />
+                    <input aria-label={`${item.testName || index + 1} 판정`} value={item.judgment} onChange={(event) => setOcrItems(updateExamItem(ocrItems, index, "judgment", event.currentTarget.value))} />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <label className="ocr-review-field">서류에서 확인한 내용<textarea rows={14} value={ocrText} onChange={(event) => setOcrText(event.currentTarget.value)} placeholder="서류에서 읽은 내용이 여기에 표시됩니다." /></label>
+            <p className="field-help">서류 분석을 위해 선택한 파일이 AI 분석 서버로 전송됩니다. 저장 버튼을 누르기 전 원본과 결과를 꼭 확인해 주세요.</p>
+            <div className="form-actions"><button className="secondary-button" type="button" onClick={() => setOcrDocument(undefined)}>취소</button><button className="primary-button" type="button" disabled={working || !ocrExamDate || (!ocrText.trim() && ocrItems.length === 0)} onClick={() => void saveOcrResult()}>건강검진 기록으로 저장</button></div>
           </section>
         </div>
       ) : null}
@@ -366,4 +421,19 @@ export function DataManagementPage() {
 
 function errorMessage(caught: unknown, fallback: string): string {
   return caught instanceof Error ? caught.message : fallback;
+}
+
+function todayValue(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function updateExamItem(items: OcrExamItem[], index: number, key: keyof OcrExamItem, value: string): OcrExamItem[] {
+  return items.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item);
+}
+
+function extractExamDate(text: string): string | undefined {
+  const match = text.match(/(?:검사일|검진일|판정일|수검일)[^0-9]{0,12}(20\d{2})[.\-/년\s]+(\d{1,2})[.\-/월\s]+(\d{1,2})/);
+  if (!match) return undefined;
+  const [, year, month, day] = match;
+  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 }

@@ -145,6 +145,10 @@ class HealthAssistantResponse(BaseModel):
         default_factory=list, description="초안 완성을 위해 사용자에게 추가 확인이 필요한 필드 목록"
     )
     needs_confirmation: bool = Field(default=False, description="사용자에게 저장 전 확인 카드를 노출해야 하는지 여부")
+    auto_save: bool = Field(
+        default=False,
+        description="사용자가 이미 수행한 사실을 명확히 말했고 필수 필드가 모두 있어 즉시 로컬 저장해야 하는지 여부",
+    )
     suggested_quick_replies: list[str] = Field(
         default_factory=list, description="사용자가 누르기 편한 추천 빠른 답변 목록"
     )

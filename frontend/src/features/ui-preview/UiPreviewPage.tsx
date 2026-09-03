@@ -124,7 +124,7 @@ export function UiPreviewPage() {
         </NavLink>
         <nav aria-label="미리보기 메뉴">
           <NavLink to="/ui-preview">건강 기록</NavLink>
-          <NavLink to="/data">데이터 관리</NavLink>
+          <NavLink to="/health-files">건강 파일</NavLink>
           <NavLink className="ui-preview-quiet-link" to="/">기존 화면</NavLink>
         </nav>
       </header>
@@ -171,7 +171,7 @@ export function UiPreviewPage() {
           <div className="ui-preview-storage-note">
             <strong>저장 위치</strong>
             <p>건강정보는 이 브라우저에 암호화되어 저장됩니다.</p>
-            <NavLink to="/data">백업 관리 열기</NavLink>
+            <NavLink to="/health-files">건강 파일 관리 열기</NavLink>
           </div>
         </aside>
 
@@ -227,7 +227,7 @@ export function UiPreviewPage() {
                 <article>
                   <span>백업</span>
                   <strong>수동 관리</strong>
-                  <small><NavLink to="/data">백업 파일 관리</NavLink></small>
+                  <small><NavLink to="/health-files">전체 건강 데이터 백업</NavLink></small>
                 </article>
               </div>
 

@@ -5,6 +5,7 @@ import { DataManagementPage } from "../features/data/DataManagementPage";
 import { HomePage } from "../features/home/HomePage";
 import { UiPreviewPage } from "../features/ui-preview/UiPreviewPage";
 import { AccountPage } from "../features/account/AccountPage";
+import { HealthDataPage } from "../features/health-data/HealthDataPage";
 import { RootLayout } from "./RootLayout";
 
 export const router = createBrowserRouter([
@@ -35,6 +36,14 @@ export const router = createBrowserRouter([
       {
         path: "members/:profileId/family-history",
         element: <HomePage />,
+      },
+      {
+        path: "health-data",
+        element: <HealthDataPage />,
+      },
+      {
+        path: "health-files",
+        element: <DataManagementPage />,
       },
       {
         path: "data",

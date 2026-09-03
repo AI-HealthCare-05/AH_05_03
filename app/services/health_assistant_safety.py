@@ -42,6 +42,7 @@ class HealthAssistantSafetyService:
         if response.emergency_notice:
             # 응급 상황 시 확인 카드 등 부가 동작 차단
             response.needs_confirmation = False
+            response.auto_save = False
             response.missing_fields = []
             response.suggested_quick_replies = []
 

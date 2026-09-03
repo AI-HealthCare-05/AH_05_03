@@ -112,6 +112,7 @@ export interface HealthAssistantResponse {
   query_draft?: QueryDraft | null;
   missing_fields: string[];
   needs_confirmation: boolean;
+  auto_save?: boolean;
   suggested_quick_replies: string[];
   emergency_notice?: string | null;
   safety_disclaimer?: string | null;
@@ -141,4 +142,3 @@ export async function sendHealthAssistantMessage(
 
   return body.data as HealthAssistantResponse;
 }
-

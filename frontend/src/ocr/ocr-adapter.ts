@@ -24,16 +24,13 @@ export class DevServerOcrAdapter implements OcrAdapter {
     for (const file of fileList) {
       body.append("files", file);
     }
-    if (fileList.length === 1) {
-      body.append("file", fileList[0]);
-    }
     const response = await fetch(`${this.baseUrl}/dev/ocr/recognize`, { method: "POST", body });
     if (!response.ok) {
       const error = await response.json().catch(() => null) as { message?: string } | null;
-      throw new Error(error?.message ?? "OCR 실행에 실패했습니다.");
+      if (response.status === 413) throw new Error("파일 용량이 너무 큽니다. 20MB 이하의 서류를 선택해 주세요.");
+      throw new Error(error?.message ?? "서류를 분석하지 못했습니다.");
     }
     const envelope = await response.json() as ApiEnvelope<RawOcrResult>;
     return envelope.data;
   }
 }
-

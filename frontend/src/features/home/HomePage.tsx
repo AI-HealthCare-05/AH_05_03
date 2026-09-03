@@ -17,6 +17,7 @@ import {
   HealthRecordHistoryDialog,
 } from "../health-record/HealthRecordWorkspace";
 import { HealthAssistantDrawer } from "../health-assistant/HealthAssistantDrawer";
+import { FamilyProfileSidebar } from "../family/FamilyProfileSidebar";
 
 const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
   default: module.VanatomeBodyMap,
@@ -343,7 +344,7 @@ export function HomePage() {
           <strong>민감한 건강정보는 이 기기 안에서 처리합니다.</strong>
           <p>현재 버전은 같은 브라우저 프로필의 사용자별 보관함 잠금을 아직 지원하지 않습니다. 공용 PC에서는 각자 다른 OS·브라우저 프로필을 사용하세요.</p>
         </div>
-        <NavLink to="/data">백업 관리</NavLink>
+        <NavLink to="/health-files">건강 파일 관리</NavLink>
       </section>
 
       {error ? <div className="alert error-alert" role="alert">{error}</div> : null}
@@ -459,67 +460,22 @@ export function HomePage() {
             </Suspense>
           </div>
 
-          <aside className="family-switcher-panel" aria-label="가족 구성원">
-            <div className="family-switcher-header">
-              <div>
-                <p className="section-kicker">가족 구성원</p>
-                <h2 id="members-heading">기록 대상</h2>
-              </div>
-              <span className="section-count">{profiles.length}명</span>
-            </div>
-
-            <p className="family-switcher-description">구성원을 선택하면 해당 프로필의 건강기록과 챌린지로 전환됩니다.</p>
-
-            <div className="family-switcher-list" role="list">
-              {profiles.map((profile, index) => {
-                const isSelected = profile.id === selectedProfile.id;
-                return (
-                  <button
-                    className={isSelected ? "family-switcher-card is-selected" : "family-switcher-card"}
-                    key={profile.id}
-                    type="button"
-                    role="listitem"
-                    aria-pressed={isSelected}
-                    onClick={() => {
-                      setSelectedProfileId(profile.id);
-                      void navigate(`/members/${profile.id}`);
-                    }}
-                  >
-                    <span className={`member-avatar avatar-tone-${index % 4}`} aria-hidden="true">
-                      {profile.displayName.slice(0, 1)}
-                    </span>
-                    <span className="family-switcher-copy">
-                      <strong>{profile.displayName}</strong>
-                      <small>{profile.relationship}{profile.birthDate ? ` · ${profile.birthDate.slice(0, 4)}년생` : ""}</small>
-                    </span>
-                    {isSelected ? <span className="family-switcher-current">현재</span> : null}
-                  </button>
-                );
-              })}
-
-              <button
-                className="family-switcher-card family-switcher-add"
-                type="button"
-                disabled={!localStorageReady}
-                onClick={() => setProfileDialogOpen(true)}
-              >
-                <span className="add-member-mark" aria-hidden="true">+</span>
-                <span className="family-switcher-copy">
-                  <strong>구성원 추가</strong>
-                  <small>새 프로필 만들기</small>
-                </span>
-              </button>
-            </div>
-
-            {hiddenProfiles.length > 0 ? (
-              <button className="family-switcher-hidden" type="button" onClick={() => {
-                setActionError(undefined);
-                setHiddenProfilesDialogOpen(true);
-              }}>
-                숨긴 프로필 {hiddenProfiles.length}명 관리
-              </button>
-            ) : null}
-          </aside>
+          <FamilyProfileSidebar
+            profiles={profiles}
+            selectedProfileId={selectedProfile.id}
+            onSelect={(profileId) => {
+              setSelectedProfileId(profileId);
+              void navigate(`/members/${profileId}`);
+            }}
+            onAdd={() => setProfileDialogOpen(true)}
+            addDisabled={!localStorageReady}
+            hiddenCount={hiddenProfiles.length}
+            onManageHidden={() => {
+              setActionError(undefined);
+              setHiddenProfilesDialogOpen(true);
+            }}
+            description="구성원을 선택하면 해당 프로필의 건강기록과 챌린지로 전환됩니다."
+          />
         </section>
       ) : (
         <section className="dashboard-section" aria-labelledby="members-heading">

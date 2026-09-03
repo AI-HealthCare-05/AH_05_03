@@ -21,7 +21,7 @@ class MockLLMClient:
 async def test_health_assistant_service_extracts_exercise_draft() -> None:
     fake_json = """{
         "intent": "record_exercise",
-        "assistant_message": "오늘 하신 랫풀다운 20kg 10회 3세트 운동을 기록할까요?",
+        "assistant_message": "오늘 하신 랫풀다운 20kg 10회 3세트 운동을 기록했습니다.",
         "exercise_draft": {
             "exercise_name": "랫풀다운",
             "weight_kg": 20.0,
@@ -38,8 +38,9 @@ async def test_health_assistant_service_extracts_exercise_draft() -> None:
         "lab_result_draft": null,
         "query_draft": null,
         "missing_fields": [],
-        "needs_confirmation": true,
-        "suggested_quick_replies": ["오늘 운동 기록에 저장", "수정하기"],
+        "needs_confirmation": false,
+        "auto_save": true,
+        "suggested_quick_replies": [],
         "emergency_notice": null,
         "safety_disclaimer": "본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요."
     }"""
@@ -58,7 +59,8 @@ async def test_health_assistant_service_extracts_exercise_draft() -> None:
     assert response.exercise_draft.weight_kg == 20.0
     assert response.exercise_draft.reps == 10
     assert response.exercise_draft.sets == 3
-    assert response.needs_confirmation is True
+    assert response.needs_confirmation is False
+    assert response.auto_save is True
 
 
 @pytest.mark.asyncio

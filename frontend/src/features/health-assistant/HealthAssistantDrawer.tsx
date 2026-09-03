@@ -1,13 +1,14 @@
 import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from "react";
 import type { FamilyProfile, HealthRecord, HealthRecordType, ISODate } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
-import { DevServerOcrAdapter } from "../../ocr/ocr-adapter";
+import { DevServerOcrAdapter, type RawOcrTable } from "../../ocr/ocr-adapter";
 import {
   sendHealthAssistantMessage,
   type ChatMessage,
   type HealthAssistantResponse,
   type ExerciseDraft,
   type BloodPressureDraft,
+  type BloodGlucoseDraft,
   type MedicationDraft,
   type PainDraft,
   type LabResultDraft,
@@ -55,6 +56,13 @@ interface ExtendedChatMessage extends ChatMessage {
   trendInitialKey?: string;
 }
 
+interface OcrReviewItem {
+  testName: string;
+  value: string;
+  unit: string;
+  judgment: string;
+}
+
 const PRIMARY_HOUSEHOLD_ID = "household-local-primary";
 
 function toLocalMinuteString(date: Date): string {
@@ -88,6 +96,34 @@ export function resolveMedicationTakenAt(
   return toLocalMinuteString(now);
 }
 
+/**
+ * 완료한 건강기록의 시각이 생략됐거나 오늘 날짜만 추출된 경우에는
+ * UTC 자정(한국 시각 09:00)으로 저장하지 않고 실제 입력 시각을 사용한다.
+ */
+export function resolveHealthRecordDateTime(
+  userMessage: string,
+  extractedDateTime?: string | null,
+  now = new Date(),
+): string {
+  const localNow = toLocalMinuteString(now);
+  if (!extractedDateTime) return localNow;
+
+  const value = extractedDateTime.trim();
+  const dateOnly = value.match(/^(\d{4}-\d{2}-\d{2})$/)?.[1];
+  if (dateOnly === localNow.slice(0, 10)) return localNow;
+
+  const hasExplicitClock =
+    /(?:아침|점심|저녁|밤|새벽|오전|오후|정오|자정|\d{1,2}\s*(?:시|:)|\d+\s*분\s*전)/.test(
+      userMessage,
+    );
+  const refersToPastDate = /(?:어제|그제|지난|\d+\s*일\s*전|\d{4}\s*년|\d{1,2}\s*월\s*\d{1,2}\s*일)/.test(
+    userMessage,
+  );
+
+  if (!hasExplicitClock && !refersToPastDate) return localNow;
+  return value;
+}
+
 export function containsNewMedicationRecord(message: string): boolean {
   const normalized = message.trim().toLowerCase();
   const isHypothetical = /(?:먹어도|복용해도|먹을까|복용할까|먹으면|복용하면)/.test(normalized);
@@ -105,6 +141,52 @@ function removeMedicationSavePrompt(message: string): string {
     .filter((sentence) => !/(?:약|복약|복용).*(?:기록|저장).*(?:저장|할까요|하시겠)/.test(sentence))
     .join(" ")
     .trim();
+}
+
+export function shouldAutoSaveHealthRecord(response: HealthAssistantResponse, userMessage: string): boolean {
+  if (response.emergency_notice || response.missing_fields.length > 0) return false;
+  if (!["record_exercise", "record_blood_pressure", "record_blood_glucose", "record_medication", "record_pain"].includes(response.intent)) return false;
+  if (response.auto_save === true) return true;
+
+  const normalized = userMessage.trim().toLowerCase();
+  if (/(?:할\s*거|할게|하려고|예정|먹을\s*거|복용할\s*거|측정할\s*거)/.test(normalized)) return false;
+  return /(?:했어|했어요|했다|했습니다|완료|먹었|복용했|나왔|측정했|쟀|뛰었|달렸|걸었|마셨|잤어|잤어요)/.test(normalized);
+}
+
+function buildAutoSaveAssistantMessage(response: HealthAssistantResponse): string {
+  let confirmation = "건강 기록에 저장했습니다.";
+  if (response.intent === "record_exercise" && response.exercise_draft) {
+    const draft = response.exercise_draft;
+    const details = [
+      draft.distance_km ? `${draft.distance_km}km` : "",
+      draft.duration_minutes ? `${draft.duration_minutes}분` : "",
+      draft.weight_kg ? `${draft.weight_kg}kg` : "",
+      draft.reps ? `${draft.reps}회` : "",
+      draft.sets ? `${draft.sets}세트` : "",
+    ].filter(Boolean).join(" · ");
+    confirmation = `${draft.exercise_name}${details ? ` ${details}` : ""} 운동을 기록했습니다.`;
+  } else if (response.intent === "record_blood_pressure" && response.blood_pressure_draft) {
+    confirmation = `혈압 ${response.blood_pressure_draft.systolic}/${response.blood_pressure_draft.diastolic}mmHg를 기록했습니다.`;
+  } else if (response.intent === "record_blood_glucose" && response.blood_glucose_draft) {
+    confirmation = `혈당 ${response.blood_glucose_draft.value}mg/dL를 기록했습니다.`;
+  } else if (response.intent === "record_medication" && response.medication_draft) {
+    confirmation = `${response.medication_draft.medication_name}${response.medication_draft.dosage ? ` ${response.medication_draft.dosage}` : ""} 복용 기록을 저장했습니다.`;
+  } else if (response.intent === "record_pain" && response.pain_draft) {
+    confirmation = `${response.pain_draft.body_area} 통증 강도 ${response.pain_draft.intensity}/10을 기록했습니다.`;
+  }
+
+  if (/(?:저장했습니다|기록했습니다)/.test(response.assistant_message)) return response.assistant_message;
+  const remaining = response.assistant_message
+    .split(/(?<=[.!?])\s+/)
+    .filter((sentence) => !/(?:기록|저장).*(?:확인|할까요|하시겠|저장)/.test(sentence))
+    .join(" ")
+    .trim();
+  return remaining ? `${confirmation}\n\n${remaining}` : confirmation;
+}
+
+function normalizeBloodGlucoseTiming(value?: string | null): "fasting" | "before_meal" | "after_meal" | "bedtime" | "random" {
+  if (value === "fasting" || value === "before_meal" || value === "after_meal" || value === "bedtime") return value;
+  return "random";
 }
 
 // 텍스트/OCR 결과에서 실제 검사일자(YYYY-MM-DD) 추출
@@ -148,6 +230,20 @@ export function parseExamDateFromText(text: string): string | undefined {
   }
 
   return undefined;
+}
+
+function extractReviewItems(tables: RawOcrTable[]): OcrReviewItem[] {
+  return tables.flatMap((table) => table.rows.flatMap((row) => {
+    const cells = row.map((cell) => cell.trim());
+    const testName = cells[0] ?? "";
+    const value = cells[1] ?? "";
+    if (!testName || !value || /검사\s*항목|항목명|결과값|검사명/.test(testName)) return [];
+    return [{ testName, value, unit: cells[2] ?? "", judgment: cells.slice(3).join(" ") }];
+  }));
+}
+
+function reviewItemsToText(items: OcrReviewItem[]): string {
+  return items.map((item) => [item.testName, item.value, item.unit, item.judgment].filter(Boolean).join(" | ")).join("\n");
 }
 
 // 조회 요청된 recordType을 도메인 HealthRecordType 배열로 정규화
@@ -509,10 +605,12 @@ export function HealthAssistantDrawer({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 서류 OCR 상세 검토 및 저장 모달 상태
+  // 건강 서류 상세 검토 및 저장 모달 상태
   const [ocrModalOpen, setOcrModalOpen] = useState(false);
   const [ocrModalWorking, setOcrModalWorking] = useState(false);
   const [ocrReviewDraft, setOcrReviewDraft] = useState<LabResultDraft | null>(null);
+  const [ocrReviewItems, setOcrReviewItems] = useState<OcrReviewItem[]>([]);
+  const [ocrModalError, setOcrModalError] = useState<string>();
   const [ocrImageFile, setOcrImageFile] = useState<File | null>(null);
   const [ocrImagePreviewUrl, setOcrImagePreviewUrl] = useState<string | null>(null);
 
@@ -613,27 +711,35 @@ export function HealthAssistantDrawer({
     setImagePreview(previewUrl);
     setError(undefined);
 
-    // 모달을 열고 OCR 시작
+    // 모달을 열고 서류 분석 시작
     setOcrImageFile(file);
     setOcrImagePreviewUrl(previewUrl);
     setOcrModalOpen(true);
     setOcrModalWorking(true);
+    setOcrReviewDraft(null);
+    setOcrReviewItems([]);
+    setOcrModalError(undefined);
 
     try {
       const ocrAdapter = new DevServerOcrAdapter();
       const ocrResult = await ocrAdapter.recognize(file);
-      const extractedDate = parseExamDateFromText(ocrResult.text) || new Date().toISOString().slice(0, 10);
+      const items = extractReviewItems(ocrResult.tables);
+      const structuredText = reviewItemsToText(items);
+      const extractedText = ocrResult.text.trim() || structuredText;
+      if (!extractedText) throw new Error("서류에서 확인할 수 있는 글자나 검사 항목을 찾지 못했습니다. 더 선명한 이미지를 선택해 주세요.");
+      const extractedDate = parseExamDateFromText(extractedText) || new Date().toISOString().slice(0, 10);
 
       const draft: LabResultDraft = {
         screening_name: "건강검진",
         recorded_at: extractedDate,
-        summary: ocrResult.text.slice(0, 300),
-        items_summary: ocrResult.text,
+        summary: extractedText.slice(0, 300),
+        items_summary: extractedText,
       };
+      setOcrReviewItems(items);
       setOcrReviewDraft(draft);
     } catch (ocrErr) {
-      console.warn("OCR 실행 오류:", ocrErr);
-      setError(ocrErr instanceof Error ? ocrErr.message : "서류 분석에 실패했습니다.");
+      console.warn("서류 분석 오류:", ocrErr);
+      setOcrModalError(ocrErr instanceof Error ? ocrErr.message : "서류 분석에 실패했습니다.");
     } finally {
       setOcrModalWorking(false);
     }
@@ -647,7 +753,7 @@ export function HealthAssistantDrawer({
   }
 
   // 모달에서 서류 확정 저장 핸들러
-  async function handleConfirmOcrModalSave(draft: LabResultDraft) {
+  async function handleConfirmOcrModalSave(draft: LabResultDraft, items: OcrReviewItem[]) {
     if (!runtime || !profile || !ocrImageFile) return;
     setOcrModalWorking(true);
     try {
@@ -683,6 +789,7 @@ export function HealthAssistantDrawer({
           institution: draft.institution ?? undefined,
           summary: draft.summary ?? "",
           itemsSummary: draft.items_summary ?? "",
+          items,
           note: finalNote || draft.summary || "건강검진 결과",
         },
       });
@@ -747,7 +854,7 @@ export function HealthAssistantDrawer({
           userContent = "건강검진표/검사결과지 서류 이미지를 업로드했습니다. 내용을 확인하고 기록해 주세요.";
         }
       } catch (ocrErr) {
-        console.warn("OCR 실행 오류:", ocrErr);
+        console.warn("서류 분석 실행 오류:", ocrErr);
         if (!userContent) {
           userContent = "서류 이미지를 업로드했습니다.";
         }
@@ -785,7 +892,7 @@ export function HealthAssistantDrawer({
         if (idx === nextMessages.length - 1 && ocrAttachedText) {
           return {
             role: m.role,
-            content: `${m.content}\n\n[업로드된 검사 서류 OCR 추출 내용]\n${ocrAttachedText}`,
+            content: `${m.content}\n\n[업로드된 검사 서류 추출 내용]\n${ocrAttachedText}`,
           };
         }
         return { role: m.role, content: m.content };
@@ -832,7 +939,42 @@ export function HealthAssistantDrawer({
         );
       }
 
+      if (res.exercise_draft) {
+        res.exercise_draft.date_str = resolveHealthRecordDateTime(
+          textToSend,
+          res.exercise_draft.date_str,
+        );
+      }
+      if (res.blood_pressure_draft) {
+        res.blood_pressure_draft.measured_at = resolveHealthRecordDateTime(
+          textToSend,
+          res.blood_pressure_draft.measured_at,
+        );
+      }
+      if (res.blood_glucose_draft) {
+        res.blood_glucose_draft.measured_at = resolveHealthRecordDateTime(
+          textToSend,
+          res.blood_glucose_draft.measured_at,
+        );
+      }
+      if (res.pain_draft) {
+        res.pain_draft.onset_at = resolveHealthRecordDateTime(
+          textToSend,
+          res.pain_draft.onset_at,
+        );
+      }
+
       const assistantMsgId = `assistant-${Date.now()}`;
+      const shouldAutoSave = shouldAutoSaveHealthRecord(res, textToSend);
+      if (shouldAutoSave) {
+        res.auto_save = true;
+        res.needs_confirmation = false;
+        res.missing_fields = [];
+        res.suggested_quick_replies = res.suggested_quick_replies.filter(
+          (reply) => !/(?:저장|기록|수정|취소)/.test(reply),
+        );
+        res.assistant_message = buildAutoSaveAssistantMessage(res);
+      }
       const assistantMsg: ExtendedChatMessage = {
         id: assistantMsgId,
         role: "assistant",
@@ -842,6 +984,15 @@ export function HealthAssistantDrawer({
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
+
+      if (shouldAutoSave) {
+        const saved = await saveStructuredDraftAutomatically(res, assistantMsgId);
+        if (!saved) {
+          setMessages((prev) => prev.map((message) => message.id === assistantMsgId
+            ? { ...message, content: "입력하신 기록은 이해했지만 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." }
+            : message));
+        }
+      }
 
       // 챌린지 일정 조정 또는 완료 인텐트 자동 처리
       if (runtime && profile) {
@@ -1054,8 +1205,17 @@ export function HealthAssistantDrawer({
   }
 
   // 운동 초안 로컬 저장
-  async function saveExercise(draft: ExerciseDraft, msgId: string) {
-    if (!runtime || !profile) return;
+  async function saveStructuredDraftAutomatically(response: HealthAssistantResponse, msgId: string): Promise<boolean> {
+    if (response.intent === "record_exercise" && response.exercise_draft) return saveExercise(response.exercise_draft, msgId);
+    if (response.intent === "record_blood_pressure" && response.blood_pressure_draft) return saveBloodPressure(response.blood_pressure_draft, msgId);
+    if (response.intent === "record_blood_glucose" && response.blood_glucose_draft) return saveBloodGlucose(response.blood_glucose_draft, msgId);
+    if (response.intent === "record_medication" && response.medication_draft) return saveMedication(response.medication_draft, msgId);
+    if (response.intent === "record_pain" && response.pain_draft) return savePain(response.pain_draft, msgId);
+    return false;
+  }
+
+  async function saveExercise(draft: ExerciseDraft, msgId: string): Promise<boolean> {
+    if (!runtime || !profile) return false;
     setLoading(true);
     try {
       const details: string[] = [];
@@ -1101,16 +1261,18 @@ export function HealthAssistantDrawer({
         setQueriedRecords(todayExercises);
         setQueriedRecordsTitle(`오늘 운동 기록 (${todayExercises.length}건)`);
       }
+      return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "운동 기록 저장에 실패했습니다.");
+      return false;
     } finally {
       setLoading(false);
     }
   }
 
   // 혈압 초안 로컬 저장
-  async function saveBloodPressure(draft: BloodPressureDraft, msgId: string) {
-    if (!runtime || !profile || !draft.systolic || !draft.diastolic) return;
+  async function saveBloodPressure(draft: BloodPressureDraft, msgId: string): Promise<boolean> {
+    if (!runtime || !profile || !draft.systolic || !draft.diastolic) return false;
     setLoading(true);
     try {
       const summaryText = `혈압 ${draft.systolic}/${draft.diastolic} mmHg${draft.pulse ? ` (맥박 ${draft.pulse})` : ""}`;
@@ -1135,16 +1297,48 @@ export function HealthAssistantDrawer({
         prev.map((m) => (m.id === msgId ? { ...m, saved: true } : m)),
       );
       if (onRecordSaved) await onRecordSaved();
+      return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "혈압 기록 저장에 실패했습니다.");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function saveBloodGlucose(draft: BloodGlucoseDraft, msgId: string): Promise<boolean> {
+    if (!runtime || !profile || !draft.value) return false;
+    setLoading(true);
+    try {
+      const timing = normalizeBloodGlucoseTiming(draft.timing);
+      const result = await runtime.healthRecords.create({
+        householdId: PRIMARY_HOUSEHOLD_ID,
+        profileId: profile.id,
+        recordType: "blood_glucose",
+        recordedAt: draft.measured_at ? new Date(draft.measured_at).toISOString() : new Date().toISOString(),
+        source: "local_ai",
+        payload: {
+          type: "blood_glucose",
+          valueMgDl: draft.value,
+          timing,
+          note: draft.note || `혈당 ${draft.value}mg/dL`,
+        },
+      });
+      if (!result.ok) throw new Error(result.error.message);
+      setMessages((prev) => prev.map((message) => message.id === msgId ? { ...message, saved: true } : message));
+      if (onRecordSaved) await onRecordSaved();
+      return true;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "혈당 기록 저장에 실패했습니다.");
+      return false;
     } finally {
       setLoading(false);
     }
   }
 
   // 복약 초안 로컬 저장
-  async function saveMedication(draft: MedicationDraft, msgId: string) {
-    if (!runtime || !profile || !draft.medication_name) return;
+  async function saveMedication(draft: MedicationDraft, msgId: string): Promise<boolean> {
+    if (!runtime || !profile || !draft.medication_name) return false;
     setLoading(true);
     try {
       const summaryText = `복약: ${draft.medication_name}${draft.dosage ? ` ${draft.dosage}` : ""}${draft.taken_at ? ` (${draft.taken_at})` : ""}`;
@@ -1169,16 +1363,18 @@ export function HealthAssistantDrawer({
         prev.map((m) => (m.id === msgId ? { ...m, saved: true } : m)),
       );
       if (onRecordSaved) await onRecordSaved();
+      return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "복약 기록 저장에 실패했습니다.");
+      return false;
     } finally {
       setLoading(false);
     }
   }
 
   // 통증 초안 로컬 저장
-  async function savePain(draft: PainDraft, msgId: string) {
-    if (!runtime || !profile || !draft.body_area) return;
+  async function savePain(draft: PainDraft, msgId: string): Promise<boolean> {
+    if (!runtime || !profile || !draft.body_area) return false;
     setLoading(true);
     try {
       const summaryText = `통증: ${draft.body_area} (강도 ${draft.intensity}/10)${draft.sensation ? ` - ${draft.sensation}` : ""}`;
@@ -1204,8 +1400,10 @@ export function HealthAssistantDrawer({
         prev.map((m) => (m.id === msgId ? { ...m, saved: true } : m)),
       );
       if (onRecordSaved) await onRecordSaved();
+      return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "통증 기록 저장에 실패했습니다.");
+      return false;
     } finally {
       setLoading(false);
     }
@@ -1325,9 +1523,9 @@ export function HealthAssistantDrawer({
   const quickPrompts = [
     "검진 수치 변화 그래프",
     "최근 건강검진 결과 원본 보여줘",
-    "혈압 120에 80",
-    "랫풀다운 20kg 10개 3세트",
-    "저녁 8시에 타이레놀 1알 복용",
+    "혈압 120에 80 나왔어",
+    "랫풀다운 20kg 10개 3세트 했어",
+    "저녁 8시에 타이레놀 1알 복용했어",
   ];
 
   return (
@@ -1623,19 +1821,21 @@ export function HealthAssistantDrawer({
         </div>
       )}
 
-      {/* 서류 OCR 상세 검토 및 건강기록 확정 저장 모달 */}
+      {/* 건강 서류 상세 검토 및 건강기록 확정 저장 모달 */}
       {ocrModalOpen && ocrImagePreviewUrl && (
         <OcrReviewModal
           profileName={profile.displayName}
           imageUrl={ocrImagePreviewUrl}
           fileName={ocrImageFile?.name ?? "검진 서류"}
           draft={ocrReviewDraft}
+          items={ocrReviewItems}
+          error={ocrModalError}
           working={ocrModalWorking}
           onClose={() => {
             setOcrModalOpen(false);
             clearSelectedImage();
           }}
-          onConfirm={(updatedDraft) => void handleConfirmOcrModalSave(updatedDraft)}
+          onConfirm={(updatedDraft, updatedItems) => void handleConfirmOcrModalSave(updatedDraft, updatedItems)}
         />
       )}
     </div>
@@ -1643,13 +1843,15 @@ export function HealthAssistantDrawer({
 }
 
 // -------------------------------------------------------------
-// 서류 OCR 상세 검토 및 저장 모달 (2분할 분할 뷰)
+// 건강 서류 상세 검토 및 저장 모달 (2분할 분할 뷰)
 // -------------------------------------------------------------
 function OcrReviewModal({
   profileName,
   imageUrl,
   fileName,
   draft,
+  items,
+  error,
   working,
   onClose,
   onConfirm,
@@ -1658,15 +1860,18 @@ function OcrReviewModal({
   imageUrl: string;
   fileName: string;
   draft: LabResultDraft | null;
+  items: OcrReviewItem[];
+  error?: string;
   working: boolean;
   onClose: () => void;
-  onConfirm: (draft: LabResultDraft) => void;
+  onConfirm: (draft: LabResultDraft, items: OcrReviewItem[]) => void;
 }) {
   const [recordedAt, setRecordedAt] = useState(draft?.recorded_at ?? new Date().toISOString().slice(0, 10));
   const [screeningName, setScreeningName] = useState(draft?.screening_name ?? "국가건강검진");
   const [institution, setInstitution] = useState(draft?.institution ?? "");
   const [itemsSummary, setItemsSummary] = useState(draft?.items_summary ?? "");
   const [summary, setSummary] = useState(draft?.summary ?? "");
+  const [reviewItems, setReviewItems] = useState<OcrReviewItem[]>(items);
 
   // draft가 비동기로 로드되었을 때 상태 동기화
   useEffect(() => {
@@ -1679,12 +1884,16 @@ function OcrReviewModal({
     }
   }, [draft]);
 
+  useEffect(() => {
+    setReviewItems(items);
+  }, [items]);
+
   return (
     <div className="modal-backdrop ocr-split-modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="modal-panel ocr-split-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-heading">
           <div>
-            <p className="section-kicker">서류 OCR 상세 검토</p>
+            <p className="section-kicker">건강검진 결과 확인</p>
             <h2>{profileName}님의 {fileName} 분석 결과</h2>
           </div>
           <button className="modal-close" type="button" onClick={onClose} aria-label="닫기">×</button>
@@ -1705,9 +1914,15 @@ function OcrReviewModal({
             </div>
           </div>
 
-          {/* 오른쪽: OCR 추출 내용 및 편집 폼 */}
+          {/* 오른쪽: 서류에서 확인한 내용 및 편집 폼 */}
           <div className="ocr-split-right">
-            {working && !draft ? (
+            {error ? (
+              <div className="ocr-modal-error" role="alert">
+                <strong>서류를 분석하지 못했습니다.</strong>
+                <p>{error}</p>
+                <button className="secondary-button" type="button" onClick={onClose}>다른 파일 선택하기</button>
+              </div>
+            ) : working && !draft ? (
               <div className="ocr-modal-loading">
                 <div className="loading-dots">
                   <span>●</span><span>●</span><span>●</span>
@@ -1745,6 +1960,20 @@ function OcrReviewModal({
                   />
                 </label>
 
+                {reviewItems.length > 0 ? (
+                  <div className="ocr-structured-items">
+                    <div><strong>검사 항목 확인</strong><small>항목·결과·단위·판정을 원본과 비교해 수정하세요.</small></div>
+                    {reviewItems.map((item, index) => (
+                      <div className="ocr-structured-item" key={`${item.testName}-${index}`}>
+                        <input aria-label={`${index + 1}번째 검사항목`} value={item.testName} onChange={(event) => setReviewItems(reviewItems.map((current, currentIndex) => currentIndex === index ? { ...current, testName: event.currentTarget.value } : current))} />
+                        <input aria-label={`${index + 1}번째 결과값`} value={item.value} onChange={(event) => setReviewItems(reviewItems.map((current, currentIndex) => currentIndex === index ? { ...current, value: event.currentTarget.value } : current))} />
+                        <input aria-label={`${index + 1}번째 단위`} value={item.unit} onChange={(event) => setReviewItems(reviewItems.map((current, currentIndex) => currentIndex === index ? { ...current, unit: event.currentTarget.value } : current))} />
+                        <input aria-label={`${index + 1}번째 판정`} value={item.judgment} onChange={(event) => setReviewItems(reviewItems.map((current, currentIndex) => currentIndex === index ? { ...current, judgment: event.currentTarget.value } : current))} />
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
                 <label>
                   전체 검사 항목 및 수치 (혈액, 계측, 요검사, 노인기능평가 등)
                   <textarea
@@ -1776,14 +2005,14 @@ function OcrReviewModal({
           <button
             className="primary-button"
             type="button"
-            disabled={working || !recordedAt}
+            disabled={working || Boolean(error) || !draft || !recordedAt}
             onClick={() => onConfirm({
               screening_name: screeningName,
               recorded_at: recordedAt,
               institution,
               items_summary: itemsSummary,
               summary,
-            })}
+            }, reviewItems)}
           >
             {working ? "저장 중…" : "수정 내용 확정 · 건강기록 저장"}
           </button>

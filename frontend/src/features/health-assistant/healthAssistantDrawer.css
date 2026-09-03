@@ -950,6 +950,60 @@
   transition: border-color 0.15s;
 }
 
+.ocr-modal-error {
+  min-height: 260px;
+  display: grid;
+  place-content: center;
+  justify-items: start;
+  gap: 10px;
+  border: 1px solid #f0c8cd;
+  border-radius: 16px;
+  padding: 24px;
+  color: #9f2635;
+  background: #fff4f5;
+}
+
+.ocr-modal-error p {
+  color: #74434a;
+  line-height: 1.6;
+}
+
+.ocr-structured-items {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dbe5f6;
+  border-radius: 14px;
+  padding: 12px;
+  background: #f8faff;
+}
+
+.ocr-structured-items > div:first-child strong,
+.ocr-structured-items > div:first-child small {
+  display: block;
+}
+
+.ocr-structured-items > div:first-child small {
+  margin-top: 3px;
+  color: #718099;
+  font-size: 0.7rem;
+}
+
+.ocr-structured-item {
+  display: grid;
+  grid-template-columns: 1.3fr 0.8fr 0.7fr 1fr;
+  gap: 6px;
+}
+
+.ocr-structured-item input {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .ocr-structured-item {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 .ocr-edit-fields input:focus,
 .ocr-edit-fields textarea:focus {
   border-color: #10b981;

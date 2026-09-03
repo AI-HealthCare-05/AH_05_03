@@ -3,10 +3,9 @@ import { NavLink, Outlet } from "react-router-dom";
 import { useUiStore } from "../stores/uiStore";
 
 const NAVIGATION = [
-  { to: "/", label: "가족 홈", end: true },
-  { to: "/data", label: "데이터 관리", end: false },
-  { to: "/ui-preview", label: "UI 미리보기", end: false },
-  { to: "/account", label: "계정", end: false },
+  { to: "/", label: "대시보드", end: true },
+  { to: "/health-data", label: "건강 데이터", end: false },
+  { to: "/health-files", label: "건강 파일", end: false },
 ] as const;
 
 export function RootLayout() {
