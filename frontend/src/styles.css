@@ -1120,6 +1120,38 @@ main {
   margin-top: 10px !important;
 }
 
+/* 부위별 위험 범례. 3D 안의 색이 무슨 뜻인지 밖에서 읽을 자리가 있어야 한다 —
+   색만 칠하면 "심장이 왜 빨간가" 를 화면이 대답하지 못한다. 그래서 등급과 함께
+   **그 색을 만든 질환 이름**을 같이 적는다. */
+.vanatome-risk-legend {
+  list-style: none;
+  margin: 12px 0 0 !important;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.vanatome-risk-legend li {
+  display: grid;
+  grid-template-columns: 10px auto 1fr;
+  align-items: baseline;
+  gap: 2px 8px;
+  font-size: 0.82rem;
+}
+.vanatome-risk-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  align-self: center;
+}
+.vanatome-risk-legend b { font-weight: 600; }
+.vanatome-risk-level { font-weight: 600; font-size: 0.74rem; }
+.vanatome-risk-legend small {
+  grid-column: 2 / -1;
+  font-size: 0.74rem;
+  opacity: 0.72;
+  line-height: 1.5;
+}
+
 .vanatome-layer-summary span {
   border: 1px solid #bfe8ee;
   border-radius: 999px;

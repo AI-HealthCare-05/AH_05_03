@@ -13,6 +13,7 @@ import type {
 import { LEVEL_LABEL } from "../assessment/contracts";
 import type { RiskLevel } from "../assessment/contracts";
 import { type LatestSummary, listLatestByProfile } from "../assessment/snapshots";
+import { regionRisks, type RegionRisk } from "./bodyRisk";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
 import { ChallengeDashboardCard } from "../challenge/ChallengeDashboardCard";
 
@@ -67,6 +68,9 @@ export function HomePage() {
   const [verdicts, setVerdicts] = useState<Record<string, LatestSummary>>({});
   // 자세히 볼 판정 기록. 판정은 수정·삭제 대상이 아니라 열어 보는 대상이다.
   const [openRecord, setOpenRecord] = useState<HealthRecord>();
+  // 3D 인체에 색을 입힐 판정. `openRecord` 와 따로 두는 이유는 모달을 닫아도 색은
+  // 남아야 하기 때문이다 — 모달을 닫는 동작은 "그만 볼래" 지 "선택을 풀래" 가 아니다.
+  const [bodyRecord, setBodyRecord] = useState<HealthRecord>();
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [profileEditDialogOpen, setProfileEditDialogOpen] = useState(false);
   const [profileLifecycleAction, setProfileLifecycleAction] = useState<"hide" | "delete">();
@@ -103,6 +107,22 @@ export function HomePage() {
     },
     [runtime],
   );
+
+  // 고른 판정 -> 부위별 위험. 판정이 없는 기록(수치만 적은 것)이면 색을 안 칠한다.
+  const bodyRisks: RegionRisk[] | undefined = useMemo(() => {
+    if (!bodyRecord || bodyRecord.recordType !== "assessment") return undefined;
+    const payload = bodyRecord.payload as unknown as {
+      verdicts?: { key: string; name?: string; risk_level: string }[];
+      levels?: Record<string, string>;
+    };
+    // `verdicts` 가 생기기 전에 남긴 기록도 있다. 그때는 등급만 남아 있으므로
+    // 그걸로 만든다 — 이름이 없어도 부위는 키로 정해진다.
+    const verdicts =
+      payload.verdicts ??
+      Object.entries(payload.levels ?? {}).map(([key, risk_level]) => ({ key, risk_level }));
+    const risks = regionRisks(verdicts);
+    return risks.length > 0 ? risks : undefined;
+  }, [bodyRecord]);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === (routeProfileId ?? selectedProfileId)) ?? profiles[0],
@@ -431,7 +451,7 @@ export function HomePage() {
             </div>
 
             <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
-              <VanatomeBodyMap profileName={selectedProfile.displayName} />
+              <VanatomeBodyMap profileName={selectedProfile.displayName} risks={bodyRisks} />
             </Suspense>
 
             <div className="records-panel">
@@ -476,7 +496,16 @@ export function HomePage() {
                         {/* 판정은 그날 화면에 뜬 값을 그대로 남긴 것이라 고칠 것이 아니다.
                             손으로 고치면 그날 본 것과 기록이 어긋난다. 그래서 열어 보기만 한다. */}
                         {record.recordType === "assessment" ? (
-                          <button type="button" onClick={() => setOpenRecord(record)}>자세히</button>
+                          <button
+                            type="button"
+                            aria-pressed={bodyRecord?.id === record.id}
+                            onClick={() => {
+                              setBodyRecord(record);
+                              setOpenRecord(record);
+                            }}
+                          >
+                            자세히
+                          </button>
                         ) : (
                           <button type="button" onClick={() => {
                             setActionError(undefined);
