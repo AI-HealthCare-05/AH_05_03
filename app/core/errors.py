@@ -46,6 +46,19 @@ class ErrorCode(StrEnum):
     INVITATION_TOKEN_INVALID = "INVITATION_TOKEN_INVALID"
     INVITATION_TOKEN_REUSED = "INVITATION_TOKEN_REUSED"
     PROFILE_REFERENCE_ALREADY_USED = "PROFILE_REFERENCE_ALREADY_USED"
+    # --- profile link ----------------------------------------------
+    PROFILE_LINK_NOT_FOUND = "PROFILE_LINK_NOT_FOUND"
+    PROFILE_REF_INVALID = "PROFILE_REF_INVALID"
+    PROFILE_ALREADY_LINKED = "PROFILE_ALREADY_LINKED"
+    PROFILE_REF_ALREADY_CLAIMED = "PROFILE_REF_ALREADY_CLAIMED"
+    # --- 검진문서 OCR --------------------------------------------------
+    DOCUMENT_UNSUPPORTED_TYPE = "DOCUMENT_UNSUPPORTED_TYPE"
+    DOCUMENT_TOO_LARGE = "DOCUMENT_TOO_LARGE"
+    DOCUMENT_RESOLUTION_TOO_LOW = "DOCUMENT_RESOLUTION_TOO_LOW"
+    OCR_NO_RESULT = "OCR_NO_RESULT"
+    OCR_UNAVAILABLE = "OCR_UNAVAILABLE"
+    # --- 작업 큐 --------------------------------------------------------
+    JOB_NOT_FOUND = "JOB_NOT_FOUND"
 
 
 ERROR_STATUS: dict[ErrorCode, int] = {
@@ -81,6 +94,21 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     ErrorCode.INVITATION_TOKEN_INVALID: status.HTTP_403_FORBIDDEN,
     ErrorCode.INVITATION_TOKEN_REUSED: status.HTTP_409_CONFLICT,
     ErrorCode.PROFILE_REFERENCE_ALREADY_USED: status.HTTP_409_CONFLICT,
+    ErrorCode.PROFILE_LINK_NOT_FOUND: status.HTTP_404_NOT_FOUND,
+    # 형식은 통과했으나 이 초대와 함께 쓸 수 없는 참조값이다. 03_api_spec.md
+    # 2.3의 "JSON은 유효하지만 요청 조합이 잘못됨"에 해당하므로 422가 아니다.
+    ErrorCode.PROFILE_REF_INVALID: status.HTTP_400_BAD_REQUEST,
+    ErrorCode.PROFILE_ALREADY_LINKED: status.HTTP_409_CONFLICT,
+    ErrorCode.PROFILE_REF_ALREADY_CLAIMED: status.HTTP_409_CONFLICT,
+    ErrorCode.DOCUMENT_UNSUPPORTED_TYPE: status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+    ErrorCode.DOCUMENT_TOO_LARGE: status.HTTP_413_CONTENT_TOO_LARGE,
+    # 형식은 맞지만 이 해상도로는 인식을 시도할 가치가 없다.
+    # 실측: 600x832 저해상도 스캔에서 사전 14개 중 0개가 잡혔다.
+    ErrorCode.DOCUMENT_RESOLUTION_TOO_LOW: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    ErrorCode.OCR_NO_RESULT: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    ErrorCode.OCR_UNAVAILABLE: status.HTTP_503_SERVICE_UNAVAILABLE,
+    # 결과는 TTL이 지나면 사라진다. 만료와 오타를 구분하지 않고 404로 준다.
+    ErrorCode.JOB_NOT_FOUND: status.HTTP_404_NOT_FOUND,
 }
 
 DEFAULT_MESSAGE: dict[ErrorCode, str] = {
@@ -114,6 +142,16 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.INVITATION_TOKEN_INVALID: "초대 링크가 유효하지 않습니다.",
     ErrorCode.INVITATION_TOKEN_REUSED: "이미 사용된 초대 링크입니다.",
     ErrorCode.PROFILE_REFERENCE_ALREADY_USED: "이미 사용된 프로필 연결 참조값입니다. 새 참조값으로 다시 시도해 주세요.",
+    ErrorCode.PROFILE_LINK_NOT_FOUND: "프로필 연결을 찾을 수 없습니다.",
+    ErrorCode.PROFILE_REF_INVALID: "초대 대상 프로필과 일치하지 않는 참조값입니다.",
+    ErrorCode.PROFILE_ALREADY_LINKED: "이 가정에서 이미 다른 로컬 프로필과 연결되어 있습니다.",
+    ErrorCode.PROFILE_REF_ALREADY_CLAIMED: "이 프로필은 이미 다른 계정과 연결되어 있습니다.",
+    ErrorCode.DOCUMENT_UNSUPPORTED_TYPE: "JPG, PNG, WebP 이미지만 업로드할 수 있습니다.",
+    ErrorCode.DOCUMENT_TOO_LARGE: "파일이 너무 큽니다. 20MB 이하로 올려주세요.",
+    ErrorCode.DOCUMENT_RESOLUTION_TOO_LOW: "이미지가 너무 작아 수치를 읽을 수 없습니다. 더 크게 촬영해 주세요.",
+    ErrorCode.OCR_NO_RESULT: "문서에서 검사 수치를 찾지 못했습니다. 표가 잘 보이도록 다시 촬영해 주세요.",
+    ErrorCode.OCR_UNAVAILABLE: "문서 인식 기능을 일시적으로 사용할 수 없습니다.",
+    ErrorCode.JOB_NOT_FOUND: "작업을 찾을 수 없습니다. 유효 시간이 지났을 수 있으니 다시 시도해 주세요.",
 }
 
 # 프레임워크가 직접 올리는 오류(라우터 404·405, HTTPBearer 401)만 여기로 온다.

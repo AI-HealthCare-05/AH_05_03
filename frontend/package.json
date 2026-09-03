@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "description": "이어봄 브라우저 로컬 도메인 계층. 건강정보는 이 경계 밖으로 나가지 않는다 (ADR-002).",
   "engines": {
     "node": ">=22.12.0"
   },
@@ -14,13 +15,15 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "verify:ocr": "tsx scripts/verify-ocr.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2",
+    "tesseract.js": "^7.0.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -40,6 +43,8 @@
     "fake-indexeddb": "^6.2.5",
     "globals": "^17.11.0",
     "jsdom": "^30.0.1",
+    "sharp": "^0.34.4",
+    "tsx": "^4.20.6",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.67.0",
     "vite": "^8.2.1",

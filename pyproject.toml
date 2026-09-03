@@ -4,22 +4,16 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
+# 기본 의존성은 `app/` 이 실제로 import하는 것만 둔다.
+# 예전에는 jupyter·pandas·matplotlib·scikit-learn·seaborn이 여기 있어서
+# `uv sync --group app`만 해도 API 이미지에 JupyterLab이 통째로 들어갔다.
+# 노트북·모델링 전용 패키지는 아래 `ds` 그룹으로 옮겼다.
 dependencies = [
     "cryptography>=46.0.3",
-    "duckdb>=1.5.5",
-    "jupyter>=1.1.1",
-    "matplotlib>=3.10.9",
-    "pandas>=2.3.3",
-    "pandas-stubs~=2.3.3",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.12.0",
-    "python-dateutil>=2.9.0.post0",
     "python-dotenv>=1.2.2",
     "redis>=7.1.0",
-    "requests>=2.34.2",
-    "scikit-learn>=1.7.2",
-    "seaborn>=0.13.2",
-    "tomlkit>=0.14.0",
     "typing-extensions>=4.15.0",
 ]
 
@@ -29,6 +23,20 @@ ai = [
     "torchvision",
     "torchaudio",
     "sentence-transformers>=5.2.0",
+]
+# 노트북·모델링 전용. API 이미지에는 넣지 않는다.
+# brfss_eda.ipynb, modeling/train_chronic_disease_models.py, duckdb_test.py, ocr_test.py 가 쓴다.
+ds = [
+    "duckdb>=1.5.5",
+    "jupyter>=1.1.1",
+    "matplotlib>=3.10.9",
+    "pandas>=2.3.3",
+    "pandas-stubs~=2.3.3",
+    "python-dateutil>=2.9.0.post0",
+    "requests>=2.34.2",
+    "scikit-learn>=1.7.2",
+    "seaborn>=0.13.2",
+    "tomlkit>=0.14.0",
 ]
 app = [
     "alembic>=1.14.0",
@@ -51,6 +59,10 @@ dev = [
     "ruff>=0.14.14",
     "types-passlib>=1.7.7.20250602",
     "types-python-dateutil>=2.9.0.20260124",
+]
+ocr = [
+    "onnxruntime>=1.20,<1.24",
+    "rapidocr-onnxruntime>=1.4.4",
 ]
 
 [tool.uv.sources]
@@ -90,3 +102,8 @@ line-ending = "auto"
 
 [tool.mypy]
 exclude = ["app/core/db/migrations/"]
+
+# OCR 엔진 패키지들은 py.typed 마커를 제공하지 않는다.
+[[tool.mypy.overrides]]
+module = ["rapidocr_onnxruntime.*", "cv2.*"]
+ignore_missing_imports = true

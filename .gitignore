@@ -18,3 +18,13 @@ wheels/
 .coverage
 *.coverage
 .coverage.*
+
+# frontend
+node_modules/
+frontend/dist/
+*.traineddata
+
+# 로컬 보안 소프트웨어(Norton 등)의 TLS 가로채기용 개인 루트 인증서.
+# 팀원마다 다르고 재설치 시 바뀌므로 각자 로컬에서만 생성해서 쓴다.
+docker/certs/*.crt
+!docker/certs/.gitkeep

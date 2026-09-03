@@ -67,8 +67,10 @@ services:
       # 로컬 HTTP 실험에서는 __Host- Secure 쿠키를 사용할 수 없다.
       REFRESH_COOKIE_NAME: ieobom_refresh
       REFRESH_COOKIE_SECURE: "false"
+    # --no-sync가 없으면 uv가 이미지에 설치해둔 app·ocr 그룹을 걷어내고
+    # 기본 그룹으로 되돌린다. 그러면 OCR 라우터 import에서 죽는다.
     command: |
-      sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      sh -c "uv run --no-sync alembic upgrade head && uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
       - ./app:/app/app  # 로컬의 app 디렉토리를 컨테이너의 /app/app에 마운트(수정사항 즉시 반영)
       - static_volume:/app/templates
@@ -83,22 +85,22 @@ services:
       redis:
         condition: service_healthy
 
-  # 4. AI Worker (연구·비건강 비동기 작업 전용)
-  #    브라우저의 건강정보 또는 건강 모델 입출력을 전달하지 않는다.
+  # 4. AI Worker (검진문서 OCR 전용, Redis Streams 소비자)
+  #    인식 로직은 app.services.documents가 정본이고 워커는 호출만 한다.
   ai-worker:
     container_name: ai-worker
     build:
       context: .  # 프로젝트 루트를 빌드 컨텍스트로 지정
       dockerfile: ai_worker/Dockerfile  # Dockerfile 위치 지정
     image: ${AI_WORKER_IMAGE:-ieobom-ai-worker:local}
-    profiles:
-      - ai
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-pw1234}
       DB_NAME: ${DB_NAME:-ai_health}
+      # .env의 REDIS_URL은 호스트에서 직접 띄울 때 쓰는 값(localhost)이다.
+      # 컨테이너 안에서는 서비스명으로 붙어야 큐를 찾는다.
       REDIS_URL: redis://redis:6379/0
     restart: always
     mem_limit: 4G

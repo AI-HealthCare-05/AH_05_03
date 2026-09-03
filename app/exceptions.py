@@ -135,5 +135,52 @@ class ProfileReferenceAlreadyUsedError(AppError):
     error_code = ErrorCode.PROFILE_REFERENCE_ALREADY_USED
 
 
+# --- profile link --------------------------------------------------------
+class ProfileLinkNotFoundError(AppError):
+    error_code = ErrorCode.PROFILE_LINK_NOT_FOUND
+
+
+class ProfileRefInvalidError(AppError):
+    error_code = ErrorCode.PROFILE_REF_INVALID
+
+
+class ProfileAlreadyLinkedError(AppError):
+    error_code = ErrorCode.PROFILE_ALREADY_LINKED
+
+
+class ProfileRefAlreadyClaimedError(AppError):
+    error_code = ErrorCode.PROFILE_REF_ALREADY_CLAIMED
+
+
 class RateLimitedError(AppError):
     error_code = ErrorCode.RATE_LIMITED
+
+
+# --- 검진문서 OCR --------------------------------------------------------
+class DocumentUnsupportedTypeError(AppError):
+    error_code = ErrorCode.DOCUMENT_UNSUPPORTED_TYPE
+
+
+class DocumentTooLargeError(AppError):
+    error_code = ErrorCode.DOCUMENT_TOO_LARGE
+
+
+class DocumentResolutionTooLowError(AppError):
+    error_code = ErrorCode.DOCUMENT_RESOLUTION_TOO_LOW
+
+
+class OcrNoResultError(AppError):
+    error_code = ErrorCode.OCR_NO_RESULT
+
+
+class OcrUnavailableError(AppError):
+    error_code = ErrorCode.OCR_UNAVAILABLE
+
+
+# --- 작업 큐 -------------------------------------------------------------
+class JobNotFoundError(AppError):
+    error_code = ErrorCode.JOB_NOT_FOUND
+
+
+class JobStoreUnavailableError(AppError):
+    error_code = ErrorCode.SERVICE_UNAVAILABLE

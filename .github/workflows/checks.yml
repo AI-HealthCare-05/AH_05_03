@@ -137,7 +137,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: uv sync --group app --frozen
+        run: uv sync --group app --group ocr --frozen
 
       - name: Check if tests exist
         id: check_tests
