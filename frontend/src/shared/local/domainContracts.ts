@@ -87,6 +87,10 @@ export type HealthRecordType =
   // 근력·수영을 담지 못하고, 복약은 어느 종류에도 안 들어간다.
   | "exercise"
   | "medication"
+  // 챌린지가 만들어 남기는 두 가지. 수면과 그날 컨디션은 어느 기존 종류에도
+  // 들어가지 않는다.
+  | "sleep"
+  | "daily_condition"
   // 판정 시점 스냅샷. 추적 대시보드가 "같은 사람의 다른 시점"을 그리려면 그 시점의
   // 입력값과 결과를 함께 남겨야 한다. 서버는 판정을 저장하지 않으므로(NFR-01)
   // 남길 자리는 여기, 암호화 로컬 보관함뿐이다.
@@ -224,4 +228,94 @@ export interface DashboardSummary {
   totalRecords: number;
   latestRecordedAt: ISODateTime | null;
   countsByType: Partial<Record<HealthRecordType, number>>;
+}
+
+
+export type ChallengeTaskStatus =
+  | "pending"
+  | "completed"
+  | "partial"
+  | "rest"
+  | "postponed"
+  | "skipped";
+
+export interface ChallengeTask {
+  id: string;
+  week: number;
+  dayOfWeek: number; // 0 (일) ~ 6 (토)
+  type: "exercise" | "sleep" | "check_in";
+  title: string;
+  targetMinutes?: number;
+  targetDistanceKm?: number;
+  note?: string;
+}
+
+export interface ChallengePlan {
+  id: string;
+  householdId: string;
+  profileId: string;
+  title: string;
+  goal: string;
+  startDate: ISODate;
+  endDate: ISODate;
+  status: "draft" | "active" | "completed" | "archived";
+  weeks: number;
+  tasks: ChallengeTask[];
+  createdBy: "health_assistant" | "manual";
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+  version: number;
+}
+
+export interface ChallengeTaskProgressState {
+  status: ChallengeTaskStatus;
+  completedAt?: ISODateTime;
+  adjustedMinutes?: number;
+  note?: string;
+}
+
+export interface ChallengeProgress {
+  id: string;
+  challengeId: string;
+  profileId: string;
+  date: ISODate;
+  dayStatus: ChallengeTaskStatus;
+  taskStatuses: Record<string, ChallengeTaskProgressState>;
+  completedAt: ISODateTime | null;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+  version: number;
+}
+
+export interface ChallengeWeeklyProgress {
+  challengeId: string;
+  profileId: string;
+  weekNumber: number;
+  totalDays: number;
+  completedDays: number;
+  ratePercent: number;
+  currentStreakDays: number;
+  dailyStatuses: Array<{
+    date: ISODate;
+    dayOfWeek: number;
+    status: ChallengeTaskStatus;
+    tasksCount: number;
+    completedCount: number;
+  }>;
+}
+
+export interface TodayTaskItem {
+  task: ChallengeTask;
+  status: ChallengeTaskStatus;
+  adjustedMinutes?: number;
+  completedAt?: ISODateTime;
+}
+
+export interface TodayChallengeSummary {
+  hasActiveChallenge: boolean;
+  plan?: ChallengePlan;
+  todayDate: ISODate;
+  tasks: TodayTaskItem[];
+  allCompleted: boolean;
+  weeklyProgress?: ChallengeWeeklyProgress;
 }

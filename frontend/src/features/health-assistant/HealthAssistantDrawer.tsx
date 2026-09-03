@@ -149,6 +149,27 @@ export function HealthAssistantDrawer({
     }
   }, [messages, loading, isOpen]);
 
+  // 구성원이 바뀌면 대화를 처음으로 되돌린다. 안 되돌리면 아버지 화면에 내 통증
+  // 이야기가 그대로 남는다 — 같은 서랍을 두 사람이 쓰는 꼴이다. 첫 인사말은 이
+  // 서랍이 무엇을 받아 주는지 알려 주는 유일한 안내이기도 하다.
+  useEffect(() => {
+    if (!profile) return;
+    setMessages([
+      {
+        id: "welcome",
+        role: "assistant",
+        content: `안녕하세요! ${profile.displayName}님의 건강 비서 '봄이'입니다.
+
+평소 운동, 혈압, 복약 정보를 편하게 말씀해 주시거나, 하단 + 버튼으로 검진표/서류 사진을 올리시면 기록과 조회를 도와드릴게요!`,
+      },
+    ]);
+    setQueriedRecords(null);
+    setQueriedRecordsTitle(undefined);
+    setSelectedImage(null);
+    setImagePreview(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id, profile?.displayName]);
+
   // 이미지 미리보기 메모리 정리
   useEffect(() => {
     return () => {

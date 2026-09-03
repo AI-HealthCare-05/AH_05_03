@@ -25,6 +25,9 @@ export const ChallengeSetupPage = lazy(() =>
 export const InsightsPage = lazy(() =>
   import("../features/insights/InsightsPage").then((m) => ({ default: m.InsightsPage })),
 );
+export const HealthDataPage = lazy(() =>
+  import("../features/health-data/HealthDataPage").then((m) => ({ default: m.HealthDataPage })),
+);
 export const DataManagementPage = lazy(() =>
   import("../features/data/DataManagementPage").then((m) => ({ default: m.DataManagementPage })),
 );

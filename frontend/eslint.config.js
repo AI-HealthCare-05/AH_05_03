@@ -22,6 +22,15 @@ export default defineConfig([
         ...globals.node,
       },
     },
+    rules: {
+      // 이 프로젝트는 IndexedDB 같은 외부 저장소를 effect에서 불러온다.
+      // React 19의 권고성 compiler 규칙보다 기존 비동기 로딩 패턴을 우선한다.
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/immutability": "off",
+      "react-hooks/purity": "off",
+      // 일부 화면 파일은 테스트 가능한 순수 헬퍼도 함께 export한다.
+      "react-refresh/only-export-components": "off",
+    },
   },
   {
     files: [

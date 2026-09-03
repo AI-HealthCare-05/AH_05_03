@@ -9,6 +9,18 @@ import type { LocalDocument } from "../../shared/local/domainContracts";
 import { GeminiOcrAdapter, type OcrMeasurements } from "../../shared/api/geminiOcrAdapter";
 import { FIELD_META } from "../assessment/fields";
 
+/**
+ * 선택한 구성원의 서류만 남긴다.
+ *
+ * 예전에는 가구 전체 서류를 한 목록에 쏟았다. 구성원을 골라 놓고 아버지 검진표와
+ * 내 검진표가 나란히 뜨면, 어느 것을 눌러야 지금 고른 사람의 기록이 되는지 화면이
+ * 말해 주지 않는다. 고르지 않았으면 아무것도 보이지 않는 편이 낫다.
+ */
+export function filterDocumentsByProfile(documents: LocalDocument[], profileId: string): LocalDocument[] {
+  if (!profileId) return [];
+  return documents.filter((document) => document.profileId === profileId);
+}
+
 export function DataManagementPage() {
   const { runtime, profiles, refreshProfiles } = useLocalDomain();
   const capabilities = useMemo(() => detectLocalCapabilities(), []);
@@ -32,6 +44,11 @@ export function DataManagementPage() {
   const navigate = useNavigate();
 
   const effectiveProfileId = selectedProfileId || profiles[0]?.id || "";
+  const visibleDocuments = useMemo(
+    () => filterDocumentsByProfile(documents, effectiveProfileId),
+    [documents, effectiveProfileId],
+  );
+
 
   const refreshDocuments = useCallback(async () => {
     if (!runtime?.documents) return;
@@ -334,13 +351,13 @@ export function DataManagementPage() {
               <button className="primary-button" type="button" disabled={!documentFile || !effectiveProfileId || working} onClick={() => void saveDocument()}>암호화 저장</button>
             </div>
             <div className="document-list">
-              {documents.map((document) => (
+              {visibleDocuments.map((document) => (
                 <article key={document.id}>
                   <div><strong>{document.fileName}</strong><small>{profiles.find((profile) => profile.id === document.profileId)?.displayName ?? "알 수 없는 구성원"} · {(document.byteSize / 1024).toFixed(1)}KB</small></div>
                   <div className="record-row-actions"><button type="button" onClick={() => void downloadDocument(document)}>내려받기</button><button type="button" disabled={!(document.mimeType.startsWith("image/") || document.mimeType === "application/pdf") || working} onClick={() => void runOcr(document)}>건강자료 불러오기</button><button type="button" onClick={() => setDeletingDocument(document)}>삭제</button></div>
                 </article>
               ))}
-              {documents.length === 0 ? <div className="compact-empty"><strong>저장된 건강자료가 없습니다.</strong></div> : null}
+              {visibleDocuments.length === 0 ? <div className="compact-empty"><strong>선택한 구성원에게 저장된 건강자료가 없습니다.</strong></div> : null}
             </div>
           </>
         )}

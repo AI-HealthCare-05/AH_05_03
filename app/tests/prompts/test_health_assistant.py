@@ -6,7 +6,10 @@ def test_build_system_instruction_without_context() -> None:
     instruction = build_system_instruction(None)
 
     assert "시스템 기준 일자" in instruction
+    assert "한국 표준시" in instruction
     assert "가족 건강관리 서비스" in instruction
+    assert "원래 질문에도 답하세요" in instruction
+    assert "임의의 08:00, 12:00 같은 시각을 만들지 마세요" in instruction
     assert "대화 대상 프로필 컨텍스트" not in instruction
 
 

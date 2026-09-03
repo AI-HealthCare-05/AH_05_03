@@ -11,11 +11,18 @@ import { useAuth } from "./authContext";
 // 실제로 써 보니 반대였다. 그 화면들에 들어가려면 **어느 카드의 어느 버튼을 눌러야
 // 하는지 알고 있어야** 했고, 처음 온 사람은 홈에서 더 나아가지 못했다. 문이 둘인
 // 것보다 문을 못 찾는 쪽이 비싸다. 현재 위치는 `NavLink` 의 active 표시가 말한다.
+// 예측 데모는 FastAPI 가 직접 내는 화면이라 SPA 라우트가 아니다. `NavLink` 로 걸면
+// react-router 가 클라이언트 라우팅을 시도해 404 로 떨어진다 — 일반 앵커여야 한다.
+const DEMO_PAGES = [
+  { href: "/api/demo", label: "예측 데모", hint: "ML 모델과 규칙 엔진을 한 화면에서 비교합니다" },
+] as const;
+
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
   { to: "/assessment", label: "위험 판정", end: false },
   { to: "/challenge", label: "챌린지", end: false },
   { to: "/insights", label: "건강 현황", end: false },
+  { to: "/health-data", label: "건강 데이터", end: false },
   { to: "/data", label: "데이터 관리", end: false },
   { to: "/account", label: "계정", end: false },
 ] as const;
@@ -55,6 +62,12 @@ export function RootLayout() {
               <NavLink key={`${item.to}-${item.label}`} to={item.to} end={item.end}>
                 {item.label}
               </NavLink>
+            ))}
+            {DEMO_PAGES.map((item) => (
+              <a key={item.href} className="navigation-external" href={item.href} title={item.hint}>
+                {item.label}
+                <i aria-hidden="true">↗</i>
+              </a>
             ))}
           </nav>
 

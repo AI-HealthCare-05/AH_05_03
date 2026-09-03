@@ -11,6 +11,7 @@ import {
   ChallengePage,
   ChallengeSetupPage,
   DataManagementPage,
+  HealthDataPage,
   InsightsPage,
   UiPreviewPage,
 } from "./lazyRoutes";
@@ -66,9 +67,16 @@ export const router = createBrowserRouter([
         element: <ChallengePage />,
       },
       {
-        // 챌린지와 수치를 모아 보는 곳. 가족 홈이 "관리", 여기가 "현황" 이다.
+        // 챌린지와 판정 수치를 모아 보는 곳. 가족 홈이 "관리", 여기가 "현황" 이다.
         path: "insights",
         element: <InsightsPage />,
+      },
+      {
+        // 건강기록 자체를 기간별로 훑는 곳. `insights` 와 겹쳐 보이지만 원천이 다르다 —
+        // 여기는 기기 안 `healthRecords`, `insights` 는 판정 스냅샷이다. 한쪽을 지우면
+        // 검사 지표 추이나 챌린지 달성 둘 중 하나가 갈 곳을 잃는다.
+        path: "health-data",
+        element: <HealthDataPage />,
       },
       {
         path: "data",
