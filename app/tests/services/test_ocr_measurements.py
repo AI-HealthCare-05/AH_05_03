@@ -224,6 +224,36 @@ class TestUnitlessSiValues:
         result = extract(table(["트리글리세라이드", "69", "mg/dL", "정상: 0~20"]))
         assert result.values == {"triglyceride": 69.0}
 
+    def test_triglyceride_spelling_variant(self) -> None:
+        """`트리글리세리드` — 오타가 아니라 실제로 쓰이는 표기다.
+
+        2026-09-03 합성 채점 세트(`scripts/score_ocr.py`)에서 OCR 이 인쇄된
+        `트리글리세라이드` 를 이 꼴로 읽었고, 사전에 없어 한 칸을 통째로 놓쳤다.
+        관문은 못 잡는다 — 이름을 못 알아본 값은 애초에 관문까지 오지 않는다.
+        """
+        result = extract(table(["트리글리세리드", "406", "mg/dL", "정상: 150 미만"]))
+        assert result.values == {"triglyceride": 406.0}
+
+    def test_slash_in_a_test_name_does_not_break_the_lookup(self) -> None:
+        """`요알부민/크레아티닌비` — 슬래시가 있는 인쇄명.
+
+        정규화는 단위(`mg/dL`) 때문에 `/` 를 남긴다. 그 결정이 검사명에서는 사전과
+        어긋나게 만들어, 2026-09-03 채점에서 이 항목을 10 개 중 7 개 놓쳤다.
+        사전을 슬래시 유무로 두 벌 만들지 않고 후보 열쇠를 넓혀 푼다.
+        """
+        result = extract(table(["요알부민/크레아티닌비", "62", "mg/g", "30 미만"]))
+        assert result.values == {"urine_acr": 62.0}
+
+    def test_greek_gamma_folds_to_its_name(self) -> None:
+        """`γ-GTP` — 그리스 문자를 지우면 `gtp` 만 남아 사전과 안 맞는다.
+
+        `_KEEP` 이 한글·영숫자만 남기므로 `γ` 는 통째로 사라진다. 이름으로 펴 두면
+        `gammagtp` 가 되어 기존 사전에 그대로 걸린다. OCR 이 `ɣ` 로 읽는 경우도 같다.
+        """
+        for printed in ("γ-GTP", "ɣ-GTP", "감마GTP"):
+            result = extract(table([printed, "101", "IU/L", "63 이하"]))
+            assert result.values == {"ggt": 101.0}, printed
+
 
 class TestShortAbbreviationsAreDeliberatelyNarrow:
     """두 글자 약어는 한 글자만 틀려도 값이 다른 칸에 앉는다.

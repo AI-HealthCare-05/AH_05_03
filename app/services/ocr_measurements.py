@@ -102,7 +102,9 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "total_chol": ("총콜레스테롤", "총콜레스테롤수치", "totalcholesterol", "tchol", "tcho"),
     "hdl": ("hdl콜레스테롤", "hdl콜레스테롤수치", "고밀도지단백", "고밀도콜레스테롤", "hdl", "hdlc", "hdlcholesterol"),
     "ldl": ("ldl콜레스테롤", "ldl콜레스테롤수치", "저밀도지단백", "저밀도콜레스테롤", "ldl", "ldlc", "ldlcholesterol"),
-    "triglyceride": ("중성지방", "트리글리세라이드", "tg", "triglyceride", "triglycerides"),
+    # `트리글리세리드` 는 오타가 아니라 실제로 쓰이는 표기이고, 2026-09-03 채점
+    # 세트(`scripts/score_ocr.py`)에서 OCR 이 이 꼴로 읽어 한 칸을 통째로 놓쳤다.
+    "triglyceride": ("중성지방", "트리글리세라이드", "트리글리세리드", "tg", "triglyceride", "triglycerides"),
     # --- 간기능 -----------------------------------------------------
     #
     # `sgot`·`sgpt` 는 옛 이름이라 아직 그대로 찍는 기관이 있다. 괄호 안에 들어가는
@@ -282,6 +284,11 @@ class ExtractionResult:
 # 정규화
 # --------------------------------------------------------------------------
 _KEEP = re.compile(r"[^0-9a-z가-힣%/]")
+
+#: 그리스 문자를 이름으로 편다. `_KEEP` 이 이 글자들을 지우기 때문에, 접어 두지 않으면
+#: `γ-GTP` 가 `gtp` 로 줄어 사전(`gammagtp`)과 어긋난다. 2026-09-03 채점 세트에서
+#: 감마지티피 재현율이 69% 였던 이유가 이것이다 — 셋 중 하나를 그 표기로 인쇄했다.
+_GREEK = {"γ": "gamma", "ɣ": "gamma", "α": "alpha", "β": "beta"}
 _NUMBER = re.compile(r"[-+]?\d+(?:[.,]\d+)?")
 _CENSORED = re.compile(r"[<>≤≥]")
 
@@ -292,6 +299,8 @@ def _normalize(text: str) -> str:
     `NFKC` 를 먼저 거는 이유는 검진표가 전각 영숫자(`ＡＳＴ`)를 쓰는 일이 있어서다.
     """
     folded = unicodedata.normalize("NFKC", text).lower()
+    for glyph, name in _GREEK.items():
+        folded = folded.replace(glyph, name)
     return _KEEP.sub("", folded)
 
 
@@ -306,6 +315,11 @@ def _candidates(label: str) -> list[str]:
         keys.append(_normalize(inside))
     outside = re.split(r"[(\[（]", label)[0]
     keys.append(_normalize(outside))
+    # 슬래시를 뺀 꼴도 찾아본다. `_KEEP` 이 `/` 를 남기는 것은 단위(`mg/dL`) 때문인데,
+    # 검사명에서는 그게 사전과 어긋나게 만든다 — 인쇄된 `요알부민/크레아티닌비` 가
+    # 사전의 `요알부민크레아티닌비` 와 안 맞아 2026-09-03 채점에서 10 개 중 7 개를
+    # 놓쳤다. 사전을 슬래시 유무로 두 벌 만들지 않으려고 여기서 편다.
+    keys += [key.replace("/", "") for key in list(keys) if "/" in key]
     return [k for k in dict.fromkeys(keys) if k]
 
 

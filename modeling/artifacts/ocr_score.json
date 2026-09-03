@@ -1,0 +1,130 @@
+{
+  "documents": 24,
+  "totals": {
+    "expected": 223,
+    "returned": 211,
+    "exact": 210,
+    "wrong_value": 1,
+    "misrouted": 0,
+    "missed": 12
+  },
+  "recall": 0.9417,
+  "precision": 0.9953,
+  "latency_ms_median": 4193.4,
+  "per_key": {
+    "albumin": {
+      "expected": 14,
+      "got": 14,
+      "exact": 14,
+      "wrong": 0,
+      "recall": 1.0
+    },
+    "alt": {
+      "expected": 14,
+      "got": 14,
+      "exact": 14,
+      "wrong": 0,
+      "recall": 1.0
+    },
+    "ast": {
+      "expected": 15,
+      "got": 15,
+      "exact": 15,
+      "wrong": 0,
+      "recall": 1.0
+    },
+    "creatinine": {
+      "expected": 9,
+      "got": 8,
+      "exact": 8,
+      "wrong": 0,
+      "recall": 0.889
+    },
+    "dbp": {
+      "expected": 19,
+      "got": 18,
+      "exact": 18,
+      "wrong": 0,
+      "recall": 0.947
+    },
+    "fasting_glucose": {
+      "expected": 13,
+      "got": 12,
+      "exact": 12,
+      "wrong": 0,
+      "recall": 0.923
+    },
+    "ggt": {
+      "expected": 16,
+      "got": 16,
+      "exact": 16,
+      "wrong": 0,
+      "recall": 1.0
+    },
+    "hba1c": {
+      "expected": 17,
+      "got": 17,
+      "exact": 17,
+      "wrong": 0,
+      "recall": 1.0
+    },
+    "hdl": {
+      "expected": 13,
+      "got": 13,
+      "exact": 13,
+      "wrong": 0,
+      "recall": 1.0
+    },
+    "hemoglobin": {
+      "expected": 10,
+      "got": 10,
+      "exact": 10,
+      "wrong": 0,
+      "recall": 1.0
+    },
+    "ldl": {
+      "expected": 14,
+      "got": 13,
+      "exact": 13,
+      "wrong": 0,
+      "recall": 0.929
+    },
+    "sbp": {
+      "expected": 13,
+      "got": 13,
+      "exact": 13,
+      "wrong": 0,
+      "recall": 1.0
+    },
+    "total_chol": {
+      "expected": 15,
+      "got": 14,
+      "exact": 14,
+      "wrong": 0,
+      "recall": 0.933
+    },
+    "triglyceride": {
+      "expected": 14,
+      "got": 13,
+      "exact": 13,
+      "wrong": 0,
+      "recall": 0.929
+    },
+    "uric_acid": {
+      "expected": 17,
+      "got": 17,
+      "exact": 17,
+      "wrong": 0,
+      "recall": 1.0
+    },
+    "urine_acr": {
+      "expected": 10,
+      "got": 4,
+      "exact": 3,
+      "wrong": 1,
+      "recall": 0.3
+    }
+  },
+  "misroutes": [],
+  "failures": []
+}
