@@ -12,6 +12,8 @@ BIN_DIR="${STATE_DIR}/bin"
 CLOUDFLARED_BIN="${BIN_DIR}/cloudflared"
 PLIST_FILE="${HOME}/Library/LaunchAgents/com.ieobom.cloudflare-dev.plist"
 LABEL="com.ieobom.cloudflare-dev"
+NAMED_CONFIG="${IEOBOM_CLOUDFLARED_CONFIG:-${HOME}/.cloudflared/config.yml}"
+NAMED_ORIGIN="${IEOBOM_CLOUDFLARE_ORIGIN:-https://ieobom.cromtind.uk}"
 
 mkdir -p "${STATE_DIR}" "${BIN_DIR}" "$(dirname "${PLIST_FILE}")"
 
@@ -30,14 +32,27 @@ if [[ ! -x "${CLOUDFLARED_BIN}" ]]; then
   chmod 755 "${CLOUDFLARED_BIN}"
 fi
 
-existing_url=""
-if [[ -f "${LOG_FILE}" ]]; then
-  existing_url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "${LOG_FILE}" | tail -1 || true)"
-fi
+write_launch_agent() {
+  local mode="$1"
+  local target="$2"
+  local log_file="$3"
 
-if [[ -z "${existing_url}" ]] || ! curl --fail --silent --show-error --max-time 10 "${existing_url}/healthz" >/dev/null 2>&1; then
   launchctl bootout "gui/$(id -u)" "${PLIST_FILE}" >/dev/null 2>&1 || true
-  : > "${LOG_FILE}"
+  : > "${log_file}"
+  if [[ "${mode}" == "named" ]]; then
+    program_arguments="
+    <string>tunnel</string>
+    <string>--no-autoupdate</string>
+    <string>--config</string>
+    <string>${target}</string>
+    <string>run</string>"
+  else
+    program_arguments="
+    <string>tunnel</string>
+    <string>--no-autoupdate</string>
+    <string>--url</string>
+    <string>${target}</string>"
+  fi
   cat > "${PLIST_FILE}" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -47,34 +62,53 @@ if [[ -z "${existing_url}" ]] || ! curl --fail --silent --show-error --max-time 
   <key>ProgramArguments</key>
   <array>
     <string>${CLOUDFLARED_BIN}</string>
-    <string>tunnel</string>
-    <string>--no-autoupdate</string>
-    <string>--url</string>
-    <string>http://127.0.0.1:${HTTP_PORT}</string>
+    ${program_arguments}
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>${LOG_FILE}</string>
-  <key>StandardErrorPath</key><string>${LOG_FILE}</string>
+  <key>StandardOutPath</key><string>${log_file}</string>
+  <key>StandardErrorPath</key><string>${log_file}</string>
 </dict>
 </plist>
 EOF
   plutil -lint "${PLIST_FILE}"
   launchctl bootstrap "gui/$(id -u)" "${PLIST_FILE}"
-fi
+}
 
 tunnel_url=""
-for attempt in $(seq 1 30); do
-  tunnel_url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "${LOG_FILE}" | tail -1 || true)"
-  if [[ -n "${tunnel_url}" ]] && curl --fail --silent --show-error --max-time 10 "${tunnel_url}/healthz" >/dev/null 2>&1; then
-    break
+if [[ -f "${NAMED_CONFIG}" ]]; then
+  LOG_FILE="${STATE_DIR}/named-tunnel.log"
+  tunnel_url="${NAMED_ORIGIN%/}"
+  if ! curl --fail --silent --show-error --max-time 10 "${tunnel_url}/healthz" >/dev/null 2>&1; then
+    write_launch_agent named "${NAMED_CONFIG}" "${LOG_FILE}"
+    for attempt in $(seq 1 30); do
+      if curl --fail --silent --show-error --max-time 10 "${tunnel_url}/healthz" >/dev/null 2>&1; then
+        break
+      fi
+      echo "Cloudflare named tunnel health check ${attempt}/30 is not ready yet."
+      sleep 2
+    done
   fi
-  echo "Cloudflare tunnel health check ${attempt}/30 is not ready yet."
-  sleep 2
-done
+else
+  existing_url=""
+  if [[ -f "${LOG_FILE}" ]]; then
+    existing_url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "${LOG_FILE}" | tail -1 || true)"
+  fi
+  if [[ -z "${existing_url}" ]] || ! curl --fail --silent --show-error --max-time 10 "${existing_url}/healthz" >/dev/null 2>&1; then
+    write_launch_agent quick "http://127.0.0.1:${HTTP_PORT}" "${LOG_FILE}"
+  fi
+  for attempt in $(seq 1 30); do
+    tunnel_url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "${LOG_FILE}" | tail -1 || true)"
+    if [[ -n "${tunnel_url}" ]] && curl --fail --silent --show-error --max-time 10 "${tunnel_url}/healthz" >/dev/null 2>&1; then
+      break
+    fi
+    echo "Cloudflare tunnel health check ${attempt}/30 is not ready yet."
+    sleep 2
+  done
+fi
 
 if [[ -z "${tunnel_url}" ]] || ! curl --fail --silent --show-error --max-time 10 "${tunnel_url}/healthz" >/dev/null; then
-  echo "Cloudflare quick tunnel did not become healthy." >&2
+  echo "Cloudflare tunnel did not become healthy." >&2
   tail -100 "${LOG_FILE}" >&2
   exit 1
 fi
