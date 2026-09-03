@@ -107,7 +107,7 @@ services:
       start_period: 15s
 
   email-worker:
-    image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
+    image: ieobom-dev-fastapi:current
     command: ["python", "-m", "app.workers.invitation_email_worker"]
     restart: unless-stopped
     environment:
