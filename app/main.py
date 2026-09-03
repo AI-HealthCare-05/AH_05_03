@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 
+from app.apis.demo_routers import demo_router
 from app.apis.exception_handlers import register_exception_handlers
 from app.apis.v1 import v1_routers
 from app.core import config
@@ -50,3 +51,6 @@ app.add_middleware(
 register_exception_handlers(app)
 
 app.include_router(v1_routers)
+# 예측 API를 사람이 눌러 확인하는 데모 화면. nginx가 /api/ 만 프록시하므로 그 아래 둔다.
+# ML 모델과 규칙 엔진을 한 화면에서 스위치로 바꿔 돌린다.
+app.include_router(demo_router)

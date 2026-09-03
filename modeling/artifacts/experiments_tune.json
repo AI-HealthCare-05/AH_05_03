@@ -1,0 +1,70 @@
+{
+  "tune": [
+    {
+      "target": "dm_undiagnosed",
+      "model": "logistic",
+      "best_params": {
+        "C": 0.1
+      },
+      "cv_auroc": 0.7502728053619696,
+      "holdout_auroc": 0.7732430908065426,
+      "holdout_auprc": 0.10474095298653874
+    },
+    {
+      "target": "dm_undiagnosed",
+      "model": "xgboost",
+      "best_params": {
+        "max_depth": 2,
+        "min_child_weight": 50,
+        "n_estimators": 200
+      },
+      "cv_auroc": 0.7529089387660975,
+      "holdout_auroc": 0.7903053742647651,
+      "holdout_auprc": 0.12403641242574368
+    },
+    {
+      "target": "prediabetes",
+      "model": "logistic",
+      "best_params": {
+        "C": 0.01
+      },
+      "cv_auroc": 0.6992089502665635,
+      "holdout_auroc": 0.6807510904510992,
+      "holdout_auprc": 0.5512522115191802
+    },
+    {
+      "target": "prediabetes",
+      "model": "xgboost",
+      "best_params": {
+        "max_depth": 2,
+        "min_child_weight": 50,
+        "n_estimators": 200
+      },
+      "cv_auroc": 0.7032183875613708,
+      "holdout_auroc": 0.676350000504924,
+      "holdout_auprc": 0.5404945001157686
+    },
+    {
+      "target": "htn_undiagnosed",
+      "model": "logistic",
+      "best_params": {
+        "C": 0.01
+      },
+      "cv_auroc": 0.7889958401422826,
+      "holdout_auroc": 0.7230434284404721,
+      "holdout_auprc": 0.19780450278498135
+    },
+    {
+      "target": "htn_undiagnosed",
+      "model": "xgboost",
+      "best_params": {
+        "max_depth": 3,
+        "min_child_weight": 50,
+        "n_estimators": 200
+      },
+      "cv_auroc": 0.796274329595403,
+      "holdout_auroc": 0.7354425973610417,
+      "holdout_auprc": 0.21213503431795858
+    }
+  ]
+}
