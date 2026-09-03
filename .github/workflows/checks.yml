@@ -203,6 +203,7 @@ jobs:
       IEOBOM_DEV_INVITATION_WEB_ORIGIN: ${{ vars.IEOBOM_DEV_INVITATION_WEB_ORIGIN }}
       IEOBOM_DEV_CORS_ALLOW_ORIGINS: ${{ vars.IEOBOM_DEV_CORS_ALLOW_ORIGINS }}
       IEOBOM_DEV_REFRESH_COOKIE_SECURE: ${{ vars.IEOBOM_DEV_REFRESH_COOKIE_SECURE }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       DEPLOY_SHA: ${{ github.sha }}
     steps:
       - name: Check out the exact dev revision that passed CI
