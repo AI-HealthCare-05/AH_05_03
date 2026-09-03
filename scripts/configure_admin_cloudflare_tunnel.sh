@@ -15,6 +15,23 @@ LABEL="com.ieobom.cloudflare-dev"
 NAMED_CONFIG="${IEOBOM_CLOUDFLARED_CONFIG:-${HOME}/.cloudflared/config.yml}"
 NAMED_ORIGIN="${IEOBOM_CLOUDFLARE_ORIGIN:-https://ieobom.cromtind.uk}"
 
+# Named Tunnel은 LaunchAgent가 상시 관리한다. 정상인 배포마다 plist를 다시 쓰고
+# FastAPI/nginx를 재생성하던 작업을 건너뛰며, 공개 주소와 CORS만 확인한다.
+if [[ -f "${NAMED_CONFIG}" ]]; then
+  healthy_origin="${NAMED_ORIGIN%/}"
+  if curl --fail --silent --show-error --max-time 5 "${healthy_origin}/healthz" >/dev/null 2>&1; then
+    origin_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --max-time 5 \
+      --header "Origin: ${healthy_origin}" "${healthy_origin}/api/openapi.json")"
+    if [[ "${origin_status}" != "403" ]] && [[ "${origin_status}" != "000" ]]; then
+      echo "Cloudflare named tunnel is already healthy: ${healthy_origin}"
+      if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+        printf '### Admin Mac Cloudflare tunnel\n\n%s\n' "${healthy_origin}" >> "${GITHUB_STEP_SUMMARY}"
+      fi
+      exit 0
+    fi
+  fi
+fi
+
 mkdir -p "${STATE_DIR}" "${BIN_DIR}" "$(dirname "${PLIST_FILE}")"
 
 if [[ ! -x "${CLOUDFLARED_BIN}" ]]; then
@@ -179,7 +196,8 @@ PY
 export DEV_HTTP_PORT="${HTTP_PORT}"
 export DEPLOY_VERSION="${DEPLOY_SHA:-local}"
 export INVITATION_WEB_ORIGIN="${tunnel_url}"
-export CORS_ALLOW_ORIGINS="$(grep '^CORS_ALLOW_ORIGINS=' "${ENV_FILE}" | tail -1 | cut -d= -f2-)"
+CORS_ALLOW_ORIGINS="$(grep '^CORS_ALLOW_ORIGINS=' "${ENV_FILE}" | tail -1 | cut -d= -f2-)"
+export CORS_ALLOW_ORIGINS
 if [[ -n "${IEOBOM_DEV_REFRESH_COOKIE_SECURE:-}" ]]; then
   export REFRESH_COOKIE_SECURE="${IEOBOM_DEV_REFRESH_COOKIE_SECURE}"
 fi
