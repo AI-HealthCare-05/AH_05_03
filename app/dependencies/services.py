@@ -5,6 +5,7 @@ from redis.asyncio import Redis
 
 from app.core.redis.client import get_redis
 from app.services.invitation_store import InvitationStore
+from app.services.rate_limit import RateLimiter
 from app.services.token_store import TokenStore
 
 
@@ -14,3 +15,7 @@ def get_token_store(redis: Annotated[Redis, Depends(get_redis)]) -> TokenStore:
 
 def get_invitation_store(redis: Annotated[Redis, Depends(get_redis)]) -> InvitationStore:
     return InvitationStore(redis)
+
+
+def get_rate_limiter(redis: Annotated[Redis, Depends(get_redis)]) -> RateLimiter:
+    return RateLimiter(redis)

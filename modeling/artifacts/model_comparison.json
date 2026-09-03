@@ -1,0 +1,32 @@
+[
+  {
+    "target": "dm_undiagnosed",
+    "logistic_auroc": 0.7732430908065426,
+    "xgboost_auroc": 0.7903053742647651,
+    "gap_mean": 0.017272902286747965,
+    "ci_low": -0.003246298792404675,
+    "ci_high": 0.03713723029485762,
+    "two_sided_crossing": 0.094,
+    "verdict": "구분 안 됨"
+  },
+  {
+    "target": "prediabetes",
+    "logistic_auroc": 0.6807510904510992,
+    "xgboost_auroc": 0.676350000504924,
+    "gap_mean": -0.004408965994167216,
+    "ci_low": -0.010328913337501532,
+    "ci_high": 0.001371256578634028,
+    "two_sided_crossing": 0.135,
+    "verdict": "구분 안 됨"
+  },
+  {
+    "target": "htn_undiagnosed",
+    "logistic_auroc": 0.7230434284404721,
+    "xgboost_auroc": 0.7354425973610417,
+    "gap_mean": 0.012472892257206108,
+    "ci_low": 0.0005805446665914593,
+    "ci_high": 0.024252895955352387,
+    "two_sided_crossing": 0.039,
+    "verdict": "유의"
+  }
+]

@@ -1,0 +1,1129 @@
+{
+  "greedy_dm": [
+    {
+      "target": "dm",
+      "step": 1,
+      "added": "self_rated_health",
+      "features": [
+        "self_rated_health"
+      ],
+      "auroc": 0.7283719683793852,
+      "gain": 0.22837196837938523,
+      "bands": {
+        "19-39": 0.684351097673789,
+        "40-59": 0.7101523169336385,
+        "60+": 0.683072502071338
+      }
+    },
+    {
+      "target": "dm",
+      "step": 2,
+      "added": "age",
+      "features": [
+        "self_rated_health",
+        "age"
+      ],
+      "auroc": 0.7694056031052042,
+      "gain": 0.041033634725819,
+      "bands": {
+        "19-39": 0.7207108368493491,
+        "40-59": 0.7380928203661328,
+        "60+": 0.6890463455306297
+      }
+    },
+    {
+      "target": "dm",
+      "step": 3,
+      "added": "bmi",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi"
+      ],
+      "auroc": 0.7965640532622185,
+      "gain": 0.027158450157014236,
+      "bands": {
+        "19-39": 0.8040968164075721,
+        "40-59": 0.7675028604118994,
+        "60+": 0.7109974934189136
+      }
+    },
+    {
+      "target": "dm",
+      "step": 4,
+      "added": "sex",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex"
+      ],
+      "auroc": 0.7982288429246909,
+      "gain": 0.0016647896624724101,
+      "bands": {
+        "19-39": 0.8057861961598339,
+        "40-59": 0.7692856121281464,
+        "60+": 0.7157088170825074
+      }
+    },
+    {
+      "target": "dm",
+      "step": 5,
+      "added": "heavy_alcohol",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol"
+      ],
+      "auroc": 0.7999523774321156,
+      "gain": 0.0017235345074246844,
+      "bands": {
+        "19-39": 0.811900679136301,
+        "40-59": 0.769846252860412,
+        "60+": 0.7201774533555674
+      }
+    },
+    {
+      "target": "dm",
+      "step": 6,
+      "added": "income_rank",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank"
+      ],
+      "auroc": 0.8014805615409895,
+      "gain": 0.0015281841088738979,
+      "bands": {
+        "19-39": 0.8161368200175989,
+        "40-59": 0.7716883581235697,
+        "60+": 0.7218244554216615
+      }
+    },
+    {
+      "target": "dm",
+      "step": 7,
+      "added": "difficulty_walking",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking"
+      ],
+      "auroc": 0.8020554653646446,
+      "gain": 0.0005749038236551041,
+      "bands": {
+        "19-39": 0.8165091040364614,
+        "40-59": 0.7718256578947368,
+        "60+": 0.721840396857859
+      }
+    },
+    {
+      "target": "dm",
+      "step": 8,
+      "added": "education_level",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level"
+      ],
+      "auroc": 0.8023074099386391,
+      "gain": 0.00025194457399457804,
+      "bands": {
+        "19-39": 0.8168052390514654,
+        "40-59": 0.7707737414187643,
+        "60+": 0.7236988327093101
+      }
+    },
+    {
+      "target": "dm",
+      "step": 9,
+      "added": "veg_fruit_daily",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily"
+      ],
+      "auroc": 0.8024554121102521,
+      "gain": 0.0001480021716129265,
+      "bands": {
+        "19-39": 0.8164724397012703,
+        "40-59": 0.7708838672768878,
+        "60+": 0.7233837795886691
+      }
+    },
+    {
+      "target": "dm",
+      "step": 10,
+      "added": "dbp",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp"
+      ],
+      "auroc": 0.8025371426613926,
+      "gain": 8.17305511405797e-05,
+      "bands": {
+        "19-39": 0.8123603934929265,
+        "40-59": 0.772433495423341,
+        "60+": 0.7259755215052072
+      }
+    },
+    {
+      "target": "dm",
+      "step": 11,
+      "added": "sbp",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp"
+      ],
+      "auroc": 0.802755338529762,
+      "gain": 0.000218195868369353,
+      "bands": {
+        "19-39": 0.8125408948354054,
+        "40-59": 0.7742141018306636,
+        "60+": 0.7273393533230553
+      }
+    },
+    {
+      "target": "dm",
+      "step": 12,
+      "added": "moderate_min_per_week",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp",
+        "moderate_min_per_week"
+      ],
+      "auroc": 0.8027983808756145,
+      "gain": 4.3042345852506436e-05,
+      "bands": {
+        "19-39": 0.8137282552288984,
+        "40-59": 0.7743320938215104,
+        "60+": 0.7280456008977546
+      }
+    },
+    {
+      "target": "dm",
+      "step": 13,
+      "added": "waist_cm",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp",
+        "moderate_min_per_week",
+        "waist_cm"
+      ],
+      "auroc": 0.8028542784112784,
+      "gain": 5.5897535663929077e-05,
+      "bands": {
+        "19-39": 0.819397125516121,
+        "40-59": 0.7757193935926775,
+        "60+": 0.7309062496722567
+      }
+    },
+    {
+      "target": "dm",
+      "step": 14,
+      "added": "alcohol_days_per_year",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp",
+        "moderate_min_per_week",
+        "waist_cm",
+        "alcohol_days_per_year"
+      ],
+      "auroc": 0.803055360900472,
+      "gain": 0.00020108248919359362,
+      "bands": {
+        "19-39": 0.8211570136052887,
+        "40-59": 0.7761627574370709,
+        "60+": 0.736176152869983
+      }
+    },
+    {
+      "target": "dm",
+      "step": 15,
+      "added": "fh_cvd",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp",
+        "moderate_min_per_week",
+        "waist_cm",
+        "alcohol_days_per_year",
+        "fh_cvd"
+      ],
+      "auroc": 0.8027506187526706,
+      "gain": -0.00030474214780140674,
+      "bands": {
+        "19-39": 0.8212811082782429,
+        "40-59": 0.7764831235697941,
+        "60+": 0.7362487283558297
+      }
+    },
+    {
+      "target": "dm",
+      "step": 16,
+      "added": "sleep_hours",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp",
+        "moderate_min_per_week",
+        "waist_cm",
+        "alcohol_days_per_year",
+        "fh_cvd",
+        "sleep_hours"
+      ],
+      "auroc": 0.8028233066128772,
+      "gain": 7.268786020653284e-05,
+      "bands": {
+        "19-39": 0.8210949662688115,
+        "40-59": 0.7762814645308924,
+        "60+": 0.7362120211014274
+      }
+    },
+    {
+      "target": "dm",
+      "step": 17,
+      "added": "vigorous_min_per_week",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp",
+        "moderate_min_per_week",
+        "waist_cm",
+        "alcohol_days_per_year",
+        "fh_cvd",
+        "sleep_hours",
+        "vigorous_min_per_week"
+      ],
+      "auroc": 0.8028461356176969,
+      "gain": 2.2829004819757692e-05,
+      "bands": {
+        "19-39": 0.818686401480111,
+        "40-59": 0.7772425629290617,
+        "60+": 0.7359380801057169
+      }
+    },
+    {
+      "target": "dm",
+      "step": 18,
+      "added": "unhealthy_days_mental",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp",
+        "moderate_min_per_week",
+        "waist_cm",
+        "alcohol_days_per_year",
+        "fh_cvd",
+        "sleep_hours",
+        "vigorous_min_per_week",
+        "unhealthy_days_mental"
+      ],
+      "auroc": 0.802831229116129,
+      "gain": -1.4906501567879538e-05,
+      "bands": {
+        "19-39": 0.8187428081496355,
+        "40-59": 0.7771453089244852,
+        "60+": 0.7359875824602249
+      }
+    },
+    {
+      "target": "dm",
+      "step": 19,
+      "added": "fh_diabetes",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp",
+        "moderate_min_per_week",
+        "waist_cm",
+        "alcohol_days_per_year",
+        "fh_cvd",
+        "sleep_hours",
+        "vigorous_min_per_week",
+        "unhealthy_days_mental",
+        "fh_diabetes"
+      ],
+      "auroc": 0.8019827343547857,
+      "gain": -0.0008484947613432992,
+      "bands": {
+        "19-39": 0.8157194106631168,
+        "40-59": 0.7774299199084669,
+        "60+": 0.734497897198712
+      }
+    },
+    {
+      "target": "dm",
+      "step": 20,
+      "added": "unhealthy_days_physical",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp",
+        "moderate_min_per_week",
+        "waist_cm",
+        "alcohol_days_per_year",
+        "fh_cvd",
+        "sleep_hours",
+        "vigorous_min_per_week",
+        "unhealthy_days_mental",
+        "fh_diabetes",
+        "unhealthy_days_physical"
+      ],
+      "auroc": 0.8019256956243721,
+      "gain": -5.7038730413627725e-05,
+      "bands": {
+        "19-39": 0.814399494596241,
+        "40-59": 0.7770938215102976,
+        "60+": 0.7344118973455411
+      }
+    },
+    {
+      "target": "dm",
+      "step": 21,
+      "added": "sedentary_min_per_day",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp",
+        "moderate_min_per_week",
+        "waist_cm",
+        "alcohol_days_per_year",
+        "fh_cvd",
+        "sleep_hours",
+        "vigorous_min_per_week",
+        "unhealthy_days_mental",
+        "fh_diabetes",
+        "unhealthy_days_physical",
+        "sedentary_min_per_day"
+      ],
+      "auroc": 0.8019188512946672,
+      "gain": -6.844329704880359e-06,
+      "bands": {
+        "19-39": 0.8144276979310032,
+        "40-59": 0.7768606979405035,
+        "60+": 0.7342982097347639
+      }
+    },
+    {
+      "target": "dm",
+      "step": 22,
+      "added": "physical_activity_any",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp",
+        "moderate_min_per_week",
+        "waist_cm",
+        "alcohol_days_per_year",
+        "fh_cvd",
+        "sleep_hours",
+        "vigorous_min_per_week",
+        "unhealthy_days_mental",
+        "fh_diabetes",
+        "unhealthy_days_physical",
+        "sedentary_min_per_day",
+        "physical_activity_any"
+      ],
+      "auroc": 0.8018223272259168,
+      "gain": -9.6524068750381e-05,
+      "bands": {
+        "19-39": 0.8152004693034904,
+        "40-59": 0.7772096681922197,
+        "60+": 0.7343418389285676
+      }
+    },
+    {
+      "target": "dm",
+      "step": 23,
+      "added": "smoking_status",
+      "features": [
+        "self_rated_health",
+        "age",
+        "bmi",
+        "sex",
+        "heavy_alcohol",
+        "income_rank",
+        "difficulty_walking",
+        "education_level",
+        "veg_fruit_daily",
+        "dbp",
+        "sbp",
+        "moderate_min_per_week",
+        "waist_cm",
+        "alcohol_days_per_year",
+        "fh_cvd",
+        "sleep_hours",
+        "vigorous_min_per_week",
+        "unhealthy_days_mental",
+        "fh_diabetes",
+        "unhealthy_days_physical",
+        "sedentary_min_per_day",
+        "physical_activity_any",
+        "smoking_status"
+      ],
+      "auroc": 0.8018516411692589,
+      "gain": 2.93139433420464e-05,
+      "bands": {
+        "19-39": 0.8105243563999007,
+        "40-59": 0.7776144164759726,
+        "60+": 0.7331860848042454
+      }
+    }
+  ],
+  "greedy_htn": [
+    {
+      "target": "htn",
+      "step": 1,
+      "added": "age",
+      "features": [
+        "age"
+      ],
+      "auroc": 0.7054962512999319,
+      "gain": 0.20549625129993188,
+      "bands": {
+        "19-39": 0.6328250692484005,
+        "40-59": 0.6185460103075678,
+        "60+": 0.5666315886500853
+      }
+    },
+    {
+      "target": "htn",
+      "step": 2,
+      "added": "self_rated_health",
+      "features": [
+        "age",
+        "self_rated_health"
+      ],
+      "auroc": 0.75466379145224,
+      "gain": 0.049167540152308176,
+      "bands": {
+        "19-39": 0.6949318135558722,
+        "40-59": 0.6889700813692335,
+        "60+": 0.6413725536749517
+      }
+    },
+    {
+      "target": "htn",
+      "step": 3,
+      "added": "bmi",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi"
+      ],
+      "auroc": 0.775153376356023,
+      "gain": 0.020489584903782943,
+      "bands": {
+        "19-39": 0.7284816679793626,
+        "40-59": 0.7164803059770551,
+        "60+": 0.6647481994293479
+      }
+    },
+    {
+      "target": "htn",
+      "step": 4,
+      "added": "sex",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex"
+      ],
+      "auroc": 0.7769964637914932,
+      "gain": 0.0018430874354702365,
+      "bands": {
+        "19-39": 0.7310347879184771,
+        "40-59": 0.7178756591900023,
+        "60+": 0.6645046667495318
+      }
+    },
+    {
+      "target": "htn",
+      "step": 5,
+      "added": "income_rank",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank"
+      ],
+      "auroc": 0.7776669477979162,
+      "gain": 0.000670484006423,
+      "bands": {
+        "19-39": 0.730539208311578,
+        "40-59": 0.7176041148166583,
+        "60+": 0.6654086181589138
+      }
+    },
+    {
+      "target": "htn",
+      "step": 6,
+      "added": "difficulty_walking",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking"
+      ],
+      "auroc": 0.7781353065956151,
+      "gain": 0.000468358797698909,
+      "bands": {
+        "19-39": 0.7308613350560625,
+        "40-59": 0.7178572711458232,
+        "60+": 0.6654665771909563
+      }
+    },
+    {
+      "target": "htn",
+      "step": 7,
+      "added": "heavy_alcohol",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol"
+      ],
+      "auroc": 0.7785047093010127,
+      "gain": 0.00036940270539753683,
+      "bands": {
+        "19-39": 0.7313923132063115,
+        "40-59": 0.7185816745606968,
+        "60+": 0.6662165530995512
+      }
+    },
+    {
+      "target": "htn",
+      "step": 8,
+      "added": "education_level",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level"
+      ],
+      "auroc": 0.778722785098797,
+      "gain": 0.00021807579778432284,
+      "bands": {
+        "19-39": 0.7303586757404933,
+        "40-59": 0.717986415084012,
+        "60+": 0.6672290904063137
+      }
+    },
+    {
+      "target": "htn",
+      "step": 9,
+      "added": "veg_fruit_daily",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily"
+      ],
+      "auroc": 0.778885967208101,
+      "gain": 0.00016318210930399424,
+      "bands": {
+        "19-39": 0.7306277046699529,
+        "40-59": 0.7181514798526902,
+        "60+": 0.6671728771282487
+      }
+    },
+    {
+      "target": "htn",
+      "step": 10,
+      "added": "fh_diabetes",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily",
+        "fh_diabetes"
+      ],
+      "auroc": 0.7787094837230925,
+      "gain": -0.0001764834850085384,
+      "bands": {
+        "19-39": 0.7308082372410375,
+        "40-59": 0.7182532555390775,
+        "60+": 0.6669473257143974
+      }
+    },
+    {
+      "target": "htn",
+      "step": 11,
+      "added": "unhealthy_days_mental",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily",
+        "fh_diabetes",
+        "unhealthy_days_mental"
+      ],
+      "auroc": 0.778809190276108,
+      "gain": 9.970655301549947e-05,
+      "bands": {
+        "19-39": 0.7307657589890176,
+        "40-59": 0.7182447029603896,
+        "60+": 0.6668390889678126
+      }
+    },
+    {
+      "target": "htn",
+      "step": 12,
+      "added": "sedentary_min_per_day",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily",
+        "fh_diabetes",
+        "unhealthy_days_mental",
+        "sedentary_min_per_day"
+      ],
+      "auroc": 0.7787939730216475,
+      "gain": -1.5217254460409002e-05,
+      "bands": {
+        "19-39": 0.7331489659200524,
+        "40-59": 0.7181395062425272,
+        "60+": 0.6684891756270399
+      }
+    },
+    {
+      "target": "htn",
+      "step": 13,
+      "added": "waist_cm",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily",
+        "fh_diabetes",
+        "unhealthy_days_mental",
+        "sedentary_min_per_day",
+        "waist_cm"
+      ],
+      "auroc": 0.7789486097614198,
+      "gain": 0.00015463673977222925,
+      "bands": {
+        "19-39": 0.7331100275223674,
+        "40-59": 0.7180043754992567,
+        "60+": 0.6686897627590175
+      }
+    },
+    {
+      "target": "htn",
+      "step": 14,
+      "added": "physical_activity_any",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily",
+        "fh_diabetes",
+        "unhealthy_days_mental",
+        "sedentary_min_per_day",
+        "waist_cm",
+        "physical_activity_any"
+      ],
+      "auroc": 0.7789694702109251,
+      "gain": 2.086044950533328e-05,
+      "bands": {
+        "19-39": 0.7330533898530075,
+        "40-59": 0.7180428621033528,
+        "60+": 0.6686363426873159
+      }
+    },
+    {
+      "target": "htn",
+      "step": 15,
+      "added": "moderate_min_per_week",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily",
+        "fh_diabetes",
+        "unhealthy_days_mental",
+        "sedentary_min_per_day",
+        "waist_cm",
+        "physical_activity_any",
+        "moderate_min_per_week"
+      ],
+      "auroc": 0.7789817063984704,
+      "gain": 1.2236187545311417e-05,
+      "bands": {
+        "19-39": 0.7325038274674998,
+        "40-59": 0.7189083830665783,
+        "60+": 0.6686953491717444
+      }
+    },
+    {
+      "target": "htn",
+      "step": 16,
+      "added": "unhealthy_days_physical",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily",
+        "fh_diabetes",
+        "unhealthy_days_mental",
+        "sedentary_min_per_day",
+        "waist_cm",
+        "physical_activity_any",
+        "moderate_min_per_week",
+        "unhealthy_days_physical"
+      ],
+      "auroc": 0.7789885256802841,
+      "gain": 6.819281813674749e-06,
+      "bands": {
+        "19-39": 0.7324153311091248,
+        "40-59": 0.7191470000119735,
+        "60+": 0.6687361998148105
+      }
+    },
+    {
+      "target": "htn",
+      "step": 17,
+      "added": "smoking_status",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily",
+        "fh_diabetes",
+        "unhealthy_days_mental",
+        "sedentary_min_per_day",
+        "waist_cm",
+        "physical_activity_any",
+        "moderate_min_per_week",
+        "unhealthy_days_physical",
+        "smoking_status"
+      ],
+      "auroc": 0.7789869031915196,
+      "gain": -1.6224887644522568e-06,
+      "bands": {
+        "19-39": 0.7325657749183621,
+        "40-59": 0.7187809496441272,
+        "60+": 0.6689163616252549
+      }
+    },
+    {
+      "target": "htn",
+      "step": 18,
+      "added": "alcohol_days_per_year",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily",
+        "fh_diabetes",
+        "unhealthy_days_mental",
+        "sedentary_min_per_day",
+        "waist_cm",
+        "physical_activity_any",
+        "moderate_min_per_week",
+        "unhealthy_days_physical",
+        "smoking_status",
+        "alcohol_days_per_year"
+      ],
+      "auroc": 0.7790258286033134,
+      "gain": 3.892541179373321e-05,
+      "bands": {
+        "19-39": 0.7321710811600103,
+        "40-59": 0.7193702223157304,
+        "60+": 0.6664695128508442
+      }
+    },
+    {
+      "target": "htn",
+      "step": 19,
+      "added": "sleep_hours",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily",
+        "fh_diabetes",
+        "unhealthy_days_mental",
+        "sedentary_min_per_day",
+        "waist_cm",
+        "physical_activity_any",
+        "moderate_min_per_week",
+        "unhealthy_days_physical",
+        "smoking_status",
+        "alcohol_days_per_year",
+        "sleep_hours"
+      ],
+      "auroc": 0.7789721034211903,
+      "gain": -5.372518212309885e-05,
+      "bands": {
+        "19-39": 0.7331286117576261,
+        "40-59": 0.718863054399532,
+        "60+": 0.6663989843901663
+      }
+    },
+    {
+      "target": "htn",
+      "step": 20,
+      "added": "vigorous_min_per_week",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily",
+        "fh_diabetes",
+        "unhealthy_days_mental",
+        "sedentary_min_per_day",
+        "waist_cm",
+        "physical_activity_any",
+        "moderate_min_per_week",
+        "unhealthy_days_physical",
+        "smoking_status",
+        "alcohol_days_per_year",
+        "sleep_hours",
+        "vigorous_min_per_week"
+      ],
+      "auroc": 0.778908696930871,
+      "gain": -6.340649031932877e-05,
+      "bands": {
+        "19-39": 0.7324666589969823,
+        "40-59": 0.7151016302925495,
+        "60+": 0.6652418986540936
+      }
+    },
+    {
+      "target": "htn",
+      "step": 21,
+      "added": "fh_cvd",
+      "features": [
+        "age",
+        "self_rated_health",
+        "bmi",
+        "sex",
+        "income_rank",
+        "difficulty_walking",
+        "heavy_alcohol",
+        "education_level",
+        "veg_fruit_daily",
+        "fh_diabetes",
+        "unhealthy_days_mental",
+        "sedentary_min_per_day",
+        "waist_cm",
+        "physical_activity_any",
+        "moderate_min_per_week",
+        "unhealthy_days_physical",
+        "smoking_status",
+        "alcohol_days_per_year",
+        "sleep_hours",
+        "vigorous_min_per_week",
+        "fh_cvd"
+      ],
+      "auroc": 0.778927322843592,
+      "gain": 1.8625912721059734e-05,
+      "bands": {
+        "19-39": 0.7322153293391978,
+        "40-59": 0.7150391964681271,
+        "60+": 0.6654094910359025
+      }
+    }
+  ]
+}

@@ -5,8 +5,8 @@ import { detectLocalCapabilities } from "../../shared/local/capabilities";
 import type { BackupPreview } from "../../shared/local/localBackupService";
 import type { LocalDocument } from "../../shared/local/domainContracts";
 import type { OcrExamItem } from "../../local-domain/types";
-import { DevServerOcrAdapter } from "../../ocr/ocr-adapter";
 import { normalizeOcrResult } from "../../ocr/ocr-normalizer";
+import { GeminiOcrAdapter } from "../../shared/api/geminiOcrAdapter";
 
 export function filterDocumentsByProfile(documents: LocalDocument[], profileId: string): LocalDocument[] {
   if (!profileId) return [];
@@ -50,7 +50,7 @@ export function DataManagementPage() {
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
-      void refreshDocuments().catch((caught: unknown) => setError(errorMessage(caught, "문서 목록을 불러오지 못했습니다.")));
+      void refreshDocuments().catch((caught: unknown) => setError(errorMessage(caught, "건강자료 목록을 불러오지 못했어요.")));
     }, 0);
     return () => window.clearTimeout(timeout);
   }, [refreshDocuments]);
@@ -138,9 +138,9 @@ export function DataManagementPage() {
       if (!result.ok) throw new Error(result.error.message);
       await refreshDocuments();
       setDocumentFile(undefined);
-      setMessage("원본 문서를 암호화해 OPFS에 저장했습니다.");
+      setMessage("건강자료를 이 브라우저에 암호화해 저장했어요.");
     } catch (caught) {
-      setError(errorMessage(caught, "문서를 저장하지 못했습니다."));
+      setError(errorMessage(caught, "건강자료를 저장하지 못했어요."));
     } finally {
       setWorking(false);
     }
@@ -180,17 +180,27 @@ export function DataManagementPage() {
     try {
       const source = await runtime.documents.read(document);
       if (!source.ok) throw new Error(source.error.message);
-      const file = new File([source.value], document.fileName, { type: document.mimeType });
-      const normalized = normalizeOcrResult(await new DevServerOcrAdapter().recognize(file));
+      setOcrProgress("건강자료 내용을 불러오는 중이에요…");
+      // 인식되는 대로 아래 편집창에 흘려 넣는다. 예전에는 20초 넘게 빈 화면을 보다가
+      // 결과가 한 번에 나타났다 — 사용자는 그동안 멈춘 것인지 알 수 없었다.
+      const result = await new GeminiOcrAdapter().recognize(source.value, document.fileName, {
+        onProgress: ({ text }) => {
+          setOcrText(text);
+          setOcrProgress(text ? "건강자료 내용을 읽고 있어요…" : "건강자료 내용을 불러오는 중이에요…");
+        },
+      });
+      // 스트리밍이 흘려 준 것은 `text` 뿐이다. 표까지 담긴 완성본을 다시 정리해야
+      // 아래 검사항목 칸이 채워지고, 저장되는 내용이 폴링 경로와 같아진다.
+      const normalized = normalizeOcrResult(result);
       if (!normalized.text.trim() && !normalized.examItems?.length) {
-        throw new Error("서류에서 확인할 수 있는 내용을 찾지 못했습니다. 더 선명한 파일로 다시 시도해 주세요.");
+        throw new Error("건강자료에서 확인할 수 있는 내용을 찾지 못했어요. 더 선명한 파일로 다시 시도해 주세요.");
       }
       setOcrText(normalized.text);
       setOcrItems(normalized.examItems ?? []);
       setOcrExamDate(extractExamDate(normalized.text) ?? todayValue());
       setOcrProgress(undefined);
     } catch (caught) {
-      setError(errorMessage(caught, "서류 내용을 읽지 못했습니다."));
+      setError(errorMessage(caught, "건강자료 내용을 불러오지 못했어요."));
       setOcrProgress(undefined);
       setOcrDocument(undefined);
     } finally {
@@ -218,12 +228,12 @@ export function DataManagementPage() {
         },
       });
       if (!result.ok) throw new Error(result.error.message);
-      setMessage("검토한 내용을 구성원의 로컬 건강기록으로 저장했습니다.");
+      setMessage("확인한 내용을 구성원의 건강기록으로 저장했어요.");
       setOcrDocument(undefined);
       setOcrText("");
       setOcrItems([]);
     } catch (caught) {
-      setError(errorMessage(caught, "분석 결과를 저장하지 못했습니다."));
+      setError(errorMessage(caught, "확인한 내용을 건강기록으로 저장하지 못했어요."));
     } finally {
       setWorking(false);
     }
@@ -238,9 +248,9 @@ export function DataManagementPage() {
       if (!result.ok) throw new Error(result.error.message);
       await refreshDocuments();
       setDeletingDocument(undefined);
-      setMessage("원본 문서를 이 브라우저에서 삭제했습니다.");
+      setMessage("건강자료를 이 브라우저에서 삭제했어요.");
     } catch (caught) {
-      setError(errorMessage(caught, "문서를 삭제하지 못했습니다."));
+      setError(errorMessage(caught, "건강자료를 삭제하지 못했어요."));
     } finally {
       setWorking(false);
     }
@@ -269,7 +279,7 @@ export function DataManagementPage() {
           <p>브라우저 데이터 삭제나 기기 분실에 대비해 암호화 백업 파일을 정기적으로 내려받으세요.</p>
         </div>
         <dl>
-          <div><dt>브라우저 로컬</dt><dd>프로필·건강기록·가족력·건강 서류</dd></div>
+          <div><dt>브라우저 로컬</dt><dd>프로필·건강기록·가족력·건강자료</dd></div>
           <div><dt>이어봄 서버</dt><dd>계정·구독·초대·연결 상태</dd></div>
         </dl>
       </section>
@@ -315,7 +325,7 @@ export function DataManagementPage() {
           {preview ? (
             <div className="backup-preview">
               <strong>{preview.totalRecords}개 데이터가 들어 있습니다.</strong>
-              <span>원본 문서 {preview.totalFiles}개 포함</span>
+              <span>건강자료 파일 {preview.totalFiles}개 포함</span>
               <span>생성 시각 {new Date(preview.createdAt).toLocaleString("ko-KR")}</span>
               {profiles.length > 0 ? (
                 <label className="danger-checkbox">
@@ -348,15 +358,15 @@ export function DataManagementPage() {
 
       <section className="document-panel" id="health-documents">
         <div className="section-title-row">
-          <div><p className="section-kicker">건강 서류</p><h2>검진 서류를 안전하게 보관하고 내용을 확인하세요</h2></div>
+          <div><p className="section-kicker">건강자료 관리</p><h2>건강자료를 올리고 기록으로 연결하세요</h2></div>
         </div>
         {!runtime?.documents ? (
-          <div className="alert error-alert">이 브라우저에서는 OPFS 문서 저장을 사용할 수 없습니다.</div>
+          <div className="alert error-alert">이 브라우저에서는 건강자료 파일을 저장할 수 없습니다.</div>
         ) : (
           <>
             <div className="document-upload-row">
               <label>구성원<select value={effectiveProfileId} onChange={(event) => setSelectedProfileId(event.currentTarget.value)}>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.displayName}</option>)}</select></label>
-              <label>건강서류<input type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => setDocumentFile(event.currentTarget.files?.[0])} /></label>
+              <label>건강자료<input type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => setDocumentFile(event.currentTarget.files?.[0])} /></label>
               <button className="primary-button" type="button" disabled={!documentFile || !effectiveProfileId || working} onClick={() => void saveDocument()}>암호화 저장</button>
             </div>
             <div className="document-list">
@@ -366,12 +376,12 @@ export function DataManagementPage() {
                   <div className="record-row-actions">
                     <button type="button" onClick={() => void viewDocument(document)}>보기</button>
                     <button type="button" onClick={() => void downloadDocument(document)}>내려받기</button>
-                    <button type="button" disabled={!(document.mimeType.startsWith("image/") || document.mimeType === "application/pdf") || working} onClick={() => void runOcr(document)}>서류 내용 읽기</button>
+                    <button type="button" disabled={!(document.mimeType.startsWith("image/") || document.mimeType === "application/pdf") || working} onClick={() => void runOcr(document)}>건강자료 불러오기</button>
                     <button type="button" onClick={() => setDeletingDocument(document)}>삭제</button>
                   </div>
                 </article>
               ))}
-              {filteredDocuments.length === 0 ? <div className="compact-empty"><strong>선택한 구성원에게 저장된 건강 서류가 없습니다.</strong></div> : null}
+              {filteredDocuments.length === 0 ? <div className="compact-empty"><strong>선택한 구성원에게 저장된 건강자료가 없습니다.</strong></div> : null}
             </div>
           </>
         )}
@@ -380,11 +390,11 @@ export function DataManagementPage() {
       {ocrDocument ? (
         <div className="modal-backdrop" role="presentation">
           <section className="modal-panel ocr-review-modal" role="dialog" aria-modal="true" aria-labelledby="ocr-review-title">
-            <div className="modal-heading"><div><p className="section-kicker">저장 전 검토</p><h2 id="ocr-review-title">서류 분석 결과 확인</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={() => setOcrDocument(undefined)}>×</button></div>
+            <div className="modal-heading"><div><p className="section-kicker">사용자 확인 단계</p><h2 id="ocr-review-title">불러온 내용 확인</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={() => setOcrDocument(undefined)}>×</button></div>
             {ocrProgress ? <p className="form-notice">{ocrProgress}</p> : null}
             <div className="ocr-review-meta-grid">
               <label>실제 검사일<input type="date" value={ocrExamDate} onChange={(event) => setOcrExamDate(event.currentTarget.value)} /></label>
-              <label>검진·서류명<input value={ocrScreeningName} onChange={(event) => setOcrScreeningName(event.currentTarget.value)} /></label>
+              <label>검진·자료명<input value={ocrScreeningName} onChange={(event) => setOcrScreeningName(event.currentTarget.value)} /></label>
               <label>검진 기관<input value={ocrInstitution} onChange={(event) => setOcrInstitution(event.currentTarget.value)} placeholder="선택 입력" /></label>
             </div>
             {ocrItems.length > 0 ? (
@@ -400,9 +410,9 @@ export function DataManagementPage() {
                 ))}
               </div>
             ) : null}
-            <label className="ocr-review-field">서류에서 확인한 내용<textarea rows={14} value={ocrText} onChange={(event) => setOcrText(event.currentTarget.value)} placeholder="서류에서 읽은 내용이 여기에 표시됩니다." /></label>
-            <p className="field-help">서류 분석을 위해 선택한 파일이 AI 분석 서버로 전송됩니다. 저장 버튼을 누르기 전 원본과 결과를 꼭 확인해 주세요.</p>
-            <div className="form-actions"><button className="secondary-button" type="button" onClick={() => setOcrDocument(undefined)}>취소</button><button className="primary-button" type="button" disabled={working || !ocrExamDate || (!ocrText.trim() && ocrItems.length === 0)} onClick={() => void saveOcrResult()}>건강검진 기록으로 저장</button></div>
+            <label className="ocr-review-field">불러온 내용<textarea rows={14} value={ocrText} onChange={(event) => setOcrText(event.currentTarget.value)} placeholder="건강자료에서 불러온 내용이 여기에 표시됩니다." /></label>
+            <p className="field-help">내용을 불러오기 위해 선택한 파일이 인식 서버로 전송됩니다. 저장 버튼을 누르기 전 원본과 결과를 꼭 확인해 주세요.</p>
+            <div className="form-actions"><button className="secondary-button" type="button" onClick={() => setOcrDocument(undefined)}>취소</button><button className="primary-button" type="button" disabled={working || !ocrExamDate || (!ocrText.trim() && ocrItems.length === 0)} onClick={() => void saveOcrResult()}>확인하고 건강기록에 저장</button></div>
           </section>
         </div>
       ) : null}
@@ -410,8 +420,8 @@ export function DataManagementPage() {
       {deletingDocument ? (
         <div className="modal-backdrop" role="presentation">
           <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="delete-document-title">
-            <div className="modal-heading"><div><p className="section-kicker">원본 문서 삭제</p><h2 id="delete-document-title">{deletingDocument.fileName}</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={() => setDeletingDocument(undefined)}>×</button></div>
-            <div className="profile-confirmation"><p>OPFS에 저장된 암호화 원본을 삭제합니다. 이미 생성한 건강기록은 자동으로 삭제하지 않습니다.</p><div className="form-actions"><button className="secondary-button" type="button" onClick={() => setDeletingDocument(undefined)}>취소</button><button className="danger-button" type="button" disabled={working} onClick={() => void confirmDeleteDocument()}>원본 삭제</button></div></div>
+            <div className="modal-heading"><div><p className="section-kicker">건강자료 삭제</p><h2 id="delete-document-title">{deletingDocument.fileName}</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={() => setDeletingDocument(undefined)}>×</button></div>
+            <div className="profile-confirmation"><p>이 브라우저에 암호화해 저장한 파일을 삭제합니다. 이미 생성한 건강기록은 자동으로 삭제하지 않습니다.</p><div className="form-actions"><button className="secondary-button" type="button" onClick={() => setDeletingDocument(undefined)}>취소</button><button className="danger-button" type="button" disabled={working} onClick={() => void confirmDeleteDocument()}>파일 삭제</button></div></div>
           </section>
         </div>
       ) : null}

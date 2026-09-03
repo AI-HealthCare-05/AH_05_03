@@ -1,0 +1,85 @@
+{
+  "age": [
+    {
+      "target": "dm_undiagnosed",
+      "band": "19-39",
+      "n": 1344,
+      "positive_rate": 0.012648809523809524,
+      "global": 0.8013209805399175,
+      "interaction": 0.789972959794317,
+      "dedicated": 0.8350104171284187
+    },
+    {
+      "target": "dm_undiagnosed",
+      "band": "40-59",
+      "n": 1200,
+      "positive_rate": 0.035,
+      "global": 0.7847890451517394,
+      "interaction": 0.7801422814376182,
+      "dedicated": 0.7877086931491076
+    },
+    {
+      "target": "dm_undiagnosed",
+      "band": "60+",
+      "n": 1743,
+      "positive_rate": 0.05220883534136546,
+      "global": 0.6949551658994758,
+      "interaction": 0.7022723039672193,
+      "dedicated": 0.6906314024958092
+    },
+    {
+      "target": "prediabetes",
+      "band": "19-39",
+      "n": 1249,
+      "positive_rate": 0.23138510808646917,
+      "global": 0.6481221164936564,
+      "interaction": 0.6485834775086506,
+      "dedicated": 0.6475382064590544
+    },
+    {
+      "target": "prediabetes",
+      "band": "40-59",
+      "n": 1165,
+      "positive_rate": 0.4240343347639485,
+      "global": 0.6314582742537875,
+      "interaction": 0.6315216276389702,
+      "dedicated": 0.6190500612416057
+    },
+    {
+      "target": "prediabetes",
+      "band": "60+",
+      "n": 1684,
+      "positive_rate": 0.5308788598574822,
+      "global": 0.5757992807181491,
+      "interaction": 0.5700096281822559,
+      "dedicated": 0.5738708124486732
+    },
+    {
+      "target": "htn_undiagnosed",
+      "band": "19-39",
+      "n": 1258,
+      "positive_rate": 0.03815580286168521,
+      "global": 0.7546315426997244,
+      "interaction": 0.7676997245179064,
+      "dedicated": 0.7501893939393939
+    },
+    {
+      "target": "htn_undiagnosed",
+      "band": "40-59",
+      "n": 928,
+      "positive_rate": 0.09051724137931035,
+      "global": 0.6208812909049874,
+      "interaction": 0.611952719476416,
+      "dedicated": 0.6202042428345746
+    },
+    {
+      "target": "htn_undiagnosed",
+      "band": "60+",
+      "n": 1041,
+      "positive_rate": 0.1786743515850144,
+      "global": 0.5727535685090863,
+      "interaction": 0.581060177325033,
+      "dedicated": 0.5881909073759668
+    }
+  ]
+}

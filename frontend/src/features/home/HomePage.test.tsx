@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -11,13 +12,7 @@ afterEach(cleanup);
 describe("HomePage", () => {
   it("로컬 프로필을 생성하고 제품 대시보드에 표시한다", async () => {
     const user = userEvent.setup();
-    render(
-      <MemoryRouter>
-        <LocalDomainProvider databaseName={`ieobom-home-test-${crypto.randomUUID()}`}>
-          <HomePage />
-        </LocalDomainProvider>
-      </MemoryRouter>,
-    );
+    renderHomePage();
 
     expect(
       screen.getByRole("heading", { name: "가족의 건강 흐름을 한곳에서 이어보세요" }),
@@ -138,12 +133,19 @@ describe("HomePage", () => {
 });
 
 function renderHomePage() {
+  // 운영에서는 AppProviders 가 항상 QueryClientProvider 로 감싼다. 대시보드에
+  // 서버 상태를 읽는 카드(ChallengeDashboardCard)가 붙으면서 이 하네스에도 필요해졌다.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+  });
   render(
-    <MemoryRouter>
-      <LocalDomainProvider databaseName={`ieobom-home-test-${crypto.randomUUID()}`}>
-        <HomePage />
-      </LocalDomainProvider>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter>
+        <LocalDomainProvider databaseName={`ieobom-home-test-${crypto.randomUUID()}`}>
+          <HomePage />
+        </LocalDomainProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

@@ -1,19 +1,43 @@
 from fastapi import Request
-from redis.asyncio import Redis
+from redis.asyncio import BlockingConnectionPool, Redis
 
 from app.core import config
 
 
 def create_redis_pool() -> Redis:
-    return Redis.from_url(
+    """**`BlockingConnectionPool` 이어야 한다.**
+
+    기본 `ConnectionPool` 은 `max_connections` 에 닿는 순간 기다리지 않고
+    `MaxConnectionsError` 를 던진다(redis-py `get_available_connection`). 그 예외는
+    `RedisError` 라서 `TokenStoreUnavailableError` 로 잡히고 사용자에게 503 이 나간다.
+    Redis 는 멀쩡한데 "일시적으로 서비스를 이용할 수 없습니다" 를 보는 것이다.
+
+    2026-08-27 에 다중 유저 부하로 재현했다 — 동시 로그인 10 건 중 1~4 건이 503 이었고,
+    같은 설정을 직접 두드리니 동시 40 건에서 정확히 20 건이 `Too many connections` 였다.
+    상한이 곧 동시 사용자 상한이었던 셈이다.
+
+    `BlockingConnectionPool` 은 조건 변수로 **대기했다가** `timeout` 이 지나야 포기한다.
+    큐가 잠깐 몰리면 밀리초 단위로 순서를 기다릴 뿐 요청이 죽지 않는다.
+
+    `socket_timeout` 은 그대로 둔다. 그건 명령 왕복 상한이고 여기서 늘린 것은 풀 대기
+    상한이다 — Redis 가 진짜 죽으면 여전히 0.5 초에 끊긴다.
+    """
+    pool = BlockingConnectionPool.from_url(
         config.REDIS_URL,
         decode_responses=True,
         max_connections=config.REDIS_MAX_CONNECTIONS,
+        # 풀이 빌 때까지 기다리는 상한. `ConnectionPool` 에는 없는 인자다.
+        timeout=config.REDIS_POOL_WAIT_TIMEOUT,
         # 타임아웃을 짧게 잡아, 장애 시 매달리지 않고 빠르게 503으로 떨어지게 한다.
         socket_timeout=config.REDIS_SOCKET_TIMEOUT,
         socket_connect_timeout=config.REDIS_SOCKET_CONNECT_TIMEOUT,
         health_check_interval=30,
     )
+    # **`Redis(connection_pool=...)` 이 아니라 `from_pool` 이다.** 전자는 풀 소유권을
+    # 가져가지 않아서 `aclose()` 가 풀을 안 닫는다 — lifespan 종료 때 연결이 그대로
+    # 남는다. `from_pool` 은 소유권을 넘겨받아 같이 닫으므로, 풀을 쓰기 전 동작과
+    # 종료 의미가 같아진다.
+    return Redis.from_pool(pool)
 
 
 async def close_redis_pool(client: Redis) -> None:

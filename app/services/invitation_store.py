@@ -15,6 +15,16 @@ from app.exceptions import (
 )
 
 
+def _retry_after(ttl: object, window_seconds: int) -> int:
+    """`TTL` 응답을 `Retry-After` 초로 바꾼다.
+
+    Redis 의 `TTL` 은 키가 없으면 -2, 만료가 없으면 -1 을 준다. 둘 다 "언제 풀릴지
+    모른다" 이므로 창 길이로 되돌린다 — 음수를 그대로 헤더에 넣으면 클라이언트가
+    즉시 재시도해서 헤더가 없느니만 못하다.
+    """
+    return ttl if isinstance(ttl, int) and ttl > 0 else window_seconds
+
+
 @dataclass(frozen=True)
 class InvitationDelivery:
     invitation_id: uuid.UUID
@@ -73,16 +83,21 @@ class InvitationStore:
                 pipe.expire(
                     self._rate_account(account_id), config.FAMILY_INVITATION_ACCOUNT_RATE_WINDOW_SECONDS, nx=True
                 )
+                pipe.ttl(self._rate_account(account_id))
                 pipe.incr(self._rate_email(invitee_email))
                 pipe.expire(
                     self._rate_email(invitee_email), config.FAMILY_INVITATION_EMAIL_RATE_WINDOW_SECONDS, nx=True
                 )
-                account_count, _, email_count, _ = await pipe.execute()
-            if (
-                int(account_count) > config.FAMILY_INVITATION_ACCOUNT_RATE_LIMIT
-                or int(email_count) > config.FAMILY_INVITATION_EMAIL_RATE_LIMIT
-            ):
-                raise RateLimitedError()
+                pipe.ttl(self._rate_email(invitee_email))
+                account_count, _, account_ttl, email_count, _, email_ttl = await pipe.execute()
+            # 어느 쪽이 걸렸는지에 따라 기다릴 시간이 다르다. 둘 다면 늦게 풀리는 쪽을 준다.
+            waits = []
+            if int(account_count) > config.FAMILY_INVITATION_ACCOUNT_RATE_LIMIT:
+                waits.append(_retry_after(account_ttl, config.FAMILY_INVITATION_ACCOUNT_RATE_WINDOW_SECONDS))
+            if int(email_count) > config.FAMILY_INVITATION_EMAIL_RATE_LIMIT:
+                waits.append(_retry_after(email_ttl, config.FAMILY_INVITATION_EMAIL_RATE_WINDOW_SECONDS))
+            if waits:
+                raise RateLimitedError(headers={"Retry-After": str(max(waits))})
         except RedisError as err:
             raise TokenStoreUnavailableError() from err
 
@@ -95,15 +110,20 @@ class InvitationStore:
                     config.FAMILY_INVITATION_TRANSITION_RATE_WINDOW_SECONDS,
                     nx=True,
                 )
+                pipe.ttl(self._rate_transition_account(account_id))
                 pipe.incr(self._rate_transition_invitation(invitation_id))
                 pipe.expire(
                     self._rate_transition_invitation(invitation_id),
                     config.FAMILY_INVITATION_TRANSITION_RATE_WINDOW_SECONDS,
                     nx=True,
                 )
-                account_count, _, invitation_count, _ = await pipe.execute()
+                pipe.ttl(self._rate_transition_invitation(invitation_id))
+                account_count, _, account_ttl, invitation_count, _, invitation_ttl = await pipe.execute()
             if max(int(account_count), int(invitation_count)) > config.FAMILY_INVITATION_TRANSITION_RATE_LIMIT:
-                raise RateLimitedError()
+                # 두 카운터가 같은 창을 쓰므로 남은 시간이 긴 쪽이 실제로 풀리는 시점이다.
+                window = config.FAMILY_INVITATION_TRANSITION_RATE_WINDOW_SECONDS
+                retry_after = max(_retry_after(account_ttl, window), _retry_after(invitation_ttl, window))
+                raise RateLimitedError(headers={"Retry-After": str(retry_after)})
         except RedisError as err:
             raise TokenStoreUnavailableError() from err
 

@@ -1,0 +1,344 @@
+{
+  "ladder_dm": [
+    {
+      "target": "dm",
+      "step": 1,
+      "screen": "SCR-ONBD-02 기본정보",
+      "n_features": 2,
+      "features": [
+        "age",
+        "sex"
+      ],
+      "auroc": 0.6584363337958398,
+      "gain": 0.15843633379583977,
+      "bands": {
+        "19-39": 0.624670020983281,
+        "40-59": 0.6223348112128146,
+        "60+": 0.534754428468049
+      }
+    },
+    {
+      "target": "dm",
+      "step": 2,
+      "screen": "+ 가족력",
+      "n_features": 4,
+      "features": [
+        "age",
+        "sex",
+        "fh_diabetes",
+        "fh_cvd"
+      ],
+      "auroc": 0.6585335278197169,
+      "gain": 9.719402387708964e-05,
+      "bands": {
+        "19-39": 0.6294476658920151,
+        "40-59": 0.6254226258581236,
+        "60+": 0.5332135628061122
+      }
+    },
+    {
+      "target": "dm",
+      "step": 3,
+      "screen": "SCR-ONBD-03 생활습관",
+      "n_features": 11,
+      "features": [
+        "age",
+        "sex",
+        "fh_diabetes",
+        "fh_cvd",
+        "smoking_status",
+        "alcohol_days_per_year",
+        "moderate_min_per_week",
+        "vigorous_min_per_week",
+        "sedentary_min_per_day",
+        "sleep_hours",
+        "veg_fruit_daily"
+      ],
+      "auroc": 0.6734117311643084,
+      "gain": 0.014878203344591556,
+      "bands": {
+        "19-39": 0.6318957153493829,
+        "40-59": 0.6417090961098398,
+        "60+": 0.619858414875877
+      }
+    },
+    {
+      "target": "dm",
+      "step": 4,
+      "screen": "SCR-ONBD-04 신체계측",
+      "n_features": 13,
+      "features": [
+        "age",
+        "sex",
+        "fh_diabetes",
+        "fh_cvd",
+        "smoking_status",
+        "alcohol_days_per_year",
+        "moderate_min_per_week",
+        "vigorous_min_per_week",
+        "sedentary_min_per_day",
+        "sleep_hours",
+        "veg_fruit_daily",
+        "bmi",
+        "waist_cm"
+      ],
+      "auroc": 0.7509368081893616,
+      "gain": 0.07752507702505318,
+      "bands": {
+        "19-39": 0.7795627354978454,
+        "40-59": 0.7073641304347825,
+        "60+": 0.6563024258251267
+      }
+    },
+    {
+      "target": "dm",
+      "step": 5,
+      "screen": "+ 혈압",
+      "n_features": 15,
+      "features": [
+        "age",
+        "sex",
+        "fh_diabetes",
+        "fh_cvd",
+        "smoking_status",
+        "alcohol_days_per_year",
+        "moderate_min_per_week",
+        "vigorous_min_per_week",
+        "sedentary_min_per_day",
+        "sleep_hours",
+        "veg_fruit_daily",
+        "bmi",
+        "waist_cm",
+        "sbp",
+        "dbp"
+      ],
+      "auroc": 0.7516752997254613,
+      "gain": 0.000738491536099728,
+      "bands": {
+        "19-39": 0.7774080007220054,
+        "40-59": 0.7142977688787184,
+        "60+": 0.6634509014252903
+      }
+    },
+    {
+      "target": "dm",
+      "step": 6,
+      "screen": "신규 제안: 주관적 건강·보행",
+      "n_features": 17,
+      "features": [
+        "age",
+        "sex",
+        "fh_diabetes",
+        "fh_cvd",
+        "smoking_status",
+        "alcohol_days_per_year",
+        "moderate_min_per_week",
+        "vigorous_min_per_week",
+        "sedentary_min_per_day",
+        "sleep_hours",
+        "veg_fruit_daily",
+        "bmi",
+        "waist_cm",
+        "sbp",
+        "dbp",
+        "self_rated_health",
+        "difficulty_walking"
+      ],
+      "auroc": 0.7992031206255443,
+      "gain": 0.047527820900083007,
+      "bands": {
+        "19-39": 0.8062318088490784,
+        "40-59": 0.7760011441647596,
+        "60+": 0.7295778665743742
+      }
+    },
+    {
+      "target": "dm",
+      "step": 7,
+      "screen": "사회경제",
+      "n_features": 19,
+      "features": [
+        "age",
+        "sex",
+        "fh_diabetes",
+        "fh_cvd",
+        "smoking_status",
+        "alcohol_days_per_year",
+        "moderate_min_per_week",
+        "vigorous_min_per_week",
+        "sedentary_min_per_day",
+        "sleep_hours",
+        "veg_fruit_daily",
+        "bmi",
+        "waist_cm",
+        "sbp",
+        "dbp",
+        "self_rated_health",
+        "difficulty_walking",
+        "education_level",
+        "income_rank"
+      ],
+      "auroc": 0.8010079814399992,
+      "gain": 0.0018048608144548561,
+      "bands": {
+        "19-39": 0.8120868211457323,
+        "40-59": 0.7777931922196796,
+        "60+": 0.7329700363926207
+      }
+    }
+  ],
+  "ladder_htn": [
+    {
+      "target": "htn",
+      "step": 1,
+      "screen": "SCR-ONBD-02 기본정보",
+      "n_features": 2,
+      "features": [
+        "age",
+        "sex"
+      ],
+      "auroc": 0.708765672847705,
+      "gain": 0.20876567284770498,
+      "bands": {
+        "19-39": 0.6346259701413287,
+        "40-59": 0.6167867448714461,
+        "60+": 0.5635255431738925
+      }
+    },
+    {
+      "target": "htn",
+      "step": 2,
+      "screen": "+ 가족력",
+      "n_features": 4,
+      "features": [
+        "age",
+        "sex",
+        "fh_diabetes",
+        "fh_cvd"
+      ],
+      "auroc": 0.7087642884400049,
+      "gain": -1.384407700033563e-06,
+      "bands": {
+        "19-39": 0.6346259701413287,
+        "40-59": 0.6167717778587422,
+        "60+": 0.5635255431738925
+      }
+    },
+    {
+      "target": "htn",
+      "step": 3,
+      "screen": "SCR-ONBD-03 생활습관",
+      "n_features": 11,
+      "features": [
+        "age",
+        "sex",
+        "fh_diabetes",
+        "fh_cvd",
+        "smoking_status",
+        "alcohol_days_per_year",
+        "moderate_min_per_week",
+        "vigorous_min_per_week",
+        "sedentary_min_per_day",
+        "sleep_hours",
+        "veg_fruit_daily"
+      ],
+      "auroc": 0.7144837603909153,
+      "gain": 0.005719471950910382,
+      "bands": {
+        "19-39": 0.6402224798449544,
+        "40-59": 0.6179032840191646,
+        "60+": 0.582550944592562
+      }
+    },
+    {
+      "target": "htn",
+      "step": 4,
+      "screen": "SCR-ONBD-04 신체계측",
+      "n_features": 13,
+      "features": [
+        "age",
+        "sex",
+        "fh_diabetes",
+        "fh_cvd",
+        "smoking_status",
+        "alcohol_days_per_year",
+        "moderate_min_per_week",
+        "vigorous_min_per_week",
+        "sedentary_min_per_day",
+        "sleep_hours",
+        "veg_fruit_daily",
+        "bmi",
+        "waist_cm"
+      ],
+      "auroc": 0.7550201541657436,
+      "gain": 0.040536393774828317,
+      "bands": {
+        "19-39": 0.7015858547420775,
+        "40-59": 0.6738303065757356,
+        "60+": 0.6256378985032603
+      }
+    },
+    {
+      "target": "htn",
+      "step": 6,
+      "screen": "신규 제안: 주관적 건강·보행",
+      "n_features": 15,
+      "features": [
+        "age",
+        "sex",
+        "fh_diabetes",
+        "fh_cvd",
+        "smoking_status",
+        "alcohol_days_per_year",
+        "moderate_min_per_week",
+        "vigorous_min_per_week",
+        "sedentary_min_per_day",
+        "sleep_hours",
+        "veg_fruit_daily",
+        "bmi",
+        "waist_cm",
+        "self_rated_health",
+        "difficulty_walking"
+      ],
+      "auroc": 0.7777858589017119,
+      "gain": 0.022765704735968284,
+      "bands": {
+        "19-39": 0.7326277223692244,
+        "40-59": 0.7129027623118647,
+        "60+": 0.6631941292388652
+      }
+    },
+    {
+      "target": "htn",
+      "step": 7,
+      "screen": "사회경제",
+      "n_features": 17,
+      "features": [
+        "age",
+        "sex",
+        "fh_diabetes",
+        "fh_cvd",
+        "smoking_status",
+        "alcohol_days_per_year",
+        "moderate_min_per_week",
+        "vigorous_min_per_week",
+        "sedentary_min_per_day",
+        "sleep_hours",
+        "veg_fruit_daily",
+        "bmi",
+        "waist_cm",
+        "self_rated_health",
+        "difficulty_walking",
+        "education_level",
+        "income_rank"
+      ],
+      "auroc": 0.7785732786129088,
+      "gain": 0.0007874197111968906,
+      "bands": {
+        "19-39": 0.732981707802724,
+        "40-59": 0.714521765457503,
+        "60+": 0.6655089990126015
+      }
+    }
+  ]
+}

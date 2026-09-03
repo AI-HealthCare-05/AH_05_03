@@ -1,11 +1,24 @@
+import { Suspense } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import { useUiStore } from "../stores/uiStore";
 
 const NAVIGATION = [
-  { to: "/", label: "대시보드", end: true },
+  { to: "/", label: "가족 홈", end: true },
+  { to: "/assessment", label: "위험 판정", end: false },
+  { to: "/challenge", label: "챌린지", end: false },
   { to: "/health-data", label: "건강 데이터", end: false },
-  { to: "/health-files", label: "건강 파일", end: false },
+  { to: "/data", label: "데이터 관리", end: false },
+  { to: "/ui-preview", label: "UI 미리보기", end: false },
+  { to: "/account", label: "계정", end: false },
+] as const;
+
+// 예측 데모는 FastAPI 가 직접 내는 화면이라 SPA 라우트가 아니다. NavLink 로 걸면
+// react-router 가 클라이언트 라우팅을 시도하고 404 로 떨어진다 — 일반 앵커여야 한다.
+// 규칙 엔진 화면(`/api/demo/rules`)은 데모 안에서 스위치로 바꿀 수 있으므로
+// 내비게이션에는 입구를 하나만 둔다. 주소는 문서에 남아 있어 그대로 살아 있다.
+const DEMO_PAGES = [
+  { href: "/api/demo", label: "예측 데모", hint: "ML 모델과 규칙 엔진을 한 화면에서 비교합니다" },
 ] as const;
 
 export function RootLayout() {
@@ -45,6 +58,18 @@ export function RootLayout() {
                 {item.label}
               </NavLink>
             ))}
+            {DEMO_PAGES.map((item) => (
+              <a
+                key={item.href}
+                className="navigation-external"
+                href={item.href}
+                title={item.hint}
+                onClick={closeNavigation}
+              >
+                {item.label}
+                <i aria-hidden="true">↗</i>
+              </a>
+            ))}
           </nav>
 
           <div className="header-status">
@@ -55,7 +80,11 @@ export function RootLayout() {
       </header>
 
       <main>
-        <Outlet />
+        {/* 라우트가 lazy 라 청크를 받는 동안 잠깐 빈다. 폴백을 안 두면 React 가
+            "A component suspended while responding to synchronous input" 으로 던진다. */}
+        <Suspense fallback={<div className="route-loading">불러오는 중…</div>}>
+          <Outlet />
+        </Suspense>
       </main>
 
       <footer className="site-footer">

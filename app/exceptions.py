@@ -28,7 +28,48 @@ class AppError(Exception):
 
 
 class OcrUnavailableError(AppError):
+    """**우리 쪽 사정으로** 문서 인식을 못 할 때만. 브리지 꺼짐·API 키 없음 등.
+
+    사용자가 잘못 올린 것(파일 없음·형식·용량)이나 외부 공급자 실패는 아래 형제
+    예외를 쓴다. 전부 이 하나로 뭉쳐 있어서 .docx 한 번 올릴 때마다 5xx 알림이
+    울렸고, 프런트도 사유를 구분하지 못해 "설정을 확인해 주세요" 만 보여 줬다.
+    """
+
     error_code = ErrorCode.OCR_UNAVAILABLE
+
+
+class OcrNoFileError(AppError):
+    """첨부가 없다. 400 — 다시 시도해도 같으므로 5xx 로 두면 안 된다."""
+
+    error_code = ErrorCode.OCR_NO_FILE
+
+
+class OcrUnsupportedTypeError(AppError):
+    """지원하지 않는 형식. 415 — 사용자가 파일을 바꾸면 해결된다."""
+
+    error_code = ErrorCode.OCR_UNSUPPORTED_TYPE
+
+
+class OcrFileTooLargeError(AppError):
+    """파일당·합계 상한 초과. 413."""
+
+    error_code = ErrorCode.OCR_FILE_TOO_LARGE
+
+
+class OcrJobNotFoundError(AppError):
+    """작업이 없거나 TTL 이 지났다. 404.
+
+    둘을 구분해 알려 주지 않는 것은 그대로다 — 무작위 job_id 를 긁어 남의 작업
+    존재 여부를 알아내는 것을 막는다. 상태 코드만 정직해진다.
+    """
+
+    error_code = ErrorCode.OCR_JOB_NOT_FOUND
+
+
+class OcrProviderFailedError(AppError):
+    """외부 공급자가 답을 못 줬다. 502 — 죽은 것은 우리가 아니라 업스트림이다."""
+
+    error_code = ErrorCode.OCR_PROVIDER_FAILED
 
 
 # --- auth ----------------------------------------------------------------
@@ -173,3 +214,8 @@ class ProfileLinkInvitationMismatchError(AppError):
 
 class RateLimitedError(AppError):
     error_code = ErrorCode.RATE_LIMITED
+
+
+# --- challenge -----------------------------------------------------------
+class ChallengeNotFoundError(AppError):
+    error_code = ErrorCode.CHALLENGE_NOT_FOUND
