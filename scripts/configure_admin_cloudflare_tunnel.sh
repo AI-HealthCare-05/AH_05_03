@@ -9,23 +9,29 @@ HTTP_PORT="${IEOBOM_HTTP_PORT:-8080}"
 STATE_DIR="${HOME}/.local/state/ieobom-cloudflare"
 LOG_FILE="${STATE_DIR}/quick-tunnel.log"
 TUNNEL_CONTAINER="ieobom-cloudflared"
+TUNNEL_DOCKER_CONFIG="${STATE_DIR}/docker-config"
 
-mkdir -p "${STATE_DIR}"
+mkdir -p "${STATE_DIR}" "${TUNNEL_DOCKER_CONFIG}"
+printf '{}\n' > "${TUNNEL_DOCKER_CONFIG}/config.json"
+
+tunnel_docker() {
+  DOCKER_CONFIG="${TUNNEL_DOCKER_CONFIG}" docker "$@"
+}
 
 refresh_tunnel_log() {
-  docker logs "${TUNNEL_CONTAINER}" > "${LOG_FILE}" 2>&1 || true
+  tunnel_docker logs "${TUNNEL_CONTAINER}" > "${LOG_FILE}" 2>&1 || true
 }
 
 existing_url=""
-if docker inspect "${TUNNEL_CONTAINER}" >/dev/null 2>&1; then
+if tunnel_docker inspect "${TUNNEL_CONTAINER}" >/dev/null 2>&1; then
   refresh_tunnel_log
   existing_url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "${LOG_FILE}" | tail -1 || true)"
 fi
 
 if [[ -z "${existing_url}" ]] || ! curl --fail --silent --show-error --max-time 10 "${existing_url}/healthz" >/dev/null 2>&1; then
-  docker rm --force "${TUNNEL_CONTAINER}" >/dev/null 2>&1 || true
+  tunnel_docker rm --force "${TUNNEL_CONTAINER}" >/dev/null 2>&1 || true
   : > "${LOG_FILE}"
-  docker run --detach \
+  tunnel_docker run --detach \
     --name "${TUNNEL_CONTAINER}" \
     --restart unless-stopped \
     cloudflare/cloudflared:latest \
