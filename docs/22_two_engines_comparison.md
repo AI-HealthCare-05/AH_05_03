@@ -5,7 +5,14 @@ PR #4로 올린 **국내 지침 기반 규칙 엔진**이고, 다른 하나는 �
 **로지스틱 회귀 모델**이다. 어느 쪽을 쓸지 정하기 전에 같은 사람을 두 쪽에 넣어보고
 결과가 어떻게 갈리는지 손으로 확인할 수 있게 만들어 두었다.
 
-**화면은 하나다.** http://localhost/api/demo 에서 스위치로 엔진을 고른다.
+> **2026-09-03 — 이 문서의 화면은 없어졌다.** `/api/demo` 는 404 다. 서버 렌더
+> 데모(`app/apis/demo_routers.py`)를 지우고 SPA 의 `http://localhost/assessment`
+> 로 옮겼다. 아래 비교의 **결론과 수치는 그대로 유효**하고, 바뀐 것은 화면과
+> "누가 고르는가" 다 — 사용자가 스위치로 엔진을 고르던 것을 **서버가 질환마다
+> 중재**한다(ADR-009). 지금 두 엔진을 따로 보려면 `POST /api/v1/predictions/risk`
+> 와 `POST /api/v1/assessments/rules` 를 직접 부른다.
+
+**화면은 하나였다.** `/api/demo` 에서 스위치로 엔진을 골랐다.
 
 | 스위치 | 무엇이 돌아가는가 |
 |---|---|
@@ -13,8 +20,8 @@ PR #4로 올린 **국내 지침 기반 규칙 엔진**이고, 다른 하나는 �
 | 규칙 엔진 | `POST /api/v1/assessments/rules` |
 | 둘 다 (기본) | 두 요청을 동시에 보내고 겹치는 질환을 한 표에 놓는다 |
 
-`/api/demo?engine=ml|rules|both` 로 처음 고를 엔진을 지정할 수 있고,
-`/api/demo/rules` 는 화면이 둘이던 시절의 주소라 규칙 엔진을 고른 상태로 열린다.
+`/api/demo?engine=ml|rules|both` 로 처음 고를 엔진을 지정할 수 있었고,
+`/api/demo/rules` 는 화면이 둘이던 시절의 주소였다.
 
 화면을 두 개로 나눴다가 하나로 합쳤다. 페이지를 새로 열면 입력값이 날아가서 **같은
 사람으로 두 결과를 나란히 놓을 수가 없었다.** 지금은 입력을 한 번만 하고 엔진을 바꿔 돌린다.
@@ -125,6 +132,7 @@ ML 모델은 확률이 1.0%p 움직였고 고혈압은 소수점까지 그대로
 ```
 dm  모델 입력: age, sex, bmi, self_rated_health + waist_cm, smoking_status,
               difficulty_walking, alcohol, moderate, vigorous, sedentary, sleep, sbp, dbp
+              (difficulty_walking·education_level 은 2026-09-03 에 뺐다 — 19번·42번)
 htn 모델 입력: 위와 같고 sbp·dbp 가 빠진다
 ```
 
@@ -271,7 +279,16 @@ no issues found   # mypy app (113 files)
 ```bash
 cd project
 docker compose up -d
-# http://localhost/api/demo
+# http://localhost/assessment   (예전 주소 /api/demo 는 2026-09-03 에 삭제)
+```
+
+지금 화면은 엔진을 고르는 스위치가 없다 — 서버가 질환마다 중재한다. 아래 절차를
+그대로 재현하려면 두 API 를 직접 부른다.
+
+```bash
+# ML 만            POST /api/v1/predictions/risk
+# 규칙 엔진만       POST /api/v1/assessments/rules
+# 중재까지 끝난 것   POST /api/v1/assessments/summary
 ```
 
 1. 아무것도 고치지 않고 **두 모델 실행**을 누른다. 위 첫 사례의 숫자가 그대로 나온다.

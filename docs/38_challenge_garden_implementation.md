@@ -214,7 +214,7 @@ GET    /api/v1/challenges/households/{household_id}
 |---|---|
 | `/` · `/challenge` · `/members/3/records` | 200 `text/html` (SPA 폴백 동작) |
 | `/healthz` | 200 `text/plain` |
-| `/api/demo` · `/api/docs` | 200 `text/html` |
+| `/api/docs` | 200 `text/html` *(`/api/demo` 는 2026-09-03 삭제)* |
 | `/api/nope` | **404 `application/json`** — HTML 폴백에 안 먹혔다 |
 | `/api/health` | 200 `application/json` |
 
@@ -386,7 +386,7 @@ SPA 번들(`index-*.js`, 468 KB)에 `오늘의 챌린지` · `찾아온 동물` 
 | 프런트 전체 | 17파일 **76건** 통과 (자정·동시성 검사 2건 추가) |
 | API 회귀 16항목 | 전부 통과 |
 | 지연 | `GET today` p50 9.9 ms · `POST checks` p50 14.0 ms |
-| 경로 | `/` · `/challenge` · `/assessment` · `/healthz` · `/api/demo` · `/api/docs` 전부 200 |
+| 경로 | `/` · `/challenge` · `/assessment` · `/healthz` · `/api/docs` 전부 200 *(`/api/demo` 는 2026-09-03 에 삭제. 다시 돌릴 때 목록에서 뺀다)* |
 | `ruff` · `mypy` · `tsc` · `eslint` | 통과 |
 
 ---

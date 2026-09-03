@@ -94,6 +94,8 @@ git fetch origin && git rev-list --count origin/dev ^HEAD
 
 AI 도구가 Claude Code 든 Codex 든 Cursor 든, 이 순서를 공통으로 밟는다. 도구가 다른 건 문제가 아니고 **검증하는 방식이 다른 게 문제**다.
 
+도구가 매 세션 읽는 요약본은 저장소 루트의 [`AGENTS.md`](../AGENTS.md) 다(Claude Code 는 `CLAUDE.md` 가 그것을 import 한다). **정본은 이 문서와 ADR 이고 AGENTS.md 는 요약이다** — 규칙을 바꾸면 이 문서를 먼저 고치고 AGENTS.md 를 따라 맞춘다. AGENTS.md 는 짧게 유지한다. 길어지면 아무도 안 읽는다.
+
 ### 1단계 — 계약 확인
 
 착수 전에 읽는다. 안 읽으면 이미 기각된 설계를 다시 제안한다.

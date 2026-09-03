@@ -49,6 +49,8 @@ curl -L -o raw/brfss_health_indicators/cdc_diabetes_health_indicators.csv \
   https://archive.ics.uci.edu/static/public/891/data.csv
 curl -L -o raw/framingham/framingham.csv \
   https://raw.githubusercontent.com/GauravPadawe/Framingham-Heart-Study/master/framingham.csv
+# 3회 검진 종단본(frmgham2). 발병 궤적 검증(41번 문서)만 쓴다. 같은 교육용 추출본 계열이라 출처 주의도 같다.
+curl -L -o raw/framingham/frmgham2.csv \n  https://raw.githubusercontent.com/singator/bdah/master/data/frmgham2.csv
 ```
 
 ## 0. 2026-08-21에 늘어난 것 — 파일 세 개, 질환 여덟 개

@@ -336,7 +336,7 @@ docker compose up -d --build
 
 | 경로 | 용도 |
 |---|---|
-| `http://localhost/api/demo` | 값을 넣고 결과를 보는 데모 화면. 스위치로 **규칙 엔진**과 바꿔 돌린다 — [22번](22_two_engines_comparison.md) |
+| `http://localhost/assessment` | 값을 넣고 결과를 보는 화면. 규칙 엔진과 ML 을 서버가 중재해 한 벌로 낸다 — [22번](22_two_engines_comparison.md) |
 | `POST /api/v1/predictions/risk` | 위험도 산출. 무인증·무저장 |
 | `GET /api/v1/predictions/model-info` | 적재된 모델 버전과 한계 확인 |
 | `http://localhost/api/docs` | OpenAPI 문서 |
@@ -517,6 +517,8 @@ KoGES·AI-Hub와 같은 벽이 아니므로 다시 확인해 볼 값어치가 �
 |---|---|
 | [20_prediction_inputs_and_levers.md](20_prediction_inputs_and_levers.md) | 최소 입력 4문항과 지렛대 — 제품 결정용 요약 |
 | [22_two_engines_comparison.md](22_two_engines_comparison.md) | 팀원의 규칙 엔진(PR #4)과 이 모델의 실측 비교, 데모 두 화면 |
+| [41_onset_trajectory.md](41_onset_trajectory.md) | 2단계 발병 궤적 — §7.4 의 "발병 예측" 공백을 종단 자료 없이 어디까지 메웠는지 |
+| [42_ml_evaluation_strategy.md](42_ml_evaluation_strategy.md) | 라우팅 결정 · 평가 자료 4종 · 약한 모델 · 순환성 판정 |
 | [09_chronic_disease_model_plan.md](09_chronic_disease_model_plan.md) | BRFSS 2024 단독 시절의 계획과 1차 평가 |
 | `modeling/data/README.md` | 데이터 취득 런북 |
 | `modeling/data/VARIABLE_MAP.md` | 온보딩 입력 ↔ 데이터셋 변수 대조표 |
