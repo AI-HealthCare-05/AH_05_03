@@ -8,63 +8,33 @@ ENV_FILE="${IEOBOM_ENV_FILE:-${HOME}/.config/ieobom/dev.env}"
 HTTP_PORT="${IEOBOM_HTTP_PORT:-8080}"
 STATE_DIR="${HOME}/.local/state/ieobom-cloudflare"
 LOG_FILE="${STATE_DIR}/quick-tunnel.log"
-PLIST_FILE="${HOME}/Library/LaunchAgents/com.ieobom.cloudflare-dev.plist"
-LABEL="com.ieobom.cloudflare-dev"
+TUNNEL_CONTAINER="ieobom-cloudflared"
 
-if ! command -v cloudflared >/dev/null 2>&1; then
-  if [[ -x /opt/homebrew/bin/brew ]]; then
-    /opt/homebrew/bin/brew install cloudflared
-  else
-    echo "cloudflared is unavailable and Homebrew was not found." >&2
-    exit 1
-  fi
-fi
+mkdir -p "${STATE_DIR}"
 
-if command -v cloudflared >/dev/null 2>&1; then
-  CLOUDFLARED_BIN="$(command -v cloudflared)"
-elif [[ -x /opt/homebrew/bin/cloudflared ]]; then
-  CLOUDFLARED_BIN="/opt/homebrew/bin/cloudflared"
-else
-  echo "cloudflared installation completed, but its executable cannot be located." >&2
-  exit 1
-fi
-mkdir -p "${STATE_DIR}" "$(dirname "${PLIST_FILE}")"
+refresh_tunnel_log() {
+  docker logs "${TUNNEL_CONTAINER}" > "${LOG_FILE}" 2>&1 || true
+}
 
 existing_url=""
-if [[ -f "${LOG_FILE}" ]]; then
+if docker inspect "${TUNNEL_CONTAINER}" >/dev/null 2>&1; then
+  refresh_tunnel_log
   existing_url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "${LOG_FILE}" | tail -1 || true)"
 fi
 
 if [[ -z "${existing_url}" ]] || ! curl --fail --silent --show-error --max-time 10 "${existing_url}/healthz" >/dev/null 2>&1; then
-  launchctl bootout "gui/$(id -u)" "${PLIST_FILE}" >/dev/null 2>&1 || true
+  docker rm --force "${TUNNEL_CONTAINER}" >/dev/null 2>&1 || true
   : > "${LOG_FILE}"
-  cat > "${PLIST_FILE}" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>${LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${CLOUDFLARED_BIN}</string>
-    <string>tunnel</string>
-    <string>--no-autoupdate</string>
-    <string>--url</string>
-    <string>http://127.0.0.1:${HTTP_PORT}</string>
-  </array>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>${LOG_FILE}</string>
-  <key>StandardErrorPath</key><string>${LOG_FILE}</string>
-</dict>
-</plist>
-EOF
-  plutil -lint "${PLIST_FILE}"
-  launchctl bootstrap "gui/$(id -u)" "${PLIST_FILE}"
+  docker run --detach \
+    --name "${TUNNEL_CONTAINER}" \
+    --restart unless-stopped \
+    cloudflare/cloudflared:latest \
+    tunnel --no-autoupdate --url "http://host.docker.internal:${HTTP_PORT}" >/dev/null
 fi
 
 tunnel_url=""
 for attempt in $(seq 1 30); do
+  refresh_tunnel_log
   tunnel_url="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' "${LOG_FILE}" | tail -1 || true)"
   if [[ -n "${tunnel_url}" ]] && curl --fail --silent --show-error --max-time 10 "${tunnel_url}/healthz" >/dev/null 2>&1; then
     break
