@@ -4303,3 +4303,50 @@ main {
 .record-detail-modal { width: min(880px, 100%); }
 .record-detail-modal .assess-cards { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
 .record-detail-modal .form-actions { margin-top: 20px; }
+
+/* 건강 비서 런처 — **드로어 CSS 가 아니라 여기 있어야 한다.**
+ *
+ * 드로어는 지연 적재라 그 스타일시트도 누를 때 같이 온다. 런처는 그 전부터 화면에
+ * 떠 있으므로 저기 두면 **처음 여는 순간까지 맨 글자로 보인다** — 검은 텍스트가
+ * 본문 흐름에 얹혀 버튼처럼 보이지 않는다. 늘 보이는 것은 늘 로드되는 곳에 둔다.
+ */
+/* 우측 하단 봄이 런처 플로팅 버튼 */
+.health-assistant-launcher-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4), 0 2px 6px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  z-index: 999;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.health-assistant-launcher-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5), 0 3px 8px rgba(0, 0, 0, 0.12);
+}
+
+.health-assistant-launcher-btn:active {
+  transform: translateY(0);
+}
+
+.health-assistant-launcher-btn .launcher-icon {
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.25);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
