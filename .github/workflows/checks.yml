@@ -259,6 +259,11 @@ jobs:
         timeout-minutes: 10
         run: ./scripts/deploy_admin_mac.sh
 
+      - name: Connect the admin Mac through Cloudflare
+        shell: bash
+        timeout-minutes: 10
+        run: ./scripts/configure_admin_cloudflare_tunnel.sh
+
       - name: Show service logs after a failed deployment
         if: failure()
         shell: bash
