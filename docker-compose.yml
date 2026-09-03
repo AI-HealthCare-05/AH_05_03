@@ -60,8 +60,10 @@ services:
       # 컨테이너 안에서는 서비스명으로 붙어야 한다.
       DB_HOST: postgres
       REDIS_URL: redis://redis:6379/0
+    # --no-sync가 없으면 uv가 이미지에 설치해둔 app·ocr 그룹을 걷어내고
+    # 기본 그룹으로 되돌린다. 그러면 OCR 라우터 import에서 죽는다.
     command: |
-      sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      sh -c "uv run --no-sync alembic upgrade head && uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     volumes:
       - ./app:/app/app  # 로컬의 app 디렉토리를 컨테이너의 /app/app에 마운트(수정사항 즉시 반영)
       - static_volume:/app/templates
@@ -87,6 +89,10 @@ services:
         - linux/arm64
     image: ${DOCKER_USER}/${DOCKER_REPOSITORY}:ai-${AI_WORKER_VERSION}  # AI_WORKER_VERSION은 빌드된 이미지의 버전관리를 위함입니다. V1.0.0 형식으로 사용합니다.
     env_file: .env
+    environment:
+      # .env의 REDIS_URL은 호스트에서 직접 띄울 때 쓰는 값(localhost)이다.
+      # 컨테이너 안에서는 서비스명으로 붙어야 큐를 찾는다.
+      REDIS_URL: redis://redis:6379/0
     restart: always
     mem_limit: 4G
     networks:
