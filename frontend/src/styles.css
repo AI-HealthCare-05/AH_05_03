@@ -147,12 +147,17 @@ main {
   font-size: 0.72rem;
 }
 
+/* 항목이 셋에서 여섯으로 늘었다(2026-09-03). 좁은 화면에서 줄바꿈이 나야 하고,
+   넘칠 때는 가로로 밀 수 있어야 한다 — 잘리면 마지막 항목에 영영 못 간다. */
 .primary-navigation {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
+.primary-navigation a { white-space: nowrap; }
 
 .primary-navigation a,
 
@@ -1015,9 +1020,13 @@ main {
   font-size: 1.15rem;
 }
 
+/* **확정 높이여야 한다.** `min-height` 만 두면 자식 캔버스의 `height: 100%` 가
+ * `auto` 로 풀리고, 그때 캔버스의 레이아웃 높이는 `height` **속성**이 된다.
+ * three.js 는 그 속성에 `clientHeight × devicePixelRatio` 를 쓰므로 관찰 -> 확대 ->
+ * 관찰이 되먹임이 되어 화면이 세로로 끝없이 자란다(실측 551 -> 3494 -> 5235px). */
 .body-map-viewer {
   position: relative;
-  min-height: 430px;
+  height: 430px;
 }
 
 .body-map-viewer canvas {
@@ -1068,7 +1077,7 @@ main {
 }
 
 .vanatome-viewer {
-  min-height: 520px;
+  height: 520px;
   background: radial-gradient(circle at center, #f9fbff 0, #edf3ff 72%, #e8f0fd 100%);
 }
 

@@ -5,12 +5,18 @@ import { SignInPage } from "../features/account/SignInPage";
 import { useAuth } from "./authContext";
 
 // 가족 홈이 "관리"(구성원·기록·검진표), 건강 현황이 "지금 어떤가"(챌린지·수치) 다.
-// 판정과 데이터 관리는 주소로 살아 있지만 메뉴에서는 뺐다 — 둘 다 가족 홈과
-// 건강 현황 안에서 이어지는 화면이라, 메뉴에 또 세우면 같은 곳으로 가는 문이
-// 두 개가 된다.
+// **2026-09-03 에 뒤집었다.** 예전에는 판정·챌린지·데이터 관리를 메뉴에서 뺐다 —
+// 화면 안에서 이어지니 메뉴에 또 세우면 같은 곳으로 가는 문이 둘이 된다는 이유였다.
+//
+// 실제로 써 보니 반대였다. 그 화면들에 들어가려면 **어느 카드의 어느 버튼을 눌러야
+// 하는지 알고 있어야** 했고, 처음 온 사람은 홈에서 더 나아가지 못했다. 문이 둘인
+// 것보다 문을 못 찾는 쪽이 비싸다. 현재 위치는 `NavLink` 의 active 표시가 말한다.
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
+  { to: "/assessment", label: "위험 판정", end: false },
+  { to: "/challenge", label: "챌린지", end: false },
   { to: "/insights", label: "건강 현황", end: false },
+  { to: "/data", label: "데이터 관리", end: false },
   { to: "/account", label: "계정", end: false },
 ] as const;
 

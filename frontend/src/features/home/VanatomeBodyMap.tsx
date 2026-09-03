@@ -112,8 +112,11 @@ export function VanatomeBodyMap({
       camera.updateProjectionMatrix();
       renderScene();
     };
+    // **캔버스가 아니라 그것을 담은 상자를 본다.** 캔버스를 관찰하면
+    // `renderer.setSize` 가 바꾼 `width`/`height` 속성이 다시 관찰을 부르고,
+    // 픽셀비만큼 커진 값을 또 읽어 화면이 세로로 끝없이 자란다.
     const resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(canvas);
+    resizeObserver.observe(canvas.parentElement ?? canvas);
     controls.addEventListener("change", renderScene);
     resize();
 

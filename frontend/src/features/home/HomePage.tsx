@@ -640,6 +640,25 @@ export function HomePage() {
               </small>
               <span className="record-choice-meta">이미지 · PDF · 7~20초</span>
             </button>
+
+            {/* 대화로 남기는 길. 앞의 둘과 성격이 다르다 — 무엇을 적을지 정하지 않고
+                "어제 30분 걸었어" 처럼 말하면 비서가 종류와 칸을 골라 준다. 폼을
+                채우기 어려운 사람에게는 이쪽이 유일하게 끝까지 가는 길이다. */}
+            <button
+              className="record-choice-card"
+              type="button"
+              onClick={() => {
+                setRecordChoiceOpen(false);
+                setAssistantOpen(true);
+              }}
+            >
+              <strong>봄이와 대화로</strong>
+              <small>
+                “어제 30분 걸었어”, “아침 혈압 130에 85” 처럼 말하면 비서가 종류를 고르고 빠진 칸을 되물어 기록으로
+                남겨요. 검진표 사진도 대화 안에서 올릴 수 있어요.
+              </small>
+              <span className="record-choice-meta">운동 · 혈압 · 혈당 · 복약 · 통증</span>
+            </button>
           </div>
           <p className="form-notice">
             검진표 원본은 이 브라우저에 암호화해 보관합니다. 읽는 동안에만 서버를 거치고, 서버 데이터베이스에는
