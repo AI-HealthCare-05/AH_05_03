@@ -42,6 +42,8 @@ export function InsightsPage() {
   // (`react-hooks/set-state-in-effect`). 실려 있는 사람과 보고 있는 사람이
   // 다르면 아직 불러오는 중이다 — 깃발 하나가 덜 필요하다.
   const [loadedFor, setLoadedFor] = useState<string>();
+  // 불러오기 실패. 빈 화면과 고장 난 화면을 가르는 유일한 신호다.
+  const [loadError, setLoadError] = useState<string>();
 
   const activeProfileId = profileId ?? profiles[0]?.id;
   const activeProfile = profiles.find((item) => item.id === activeProfileId);
@@ -51,11 +53,19 @@ export function InsightsPage() {
   useEffect(() => {
     if (!runtime || !activeProfileId) return;
     let cancelled = false;
-    void listSnapshots(runtime, activeProfileId).then((found) => {
-      if (cancelled) return;
-      setSnapshots(found);
-      setLoadedFor(activeProfileId);
-    });
+    // 실패를 삼키면 `loadedFor` 가 영영 안 맞아 **불러오는 중이 끝나지 않는다.**
+    // 빈 화면과 고장 난 화면이 구분되지 않는 것이 이 화면에서 제일 나쁘다.
+    void listSnapshots(runtime, activeProfileId)
+      .then((found) => {
+        if (cancelled) return;
+        setSnapshots(found);
+        setLoadedFor(activeProfileId);
+      })
+      .catch((caught: unknown) => {
+        if (cancelled) return;
+        setLoadError(caught instanceof Error ? caught.message : "기기에 저장된 기록을 불러오지 못했습니다.");
+        setLoadedFor(activeProfileId);
+      });
     return () => {
       cancelled = true;
     };
@@ -114,6 +124,11 @@ export function InsightsPage() {
             <p>
               <NavLink to="/">가족 홈</NavLink>에서 구성원을 만들면 그 사람의 수치를 여기에 모읍니다.
             </p>
+          </div>
+        ) : loadError ? (
+          <div className="compact-empty">
+            <strong>기록을 불러오지 못했어요.</strong>
+            <p className="assess-muted">{loadError}</p>
           </div>
         ) : loading ? (
           <div className="compact-empty">

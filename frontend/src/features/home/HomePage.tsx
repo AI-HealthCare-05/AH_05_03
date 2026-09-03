@@ -179,9 +179,17 @@ export function HomePage() {
   useEffect(() => {
     if (!runtime || !profileIds) return;
     let cancelled = false;
-    void listLatestByProfile(runtime, profileIds.split(",")).then((found) => {
-      if (!cancelled) setVerdicts(found);
-    });
+    void listLatestByProfile(runtime, profileIds.split(","))
+      .then((found) => {
+        if (!cancelled) setVerdicts(found);
+      })
+      .catch((caught: unknown) => {
+        // 카드 위 요약이 못 뜨는 것뿐이라 화면 전체를 막지 않는다. 다만 조용히
+        // 넘기지도 않는다 — 보관함이 깨졌다는 신호일 수 있다.
+        if (!cancelled) {
+          setActionError(messageFrom(caught, "구성원별 최근 판정을 불러오지 못했습니다."));
+        }
+      });
     return () => {
       cancelled = true;
     };

@@ -201,9 +201,18 @@ export function AssessmentPage() {
       return;
     }
     let cancelled = false;
-    void listSnapshots(runtime, activeProfileId).then((found) => {
-      if (!cancelled) setSnapshots(found);
-    });
+    // **삼키지 않는다.** 기기 안 암호화 보관함은 시크릿 모드·용량 초과·손상으로
+    // 실패할 수 있는데, `.catch` 가 없으면 화면은 "기록이 아직 없다" 와 똑같이 보인다.
+    // 사용자는 자기 기록이 사라진 줄 안다.
+    void listSnapshots(runtime, activeProfileId)
+      .then((found) => {
+        if (!cancelled) setSnapshots(found);
+      })
+      .catch((caught: unknown) => {
+        if (!cancelled) {
+          setError(caught instanceof Error ? caught.message : "기기에 저장된 지난 판정을 불러오지 못했습니다.");
+        }
+      });
     return () => {
       cancelled = true;
     };
