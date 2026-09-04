@@ -1,12 +1,44 @@
 services:
-  # 1. Redis (메시지 브로커 및 캐싱)
+  # 1. Redis — 역할이 둘이다.
+  #    (1) 리프레시 토큰 저장소  `ieobom:rt:*`
+  #    (2) 예측 작업 큐 홀더      `ieobom:predict:stream` · `ieobom:predict:job:{id}`
+  #
+  #    **지속화를 끈다.** (2)의 작업 해시에는 사용자가 입력한 건강 수치가 담기므로
+  #    RDB 스냅샷이나 AOF 로 디스크에 남으면 ADR-010 §6 의 "지속화를 켜지 않는다"를
+  #    어긴다. redis:alpine 기본값은 RDB 가 켜져 있어서 명시적으로 꺼야 한다.
+  #
+  #    대가는 Redis 를 재시작하면 리프레시 토큰이 사라져 전원이 재로그인하는 것이다.
+  #    토큰은 다시 만들면 되는 값이고, 건강 수치는 그렇지 않다.
   redis:
     image: redis:alpine
     container_name: redis
+    command:
+      # 지속화를 끄고(위 설명) 메모리 상한을 둔다. 상한이 없으면 큐가 폭주할 때
+      # 호스트 메모리를 다 먹는다. `volatile-ttl` 은 **TTL 이 있는 키만** 버리고
+      # 만료가 가까운 것부터 고른다 — 토큰과 작업 해시 둘 다 TTL 이 있으므로
+      # 최악의 경우 재로그인 또는 작업 404 로 끝나고 쓰기가 실패하지는 않는다.
+      # `noeviction`(기본)이면 가득 찬 순간 로그인까지 막힌다.
+      ["redis-server", "--save", "", "--appendonly", "no",
+       "--maxmemory", "256mb", "--maxmemory-policy", "volatile-ttl"]
+    # **정책을 빠뜨리면 안 된다.** fastapi·ai-worker·email-worker 는 `restart: always`
+    # 인데 여기만 비어 있었다. 도커가 재시작하면 소비자들만 살아 돌아오고 Redis 는
+    # 내려간 채로 남아, 워커 3 대가 `attempt=60` 까지 재시도하며 도는 동안
+    # `/api/health` 는 200 을 준다(의도된 동작이다 — `app/main.py` 참조).
+    # 겉으로 멀쩡한데 문서 인식과 비동기 예측만 죽어 있는 상태가 실제로 있었다.
+    restart: always
     networks:
       - ws
     ports:
-      - "6379:6379"
+      # **루프백에만 묶는다.** 0.0.0.0 으로 열면 같은 네트워크의 다른 기기가
+      # 인증 없이 Redis 에 붙는다 — 여기엔 리프레시 토큰과 예측 payload 가 있다.
+      # 컨테이너끼리는 `ws` 네트워크로 통하므로 이 포트는 로컬 디버깅 전용이다.
+      #
+      # **v4 와 v6 를 둘 다 연다.** 윈도우에서 `localhost` 는 `::1` 을 먼저 내주는데
+      # v4 에만 묶여 있으면 SYN 이 응답 없이 버려져 RST 도 안 온다 — 연결 거부가
+      # 아니라 **무한 대기**다. `.env` 의 `REDIS_URL` 이 localhost 인 채로 호스트에서
+      # 붙으면 그대로 멈춘다. `::1` 도 루프백이라 위 원칙은 그대로다.
+      - "127.0.0.1:6379:6379"
+      - "[::1]:6379:6379"
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -32,7 +64,14 @@ services:
     ports:
       # 컨테이너 안 포트는 5432로 고정한다. 바꾸면 healthcheck의 pg_isready도
       # 같이 고쳐야 하고, 놓치면 depends_on 게이트가 영영 안 열린다.
-      - ${DB_EXPOSE_PORT:-5432}:5432
+      # 루프백에만 묶는다 — pytest 가 localhost:5432 로 붙으므로 없앨 수는 없다.
+      #
+      # **v6 루프백도 같이 연다.** 윈도우에서 `localhost` 는 `::1` 을 먼저 내주는데
+      # v4 에만 묶어 두면 asyncpg 가 `::1:5432` 로 SYN 을 쏘고 SynSent 에서 굳는다.
+      # 거부가 아니라 무한 대기라서 `uv run pytest app` 이 출력 한 줄 없이 멈춘다
+      # (실측 30분). 리눅스 CI 는 localhost 가 v4 로 먼저 풀려 드러나지 않는다.
+      - "127.0.0.1:${DB_EXPOSE_PORT:-5432}:5432"
+      - "[::1]:${DB_EXPOSE_PORT:-5432}:5432"
     networks:
       - ws
     volumes:
@@ -67,46 +106,153 @@ services:
       # 로컬 HTTP 실험에서는 __Host- Secure 쿠키를 사용할 수 없다.
       REFRESH_COOKIE_NAME: ieobom_refresh
       REFRESH_COOKIE_SECURE: "false"
+      ENABLE_DEV_OCR_BRIDGE: ${ENABLE_DEV_OCR_BRIDGE:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      # **예비 공급자다 (2026-09-03).** Gemini 가 앞이고 이쪽이 뒤다 — 무료 등급
+      # 할당량은 모델마다 하루로 따로 세서, 소진되는 날 이게 없으면 인식이 멈춘다.
+      # 순서는 `DEV_OCR_MODELS` 가 정한다.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # 문서 인식 모델 시도 순서와 첫 청크 상한.
+      #
+      # **여기에 안 적으면 `.env` 에 써도 컨테이너까지 안 닿는다** — 이미지에 `.env` 를
+      # 넣지 않으므로(`.dockerignore`) 컨테이너 안에서는 명시적으로 넘긴 값만 보인다.
+      # **아래 ai-worker 와 같은 값이어야 한다.** 두 경로가 다른 모델을 쓰면 같은
+      # 문서에 다른 결과가 나오고, 그건 사용자에게 설명할 수 없는 동작이다.
+      # JSON 배열이다 (`CORS_ALLOW_ORIGINS` 와 같은 규칙).
+      #
+      # **가벼운 Gemini 를 앞에, gpt-4o-mini 를 예비로.** 어느 실패든 다음 항목으로
+      # 넘어간다(`dev_ocr._stream_once` 를 감싸는 루프). 할당량 소진은 공급자마다
+      # 알리는 방식이 달라 종류를 가리지 않는다.
+      DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["gemini-3.5-flash-lite","gemini-3.1-flash-lite","openai:gpt-4o-mini"]}
+      # 대화 공급자 시도 순서. 표기는 위와 같다.
+      HEALTH_ASSISTANT_MODELS: ${HEALTH_ASSISTANT_MODELS:-["gemini-3.5-flash-lite","openai:gpt-4o-mini"]}
+      DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS: ${DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS:-25}
+    # **이제 `uv` 를 부르지 않는다.** 예전에는 `uv run --no-sync ...` 였고, `--no-sync`
+    # 를 한 번 빠뜨렸을 때 `uv run` 이 기동할 때마다 락파일과 환경을 맞추면서
+    # **기본 그룹인 dev 를 설치했다** — 기동 로그에 `Downloading ruff (10.5MiB)` ·
+    # `Downloading mypy (14.5MiB)` 가 찍혔고 컨테이너 venv 에 mypy·ruff·coverage·
+    # fakeredis·pytest 가 들어와 있었다. Dockerfile 이 `--no-dev` 로 공들여 뺀 것을
+    # 여기서 도로 넣던 셈이다.
+    #
+    # Dockerfile 이 멀티스테이지가 되면서 런타임 이미지에 uv 자체가 없다(55MB 절감).
+    # venv 가 PATH 앞에 있으므로 `uvicorn`·`alembic` 을 그냥 부른다. 실수로 dev 를
+    # 설치할 경로가 아예 사라졌다.
+    #
+    # **`--reload-dir` 를 반드시 준다.** 없으면 watchfiles 가 WORKDIR 인 `/app` 전체를
+    # 보는데, 거기엔 아래에서 붙이는 `:ro` 바인드 마운트 `/app/models` 와
+    # `/app/chronic_disease_engine` 이 들어 있다. 윈도우 도커 데스크톱에서 그 마운트를
+    # 감시하면 `IO error ... (os error 5)` 로 `WatchfilesRustInternalError` 가 나고
+    # **리로더가 통째로 죽는다** — 서버가 내려갔다가 `restart: always` 로 살아난
+    # 흔적이 실제 로그에 있다. 편집해서 즉시 반영해야 하는 것은 `/app/app` 뿐이다.
     command: |
-      sh -c "uv run alembic upgrade head && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/app"
     volumes:
       - ./app:/app/app  # 로컬의 app 디렉토리를 컨테이너의 /app/app에 마운트(수정사항 즉시 반영)
+      # 위험도 모델은 순수 JSON이라 이미지에 넣지 않고 마운트한다. 재학습해도
+      # 이미지를 다시 빌드할 필요가 없고, app/services/risk.py가 이 경로를 본다.
+      - ./modeling/artifacts/models:/app/models:ro
+      # PR #4 규칙 엔진. app 과 같이 마운트해 재빌드 없이 반영된다.
+      - ./chronic_disease_engine:/app/chronic_disease_engine:ro
       - static_volume:/app/templates
     restart: always
     ports:
-      - "8000:8000"
+      # nginx 는 `ws` 네트워크로 `fastapi:8000` 에 붙으므로 이 포트는 필요 없다.
+      # 로컬에서 nginx 를 건너뛰고 직접 때려 보려고 남기되 루프백에만 묶는다.
+      - "127.0.0.1:8000:8000"
     networks:
       - ws
+    # 기동 시 `alembic upgrade head` 를 돌리므로 컨테이너가 떴다고 받을 준비가 된 게
+    # 아니다. nginx 가 그 창에 트래픽을 넘기면 사용자가 502 를 본다.
+    # `/api/health` 는 모델 적재 여부까지 확인한다.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
 
-  # 4. AI Worker (연구·비건강 비동기 작업 전용)
-  #    브라우저의 건강정보 또는 건강 모델 입출력을 전달하지 않는다.
+  # 4. AI Worker — Redis 큐에 쌓인 예측 작업을 순차 처리한다.
+  #
+  #    **`container_name` 을 뺐다.** 이름을 고정하면 여러 대를 띄울 수 없다
+  #    (`--scale` 이 이름 충돌로 실패한다). 컨테이너 이름은 compose 가
+  #    `project-ai-worker-1..3` 으로 붙인다.
+  #
+  #    3 대를 띄워도 코드에 분배 로직이 없다. Redis 소비자 그룹이 한 메시지를
+  #    한 소비자에게만 배달하고, 워커는 `{hostname}-{pid}` 로 서로 다른 이름을 쓴다.
+  #    한 대가 죽으면 물고 있던 작업이 pending 에 남고 다른 대가 XAUTOCLAIM 으로 회수한다.
+  #
+  #    profile 을 남긴 이유: 기본 4 종(nginx·fastapi·postgres·redis)만으로도
+  #    동기 예측 경로가 완전히 동작하므로, 큐를 쓰려는 사람만 켜면 된다.
+  #        docker compose --profile ai up -d
+  #
+  #    **단, `ENABLE_DEV_OCR_BRIDGE=true` 면 이 프로파일은 선택이 아니다.**
+  #    문서 인식에는 동기 대체 경로가 없다. `POST /dev/ocr/jobs` 는 Redis 에 싣기만
+  #    하므로 워커가 없으면 작업이 `queued` 인 채로 TTL(5분)까지 매달려 있다가
+  #    조용히 사라진다. 사용자에게는 "인식이 영원히 안 끝난다" 로 보인다.
   ai-worker:
-    container_name: ai-worker
     build:
       context: .  # 프로젝트 루트를 빌드 컨텍스트로 지정
       dockerfile: ai_worker/Dockerfile  # Dockerfile 위치 지정
     image: ${AI_WORKER_IMAGE:-ieobom-ai-worker:local}
     profiles:
       - ai
+    # **기본 3 대.** 예전에는 `--scale ai-worker=3` 을 매번 붙여야 했는데, 안 붙이면
+    # 조용히 1 대로 떠서 동시 부하가 한 대에 몰렸다. 명령을 기억해야 하는 설정은
+    # 결국 잊히므로 파일에 박는다. 다른 수를 원하면 `--scale` 이 이 값을 덮어쓴다.
+    #
+    # 3 인 이유는 소비 동시성이 곧 워커 수이기 때문이다 — 아래 `_handle` 은 배치를
+    # 순차로 돈다. 문서 인식 한 건이 Gemini 왕복 3~5 초를 먹으므로 1 대면 세 사람이
+    # 동시에 올렸을 때 마지막 사람이 15 초를 기다린다. 3 대면 각자 한 건씩이다.
+    deploy:
+      replicas: 3
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-pw1234}
-      DB_NAME: ${DB_NAME:-ai_health}
+      ENV: local
+      SECRET_KEY: ${SECRET_KEY:-local-only-secret-key-change-before-deploy}
       REDIS_URL: redis://redis:6379/0
+      # 워커가 Gemini 를 직접 부른다. fastapi 와 같은 값을 봐야 두 경로의 결과가 갈리지 않는다.
+      ENABLE_DEV_OCR_BRIDGE: ${ENABLE_DEV_OCR_BRIDGE:-false}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      # **예비 공급자다 (2026-09-03).** Gemini 가 앞이고 이쪽이 뒤다 — 무료 등급
+      # 할당량은 모델마다 하루로 따로 세서, 소진되는 날 이게 없으면 인식이 멈춘다.
+      # 순서는 `DEV_OCR_MODELS` 가 정한다.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # 위 fastapi 와 **같은 기본값**이어야 한다. 한쪽만 바꾸면 동기 경로와 큐 경로가
+      # 다른 모델을 쓰게 되고, 두 경로의 결과가 같다는 계약이 조용히 깨진다.
+      #
+      # **가벼운 Gemini 를 앞에, gpt-4o-mini 를 예비로.** 어느 실패든 다음 항목으로
+      # 넘어간다(`dev_ocr._stream_once` 를 감싸는 루프). 할당량 소진은 공급자마다
+      # 알리는 방식이 달라 종류를 가리지 않는다.
+      DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["gemini-3.5-flash-lite","gemini-3.1-flash-lite","openai:gpt-4o-mini"]}
+      # 대화 공급자 시도 순서. 표기는 위와 같다.
+      HEALTH_ASSISTANT_MODELS: ${HEALTH_ASSISTANT_MODELS:-["gemini-3.5-flash-lite","openai:gpt-4o-mini"]}
+      DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS: ${DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS:-25}
+    # FastAPI 와 같은 규칙으로 마운트한다. 재학습해도 이미지 재빌드 없이 반영되고,
+    # 무엇보다 두 경로가 **같은 번들 파일**을 읽어야 결과가 갈리지 않는다.
+    volumes:
+      - ./app:/app/app
+      - ./ai_worker:/app/ai_worker
+      - ./modeling/artifacts/models:/app/models:ro
+      - ./chronic_disease_engine:/app/chronic_disease_engine:ro
     restart: always
-    mem_limit: 4G
+    # 3 대 x 4G 는 로컬에서 과하다. 순수 파이썬 채점이라 실제 사용량은 훨씬 작고,
+    # 상한은 번들 20 개를 메모리에 들고 있는 크기(원본 24MB)가 지배한다.
+    mem_limit: 1G
+    # "떠 있음"과 "큐를 소비 중"은 다르다. 소비자 그룹에 자기 이름이 등록돼 있고
+    # 모델이 적재됐는지를 본다 — 둘 중 하나라도 아니면 이 워커는 작업을 처리하지 못한다.
+    healthcheck:
+      test: ["CMD", "python", "-m", "ai_worker.healthcheck"]
+      interval: 20s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     networks:
       - ws
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
 
@@ -119,7 +265,7 @@ services:
     image: ${APP_IMAGE:-ieobom-app:local}
     profiles:
       - mail
-    command: ["uv", "run", "--no-sync", "python", "-m", "app.workers.invitation_email_worker"]
+    command: ["python", "-m", "app.workers.invitation_email_worker"]
     environment:
       REDIS_URL: redis://redis:6379/0
       SMTP_HOST: mailpit
@@ -152,20 +298,19 @@ services:
       - ws
 
   # 7. Frontend (Vite production build를 정적 제공)
-  frontend:
-    container_name: frontend
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-    image: ieobom-frontend:local
-    restart: always
-    networks:
-      - ws
-
   # 8. Nginx (프론트엔드와 API 요청을 리버스 프록시로 전달)
   nginx:
     container_name: nginx
-    image: nginx:latest
+    # **alpine 이어야 한다.** `nginx:latest` 는 241MB 이고 alpine 은 94MB 다 —
+    # 147MB 차이인데 이 컨테이너가 하는 일(리버스 프록시·gzip·로그 마스킹)에
+    # 데비안 기반이 필요한 부분이 없다. `default.conf` 가 쓰는 지시어는 전부
+    # 기본 모듈이다(map · log_format · gzip · upstream keepalive · proxy_*).
+    #
+    # `latest` 를 벗어난 이유가 하나 더 있다. 떠 있는 nginx 가 언제 빌드된 것인지
+    # 태그만 봐서는 알 수 없어 재현이 안 된다.
+    image: nginx:1.29-alpine
+    # redis 와 같은 이유다 — 정책이 없으면 도커 재시작 뒤 입구만 안 열린 스택이 남는다.
+    restart: always
     volumes:
       - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf
       - static_volume:/vol/web/static
@@ -174,8 +319,9 @@ services:
     networks:
       - ws
     depends_on:
-      - fastapi
-      - frontend
+      # 조건 없이 두면 컨테이너가 뜨자마자 트래픽을 넘겨 기동 창에서 502 가 난다.
+      fastapi:
+        condition: service_healthy
 
 volumes:
   postgres_data:

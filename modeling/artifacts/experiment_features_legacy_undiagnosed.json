@@ -1,0 +1,858 @@
+{
+  "preset": "legacy",
+  "holdout": "2017_2018",
+  "results": [
+    {
+      "target": "dm",
+      "name": "당뇨",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2017_2018",
+      "base_auroc": 0.8143,
+      "base": {
+        "n_features": 18,
+        "train_rows": 43180,
+        "train_positives": 7148,
+        "holdout_rows": 5712,
+        "added_coverage": {}
+      },
+      "arms": {
+        "−보행곤란": {
+          "delta_auroc": 0.0001,
+          "ci_low": -0.0007,
+          "ci_high": 0.001,
+          "two_sided_crossing": 0.83,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8144,
+          "n_features": 17,
+          "train_rows": 43180,
+          "train_positives": 7148,
+          "holdout_rows": 5712,
+          "added_coverage": {},
+          "undiagnosed": {
+            "delta_auroc": 0.0003,
+            "ci_low": -0.0016,
+            "ci_high": 0.0023,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7441
+          }
+        },
+        "+가족력": {
+          "delta_auroc": 0.0189,
+          "ci_low": 0.0141,
+          "ci_high": 0.0232,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.8332,
+          "n_features": 20,
+          "train_rows": 43180,
+          "train_positives": 7148,
+          "holdout_rows": 5712,
+          "added_coverage": {
+            "fh_diabetes": 0.961,
+            "fh_cvd": 0.953
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0052,
+            "ci_low": -0.0053,
+            "ci_high": 0.0154,
+            "verdict": "구분 안 됨",
+            "auroc": 0.749
+          }
+        },
+        "+기왕력": {
+          "delta_auroc": 0.0038,
+          "ci_low": 0.0006,
+          "ci_high": 0.007,
+          "two_sided_crossing": 0.016,
+          "verdict": "유의",
+          "auroc": 0.8182,
+          "n_features": 21,
+          "train_rows": 43180,
+          "train_positives": 7148,
+          "holdout_rows": 5712,
+          "added_coverage": {
+            "dx_stroke": 0.973,
+            "dx_heart_disease": 0.973,
+            "dx_hypertension": 0.998
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.003,
+            "ci_low": -0.0096,
+            "ci_high": 0.0039,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7408
+          }
+        },
+        "+가족력+기왕력": {
+          "delta_auroc": 0.0206,
+          "ci_low": 0.0149,
+          "ci_high": 0.0256,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.8349,
+          "n_features": 23,
+          "train_rows": 43180,
+          "train_positives": 7148,
+          "holdout_rows": 5712,
+          "added_coverage": {
+            "fh_diabetes": 0.961,
+            "fh_cvd": 0.953,
+            "dx_stroke": 0.973,
+            "dx_heart_disease": 0.973,
+            "dx_hypertension": 0.998
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0021,
+            "ci_low": -0.009,
+            "ci_high": 0.0144,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7459
+          }
+        },
+        "+둘−보행곤란": {
+          "delta_auroc": 0.0199,
+          "ci_low": 0.0144,
+          "ci_high": 0.0248,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.8343,
+          "n_features": 22,
+          "train_rows": 43180,
+          "train_positives": 7148,
+          "holdout_rows": 5712,
+          "added_coverage": {
+            "fh_diabetes": 0.961,
+            "fh_cvd": 0.953,
+            "dx_stroke": 0.973,
+            "dx_heart_disease": 0.973,
+            "dx_hypertension": 0.998
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0023,
+            "ci_low": -0.0091,
+            "ci_high": 0.0142,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7461
+          }
+        }
+      },
+      "undiagnosed": {
+        "n": 4763,
+        "positives": 227,
+        "base_auroc": 0.7438
+      }
+    },
+    {
+      "target": "dm",
+      "name": "당뇨",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2017_2018",
+      "base_auroc": 0.8584,
+      "base": {
+        "n_features": 42,
+        "train_rows": 37270,
+        "train_positives": 6299,
+        "holdout_rows": 5037,
+        "added_coverage": {}
+      },
+      "arms": {
+        "−보행곤란": {
+          "delta_auroc": -0.0005,
+          "ci_low": -0.0018,
+          "ci_high": 0.0007,
+          "two_sided_crossing": 0.378,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8579,
+          "n_features": 41,
+          "train_rows": 37270,
+          "train_positives": 6299,
+          "holdout_rows": 5037,
+          "added_coverage": {},
+          "undiagnosed": {
+            "delta_auroc": 0.0027,
+            "ci_low": -0.0005,
+            "ci_high": 0.006,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7976
+          }
+        },
+        "+가족력": {
+          "delta_auroc": 0.0102,
+          "ci_low": 0.0065,
+          "ci_high": 0.0143,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.8687,
+          "n_features": 44,
+          "train_rows": 37270,
+          "train_positives": 6299,
+          "holdout_rows": 5037,
+          "added_coverage": {
+            "fh_diabetes": 0.962,
+            "fh_cvd": 0.954
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0049,
+            "ci_low": -0.0033,
+            "ci_high": 0.0143,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7999
+          }
+        },
+        "+기왕력": {
+          "delta_auroc": 0.0007,
+          "ci_low": -0.0014,
+          "ci_high": 0.0027,
+          "two_sided_crossing": 0.536,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8591,
+          "n_features": 45,
+          "train_rows": 37270,
+          "train_positives": 6299,
+          "holdout_rows": 5037,
+          "added_coverage": {
+            "dx_stroke": 0.974,
+            "dx_heart_disease": 0.974,
+            "dx_hypertension": 0.998
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0012,
+            "ci_low": -0.0059,
+            "ci_high": 0.0042,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7938
+          }
+        },
+        "+가족력+기왕력": {
+          "delta_auroc": 0.0107,
+          "ci_low": 0.0066,
+          "ci_high": 0.0151,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.8691,
+          "n_features": 47,
+          "train_rows": 37270,
+          "train_positives": 6299,
+          "holdout_rows": 5037,
+          "added_coverage": {
+            "fh_diabetes": 0.962,
+            "fh_cvd": 0.954,
+            "dx_stroke": 0.974,
+            "dx_heart_disease": 0.974,
+            "dx_hypertension": 0.998
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0003,
+            "ci_low": -0.0082,
+            "ci_high": 0.0094,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7952
+          }
+        },
+        "+둘−보행곤란": {
+          "delta_auroc": 0.0106,
+          "ci_low": 0.0067,
+          "ci_high": 0.015,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.869,
+          "n_features": 46,
+          "train_rows": 37270,
+          "train_positives": 6299,
+          "holdout_rows": 5037,
+          "added_coverage": {
+            "fh_diabetes": 0.962,
+            "fh_cvd": 0.954,
+            "dx_stroke": 0.974,
+            "dx_heart_disease": 0.974,
+            "dx_hypertension": 0.998
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0004,
+            "ci_low": -0.008,
+            "ci_high": 0.0094,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7953
+          }
+        }
+      },
+      "undiagnosed": {
+        "n": 4174,
+        "positives": 218,
+        "base_auroc": 0.7949
+      }
+    },
+    {
+      "target": "htn",
+      "name": "고혈압",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2017_2018",
+      "base_auroc": 0.8243,
+      "base": {
+        "n_features": 16,
+        "train_rows": 43165,
+        "train_positives": 17597,
+        "holdout_rows": 5712,
+        "added_coverage": {}
+      },
+      "arms": {
+        "−보행곤란": {
+          "delta_auroc": 0.0003,
+          "ci_low": -0.0005,
+          "ci_high": 0.0012,
+          "two_sided_crossing": 0.484,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8246,
+          "n_features": 15,
+          "train_rows": 43165,
+          "train_positives": 17597,
+          "holdout_rows": 5712,
+          "added_coverage": {},
+          "undiagnosed": {
+            "delta_auroc": 0.0014,
+            "ci_low": 0.0,
+            "ci_high": 0.003,
+            "verdict": "유의",
+            "auroc": 0.7891
+          }
+        },
+        "+가족력": {
+          "delta_auroc": 0.0017,
+          "ci_low": 0.0002,
+          "ci_high": 0.0031,
+          "two_sided_crossing": 0.018,
+          "verdict": "유의",
+          "auroc": 0.826,
+          "n_features": 18,
+          "train_rows": 43165,
+          "train_positives": 17597,
+          "holdout_rows": 5712,
+          "added_coverage": {
+            "fh_diabetes": 0.961,
+            "fh_cvd": 0.953
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0012,
+            "ci_low": -0.0038,
+            "ci_high": 0.0016,
+            "verdict": "구분 안 됨",
+            "auroc": 0.7865
+          }
+        },
+        "+기왕력": {
+          "delta_auroc": 0.0032,
+          "ci_low": 0.0005,
+          "ci_high": 0.0059,
+          "two_sided_crossing": 0.02,
+          "verdict": "유의",
+          "auroc": 0.8275,
+          "n_features": 19,
+          "train_rows": 43165,
+          "train_positives": 17597,
+          "holdout_rows": 5712,
+          "added_coverage": {
+            "dx_stroke": 0.973,
+            "dx_heart_disease": 0.973,
+            "dx_diabetes": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0056,
+            "ci_low": -0.0095,
+            "ci_high": -0.0016,
+            "verdict": "유의",
+            "auroc": 0.782
+          }
+        },
+        "+가족력+기왕력": {
+          "delta_auroc": 0.0032,
+          "ci_low": 0.0003,
+          "ci_high": 0.0061,
+          "two_sided_crossing": 0.03,
+          "verdict": "유의",
+          "auroc": 0.8275,
+          "n_features": 21,
+          "train_rows": 43165,
+          "train_positives": 17597,
+          "holdout_rows": 5712,
+          "added_coverage": {
+            "fh_diabetes": 0.961,
+            "fh_cvd": 0.953,
+            "dx_stroke": 0.973,
+            "dx_heart_disease": 0.973,
+            "dx_diabetes": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0067,
+            "ci_low": -0.0111,
+            "ci_high": -0.002,
+            "verdict": "유의",
+            "auroc": 0.7809
+          }
+        },
+        "+둘−보행곤란": {
+          "delta_auroc": 0.0033,
+          "ci_low": 0.0003,
+          "ci_high": 0.0064,
+          "two_sided_crossing": 0.034,
+          "verdict": "유의",
+          "auroc": 0.8276,
+          "n_features": 20,
+          "train_rows": 43165,
+          "train_positives": 17597,
+          "holdout_rows": 5712,
+          "added_coverage": {
+            "fh_diabetes": 0.961,
+            "fh_cvd": 0.953,
+            "dx_stroke": 0.973,
+            "dx_heart_disease": 0.973,
+            "dx_diabetes": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0075,
+            "ci_low": -0.0119,
+            "ci_high": -0.0027,
+            "verdict": "유의",
+            "auroc": 0.7802
+          }
+        }
+      },
+      "undiagnosed": {
+        "n": 3586,
+        "positives": 451,
+        "base_auroc": 0.7877
+      }
+    },
+    {
+      "target": "htn",
+      "name": "고혈압",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2017_2018",
+      "base_auroc": 0.8456,
+      "base": {
+        "n_features": 44,
+        "train_rows": 37284,
+        "train_positives": 15292,
+        "holdout_rows": 5038,
+        "added_coverage": {}
+      },
+      "arms": {
+        "−보행곤란": {
+          "delta_auroc": 0.0003,
+          "ci_low": -0.0006,
+          "ci_high": 0.0013,
+          "two_sided_crossing": 0.458,
+          "verdict": "구분 안 됨",
+          "auroc": 0.846,
+          "n_features": 43,
+          "train_rows": 37284,
+          "train_positives": 15292,
+          "holdout_rows": 5038,
+          "added_coverage": {},
+          "undiagnosed": {
+            "delta_auroc": 0.0019,
+            "ci_low": -0.0,
+            "ci_high": 0.0037,
+            "verdict": "구분 안 됨",
+            "auroc": 0.8058
+          }
+        },
+        "+가족력": {
+          "delta_auroc": 0.0002,
+          "ci_low": -0.001,
+          "ci_high": 0.0015,
+          "two_sided_crossing": 0.746,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8458,
+          "n_features": 46,
+          "train_rows": 37284,
+          "train_positives": 15292,
+          "holdout_rows": 5038,
+          "added_coverage": {
+            "fh_diabetes": 0.962,
+            "fh_cvd": 0.954
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0001,
+            "ci_low": -0.0023,
+            "ci_high": 0.0025,
+            "verdict": "구분 안 됨",
+            "auroc": 0.804
+          }
+        },
+        "+기왕력": {
+          "delta_auroc": 0.0001,
+          "ci_low": -0.0013,
+          "ci_high": 0.0016,
+          "two_sided_crossing": 0.866,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8457,
+          "n_features": 47,
+          "train_rows": 37284,
+          "train_positives": 15292,
+          "holdout_rows": 5038,
+          "added_coverage": {
+            "dx_stroke": 0.974,
+            "dx_heart_disease": 0.974,
+            "dx_diabetes": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0029,
+            "ci_low": -0.0054,
+            "ci_high": -0.0005,
+            "verdict": "유의",
+            "auroc": 0.801
+          }
+        },
+        "+가족력+기왕력": {
+          "delta_auroc": 0.0009,
+          "ci_low": -0.0009,
+          "ci_high": 0.0026,
+          "two_sided_crossing": 0.258,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8465,
+          "n_features": 49,
+          "train_rows": 37284,
+          "train_positives": 15292,
+          "holdout_rows": 5038,
+          "added_coverage": {
+            "fh_diabetes": 0.962,
+            "fh_cvd": 0.954,
+            "dx_stroke": 0.974,
+            "dx_heart_disease": 0.974,
+            "dx_diabetes": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0017,
+            "ci_low": -0.005,
+            "ci_high": 0.0015,
+            "verdict": "구분 안 됨",
+            "auroc": 0.8023
+          }
+        },
+        "+둘−보행곤란": {
+          "delta_auroc": 0.0013,
+          "ci_low": -0.0005,
+          "ci_high": 0.0031,
+          "two_sided_crossing": 0.132,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8469,
+          "n_features": 48,
+          "train_rows": 37284,
+          "train_positives": 15292,
+          "holdout_rows": 5038,
+          "added_coverage": {
+            "fh_diabetes": 0.962,
+            "fh_cvd": 0.954,
+            "dx_stroke": 0.974,
+            "dx_heart_disease": 0.974,
+            "dx_diabetes": 0.999
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0015,
+            "ci_low": -0.0046,
+            "ci_high": 0.0012,
+            "verdict": "구분 안 됨",
+            "auroc": 0.8024
+          }
+        }
+      },
+      "undiagnosed": {
+        "n": 3147,
+        "positives": 414,
+        "base_auroc": 0.8039
+      }
+    },
+    {
+      "target": "dlp",
+      "name": "이상지질혈증",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2017_2018",
+      "base_auroc": 0.7352,
+      "base": {
+        "n_features": 18,
+        "train_rows": 42517,
+        "train_positives": 20871,
+        "holdout_rows": 5710,
+        "added_coverage": {}
+      },
+      "arms": {
+        "−보행곤란": {
+          "delta_auroc": -0.0004,
+          "ci_low": -0.0017,
+          "ci_high": 0.0008,
+          "two_sided_crossing": 0.464,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7348,
+          "n_features": 17,
+          "train_rows": 42517,
+          "train_positives": 20871,
+          "holdout_rows": 5710,
+          "added_coverage": {},
+          "undiagnosed": {
+            "delta_auroc": -0.0,
+            "ci_low": -0.0018,
+            "ci_high": 0.0019,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6674
+          }
+        },
+        "+가족력": {
+          "delta_auroc": 0.0035,
+          "ci_low": 0.0015,
+          "ci_high": 0.0054,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.7387,
+          "n_features": 20,
+          "train_rows": 42517,
+          "train_positives": 20871,
+          "holdout_rows": 5710,
+          "added_coverage": {
+            "fh_diabetes": 0.961,
+            "fh_cvd": 0.953
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0006,
+            "ci_low": -0.0033,
+            "ci_high": 0.0022,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6668
+          }
+        },
+        "+기왕력": {
+          "delta_auroc": 0.0138,
+          "ci_low": 0.0087,
+          "ci_high": 0.0189,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.749,
+          "n_features": 22,
+          "train_rows": 42517,
+          "train_positives": 20871,
+          "holdout_rows": 5710,
+          "added_coverage": {
+            "dx_stroke": 0.973,
+            "dx_heart_disease": 0.973,
+            "dx_diabetes": 0.999,
+            "dx_hypertension": 0.998
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0049,
+            "ci_low": -0.0109,
+            "ci_high": 0.0009,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6624
+          }
+        },
+        "+가족력+기왕력": {
+          "delta_auroc": 0.0154,
+          "ci_low": 0.0101,
+          "ci_high": 0.0204,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.7507,
+          "n_features": 24,
+          "train_rows": 42517,
+          "train_positives": 20871,
+          "holdout_rows": 5710,
+          "added_coverage": {
+            "fh_diabetes": 0.961,
+            "fh_cvd": 0.953,
+            "dx_stroke": 0.973,
+            "dx_heart_disease": 0.973,
+            "dx_diabetes": 0.999,
+            "dx_hypertension": 0.998
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0051,
+            "ci_low": -0.0112,
+            "ci_high": 0.0009,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6622
+          }
+        },
+        "+둘−보행곤란": {
+          "delta_auroc": 0.0156,
+          "ci_low": 0.0103,
+          "ci_high": 0.0208,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.7509,
+          "n_features": 23,
+          "train_rows": 42517,
+          "train_positives": 20871,
+          "holdout_rows": 5710,
+          "added_coverage": {
+            "fh_diabetes": 0.961,
+            "fh_cvd": 0.953,
+            "dx_stroke": 0.973,
+            "dx_heart_disease": 0.973,
+            "dx_diabetes": 0.999,
+            "dx_hypertension": 0.998
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0038,
+            "ci_low": -0.01,
+            "ci_high": 0.0025,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6636
+          }
+        }
+      },
+      "undiagnosed": {
+        "n": 3749,
+        "positives": 763,
+        "base_auroc": 0.6674
+      }
+    },
+    {
+      "target": "dlp",
+      "name": "이상지질혈증",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2017_2018",
+      "base_auroc": 0.7464,
+      "base": {
+        "n_features": 31,
+        "train_rows": 37268,
+        "train_positives": 19092,
+        "holdout_rows": 5037,
+        "added_coverage": {}
+      },
+      "arms": {
+        "−보행곤란": {
+          "delta_auroc": 0.0006,
+          "ci_low": -0.0011,
+          "ci_high": 0.0021,
+          "two_sided_crossing": 0.508,
+          "verdict": "구분 안 됨",
+          "auroc": 0.747,
+          "n_features": 30,
+          "train_rows": 37268,
+          "train_positives": 19092,
+          "holdout_rows": 5037,
+          "added_coverage": {},
+          "undiagnosed": {
+            "delta_auroc": 0.0008,
+            "ci_low": -0.0014,
+            "ci_high": 0.003,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6864
+          }
+        },
+        "+가족력": {
+          "delta_auroc": 0.0015,
+          "ci_low": -0.0,
+          "ci_high": 0.0031,
+          "two_sided_crossing": 0.052,
+          "verdict": "구분 안 됨",
+          "auroc": 0.748,
+          "n_features": 33,
+          "train_rows": 37268,
+          "train_positives": 19092,
+          "holdout_rows": 5037,
+          "added_coverage": {
+            "fh_diabetes": 0.962,
+            "fh_cvd": 0.954
+          },
+          "undiagnosed": {
+            "delta_auroc": 0.0014,
+            "ci_low": -0.0008,
+            "ci_high": 0.0039,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6871
+          }
+        },
+        "+기왕력": {
+          "delta_auroc": 0.008,
+          "ci_low": 0.004,
+          "ci_high": 0.0121,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.7545,
+          "n_features": 35,
+          "train_rows": 37268,
+          "train_positives": 19092,
+          "holdout_rows": 5037,
+          "added_coverage": {
+            "dx_stroke": 0.974,
+            "dx_heart_disease": 0.974,
+            "dx_diabetes": 0.999,
+            "dx_hypertension": 0.998
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0023,
+            "ci_low": -0.0072,
+            "ci_high": 0.0028,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6834
+          }
+        },
+        "+가족력+기왕력": {
+          "delta_auroc": 0.0092,
+          "ci_low": 0.0053,
+          "ci_high": 0.0132,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.7557,
+          "n_features": 37,
+          "train_rows": 37268,
+          "train_positives": 19092,
+          "holdout_rows": 5037,
+          "added_coverage": {
+            "fh_diabetes": 0.962,
+            "fh_cvd": 0.954,
+            "dx_stroke": 0.974,
+            "dx_heart_disease": 0.974,
+            "dx_diabetes": 0.999,
+            "dx_hypertension": 0.998
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0013,
+            "ci_low": -0.0063,
+            "ci_high": 0.004,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6844
+          }
+        },
+        "+둘−보행곤란": {
+          "delta_auroc": 0.0084,
+          "ci_low": 0.0045,
+          "ci_high": 0.0123,
+          "two_sided_crossing": 0.0,
+          "verdict": "유의",
+          "auroc": 0.7548,
+          "n_features": 36,
+          "train_rows": 37268,
+          "train_positives": 19092,
+          "holdout_rows": 5037,
+          "added_coverage": {
+            "fh_diabetes": 0.962,
+            "fh_cvd": 0.954,
+            "dx_stroke": 0.974,
+            "dx_heart_disease": 0.974,
+            "dx_diabetes": 0.999,
+            "dx_hypertension": 0.998
+          },
+          "undiagnosed": {
+            "delta_auroc": -0.0043,
+            "ci_low": -0.0092,
+            "ci_high": 0.001,
+            "verdict": "구분 안 됨",
+            "auroc": 0.6814
+          }
+        }
+      },
+      "undiagnosed": {
+        "n": 3284,
+        "positives": 754,
+        "base_auroc": 0.6857
+      }
+    }
+  ]
+}

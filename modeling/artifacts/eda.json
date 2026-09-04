@@ -1,0 +1,3636 @@
+{
+  "data": "C:\\Users\\kkmj1\\orca\\projects\\Team_project\\project\\modeling\\data\\processed\\nhanes_pooled.csv",
+  "rows": 48895,
+  "numeric": [
+    {
+      "column": "age",
+      "n": 48895,
+      "coverage": 1.0,
+      "mean": 49.499,
+      "std": 18.464,
+      "p1": 19.0,
+      "p25": 33.0,
+      "median": 49.0,
+      "p75": 65.0,
+      "p99": 80.0,
+      "skew": 0.05,
+      "mode_share": 0.0604,
+      "implausible": 0
+    },
+    {
+      "column": "bmi",
+      "n": 44815,
+      "coverage": 0.9166,
+      "mean": 29.17,
+      "std": 7.048,
+      "p1": 17.851,
+      "p25": 24.29,
+      "median": 28.0,
+      "p75": 32.67,
+      "p99": 51.786,
+      "skew": 1.32,
+      "mode_share": 0.0047,
+      "implausible": 9
+    },
+    {
+      "column": "self_rated_health",
+      "n": 48858,
+      "coverage": 0.9992,
+      "mean": 2.745,
+      "std": 1.053,
+      "p1": 1.0,
+      "p25": 2.0,
+      "median": 3.0,
+      "p75": 3.0,
+      "p99": 5.0,
+      "skew": 0.07,
+      "mode_share": 0.362,
+      "implausible": 0
+    },
+    {
+      "column": "height_cm",
+      "n": 44912,
+      "coverage": 0.9185,
+      "mean": 166.983,
+      "std": 10.152,
+      "p1": 145.511,
+      "p25": 159.6,
+      "median": 166.7,
+      "p75": 174.3,
+      "p99": 189.9,
+      "skew": 0.113,
+      "mode_share": 0.0044,
+      "implausible": 0
+    },
+    {
+      "column": "waist_cm",
+      "n": 42845,
+      "coverage": 0.8763,
+      "mean": 99.175,
+      "std": 16.549,
+      "p1": 68.6,
+      "p25": 87.3,
+      "median": 97.9,
+      "p75": 109.0,
+      "p99": 145.6,
+      "skew": 0.584,
+      "mode_share": 0.0044,
+      "implausible": 0
+    },
+    {
+      "column": "difficulty_walking",
+      "n": 14115,
+      "coverage": 0.2887,
+      "mean": 0.254,
+      "std": 0.435,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 1.0,
+      "p99": 1.0,
+      "skew": 1.13,
+      "mode_share": 0.7459,
+      "implausible": 0
+    },
+    {
+      "column": "alcohol_days_per_year",
+      "n": 40395,
+      "coverage": 0.8262,
+      "mean": 51.38,
+      "std": 90.888,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 6.0,
+      "p75": 52.0,
+      "p99": 364.0,
+      "skew": 2.202,
+      "mode_share": 0.3747,
+      "implausible": 0
+    },
+    {
+      "column": "moderate_min_per_week",
+      "n": 43526,
+      "coverage": 0.8902,
+      "mean": 111.604,
+      "std": 258.727,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 125.0,
+      "p99": 1200.0,
+      "skew": 7.533,
+      "mode_share": 0.5366,
+      "implausible": 0
+    },
+    {
+      "column": "vigorous_min_per_week",
+      "n": 43561,
+      "coverage": 0.8909,
+      "mean": 58.731,
+      "std": 179.423,
+      "p1": 0.0,
+      "p25": 0.0,
+      "median": 0.0,
+      "p75": 13.846,
+      "p99": 720.0,
+      "skew": 9.679,
+      "mode_share": 0.7384,
+      "implausible": 0
+    },
+    {
+      "column": "sedentary_min_per_day",
+      "n": 43351,
+      "coverage": 0.8866,
+      "mean": 353.908,
+      "std": 204.292,
+      "p1": 30.0,
+      "p25": 180.0,
+      "median": 300.0,
+      "p75": 480.0,
+      "p99": 900.0,
+      "skew": 0.725,
+      "mode_share": 0.1332,
+      "implausible": 0
+    },
+    {
+      "column": "sleep_hours",
+      "n": 48650,
+      "coverage": 0.995,
+      "mean": 7.194,
+      "std": 1.574,
+      "p1": 3.0,
+      "p25": 6.0,
+      "median": 7.0,
+      "p75": 8.0,
+      "p99": 11.5,
+      "skew": 0.055,
+      "mode_share": 0.2405,
+      "implausible": 0
+    },
+    {
+      "column": "education_level",
+      "n": 47471,
+      "coverage": 0.9709,
+      "mean": 3.446,
+      "std": 1.266,
+      "p1": 1.0,
+      "p25": 3.0,
+      "median": 4.0,
+      "p75": 4.0,
+      "p99": 5.0,
+      "skew": -0.457,
+      "mode_share": 0.2935,
+      "implausible": 0
+    },
+    {
+      "column": "sbp",
+      "n": 43574,
+      "coverage": 0.8912,
+      "mean": 123.867,
+      "std": 18.756,
+      "p1": 92.0,
+      "p25": 110.667,
+      "median": 120.667,
+      "p75": 133.333,
+      "p99": 183.333,
+      "skew": 1.082,
+      "mode_share": 0.018,
+      "implausible": 1
+    },
+    {
+      "column": "dbp",
+      "n": 43443,
+      "coverage": 0.8885,
+      "mean": 70.889,
+      "std": 11.919,
+      "p1": 42.0,
+      "p25": 63.333,
+      "median": 70.667,
+      "p75": 78.0,
+      "p99": 101.333,
+      "skew": 0.091,
+      "mode_share": 0.0245,
+      "implausible": 49
+    },
+    {
+      "column": "fasting_glucose",
+      "n": 21280,
+      "coverage": 0.4352,
+      "mean": 109.406,
+      "std": 36.144,
+      "p1": 75.0,
+      "p25": 93.0,
+      "median": 100.0,
+      "p75": 111.0,
+      "p99": 288.0,
+      "skew": 4.266,
+      "mode_share": 0.0372,
+      "implausible": 1
+    },
+    {
+      "column": "hba1c",
+      "n": 43151,
+      "coverage": 0.8825,
+      "mean": 5.75,
+      "std": 1.085,
+      "p1": 4.5,
+      "p25": 5.2,
+      "median": 5.5,
+      "p75": 5.9,
+      "p99": 10.9,
+      "skew": 3.578,
+      "mode_share": 0.0899,
+      "implausible": 1
+    },
+    {
+      "column": "total_chol",
+      "n": 42484,
+      "coverage": 0.8689,
+      "mean": 191.7,
+      "std": 42.207,
+      "p1": 109.0,
+      "p25": 162.0,
+      "median": 188.0,
+      "p75": 217.0,
+      "p99": 307.0,
+      "skew": 0.757,
+      "mode_share": 0.0107,
+      "implausible": 3
+    },
+    {
+      "column": "hdl",
+      "n": 42484,
+      "coverage": 0.8689,
+      "mean": 53.297,
+      "std": 16.0,
+      "p1": 26.0,
+      "p25": 42.0,
+      "median": 51.0,
+      "p75": 62.0,
+      "p99": 102.0,
+      "skew": 1.121,
+      "mode_share": 0.0343,
+      "implausible": 1
+    },
+    {
+      "column": "ldl",
+      "n": 20440,
+      "coverage": 0.418,
+      "mean": 112.13,
+      "std": 35.893,
+      "p1": 42.0,
+      "p25": 87.0,
+      "median": 109.0,
+      "p75": 134.0,
+      "p99": 210.0,
+      "skew": 0.592,
+      "mode_share": 0.0126,
+      "implausible": 1
+    },
+    {
+      "column": "triglyceride",
+      "n": 20785,
+      "coverage": 0.4251,
+      "mean": 125.579,
+      "std": 106.2,
+      "p1": 30.0,
+      "p25": 71.0,
+      "median": 101.0,
+      "p75": 150.0,
+      "p99": 481.0,
+      "skew": 9.002,
+      "mode_share": 0.0103,
+      "implausible": 1
+    },
+    {
+      "column": "ast",
+      "n": 42215,
+      "coverage": 0.8634,
+      "mean": 24.504,
+      "std": 19.918,
+      "p1": 8.0,
+      "p25": 15.0,
+      "median": 20.0,
+      "p75": 27.0,
+      "p99": 96.0,
+      "skew": 15.035,
+      "mode_share": 0.0557,
+      "implausible": 0
+    },
+    {
+      "column": "alt",
+      "n": 42183,
+      "coverage": 0.8627,
+      "mean": 25.016,
+      "std": 16.595,
+      "p1": 12.0,
+      "p25": 19.0,
+      "median": 22.0,
+      "p75": 27.0,
+      "p99": 77.18,
+      "skew": 19.306,
+      "mode_share": 0.0716,
+      "implausible": 0
+    },
+    {
+      "column": "ggt",
+      "n": 42303,
+      "coverage": 0.8652,
+      "mean": 29.487,
+      "std": 44.038,
+      "p1": 7.0,
+      "p25": 14.0,
+      "median": 20.0,
+      "p75": 30.0,
+      "p99": 185.98,
+      "skew": 13.001,
+      "mode_share": 0.0482,
+      "implausible": 0
+    },
+    {
+      "column": "uric_acid",
+      "n": 42300,
+      "coverage": 0.8651,
+      "mean": 5.399,
+      "std": 1.451,
+      "p1": 2.6,
+      "p25": 4.4,
+      "median": 5.3,
+      "p75": 6.3,
+      "p99": 9.4,
+      "skew": 0.574,
+      "mode_share": 0.0284,
+      "implausible": 2
+    },
+    {
+      "column": "creatinine",
+      "n": 42306,
+      "coverage": 0.8652,
+      "mean": 0.903,
+      "std": 0.443,
+      "p1": 0.46,
+      "p25": 0.71,
+      "median": 0.85,
+      "p75": 1.0,
+      "p99": 1.96,
+      "skew": 13.478,
+      "mode_share": 0.0357,
+      "implausible": 0
+    },
+    {
+      "column": "egfr",
+      "n": 42306,
+      "coverage": 0.8652,
+      "mean": 94.42,
+      "std": 23.083,
+      "p1": 31.41,
+      "p25": 79.917,
+      "median": 96.933,
+      "p75": 111.443,
+      "p99": 134.409,
+      "skew": -0.606,
+      "mode_share": 0.0012,
+      "implausible": 0
+    },
+    {
+      "column": "hemoglobin",
+      "n": 43171,
+      "coverage": 0.8829,
+      "mean": 14.016,
+      "std": 1.547,
+      "p1": 9.9,
+      "p25": 13.0,
+      "median": 14.0,
+      "p75": 15.1,
+      "p99": 17.3,
+      "skew": -0.34,
+      "mode_share": 0.0331,
+      "implausible": 0
+    },
+    {
+      "column": "albumin",
+      "n": 42345,
+      "coverage": 0.866,
+      "mean": 4.195,
+      "std": 0.364,
+      "p1": 3.1,
+      "p25": 4.0,
+      "median": 4.2,
+      "p75": 4.4,
+      "p99": 5.0,
+      "skew": -0.504,
+      "mode_share": 0.1203,
+      "implausible": 0
+    },
+    {
+      "column": "urine_acr",
+      "n": 44364,
+      "coverage": 0.9073,
+      "mean": 48.572,
+      "std": 562.002,
+      "p1": 1.078,
+      "p25": 4.669,
+      "median": 7.321,
+      "p75": 14.286,
+      "p99": 814.748,
+      "skew": 106.018,
+      "mode_share": 0.0058,
+      "implausible": 2
+    }
+  ],
+  "missingness": {
+    "pairs": [
+      {
+        "a": "total_chol",
+        "b": "hdl",
+        "r": 1.0
+      },
+      {
+        "a": "creatinine",
+        "b": "egfr",
+        "r": 1.0
+      },
+      {
+        "a": "ggt",
+        "b": "uric_acid",
+        "r": 0.999
+      },
+      {
+        "a": "ggt",
+        "b": "creatinine",
+        "r": 0.999
+      },
+      {
+        "a": "ggt",
+        "b": "egfr",
+        "r": 0.999
+      },
+      {
+        "a": "uric_acid",
+        "b": "creatinine",
+        "r": 0.998
+      },
+      {
+        "a": "uric_acid",
+        "b": "egfr",
+        "r": 0.998
+      },
+      {
+        "a": "ast",
+        "b": "alt",
+        "r": 0.997
+      },
+      {
+        "a": "creatinine",
+        "b": "albumin",
+        "r": 0.997
+      },
+      {
+        "a": "egfr",
+        "b": "albumin",
+        "r": 0.997
+      },
+      {
+        "a": "ggt",
+        "b": "albumin",
+        "r": 0.996
+      },
+      {
+        "a": "uric_acid",
+        "b": "albumin",
+        "r": 0.996
+      },
+      {
+        "a": "ast",
+        "b": "ggt",
+        "r": 0.992
+      },
+      {
+        "a": "ast",
+        "b": "uric_acid",
+        "r": 0.992
+      },
+      {
+        "a": "ast",
+        "b": "creatinine",
+        "r": 0.991
+      },
+      {
+        "a": "ast",
+        "b": "egfr",
+        "r": 0.991
+      },
+      {
+        "a": "alt",
+        "b": "ggt",
+        "r": 0.99
+      },
+      {
+        "a": "ast",
+        "b": "albumin",
+        "r": 0.989
+      },
+      {
+        "a": "alt",
+        "b": "uric_acid",
+        "r": 0.989
+      },
+      {
+        "a": "alt",
+        "b": "creatinine",
+        "r": 0.989
+      },
+      {
+        "a": "alt",
+        "b": "egfr",
+        "r": 0.989
+      },
+      {
+        "a": "bmi",
+        "b": "height_cm",
+        "r": 0.987
+      },
+      {
+        "a": "moderate_min_per_week",
+        "b": "vigorous_min_per_week",
+        "r": 0.987
+      },
+      {
+        "a": "sbp",
+        "b": "dbp",
+        "r": 0.986
+      },
+      {
+        "a": "total_chol",
+        "b": "albumin",
+        "r": 0.986
+      },
+      {
+        "a": "hdl",
+        "b": "albumin",
+        "r": 0.986
+      },
+      {
+        "a": "ldl",
+        "b": "triglyceride",
+        "r": 0.986
+      },
+      {
+        "a": "alt",
+        "b": "albumin",
+        "r": 0.986
+      },
+      {
+        "a": "total_chol",
+        "b": "ggt",
+        "r": 0.983
+      },
+      {
+        "a": "total_chol",
+        "b": "creatinine",
+        "r": 0.983
+      },
+      {
+        "a": "total_chol",
+        "b": "egfr",
+        "r": 0.983
+      },
+      {
+        "a": "hdl",
+        "b": "ggt",
+        "r": 0.983
+      },
+      {
+        "a": "hdl",
+        "b": "creatinine",
+        "r": 0.983
+      },
+      {
+        "a": "hdl",
+        "b": "egfr",
+        "r": 0.983
+      },
+      {
+        "a": "total_chol",
+        "b": "uric_acid",
+        "r": 0.982
+      },
+      {
+        "a": "hdl",
+        "b": "uric_acid",
+        "r": 0.982
+      },
+      {
+        "a": "fasting_glucose",
+        "b": "triglyceride",
+        "r": 0.977
+      },
+      {
+        "a": "hba1c",
+        "b": "hemoglobin",
+        "r": 0.976
+      },
+      {
+        "a": "total_chol",
+        "b": "ast",
+        "r": 0.975
+      },
+      {
+        "a": "hdl",
+        "b": "ast",
+        "r": 0.975
+      }
+    ],
+    "n_columns": 29
+  },
+  "comorbidity": {
+    "pairs": [
+      {
+        "a": "고중성지방혈증",
+        "b": "낮은 HDL 콜레스테롤",
+        "n": 16907,
+        "prev_a": 0.1142,
+        "prev_b": 0.1498,
+        "joint": 0.0518,
+        "lift": 3.029,
+        "p_b_given_a": 0.4537
+      },
+      {
+        "a": "이상지질혈증",
+        "b": "고LDL콜레스테롤혈증",
+        "n": 34837,
+        "prev_a": 0.4035,
+        "prev_b": 0.1383,
+        "joint": 0.1383,
+        "lift": 2.478,
+        "p_b_given_a": 0.3427
+      },
+      {
+        "a": "이상지질혈증",
+        "b": "낮은 HDL 콜레스테롤",
+        "n": 34837,
+        "prev_a": 0.4035,
+        "prev_b": 0.1757,
+        "joint": 0.1757,
+        "lift": 2.478,
+        "p_b_given_a": 0.4355
+      },
+      {
+        "a": "이상지질혈증",
+        "b": "고중성지방혈증",
+        "n": 16907,
+        "prev_a": 0.4055,
+        "prev_b": 0.1142,
+        "joint": 0.1142,
+        "lift": 2.466,
+        "p_b_given_a": 0.2817
+      },
+      {
+        "a": "낮은 HDL 콜레스테롤",
+        "b": "대사증후군",
+        "n": 33207,
+        "prev_a": 0.167,
+        "prev_b": 0.2776,
+        "joint": 0.1077,
+        "lift": 2.324,
+        "p_b_given_a": 0.6451
+      },
+      {
+        "a": "당뇨",
+        "b": "대사증후군",
+        "n": 46268,
+        "prev_a": 0.1684,
+        "prev_b": 0.3848,
+        "joint": 0.1464,
+        "lift": 2.259,
+        "p_b_given_a": 0.8691
+      },
+      {
+        "a": "당뇨",
+        "b": "신기능 확인 필요",
+        "n": 45015,
+        "prev_a": 0.1738,
+        "prev_b": 0.1735,
+        "joint": 0.0678,
+        "lift": 2.247,
+        "p_b_given_a": 0.3898
+      },
+      {
+        "a": "고중성지방혈증",
+        "b": "대사증후군",
+        "n": 16540,
+        "prev_a": 0.1152,
+        "prev_b": 0.3842,
+        "joint": 0.098,
+        "lift": 2.215,
+        "p_b_given_a": 0.8509
+      },
+      {
+        "a": "고LDL콜레스테롤혈증",
+        "b": "고중성지방혈증",
+        "n": 16907,
+        "prev_a": 0.1453,
+        "prev_b": 0.1142,
+        "joint": 0.0364,
+        "lift": 2.196,
+        "p_b_given_a": 0.2508
+      },
+      {
+        "a": "신기능 확인 필요",
+        "b": "빈혈",
+        "n": 42436,
+        "prev_a": 0.1757,
+        "prev_b": 0.1007,
+        "joint": 0.037,
+        "lift": 2.089,
+        "p_b_given_a": 0.2104
+      },
+      {
+        "a": "고중성지방혈증",
+        "b": "지방간",
+        "n": 3824,
+        "prev_a": 0.0858,
+        "prev_b": 0.3834,
+        "joint": 0.0594,
+        "lift": 1.805,
+        "p_b_given_a": 0.6921
+      },
+      {
+        "a": "당뇨",
+        "b": "고혈압",
+        "n": 48876,
+        "prev_a": 0.1702,
+        "prev_b": 0.4127,
+        "joint": 0.1228,
+        "lift": 1.748,
+        "p_b_given_a": 0.7213
+      },
+      {
+        "a": "당뇨",
+        "b": "고중성지방혈증",
+        "n": 16907,
+        "prev_a": 0.1334,
+        "prev_b": 0.1142,
+        "joint": 0.0264,
+        "lift": 1.735,
+        "p_b_given_a": 0.1981
+      },
+      {
+        "a": "고혈압",
+        "b": "대사증후군",
+        "n": 46259,
+        "prev_a": 0.4183,
+        "prev_b": 0.3848,
+        "joint": 0.2766,
+        "lift": 1.718,
+        "p_b_given_a": 0.6613
+      },
+      {
+        "a": "고혈압",
+        "b": "신기능 확인 필요",
+        "n": 45012,
+        "prev_a": 0.4178,
+        "prev_b": 0.1735,
+        "joint": 0.1245,
+        "lift": 1.717,
+        "p_b_given_a": 0.2979
+      },
+      {
+        "a": "당뇨",
+        "b": "빈혈",
+        "n": 42479,
+        "prev_a": 0.1785,
+        "prev_b": 0.1009,
+        "joint": 0.0306,
+        "lift": 1.7,
+        "p_b_given_a": 0.1715
+      },
+      {
+        "a": "이상지질혈증",
+        "b": "대사증후군",
+        "n": 46149,
+        "prev_a": 0.4888,
+        "prev_b": 0.3856,
+        "joint": 0.3127,
+        "lift": 1.659,
+        "p_b_given_a": 0.6398
+      },
+      {
+        "a": "대사증후군",
+        "b": "신기능 확인 필요",
+        "n": 43085,
+        "prev_a": 0.4012,
+        "prev_b": 0.1728,
+        "joint": 0.1112,
+        "lift": 1.605,
+        "p_b_given_a": 0.2772
+      },
+      {
+        "a": "낮은 HDL 콜레스테롤",
+        "b": "지방간",
+        "n": 7344,
+        "prev_a": 0.1401,
+        "prev_b": 0.3889,
+        "joint": 0.0871,
+        "lift": 1.599,
+        "p_b_given_a": 0.622
+      },
+      {
+        "a": "당뇨",
+        "b": "지방간",
+        "n": 10015,
+        "prev_a": 0.1876,
+        "prev_b": 0.4173,
+        "joint": 0.1243,
+        "lift": 1.588,
+        "p_b_given_a": 0.6626
+      },
+      {
+        "a": "당뇨",
+        "b": "낮은 HDL 콜레스테롤",
+        "n": 34837,
+        "prev_a": 0.1217,
+        "prev_b": 0.1757,
+        "joint": 0.032,
+        "lift": 1.497,
+        "p_b_given_a": 0.263
+      },
+      {
+        "a": "당뇨",
+        "b": "이상지질혈증",
+        "n": 48226,
+        "prev_a": 0.1721,
+        "prev_b": 0.4892,
+        "joint": 0.1231,
+        "lift": 1.461,
+        "p_b_given_a": 0.715
+      },
+      {
+        "a": "대사증후군",
+        "b": "지방간",
+        "n": 9881,
+        "prev_a": 0.4182,
+        "prev_b": 0.4153,
+        "joint": 0.2478,
+        "lift": 1.427,
+        "p_b_given_a": 0.5927
+      },
+      {
+        "a": "고혈압",
+        "b": "빈혈",
+        "n": 42476,
+        "prev_a": 0.4236,
+        "prev_b": 0.1009,
+        "joint": 0.0573,
+        "lift": 1.341,
+        "p_b_given_a": 0.1353
+      },
+      {
+        "a": "고중성지방혈증",
+        "b": "신기능 확인 필요",
+        "n": 16905,
+        "prev_a": 0.1142,
+        "prev_b": 0.1378,
+        "joint": 0.021,
+        "lift": 1.334,
+        "p_b_given_a": 0.1838
+      },
+      {
+        "a": "고혈압",
+        "b": "이상지질혈증",
+        "n": 48214,
+        "prev_a": 0.4156,
+        "prev_b": 0.4893,
+        "joint": 0.267,
+        "lift": 1.313,
+        "p_b_given_a": 0.6424
+      },
+      {
+        "a": "이상지질혈증",
+        "b": "신기능 확인 필요",
+        "n": 44675,
+        "prev_a": 0.503,
+        "prev_b": 0.1739,
+        "joint": 0.1095,
+        "lift": 1.252,
+        "p_b_given_a": 0.2176
+      },
+      {
+        "a": "고혈압",
+        "b": "지방간",
+        "n": 10015,
+        "prev_a": 0.4351,
+        "prev_b": 0.4173,
+        "joint": 0.2269,
+        "lift": 1.249,
+        "p_b_given_a": 0.5213
+      },
+      {
+        "a": "고혈압",
+        "b": "고중성지방혈증",
+        "n": 16907,
+        "prev_a": 0.3407,
+        "prev_b": 0.1142,
+        "joint": 0.0483,
+        "lift": 1.24,
+        "p_b_given_a": 0.1416
+      },
+      {
+        "a": "고LDL콜레스테롤혈증",
+        "b": "대사증후군",
+        "n": 33207,
+        "prev_a": 0.1387,
+        "prev_b": 0.2776,
+        "joint": 0.0476,
+        "lift": 1.238,
+        "p_b_given_a": 0.3435
+      },
+      {
+        "a": "이상지질혈증",
+        "b": "지방간",
+        "n": 10014,
+        "prev_a": 0.5007,
+        "prev_b": 0.4172,
+        "joint": 0.2571,
+        "lift": 1.231,
+        "p_b_given_a": 0.5136
+      },
+      {
+        "a": "고혈압",
+        "b": "고LDL콜레스테롤혈증",
+        "n": 34834,
+        "prev_a": 0.3404,
+        "prev_b": 0.1383,
+        "joint": 0.0576,
+        "lift": 1.223,
+        "p_b_given_a": 0.1692
+      },
+      {
+        "a": "고LDL콜레스테롤혈증",
+        "b": "지방간",
+        "n": 7344,
+        "prev_a": 0.1287,
+        "prev_b": 0.3889,
+        "joint": 0.0603,
+        "lift": 1.205,
+        "p_b_given_a": 0.4688
+      },
+      {
+        "a": "신기능 확인 필요",
+        "b": "지방간",
+        "n": 9968,
+        "prev_a": 0.1677,
+        "prev_b": 0.4172,
+        "joint": 0.084,
+        "lift": 1.2,
+        "p_b_given_a": 0.5006
+      },
+      {
+        "a": "대사증후군",
+        "b": "빈혈",
+        "n": 40813,
+        "prev_a": 0.4134,
+        "prev_b": 0.1,
+        "joint": 0.0491,
+        "lift": 1.187,
+        "p_b_given_a": 0.1186
+      },
+      {
+        "a": "고혈압",
+        "b": "낮은 HDL 콜레스테롤",
+        "n": 34834,
+        "prev_a": 0.3404,
+        "prev_b": 0.1757,
+        "joint": 0.0665,
+        "lift": 1.113,
+        "p_b_given_a": 0.1955
+      },
+      {
+        "a": "낮은 HDL 콜레스테롤",
+        "b": "신기능 확인 필요",
+        "n": 34834,
+        "prev_a": 0.1757,
+        "prev_b": 0.1405,
+        "joint": 0.0275,
+        "lift": 1.113,
+        "p_b_given_a": 0.1563
+      },
+      {
+        "a": "고LDL콜레스테롤혈증",
+        "b": "신기능 확인 필요",
+        "n": 34834,
+        "prev_a": 0.1383,
+        "prev_b": 0.1405,
+        "joint": 0.0215,
+        "lift": 1.108,
+        "p_b_given_a": 0.1557
+      },
+      {
+        "a": "당뇨",
+        "b": "고LDL콜레스테롤혈증",
+        "n": 34837,
+        "prev_a": 0.1217,
+        "prev_b": 0.1383,
+        "joint": 0.0183,
+        "lift": 1.085,
+        "p_b_given_a": 0.15
+      },
+      {
+        "a": "이상지질혈증",
+        "b": "빈혈",
+        "n": 42430,
+        "prev_a": 0.5107,
+        "prev_b": 0.1009,
+        "joint": 0.0501,
+        "lift": 0.973,
+        "p_b_given_a": 0.0982
+      },
+      {
+        "a": "낮은 HDL 콜레스테롤",
+        "b": "빈혈",
+        "n": 34066,
+        "prev_a": 0.1789,
+        "prev_b": 0.0921,
+        "joint": 0.0147,
+        "lift": 0.892,
+        "p_b_given_a": 0.0822
+      },
+      {
+        "a": "고LDL콜레스테롤혈증",
+        "b": "낮은 HDL 콜레스테롤",
+        "n": 34837,
+        "prev_a": 0.1383,
+        "prev_b": 0.1757,
+        "joint": 0.0214,
+        "lift": 0.881,
+        "p_b_given_a": 0.1548
+      },
+      {
+        "a": "지방간",
+        "b": "빈혈",
+        "n": 9623,
+        "prev_a": 0.4192,
+        "prev_b": 0.0982,
+        "joint": 0.0349,
+        "lift": 0.848,
+        "p_b_given_a": 0.0833
+      },
+      {
+        "a": "고중성지방혈증",
+        "b": "빈혈",
+        "n": 16524,
+        "prev_a": 0.1101,
+        "prev_b": 0.0848,
+        "joint": 0.0057,
+        "lift": 0.616,
+        "p_b_given_a": 0.0522
+      },
+      {
+        "a": "고LDL콜레스테롤혈증",
+        "b": "빈혈",
+        "n": 34066,
+        "prev_a": 0.1348,
+        "prev_b": 0.0921,
+        "joint": 0.0063,
+        "lift": 0.51,
+        "p_b_given_a": 0.047
+      }
+    ],
+    "n_complete": 3738,
+    "count_distribution": {
+      "0": 925,
+      "1": 711,
+      "2": 620,
+      "3": 532,
+      "4": 428,
+      "5": 293,
+      "6": 147,
+      "7": 56,
+      "8": 25,
+      "9": 1
+    }
+  },
+  "associations": {
+    "dm": [
+      {
+        "column": "age",
+        "d": 0.903,
+        "mean_positive": 61.578,
+        "mean_negative": 47.018,
+        "n_positive": 8324
+      },
+      {
+        "column": "waist_cm",
+        "d": 0.771,
+        "mean_positive": 109.424,
+        "mean_negative": 97.097,
+        "n_positive": 7223
+      },
+      {
+        "column": "self_rated_health",
+        "d": 0.744,
+        "mean_positive": 3.361,
+        "mean_negative": 2.619,
+        "n_positive": 8317
+      },
+      {
+        "column": "egfr",
+        "d": -0.591,
+        "mean_positive": 82.954,
+        "mean_negative": 96.842,
+        "n_positive": 7379
+      },
+      {
+        "column": "bmi",
+        "d": 0.569,
+        "mean_positive": 32.567,
+        "mean_negative": 28.466,
+        "n_positive": 7692
+      },
+      {
+        "column": "sbp",
+        "d": 0.486,
+        "mean_positive": 131.56,
+        "mean_negative": 122.248,
+        "n_positive": 7573
+      },
+      {
+        "column": "hdl",
+        "d": -0.39,
+        "mean_positive": 48.393,
+        "mean_negative": 54.336,
+        "n_positive": 7426
+      },
+      {
+        "column": "albumin",
+        "d": -0.383,
+        "mean_positive": 4.081,
+        "mean_negative": 4.219,
+        "n_positive": 7386
+      },
+      {
+        "column": "triglyceride",
+        "d": 0.337,
+        "mean_positive": 160.288,
+        "mean_negative": 117.442,
+        "n_positive": 3947
+      },
+      {
+        "column": "education_level",
+        "d": -0.319,
+        "mean_positive": 3.108,
+        "mean_negative": 3.517,
+        "n_positive": 8288
+      },
+      {
+        "column": "ldl",
+        "d": -0.301,
+        "mean_positive": 103.134,
+        "mean_negative": 114.189,
+        "n_positive": 3808
+      },
+      {
+        "column": "vigorous_min_per_week",
+        "d": -0.3,
+        "mean_positive": 21.017,
+        "mean_negative": 66.776,
+        "n_positive": 7657
+      },
+      {
+        "column": "alcohol_days_per_year",
+        "d": -0.257,
+        "mean_positive": 33.203,
+        "mean_negative": 55.275,
+        "n_positive": 7129
+      },
+      {
+        "column": "uric_acid",
+        "d": 0.257,
+        "mean_positive": 5.719,
+        "mean_negative": 5.332,
+        "n_positive": 7379
+      },
+      {
+        "column": "creatinine",
+        "d": 0.236,
+        "mean_positive": 1.011,
+        "mean_negative": 0.88,
+        "n_positive": 7379
+      },
+      {
+        "column": "total_chol",
+        "d": -0.212,
+        "mean_positive": 183.978,
+        "mean_negative": 193.336,
+        "n_positive": 7426
+      },
+      {
+        "column": "ggt",
+        "d": 0.212,
+        "mean_positive": 38.025,
+        "mean_negative": 27.683,
+        "n_positive": 7381
+      },
+      {
+        "column": "hemoglobin",
+        "d": -0.195,
+        "mean_positive": 13.762,
+        "mean_negative": 14.07,
+        "n_positive": 7598
+      },
+      {
+        "column": "urine_acr",
+        "d": 0.195,
+        "mean_positive": 147.564,
+        "mean_negative": 28.05,
+        "n_positive": 7618
+      },
+      {
+        "column": "difficulty_walking",
+        "d": 0.177,
+        "mean_positive": 0.313,
+        "mean_negative": 0.235,
+        "n_positive": 3506
+      },
+      {
+        "column": "moderate_min_per_week",
+        "d": -0.151,
+        "mean_positive": 81.611,
+        "mean_negative": 117.995,
+        "n_positive": 7643
+      },
+      {
+        "column": "height_cm",
+        "d": -0.119,
+        "mean_positive": 165.981,
+        "mean_negative": 167.192,
+        "n_positive": 7737
+      },
+      {
+        "column": "ast",
+        "d": 0.096,
+        "mean_positive": 26.299,
+        "mean_negative": 24.124,
+        "n_positive": 7370
+      },
+      {
+        "column": "sedentary_min_per_day",
+        "d": 0.084,
+        "mean_positive": 368.319,
+        "mean_negative": 350.85,
+        "n_positive": 7597
+      },
+      {
+        "column": "alt",
+        "d": 0.058,
+        "mean_positive": 25.855,
+        "mean_negative": 24.838,
+        "n_positive": 7365
+      },
+      {
+        "column": "dbp",
+        "d": -0.054,
+        "mean_positive": 70.344,
+        "mean_negative": 71.003,
+        "n_positive": 7531
+      },
+      {
+        "column": "sleep_hours",
+        "d": 0.027,
+        "mean_positive": 7.231,
+        "mean_negative": 7.186,
+        "n_positive": 8257
+      }
+    ],
+    "htn": [
+      {
+        "column": "age",
+        "d": 1.144,
+        "mean_positive": 60.223,
+        "mean_negative": 41.948,
+        "n_positive": 20174
+      },
+      {
+        "column": "egfr",
+        "d": -0.89,
+        "mean_positive": 83.298,
+        "mean_negative": 102.337,
+        "n_positive": 17591
+      },
+      {
+        "column": "waist_cm",
+        "d": 0.6,
+        "mean_positive": 104.794,
+        "mean_negative": 95.246,
+        "n_positive": 17628
+      },
+      {
+        "column": "self_rated_health",
+        "d": 0.529,
+        "mean_positive": 3.061,
+        "mean_negative": 2.522,
+        "n_positive": 20160
+      },
+      {
+        "column": "hba1c",
+        "d": 0.501,
+        "mean_positive": 6.066,
+        "mean_negative": 5.524,
+        "n_positive": 18032
+      },
+      {
+        "column": "fasting_glucose",
+        "d": 0.431,
+        "mean_positive": 118.496,
+        "mean_negative": 102.819,
+        "n_positive": 8942
+      },
+      {
+        "column": "uric_acid",
+        "d": 0.427,
+        "mean_positive": 5.758,
+        "mean_negative": 5.144,
+        "n_positive": 17584
+      },
+      {
+        "column": "bmi",
+        "d": 0.426,
+        "mean_positive": 30.906,
+        "mean_negative": 27.936,
+        "n_positive": 18616
+      },
+      {
+        "column": "creatinine",
+        "d": 0.327,
+        "mean_positive": 0.992,
+        "mean_negative": 0.839,
+        "n_positive": 17591
+      },
+      {
+        "column": "albumin",
+        "d": -0.25,
+        "mean_positive": 4.143,
+        "mean_negative": 4.233,
+        "n_positive": 17603
+      },
+      {
+        "column": "vigorous_min_per_week",
+        "d": -0.225,
+        "mean_positive": 35.622,
+        "mean_negative": 75.355,
+        "n_positive": 18212
+      },
+      {
+        "column": "ggt",
+        "d": 0.21,
+        "mean_positive": 35.046,
+        "mean_negative": 25.532,
+        "n_positive": 17587
+      },
+      {
+        "column": "triglyceride",
+        "d": 0.205,
+        "mean_positive": 138.304,
+        "mean_negative": 116.417,
+        "n_positive": 8700
+      },
+      {
+        "column": "education_level",
+        "d": -0.195,
+        "mean_positive": 3.304,
+        "mean_negative": 3.55,
+        "n_positive": 20051
+      },
+      {
+        "column": "difficulty_walking",
+        "d": 0.172,
+        "mean_positive": 0.283,
+        "mean_negative": 0.209,
+        "n_positive": 8653
+      },
+      {
+        "column": "urine_acr",
+        "d": 0.123,
+        "mean_positive": 92.542,
+        "mean_negative": 17.348,
+        "n_positive": 18422
+      },
+      {
+        "column": "hemoglobin",
+        "d": -0.119,
+        "mean_positive": 13.908,
+        "mean_negative": 14.093,
+        "n_positive": 18053
+      },
+      {
+        "column": "height_cm",
+        "d": -0.107,
+        "mean_positive": 166.348,
+        "mean_negative": 167.437,
+        "n_positive": 18680
+      },
+      {
+        "column": "sedentary_min_per_day",
+        "d": 0.095,
+        "mean_positive": 365.163,
+        "mean_negative": 345.845,
+        "n_positive": 18095
+      },
+      {
+        "column": "alt",
+        "d": 0.084,
+        "mean_positive": 25.837,
+        "mean_negative": 24.432,
+        "n_positive": 17533
+      },
+      {
+        "column": "moderate_min_per_week",
+        "d": -0.076,
+        "mean_positive": 100.244,
+        "mean_negative": 119.78,
+        "n_positive": 18194
+      },
+      {
+        "column": "hdl",
+        "d": -0.067,
+        "mean_positive": 52.666,
+        "mean_negative": 53.745,
+        "n_positive": 17679
+      },
+      {
+        "column": "ldl",
+        "d": -0.067,
+        "mean_positive": 110.723,
+        "mean_negative": 113.134,
+        "n_positive": 8513
+      },
+      {
+        "column": "total_chol",
+        "d": 0.039,
+        "mean_positive": 192.677,
+        "mean_negative": 191.004,
+        "n_positive": 17679
+      },
+      {
+        "column": "ast",
+        "d": 0.034,
+        "mean_positive": 24.902,
+        "mean_negative": 24.221,
+        "n_positive": 17542
+      },
+      {
+        "column": "alcohol_days_per_year",
+        "d": 0.024,
+        "mean_positive": 52.652,
+        "mean_negative": 50.444,
+        "n_positive": 17195
+      },
+      {
+        "column": "sleep_hours",
+        "d": -0.018,
+        "mean_positive": 7.177,
+        "mean_negative": 7.205,
+        "n_positive": 20040
+      }
+    ],
+    "dlp": [
+      {
+        "column": "age",
+        "d": 0.598,
+        "mean_positive": 55.04,
+        "mean_negative": 44.499,
+        "n_positive": 23595
+      },
+      {
+        "column": "waist_cm",
+        "d": 0.5,
+        "mean_positive": 103.226,
+        "mean_negative": 95.196,
+        "n_positive": 21361
+      },
+      {
+        "column": "hba1c",
+        "d": 0.429,
+        "mean_positive": 5.973,
+        "mean_negative": 5.52,
+        "n_positive": 21947
+      },
+      {
+        "column": "egfr",
+        "d": -0.422,
+        "mean_positive": 89.76,
+        "mean_negative": 99.282,
+        "n_positive": 21598
+      },
+      {
+        "column": "fasting_glucose",
+        "d": 0.383,
+        "mean_positive": 115.976,
+        "mean_negative": 102.465,
+        "n_positive": 10941
+      },
+      {
+        "column": "uric_acid",
+        "d": 0.365,
+        "mean_positive": 5.654,
+        "mean_negative": 5.133,
+        "n_positive": 21595
+      },
+      {
+        "column": "sbp",
+        "d": 0.328,
+        "mean_positive": 126.902,
+        "mean_negative": 120.831,
+        "n_positive": 21813
+      },
+      {
+        "column": "self_rated_health",
+        "d": 0.324,
+        "mean_positive": 2.917,
+        "mean_negative": 2.581,
+        "n_positive": 23575
+      },
+      {
+        "column": "bmi",
+        "d": 0.308,
+        "mean_positive": 30.258,
+        "mean_negative": 28.114,
+        "n_positive": 22242
+      },
+      {
+        "column": "ast",
+        "d": 0.2,
+        "mean_positive": 26.444,
+        "mean_negative": 22.483,
+        "n_positive": 21544
+      },
+      {
+        "column": "ggt",
+        "d": 0.187,
+        "mean_positive": 33.481,
+        "mean_negative": 25.322,
+        "n_positive": 21597
+      },
+      {
+        "column": "creatinine",
+        "d": 0.18,
+        "mean_positive": 0.941,
+        "mean_negative": 0.862,
+        "n_positive": 21598
+      },
+      {
+        "column": "vigorous_min_per_week",
+        "d": -0.175,
+        "mean_positive": 42.761,
+        "mean_negative": 73.275,
+        "n_positive": 21185
+      },
+      {
+        "column": "hemoglobin",
+        "d": 0.172,
+        "mean_positive": 14.145,
+        "mean_negative": 13.881,
+        "n_positive": 21954
+      },
+      {
+        "column": "education_level",
+        "d": -0.123,
+        "mean_positive": 3.374,
+        "mean_negative": 3.53,
+        "n_positive": 23330
+      },
+      {
+        "column": "dbp",
+        "d": 0.114,
+        "mean_positive": 71.581,
+        "mean_negative": 70.22,
+        "n_positive": 21730
+      },
+      {
+        "column": "alt",
+        "d": 0.1,
+        "mean_positive": 25.83,
+        "mean_negative": 24.167,
+        "n_positive": 21527
+      },
+      {
+        "column": "difficulty_walking",
+        "d": 0.097,
+        "mean_positive": 0.27,
+        "mean_negative": 0.228,
+        "n_positive": 8546
+      },
+      {
+        "column": "albumin",
+        "d": -0.071,
+        "mean_positive": 4.183,
+        "mean_negative": 4.208,
+        "n_positive": 21617
+      },
+      {
+        "column": "sedentary_min_per_day",
+        "d": 0.06,
+        "mean_positive": 360.678,
+        "mean_negative": 348.412,
+        "n_positive": 21068
+      },
+      {
+        "column": "moderate_min_per_week",
+        "d": -0.056,
+        "mean_positive": 104.638,
+        "mean_negative": 119.221,
+        "n_positive": 21162
+      },
+      {
+        "column": "urine_acr",
+        "d": 0.049,
+        "mean_positive": 62.191,
+        "mean_negative": 34.678,
+        "n_positive": 22118
+      },
+      {
+        "column": "alcohol_days_per_year",
+        "d": -0.04,
+        "mean_positive": 49.58,
+        "mean_negative": 53.236,
+        "n_positive": 20549
+      },
+      {
+        "column": "height_cm",
+        "d": 0.032,
+        "mean_positive": 167.136,
+        "mean_negative": 166.811,
+        "n_positive": 22304
+      },
+      {
+        "column": "sleep_hours",
+        "d": -0.022,
+        "mean_positive": 7.179,
+        "mean_negative": 7.214,
+        "n_positive": 23478
+      }
+    ],
+    "hyperchol": [
+      {
+        "column": "age",
+        "d": 0.353,
+        "mean_positive": 51.073,
+        "mean_negative": 45.161,
+        "n_positive": 4818
+      },
+      {
+        "column": "sbp",
+        "d": 0.284,
+        "mean_positive": 126.82,
+        "mean_negative": 121.551,
+        "n_positive": 4654
+      },
+      {
+        "column": "dbp",
+        "d": 0.266,
+        "mean_positive": 73.784,
+        "mean_negative": 70.622,
+        "n_positive": 4637
+      },
+      {
+        "column": "hba1c",
+        "d": 0.216,
+        "mean_positive": 5.83,
+        "mean_negative": 5.588,
+        "n_positive": 4815
+      },
+      {
+        "column": "hemoglobin",
+        "d": 0.21,
+        "mean_positive": 14.329,
+        "mean_negative": 14.008,
+        "n_positive": 4803
+      },
+      {
+        "column": "ggt",
+        "d": 0.196,
+        "mean_positive": 38.494,
+        "mean_negative": 27.307,
+        "n_positive": 4794
+      },
+      {
+        "column": "egfr",
+        "d": -0.185,
+        "mean_positive": 94.35,
+        "mean_negative": 98.32,
+        "n_positive": 4795
+      },
+      {
+        "column": "waist_cm",
+        "d": 0.149,
+        "mean_positive": 99.89,
+        "mean_negative": 97.578,
+        "n_positive": 4625
+      },
+      {
+        "column": "ast",
+        "d": 0.149,
+        "mean_positive": 27.22,
+        "mean_negative": 24.14,
+        "n_positive": 4779
+      },
+      {
+        "column": "uric_acid",
+        "d": 0.138,
+        "mean_positive": 5.51,
+        "mean_negative": 5.31,
+        "n_positive": 4794
+      },
+      {
+        "column": "height_cm",
+        "d": -0.132,
+        "mean_positive": 166.086,
+        "mean_negative": 167.415,
+        "n_positive": 4766
+      },
+      {
+        "column": "fasting_glucose",
+        "d": 0.131,
+        "mean_positive": 109.81,
+        "mean_negative": 105.06,
+        "n_positive": 2476
+      },
+      {
+        "column": "alcohol_days_per_year",
+        "d": 0.12,
+        "mean_positive": 61.946,
+        "mean_negative": 50.578,
+        "n_positive": 4413
+      },
+      {
+        "column": "difficulty_walking",
+        "d": -0.11,
+        "mean_positive": 0.198,
+        "mean_negative": 0.244,
+        "n_positive": 1604
+      },
+      {
+        "column": "vigorous_min_per_week",
+        "d": -0.106,
+        "mean_positive": 49.524,
+        "mean_negative": 66.829,
+        "n_positive": 4151
+      },
+      {
+        "column": "alt",
+        "d": 0.095,
+        "mean_positive": 26.39,
+        "mean_negative": 24.77,
+        "n_positive": 4774
+      },
+      {
+        "column": "urine_acr",
+        "d": 0.059,
+        "mean_positive": 58.446,
+        "mean_negative": 32.843,
+        "n_positive": 4764
+      },
+      {
+        "column": "sedentary_min_per_day",
+        "d": -0.053,
+        "mean_positive": 340.698,
+        "mean_negative": 351.339,
+        "n_positive": 4132
+      },
+      {
+        "column": "self_rated_health",
+        "d": 0.048,
+        "mean_positive": 2.703,
+        "mean_negative": 2.654,
+        "n_positive": 4813
+      },
+      {
+        "column": "bmi",
+        "d": 0.042,
+        "mean_positive": 29.119,
+        "mean_negative": 28.839,
+        "n_positive": 4757
+      },
+      {
+        "column": "education_level",
+        "d": -0.04,
+        "mean_positive": 3.432,
+        "mean_negative": 3.482,
+        "n_positive": 4782
+      },
+      {
+        "column": "creatinine",
+        "d": -0.032,
+        "mean_positive": 0.868,
+        "mean_negative": 0.88,
+        "n_positive": 4795
+      },
+      {
+        "column": "albumin",
+        "d": 0.023,
+        "mean_positive": 4.212,
+        "mean_negative": 4.204,
+        "n_positive": 4797
+      },
+      {
+        "column": "moderate_min_per_week",
+        "d": -0.021,
+        "mean_positive": 103.234,
+        "mean_negative": 108.248,
+        "n_positive": 4149
+      },
+      {
+        "column": "sleep_hours",
+        "d": -0.006,
+        "mean_positive": 7.121,
+        "mean_negative": 7.13,
+        "n_positive": 4808
+      }
+    ],
+    "hypertg": [
+      {
+        "column": "waist_cm",
+        "d": 0.521,
+        "mean_positive": 104.938,
+        "mean_negative": 96.901,
+        "n_positive": 1859
+      },
+      {
+        "column": "uric_acid",
+        "d": 0.472,
+        "mean_positive": 5.981,
+        "mean_negative": 5.292,
+        "n_positive": 1928
+      },
+      {
+        "column": "ast",
+        "d": 0.365,
+        "mean_positive": 31.355,
+        "mean_negative": 23.542,
+        "n_positive": 1923
+      },
+      {
+        "column": "fasting_glucose",
+        "d": 0.358,
+        "mean_positive": 118.381,
+        "mean_negative": 104.068,
+        "n_positive": 1929
+      },
+      {
+        "column": "hemoglobin",
+        "d": 0.346,
+        "mean_positive": 14.607,
+        "mean_negative": 14.068,
+        "n_positive": 1925
+      },
+      {
+        "column": "bmi",
+        "d": 0.334,
+        "mean_positive": 30.775,
+        "mean_negative": 28.565,
+        "n_positive": 1906
+      },
+      {
+        "column": "ggt",
+        "d": 0.301,
+        "mean_positive": 45.343,
+        "mean_negative": 26.629,
+        "n_positive": 1927
+      },
+      {
+        "column": "hba1c",
+        "d": 0.299,
+        "mean_positive": 5.936,
+        "mean_negative": 5.582,
+        "n_positive": 1925
+      },
+      {
+        "column": "self_rated_health",
+        "d": 0.264,
+        "mean_positive": 2.901,
+        "mean_negative": 2.631,
+        "n_positive": 1930
+      },
+      {
+        "column": "education_level",
+        "d": -0.246,
+        "mean_positive": 3.207,
+        "mean_negative": 3.523,
+        "n_positive": 1906
+      },
+      {
+        "column": "sbp",
+        "d": 0.244,
+        "mean_positive": 125.606,
+        "mean_negative": 121.221,
+        "n_positive": 1865
+      },
+      {
+        "column": "dbp",
+        "d": 0.241,
+        "mean_positive": 72.946,
+        "mean_negative": 70.087,
+        "n_positive": 1856
+      },
+      {
+        "column": "alt",
+        "d": 0.16,
+        "mean_positive": 27.405,
+        "mean_negative": 24.528,
+        "n_positive": 1921
+      },
+      {
+        "column": "vigorous_min_per_week",
+        "d": -0.135,
+        "mean_positive": 43.502,
+        "mean_negative": 65.004,
+        "n_positive": 1583
+      },
+      {
+        "column": "height_cm",
+        "d": 0.101,
+        "mean_positive": 168.313,
+        "mean_negative": 167.292,
+        "n_positive": 1910
+      },
+      {
+        "column": "urine_acr",
+        "d": 0.091,
+        "mean_positive": 69.605,
+        "mean_negative": 33.321,
+        "n_positive": 1913
+      },
+      {
+        "column": "difficulty_walking",
+        "d": 0.078,
+        "mean_positive": 0.261,
+        "mean_negative": 0.228,
+        "n_positive": 513
+      },
+      {
+        "column": "moderate_min_per_week",
+        "d": -0.07,
+        "mean_positive": 93.0,
+        "mean_negative": 109.917,
+        "n_positive": 1584
+      },
+      {
+        "column": "age",
+        "d": 0.067,
+        "mean_positive": 47.286,
+        "mean_negative": 46.14,
+        "n_positive": 1931
+      },
+      {
+        "column": "albumin",
+        "d": -0.063,
+        "mean_positive": 4.155,
+        "mean_negative": 4.179,
+        "n_positive": 1929
+      },
+      {
+        "column": "alcohol_days_per_year",
+        "d": -0.043,
+        "mean_positive": 49.727,
+        "mean_negative": 53.541,
+        "n_positive": 1760
+      },
+      {
+        "column": "creatinine",
+        "d": 0.041,
+        "mean_positive": 0.883,
+        "mean_negative": 0.867,
+        "n_positive": 1928
+      },
+      {
+        "column": "egfr",
+        "d": 0.017,
+        "mean_positive": 98.743,
+        "mean_negative": 98.358,
+        "n_positive": 1928
+      },
+      {
+        "column": "sleep_hours",
+        "d": -0.011,
+        "mean_positive": 7.108,
+        "mean_negative": 7.125,
+        "n_positive": 1926
+      },
+      {
+        "column": "sedentary_min_per_day",
+        "d": 0.003,
+        "mean_positive": 347.884,
+        "mean_negative": 347.351,
+        "n_positive": 1578
+      }
+    ],
+    "low_hdl": [
+      {
+        "column": "waist_cm",
+        "d": 0.594,
+        "mean_positive": 105.752,
+        "mean_negative": 96.23,
+        "n_positive": 5829
+      },
+      {
+        "column": "uric_acid",
+        "d": 0.53,
+        "mean_positive": 5.959,
+        "mean_negative": 5.205,
+        "n_positive": 6097
+      },
+      {
+        "column": "bmi",
+        "d": 0.45,
+        "mean_positive": 31.448,
+        "mean_negative": 28.332,
+        "n_positive": 6028
+      },
+      {
+        "column": "hemoglobin",
+        "d": 0.407,
+        "mean_positive": 14.578,
+        "mean_negative": 13.94,
+        "n_positive": 6106
+      },
+      {
+        "column": "height_cm",
+        "d": 0.373,
+        "mean_positive": 170.303,
+        "mean_negative": 166.578,
+        "n_positive": 6045
+      },
+      {
+        "column": "ast",
+        "d": 0.331,
+        "mean_positive": 31.084,
+        "mean_negative": 23.175,
+        "n_positive": 6086
+      },
+      {
+        "column": "fasting_glucose",
+        "d": 0.282,
+        "mean_positive": 114.221,
+        "mean_negative": 104.254,
+        "n_positive": 2560
+      },
+      {
+        "column": "self_rated_health",
+        "d": 0.255,
+        "mean_positive": 2.875,
+        "mean_negative": 2.615,
+        "n_positive": 6115
+      },
+      {
+        "column": "education_level",
+        "d": -0.244,
+        "mean_positive": 3.222,
+        "mean_negative": 3.529,
+        "n_positive": 5927
+      },
+      {
+        "column": "hba1c",
+        "d": 0.234,
+        "mean_positive": 5.829,
+        "mean_negative": 5.577,
+        "n_positive": 6110
+      },
+      {
+        "column": "alcohol_days_per_year",
+        "d": -0.232,
+        "mean_positive": 36.441,
+        "mean_negative": 55.585,
+        "n_positive": 5514
+      },
+      {
+        "column": "creatinine",
+        "d": 0.174,
+        "mean_positive": 0.939,
+        "mean_negative": 0.865,
+        "n_positive": 6095
+      },
+      {
+        "column": "difficulty_walking",
+        "d": 0.169,
+        "mean_positive": 0.297,
+        "mean_negative": 0.223,
+        "n_positive": 1598
+      },
+      {
+        "column": "alt",
+        "d": 0.149,
+        "mean_positive": 27.383,
+        "mean_negative": 24.484,
+        "n_positive": 6080
+      },
+      {
+        "column": "ggt",
+        "d": 0.135,
+        "mean_positive": 34.26,
+        "mean_negative": 27.7,
+        "n_positive": 6096
+      },
+      {
+        "column": "dbp",
+        "d": 0.126,
+        "mean_positive": 72.284,
+        "mean_negative": 70.8,
+        "n_positive": 5883
+      },
+      {
+        "column": "age",
+        "d": -0.114,
+        "mean_positive": 44.348,
+        "mean_negative": 46.326,
+        "n_positive": 6122
+      },
+      {
+        "column": "vigorous_min_per_week",
+        "d": -0.072,
+        "mean_positive": 54.41,
+        "mean_negative": 66.693,
+        "n_positive": 5507
+      },
+      {
+        "column": "sbp",
+        "d": 0.066,
+        "mean_positive": 123.237,
+        "mean_negative": 122.081,
+        "n_positive": 5894
+      },
+      {
+        "column": "sleep_hours",
+        "d": -0.061,
+        "mean_positive": 7.052,
+        "mean_negative": 7.146,
+        "n_positive": 6101
+      },
+      {
+        "column": "moderate_min_per_week",
+        "d": -0.059,
+        "mean_positive": 95.884,
+        "mean_negative": 110.122,
+        "n_positive": 5502
+      },
+      {
+        "column": "albumin",
+        "d": 0.046,
+        "mean_positive": 4.218,
+        "mean_negative": 4.202,
+        "n_positive": 6100
+      },
+      {
+        "column": "egfr",
+        "d": 0.044,
+        "mean_positive": 98.584,
+        "mean_negative": 97.598,
+        "n_positive": 6095
+      },
+      {
+        "column": "sedentary_min_per_day",
+        "d": 0.036,
+        "mean_positive": 356.02,
+        "mean_negative": 348.567,
+        "n_positive": 5471
+      },
+      {
+        "column": "urine_acr",
+        "d": 0.032,
+        "mean_positive": 44.582,
+        "mean_negative": 34.649,
+        "n_positive": 6034
+      }
+    ],
+    "mets": [
+      {
+        "column": "age",
+        "d": 0.942,
+        "mean_positive": 59.111,
+        "mean_negative": 43.618,
+        "n_positive": 17804
+      },
+      {
+        "column": "bmi",
+        "d": 0.666,
+        "mean_positive": 31.779,
+        "mean_negative": 27.318,
+        "n_positive": 17134
+      },
+      {
+        "column": "egfr",
+        "d": -0.662,
+        "mean_positive": 85.628,
+        "mean_negative": 100.26,
+        "n_positive": 16633
+      },
+      {
+        "column": "self_rated_health",
+        "d": 0.54,
+        "mean_positive": 3.071,
+        "mean_negative": 2.524,
+        "n_positive": 17793
+      },
+      {
+        "column": "uric_acid",
+        "d": 0.469,
+        "mean_positive": 5.788,
+        "mean_negative": 5.121,
+        "n_positive": 16631
+      },
+      {
+        "column": "vigorous_min_per_week",
+        "d": -0.274,
+        "mean_positive": 30.884,
+        "mean_negative": 77.632,
+        "n_positive": 16180
+      },
+      {
+        "column": "albumin",
+        "d": -0.273,
+        "mean_positive": 4.14,
+        "mean_negative": 4.237,
+        "n_positive": 16646
+      },
+      {
+        "column": "education_level",
+        "d": -0.247,
+        "mean_positive": 3.286,
+        "mean_negative": 3.597,
+        "n_positive": 17712
+      },
+      {
+        "column": "creatinine",
+        "d": 0.232,
+        "mean_positive": 0.967,
+        "mean_negative": 0.859,
+        "n_positive": 16633
+      },
+      {
+        "column": "ggt",
+        "d": 0.215,
+        "mean_positive": 34.911,
+        "mean_negative": 25.359,
+        "n_positive": 16633
+      },
+      {
+        "column": "difficulty_walking",
+        "d": 0.191,
+        "mean_positive": 0.288,
+        "mean_negative": 0.206,
+        "n_positive": 7464
+      },
+      {
+        "column": "ast",
+        "d": 0.172,
+        "mean_positive": 26.443,
+        "mean_negative": 22.968,
+        "n_positive": 16600
+      },
+      {
+        "column": "moderate_min_per_week",
+        "d": -0.109,
+        "mean_positive": 96.177,
+        "mean_negative": 123.73,
+        "n_positive": 16164
+      },
+      {
+        "column": "alcohol_days_per_year",
+        "d": -0.097,
+        "mean_positive": 46.316,
+        "mean_negative": 55.163,
+        "n_positive": 15972
+      },
+      {
+        "column": "urine_acr",
+        "d": 0.095,
+        "mean_positive": 80.517,
+        "mean_negative": 27.602,
+        "n_positive": 17010
+      },
+      {
+        "column": "alt",
+        "d": 0.091,
+        "mean_positive": 25.866,
+        "mean_negative": 24.322,
+        "n_positive": 16590
+      },
+      {
+        "column": "sedentary_min_per_day",
+        "d": 0.066,
+        "mean_positive": 362.951,
+        "mean_negative": 349.569,
+        "n_positive": 16087
+      },
+      {
+        "column": "height_cm",
+        "d": -0.042,
+        "mean_positive": 166.756,
+        "mean_negative": 167.187,
+        "n_positive": 17187
+      },
+      {
+        "column": "hemoglobin",
+        "d": 0.031,
+        "mean_positive": 14.043,
+        "mean_negative": 13.995,
+        "n_positive": 16923
+      },
+      {
+        "column": "sleep_hours",
+        "d": 0.006,
+        "mean_positive": 7.205,
+        "mean_negative": 7.195,
+        "n_positive": 17709
+      }
+    ],
+    "ckd": [
+      {
+        "column": "age",
+        "d": 0.933,
+        "mean_positive": 62.538,
+        "mean_negative": 46.546,
+        "n_positive": 7810
+      },
+      {
+        "column": "sbp",
+        "d": 0.625,
+        "mean_positive": 134.378,
+        "mean_negative": 121.637,
+        "n_positive": 7463
+      },
+      {
+        "column": "hba1c",
+        "d": 0.549,
+        "mean_positive": 6.334,
+        "mean_negative": 5.628,
+        "n_positive": 7491
+      },
+      {
+        "column": "fasting_glucose",
+        "d": 0.48,
+        "mean_positive": 126.902,
+        "mean_negative": 105.773,
+        "n_positive": 3657
+      },
+      {
+        "column": "uric_acid",
+        "d": 0.467,
+        "mean_positive": 5.993,
+        "mean_negative": 5.274,
+        "n_positive": 7355
+      },
+      {
+        "column": "self_rated_health",
+        "d": 0.461,
+        "mean_positive": 3.144,
+        "mean_negative": 2.665,
+        "n_positive": 7804
+      },
+      {
+        "column": "albumin",
+        "d": -0.344,
+        "mean_positive": 4.091,
+        "mean_negative": 4.217,
+        "n_positive": 7361
+      },
+      {
+        "column": "hemoglobin",
+        "d": -0.335,
+        "mean_positive": 13.573,
+        "mean_negative": 14.11,
+        "n_positive": 7498
+      },
+      {
+        "column": "waist_cm",
+        "d": 0.312,
+        "mean_positive": 103.537,
+        "mean_negative": 98.34,
+        "n_positive": 7109
+      },
+      {
+        "column": "education_level",
+        "d": -0.273,
+        "mean_positive": 3.158,
+        "mean_negative": 3.506,
+        "n_positive": 7696
+      },
+      {
+        "column": "vigorous_min_per_week",
+        "d": -0.257,
+        "mean_positive": 25.583,
+        "mean_negative": 64.247,
+        "n_positive": 6903
+      },
+      {
+        "column": "difficulty_walking",
+        "d": 0.253,
+        "mean_positive": 0.337,
+        "mean_negative": 0.224,
+        "n_positive": 3439
+      },
+      {
+        "column": "height_cm",
+        "d": -0.203,
+        "mean_positive": 165.286,
+        "mean_negative": 167.345,
+        "n_positive": 7634
+      },
+      {
+        "column": "ldl",
+        "d": -0.199,
+        "mean_positive": 106.068,
+        "mean_negative": 113.367,
+        "n_positive": 3469
+      },
+      {
+        "column": "triglyceride",
+        "d": 0.186,
+        "mean_positive": 143.414,
+        "mean_negative": 121.883,
+        "n_positive": 3573
+      },
+      {
+        "column": "bmi",
+        "d": 0.169,
+        "mean_positive": 30.195,
+        "mean_negative": 28.97,
+        "n_positive": 7594
+      },
+      {
+        "column": "ggt",
+        "d": 0.141,
+        "mean_positive": 35.439,
+        "mean_negative": 28.234,
+        "n_positive": 7358
+      },
+      {
+        "column": "alcohol_days_per_year",
+        "d": -0.102,
+        "mean_positive": 43.749,
+        "mean_negative": 53.06,
+        "n_positive": 6966
+      },
+      {
+        "column": "moderate_min_per_week",
+        "d": -0.094,
+        "mean_positive": 88.176,
+        "mean_negative": 111.478,
+        "n_positive": 6898
+      },
+      {
+        "column": "sedentary_min_per_day",
+        "d": 0.094,
+        "mean_positive": 369.654,
+        "mean_negative": 350.536,
+        "n_positive": 6856
+      },
+      {
+        "column": "sleep_hours",
+        "d": 0.09,
+        "mean_positive": 7.287,
+        "mean_negative": 7.139,
+        "n_positive": 7763
+      },
+      {
+        "column": "total_chol",
+        "d": -0.085,
+        "mean_positive": 188.616,
+        "mean_negative": 192.347,
+        "n_positive": 7382
+      },
+      {
+        "column": "ast",
+        "d": -0.063,
+        "mean_positive": 23.357,
+        "mean_negative": 24.745,
+        "n_positive": 7337
+      },
+      {
+        "column": "hdl",
+        "d": -0.062,
+        "mean_positive": 52.46,
+        "mean_negative": 53.471,
+        "n_positive": 7382
+      },
+      {
+        "column": "alt",
+        "d": 0.054,
+        "mean_positive": 25.774,
+        "mean_negative": 24.856,
+        "n_positive": 7332
+      },
+      {
+        "column": "dbp",
+        "d": -0.034,
+        "mean_positive": 70.517,
+        "mean_negative": 70.954,
+        "n_positive": 7405
+      }
+    ],
+    "fatty_liver": [
+      {
+        "column": "waist_cm",
+        "d": 1.204,
+        "mean_positive": 109.788,
+        "mean_negative": 92.616,
+        "n_positive": 4027
+      },
+      {
+        "column": "bmi",
+        "d": 1.025,
+        "mean_positive": 33.175,
+        "mean_negative": 26.672,
+        "n_positive": 4149
+      },
+      {
+        "column": "hdl",
+        "d": -0.572,
+        "mean_positive": 49.169,
+        "mean_negative": 57.457,
+        "n_positive": 3919
+      },
+      {
+        "column": "triglyceride",
+        "d": 0.523,
+        "mean_positive": 148.046,
+        "mean_negative": 95.576,
+        "n_positive": 2033
+      },
+      {
+        "column": "fasting_glucose",
+        "d": 0.493,
+        "mean_positive": 121.111,
+        "mean_negative": 103.996,
+        "n_positive": 2096
+      },
+      {
+        "column": "uric_acid",
+        "d": 0.491,
+        "mean_positive": 5.699,
+        "mean_negative": 5.003,
+        "n_positive": 3889
+      },
+      {
+        "column": "hba1c",
+        "d": 0.48,
+        "mean_positive": 6.09,
+        "mean_negative": 5.573,
+        "n_positive": 4037
+      },
+      {
+        "column": "ast",
+        "d": 0.436,
+        "mean_positive": 26.664,
+        "mean_negative": 19.114,
+        "n_positive": 3887
+      },
+      {
+        "column": "self_rated_health",
+        "d": 0.368,
+        "mean_positive": 2.894,
+        "mean_negative": 2.529,
+        "n_positive": 4177
+      },
+      {
+        "column": "ggt",
+        "d": 0.282,
+        "mean_positive": 38.781,
+        "mean_negative": 25.278,
+        "n_positive": 3887
+      },
+      {
+        "column": "dbp",
+        "d": 0.28,
+        "mean_positive": 75.782,
+        "mean_negative": 72.638,
+        "n_positive": 4042
+      },
+      {
+        "column": "sbp",
+        "d": 0.271,
+        "mean_positive": 127.363,
+        "mean_negative": 122.298,
+        "n_positive": 4047
+      },
+      {
+        "column": "age",
+        "d": 0.264,
+        "mean_positive": 54.217,
+        "mean_negative": 49.608,
+        "n_positive": 4179
+      },
+      {
+        "column": "hemoglobin",
+        "d": 0.242,
+        "mean_positive": 14.194,
+        "mean_negative": 13.834,
+        "n_positive": 4034
+      },
+      {
+        "column": "alt",
+        "d": 0.174,
+        "mean_positive": 23.897,
+        "mean_negative": 21.347,
+        "n_positive": 3875
+      },
+      {
+        "column": "vigorous_min_per_week",
+        "d": -0.164,
+        "mean_positive": 49.551,
+        "mean_negative": 81.996,
+        "n_positive": 4162
+      },
+      {
+        "column": "education_level",
+        "d": -0.156,
+        "mean_positive": 3.609,
+        "mean_negative": 3.792,
+        "n_positive": 4135
+      },
+      {
+        "column": "albumin",
+        "d": -0.154,
+        "mean_positive": 4.049,
+        "mean_negative": 4.1,
+        "n_positive": 3903
+      },
+      {
+        "column": "total_chol",
+        "d": 0.131,
+        "mean_positive": 191.51,
+        "mean_negative": 186.04,
+        "n_positive": 3919
+      },
+      {
+        "column": "difficulty_walking",
+        "d": 0.124,
+        "mean_positive": 0.293,
+        "mean_negative": 0.238,
+        "n_positive": 822
+      },
+      {
+        "column": "ldl",
+        "d": 0.118,
+        "mean_positive": 112.425,
+        "mean_negative": 108.129,
+        "n_positive": 1985
+      },
+      {
+        "column": "sedentary_min_per_day",
+        "d": 0.11,
+        "mean_positive": 357.983,
+        "mean_negative": 335.503,
+        "n_positive": 4144
+      },
+      {
+        "column": "moderate_min_per_week",
+        "d": -0.107,
+        "mean_positive": 142.56,
+        "mean_negative": 178.665,
+        "n_positive": 4160
+      },
+      {
+        "column": "height_cm",
+        "d": 0.087,
+        "mean_positive": 167.308,
+        "mean_negative": 166.436,
+        "n_positive": 4159
+      },
+      {
+        "column": "egfr",
+        "d": -0.083,
+        "mean_positive": 92.097,
+        "mean_negative": 93.891,
+        "n_positive": 3887
+      },
+      {
+        "column": "sleep_hours",
+        "d": -0.073,
+        "mean_positive": 7.561,
+        "mean_negative": 7.677,
+        "n_positive": 4146
+      },
+      {
+        "column": "alcohol_days_per_year",
+        "d": -0.039,
+        "mean_positive": 52.831,
+        "mean_negative": 56.479,
+        "n_positive": 3817
+      },
+      {
+        "column": "creatinine",
+        "d": 0.012,
+        "mean_positive": 0.896,
+        "mean_negative": 0.891,
+        "n_positive": 3887
+      },
+      {
+        "column": "urine_acr",
+        "d": 0.008,
+        "mean_positive": 41.203,
+        "mean_negative": 38.808,
+        "n_positive": 4120
+      }
+    ],
+    "anemia": [
+      {
+        "column": "albumin",
+        "d": -0.769,
+        "mean_positive": 3.961,
+        "mean_negative": 4.237,
+        "n_positive": 4175
+      },
+      {
+        "column": "egfr",
+        "d": -0.466,
+        "mean_positive": 82.836,
+        "mean_negative": 95.13,
+        "n_positive": 4168
+      },
+      {
+        "column": "total_chol",
+        "d": -0.429,
+        "mean_positive": 175.448,
+        "mean_negative": 193.029,
+        "n_positive": 4189
+      },
+      {
+        "column": "ldl",
+        "d": -0.414,
+        "mean_positive": 99.02,
+        "mean_negative": 113.395,
+        "n_positive": 1882
+      },
+      {
+        "column": "age",
+        "d": 0.376,
+        "mean_positive": 56.011,
+        "mean_negative": 49.104,
+        "n_positive": 4286
+      },
+      {
+        "column": "dbp",
+        "d": -0.362,
+        "mean_positive": 67.033,
+        "mean_negative": 71.48,
+        "n_positive": 4029
+      },
+      {
+        "column": "self_rated_health",
+        "d": 0.357,
+        "mean_positive": 3.087,
+        "mean_negative": 2.714,
+        "n_positive": 4281
+      },
+      {
+        "column": "ast",
+        "d": -0.343,
+        "mean_positive": 19.14,
+        "mean_negative": 25.224,
+        "n_positive": 4160
+      },
+      {
+        "column": "height_cm",
+        "d": -0.307,
+        "mean_positive": 164.355,
+        "mean_negative": 167.377,
+        "n_positive": 4163
+      },
+      {
+        "column": "creatinine",
+        "d": 0.291,
+        "mean_positive": 1.107,
+        "mean_negative": 0.886,
+        "n_positive": 4168
+      },
+      {
+        "column": "difficulty_walking",
+        "d": 0.239,
+        "mean_positive": 0.347,
+        "mean_negative": 0.239,
+        "n_positive": 1430
+      },
+      {
+        "column": "hba1c",
+        "d": 0.221,
+        "mean_positive": 5.988,
+        "mean_negative": 5.737,
+        "n_positive": 4259
+      },
+      {
+        "column": "triglyceride",
+        "d": -0.217,
+        "mean_positive": 106.359,
+        "mean_negative": 126.491,
+        "n_positive": 1897
+      },
+      {
+        "column": "alcohol_days_per_year",
+        "d": -0.205,
+        "mean_positive": 35.992,
+        "mean_negative": 53.904,
+        "n_positive": 3750
+      },
+      {
+        "column": "urine_acr",
+        "d": 0.201,
+        "mean_positive": 155.058,
+        "mean_negative": 33.83,
+        "n_positive": 4097
+      },
+      {
+        "column": "sbp",
+        "d": 0.177,
+        "mean_positive": 127.29,
+        "mean_negative": 123.699,
+        "n_positive": 4061
+      },
+      {
+        "column": "education_level",
+        "d": -0.171,
+        "mean_positive": 3.256,
+        "mean_negative": 3.474,
+        "n_positive": 4198
+      },
+      {
+        "column": "vigorous_min_per_week",
+        "d": -0.126,
+        "mean_positive": 37.255,
+        "mean_negative": 59.974,
+        "n_positive": 3936
+      },
+      {
+        "column": "bmi",
+        "d": 0.112,
+        "mean_positive": 29.942,
+        "mean_negative": 29.108,
+        "n_positive": 4144
+      },
+      {
+        "column": "alt",
+        "d": -0.101,
+        "mean_positive": 23.505,
+        "mean_negative": 25.278,
+        "n_positive": 4157
+      },
+      {
+        "column": "waist_cm",
+        "d": 0.076,
+        "mean_positive": 100.384,
+        "mean_negative": 99.112,
+        "n_positive": 3865
+      },
+      {
+        "column": "sedentary_min_per_day",
+        "d": 0.075,
+        "mean_positive": 367.938,
+        "mean_negative": 352.497,
+        "n_positive": 3915
+      },
+      {
+        "column": "fasting_glucose",
+        "d": 0.068,
+        "mean_positive": 112.057,
+        "mean_negative": 109.528,
+        "n_positive": 1948
+      },
+      {
+        "column": "moderate_min_per_week",
+        "d": -0.058,
+        "mean_positive": 94.553,
+        "mean_negative": 109.247,
+        "n_positive": 3937
+      },
+      {
+        "column": "sleep_hours",
+        "d": 0.057,
+        "mean_positive": 7.243,
+        "mean_negative": 7.148,
+        "n_positive": 4252
+      },
+      {
+        "column": "hdl",
+        "d": 0.052,
+        "mean_positive": 53.817,
+        "mean_negative": 52.987,
+        "n_positive": 4189
+      },
+      {
+        "column": "ggt",
+        "d": -0.031,
+        "mean_positive": 28.475,
+        "mean_negative": 29.887,
+        "n_positive": 4171
+      },
+      {
+        "column": "uric_acid",
+        "d": -0.022,
+        "mean_positive": 5.394,
+        "mean_negative": 5.429,
+        "n_positive": 4171
+      }
+    ]
+  },
+  "subgroups": [
+    {
+      "target": "당뇨",
+      "sex": "M",
+      "age_band": "19-40",
+      "n": 8030,
+      "prevalence": 0.0359
+    },
+    {
+      "target": "당뇨",
+      "sex": "M",
+      "age_band": "40-50",
+      "n": 3550,
+      "prevalence": 0.1279
+    },
+    {
+      "target": "당뇨",
+      "sex": "M",
+      "age_band": "50-60",
+      "n": 3596,
+      "prevalence": 0.2328
+    },
+    {
+      "target": "당뇨",
+      "sex": "M",
+      "age_band": "60-70",
+      "n": 4058,
+      "prevalence": 0.3248
+    },
+    {
+      "target": "당뇨",
+      "sex": "M",
+      "age_band": "70+",
+      "n": 4176,
+      "prevalence": 0.323
+    },
+    {
+      "target": "당뇨",
+      "sex": "F",
+      "age_band": "19-40",
+      "n": 8858,
+      "prevalence": 0.0364
+    },
+    {
+      "target": "당뇨",
+      "sex": "F",
+      "age_band": "40-50",
+      "n": 4079,
+      "prevalence": 0.1169
+    },
+    {
+      "target": "당뇨",
+      "sex": "F",
+      "age_band": "50-60",
+      "n": 3797,
+      "prevalence": 0.2046
+    },
+    {
+      "target": "당뇨",
+      "sex": "F",
+      "age_band": "60-70",
+      "n": 4256,
+      "prevalence": 0.2916
+    },
+    {
+      "target": "당뇨",
+      "sex": "F",
+      "age_band": "70+",
+      "n": 4492,
+      "prevalence": 0.2807
+    },
+    {
+      "target": "고혈압",
+      "sex": "M",
+      "age_band": "19-40",
+      "n": 8030,
+      "prevalence": 0.161
+    },
+    {
+      "target": "고혈압",
+      "sex": "M",
+      "age_band": "40-50",
+      "n": 3550,
+      "prevalence": 0.3504
+    },
+    {
+      "target": "고혈압",
+      "sex": "M",
+      "age_band": "50-60",
+      "n": 3594,
+      "prevalence": 0.4986
+    },
+    {
+      "target": "고혈압",
+      "sex": "M",
+      "age_band": "60-70",
+      "n": 4058,
+      "prevalence": 0.6419
+    },
+    {
+      "target": "고혈압",
+      "sex": "M",
+      "age_band": "70+",
+      "n": 4170,
+      "prevalence": 0.6974
+    },
+    {
+      "target": "고혈압",
+      "sex": "F",
+      "age_band": "19-40",
+      "n": 8858,
+      "prevalence": 0.1154
+    },
+    {
+      "target": "고혈압",
+      "sex": "F",
+      "age_band": "40-50",
+      "n": 4078,
+      "prevalence": 0.2925
+    },
+    {
+      "target": "고혈압",
+      "sex": "F",
+      "age_band": "50-60",
+      "n": 3796,
+      "prevalence": 0.4947
+    },
+    {
+      "target": "고혈압",
+      "sex": "F",
+      "age_band": "60-70",
+      "n": 4255,
+      "prevalence": 0.6566
+    },
+    {
+      "target": "고혈압",
+      "sex": "F",
+      "age_band": "70+",
+      "n": 4488,
+      "prevalence": 0.7676
+    },
+    {
+      "target": "이상지질혈증",
+      "sex": "M",
+      "age_band": "19-40",
+      "n": 7778,
+      "prevalence": 0.3768
+    },
+    {
+      "target": "이상지질혈증",
+      "sex": "M",
+      "age_band": "40-50",
+      "n": 3515,
+      "prevalence": 0.5704
+    },
+    {
+      "target": "이상지질혈증",
+      "sex": "M",
+      "age_band": "50-60",
+      "n": 3569,
+      "prevalence": 0.6265
+    },
+    {
+      "target": "이상지질혈증",
+      "sex": "M",
+      "age_band": "60-70",
+      "n": 4033,
+      "prevalence": 0.6467
+    },
+    {
+      "target": "이상지질혈증",
+      "sex": "M",
+      "age_band": "70+",
+      "n": 4141,
+      "prevalence": 0.6346
+    },
+    {
+      "target": "이상지질혈증",
+      "sex": "F",
+      "age_band": "19-40",
+      "n": 8668,
+      "prevalence": 0.2359
+    },
+    {
+      "target": "이상지질혈증",
+      "sex": "F",
+      "age_band": "40-50",
+      "n": 4047,
+      "prevalence": 0.3795
+    },
+    {
+      "target": "이상지질혈증",
+      "sex": "F",
+      "age_band": "50-60",
+      "n": 3776,
+      "prevalence": 0.5469
+    },
+    {
+      "target": "이상지질혈증",
+      "sex": "F",
+      "age_band": "60-70",
+      "n": 4245,
+      "prevalence": 0.6398
+    },
+    {
+      "target": "이상지질혈증",
+      "sex": "F",
+      "age_band": "70+",
+      "n": 4455,
+      "prevalence": 0.6341
+    },
+    {
+      "target": "고LDL콜레스테롤혈증",
+      "sex": "M",
+      "age_band": "19-40",
+      "n": 6794,
+      "prevalence": 0.0967
+    },
+    {
+      "target": "고LDL콜레스테롤혈증",
+      "sex": "M",
+      "age_band": "40-50",
+      "n": 2849,
+      "prevalence": 0.1881
+    },
+    {
+      "target": "고LDL콜레스테롤혈증",
+      "sex": "M",
+      "age_band": "50-60",
+      "n": 2444,
+      "prevalence": 0.187
+    },
+    {
+      "target": "고LDL콜레스테롤혈증",
+      "sex": "M",
+      "age_band": "60-70",
+      "n": 2365,
+      "prevalence": 0.1429
+    },
+    {
+      "target": "고LDL콜레스테롤혈증",
+      "sex": "M",
+      "age_band": "70+",
+      "n": 2098,
+      "prevalence": 0.081
+    },
+    {
+      "target": "고LDL콜레스테롤혈증",
+      "sex": "F",
+      "age_band": "19-40",
+      "n": 7591,
+      "prevalence": 0.076
+    },
+    {
+      "target": "고LDL콜레스테롤혈증",
+      "sex": "F",
+      "age_band": "40-50",
+      "n": 3385,
+      "prevalence": 0.1288
+    },
+    {
+      "target": "고LDL콜레스테롤혈증",
+      "sex": "F",
+      "age_band": "50-60",
+      "n": 2662,
+      "prevalence": 0.222
+    },
+    {
+      "target": "고LDL콜레스테롤혈증",
+      "sex": "F",
+      "age_band": "60-70",
+      "n": 2462,
+      "prevalence": 0.2417
+    },
+    {
+      "target": "고LDL콜레스테롤혈증",
+      "sex": "F",
+      "age_band": "70+",
+      "n": 2187,
+      "prevalence": 0.2108
+    },
+    {
+      "target": "고중성지방혈증",
+      "sex": "M",
+      "age_band": "19-40",
+      "n": 3181,
+      "prevalence": 0.1323
+    },
+    {
+      "target": "고중성지방혈증",
+      "sex": "M",
+      "age_band": "40-50",
+      "n": 1422,
+      "prevalence": 0.1997
+    },
+    {
+      "target": "고중성지방혈증",
+      "sex": "M",
+      "age_band": "50-60",
+      "n": 1191,
+      "prevalence": 0.1696
+    },
+    {
+      "target": "고중성지방혈증",
+      "sex": "M",
+      "age_band": "60-70",
+      "n": 1173,
+      "prevalence": 0.1049
+    },
+    {
+      "target": "고중성지방혈증",
+      "sex": "M",
+      "age_band": "70+",
+      "n": 1038,
+      "prevalence": 0.1031
+    },
+    {
+      "target": "고중성지방혈증",
+      "sex": "F",
+      "age_band": "19-40",
+      "n": 3658,
+      "prevalence": 0.0755
+    },
+    {
+      "target": "고중성지방혈증",
+      "sex": "F",
+      "age_band": "40-50",
+      "n": 1606,
+      "prevalence": 0.0753
+    },
+    {
+      "target": "고중성지방혈증",
+      "sex": "F",
+      "age_band": "50-60",
+      "n": 1314,
+      "prevalence": 0.1081
+    },
+    {
+      "target": "고중성지방혈증",
+      "sex": "F",
+      "age_band": "60-70",
+      "n": 1256,
+      "prevalence": 0.1162
+    },
+    {
+      "target": "고중성지방혈증",
+      "sex": "F",
+      "age_band": "70+",
+      "n": 1068,
+      "prevalence": 0.1021
+    },
+    {
+      "target": "낮은 HDL 콜레스테롤",
+      "sex": "M",
+      "age_band": "19-40",
+      "n": 6794,
+      "prevalence": 0.2769
+    },
+    {
+      "target": "낮은 HDL 콜레스테롤",
+      "sex": "M",
+      "age_band": "40-50",
+      "n": 2849,
+      "prevalence": 0.2962
+    },
+    {
+      "target": "낮은 HDL 콜레스테롤",
+      "sex": "M",
+      "age_band": "50-60",
+      "n": 2444,
+      "prevalence": 0.2635
+    },
+    {
+      "target": "낮은 HDL 콜레스테롤",
+      "sex": "M",
+      "age_band": "60-70",
+      "n": 2365,
+      "prevalence": 0.2313
+    },
+    {
+      "target": "낮은 HDL 콜레스테롤",
+      "sex": "M",
+      "age_band": "70+",
+      "n": 2098,
+      "prevalence": 0.2021
+    },
+    {
+      "target": "낮은 HDL 콜레스테롤",
+      "sex": "F",
+      "age_band": "19-40",
+      "n": 7591,
+      "prevalence": 0.1118
+    },
+    {
+      "target": "낮은 HDL 콜레스테롤",
+      "sex": "F",
+      "age_band": "40-50",
+      "n": 3385,
+      "prevalence": 0.1096
+    },
+    {
+      "target": "낮은 HDL 콜레스테롤",
+      "sex": "F",
+      "age_band": "50-60",
+      "n": 2662,
+      "prevalence": 0.0804
+    },
+    {
+      "target": "낮은 HDL 콜레스테롤",
+      "sex": "F",
+      "age_band": "60-70",
+      "n": 2462,
+      "prevalence": 0.0833
+    },
+    {
+      "target": "낮은 HDL 콜레스테롤",
+      "sex": "F",
+      "age_band": "70+",
+      "n": 2187,
+      "prevalence": 0.0654
+    },
+    {
+      "target": "대사증후군",
+      "sex": "M",
+      "age_band": "19-40",
+      "n": 7484,
+      "prevalence": 0.1669
+    },
+    {
+      "target": "대사증후군",
+      "sex": "M",
+      "age_band": "40-50",
+      "n": 3372,
+      "prevalence": 0.3654
+    },
+    {
+      "target": "대사증후군",
+      "sex": "M",
+      "age_band": "50-60",
+      "n": 3435,
+      "prevalence": 0.4865
+    },
+    {
+      "target": "대사증후군",
+      "sex": "M",
+      "age_band": "60-70",
+      "n": 3899,
+      "prevalence": 0.6022
+    },
+    {
+      "target": "대사증후군",
+      "sex": "M",
+      "age_band": "70+",
+      "n": 3908,
+      "prevalence": 0.6441
+    },
+    {
+      "target": "대사증후군",
+      "sex": "F",
+      "age_band": "19-40",
+      "n": 8301,
+      "prevalence": 0.1229
+    },
+    {
+      "target": "대사증후군",
+      "sex": "F",
+      "age_band": "40-50",
+      "n": 3904,
+      "prevalence": 0.2761
+    },
+    {
+      "target": "대사증후군",
+      "sex": "F",
+      "age_band": "50-60",
+      "n": 3661,
+      "prevalence": 0.4471
+    },
+    {
+      "target": "대사증후군",
+      "sex": "F",
+      "age_band": "60-70",
+      "n": 4117,
+      "prevalence": 0.5995
+    },
+    {
+      "target": "대사증후군",
+      "sex": "F",
+      "age_band": "70+",
+      "n": 4188,
+      "prevalence": 0.617
+    },
+    {
+      "target": "신기능 확인 필요",
+      "sex": "M",
+      "age_band": "19-40",
+      "n": 7370,
+      "prevalence": 0.0471
+    },
+    {
+      "target": "신기능 확인 필요",
+      "sex": "M",
+      "age_band": "40-50",
+      "n": 3306,
+      "prevalence": 0.0817
+    },
+    {
+      "target": "신기능 확인 필요",
+      "sex": "M",
+      "age_band": "50-60",
+      "n": 3359,
+      "prevalence": 0.1465
+    },
+    {
+      "target": "신기능 확인 필요",
+      "sex": "M",
+      "age_band": "60-70",
+      "n": 3779,
+      "prevalence": 0.2421
+    },
+    {
+      "target": "신기능 확인 필요",
+      "sex": "M",
+      "age_band": "70+",
+      "n": 3782,
+      "prevalence": 0.4376
+    },
+    {
+      "target": "신기능 확인 필요",
+      "sex": "F",
+      "age_band": "19-40",
+      "n": 8183,
+      "prevalence": 0.0797
+    },
+    {
+      "target": "신기능 확인 필요",
+      "sex": "F",
+      "age_band": "40-50",
+      "n": 3828,
+      "prevalence": 0.1048
+    },
+    {
+      "target": "신기능 확인 필요",
+      "sex": "F",
+      "age_band": "50-60",
+      "n": 3539,
+      "prevalence": 0.1478
+    },
+    {
+      "target": "신기능 확인 필요",
+      "sex": "F",
+      "age_band": "60-70",
+      "n": 3959,
+      "prevalence": 0.2109
+    },
+    {
+      "target": "신기능 확인 필요",
+      "sex": "F",
+      "age_band": "70+",
+      "n": 3910,
+      "prevalence": 0.4399
+    },
+    {
+      "target": "지방간",
+      "sex": "M",
+      "age_band": "19-40",
+      "n": 1428,
+      "prevalence": 0.362
+    },
+    {
+      "target": "지방간",
+      "sex": "M",
+      "age_band": "40-50",
+      "n": 633,
+      "prevalence": 0.5071
+    },
+    {
+      "target": "지방간",
+      "sex": "M",
+      "age_band": "50-60",
+      "n": 745,
+      "prevalence": 0.5624
+    },
+    {
+      "target": "지방간",
+      "sex": "M",
+      "age_band": "60-70",
+      "n": 1050,
+      "prevalence": 0.4762
+    },
+    {
+      "target": "지방간",
+      "sex": "M",
+      "age_band": "70+",
+      "n": 888,
+      "prevalence": 0.482
+    },
+    {
+      "target": "지방간",
+      "sex": "F",
+      "age_band": "19-40",
+      "n": 1564,
+      "prevalence": 0.2558
+    },
+    {
+      "target": "지방간",
+      "sex": "F",
+      "age_band": "40-50",
+      "n": 739,
+      "prevalence": 0.3789
+    },
+    {
+      "target": "지방간",
+      "sex": "F",
+      "age_band": "50-60",
+      "n": 864,
+      "prevalence": 0.4583
+    },
+    {
+      "target": "지방간",
+      "sex": "F",
+      "age_band": "60-70",
+      "n": 1185,
+      "prevalence": 0.4802
+    },
+    {
+      "target": "지방간",
+      "sex": "F",
+      "age_band": "70+",
+      "n": 919,
+      "prevalence": 0.3798
+    },
+    {
+      "target": "빈혈",
+      "sex": "M",
+      "age_band": "19-40",
+      "n": 6974,
+      "prevalence": 0.0158
+    },
+    {
+      "target": "빈혈",
+      "sex": "M",
+      "age_band": "40-50",
+      "n": 3185,
+      "prevalence": 0.0339
+    },
+    {
+      "target": "빈혈",
+      "sex": "M",
+      "age_band": "50-60",
+      "n": 3237,
+      "prevalence": 0.0615
+    },
+    {
+      "target": "빈혈",
+      "sex": "M",
+      "age_band": "60-70",
+      "n": 3648,
+      "prevalence": 0.1042
+    },
+    {
+      "target": "빈혈",
+      "sex": "M",
+      "age_band": "70+",
+      "n": 3635,
+      "prevalence": 0.211
+    },
+    {
+      "target": "빈혈",
+      "sex": "F",
+      "age_band": "19-40",
+      "n": 7099,
+      "prevalence": 0.1218
+    },
+    {
+      "target": "빈혈",
+      "sex": "F",
+      "age_band": "40-50",
+      "n": 3683,
+      "prevalence": 0.1645
+    },
+    {
+      "target": "빈혈",
+      "sex": "F",
+      "age_band": "50-60",
+      "n": 3436,
+      "prevalence": 0.0835
+    },
+    {
+      "target": "빈혈",
+      "sex": "F",
+      "age_band": "60-70",
+      "n": 3821,
+      "prevalence": 0.1031
+    },
+    {
+      "target": "빈혈",
+      "sex": "F",
+      "age_band": "70+",
+      "n": 3761,
+      "prevalence": 0.1516
+    }
+  ]
+}

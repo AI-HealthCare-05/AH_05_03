@@ -16,13 +16,25 @@ from app.main import app
 TEST_BASE_URL = "http://test"
 
 
+# 봉투를 쓰지 않는 것이 **맞는** 라우트. API 가 아니라서다.
+#
+# 이 목록이 없으면 프런트엔드를 빌드한 사람만 이 테스트가 깨진다 — `spa.mount()` 가
+# 빌드 산출물이 있을 때만 `/healthz` 와 catch-all 을 등록하기 때문이다. 환경에 따라
+# 결과가 갈리는 테스트는 아무도 믿지 않게 된다.
+NOT_API_ROUTES = {
+    "/api/health",  # 컨테이너 헬스체크. 오케스트레이터가 읽고 사람이 안 읽는다
+    "/healthz",  # 같은 것. nginx 컨테이너에서 옮겨 왔다
+    "/{full_path:path}",  # SPA 폴백. HTML 을 낸다
+}
+
+
 class TestEveryRouteUsesTheEnvelope:
     def test_every_apiroute_response_model_is_api_response(self) -> None:
         from fastapi.routing import APIRoute
 
         offenders = []
         for route in app.routes:
-            if not isinstance(route, APIRoute):
+            if not isinstance(route, APIRoute) or route.path in NOT_API_ROUTES:
                 continue
             model = route.response_model
             origin = getattr(model, "__pydantic_generic_metadata__", {}).get("origin")
@@ -90,7 +102,11 @@ class TestFrameworkRaisedErrorsUseTheEnvelope:
         async def boom() -> None:
             raise RuntimeError("deliberate")
 
-        app.include_router(boom_router)
+        # **뒤에 붙이면 안 된다.** `spa.mount()` 가 등록한 `/{full_path:path}`
+        # catch-all 이 이미 목록에 있어서, 뒤에 붙은 라우트는 영원히 안 잡히고
+        # index.html 이 200 으로 나간다. 프런트엔드를 빌드한 환경에서만 그렇게 되므로
+        # 원인을 찾기 어렵다. 맨 앞에 끼운다.
+        app.router.routes[:0] = boom_router.routes
         try:
             # ServerErrorMiddleware가 항상 재던지므로 raise_app_exceptions=False가
             # 필요하다. 그러지 않으면 클라이언트가 응답 대신 예외를 받는다.

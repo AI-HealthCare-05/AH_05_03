@@ -26,6 +26,7 @@ import {
   materialsOf,
 } from "./holographicAnatomyStyle";
 import { ProceduralBodyMap } from "./ProceduralBodyMap";
+import type { RegionRisk } from "./bodyRisk";
 
 type SelectedStructure = { name: string; system?: string };
 type BodyFocus = AnatomyFocus;
@@ -61,7 +62,13 @@ const ATLAS_OPTIONS: Array<{ id: AnatomyAtlasId; label: string }> = [
   },
 ];
 
-export function VanatomeBodyMap({ profileName }: { profileName: string }) {
+export function VanatomeBodyMap({
+  profileName,
+}: {
+  profileName: string;
+  risks?: RegionRisk[];
+  risksAt?: string;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const clearSelectionRef = useRef<() => void>(() => undefined);
   const focusCameraRef = useRef<(focus: BodyFocus) => void>(() => undefined);

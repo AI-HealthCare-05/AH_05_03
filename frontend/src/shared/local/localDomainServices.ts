@@ -498,6 +498,13 @@ export class LocalHealthRecordService {
     if (!input.payload || Object.keys(input.payload).length === 0) {
       return failure("VALIDATION_ERROR", "건강기록 내용이 필요합니다.");
     }
+    if (input.source === "local_ai" || input.source === "ocr") {
+      const validationError = validateAiHealthRecordPayload(
+        input.recordType,
+        input.payload as Record<string, unknown>,
+      );
+      if (validationError) return failure("VALIDATION_ERROR", validationError);
+    }
     const now = new Date().toISOString();
     const healthRecord: HealthRecord<TPayload> = {
       id: crypto.randomUUID(),
@@ -574,6 +581,27 @@ export class LocalHealthRecordService {
     return this.changeDeletedState(recordId, expectedVersion, null);
   }
 
+  /**
+   * 되돌릴 수 없는 삭제. 보관함에서 실제로 지운다.
+   *
+   * `softDelete` 는 `deletedAt` 만 찍어 집계에서 빼고 복원할 길을 남긴다. 그런데
+   * 지운 기록이 계속 쌓이면 **보관함이 커지고 백업 파일도 같이 커진다** — 기기 안
+   * 암호화 저장이라 용량이 곧 사용자 부담이다. 되돌릴 수 없으므로 **이미 삭제된
+   * 것만** 받는다. 실수로 살아 있는 기록이 사라지지 않게 하는 문턱이다.
+   */
+  public async purge(recordId: string, expectedVersion: number): Promise<LocalResult<{ deleted: true }>> {
+    const current = await this.get(recordId);
+    if (!current.ok) return current;
+    if (current.value.version !== expectedVersion) {
+      return failure("VERSION_CONFLICT", "건강기록이 다른 화면에서 변경되었습니다.");
+    }
+    if (current.value.deletedAt === null) {
+      return failure("VALIDATION_ERROR", "먼저 삭제한 기록만 영구 삭제할 수 있습니다.");
+    }
+    await this.repository.delete(recordId);
+    return success({ deleted: true });
+  }
+
   private async changeDeletedState(
     recordId: string,
     expectedVersion: number,
@@ -622,6 +650,54 @@ export class LocalHealthRecordService {
     }
     healthRecords.sort((left, right) => right.recordedAt.localeCompare(left.recordedAt));
     return success(healthRecords);
+  }
+}
+
+function validateAiHealthRecordPayload(
+  recordType: HealthRecordType,
+  payload: Record<string, unknown>,
+): string | undefined {
+  const numberInRange = (value: unknown, min: number, max: number) =>
+    typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
+  const optionalNumberInRange = (value: unknown, min: number, max: number) =>
+    value === undefined || numberInRange(value, min, max);
+  const nonEmptyString = (value: unknown) => typeof value === "string" && value.trim().length > 0;
+
+  switch (recordType) {
+    case "exercise":
+      if (!nonEmptyString(payload.exerciseName)) return "운동명이 필요합니다.";
+      if (!optionalNumberInRange(payload.distanceKm, 0, 500)) return "운동 거리는 0~500km 사이여야 합니다.";
+      if (!optionalNumberInRange(payload.weightKg, 0, 1000)) return "운동 중량은 0~1,000kg 사이여야 합니다.";
+      if (!optionalNumberInRange(payload.reps, 1, 10000)) return "운동 횟수는 1~10,000회 사이여야 합니다.";
+      if (!optionalNumberInRange(payload.sets, 1, 1000)) return "운동 세트는 1~1,000세트 사이여야 합니다.";
+      if (!optionalNumberInRange(payload.durationMinutes, 1, 1440)) return "운동 시간은 1~1,440분 사이여야 합니다.";
+      return undefined;
+    case "blood_pressure": {
+      const systolic = payload.systolicMmHg;
+      const diastolic = payload.diastolicMmHg;
+      if (!numberInRange(systolic, 40, 300)) return "수축기 혈압은 40~300mmHg 사이여야 합니다.";
+      if (!numberInRange(diastolic, 20, 200)) return "이완기 혈압은 20~200mmHg 사이여야 합니다.";
+      if ((diastolic as number) >= (systolic as number)) return "이완기 혈압은 수축기 혈압보다 낮아야 합니다.";
+      if (!optionalNumberInRange(payload.pulseBpm, 20, 250)) return "맥박은 20~250bpm 사이여야 합니다.";
+      return undefined;
+    }
+    case "blood_glucose":
+      if (!numberInRange(payload.valueMgDl, 20, 1000)) return "혈당은 20~1,000mg/dL 사이여야 합니다.";
+      return undefined;
+    case "medication":
+      return nonEmptyString(payload.medicationName) ? undefined : "약물명이 필요합니다.";
+    case "pain":
+      if (!nonEmptyString(payload.bodyArea)) return "통증 부위가 필요합니다.";
+      if (!numberInRange(payload.intensity, 0, 10) || !Number.isInteger(payload.intensity)) {
+        return "통증 강도는 0~10 사이의 정수여야 합니다.";
+      }
+      return undefined;
+    case "health_screening":
+      return nonEmptyString(payload.screeningName) ? undefined : "검진명이 필요합니다.";
+    case "lab_result":
+      return nonEmptyString(payload.testName) ? undefined : "검사명이 필요합니다.";
+    default:
+      return undefined;
   }
 }
 

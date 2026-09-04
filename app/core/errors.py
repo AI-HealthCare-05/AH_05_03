@@ -18,6 +18,28 @@ class ErrorCode(StrEnum):
     RATE_LIMITED = "RATE_LIMITED"
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+    # --- 문서 인식 -------------------------------------------------
+    # **한 코드로 뭉쳐 있었다.** 성격이 다른 24 곳이 전부 `OCR_UNAVAILABLE`(503) 로
+    # 나가서 세 가지가 겹쳤다 — ① 사용자가 .docx 를 올릴 때마다 5xx 알림이 울리고,
+    # ② 클라이언트·프록시는 503 을 "잠시 뒤 재시도" 로 읽는데 형식 오류는 재시도해도
+    # 같으며 그 재시도가 계정 속도 제한을 태우고, ③ 프런트의 공통 매핑이
+    # `OCR_UNAVAILABLE` 을 전부 "설정을 확인해 주세요" 로 바꿔 서버가 알려 준
+    # 구체적 사유("각 20MB 이하")가 버려졌다.
+    #
+    # 그래서 원인별로 나눈다. 503 은 **우리 쪽 사정**(브리지 꺼짐·키 없음)만 남긴다.
+    OCR_UNAVAILABLE = "OCR_UNAVAILABLE"
+    OCR_NO_FILE = "OCR_NO_FILE"
+    OCR_UNSUPPORTED_TYPE = "OCR_UNSUPPORTED_TYPE"
+    OCR_FILE_TOO_LARGE = "OCR_FILE_TOO_LARGE"
+    OCR_JOB_NOT_FOUND = "OCR_JOB_NOT_FOUND"
+    OCR_PROVIDER_FAILED = "OCR_PROVIDER_FAILED"
+    # --- llm 대화 ---------------------------------------------------
+    # OCR 과 같은 이유로 처음부터 나눠 둔다. 원 PR(#27)은 타임아웃만 504 로 가르고
+    # 나머지를 통째로 503 + "오류가 발생했습니다" 로 덮었다. 그러면 키 누락과
+    # 모델명 오류와 레이트리밋이 화면에서 구분되지 않는다.
+    LLM_UNAVAILABLE = "LLM_UNAVAILABLE"
+    LLM_PROVIDER_FAILED = "LLM_PROVIDER_FAILED"
+    LLM_TIMEOUT = "LLM_TIMEOUT"
     # --- auth ------------------------------------------------------
     AUTH_REQUIRED = "AUTH_REQUIRED"
     CREDENTIALS_INVALID = "CREDENTIALS_INVALID"
@@ -54,6 +76,8 @@ class ErrorCode(StrEnum):
     PROFILE_ALREADY_LINKED = "PROFILE_ALREADY_LINKED"
     PROFILE_REF_ALREADY_CLAIMED = "PROFILE_REF_ALREADY_CLAIMED"
     PROFILE_LINK_INVITATION_MISMATCH = "PROFILE_LINK_INVITATION_MISMATCH"
+    # --- challenge -------------------------------------------------
+    CHALLENGE_NOT_FOUND = "CHALLENGE_NOT_FOUND"
 
 
 ERROR_STATUS: dict[ErrorCode, int] = {
@@ -63,6 +87,18 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     ErrorCode.RATE_LIMITED: status.HTTP_429_TOO_MANY_REQUESTS,
     ErrorCode.SERVICE_UNAVAILABLE: status.HTTP_503_SERVICE_UNAVAILABLE,
     ErrorCode.INTERNAL_ERROR: status.HTTP_500_INTERNAL_SERVER_ERROR,
+    # 503 은 우리 쪽 사정(브리지 꺼짐·키 없음)일 때만.
+    ErrorCode.OCR_UNAVAILABLE: status.HTTP_503_SERVICE_UNAVAILABLE,
+    ErrorCode.OCR_NO_FILE: status.HTTP_400_BAD_REQUEST,
+    ErrorCode.OCR_UNSUPPORTED_TYPE: status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+    # `HTTP_413_REQUEST_ENTITY_TOO_LARGE` 는 starlette 에서 deprecated 다.
+    ErrorCode.OCR_FILE_TOO_LARGE: status.HTTP_413_CONTENT_TOO_LARGE,
+    ErrorCode.OCR_JOB_NOT_FOUND: status.HTTP_404_NOT_FOUND,
+    # 외부 공급자가 실패한 것이지 우리가 죽은 게 아니다.
+    ErrorCode.OCR_PROVIDER_FAILED: status.HTTP_502_BAD_GATEWAY,
+    ErrorCode.LLM_UNAVAILABLE: status.HTTP_503_SERVICE_UNAVAILABLE,
+    ErrorCode.LLM_PROVIDER_FAILED: status.HTTP_502_BAD_GATEWAY,
+    ErrorCode.LLM_TIMEOUT: status.HTTP_504_GATEWAY_TIMEOUT,
     ErrorCode.AUTH_REQUIRED: status.HTTP_401_UNAUTHORIZED,
     ErrorCode.CREDENTIALS_INVALID: status.HTTP_401_UNAUTHORIZED,
     ErrorCode.EMAIL_ALREADY_REGISTERED: status.HTTP_409_CONFLICT,
@@ -97,6 +133,7 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     ErrorCode.PROFILE_ALREADY_LINKED: status.HTTP_409_CONFLICT,
     ErrorCode.PROFILE_REF_ALREADY_CLAIMED: status.HTTP_409_CONFLICT,
     ErrorCode.PROFILE_LINK_INVITATION_MISMATCH: status.HTTP_409_CONFLICT,
+    ErrorCode.CHALLENGE_NOT_FOUND: status.HTTP_404_NOT_FOUND,
 }
 
 DEFAULT_MESSAGE: dict[ErrorCode, str] = {
@@ -106,6 +143,15 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.RATE_LIMITED: "요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.",
     ErrorCode.SERVICE_UNAVAILABLE: "일시적으로 서비스를 이용할 수 없습니다.",
     ErrorCode.INTERNAL_ERROR: "일시적인 오류가 발생했습니다.",
+    ErrorCode.OCR_UNAVAILABLE: "OCR 기능을 사용할 수 없습니다.",
+    ErrorCode.OCR_NO_FILE: "인식할 파일을 첨부해 주세요.",
+    ErrorCode.OCR_UNSUPPORTED_TYPE: "JPEG, PNG, WEBP 이미지 또는 PDF 문서만 인식할 수 있습니다.",
+    ErrorCode.OCR_FILE_TOO_LARGE: "파일이 너무 큽니다. 크기를 줄여서 다시 올려 주세요.",
+    ErrorCode.OCR_JOB_NOT_FOUND: "문서 인식 작업을 찾을 수 없습니다. 시간이 지나 정리됐을 수 있습니다.",
+    ErrorCode.OCR_PROVIDER_FAILED: "문서 인식에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    ErrorCode.LLM_UNAVAILABLE: "대화 기능을 사용할 수 없습니다.",
+    ErrorCode.LLM_PROVIDER_FAILED: "대화 응답을 받지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    ErrorCode.LLM_TIMEOUT: "응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.",
     ErrorCode.AUTH_REQUIRED: "로그인이 필요합니다.",
     ErrorCode.CREDENTIALS_INVALID: "이메일 또는 비밀번호가 올바르지 않습니다.",
     ErrorCode.EMAIL_ALREADY_REGISTERED: "이미 사용중인 이메일입니다.",
@@ -138,6 +184,7 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.PROFILE_ALREADY_LINKED: "이 가정에서 계정에 이미 활성 프로필 연결이 있습니다.",
     ErrorCode.PROFILE_REF_ALREADY_CLAIMED: "이 프로필 참조값은 이미 연결에 사용되었습니다.",
     ErrorCode.PROFILE_LINK_INVITATION_MISMATCH: "초대와 프로필 연결 정보가 일치하지 않습니다.",
+    ErrorCode.CHALLENGE_NOT_FOUND: "그런 챌린지가 없습니다.",
 }
 
 # 프레임워크가 직접 올리는 오류(라우터 404·405, HTTPBearer 401)만 여기로 온다.

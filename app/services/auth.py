@@ -6,7 +6,7 @@ from pydantic import EmailStr
 from sqlalchemy.exc import IntegrityError
 
 from app.core.db.session import SessionDep
-from app.core.utils.security import hash_password, verify_password
+from app.core.utils.security import hash_password, hash_password_async, verify_password_async
 from app.dependencies.services import get_token_store
 from app.dtos.auth import AccessTokenData, LoginRequest, SignUpRequest
 from app.exceptions import (
@@ -70,7 +70,8 @@ class AuthService:
 
         account = await self.account_repo.create(
             email=str(data.email),
-            password_hash=hash_password(data.password),
+            # 스레드로 뺀다 — 동기로 부르면 206ms 동안 이 워커 전체가 멈춘다.
+            password_hash=await hash_password_async(data.password),
         )
         # 같은 트랜잭션에서 기본 구독을 만든다. 그래야 SUBSCRIPTION_NOT_FOUND가
         # 신규 계정의 정상 상태가 아니라 진짜 불변식 위반이 된다.
@@ -92,7 +93,10 @@ class AuthService:
         account = await self.account_repo.get_by_email(str(data.email))
 
         password_hash = account.password_hash if account else _DUMMY_PASSWORD_HASH
-        password_ok = verify_password(data.password, password_hash)
+        # 스레드로 뺀다. 여기가 로그인 지연의 거의 전부이고, 동기로 두면 동시
+        # 로그인이 완전히 직렬화된다(80건 = 17초). 타이밍 방어는 그대로다 —
+        # 계정이 없어도 더미 해시로 같은 비용을 치른다.
+        password_ok = await verify_password_async(data.password, password_hash)
 
         if not account or not password_ok:
             raise CredentialsInvalidError()

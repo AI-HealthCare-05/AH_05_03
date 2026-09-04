@@ -1,0 +1,2591 @@
+{
+  "version": "0.1",
+  "seed": 20260903,
+  "generator": "modeling/data/make_ocr_eval_set.py",
+  "note": "합성 데이터. 개인정보 0건. 정답은 값을 먼저 뽑고 그림을 그려 만든 것이라 어떤 OCR 엔진의 출력도 정답에 섞여 있지 않다(16번 문서 §11.2).",
+  "documents": [
+    {
+      "doc_id": "synth-001",
+      "image": "images/synth-001.jpg",
+      "sha256_16": "2c4d28c886f14355",
+      "layout": "inline",
+      "hospital": "서울대학교병원 건강증진센터",
+      "exam_date": "2026-01-26",
+      "noise": {
+        "jpeg_quality": 80,
+        "rotation_deg": -0.15,
+        "speckle": 0
+      },
+      "measurements": {
+        "albumin": 4.8,
+        "ast": 39.0,
+        "total_chol": 162.0,
+        "triglyceride": 93.0,
+        "urine_acr": 247.0,
+        "hdl": 27.0,
+        "hba1c": 5.4,
+        "uric_acid": 4.7,
+        "fasting_glucose": 162.0,
+        "dbp": 93.0,
+        "ggt": 101.0,
+        "creatinine": 2.16
+      },
+      "extras": {
+        "총빌리루빈": 0.5,
+        "총단백": 7.7
+      },
+      "printed": [
+        {
+          "printed_name": "알부민",
+          "key": "albumin",
+          "value": 4.8,
+          "unit": "g/dL",
+          "reference": "3.5 이상"
+        },
+        {
+          "printed_name": "AST",
+          "key": "ast",
+          "value": 39.0,
+          "unit": "IU/L",
+          "reference": "40 이하"
+        },
+        {
+          "printed_name": "총 콜레스테롤",
+          "key": "total_chol",
+          "value": 162.0,
+          "unit": "mg/dL",
+          "reference": "200 미만"
+        },
+        {
+          "printed_name": "TG",
+          "key": "triglyceride",
+          "value": 93.0,
+          "unit": "mg/dL",
+          "reference": "150 미만"
+        },
+        {
+          "printed_name": "UACR",
+          "key": "urine_acr",
+          "value": 247.0,
+          "unit": "mg/g",
+          "reference": "30 미만"
+        },
+        {
+          "printed_name": "고밀도지단백",
+          "key": "hdl",
+          "value": 27.0,
+          "unit": "mg/dL",
+          "reference": "60 이상"
+        },
+        {
+          "printed_name": "HbA1c",
+          "key": "hba1c",
+          "value": 5.4,
+          "unit": "%",
+          "reference": "5.7 미만"
+        },
+        {
+          "printed_name": "총빌리루빈",
+          "key": null,
+          "value": 0.5,
+          "unit": "mg/dL",
+          "reference": "1.2 이하"
+        },
+        {
+          "printed_name": "요산",
+          "key": "uric_acid",
+          "value": 4.7,
+          "unit": "mg/dL",
+          "reference": "7.0 이하"
+        },
+        {
+          "printed_name": "공복 혈당",
+          "key": "fasting_glucose",
+          "value": 162.0,
+          "unit": "mg/dL",
+          "reference": "100 미만"
+        },
+        {
+          "printed_name": "총단백",
+          "key": null,
+          "value": 7.7,
+          "unit": "g/dL",
+          "reference": "6.0~8.0"
+        },
+        {
+          "printed_name": "이완기혈압",
+          "key": "dbp",
+          "value": 93.0,
+          "unit": "mmHg",
+          "reference": "80 미만"
+        },
+        {
+          "printed_name": "γ-GTP",
+          "key": "ggt",
+          "value": 101.0,
+          "unit": "IU/L",
+          "reference": "63 이하"
+        },
+        {
+          "printed_name": "혈청 크레아티닌",
+          "key": "creatinine",
+          "value": 2.16,
+          "unit": "mg/dL",
+          "reference": "1.5 이하"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-002",
+      "image": "images/synth-002.jpg",
+      "sha256_16": "abaa620b176e2a44",
+      "layout": "inline",
+      "hospital": "한국건강관리협회 서울서부지부",
+      "exam_date": "2025-09-19",
+      "noise": {
+        "jpeg_quality": 62,
+        "rotation_deg": 0.17,
+        "speckle": 0
+      },
+      "measurements": {
+        "triglyceride": 406.0,
+        "creatinine": 1.98,
+        "fasting_glucose": 90.0,
+        "uric_acid": 2.9,
+        "alt": 112.0,
+        "albumin": 3.4,
+        "urine_acr": 62.0
+      },
+      "extras": {
+        "빌리루빈": 0.5,
+        "혈중요소질소": 17.0
+      },
+      "printed": [
+        {
+          "printed_name": "빌리루빈",
+          "key": null,
+          "value": 0.5,
+          "unit": "mg/dL",
+          "reference": "1.2 이하"
+        },
+        {
+          "printed_name": "트리글리세라이드",
+          "key": "triglyceride",
+          "value": 406.0,
+          "unit": "mg/dL",
+          "reference": "150 미만"
+        },
+        {
+          "printed_name": "크레아티닌",
+          "key": "creatinine",
+          "value": 1.98,
+          "unit": "mg/dL",
+          "reference": "1.5 이하"
+        },
+        {
+          "printed_name": "공복혈당",
+          "key": "fasting_glucose",
+          "value": 90.0,
+          "unit": "mg/dL",
+          "reference": "100 미만"
+        },
+        {
+          "printed_name": "Uric acid",
+          "key": "uric_acid",
+          "value": 2.9,
+          "unit": "mg/dL",
+          "reference": "7.0 이하"
+        },
+        {
+          "printed_name": "ALT",
+          "key": "alt",
+          "value": 112.0,
+          "unit": "IU/L",
+          "reference": "35 이하"
+        },
+        {
+          "printed_name": "혈중요소질소",
+          "key": null,
+          "value": 17.0,
+          "unit": "mg/dL",
+          "reference": "8~20"
+        },
+        {
+          "printed_name": "알부민",
+          "key": "albumin",
+          "value": 3.4,
+          "unit": "g/dL",
+          "reference": "3.5 이상"
+        },
+        {
+          "printed_name": "요알부민/크레아티닌비",
+          "key": "urine_acr",
+          "value": 62.0,
+          "unit": "mg/g",
+          "reference": "30 미만"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-003",
+      "image": "images/synth-003.jpg",
+      "sha256_16": "edb776ada297383c",
+      "layout": "inline",
+      "hospital": "한국건강관리협회 서울서부지부",
+      "exam_date": "2025-11-14",
+      "noise": {
+        "jpeg_quality": 80,
+        "rotation_deg": -0.4,
+        "speckle": 0
+      },
+      "measurements": {
+        "ggt": 23.0,
+        "hba1c": 7.0,
+        "ast": 58.0,
+        "fasting_glucose": 157.0,
+        "uric_acid": 3.4,
+        "dbp": 83.0
+      },
+      "extras": {
+        "총빌리루빈": 1.1,
+        "Total protein": 7.9
+      },
+      "printed": [
+        {
+          "printed_name": "감마GTP",
+          "key": "ggt",
+          "value": 23.0,
+          "unit": "IU/L",
+          "reference": "63 이하"
+        },
+        {
+          "printed_name": "총빌리루빈",
+          "key": null,
+          "value": 1.1,
+          "unit": "mg/dL",
+          "reference": "1.2 이하"
+        },
+        {
+          "printed_name": "HbA1c",
+          "key": "hba1c",
+          "value": 7.0,
+          "unit": "%",
+          "reference": "5.7 미만"
+        },
+        {
+          "printed_name": "AST",
+          "key": "ast",
+          "value": 58.0,
+          "unit": "IU/L",
+          "reference": "40 이하"
+        },
+        {
+          "printed_name": "혈당(공복)",
+          "key": "fasting_glucose",
+          "value": 157.0,
+          "unit": "mg/dL",
+          "reference": "100 미만"
+        },
+        {
+          "printed_name": "Total protein",
+          "key": null,
+          "value": 7.9,
+          "unit": "g/dL",
+          "reference": "6.0~8.0"
+        },
+        {
+          "printed_name": "Uric acid",
+          "key": "uric_acid",
+          "value": 3.4,
+          "unit": "mg/dL",
+          "reference": "7.0 이하"
+        },
+        {
+          "printed_name": "이완기",
+          "key": "dbp",
+          "value": 83.0,
+          "unit": "mmHg",
+          "reference": "80 미만"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-004",
+      "image": "images/synth-004.jpg",
+      "sha256_16": "4d81e19f53a902c5",
+      "layout": "inline",
+      "hospital": "강서구보건소",
+      "exam_date": "2026-12-17",
+      "noise": {
+        "jpeg_quality": 80,
+        "rotation_deg": -0.43,
+        "speckle": 0
+      },
+      "measurements": {
+        "ast": 48.0,
+        "fasting_glucose": 142.0,
+        "creatinine": 1.74,
+        "total_chol": 138.0,
+        "alt": 120.0,
+        "dbp": 110.0
+      },
+      "extras": {
+        "총빌리루빈": 0.5,
+        "Total protein": 7.3
+      },
+      "printed": [
+        {
+          "printed_name": "총빌리루빈",
+          "key": null,
+          "value": 0.5,
+          "unit": "mg/dL",
+          "reference": "1.2 이하"
+        },
+        {
+          "printed_name": "AST(SGOT)",
+          "key": "ast",
+          "value": 48.0,
+          "unit": "IU/L",
+          "reference": "40 이하"
+        },
+        {
+          "printed_name": "공복 혈당",
+          "key": "fasting_glucose",
+          "value": 142.0,
+          "unit": "mg/dL",
+          "reference": "100 미만"
+        },
+        {
+          "printed_name": "혈청 크레아티닌",
+          "key": "creatinine",
+          "value": 1.74,
+          "unit": "mg/dL",
+          "reference": "1.5 이하"
+        },
+        {
+          "printed_name": "총 콜레스테롤",
+          "key": "total_chol",
+          "value": 138.0,
+          "unit": "mg/dL",
+          "reference": "200 미만"
+        },
+        {
+          "printed_name": "ALT(SGPT)",
+          "key": "alt",
+          "value": 120.0,
+          "unit": "IU/L",
+          "reference": "35 이하"
+        },
+        {
+          "printed_name": "이완기",
+          "key": "dbp",
+          "value": 110.0,
+          "unit": "mmHg",
+          "reference": "80 미만"
+        },
+        {
+          "printed_name": "Total protein",
+          "key": null,
+          "value": 7.3,
+          "unit": "g/dL",
+          "reference": "6.0~8.0"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-005",
+      "image": "images/synth-005.jpg",
+      "sha256_16": "ef2fd3698e9292be",
+      "layout": "two_column",
+      "hospital": "OO내과의원",
+      "exam_date": "2026-02-18",
+      "noise": {
+        "jpeg_quality": 95,
+        "rotation_deg": -0.27,
+        "speckle": 0
+      },
+      "measurements": {
+        "sbp": 150.0,
+        "creatinine": 1.29,
+        "ggt": 108.0,
+        "ast": 20.0,
+        "fasting_glucose": 97.0,
+        "hba1c": 10.3,
+        "urine_acr": 250.0,
+        "uric_acid": 3.3,
+        "dbp": 63.0,
+        "triglyceride": 316.0,
+        "ldl": 133.0
+      },
+      "extras": {
+        "총빌리루빈": 0.7,
+        "Total protein": 6.6
+      },
+      "printed": [
+        {
+          "printed_name": "수축기",
+          "key": "sbp",
+          "value": 150.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "혈청 크레아티닌",
+          "key": "creatinine",
+          "value": 1.29,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "총빌리루빈",
+          "key": null,
+          "value": 0.7,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "감마지티피",
+          "key": "ggt",
+          "value": 108.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "SGOT",
+          "key": "ast",
+          "value": 20.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "공복 혈당",
+          "key": "fasting_glucose",
+          "value": 97.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "HbA1c",
+          "key": "hba1c",
+          "value": 10.3,
+          "unit": "%",
+          "reference": null
+        },
+        {
+          "printed_name": "UACR",
+          "key": "urine_acr",
+          "value": 250.0,
+          "unit": "mg/g",
+          "reference": null
+        },
+        {
+          "printed_name": "Uric acid",
+          "key": "uric_acid",
+          "value": 3.3,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "이완기",
+          "key": "dbp",
+          "value": 63.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "TG",
+          "key": "triglyceride",
+          "value": 316.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "LDL-C",
+          "key": "ldl",
+          "value": 133.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "Total protein",
+          "key": null,
+          "value": 6.6,
+          "unit": "g/dL",
+          "reference": null
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-006",
+      "image": "images/synth-006.jpg",
+      "sha256_16": "f616c5dc78696008",
+      "layout": "two_column",
+      "hospital": "서울대학교병원 건강증진센터",
+      "exam_date": "2024-02-28",
+      "noise": {
+        "jpeg_quality": 80,
+        "rotation_deg": 0.02,
+        "speckle": 0
+      },
+      "measurements": {
+        "albumin": 5.2,
+        "hdl": 68.0,
+        "hemoglobin": 16.1,
+        "hba1c": 4.6,
+        "alt": 27.0,
+        "creatinine": 1.0,
+        "total_chol": 133.0,
+        "ggt": 18.0,
+        "ast": 46.0
+      },
+      "extras": {
+        "총단백": 7.4
+      },
+      "printed": [
+        {
+          "printed_name": "알부민",
+          "key": "albumin",
+          "value": 5.2,
+          "unit": "g/dL",
+          "reference": "3.5 이상"
+        },
+        {
+          "printed_name": "HDL-C",
+          "key": "hdl",
+          "value": 68.0,
+          "unit": "mg/dL",
+          "reference": "60 이상"
+        },
+        {
+          "printed_name": "Hb",
+          "key": "hemoglobin",
+          "value": 16.1,
+          "unit": "g/dL",
+          "reference": "13 이상"
+        },
+        {
+          "printed_name": "당화혈색소(HbA1c)",
+          "key": "hba1c",
+          "value": 4.6,
+          "unit": "%",
+          "reference": "5.7 미만"
+        },
+        {
+          "printed_name": "ALT",
+          "key": "alt",
+          "value": 27.0,
+          "unit": "IU/L",
+          "reference": "35 이하"
+        },
+        {
+          "printed_name": "혈청 크레아티닌",
+          "key": "creatinine",
+          "value": 1.0,
+          "unit": "mg/dL",
+          "reference": "1.5 이하"
+        },
+        {
+          "printed_name": "총 콜레스테롤",
+          "key": "total_chol",
+          "value": 133.0,
+          "unit": "mg/dL",
+          "reference": "200 미만"
+        },
+        {
+          "printed_name": "총단백",
+          "key": null,
+          "value": 7.4,
+          "unit": "g/dL",
+          "reference": "6.0~8.0"
+        },
+        {
+          "printed_name": "감마지티피",
+          "key": "ggt",
+          "value": 18.0,
+          "unit": "IU/L",
+          "reference": "63 이하"
+        },
+        {
+          "printed_name": "AST",
+          "key": "ast",
+          "value": 46.0,
+          "unit": "IU/L",
+          "reference": "40 이하"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-007",
+      "image": "images/synth-007.jpg",
+      "sha256_16": "8877bd22a8322083",
+      "layout": "table",
+      "hospital": "강서구보건소",
+      "exam_date": "2024-06-03",
+      "noise": {
+        "jpeg_quality": 95,
+        "rotation_deg": -0.22,
+        "speckle": 0
+      },
+      "measurements": {
+        "triglyceride": 144.0,
+        "ldl": 137.0,
+        "ggt": 148.0,
+        "dbp": 78.0,
+        "urine_acr": 153.0,
+        "uric_acid": 4.3,
+        "hemoglobin": 16.7,
+        "alt": 43.0
+      },
+      "extras": {
+        "빌리루빈": 1.3,
+        "Total protein": 7.0
+      },
+      "printed": [
+        {
+          "printed_name": "트리글리세라이드",
+          "key": "triglyceride",
+          "value": 144.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "LDL-C",
+          "key": "ldl",
+          "value": 137.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "감마지티피",
+          "key": "ggt",
+          "value": 148.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "이완기혈압",
+          "key": "dbp",
+          "value": 78.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "알부민크레아티닌비",
+          "key": "urine_acr",
+          "value": 153.0,
+          "unit": "mg/g",
+          "reference": null
+        },
+        {
+          "printed_name": "요산",
+          "key": "uric_acid",
+          "value": 4.3,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "헤모글로빈",
+          "key": "hemoglobin",
+          "value": 16.7,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "ALT",
+          "key": "alt",
+          "value": 43.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "빌리루빈",
+          "key": null,
+          "value": 1.3,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "Total protein",
+          "key": null,
+          "value": 7.0,
+          "unit": "g/dL",
+          "reference": null
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-008",
+      "image": "images/synth-008.jpg",
+      "sha256_16": "d00599990fd7fe5a",
+      "layout": "two_column",
+      "hospital": "강서구보건소",
+      "exam_date": "2024-08-23",
+      "noise": {
+        "jpeg_quality": 95,
+        "rotation_deg": 0.29,
+        "speckle": 0
+      },
+      "measurements": {
+        "total_chol": 250.0,
+        "hdl": 64.0,
+        "hba1c": 9.6,
+        "sbp": 160.0,
+        "ggt": 192.0,
+        "uric_acid": 4.2,
+        "fasting_glucose": 162.0,
+        "ldl": 144.0,
+        "ast": 33.0
+      },
+      "extras": {},
+      "printed": [
+        {
+          "printed_name": "총 콜레스테롤",
+          "key": "total_chol",
+          "value": 250.0,
+          "unit": "mg/dL",
+          "reference": "200 미만"
+        },
+        {
+          "printed_name": "고밀도지단백",
+          "key": "hdl",
+          "value": 64.0,
+          "unit": "mg/dL",
+          "reference": "60 이상"
+        },
+        {
+          "printed_name": "당화혈색소",
+          "key": "hba1c",
+          "value": 9.6,
+          "unit": "%",
+          "reference": "5.7 미만"
+        },
+        {
+          "printed_name": "최고혈압",
+          "key": "sbp",
+          "value": 160.0,
+          "unit": "mmHg",
+          "reference": "120 미만"
+        },
+        {
+          "printed_name": "γ-GTP",
+          "key": "ggt",
+          "value": 192.0,
+          "unit": "IU/L",
+          "reference": "63 이하"
+        },
+        {
+          "printed_name": "요산",
+          "key": "uric_acid",
+          "value": 4.2,
+          "unit": "mg/dL",
+          "reference": "7.0 이하"
+        },
+        {
+          "printed_name": "공복혈당",
+          "key": "fasting_glucose",
+          "value": 162.0,
+          "unit": "mg/dL",
+          "reference": "100 미만"
+        },
+        {
+          "printed_name": "LDL콜레스테롤",
+          "key": "ldl",
+          "value": 144.0,
+          "unit": "mg/dL",
+          "reference": "130 미만"
+        },
+        {
+          "printed_name": "AST",
+          "key": "ast",
+          "value": 33.0,
+          "unit": "IU/L",
+          "reference": "40 이하"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-009",
+      "image": "images/synth-009.jpg",
+      "sha256_16": "fcb395b68db31dfb",
+      "layout": "two_column",
+      "hospital": "강서구보건소",
+      "exam_date": "2024-01-17",
+      "noise": {
+        "jpeg_quality": 95,
+        "rotation_deg": 0.63,
+        "speckle": 0
+      },
+      "measurements": {
+        "uric_acid": 4.5,
+        "ast": 71.0,
+        "ldl": 125.0,
+        "dbp": 70.0,
+        "alt": 132.0,
+        "hdl": 45.0,
+        "fasting_glucose": 187.0,
+        "sbp": 99.0,
+        "urine_acr": 66.0
+      },
+      "extras": {
+        "빌리루빈": 1.5,
+        "요소질소(BUN)": 11.0
+      },
+      "printed": [
+        {
+          "printed_name": "요산",
+          "key": "uric_acid",
+          "value": 4.5,
+          "unit": "mg/dL",
+          "reference": "7.0 이하"
+        },
+        {
+          "printed_name": "SGOT",
+          "key": "ast",
+          "value": 71.0,
+          "unit": "IU/L",
+          "reference": "40 이하"
+        },
+        {
+          "printed_name": "LDL콜레스테롤",
+          "key": "ldl",
+          "value": 125.0,
+          "unit": "mg/dL",
+          "reference": "130 미만"
+        },
+        {
+          "printed_name": "빌리루빈",
+          "key": null,
+          "value": 1.5,
+          "unit": "mg/dL",
+          "reference": "1.2 이하"
+        },
+        {
+          "printed_name": "이완기",
+          "key": "dbp",
+          "value": 70.0,
+          "unit": "mmHg",
+          "reference": "80 미만"
+        },
+        {
+          "printed_name": "ALT",
+          "key": "alt",
+          "value": 132.0,
+          "unit": "IU/L",
+          "reference": "35 이하"
+        },
+        {
+          "printed_name": "HDL콜레스테롤",
+          "key": "hdl",
+          "value": 45.0,
+          "unit": "mg/dL",
+          "reference": "60 이상"
+        },
+        {
+          "printed_name": "공복 혈당",
+          "key": "fasting_glucose",
+          "value": 187.0,
+          "unit": "mg/dL",
+          "reference": "100 미만"
+        },
+        {
+          "printed_name": "수축기혈압",
+          "key": "sbp",
+          "value": 99.0,
+          "unit": "mmHg",
+          "reference": "120 미만"
+        },
+        {
+          "printed_name": "알부민크레아티닌비",
+          "key": "urine_acr",
+          "value": 66.0,
+          "unit": "mg/g",
+          "reference": "30 미만"
+        },
+        {
+          "printed_name": "요소질소(BUN)",
+          "key": null,
+          "value": 11.0,
+          "unit": "mg/dL",
+          "reference": "8~20"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-010",
+      "image": "images/synth-010.jpg",
+      "sha256_16": "8877546f6d683748",
+      "layout": "inline",
+      "hospital": "OO내과의원",
+      "exam_date": "2024-07-11",
+      "noise": {
+        "jpeg_quality": 62,
+        "rotation_deg": 0.78,
+        "speckle": 600
+      },
+      "measurements": {
+        "alt": 43.0,
+        "ggt": 153.0,
+        "total_chol": 173.0,
+        "sbp": 156.0,
+        "ast": 31.0,
+        "ldl": 146.0,
+        "dbp": 69.0,
+        "albumin": 4.6,
+        "triglyceride": 261.0,
+        "hemoglobin": 10.4,
+        "hba1c": 7.6
+      },
+      "extras": {
+        "총단백": 6.7,
+        "BUN": 23.0,
+        "빌리루빈": 0.8
+      },
+      "printed": [
+        {
+          "printed_name": "SGPT",
+          "key": "alt",
+          "value": 43.0,
+          "unit": "IU/L",
+          "reference": "35 이하"
+        },
+        {
+          "printed_name": "감마GTP",
+          "key": "ggt",
+          "value": 153.0,
+          "unit": "IU/L",
+          "reference": "63 이하"
+        },
+        {
+          "printed_name": "총 콜레스테롤",
+          "key": "total_chol",
+          "value": 173.0,
+          "unit": "mg/dL",
+          "reference": "200 미만"
+        },
+        {
+          "printed_name": "최고혈압",
+          "key": "sbp",
+          "value": 156.0,
+          "unit": "mmHg",
+          "reference": "120 미만"
+        },
+        {
+          "printed_name": "AST",
+          "key": "ast",
+          "value": 31.0,
+          "unit": "IU/L",
+          "reference": "40 이하"
+        },
+        {
+          "printed_name": "LDL-C",
+          "key": "ldl",
+          "value": 146.0,
+          "unit": "mg/dL",
+          "reference": "130 미만"
+        },
+        {
+          "printed_name": "이완기",
+          "key": "dbp",
+          "value": 69.0,
+          "unit": "mmHg",
+          "reference": "80 미만"
+        },
+        {
+          "printed_name": "혈청 알부민",
+          "key": "albumin",
+          "value": 4.6,
+          "unit": "g/dL",
+          "reference": "3.5 이상"
+        },
+        {
+          "printed_name": "총단백",
+          "key": null,
+          "value": 6.7,
+          "unit": "g/dL",
+          "reference": "6.0~8.0"
+        },
+        {
+          "printed_name": "BUN",
+          "key": null,
+          "value": 23.0,
+          "unit": "mg/dL",
+          "reference": "8~20"
+        },
+        {
+          "printed_name": "트리글리세라이드",
+          "key": "triglyceride",
+          "value": 261.0,
+          "unit": "mg/dL",
+          "reference": "150 미만"
+        },
+        {
+          "printed_name": "Hb",
+          "key": "hemoglobin",
+          "value": 10.4,
+          "unit": "g/dL",
+          "reference": "13 이상"
+        },
+        {
+          "printed_name": "빌리루빈",
+          "key": null,
+          "value": 0.8,
+          "unit": "mg/dL",
+          "reference": "1.2 이하"
+        },
+        {
+          "printed_name": "HbA1c",
+          "key": "hba1c",
+          "value": 7.6,
+          "unit": "%",
+          "reference": "5.7 미만"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-011",
+      "image": "images/synth-011.jpg",
+      "sha256_16": "59c686440349916f",
+      "layout": "two_column",
+      "hospital": "한국건강관리협회 서울서부지부",
+      "exam_date": "2024-04-12",
+      "noise": {
+        "jpeg_quality": 62,
+        "rotation_deg": -0.2,
+        "speckle": 600
+      },
+      "measurements": {
+        "uric_acid": 9.5,
+        "hdl": 65.0,
+        "dbp": 58.0,
+        "albumin": 3.7,
+        "alt": 93.0,
+        "sbp": 127.0,
+        "hemoglobin": 10.0,
+        "hba1c": 8.9,
+        "triglyceride": 413.0
+      },
+      "extras": {
+        "총빌리루빈": 0.4,
+        "BUN": 27.0
+      },
+      "printed": [
+        {
+          "printed_name": "요산",
+          "key": "uric_acid",
+          "value": 9.5,
+          "unit": "mg/dL",
+          "reference": "7.0 이하"
+        },
+        {
+          "printed_name": "HDL-C",
+          "key": "hdl",
+          "value": 65.0,
+          "unit": "mg/dL",
+          "reference": "60 이상"
+        },
+        {
+          "printed_name": "이완기혈압",
+          "key": "dbp",
+          "value": 58.0,
+          "unit": "mmHg",
+          "reference": "80 미만"
+        },
+        {
+          "printed_name": "알부민",
+          "key": "albumin",
+          "value": 3.7,
+          "unit": "g/dL",
+          "reference": "3.5 이상"
+        },
+        {
+          "printed_name": "ALT",
+          "key": "alt",
+          "value": 93.0,
+          "unit": "IU/L",
+          "reference": "35 이하"
+        },
+        {
+          "printed_name": "수축기",
+          "key": "sbp",
+          "value": 127.0,
+          "unit": "mmHg",
+          "reference": "120 미만"
+        },
+        {
+          "printed_name": "혈색소",
+          "key": "hemoglobin",
+          "value": 10.0,
+          "unit": "g/dL",
+          "reference": "13 이상"
+        },
+        {
+          "printed_name": "총빌리루빈",
+          "key": null,
+          "value": 0.4,
+          "unit": "mg/dL",
+          "reference": "1.2 이하"
+        },
+        {
+          "printed_name": "당화혈색소",
+          "key": "hba1c",
+          "value": 8.9,
+          "unit": "%",
+          "reference": "5.7 미만"
+        },
+        {
+          "printed_name": "BUN",
+          "key": null,
+          "value": 27.0,
+          "unit": "mg/dL",
+          "reference": "8~20"
+        },
+        {
+          "printed_name": "트리글리세라이드",
+          "key": "triglyceride",
+          "value": 413.0,
+          "unit": "mg/dL",
+          "reference": "150 미만"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-012",
+      "image": "images/synth-012.jpg",
+      "sha256_16": "d796438388e6f199",
+      "layout": "table",
+      "hospital": "강서구보건소",
+      "exam_date": "2026-04-19",
+      "noise": {
+        "jpeg_quality": 62,
+        "rotation_deg": -0.46,
+        "speckle": 0
+      },
+      "measurements": {
+        "triglyceride": 164.0,
+        "dbp": 77.0,
+        "uric_acid": 3.6,
+        "ldl": 115.0,
+        "ggt": 181.0,
+        "ast": 15.0,
+        "hemoglobin": 13.9,
+        "fasting_glucose": 98.0,
+        "albumin": 4.4
+      },
+      "extras": {
+        "혈중요소질소": 13.0,
+        "총단백": 6.2
+      },
+      "printed": [
+        {
+          "printed_name": "혈중요소질소",
+          "key": null,
+          "value": 13.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "TG",
+          "key": "triglyceride",
+          "value": 164.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "최저혈압",
+          "key": "dbp",
+          "value": 77.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "총단백",
+          "key": null,
+          "value": 6.2,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "Uric acid",
+          "key": "uric_acid",
+          "value": 3.6,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "LDL-C",
+          "key": "ldl",
+          "value": 115.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "γ-GTP",
+          "key": "ggt",
+          "value": 181.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "AST(SGOT)",
+          "key": "ast",
+          "value": 15.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "혈색소",
+          "key": "hemoglobin",
+          "value": 13.9,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "혈당(공복)",
+          "key": "fasting_glucose",
+          "value": 98.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "알부민",
+          "key": "albumin",
+          "value": 4.4,
+          "unit": "g/dL",
+          "reference": null
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-013",
+      "image": "images/synth-013.jpg",
+      "sha256_16": "7832ad42fe14b11d",
+      "layout": "two_column",
+      "hospital": "서울대학교병원 건강증진센터",
+      "exam_date": "2023-05-05",
+      "noise": {
+        "jpeg_quality": 62,
+        "rotation_deg": 0.74,
+        "speckle": 600
+      },
+      "measurements": {
+        "uric_acid": 8.8,
+        "total_chol": 263.0,
+        "dbp": 91.0,
+        "ldl": 69.0,
+        "sbp": 132.0,
+        "hdl": 69.0,
+        "urine_acr": 68.0,
+        "fasting_glucose": 117.0,
+        "albumin": 4.5,
+        "ast": 119.0
+      },
+      "extras": {
+        "BUN": 8.0,
+        "총단백": 7.5
+      },
+      "printed": [
+        {
+          "printed_name": "Uric acid",
+          "key": "uric_acid",
+          "value": 8.8,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "BUN",
+          "key": null,
+          "value": 8.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "총콜레스테롤",
+          "key": "total_chol",
+          "value": 263.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "이완기혈압",
+          "key": "dbp",
+          "value": 91.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "총단백",
+          "key": null,
+          "value": 7.5,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "LDL-C",
+          "key": "ldl",
+          "value": 69.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "수축기",
+          "key": "sbp",
+          "value": 132.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "HDL콜레스테롤",
+          "key": "hdl",
+          "value": 69.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "요알부민/크레아티닌비",
+          "key": "urine_acr",
+          "value": 68.0,
+          "unit": "mg/g",
+          "reference": null
+        },
+        {
+          "printed_name": "공복혈당",
+          "key": "fasting_glucose",
+          "value": 117.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "알부민",
+          "key": "albumin",
+          "value": 4.5,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "AST",
+          "key": "ast",
+          "value": 119.0,
+          "unit": "IU/L",
+          "reference": null
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-014",
+      "image": "images/synth-014.jpg",
+      "sha256_16": "a3e07fbabb5b176d",
+      "layout": "inline",
+      "hospital": "서울대학교병원 건강증진센터",
+      "exam_date": "2025-02-26",
+      "noise": {
+        "jpeg_quality": 62,
+        "rotation_deg": 0.34,
+        "speckle": 0
+      },
+      "measurements": {
+        "ggt": 181.0,
+        "hdl": 65.0,
+        "creatinine": 1.6,
+        "hba1c": 9.4,
+        "urine_acr": 203.0,
+        "sbp": 153.0,
+        "total_chol": 123.0,
+        "dbp": 94.0,
+        "ldl": 215.0
+      },
+      "extras": {
+        "총빌리루빈": 0.8
+      },
+      "printed": [
+        {
+          "printed_name": "γ-GTP",
+          "key": "ggt",
+          "value": 181.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "총빌리루빈",
+          "key": null,
+          "value": 0.8,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "고밀도지단백",
+          "key": "hdl",
+          "value": 65.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "크레아티닌",
+          "key": "creatinine",
+          "value": 1.6,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "HbA1c",
+          "key": "hba1c",
+          "value": 9.4,
+          "unit": "%",
+          "reference": null
+        },
+        {
+          "printed_name": "요알부민/크레아티닌비",
+          "key": "urine_acr",
+          "value": 203.0,
+          "unit": "mg/g",
+          "reference": null
+        },
+        {
+          "printed_name": "수축기혈압",
+          "key": "sbp",
+          "value": 153.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "총 콜레스테롤",
+          "key": "total_chol",
+          "value": 123.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "이완기",
+          "key": "dbp",
+          "value": 94.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "LDL콜레스테롤",
+          "key": "ldl",
+          "value": 215.0,
+          "unit": "mg/dL",
+          "reference": null
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-015",
+      "image": "images/synth-015.jpg",
+      "sha256_16": "8a32e7e754f5d0d7",
+      "layout": "table",
+      "hospital": "서울대학교병원 건강증진센터",
+      "exam_date": "2026-01-18",
+      "noise": {
+        "jpeg_quality": 62,
+        "rotation_deg": -0.44,
+        "speckle": 0
+      },
+      "measurements": {
+        "albumin": 4.5,
+        "urine_acr": 87.0,
+        "ldl": 56.0,
+        "ggt": 178.0,
+        "fasting_glucose": 170.0,
+        "sbp": 155.0,
+        "total_chol": 147.0,
+        "hba1c": 6.2,
+        "alt": 14.0,
+        "dbp": 108.0,
+        "uric_acid": 3.8
+      },
+      "extras": {
+        "요소질소(BUN)": 14.0
+      },
+      "printed": [
+        {
+          "printed_name": "알부민",
+          "key": "albumin",
+          "value": 4.5,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "알부민크레아티닌비",
+          "key": "urine_acr",
+          "value": 87.0,
+          "unit": "mg/g",
+          "reference": null
+        },
+        {
+          "printed_name": "LDL-C",
+          "key": "ldl",
+          "value": 56.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "γ-GTP",
+          "key": "ggt",
+          "value": 178.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "공복혈당",
+          "key": "fasting_glucose",
+          "value": 170.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "최고혈압",
+          "key": "sbp",
+          "value": 155.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "총 콜레스테롤",
+          "key": "total_chol",
+          "value": 147.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "HbA1c",
+          "key": "hba1c",
+          "value": 6.2,
+          "unit": "%",
+          "reference": null
+        },
+        {
+          "printed_name": "ALT",
+          "key": "alt",
+          "value": 14.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "요소질소(BUN)",
+          "key": null,
+          "value": 14.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "최저혈압",
+          "key": "dbp",
+          "value": 108.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "요산",
+          "key": "uric_acid",
+          "value": 3.8,
+          "unit": "mg/dL",
+          "reference": null
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-016",
+      "image": "images/synth-016.jpg",
+      "sha256_16": "68c12231bcea0815",
+      "layout": "two_column",
+      "hospital": "강서구보건소",
+      "exam_date": "2023-11-02",
+      "noise": {
+        "jpeg_quality": 95,
+        "rotation_deg": -0.6,
+        "speckle": 0
+      },
+      "measurements": {
+        "hba1c": 10.5,
+        "ldl": 134.0,
+        "urine_acr": 246.0,
+        "dbp": 62.0,
+        "alt": 102.0,
+        "albumin": 5.0,
+        "uric_acid": 8.2,
+        "hdl": 37.0,
+        "hemoglobin": 12.2,
+        "total_chol": 190.0,
+        "sbp": 111.0,
+        "ast": 91.0
+      },
+      "extras": {
+        "혈중요소질소": 16.0,
+        "총단백": 7.8
+      },
+      "printed": [
+        {
+          "printed_name": "당화혈색소",
+          "key": "hba1c",
+          "value": 10.5,
+          "unit": "%",
+          "reference": "5.7 미만"
+        },
+        {
+          "printed_name": "LDL-C",
+          "key": "ldl",
+          "value": 134.0,
+          "unit": "mg/dL",
+          "reference": "130 미만"
+        },
+        {
+          "printed_name": "요알부민/크레아티닌비",
+          "key": "urine_acr",
+          "value": 246.0,
+          "unit": "mg/g",
+          "reference": "30 미만"
+        },
+        {
+          "printed_name": "이완기혈압",
+          "key": "dbp",
+          "value": 62.0,
+          "unit": "mmHg",
+          "reference": "80 미만"
+        },
+        {
+          "printed_name": "혈중요소질소",
+          "key": null,
+          "value": 16.0,
+          "unit": "mg/dL",
+          "reference": "8~20"
+        },
+        {
+          "printed_name": "ALT(SGPT)",
+          "key": "alt",
+          "value": 102.0,
+          "unit": "IU/L",
+          "reference": "35 이하"
+        },
+        {
+          "printed_name": "혈청 알부민",
+          "key": "albumin",
+          "value": 5.0,
+          "unit": "g/dL",
+          "reference": "3.5 이상"
+        },
+        {
+          "printed_name": "Uric acid",
+          "key": "uric_acid",
+          "value": 8.2,
+          "unit": "mg/dL",
+          "reference": "7.0 이하"
+        },
+        {
+          "printed_name": "HDL콜레스테롤",
+          "key": "hdl",
+          "value": 37.0,
+          "unit": "mg/dL",
+          "reference": "60 이상"
+        },
+        {
+          "printed_name": "총단백",
+          "key": null,
+          "value": 7.8,
+          "unit": "g/dL",
+          "reference": "6.0~8.0"
+        },
+        {
+          "printed_name": "Hb",
+          "key": "hemoglobin",
+          "value": 12.2,
+          "unit": "g/dL",
+          "reference": "13 이상"
+        },
+        {
+          "printed_name": "총 콜레스테롤",
+          "key": "total_chol",
+          "value": 190.0,
+          "unit": "mg/dL",
+          "reference": "200 미만"
+        },
+        {
+          "printed_name": "최고혈압",
+          "key": "sbp",
+          "value": 111.0,
+          "unit": "mmHg",
+          "reference": "120 미만"
+        },
+        {
+          "printed_name": "AST",
+          "key": "ast",
+          "value": 91.0,
+          "unit": "IU/L",
+          "reference": "40 이하"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-017",
+      "image": "images/synth-017.jpg",
+      "sha256_16": "cb6b587c125b5c72",
+      "layout": "two_column",
+      "hospital": "OO내과의원",
+      "exam_date": "2025-02-08",
+      "noise": {
+        "jpeg_quality": 80,
+        "rotation_deg": -0.67,
+        "speckle": 0
+      },
+      "measurements": {
+        "albumin": 4.5,
+        "dbp": 61.0,
+        "alt": 85.0,
+        "total_chol": 250.0,
+        "hba1c": 6.5,
+        "uric_acid": 5.0,
+        "sbp": 120.0
+      },
+      "extras": {
+        "총단백": 7.4
+      },
+      "printed": [
+        {
+          "printed_name": "알부민",
+          "key": "albumin",
+          "value": 4.5,
+          "unit": "g/dL",
+          "reference": "3.5 이상"
+        },
+        {
+          "printed_name": "이완기혈압",
+          "key": "dbp",
+          "value": 61.0,
+          "unit": "mmHg",
+          "reference": "80 미만"
+        },
+        {
+          "printed_name": "ALT",
+          "key": "alt",
+          "value": 85.0,
+          "unit": "IU/L",
+          "reference": "35 이하"
+        },
+        {
+          "printed_name": "T.CHOL",
+          "key": "total_chol",
+          "value": 250.0,
+          "unit": "mg/dL",
+          "reference": "200 미만"
+        },
+        {
+          "printed_name": "당화혈색소",
+          "key": "hba1c",
+          "value": 6.5,
+          "unit": "%",
+          "reference": "5.7 미만"
+        },
+        {
+          "printed_name": "총단백",
+          "key": null,
+          "value": 7.4,
+          "unit": "g/dL",
+          "reference": "6.0~8.0"
+        },
+        {
+          "printed_name": "Uric acid",
+          "key": "uric_acid",
+          "value": 5.0,
+          "unit": "mg/dL",
+          "reference": "7.0 이하"
+        },
+        {
+          "printed_name": "최고혈압",
+          "key": "sbp",
+          "value": 120.0,
+          "unit": "mmHg",
+          "reference": "120 미만"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-018",
+      "image": "images/synth-018.jpg",
+      "sha256_16": "c08ed030773ab663",
+      "layout": "table",
+      "hospital": "강서구보건소",
+      "exam_date": "2024-05-01",
+      "noise": {
+        "jpeg_quality": 62,
+        "rotation_deg": 0.31,
+        "speckle": 0
+      },
+      "measurements": {
+        "hba1c": 6.4,
+        "uric_acid": 4.9,
+        "total_chol": 179.0,
+        "alt": 108.0,
+        "triglyceride": 107.0,
+        "ggt": 173.0
+      },
+      "extras": {
+        "빌리루빈": 1.7,
+        "Total protein": 7.6
+      },
+      "printed": [
+        {
+          "printed_name": "HbA1c",
+          "key": "hba1c",
+          "value": 6.4,
+          "unit": "%",
+          "reference": null
+        },
+        {
+          "printed_name": "요산",
+          "key": "uric_acid",
+          "value": 4.9,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "빌리루빈",
+          "key": null,
+          "value": 1.7,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "총 콜레스테롤",
+          "key": "total_chol",
+          "value": 179.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "SGPT",
+          "key": "alt",
+          "value": 108.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "Total protein",
+          "key": null,
+          "value": 7.6,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "트리글리세라이드",
+          "key": "triglyceride",
+          "value": 107.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "감마GTP",
+          "key": "ggt",
+          "value": 173.0,
+          "unit": "IU/L",
+          "reference": null
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-019",
+      "image": "images/synth-019.jpg",
+      "sha256_16": "9e50a20c7da544cd",
+      "layout": "two_column",
+      "hospital": "OO내과의원",
+      "exam_date": "2023-10-14",
+      "noise": {
+        "jpeg_quality": 80,
+        "rotation_deg": -0.46,
+        "speckle": 0
+      },
+      "measurements": {
+        "dbp": 107.0,
+        "ldl": 103.0,
+        "hdl": 38.0,
+        "total_chol": 234.0,
+        "hba1c": 4.9,
+        "creatinine": 0.52,
+        "ast": 17.0,
+        "triglyceride": 78.0,
+        "fasting_glucose": 110.0,
+        "uric_acid": 7.3,
+        "ggt": 91.0
+      },
+      "extras": {
+        "요소질소(BUN)": 9.0,
+        "총단백": 6.8
+      },
+      "printed": [
+        {
+          "printed_name": "이완기",
+          "key": "dbp",
+          "value": 107.0,
+          "unit": "mmHg",
+          "reference": "80 미만"
+        },
+        {
+          "printed_name": "LDL-C",
+          "key": "ldl",
+          "value": 103.0,
+          "unit": "mg/dL",
+          "reference": "130 미만"
+        },
+        {
+          "printed_name": "HDL-C",
+          "key": "hdl",
+          "value": 38.0,
+          "unit": "mg/dL",
+          "reference": "60 이상"
+        },
+        {
+          "printed_name": "총콜레스테롤",
+          "key": "total_chol",
+          "value": 234.0,
+          "unit": "mg/dL",
+          "reference": "200 미만"
+        },
+        {
+          "printed_name": "HbA1c",
+          "key": "hba1c",
+          "value": 4.9,
+          "unit": "%",
+          "reference": "5.7 미만"
+        },
+        {
+          "printed_name": "요소질소(BUN)",
+          "key": null,
+          "value": 9.0,
+          "unit": "mg/dL",
+          "reference": "8~20"
+        },
+        {
+          "printed_name": "크레아티닌",
+          "key": "creatinine",
+          "value": 0.52,
+          "unit": "mg/dL",
+          "reference": "1.5 이하"
+        },
+        {
+          "printed_name": "SGOT",
+          "key": "ast",
+          "value": 17.0,
+          "unit": "IU/L",
+          "reference": "40 이하"
+        },
+        {
+          "printed_name": "총단백",
+          "key": null,
+          "value": 6.8,
+          "unit": "g/dL",
+          "reference": "6.0~8.0"
+        },
+        {
+          "printed_name": "TG",
+          "key": "triglyceride",
+          "value": 78.0,
+          "unit": "mg/dL",
+          "reference": "150 미만"
+        },
+        {
+          "printed_name": "공복 혈당",
+          "key": "fasting_glucose",
+          "value": 110.0,
+          "unit": "mg/dL",
+          "reference": "100 미만"
+        },
+        {
+          "printed_name": "Uric acid",
+          "key": "uric_acid",
+          "value": 7.3,
+          "unit": "mg/dL",
+          "reference": "7.0 이하"
+        },
+        {
+          "printed_name": "감마지티피",
+          "key": "ggt",
+          "value": 91.0,
+          "unit": "IU/L",
+          "reference": "63 이하"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-020",
+      "image": "images/synth-020.jpg",
+      "sha256_16": "866d988589612616",
+      "layout": "two_column",
+      "hospital": "한국건강관리협회 서울서부지부",
+      "exam_date": "2024-02-14",
+      "noise": {
+        "jpeg_quality": 80,
+        "rotation_deg": -0.7,
+        "speckle": 0
+      },
+      "measurements": {
+        "triglyceride": 64.0,
+        "sbp": 147.0,
+        "albumin": 4.9,
+        "hba1c": 7.9,
+        "total_chol": 247.0,
+        "dbp": 102.0,
+        "hdl": 83.0,
+        "ggt": 53.0,
+        "alt": 42.0,
+        "ldl": 162.0,
+        "hemoglobin": 13.4
+      },
+      "extras": {
+        "총단백": 7.1,
+        "총빌리루빈": 1.0
+      },
+      "printed": [
+        {
+          "printed_name": "중성지방",
+          "key": "triglyceride",
+          "value": 64.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "최고혈압",
+          "key": "sbp",
+          "value": 147.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "총단백",
+          "key": null,
+          "value": 7.1,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "알부민",
+          "key": "albumin",
+          "value": 4.9,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "당화혈색소",
+          "key": "hba1c",
+          "value": 7.9,
+          "unit": "%",
+          "reference": null
+        },
+        {
+          "printed_name": "총빌리루빈",
+          "key": null,
+          "value": 1.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "T.CHOL",
+          "key": "total_chol",
+          "value": 247.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "이완기",
+          "key": "dbp",
+          "value": 102.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "HDL콜레스테롤",
+          "key": "hdl",
+          "value": 83.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "γ-GTP",
+          "key": "ggt",
+          "value": 53.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "ALT",
+          "key": "alt",
+          "value": 42.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "LDL콜레스테롤",
+          "key": "ldl",
+          "value": 162.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "혈색소",
+          "key": "hemoglobin",
+          "value": 13.4,
+          "unit": "g/dL",
+          "reference": null
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-021",
+      "image": "images/synth-021.jpg",
+      "sha256_16": "1f71d3944fa5fca0",
+      "layout": "two_column",
+      "hospital": "서울대학교병원 건강증진센터",
+      "exam_date": "2026-05-18",
+      "noise": {
+        "jpeg_quality": 95,
+        "rotation_deg": 0.61,
+        "speckle": 600
+      },
+      "measurements": {
+        "total_chol": 299.0,
+        "albumin": 4.8,
+        "fasting_glucose": 134.0,
+        "hemoglobin": 16.2,
+        "creatinine": 1.17,
+        "dbp": 74.0,
+        "hba1c": 7.7,
+        "ggt": 34.0,
+        "sbp": 160.0,
+        "triglyceride": 332.0,
+        "ast": 34.0
+      },
+      "extras": {
+        "총단백": 7.6,
+        "총빌리루빈": 1.9
+      },
+      "printed": [
+        {
+          "printed_name": "총단백",
+          "key": null,
+          "value": 7.6,
+          "unit": "g/dL",
+          "reference": "6.0~8.0"
+        },
+        {
+          "printed_name": "총콜레스테롤",
+          "key": "total_chol",
+          "value": 299.0,
+          "unit": "mg/dL",
+          "reference": "200 미만"
+        },
+        {
+          "printed_name": "총빌리루빈",
+          "key": null,
+          "value": 1.9,
+          "unit": "mg/dL",
+          "reference": "1.2 이하"
+        },
+        {
+          "printed_name": "알부민",
+          "key": "albumin",
+          "value": 4.8,
+          "unit": "g/dL",
+          "reference": "3.5 이상"
+        },
+        {
+          "printed_name": "공복 혈당",
+          "key": "fasting_glucose",
+          "value": 134.0,
+          "unit": "mg/dL",
+          "reference": "100 미만"
+        },
+        {
+          "printed_name": "헤모글로빈",
+          "key": "hemoglobin",
+          "value": 16.2,
+          "unit": "g/dL",
+          "reference": "13 이상"
+        },
+        {
+          "printed_name": "Creatinine",
+          "key": "creatinine",
+          "value": 1.17,
+          "unit": "mg/dL",
+          "reference": "1.5 이하"
+        },
+        {
+          "printed_name": "이완기혈압",
+          "key": "dbp",
+          "value": 74.0,
+          "unit": "mmHg",
+          "reference": "80 미만"
+        },
+        {
+          "printed_name": "당화혈색소",
+          "key": "hba1c",
+          "value": 7.7,
+          "unit": "%",
+          "reference": "5.7 미만"
+        },
+        {
+          "printed_name": "γ-GTP",
+          "key": "ggt",
+          "value": 34.0,
+          "unit": "IU/L",
+          "reference": "63 이하"
+        },
+        {
+          "printed_name": "최고혈압",
+          "key": "sbp",
+          "value": 160.0,
+          "unit": "mmHg",
+          "reference": "120 미만"
+        },
+        {
+          "printed_name": "중성지방",
+          "key": "triglyceride",
+          "value": 332.0,
+          "unit": "mg/dL",
+          "reference": "150 미만"
+        },
+        {
+          "printed_name": "AST(SGOT)",
+          "key": "ast",
+          "value": 34.0,
+          "unit": "IU/L",
+          "reference": "40 이하"
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-022",
+      "image": "images/synth-022.jpg",
+      "sha256_16": "444c06930b827655",
+      "layout": "inline",
+      "hospital": "서울대학교병원 건강증진센터",
+      "exam_date": "2025-05-01",
+      "noise": {
+        "jpeg_quality": 62,
+        "rotation_deg": -0.63,
+        "speckle": 0
+      },
+      "measurements": {
+        "alt": 65.0,
+        "sbp": 146.0,
+        "fasting_glucose": 120.0,
+        "ldl": 218.0,
+        "triglyceride": 278.0,
+        "creatinine": 0.64,
+        "dbp": 80.0,
+        "hba1c": 7.7,
+        "albumin": 4.4,
+        "hdl": 63.0
+      },
+      "extras": {
+        "혈중요소질소": 15.0
+      },
+      "printed": [
+        {
+          "printed_name": "SGPT",
+          "key": "alt",
+          "value": 65.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "수축기혈압",
+          "key": "sbp",
+          "value": 146.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "공복혈당",
+          "key": "fasting_glucose",
+          "value": 120.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "LDL콜레스테롤",
+          "key": "ldl",
+          "value": 218.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "트리글리세라이드",
+          "key": "triglyceride",
+          "value": 278.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "크레아티닌",
+          "key": "creatinine",
+          "value": 0.64,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "혈중요소질소",
+          "key": null,
+          "value": 15.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "이완기",
+          "key": "dbp",
+          "value": 80.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "HbA1c",
+          "key": "hba1c",
+          "value": 7.7,
+          "unit": "%",
+          "reference": null
+        },
+        {
+          "printed_name": "혈청 알부민",
+          "key": "albumin",
+          "value": 4.4,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "고밀도지단백",
+          "key": "hdl",
+          "value": 63.0,
+          "unit": "mg/dL",
+          "reference": null
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-023",
+      "image": "images/synth-023.jpg",
+      "sha256_16": "25aa385d5e74c20b",
+      "layout": "two_column",
+      "hospital": "강서구보건소",
+      "exam_date": "2025-01-11",
+      "noise": {
+        "jpeg_quality": 80,
+        "rotation_deg": -0.77,
+        "speckle": 0
+      },
+      "measurements": {
+        "dbp": 100.0,
+        "hemoglobin": 10.8,
+        "hdl": 85.0,
+        "alt": 87.0,
+        "urine_acr": 154.0,
+        "albumin": 4.3,
+        "uric_acid": 9.2,
+        "ggt": 103.0,
+        "triglyceride": 152.0,
+        "ast": 71.0,
+        "total_chol": 150.0
+      },
+      "extras": {
+        "BUN": 21.0,
+        "Total protein": 7.5,
+        "총빌리루빈": 0.2
+      },
+      "printed": [
+        {
+          "printed_name": "최저혈압",
+          "key": "dbp",
+          "value": 100.0,
+          "unit": "mmHg",
+          "reference": null
+        },
+        {
+          "printed_name": "Hb",
+          "key": "hemoglobin",
+          "value": 10.8,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "HDL-C",
+          "key": "hdl",
+          "value": 85.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "BUN",
+          "key": null,
+          "value": 21.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "ALT(SGPT)",
+          "key": "alt",
+          "value": 87.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "UACR",
+          "key": "urine_acr",
+          "value": 154.0,
+          "unit": "mg/g",
+          "reference": null
+        },
+        {
+          "printed_name": "Total protein",
+          "key": null,
+          "value": 7.5,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "알부민",
+          "key": "albumin",
+          "value": 4.3,
+          "unit": "g/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "Uric acid",
+          "key": "uric_acid",
+          "value": 9.2,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "감마GTP",
+          "key": "ggt",
+          "value": 103.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "트리글리세라이드",
+          "key": "triglyceride",
+          "value": 152.0,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "총빌리루빈",
+          "key": null,
+          "value": 0.2,
+          "unit": "mg/dL",
+          "reference": null
+        },
+        {
+          "printed_name": "AST(SGOT)",
+          "key": "ast",
+          "value": 71.0,
+          "unit": "IU/L",
+          "reference": null
+        },
+        {
+          "printed_name": "총 콜레스테롤",
+          "key": "total_chol",
+          "value": 150.0,
+          "unit": "mg/dL",
+          "reference": null
+        }
+      ]
+    },
+    {
+      "doc_id": "synth-024",
+      "image": "images/synth-024.jpg",
+      "sha256_16": "6a2b0f9a524405eb",
+      "layout": "two_column",
+      "hospital": "서울대학교병원 건강증진센터",
+      "exam_date": "2026-07-15",
+      "noise": {
+        "jpeg_quality": 80,
+        "rotation_deg": -0.62,
+        "speckle": 0
+      },
+      "measurements": {
+        "ggt": 106.0,
+        "triglyceride": 226.0,
+        "hdl": 32.0,
+        "hemoglobin": 14.0,
+        "ldl": 66.0,
+        "uric_acid": 6.9,
+        "hba1c": 4.6,
+        "ast": 53.0
+      },
+      "extras": {
+        "혈중요소질소": 22.0,
+        "빌리루빈": 0.4
+      },
+      "printed": [
+        {
+          "printed_name": "혈중요소질소",
+          "key": null,
+          "value": 22.0,
+          "unit": "mg/dL",
+          "reference": "8~20"
+        },
+        {
+          "printed_name": "감마지티피",
+          "key": "ggt",
+          "value": 106.0,
+          "unit": "IU/L",
+          "reference": "63 이하"
+        },
+        {
+          "printed_name": "빌리루빈",
+          "key": null,
+          "value": 0.4,
+          "unit": "mg/dL",
+          "reference": "1.2 이하"
+        },
+        {
+          "printed_name": "TG",
+          "key": "triglyceride",
+          "value": 226.0,
+          "unit": "mg/dL",
+          "reference": "150 미만"
+        },
+        {
+          "printed_name": "HDL-C",
+          "key": "hdl",
+          "value": 32.0,
+          "unit": "mg/dL",
+          "reference": "60 이상"
+        },
+        {
+          "printed_name": "혈색소",
+          "key": "hemoglobin",
+          "value": 14.0,
+          "unit": "g/dL",
+          "reference": "13 이상"
+        },
+        {
+          "printed_name": "LDL콜레스테롤",
+          "key": "ldl",
+          "value": 66.0,
+          "unit": "mg/dL",
+          "reference": "130 미만"
+        },
+        {
+          "printed_name": "Uric acid",
+          "key": "uric_acid",
+          "value": 6.9,
+          "unit": "mg/dL",
+          "reference": "7.0 이하"
+        },
+        {
+          "printed_name": "당화혈색소",
+          "key": "hba1c",
+          "value": 4.6,
+          "unit": "%",
+          "reference": "5.7 미만"
+        },
+        {
+          "printed_name": "AST(SGOT)",
+          "key": "ast",
+          "value": 53.0,
+          "unit": "IU/L",
+          "reference": "40 이하"
+        }
+      ]
+    }
+  ]
+}

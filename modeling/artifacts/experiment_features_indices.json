@@ -1,0 +1,1398 @@
+{
+  "preset": "indices",
+  "holdout": "2021_2023",
+  "results": [
+    {
+      "target": "dm",
+      "name": "당뇨",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8168,
+      "base": {
+        "n_features": 17,
+        "train_rows": 40926,
+        "train_positives": 6937,
+        "holdout_rows": 7966,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": 0.0006,
+          "ci_low": -0.0007,
+          "ci_high": 0.0019,
+          "two_sided_crossing": 0.442,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8174,
+          "n_features": 18,
+          "train_rows": 40926,
+          "train_positives": 6937,
+          "holdout_rows": 7966,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": -0.0001,
+          "ci_low": -0.0014,
+          "ci_high": 0.001,
+          "two_sided_crossing": 0.812,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8167,
+          "n_features": 19,
+          "train_rows": 40926,
+          "train_positives": 6937,
+          "holdout_rows": 7966,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": 0.0009,
+          "ci_low": -0.0004,
+          "ci_high": 0.0024,
+          "two_sided_crossing": 0.206,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8177,
+          "n_features": 20,
+          "train_rows": 40926,
+          "train_positives": 6937,
+          "holdout_rows": 7966,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "dm",
+      "name": "당뇨",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8702,
+      "base": {
+        "n_features": 33,
+        "train_rows": 36767,
+        "train_positives": 6346,
+        "holdout_rows": 5540,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+지방간지수": {
+          "delta_auroc": 0.0004,
+          "ci_low": -0.0008,
+          "ci_high": 0.0016,
+          "two_sided_crossing": 0.47,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8706,
+          "n_features": 34,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {}
+        },
+        "+내장지방": {
+          "delta_auroc": -0.0004,
+          "ci_low": -0.0017,
+          "ci_high": 0.0009,
+          "two_sided_crossing": 0.504,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8698,
+          "n_features": 36,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {}
+        },
+        "+체형(ABSI)": {
+          "delta_auroc": 0.0004,
+          "ci_low": -0.0008,
+          "ci_high": 0.0017,
+          "two_sided_crossing": 0.528,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8706,
+          "n_features": 34,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {}
+        },
+        "+지질비": {
+          "delta_auroc": -0.0012,
+          "ci_low": -0.0026,
+          "ci_high": 0.0002,
+          "two_sided_crossing": 0.102,
+          "verdict": "구분 안 됨",
+          "auroc": 0.869,
+          "n_features": 36,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": -0.0007,
+          "ci_low": -0.0019,
+          "ci_high": 0.0005,
+          "two_sided_crossing": 0.3,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8695,
+          "n_features": 35,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {}
+        },
+        "+요산크레아티닌": {
+          "delta_auroc": 0.0005,
+          "ci_low": -0.0008,
+          "ci_high": 0.0017,
+          "two_sided_crossing": 0.476,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8707,
+          "n_features": 34,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": -0.0003,
+          "ci_low": -0.0018,
+          "ci_high": 0.0011,
+          "two_sided_crossing": 0.636,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8699,
+          "n_features": 44,
+          "train_rows": 36767,
+          "train_positives": 6346,
+          "holdout_rows": 5540,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "htn",
+      "name": "고혈압",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.7999,
+      "base": {
+        "n_features": 15,
+        "train_rows": 40917,
+        "train_positives": 16836,
+        "holdout_rows": 7960,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": 0.0007,
+          "ci_low": 0.0001,
+          "ci_high": 0.0014,
+          "two_sided_crossing": 0.028,
+          "verdict": "유의",
+          "auroc": 0.8007,
+          "n_features": 16,
+          "train_rows": 40917,
+          "train_positives": 16836,
+          "holdout_rows": 7960,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": 0.0007,
+          "ci_low": 0.0001,
+          "ci_high": 0.0014,
+          "two_sided_crossing": 0.028,
+          "verdict": "유의",
+          "auroc": 0.8007,
+          "n_features": 16,
+          "train_rows": 40917,
+          "train_positives": 16836,
+          "holdout_rows": 7960,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "htn",
+      "name": "고혈압",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8126,
+      "base": {
+        "n_features": 33,
+        "train_rows": 36766,
+        "train_positives": 15187,
+        "holdout_rows": 5556,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+인슐린저항성": {
+          "delta_auroc": -0.0004,
+          "ci_low": -0.0012,
+          "ci_high": 0.0004,
+          "two_sided_crossing": 0.342,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8122,
+          "n_features": 35,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {}
+        },
+        "+지방간지수": {
+          "delta_auroc": 0.0,
+          "ci_low": -0.0009,
+          "ci_high": 0.0009,
+          "two_sided_crossing": 0.966,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8126,
+          "n_features": 34,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {}
+        },
+        "+내장지방": {
+          "delta_auroc": 0.0,
+          "ci_low": -0.0009,
+          "ci_high": 0.0009,
+          "two_sided_crossing": 0.992,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8126,
+          "n_features": 36,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {}
+        },
+        "+체형(ABSI)": {
+          "delta_auroc": 0.0004,
+          "ci_low": -0.0005,
+          "ci_high": 0.0013,
+          "two_sided_crossing": 0.348,
+          "verdict": "구분 안 됨",
+          "auroc": 0.813,
+          "n_features": 34,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {}
+        },
+        "+지질비": {
+          "delta_auroc": -0.0001,
+          "ci_low": -0.0009,
+          "ci_high": 0.0008,
+          "two_sided_crossing": 0.834,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8125,
+          "n_features": 36,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {}
+        },
+        "+요산크레아티닌": {
+          "delta_auroc": -0.0001,
+          "ci_low": -0.001,
+          "ci_high": 0.0008,
+          "two_sided_crossing": 0.868,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8125,
+          "n_features": 34,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": -0.0001,
+          "ci_low": -0.0012,
+          "ci_high": 0.0008,
+          "two_sided_crossing": 0.772,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8125,
+          "n_features": 44,
+          "train_rows": 36766,
+          "train_positives": 15187,
+          "holdout_rows": 5556,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "dlp",
+      "name": "이상지질혈증",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.7494,
+      "base": {
+        "n_features": 17,
+        "train_rows": 40265,
+        "train_positives": 19836,
+        "holdout_rows": 7962,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": -0.0011,
+          "ci_low": -0.003,
+          "ci_high": 0.0008,
+          "two_sided_crossing": 0.254,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7483,
+          "n_features": 18,
+          "train_rows": 40265,
+          "train_positives": 19836,
+          "holdout_rows": 7962,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": -0.0001,
+          "ci_low": -0.0012,
+          "ci_high": 0.001,
+          "two_sided_crossing": 0.828,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7493,
+          "n_features": 19,
+          "train_rows": 40265,
+          "train_positives": 19836,
+          "holdout_rows": 7962,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": -0.0001,
+          "ci_low": -0.002,
+          "ci_high": 0.0018,
+          "two_sided_crossing": 0.908,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7493,
+          "n_features": 20,
+          "train_rows": 40265,
+          "train_positives": 19836,
+          "holdout_rows": 7962,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "dlp",
+      "name": "이상지질혈증",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.752,
+      "base": {
+        "n_features": 29,
+        "train_rows": 36765,
+        "train_positives": 18657,
+        "holdout_rows": 5540,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": -0.001,
+          "ci_low": -0.0031,
+          "ci_high": 0.0011,
+          "two_sided_crossing": 0.358,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7511,
+          "n_features": 30,
+          "train_rows": 36765,
+          "train_positives": 18657,
+          "holdout_rows": 5540,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": 0.0009,
+          "ci_low": -0.0006,
+          "ci_high": 0.0022,
+          "two_sided_crossing": 0.258,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7529,
+          "n_features": 31,
+          "train_rows": 36765,
+          "train_positives": 18657,
+          "holdout_rows": 5540,
+          "added_coverage": {}
+        },
+        "+요산크레아티닌": {
+          "delta_auroc": 0.0003,
+          "ci_low": -0.0013,
+          "ci_high": 0.0017,
+          "two_sided_crossing": 0.72,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7523,
+          "n_features": 30,
+          "train_rows": 36765,
+          "train_positives": 18657,
+          "holdout_rows": 5540,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": -0.0002,
+          "ci_low": -0.0024,
+          "ci_high": 0.0019,
+          "two_sided_crossing": 0.82,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7519,
+          "n_features": 33,
+          "train_rows": 36765,
+          "train_positives": 18657,
+          "holdout_rows": 5540,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "hyperchol",
+      "name": "고LDL콜레스테롤혈증",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.6962,
+      "base": {
+        "n_features": 17,
+        "train_rows": 30645,
+        "train_positives": 4241,
+        "holdout_rows": 4192,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": -0.004,
+          "ci_low": -0.009,
+          "ci_high": 0.0011,
+          "two_sided_crossing": 0.136,
+          "verdict": "구분 안 됨",
+          "auroc": 0.6922,
+          "n_features": 18,
+          "train_rows": 30645,
+          "train_positives": 4241,
+          "holdout_rows": 4192,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": -0.0,
+          "ci_low": -0.0034,
+          "ci_high": 0.0037,
+          "two_sided_crossing": 0.974,
+          "verdict": "구분 안 됨",
+          "auroc": 0.6962,
+          "n_features": 19,
+          "train_rows": 30645,
+          "train_positives": 4241,
+          "holdout_rows": 4192,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": -0.0021,
+          "ci_low": -0.0076,
+          "ci_high": 0.0034,
+          "two_sided_crossing": 0.436,
+          "verdict": "구분 안 됨",
+          "auroc": 0.6941,
+          "n_features": 20,
+          "train_rows": 30645,
+          "train_positives": 4241,
+          "holdout_rows": 4192,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "hyperchol",
+      "name": "고LDL콜레스테롤혈증",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.7409,
+      "base": {
+        "n_features": 29,
+        "train_rows": 30544,
+        "train_positives": 4221,
+        "holdout_rows": 4148,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": -0.0009,
+          "ci_low": -0.0045,
+          "ci_high": 0.0027,
+          "two_sided_crossing": 0.658,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7401,
+          "n_features": 30,
+          "train_rows": 30544,
+          "train_positives": 4221,
+          "holdout_rows": 4148,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": 0.0001,
+          "ci_low": -0.0028,
+          "ci_high": 0.0036,
+          "two_sided_crossing": 0.932,
+          "verdict": "구분 안 됨",
+          "auroc": 0.741,
+          "n_features": 31,
+          "train_rows": 30544,
+          "train_positives": 4221,
+          "holdout_rows": 4148,
+          "added_coverage": {}
+        },
+        "+요산크레아티닌": {
+          "delta_auroc": -0.0023,
+          "ci_low": -0.0052,
+          "ci_high": 0.0009,
+          "two_sided_crossing": 0.134,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7386,
+          "n_features": 30,
+          "train_rows": 30544,
+          "train_positives": 4221,
+          "holdout_rows": 4148,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": 0.0008,
+          "ci_low": -0.0034,
+          "ci_high": 0.0049,
+          "two_sided_crossing": 0.698,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7417,
+          "n_features": 33,
+          "train_rows": 30544,
+          "train_positives": 4221,
+          "holdout_rows": 4148,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "hypertg",
+      "name": "고중성지방혈증",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.7206,
+      "base": {
+        "n_features": 17,
+        "train_rows": 14591,
+        "train_positives": 1730,
+        "holdout_rows": 2316,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": 0.0065,
+          "ci_low": -0.0043,
+          "ci_high": 0.0166,
+          "two_sided_crossing": 0.244,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7271,
+          "n_features": 18,
+          "train_rows": 14591,
+          "train_positives": 1730,
+          "holdout_rows": 2316,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": 0.0017,
+          "ci_low": -0.0053,
+          "ci_high": 0.0084,
+          "two_sided_crossing": 0.604,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7223,
+          "n_features": 19,
+          "train_rows": 14591,
+          "train_positives": 1730,
+          "holdout_rows": 2316,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": 0.0064,
+          "ci_low": -0.0042,
+          "ci_high": 0.0167,
+          "two_sided_crossing": 0.236,
+          "verdict": "구분 안 됨",
+          "auroc": 0.727,
+          "n_features": 20,
+          "train_rows": 14591,
+          "train_positives": 1730,
+          "holdout_rows": 2316,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "hypertg",
+      "name": "고중성지방혈증",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.7588,
+      "base": {
+        "n_features": 29,
+        "train_rows": 14547,
+        "train_positives": 1728,
+        "holdout_rows": 2292,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": 0.0083,
+          "ci_low": -0.0001,
+          "ci_high": 0.0159,
+          "two_sided_crossing": 0.054,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7671,
+          "n_features": 30,
+          "train_rows": 14547,
+          "train_positives": 1728,
+          "holdout_rows": 2292,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": 0.0029,
+          "ci_low": -0.0015,
+          "ci_high": 0.0074,
+          "two_sided_crossing": 0.208,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7617,
+          "n_features": 31,
+          "train_rows": 14547,
+          "train_positives": 1728,
+          "holdout_rows": 2292,
+          "added_coverage": {}
+        },
+        "+요산크레아티닌": {
+          "delta_auroc": 0.0023,
+          "ci_low": -0.0046,
+          "ci_high": 0.009,
+          "two_sided_crossing": 0.55,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7611,
+          "n_features": 30,
+          "train_rows": 14547,
+          "train_positives": 1728,
+          "holdout_rows": 2292,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": 0.013,
+          "ci_low": 0.0046,
+          "ci_high": 0.0217,
+          "two_sided_crossing": 0.004,
+          "verdict": "유의",
+          "auroc": 0.7718,
+          "n_features": 33,
+          "train_rows": 14547,
+          "train_positives": 1728,
+          "holdout_rows": 2292,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "low_hdl",
+      "name": "낮은 HDL 콜레스테롤",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.7858,
+      "base": {
+        "n_features": 17,
+        "train_rows": 30645,
+        "train_positives": 5639,
+        "holdout_rows": 4192,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": 0.001,
+          "ci_low": -0.0014,
+          "ci_high": 0.0036,
+          "two_sided_crossing": 0.458,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7868,
+          "n_features": 18,
+          "train_rows": 30645,
+          "train_positives": 5639,
+          "holdout_rows": 4192,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": -0.0007,
+          "ci_low": -0.0025,
+          "ci_high": 0.0013,
+          "two_sided_crossing": 0.454,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7851,
+          "n_features": 19,
+          "train_rows": 30645,
+          "train_positives": 5639,
+          "holdout_rows": 4192,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": -0.0002,
+          "ci_low": -0.0027,
+          "ci_high": 0.0026,
+          "two_sided_crossing": 0.884,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7856,
+          "n_features": 20,
+          "train_rows": 30645,
+          "train_positives": 5639,
+          "holdout_rows": 4192,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "low_hdl",
+      "name": "낮은 HDL 콜레스테롤",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8068,
+      "base": {
+        "n_features": 29,
+        "train_rows": 30544,
+        "train_positives": 5620,
+        "holdout_rows": 4148,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": 0.0012,
+          "ci_low": -0.0013,
+          "ci_high": 0.0037,
+          "two_sided_crossing": 0.378,
+          "verdict": "구분 안 됨",
+          "auroc": 0.808,
+          "n_features": 30,
+          "train_rows": 30544,
+          "train_positives": 5620,
+          "holdout_rows": 4148,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": 0.0016,
+          "ci_low": -0.0003,
+          "ci_high": 0.0037,
+          "two_sided_crossing": 0.102,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8085,
+          "n_features": 31,
+          "train_rows": 30544,
+          "train_positives": 5620,
+          "holdout_rows": 4148,
+          "added_coverage": {}
+        },
+        "+요산크레아티닌": {
+          "delta_auroc": 0.0006,
+          "ci_low": -0.0016,
+          "ci_high": 0.0026,
+          "two_sided_crossing": 0.622,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8074,
+          "n_features": 30,
+          "train_rows": 30544,
+          "train_positives": 5620,
+          "holdout_rows": 4148,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": 0.0011,
+          "ci_low": -0.0012,
+          "ci_high": 0.0033,
+          "two_sided_crossing": 0.322,
+          "verdict": "구분 안 됨",
+          "auroc": 0.808,
+          "n_features": 33,
+          "train_rows": 30544,
+          "train_positives": 5620,
+          "holdout_rows": 4148,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "mets",
+      "name": "대사증후군",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8282,
+      "base": {
+        "n_features": 13,
+        "train_rows": 38589,
+        "train_positives": 14955,
+        "holdout_rows": 7680,
+        "added_coverage": {}
+      },
+      "arms": {}
+    },
+    {
+      "target": "mets",
+      "name": "대사증후군",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8316,
+      "base": {
+        "n_features": 23,
+        "train_rows": 35214,
+        "train_positives": 14235,
+        "holdout_rows": 5444,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+요산크레아티닌": {
+          "delta_auroc": 0.0008,
+          "ci_low": -0.0002,
+          "ci_high": 0.0019,
+          "two_sided_crossing": 0.102,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8325,
+          "n_features": 24,
+          "train_rows": 35214,
+          "train_positives": 14235,
+          "holdout_rows": 5444,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": 0.0008,
+          "ci_low": -0.0002,
+          "ci_high": 0.0019,
+          "two_sided_crossing": 0.102,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8325,
+          "n_features": 24,
+          "train_rows": 35214,
+          "train_positives": 14235,
+          "holdout_rows": 5444,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "ckd",
+      "name": "신기능 확인 필요",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.7913,
+      "base": {
+        "n_features": 17,
+        "train_rows": 38880,
+        "train_positives": 6745,
+        "holdout_rows": 6135,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": 0.001,
+          "ci_low": -0.0005,
+          "ci_high": 0.0024,
+          "two_sided_crossing": 0.182,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7923,
+          "n_features": 18,
+          "train_rows": 38880,
+          "train_positives": 6745,
+          "holdout_rows": 6135,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": 0.0008,
+          "ci_low": -0.0007,
+          "ci_high": 0.0023,
+          "two_sided_crossing": 0.284,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7921,
+          "n_features": 19,
+          "train_rows": 38880,
+          "train_positives": 6745,
+          "holdout_rows": 6135,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": -0.0008,
+          "ci_low": -0.0022,
+          "ci_high": 0.0008,
+          "two_sided_crossing": 0.306,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7905,
+          "n_features": 20,
+          "train_rows": 38880,
+          "train_positives": 6745,
+          "holdout_rows": 6135,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "ckd",
+      "name": "신기능 확인 필요",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8229,
+      "base": {
+        "n_features": 32,
+        "train_rows": 36706,
+        "train_positives": 6391,
+        "holdout_rows": 5554,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+인슐린저항성": {
+          "delta_auroc": 0.0006,
+          "ci_low": -0.0009,
+          "ci_high": 0.0021,
+          "two_sided_crossing": 0.428,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8235,
+          "n_features": 34,
+          "train_rows": 36706,
+          "train_positives": 6391,
+          "holdout_rows": 5554,
+          "added_coverage": {}
+        },
+        "+지방간지수": {
+          "delta_auroc": 0.0005,
+          "ci_low": -0.001,
+          "ci_high": 0.002,
+          "two_sided_crossing": 0.574,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8233,
+          "n_features": 33,
+          "train_rows": 36706,
+          "train_positives": 6391,
+          "holdout_rows": 5554,
+          "added_coverage": {}
+        },
+        "+내장지방": {
+          "delta_auroc": 0.0013,
+          "ci_low": -0.0002,
+          "ci_high": 0.0028,
+          "two_sided_crossing": 0.09,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8241,
+          "n_features": 35,
+          "train_rows": 36706,
+          "train_positives": 6391,
+          "holdout_rows": 5554,
+          "added_coverage": {}
+        },
+        "+체형(ABSI)": {
+          "delta_auroc": 0.0009,
+          "ci_low": -0.0006,
+          "ci_high": 0.0023,
+          "two_sided_crossing": 0.29,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8237,
+          "n_features": 33,
+          "train_rows": 36706,
+          "train_positives": 6391,
+          "holdout_rows": 5554,
+          "added_coverage": {}
+        },
+        "+지질비": {
+          "delta_auroc": 0.0009,
+          "ci_low": -0.0004,
+          "ci_high": 0.0023,
+          "two_sided_crossing": 0.192,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8238,
+          "n_features": 35,
+          "train_rows": 36706,
+          "train_positives": 6391,
+          "holdout_rows": 5554,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": 0.0013,
+          "ci_low": -0.0002,
+          "ci_high": 0.0029,
+          "two_sided_crossing": 0.08,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8242,
+          "n_features": 34,
+          "train_rows": 36706,
+          "train_positives": 6391,
+          "holdout_rows": 5554,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": 0.0001,
+          "ci_low": -0.0015,
+          "ci_high": 0.0018,
+          "two_sided_crossing": 0.928,
+          "verdict": "구분 안 됨",
+          "auroc": 0.823,
+          "n_features": 44,
+          "train_rows": 36706,
+          "train_positives": 6391,
+          "holdout_rows": 5554,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "fatty_liver",
+      "name": "지방간",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8162,
+      "base": {
+        "n_features": 17,
+        "train_rows": 4626,
+        "train_positives": 2023,
+        "holdout_rows": 5389,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": 0.0008,
+          "ci_low": -0.0009,
+          "ci_high": 0.0023,
+          "two_sided_crossing": 0.352,
+          "verdict": "구분 안 됨",
+          "auroc": 0.817,
+          "n_features": 18,
+          "train_rows": 4626,
+          "train_positives": 2023,
+          "holdout_rows": 5389,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": 0.0009,
+          "ci_low": -0.0004,
+          "ci_high": 0.0023,
+          "two_sided_crossing": 0.174,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8172,
+          "n_features": 19,
+          "train_rows": 4626,
+          "train_positives": 2023,
+          "holdout_rows": 5389,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": 0.0019,
+          "ci_low": 0.0002,
+          "ci_high": 0.0037,
+          "two_sided_crossing": 0.032,
+          "verdict": "유의",
+          "auroc": 0.8181,
+          "n_features": 20,
+          "train_rows": 4626,
+          "train_positives": 2023,
+          "holdout_rows": 5389,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "fatty_liver",
+      "name": "지방간",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8496,
+      "base": {
+        "n_features": 35,
+        "train_rows": 4376,
+        "train_positives": 1938,
+        "holdout_rows": 4880,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+인슐린저항성": {
+          "delta_auroc": 0.0016,
+          "ci_low": 0.0004,
+          "ci_high": 0.0028,
+          "two_sided_crossing": 0.014,
+          "verdict": "유의",
+          "auroc": 0.8512,
+          "n_features": 37,
+          "train_rows": 4376,
+          "train_positives": 1938,
+          "holdout_rows": 4880,
+          "added_coverage": {}
+        },
+        "+지방간지수": {
+          "delta_auroc": 0.0005,
+          "ci_low": -0.0007,
+          "ci_high": 0.0016,
+          "two_sided_crossing": 0.416,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8501,
+          "n_features": 36,
+          "train_rows": 4376,
+          "train_positives": 1938,
+          "holdout_rows": 4880,
+          "added_coverage": {}
+        },
+        "+내장지방": {
+          "delta_auroc": 0.0013,
+          "ci_low": 0.0002,
+          "ci_high": 0.0025,
+          "two_sided_crossing": 0.026,
+          "verdict": "유의",
+          "auroc": 0.8509,
+          "n_features": 38,
+          "train_rows": 4376,
+          "train_positives": 1938,
+          "holdout_rows": 4880,
+          "added_coverage": {}
+        },
+        "+체형(ABSI)": {
+          "delta_auroc": 0.0001,
+          "ci_low": -0.0011,
+          "ci_high": 0.0014,
+          "two_sided_crossing": 0.892,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8497,
+          "n_features": 36,
+          "train_rows": 4376,
+          "train_positives": 1938,
+          "holdout_rows": 4880,
+          "added_coverage": {}
+        },
+        "+지질비": {
+          "delta_auroc": 0.0013,
+          "ci_low": -0.0002,
+          "ci_high": 0.0028,
+          "two_sided_crossing": 0.106,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8509,
+          "n_features": 38,
+          "train_rows": 4376,
+          "train_positives": 1938,
+          "holdout_rows": 4880,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": 0.0006,
+          "ci_low": -0.0007,
+          "ci_high": 0.0019,
+          "two_sided_crossing": 0.328,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8502,
+          "n_features": 37,
+          "train_rows": 4376,
+          "train_positives": 1938,
+          "holdout_rows": 4880,
+          "added_coverage": {}
+        },
+        "+요산크레아티닌": {
+          "delta_auroc": 0.0006,
+          "ci_low": -0.0009,
+          "ci_high": 0.002,
+          "two_sided_crossing": 0.48,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8501,
+          "n_features": 36,
+          "train_rows": 4376,
+          "train_positives": 1938,
+          "holdout_rows": 4880,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": 0.0017,
+          "ci_low": -0.0,
+          "ci_high": 0.0036,
+          "two_sided_crossing": 0.054,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8513,
+          "n_features": 48,
+          "train_rows": 4376,
+          "train_positives": 1938,
+          "holdout_rows": 4880,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "anemia",
+      "name": "빈혈",
+      "tier": "basic",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.7168,
+      "base": {
+        "n_features": 17,
+        "train_rows": 36643,
+        "train_positives": 3664,
+        "holdout_rows": 5836,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+체형(ABSI)": {
+          "delta_auroc": 0.0034,
+          "ci_low": -0.0008,
+          "ci_high": 0.0076,
+          "two_sided_crossing": 0.116,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7203,
+          "n_features": 18,
+          "train_rows": 36643,
+          "train_positives": 3664,
+          "holdout_rows": 5836,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": 0.0055,
+          "ci_low": 0.0006,
+          "ci_high": 0.0101,
+          "two_sided_crossing": 0.028,
+          "verdict": "유의",
+          "auroc": 0.7223,
+          "n_features": 19,
+          "train_rows": 36643,
+          "train_positives": 3664,
+          "holdout_rows": 5836,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": 0.0034,
+          "ci_low": -0.0024,
+          "ci_high": 0.0087,
+          "two_sided_crossing": 0.224,
+          "verdict": "구분 안 됨",
+          "auroc": 0.7203,
+          "n_features": 20,
+          "train_rows": 36643,
+          "train_positives": 3664,
+          "holdout_rows": 5836,
+          "added_coverage": {}
+        }
+      }
+    },
+    {
+      "target": "anemia",
+      "name": "빈혈",
+      "tier": "lab",
+      "model": "xgboost",
+      "holdout_cycle": "2021_2023",
+      "base_auroc": 0.8177,
+      "base": {
+        "n_features": 34,
+        "train_rows": 36030,
+        "train_positives": 3587,
+        "holdout_rows": 5481,
+        "added_coverage": {}
+      },
+      "arms": {
+        "+인슐린저항성": {
+          "delta_auroc": -0.0009,
+          "ci_low": -0.0034,
+          "ci_high": 0.0015,
+          "two_sided_crossing": 0.44,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8168,
+          "n_features": 36,
+          "train_rows": 36030,
+          "train_positives": 3587,
+          "holdout_rows": 5481,
+          "added_coverage": {}
+        },
+        "+지방간지수": {
+          "delta_auroc": -0.0009,
+          "ci_low": -0.0031,
+          "ci_high": 0.0011,
+          "two_sided_crossing": 0.404,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8168,
+          "n_features": 35,
+          "train_rows": 36030,
+          "train_positives": 3587,
+          "holdout_rows": 5481,
+          "added_coverage": {}
+        },
+        "+내장지방": {
+          "delta_auroc": -0.0001,
+          "ci_low": -0.0026,
+          "ci_high": 0.002,
+          "two_sided_crossing": 0.87,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8176,
+          "n_features": 37,
+          "train_rows": 36030,
+          "train_positives": 3587,
+          "holdout_rows": 5481,
+          "added_coverage": {}
+        },
+        "+체형(ABSI)": {
+          "delta_auroc": -0.0009,
+          "ci_low": -0.003,
+          "ci_high": 0.0013,
+          "two_sided_crossing": 0.384,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8168,
+          "n_features": 35,
+          "train_rows": 36030,
+          "train_positives": 3587,
+          "holdout_rows": 5481,
+          "added_coverage": {}
+        },
+        "+지질비": {
+          "delta_auroc": -0.0016,
+          "ci_low": -0.004,
+          "ci_high": 0.0006,
+          "two_sided_crossing": 0.146,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8161,
+          "n_features": 37,
+          "train_rows": 36030,
+          "train_positives": 3587,
+          "holdout_rows": 5481,
+          "added_coverage": {}
+        },
+        "+혈압파생": {
+          "delta_auroc": 0.0015,
+          "ci_low": -0.0015,
+          "ci_high": 0.0045,
+          "two_sided_crossing": 0.286,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8192,
+          "n_features": 36,
+          "train_rows": 36030,
+          "train_positives": 3587,
+          "holdout_rows": 5481,
+          "added_coverage": {}
+        },
+        "+요산크레아티닌": {
+          "delta_auroc": -0.0001,
+          "ci_low": -0.0023,
+          "ci_high": 0.0019,
+          "two_sided_crossing": 0.932,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8176,
+          "n_features": 35,
+          "train_rows": 36030,
+          "train_positives": 3587,
+          "holdout_rows": 5481,
+          "added_coverage": {}
+        },
+        "+전부": {
+          "delta_auroc": -0.0019,
+          "ci_low": -0.0049,
+          "ci_high": 0.0013,
+          "two_sided_crossing": 0.266,
+          "verdict": "구분 안 됨",
+          "auroc": 0.8158,
+          "n_features": 47,
+          "train_rows": 36030,
+          "train_positives": 3587,
+          "holdout_rows": 5481,
+          "added_coverage": {}
+        }
+      }
+    }
+  ]
+}

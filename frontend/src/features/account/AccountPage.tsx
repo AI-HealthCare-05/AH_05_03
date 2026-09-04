@@ -1,5 +1,6 @@
 import { type FormEvent, type MouseEvent, useCallback, useEffect, useState } from "react";
 
+import { useAuth } from "../../app/authContext";
 import { useLocalDomain } from "../../app/localDomainContext";
 import type {
   AccountSummary,
@@ -26,6 +27,7 @@ interface LinkRecovery {
 }
 
 export function AccountPage() {
+  const { markSignedOut } = useAuth();
   const { runtime, profiles, refreshProfiles } = useLocalDomain();
   const [account, setAccount] = useState<AccountSummary>();
   const [subscription, setSubscription] = useState<SubscriptionData>();
@@ -66,27 +68,6 @@ export function AccountPage() {
   useEffect(() => {
     void serverApiClient.refresh().then(loadAccountData).catch(() => undefined);
   }, [loadAccountData]);
-
-  async function authenticate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const email = String(form.get("email") ?? "");
-    const password = String(form.get("password") ?? "");
-    const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-    const action = submitter?.value;
-    setWorking(true);
-    resetFeedback();
-    try {
-      if (action === "signup") await serverApiClient.signUp(email, password);
-      await serverApiClient.login(email, password);
-      await loadAccountData();
-      setMessage(action === "signup" ? "가입하고 로그인했습니다." : "로그인했습니다.");
-    } catch (caught) {
-      setError(messageFrom(caught, "계정 인증에 실패했습니다."));
-    } finally {
-      setWorking(false);
-    }
-  }
 
   async function changePlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -237,6 +218,9 @@ export function AccountPage() {
         await serverApiClient.closeAccount();
         serverApiClient.clearAccessToken();
         clearAccountState();
+        // 로그아웃과 같은 이유로 관문에도 알린다 — 종료한 계정으로 화면이 남으면
+        // 누르는 것마다 401 이 된다.
+        markSignedOut();
         setMessage("서비스 계정을 종료했습니다. 이 브라우저의 로컬 건강정보는 삭제되지 않았습니다.");
       }
       setConfirmation(undefined);
@@ -252,6 +236,9 @@ export function AccountPage() {
     await run(async () => {
       await serverApiClient.logout();
       clearAccountState();
+      // 관문에도 알린다. 안 알리면 레이아웃은 아직 로그인 상태라고 믿어서,
+      // 로그아웃한 사용자에게 메뉴와 화면이 그대로 남는다.
+      markSignedOut();
       setMessage("로그아웃했습니다. 로컬 건강정보는 이 브라우저에 유지됩니다.");
     });
   }
@@ -297,7 +284,9 @@ export function AccountPage() {
       {message ? <div className="alert success-alert" role="status">{message}</div> : null}
       {error ? <div className="alert error-alert" role="alert">{error}</div> : null}
 
-      {!account ? <AuthCard working={working} invitationEmail={invitationEmail} onSubmit={authenticate} /> : hasInvitationAccountMismatch && invitationEmail ? (
+      {/* 로그인은 관문(`SignInPage`)이 한다. 여기까지 왔다는 건 이미 로그인했다는 뜻이라
+          계정을 아직 못 읽은 순간만 비워 둔다. */}
+      {!account ? <p className="account-empty">계정 정보를 불러오는 중…</p> : hasInvitationAccountMismatch && invitationEmail ? (
         <InvitationAccountMismatch
           currentEmail={account.account.email}
           invitationEmail={invitationEmail}
@@ -317,10 +306,6 @@ export function AccountPage() {
       {confirmation ? <ConfirmationDialog confirmation={confirmation} email={account?.account.email} working={working} onCancel={() => setConfirmation(undefined)} onConfirm={confirmAction} /> : null}
     </div>
   );
-}
-
-function AuthCard({ working, invitationEmail, onSubmit }: { working: boolean; invitationEmail?: string; onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void> }) {
-  return <section className="account-card auth-card"><p className="section-kicker">{invitationEmail ? "가족 초대" : "서비스 계정"}</p><h2>{invitationEmail ? "초대받은 계정으로 계속하기" : "가입 또는 로그인"}</h2><p>{invitationEmail ? `${invitationEmail} 주소로 초대받았습니다. 이 이메일로 가입하거나 로그인하세요.` : "서비스 계정은 인증·구독·가족 초대만 관리합니다."}</p><form className="product-form" onSubmit={(event) => void onSubmit(event)}><label>이메일<input name="email" type="email" autoComplete="email" defaultValue={invitationEmail} required /></label><label>비밀번호<input name="password" type="password" autoComplete="current-password" minLength={8} required /></label><div className="form-actions"><button className="secondary-button" name="action" value="signup" disabled={working}>가입</button><button className="primary-button" name="action" value="login" disabled={working}>로그인</button></div></form></section>;
 }
 
 function InvitationAccountMismatch({ currentEmail, invitationEmail, working, onSwitch }: { currentEmail: string; invitationEmail: string; working: boolean; onSwitch: () => Promise<void> }) {

@@ -137,6 +137,17 @@ export class LocalDocumentService {
     return { ok: true, value: values.sort((left, right) => right.createdAt.localeCompare(left.createdAt)) };
   }
 
+  public async get(documentId: string): Promise<LocalResult<LocalDocument>> {
+    const record = await this.repository.get(documentId);
+    if (!record) return failure("문서 메타데이터를 찾을 수 없습니다.", false, "NOT_FOUND");
+    try {
+      const doc = await this.cipher.decrypt<LocalDocument>(record.encryptedPayload);
+      return { ok: true, value: doc };
+    } catch {
+      return failure("문서 메타데이터를 복호화하지 못했습니다.", false, "DECRYPTION_FAILED");
+    }
+  }
+
   public async read(document: LocalDocument): Promise<LocalResult<Blob>> {
     const content = await this.files.read(document.id);
     if (!content) return failure("문서 원본을 찾을 수 없습니다.", false, "NOT_FOUND");
@@ -148,6 +159,23 @@ export class LocalDocumentService {
     } catch {
       return failure("문서 원본을 복호화하지 못했습니다.", false, "DECRYPTION_FAILED");
     }
+  }
+
+  /**
+   * 문서 id 하나로 원본과 파일명을 함께 꺼낸다.
+   *
+   * `read()` 는 `LocalDocument` 를 받는다 — 목록을 이미 들고 있는 화면에는 그게 맞다.
+   * 그런데 대화에서 "그 서류 보여 줘" 로 들어오는 쪽은 **id 밖에 없다.** 그때마다
+   * 호출부가 `list()` 로 찾아 넘기게 두면 같은 코드가 화면마다 복사된다.
+   */
+  public async readById(documentId: string): Promise<LocalResult<{ file: Blob; fileName: string }>> {
+    const documents = await this.list();
+    if (!documents.ok) return documents;
+    const document = documents.value.find((candidate) => candidate.id === documentId);
+    if (!document) return failure("문서를 찾을 수 없습니다.", false, "NOT_FOUND");
+    const file = await this.read(document);
+    if (!file.ok) return file;
+    return { ok: true, value: { file: file.value, fileName: document.fileName } };
   }
 
   public async delete(documentId: string): Promise<LocalResult<{ deleted: true }>> {

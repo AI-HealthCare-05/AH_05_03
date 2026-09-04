@@ -1,0 +1,2268 @@
+[
+  {
+    "target": "dm",
+    "name": "당뇨",
+    "tier": "basic",
+    "holdout_cycle": "2021_2023",
+    "train_rows": 40926,
+    "holdout_rows": 7966,
+    "seeds": [
+      20260820,
+      20260921,
+      20261022
+    ],
+    "baseline": "xgboost",
+    "arms": {
+      "logistic": {
+        "auroc": 0.8074,
+        "auprc_lift": 2.47,
+        "brier_skill": 0.1795,
+        "ece": 0.0064,
+        "calibration_slope": 1.006,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.47,
+          0.8074
+        ],
+        "delta_auroc": -0.0087,
+        "ci_low": -0.0132,
+        "ci_high": -0.0048,
+        "verdict": "유의"
+      },
+      "xgboost": {
+        "auroc": 0.8161,
+        "auprc_lift": 2.63,
+        "brier_skill": 0.1942,
+        "ece": 0.0096,
+        "calibration_slope": 1.064,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.63,
+          0.8161
+        ]
+      },
+      "xgboost+시드3": {
+        "auroc": 0.8167,
+        "auprc_lift": 2.64,
+        "brier_skill": 0.195,
+        "ece": 0.0128,
+        "calibration_slope": 1.067,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.64,
+          0.8167
+        ],
+        "delta_auroc": 0.0006,
+        "ci_low": -0.0002,
+        "ci_high": 0.0014,
+        "verdict": "구분 안 됨"
+      },
+      "catboost": {
+        "auroc": 0.819,
+        "auprc_lift": 2.66,
+        "brier_skill": 0.1993,
+        "ece": 0.0114,
+        "calibration_slope": 1.071,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.66,
+          0.819
+        ],
+        "delta_auroc": 0.0029,
+        "ci_low": 0.0005,
+        "ci_high": 0.0054,
+        "verdict": "유의"
+      },
+      "catboost+시드3": {
+        "auroc": 0.8193,
+        "auprc_lift": 2.67,
+        "brier_skill": 0.2002,
+        "ece": 0.0094,
+        "calibration_slope": 1.073,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.67,
+          0.8193
+        ],
+        "delta_auroc": 0.0032,
+        "ci_low": 0.0008,
+        "ci_high": 0.0054,
+        "verdict": "유의"
+      },
+      "스태킹": {
+        "auroc": 0.8193,
+        "auprc_lift": 2.72,
+        "brier_skill": 0.1998,
+        "ece": 0.0105,
+        "calibration_slope": 1.063,
+        "calibration_method": "meta",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.72,
+          0.8193
+        ],
+        "weights": {
+          "logistic": 0.093,
+          "xgboost": 0.436,
+          "catboost": 0.493
+        },
+        "delta_auroc": 0.0032,
+        "ci_low": 0.0018,
+        "ci_high": 0.0046,
+        "verdict": "유의"
+      },
+      "앙상블 평균": {
+        "auroc": 0.8178,
+        "auprc_lift": 2.64,
+        "brier_skill": 0.1975,
+        "ece": 0.0106,
+        "calibration_slope": 1.042,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.64,
+          0.8178
+        ],
+        "slope_before_recalibration": 1.098,
+        "ece_before_recalibration": 0.0093,
+        "delta_auroc": 0.0017,
+        "ci_low": -0.0001,
+        "ci_high": 0.0035,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 로짓": {
+        "auroc": 0.8181,
+        "auprc_lift": 2.64,
+        "brier_skill": 0.1974,
+        "ece": 0.0107,
+        "calibration_slope": 1.042,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.64,
+          0.8181
+        ],
+        "slope_before_recalibration": 1.087,
+        "ece_before_recalibration": 0.0102,
+        "delta_auroc": 0.0019,
+        "ci_low": 0.0001,
+        "ci_high": 0.0037,
+        "verdict": "유의"
+      },
+      "앙상블 순위": {
+        "auroc": 0.8177,
+        "auprc_lift": 2.63,
+        "brier_skill": 0.1944,
+        "ece": 0.0137,
+        "calibration_slope": 0.903,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.63,
+          0.8177
+        ],
+        "slope_before_recalibration": 0.808,
+        "ece_before_recalibration": 0.3259,
+        "delta_auroc": 0.0016,
+        "ci_low": -0.0001,
+        "ci_high": 0.0033,
+        "verdict": "구분 안 됨"
+      },
+      "트리2 평균": {
+        "auroc": 0.8188,
+        "auprc_lift": 2.66,
+        "brier_skill": 0.1988,
+        "ece": 0.0117,
+        "calibration_slope": 1.061,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.66,
+          0.8188
+        ],
+        "slope_before_recalibration": 1.085,
+        "ece_before_recalibration": 0.0128,
+        "delta_auroc": 0.0027,
+        "ci_low": 0.0013,
+        "ci_high": 0.0041,
+        "verdict": "유의"
+      }
+    },
+    "selected": "스태킹"
+  },
+  {
+    "target": "dm",
+    "name": "당뇨",
+    "tier": "lab",
+    "holdout_cycle": "2021_2023",
+    "train_rows": 36767,
+    "holdout_rows": 5540,
+    "seeds": [
+      20260820,
+      20260921,
+      20261022
+    ],
+    "baseline": "xgboost",
+    "arms": {
+      "logistic": {
+        "auroc": 0.8442,
+        "auprc_lift": 2.89,
+        "brier_skill": 0.2557,
+        "ece": 0.0116,
+        "calibration_slope": 1.063,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.89,
+          0.8442
+        ],
+        "delta_auroc": -0.0254,
+        "ci_low": -0.0326,
+        "ci_high": -0.0183,
+        "verdict": "유의"
+      },
+      "xgboost": {
+        "auroc": 0.8696,
+        "auprc_lift": 3.3,
+        "brier_skill": 0.3166,
+        "ece": 0.0198,
+        "calibration_slope": 1.056,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          3.3,
+          0.8696
+        ]
+      },
+      "xgboost+시드3": {
+        "auroc": 0.8699,
+        "auprc_lift": 3.29,
+        "brier_skill": 0.3168,
+        "ece": 0.0204,
+        "calibration_slope": 1.06,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          3.29,
+          0.8699
+        ],
+        "delta_auroc": 0.0003,
+        "ci_low": -0.0007,
+        "ci_high": 0.0012,
+        "verdict": "구분 안 됨"
+      },
+      "catboost": {
+        "auroc": 0.8743,
+        "auprc_lift": 3.38,
+        "brier_skill": 0.3274,
+        "ece": 0.025,
+        "calibration_slope": 1.043,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          3.38,
+          0.8743
+        ],
+        "delta_auroc": 0.0047,
+        "ci_low": 0.0021,
+        "ci_high": 0.0074,
+        "verdict": "유의"
+      },
+      "catboost+시드3": {
+        "auroc": 0.8748,
+        "auprc_lift": 3.39,
+        "brier_skill": 0.329,
+        "ece": 0.0241,
+        "calibration_slope": 1.052,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          3.39,
+          0.8748
+        ],
+        "delta_auroc": 0.0052,
+        "ci_low": 0.0027,
+        "ci_high": 0.0079,
+        "verdict": "유의"
+      },
+      "스태킹": {
+        "auroc": 0.8749,
+        "auprc_lift": 3.44,
+        "brier_skill": 0.3289,
+        "ece": 0.024,
+        "calibration_slope": 1.053,
+        "calibration_method": "meta",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          3.44,
+          0.8749
+        ],
+        "weights": {
+          "logistic": 0.002,
+          "xgboost": 0.162,
+          "catboost": 0.844
+        },
+        "delta_auroc": 0.0052,
+        "ci_low": 0.0032,
+        "ci_high": 0.0074,
+        "verdict": "유의"
+      },
+      "앙상블 평균": {
+        "auroc": 0.872,
+        "auprc_lift": 3.31,
+        "brier_skill": 0.3199,
+        "ece": 0.0186,
+        "calibration_slope": 1.041,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          3.31,
+          0.872
+        ],
+        "slope_before_recalibration": 1.172,
+        "ece_before_recalibration": 0.0225,
+        "delta_auroc": 0.0024,
+        "ci_low": 0.0001,
+        "ci_high": 0.0049,
+        "verdict": "유의"
+      },
+      "앙상블 로짓": {
+        "auroc": 0.8715,
+        "auprc_lift": 3.31,
+        "brier_skill": 0.3195,
+        "ece": 0.0198,
+        "calibration_slope": 1.04,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          3.31,
+          0.8715
+        ],
+        "slope_before_recalibration": 1.138,
+        "ece_before_recalibration": 0.019,
+        "delta_auroc": 0.0019,
+        "ci_low": -0.0004,
+        "ci_high": 0.0044,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 순위": {
+        "auroc": 0.8699,
+        "auprc_lift": 3.29,
+        "brier_skill": 0.3155,
+        "ece": 0.0156,
+        "calibration_slope": 1.01,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          3.29,
+          0.8699
+        ],
+        "slope_before_recalibration": 1.159,
+        "ece_before_recalibration": 0.3134,
+        "delta_auroc": 0.0003,
+        "ci_low": -0.0021,
+        "ci_high": 0.0029,
+        "verdict": "구분 안 됨"
+      },
+      "트리2 평균": {
+        "auroc": 0.8738,
+        "auprc_lift": 3.36,
+        "brier_skill": 0.3267,
+        "ece": 0.023,
+        "calibration_slope": 1.048,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          3.36,
+          0.8738
+        ],
+        "slope_before_recalibration": 1.077,
+        "ece_before_recalibration": 0.0223,
+        "delta_auroc": 0.0042,
+        "ci_low": 0.0026,
+        "ci_high": 0.0059,
+        "verdict": "유의"
+      }
+    },
+    "selected": "스태킹"
+  },
+  {
+    "target": "htn",
+    "name": "고혈압",
+    "tier": "basic",
+    "holdout_cycle": "2021_2023",
+    "train_rows": 40917,
+    "holdout_rows": 7960,
+    "seeds": [
+      20260820,
+      20260921,
+      20261022
+    ],
+    "baseline": "xgboost",
+    "arms": {
+      "logistic": {
+        "auroc": 0.7938,
+        "auprc_lift": 1.65,
+        "brier_skill": 0.2467,
+        "ece": 0.0354,
+        "calibration_slope": 0.925,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.65,
+          0.7938
+        ],
+        "delta_auroc": -0.0055,
+        "ci_low": -0.0083,
+        "ci_high": -0.0031,
+        "verdict": "유의"
+      },
+      "xgboost": {
+        "auroc": 0.7994,
+        "auprc_lift": 1.68,
+        "brier_skill": 0.2552,
+        "ece": 0.0334,
+        "calibration_slope": 0.917,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.68,
+          0.7994
+        ]
+      },
+      "xgboost+시드3": {
+        "auroc": 0.7995,
+        "auprc_lift": 1.68,
+        "brier_skill": 0.2554,
+        "ece": 0.0328,
+        "calibration_slope": 0.921,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.68,
+          0.7995
+        ],
+        "delta_auroc": 0.0002,
+        "ci_low": -0.0004,
+        "ci_high": 0.0007,
+        "verdict": "구분 안 됨"
+      },
+      "catboost": {
+        "auroc": 0.7997,
+        "auprc_lift": 1.69,
+        "brier_skill": 0.2573,
+        "ece": 0.0334,
+        "calibration_slope": 0.916,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.69,
+          0.7997
+        ],
+        "delta_auroc": 0.0004,
+        "ci_low": -0.0015,
+        "ci_high": 0.0023,
+        "verdict": "구분 안 됨"
+      },
+      "catboost+시드3": {
+        "auroc": 0.7992,
+        "auprc_lift": 1.68,
+        "brier_skill": 0.2573,
+        "ece": 0.0316,
+        "calibration_slope": 0.919,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.68,
+          0.7992
+        ],
+        "delta_auroc": -0.0002,
+        "ci_low": -0.0018,
+        "ci_high": 0.0017,
+        "verdict": "구분 안 됨"
+      },
+      "스태킹": {
+        "auroc": 0.8002,
+        "auprc_lift": 1.7,
+        "brier_skill": 0.2575,
+        "ece": 0.0331,
+        "calibration_slope": 0.923,
+        "calibration_method": "meta",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.7,
+          0.8002
+        ],
+        "weights": {
+          "logistic": 0.152,
+          "xgboost": 0.289,
+          "catboost": 0.568
+        },
+        "delta_auroc": 0.0008,
+        "ci_low": -0.0004,
+        "ci_high": 0.0021,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 평균": {
+        "auroc": 0.7996,
+        "auprc_lift": 1.68,
+        "brier_skill": 0.2567,
+        "ece": 0.0324,
+        "calibration_slope": 0.919,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.68,
+          0.7996
+        ],
+        "slope_before_recalibration": 0.942,
+        "ece_before_recalibration": 0.0324,
+        "delta_auroc": 0.0003,
+        "ci_low": -0.001,
+        "ci_high": 0.0014,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 로짓": {
+        "auroc": 0.7997,
+        "auprc_lift": 1.68,
+        "brier_skill": 0.2567,
+        "ece": 0.0329,
+        "calibration_slope": 0.919,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.68,
+          0.7997
+        ],
+        "slope_before_recalibration": 0.936,
+        "ece_before_recalibration": 0.0324,
+        "delta_auroc": 0.0003,
+        "ci_low": -0.0009,
+        "ci_high": 0.0014,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 순위": {
+        "auroc": 0.7997,
+        "auprc_lift": 1.69,
+        "brier_skill": 0.258,
+        "ece": 0.0313,
+        "calibration_slope": 0.847,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.69,
+          0.7997
+        ],
+        "slope_before_recalibration": 0.813,
+        "ece_before_recalibration": 0.0807,
+        "delta_auroc": 0.0004,
+        "ci_low": -0.0009,
+        "ci_high": 0.0015,
+        "verdict": "구분 안 됨"
+      },
+      "트리2 평균": {
+        "auroc": 0.8003,
+        "auprc_lift": 1.69,
+        "brier_skill": 0.2581,
+        "ece": 0.0318,
+        "calibration_slope": 0.918,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.69,
+          0.8003
+        ],
+        "slope_before_recalibration": 0.929,
+        "ece_before_recalibration": 0.0313,
+        "delta_auroc": 0.0009,
+        "ci_low": -0.0001,
+        "ci_high": 0.002,
+        "verdict": "구분 안 됨"
+      }
+    },
+    "selected": "스태킹"
+  },
+  {
+    "target": "htn",
+    "name": "고혈압",
+    "tier": "lab",
+    "holdout_cycle": "2021_2023",
+    "train_rows": 36766,
+    "holdout_rows": 5556,
+    "seeds": [
+      20260820,
+      20260921,
+      20261022
+    ],
+    "baseline": "xgboost",
+    "arms": {
+      "logistic": {
+        "auroc": 0.7999,
+        "auprc_lift": 1.67,
+        "brier_skill": 0.263,
+        "ece": 0.0234,
+        "calibration_slope": 0.909,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.67,
+          0.7999
+        ],
+        "delta_auroc": -0.0126,
+        "ci_low": -0.0173,
+        "ci_high": -0.0082,
+        "verdict": "유의"
+      },
+      "xgboost": {
+        "auroc": 0.8125,
+        "auprc_lift": 1.71,
+        "brier_skill": 0.2828,
+        "ece": 0.0364,
+        "calibration_slope": 0.926,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.71,
+          0.8125
+        ]
+      },
+      "xgboost+시드3": {
+        "auroc": 0.8133,
+        "auprc_lift": 1.72,
+        "brier_skill": 0.2845,
+        "ece": 0.0341,
+        "calibration_slope": 0.932,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.72,
+          0.8133
+        ],
+        "delta_auroc": 0.0008,
+        "ci_low": 0.0001,
+        "ci_high": 0.0014,
+        "verdict": "유의"
+      },
+      "catboost": {
+        "auroc": 0.8135,
+        "auprc_lift": 1.72,
+        "brier_skill": 0.2856,
+        "ece": 0.0352,
+        "calibration_slope": 0.913,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.72,
+          0.8135
+        ],
+        "delta_auroc": 0.001,
+        "ci_low": -0.001,
+        "ci_high": 0.0034,
+        "verdict": "구분 안 됨"
+      },
+      "catboost+시드3": {
+        "auroc": 0.8136,
+        "auprc_lift": 1.72,
+        "brier_skill": 0.2852,
+        "ece": 0.0345,
+        "calibration_slope": 0.917,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.72,
+          0.8136
+        ],
+        "delta_auroc": 0.0011,
+        "ci_low": -0.0007,
+        "ci_high": 0.003,
+        "verdict": "구분 안 됨"
+      },
+      "스태킹": {
+        "auroc": 0.8138,
+        "auprc_lift": 1.74,
+        "brier_skill": 0.2855,
+        "ece": 0.0331,
+        "calibration_slope": 0.92,
+        "calibration_method": "meta",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.74,
+          0.8138
+        ],
+        "weights": {
+          "logistic": 0.146,
+          "xgboost": 0.168,
+          "catboost": 0.701
+        },
+        "delta_auroc": 0.0013,
+        "ci_low": -0.0003,
+        "ci_high": 0.0031,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 평균": {
+        "auroc": 0.8127,
+        "auprc_lift": 1.72,
+        "brier_skill": 0.2844,
+        "ece": 0.0311,
+        "calibration_slope": 0.917,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.72,
+          0.8127
+        ],
+        "slope_before_recalibration": 0.955,
+        "ece_before_recalibration": 0.0288,
+        "delta_auroc": 0.0002,
+        "ci_low": -0.0018,
+        "ci_high": 0.002,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 로짓": {
+        "auroc": 0.8127,
+        "auprc_lift": 1.72,
+        "brier_skill": 0.2851,
+        "ece": 0.0315,
+        "calibration_slope": 0.92,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.72,
+          0.8127
+        ],
+        "slope_before_recalibration": 0.945,
+        "ece_before_recalibration": 0.0299,
+        "delta_auroc": 0.0002,
+        "ci_low": -0.0018,
+        "ci_high": 0.0019,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 순위": {
+        "auroc": 0.8122,
+        "auprc_lift": 1.72,
+        "brier_skill": 0.2806,
+        "ece": 0.04,
+        "calibration_slope": 0.826,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.72,
+          0.8122
+        ],
+        "slope_before_recalibration": 0.887,
+        "ece_before_recalibration": 0.0663,
+        "delta_auroc": -0.0004,
+        "ci_low": -0.0022,
+        "ci_high": 0.0015,
+        "verdict": "구분 안 됨"
+      },
+      "트리2 평균": {
+        "auroc": 0.814,
+        "auprc_lift": 1.72,
+        "brier_skill": 0.2859,
+        "ece": 0.0346,
+        "calibration_slope": 0.92,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.72,
+          0.814
+        ],
+        "slope_before_recalibration": 0.932,
+        "ece_before_recalibration": 0.0339,
+        "delta_auroc": 0.0015,
+        "ci_low": 0.0004,
+        "ci_high": 0.0027,
+        "verdict": "유의"
+      }
+    },
+    "selected": "스태킹"
+  },
+  {
+    "target": "dlp",
+    "name": "이상지질혈증",
+    "tier": "basic",
+    "holdout_cycle": "2021_2023",
+    "train_rows": 40265,
+    "holdout_rows": 7962,
+    "seeds": [
+      20260820,
+      20260921,
+      20261022
+    ],
+    "baseline": "xgboost",
+    "arms": {
+      "logistic": {
+        "auroc": 0.7091,
+        "auprc_lift": 1.35,
+        "brier_skill": 0.1282,
+        "ece": 0.0515,
+        "calibration_slope": 1.148,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": false,
+        "rejected_for": [
+          "ECE 0.051 > 0.05"
+        ],
+        "rank_key": [
+          false,
+          1.35,
+          0.7091
+        ],
+        "delta_auroc": -0.0401,
+        "ci_low": -0.0474,
+        "ci_high": -0.0335,
+        "verdict": "유의"
+      },
+      "xgboost": {
+        "auroc": 0.7492,
+        "auprc_lift": 1.45,
+        "brier_skill": 0.1865,
+        "ece": 0.0322,
+        "calibration_slope": 1.217,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.45,
+          0.7492
+        ]
+      },
+      "xgboost+시드3": {
+        "auroc": 0.7498,
+        "auprc_lift": 1.45,
+        "brier_skill": 0.1864,
+        "ece": 0.0323,
+        "calibration_slope": 1.216,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.45,
+          0.7498
+        ],
+        "delta_auroc": 0.0007,
+        "ci_low": -0.0001,
+        "ci_high": 0.0016,
+        "verdict": "구분 안 됨"
+      },
+      "catboost": {
+        "auroc": 0.752,
+        "auprc_lift": 1.45,
+        "brier_skill": 0.1906,
+        "ece": 0.026,
+        "calibration_slope": 1.152,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.45,
+          0.752
+        ],
+        "delta_auroc": 0.0028,
+        "ci_low": -0.0,
+        "ci_high": 0.0061,
+        "verdict": "구분 안 됨"
+      },
+      "catboost+시드3": {
+        "auroc": 0.7536,
+        "auprc_lift": 1.46,
+        "brier_skill": 0.1924,
+        "ece": 0.0302,
+        "calibration_slope": 1.172,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.46,
+          0.7536
+        ],
+        "delta_auroc": 0.0044,
+        "ci_low": 0.0016,
+        "ci_high": 0.0073,
+        "verdict": "유의"
+      },
+      "스태킹": {
+        "auroc": 0.7538,
+        "auprc_lift": 1.47,
+        "brier_skill": 0.1918,
+        "ece": 0.0313,
+        "calibration_slope": 1.185,
+        "calibration_method": "meta",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.47,
+          0.7538
+        ],
+        "weights": {
+          "logistic": 0.054,
+          "xgboost": 0.205,
+          "catboost": 0.76
+        },
+        "delta_auroc": 0.0046,
+        "ci_low": 0.0025,
+        "ci_high": 0.0068,
+        "verdict": "유의"
+      },
+      "앙상블 평균": {
+        "auroc": 0.7487,
+        "auprc_lift": 1.45,
+        "brier_skill": 0.1822,
+        "ece": 0.0372,
+        "calibration_slope": 1.204,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.45,
+          0.7487
+        ],
+        "slope_before_recalibration": 1.296,
+        "ece_before_recalibration": 0.0487,
+        "delta_auroc": -0.0004,
+        "ci_low": -0.0026,
+        "ci_high": 0.0017,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 로짓": {
+        "auroc": 0.7484,
+        "auprc_lift": 1.45,
+        "brier_skill": 0.1823,
+        "ece": 0.0379,
+        "calibration_slope": 1.201,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.45,
+          0.7484
+        ],
+        "slope_before_recalibration": 1.281,
+        "ece_before_recalibration": 0.0485,
+        "delta_auroc": -0.0008,
+        "ci_low": -0.0028,
+        "ci_high": 0.0013,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 순위": {
+        "auroc": 0.746,
+        "auprc_lift": 1.44,
+        "brier_skill": 0.1832,
+        "ece": 0.0271,
+        "calibration_slope": 1.102,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.44,
+          0.746
+        ],
+        "slope_before_recalibration": 0.635,
+        "ece_before_recalibration": 0.0585,
+        "delta_auroc": -0.0031,
+        "ci_low": -0.0055,
+        "ci_high": -0.0007,
+        "verdict": "유의"
+      },
+      "트리2 평균": {
+        "auroc": 0.7535,
+        "auprc_lift": 1.46,
+        "brier_skill": 0.1916,
+        "ece": 0.0311,
+        "calibration_slope": 1.181,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.46,
+          0.7535
+        ],
+        "slope_before_recalibration": 1.211,
+        "ece_before_recalibration": 0.033,
+        "delta_auroc": 0.0043,
+        "ci_low": 0.0025,
+        "ci_high": 0.0063,
+        "verdict": "유의"
+      }
+    },
+    "selected": "스태킹"
+  },
+  {
+    "target": "dlp",
+    "name": "이상지질혈증",
+    "tier": "lab",
+    "holdout_cycle": "2021_2023",
+    "train_rows": 36765,
+    "holdout_rows": 5540,
+    "seeds": [
+      20260820,
+      20260921,
+      20261022
+    ],
+    "baseline": "xgboost",
+    "arms": {
+      "logistic": {
+        "auroc": 0.7299,
+        "auprc_lift": 1.34,
+        "brier_skill": 0.169,
+        "ece": 0.0143,
+        "calibration_slope": 1.032,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.34,
+          0.7299
+        ],
+        "delta_auroc": -0.0214,
+        "ci_low": -0.0276,
+        "ci_high": -0.0155,
+        "verdict": "유의"
+      },
+      "xgboost": {
+        "auroc": 0.7513,
+        "auprc_lift": 1.39,
+        "brier_skill": 0.1939,
+        "ece": 0.0275,
+        "calibration_slope": 1.103,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.39,
+          0.7513
+        ]
+      },
+      "xgboost+시드3": {
+        "auroc": 0.7512,
+        "auprc_lift": 1.39,
+        "brier_skill": 0.1945,
+        "ece": 0.0266,
+        "calibration_slope": 1.104,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.39,
+          0.7512
+        ],
+        "delta_auroc": -0.0001,
+        "ci_low": -0.0012,
+        "ci_high": 0.0009,
+        "verdict": "구분 안 됨"
+      },
+      "catboost": {
+        "auroc": 0.7551,
+        "auprc_lift": 1.4,
+        "brier_skill": 0.1997,
+        "ece": 0.0362,
+        "calibration_slope": 1.111,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.4,
+          0.7551
+        ],
+        "delta_auroc": 0.0038,
+        "ci_low": 0.0003,
+        "ci_high": 0.007,
+        "verdict": "유의"
+      },
+      "catboost+시드3": {
+        "auroc": 0.7543,
+        "auprc_lift": 1.4,
+        "brier_skill": 0.1991,
+        "ece": 0.036,
+        "calibration_slope": 1.116,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.4,
+          0.7543
+        ],
+        "delta_auroc": 0.003,
+        "ci_low": -0.0003,
+        "ci_high": 0.0062,
+        "verdict": "구분 안 됨"
+      },
+      "스태킹": {
+        "auroc": 0.7541,
+        "auprc_lift": 1.41,
+        "brier_skill": 0.1994,
+        "ece": 0.0358,
+        "calibration_slope": 1.109,
+        "calibration_method": "meta",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.41,
+          0.7541
+        ],
+        "weights": {
+          "logistic": 0.086,
+          "xgboost": 0.125,
+          "catboost": 0.809
+        },
+        "delta_auroc": 0.0028,
+        "ci_low": -0.0,
+        "ci_high": 0.0056,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 평균": {
+        "auroc": 0.75,
+        "auprc_lift": 1.39,
+        "brier_skill": 0.1946,
+        "ece": 0.0259,
+        "calibration_slope": 1.063,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.39,
+          0.75
+        ],
+        "slope_before_recalibration": 1.153,
+        "ece_before_recalibration": 0.0325,
+        "delta_auroc": -0.0013,
+        "ci_low": -0.004,
+        "ci_high": 0.0012,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 로짓": {
+        "auroc": 0.7499,
+        "auprc_lift": 1.39,
+        "brier_skill": 0.1942,
+        "ece": 0.0269,
+        "calibration_slope": 1.064,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.39,
+          0.7499
+        ],
+        "slope_before_recalibration": 1.137,
+        "ece_before_recalibration": 0.0316,
+        "delta_auroc": -0.0014,
+        "ci_low": -0.0042,
+        "ci_high": 0.001,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 순위": {
+        "auroc": 0.7505,
+        "auprc_lift": 1.39,
+        "brier_skill": 0.1951,
+        "ece": 0.0236,
+        "calibration_slope": 0.992,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.39,
+          0.7505
+        ],
+        "slope_before_recalibration": 0.64,
+        "ece_before_recalibration": 0.0805,
+        "delta_auroc": -0.0008,
+        "ci_low": -0.0037,
+        "ci_high": 0.0017,
+        "verdict": "구분 안 됨"
+      },
+      "트리2 평균": {
+        "auroc": 0.7545,
+        "auprc_lift": 1.4,
+        "brier_skill": 0.1987,
+        "ece": 0.0306,
+        "calibration_slope": 1.096,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.4,
+          0.7545
+        ],
+        "slope_before_recalibration": 1.133,
+        "ece_before_recalibration": 0.0352,
+        "delta_auroc": 0.0032,
+        "ci_low": 0.0012,
+        "ci_high": 0.0052,
+        "verdict": "유의"
+      }
+    },
+    "selected": "스태킹"
+  },
+  {
+    "target": "hyperchol",
+    "name": "고LDL콜레스테롤혈증",
+    "tier": "basic",
+    "holdout_cycle": "2021_2023",
+    "train_rows": 30645,
+    "holdout_rows": 4192,
+    "seeds": [
+      20260820,
+      20260921,
+      20261022
+    ],
+    "baseline": "xgboost",
+    "arms": {
+      "logistic": {
+        "auroc": 0.6408,
+        "auprc_lift": 1.48,
+        "brier_skill": 0.0246,
+        "ece": 0.0183,
+        "calibration_slope": 1.036,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.48,
+          0.6408
+        ],
+        "delta_auroc": -0.0527,
+        "ci_low": -0.0687,
+        "ci_high": -0.0373,
+        "verdict": "유의"
+      },
+      "xgboost": {
+        "auroc": 0.6935,
+        "auprc_lift": 1.76,
+        "brier_skill": 0.0544,
+        "ece": 0.0143,
+        "calibration_slope": 1.037,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.76,
+          0.6935
+        ]
+      },
+      "xgboost+시드3": {
+        "auroc": 0.6925,
+        "auprc_lift": 1.74,
+        "brier_skill": 0.0533,
+        "ece": 0.0206,
+        "calibration_slope": 1.027,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.74,
+          0.6925
+        ],
+        "delta_auroc": -0.001,
+        "ci_low": -0.0041,
+        "ci_high": 0.0023,
+        "verdict": "구분 안 됨"
+      },
+      "catboost": {
+        "auroc": 0.7036,
+        "auprc_lift": 1.88,
+        "brier_skill": 0.0614,
+        "ece": 0.0162,
+        "calibration_slope": 1.087,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.88,
+          0.7036
+        ],
+        "delta_auroc": 0.01,
+        "ci_low": 0.002,
+        "ci_high": 0.0186,
+        "verdict": "유의"
+      },
+      "catboost+시드3": {
+        "auroc": 0.6998,
+        "auprc_lift": 1.87,
+        "brier_skill": 0.0597,
+        "ece": 0.0162,
+        "calibration_slope": 1.082,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.87,
+          0.6998
+        ],
+        "delta_auroc": 0.0063,
+        "ci_low": -0.0014,
+        "ci_high": 0.014,
+        "verdict": "구분 안 됨"
+      },
+      "스태킹": {
+        "auroc": 0.6987,
+        "auprc_lift": 1.92,
+        "brier_skill": 0.0588,
+        "ece": 0.0189,
+        "calibration_slope": 1.057,
+        "calibration_method": "meta",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.92,
+          0.6987
+        ],
+        "weights": {
+          "logistic": 0.086,
+          "xgboost": 0.316,
+          "catboost": 0.672
+        },
+        "delta_auroc": 0.0051,
+        "ci_low": -0.0007,
+        "ci_high": 0.0112,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 평균": {
+        "auroc": 0.692,
+        "auprc_lift": 1.82,
+        "brier_skill": 0.0534,
+        "ece": 0.0176,
+        "calibration_slope": 1.024,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.82,
+          0.692
+        ],
+        "slope_before_recalibration": 1.284,
+        "ece_before_recalibration": 0.0254,
+        "delta_auroc": -0.0015,
+        "ci_low": -0.0074,
+        "ci_high": 0.0046,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 로짓": {
+        "auroc": 0.6928,
+        "auprc_lift": 1.82,
+        "brier_skill": 0.0537,
+        "ece": 0.018,
+        "calibration_slope": 0.973,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.82,
+          0.6928
+        ],
+        "slope_before_recalibration": 1.228,
+        "ece_before_recalibration": 0.0236,
+        "delta_auroc": -0.0007,
+        "ci_low": -0.0064,
+        "ci_high": 0.0054,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 순위": {
+        "auroc": 0.6898,
+        "auprc_lift": 1.81,
+        "brier_skill": 0.0556,
+        "ece": 0.0129,
+        "calibration_slope": 0.965,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.81,
+          0.6898
+        ],
+        "slope_before_recalibration": 0.47,
+        "ece_before_recalibration": 0.3625,
+        "delta_auroc": -0.0038,
+        "ci_low": -0.0106,
+        "ci_high": 0.0027,
+        "verdict": "구분 안 됨"
+      },
+      "트리2 평균": {
+        "auroc": 0.6965,
+        "auprc_lift": 1.83,
+        "brier_skill": 0.0582,
+        "ece": 0.0168,
+        "calibration_slope": 0.992,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.83,
+          0.6965
+        ],
+        "slope_before_recalibration": 1.121,
+        "ece_before_recalibration": 0.0196,
+        "delta_auroc": 0.003,
+        "ci_low": -0.0024,
+        "ci_high": 0.0087,
+        "verdict": "구분 안 됨"
+      }
+    },
+    "selected": "스태킹"
+  },
+  {
+    "target": "hyperchol",
+    "name": "고LDL콜레스테롤혈증",
+    "tier": "lab",
+    "holdout_cycle": "2021_2023",
+    "train_rows": 30544,
+    "holdout_rows": 4148,
+    "seeds": [
+      20260820,
+      20260921,
+      20261022
+    ],
+    "baseline": "xgboost",
+    "arms": {
+      "logistic": {
+        "auroc": 0.6898,
+        "auprc_lift": 1.81,
+        "brier_skill": 0.0543,
+        "ece": 0.0102,
+        "calibration_slope": 1.034,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.81,
+          0.6898
+        ],
+        "delta_auroc": -0.0495,
+        "ci_low": -0.0683,
+        "ci_high": -0.0323,
+        "verdict": "유의"
+      },
+      "xgboost": {
+        "auroc": 0.7393,
+        "auprc_lift": 2.11,
+        "brier_skill": 0.0875,
+        "ece": 0.0145,
+        "calibration_slope": 0.956,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.11,
+          0.7393
+        ]
+      },
+      "xgboost+시드3": {
+        "auroc": 0.7401,
+        "auprc_lift": 2.1,
+        "brier_skill": 0.0875,
+        "ece": 0.0163,
+        "calibration_slope": 1.001,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.1,
+          0.7401
+        ],
+        "delta_auroc": 0.0008,
+        "ci_low": -0.0014,
+        "ci_high": 0.0031,
+        "verdict": "구분 안 됨"
+      },
+      "catboost": {
+        "auroc": 0.742,
+        "auprc_lift": 2.15,
+        "brier_skill": 0.0912,
+        "ece": 0.0118,
+        "calibration_slope": 0.949,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.15,
+          0.742
+        ],
+        "delta_auroc": 0.0027,
+        "ci_low": -0.0044,
+        "ci_high": 0.0095,
+        "verdict": "구분 안 됨"
+      },
+      "catboost+시드3": {
+        "auroc": 0.745,
+        "auprc_lift": 2.17,
+        "brier_skill": 0.0943,
+        "ece": 0.0124,
+        "calibration_slope": 0.979,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.17,
+          0.745
+        ],
+        "delta_auroc": 0.0057,
+        "ci_low": -0.0007,
+        "ci_high": 0.012,
+        "verdict": "구분 안 됨"
+      },
+      "스태킹": {
+        "auroc": 0.7461,
+        "auprc_lift": 2.24,
+        "brier_skill": 0.0952,
+        "ece": 0.0151,
+        "calibration_slope": 0.984,
+        "calibration_method": "meta",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.24,
+          0.7461
+        ],
+        "weights": {
+          "logistic": 0.064,
+          "xgboost": 0.381,
+          "catboost": 0.617
+        },
+        "delta_auroc": 0.0068,
+        "ci_low": 0.0026,
+        "ci_high": 0.0114,
+        "verdict": "유의"
+      },
+      "앙상블 평균": {
+        "auroc": 0.7394,
+        "auprc_lift": 2.16,
+        "brier_skill": 0.0919,
+        "ece": 0.0104,
+        "calibration_slope": 0.962,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.16,
+          0.7394
+        ],
+        "slope_before_recalibration": 1.215,
+        "ece_before_recalibration": 0.0185,
+        "delta_auroc": 0.0001,
+        "ci_low": -0.0062,
+        "ci_high": 0.0064,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 로짓": {
+        "auroc": 0.7413,
+        "auprc_lift": 2.16,
+        "brier_skill": 0.0916,
+        "ece": 0.0144,
+        "calibration_slope": 0.936,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.16,
+          0.7413
+        ],
+        "slope_before_recalibration": 1.165,
+        "ece_before_recalibration": 0.017,
+        "delta_auroc": 0.002,
+        "ci_low": -0.0038,
+        "ci_high": 0.0083,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 순위": {
+        "auroc": 0.7398,
+        "auprc_lift": 2.14,
+        "brier_skill": 0.0897,
+        "ece": 0.0118,
+        "calibration_slope": 0.934,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.14,
+          0.7398
+        ],
+        "slope_before_recalibration": 0.591,
+        "ece_before_recalibration": 0.3617,
+        "delta_auroc": 0.0004,
+        "ci_low": -0.0065,
+        "ci_high": 0.0074,
+        "verdict": "구분 안 됨"
+      },
+      "트리2 평균": {
+        "auroc": 0.7437,
+        "auprc_lift": 2.15,
+        "brier_skill": 0.0914,
+        "ece": 0.0155,
+        "calibration_slope": 0.951,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.15,
+          0.7437
+        ],
+        "slope_before_recalibration": 1.037,
+        "ece_before_recalibration": 0.0175,
+        "delta_auroc": 0.0044,
+        "ci_low": 0.0006,
+        "ci_high": 0.0083,
+        "verdict": "유의"
+      }
+    },
+    "selected": "스태킹"
+  },
+  {
+    "target": "hypertg",
+    "name": "고중성지방혈증",
+    "tier": "basic",
+    "holdout_cycle": "2021_2023",
+    "train_rows": 14591,
+    "holdout_rows": 2316,
+    "seeds": [
+      20260820,
+      20260921,
+      20261022
+    ],
+    "baseline": "xgboost",
+    "arms": {
+      "logistic": {
+        "auroc": 0.6974,
+        "auprc_lift": 1.72,
+        "brier_skill": 0.0255,
+        "ece": 0.0249,
+        "calibration_slope": 0.887,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.72,
+          0.6974
+        ],
+        "delta_auroc": -0.0227,
+        "ci_low": -0.0445,
+        "ci_high": -0.0003,
+        "verdict": "유의"
+      },
+      "xgboost": {
+        "auroc": 0.7201,
+        "auprc_lift": 1.94,
+        "brier_skill": 0.041,
+        "ece": 0.0202,
+        "calibration_slope": 0.965,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.94,
+          0.7201
+        ]
+      },
+      "xgboost+시드3": {
+        "auroc": 0.7223,
+        "auprc_lift": 2.0,
+        "brier_skill": 0.0439,
+        "ece": 0.0172,
+        "calibration_slope": 1.002,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.0,
+          0.7223
+        ],
+        "delta_auroc": 0.0022,
+        "ci_low": -0.0021,
+        "ci_high": 0.0068,
+        "verdict": "구분 안 됨"
+      },
+      "catboost": {
+        "auroc": 0.7018,
+        "auprc_lift": 1.8,
+        "brier_skill": 0.0269,
+        "ece": 0.022,
+        "calibration_slope": 0.853,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.8,
+          0.7018
+        ],
+        "delta_auroc": -0.0183,
+        "ci_low": -0.0342,
+        "ci_high": -0.0027,
+        "verdict": "유의"
+      },
+      "catboost+시드3": {
+        "auroc": 0.7125,
+        "auprc_lift": 1.89,
+        "brier_skill": 0.0352,
+        "ece": 0.0196,
+        "calibration_slope": 0.943,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.89,
+          0.7125
+        ],
+        "delta_auroc": -0.0076,
+        "ci_low": -0.0232,
+        "ci_high": 0.006,
+        "verdict": "구분 안 됨"
+      },
+      "스태킹": {
+        "auroc": 0.7244,
+        "auprc_lift": 2.02,
+        "brier_skill": 0.0443,
+        "ece": 0.0157,
+        "calibration_slope": 0.96,
+        "calibration_method": "meta",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.02,
+          0.7244
+        ],
+        "weights": {
+          "logistic": 0.229,
+          "xgboost": 0.369,
+          "catboost": 0.516
+        },
+        "delta_auroc": 0.0043,
+        "ci_low": -0.0054,
+        "ci_high": 0.0128,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 평균": {
+        "auroc": 0.7215,
+        "auprc_lift": 1.97,
+        "brier_skill": 0.04,
+        "ece": 0.0219,
+        "calibration_slope": 0.894,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.97,
+          0.7215
+        ],
+        "slope_before_recalibration": 1.114,
+        "ece_before_recalibration": 0.0168,
+        "delta_auroc": 0.0014,
+        "ci_low": -0.0097,
+        "ci_high": 0.0134,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 로짓": {
+        "auroc": 0.7254,
+        "auprc_lift": 2.02,
+        "brier_skill": 0.0424,
+        "ece": 0.0187,
+        "calibration_slope": 0.907,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.02,
+          0.7254
+        ],
+        "slope_before_recalibration": 1.078,
+        "ece_before_recalibration": 0.0149,
+        "delta_auroc": 0.0052,
+        "ci_low": -0.0053,
+        "ci_high": 0.0153,
+        "verdict": "구분 안 됨"
+      },
+      "앙상블 순위": {
+        "auroc": 0.7202,
+        "auprc_lift": 1.94,
+        "brier_skill": 0.0207,
+        "ece": 0.0346,
+        "calibration_slope": 0.886,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.94,
+          0.7202
+        ],
+        "slope_before_recalibration": 0.533,
+        "ece_before_recalibration": 0.4134,
+        "delta_auroc": 0.0001,
+        "ci_low": -0.0106,
+        "ci_high": 0.01,
+        "verdict": "구분 안 됨"
+      },
+      "트리2 평균": {
+        "auroc": 0.7214,
+        "auprc_lift": 1.95,
+        "brier_skill": 0.0414,
+        "ece": 0.0213,
+        "calibration_slope": 0.943,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          1.95,
+          0.7214
+        ],
+        "slope_before_recalibration": 1.023,
+        "ece_before_recalibration": 0.0182,
+        "delta_auroc": 0.0012,
+        "ci_low": -0.0068,
+        "ci_high": 0.0095,
+        "verdict": "구분 안 됨"
+      }
+    },
+    "selected": "앙상블 로짓"
+  },
+  {
+    "target": "hypertg",
+    "name": "고중성지방혈증",
+    "tier": "lab",
+    "holdout_cycle": "2021_2023",
+    "train_rows": 14547,
+    "holdout_rows": 2292,
+    "seeds": [
+      20260820,
+      20260921,
+      20261022
+    ],
+    "baseline": "xgboost",
+    "arms": {
+      "logistic": {
+        "auroc": 0.7591,
+        "auprc_lift": 2.54,
+        "brier_skill": 0.0701,
+        "ece": 0.0234,
+        "calibration_slope": 0.884,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.54,
+          0.7591
+        ],
+        "delta_auroc": 0.0046,
+        "ci_low": -0.0206,
+        "ci_high": 0.0315,
+        "verdict": "구분 안 됨"
+      },
+      "xgboost": {
+        "auroc": 0.7545,
+        "auprc_lift": 2.61,
+        "brier_skill": 0.0702,
+        "ece": 0.0141,
+        "calibration_slope": 0.797,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": false,
+        "rejected_for": [
+          "보정 기울기 0.80 가 [0.8, 1.25] 밖"
+        ],
+        "rank_key": [
+          false,
+          2.61,
+          0.7545
+        ]
+      },
+      "xgboost+시드3": {
+        "auroc": 0.7578,
+        "auprc_lift": 2.6,
+        "brier_skill": 0.0731,
+        "ece": 0.0149,
+        "calibration_slope": 0.817,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.6,
+          0.7578
+        ],
+        "delta_auroc": 0.0033,
+        "ci_low": -0.0013,
+        "ci_high": 0.0077,
+        "verdict": "구분 안 됨"
+      },
+      "catboost": {
+        "auroc": 0.7656,
+        "auprc_lift": 2.74,
+        "brier_skill": 0.0858,
+        "ece": 0.015,
+        "calibration_slope": 0.91,
+        "calibration_method": "isotonic",
+        "seeds": 1,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.74,
+          0.7656
+        ],
+        "delta_auroc": 0.0111,
+        "ci_low": -0.0022,
+        "ci_high": 0.0231,
+        "verdict": "구분 안 됨"
+      },
+      "catboost+시드3": {
+        "auroc": 0.7635,
+        "auprc_lift": 2.8,
+        "brier_skill": 0.0864,
+        "ece": 0.0106,
+        "calibration_slope": 0.928,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.8,
+          0.7635
+        ],
+        "delta_auroc": 0.009,
+        "ci_low": -0.0043,
+        "ci_high": 0.0201,
+        "verdict": "구분 안 됨"
+      },
+      "스태킹": {
+        "auroc": 0.7689,
+        "auprc_lift": 2.96,
+        "brier_skill": 0.0886,
+        "ece": 0.0122,
+        "calibration_slope": 0.873,
+        "calibration_method": "meta",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.96,
+          0.7689
+        ],
+        "weights": {
+          "logistic": 0.181,
+          "xgboost": 0.318,
+          "catboost": 0.609
+        },
+        "delta_auroc": 0.0143,
+        "ci_low": 0.0045,
+        "ci_high": 0.0242,
+        "verdict": "유의"
+      },
+      "앙상블 평균": {
+        "auroc": 0.7735,
+        "auprc_lift": 2.87,
+        "brier_skill": 0.0914,
+        "ece": 0.0086,
+        "calibration_slope": 0.836,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.87,
+          0.7735
+        ],
+        "slope_before_recalibration": 1.079,
+        "ece_before_recalibration": 0.0106,
+        "delta_auroc": 0.019,
+        "ci_low": 0.0078,
+        "ci_high": 0.0318,
+        "verdict": "유의"
+      },
+      "앙상블 로짓": {
+        "auroc": 0.7706,
+        "auprc_lift": 2.83,
+        "brier_skill": 0.0871,
+        "ece": 0.0094,
+        "calibration_slope": 0.765,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": false,
+        "rejected_for": [
+          "보정 기울기 0.77 가 [0.8, 1.25] 밖"
+        ],
+        "rank_key": [
+          false,
+          2.83,
+          0.7706
+        ],
+        "slope_before_recalibration": 0.985,
+        "ece_before_recalibration": 0.0086,
+        "delta_auroc": 0.0161,
+        "ci_low": 0.0039,
+        "ci_high": 0.0291,
+        "verdict": "유의"
+      },
+      "앙상블 순위": {
+        "auroc": 0.7746,
+        "auprc_lift": 2.83,
+        "brier_skill": 0.0646,
+        "ece": 0.032,
+        "calibration_slope": 0.908,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.83,
+          0.7746
+        ],
+        "slope_before_recalibration": 0.663,
+        "ece_before_recalibration": 0.413,
+        "delta_auroc": 0.02,
+        "ci_low": 0.0089,
+        "ci_high": 0.0321,
+        "verdict": "유의"
+      },
+      "트리2 평균": {
+        "auroc": 0.7619,
+        "auprc_lift": 2.74,
+        "brier_skill": 0.0865,
+        "ece": 0.0135,
+        "calibration_slope": 0.838,
+        "calibration_method": "isotonic",
+        "seeds": 3,
+        "calibration_ok": true,
+        "rejected_for": [],
+        "rank_key": [
+          true,
+          2.74,
+          0.7619
+        ],
+        "slope_before_recalibration": 0.934,
+        "ece_before_recalibration": 0.0117,
+        "delta_auroc": 0.0074,
+        "ci_low": 0.0008,
+        "ci_high": 0.014,
+        "verdict": "유의"
+      }
+    },
+    "selected": "스태킹"
+  }
+]

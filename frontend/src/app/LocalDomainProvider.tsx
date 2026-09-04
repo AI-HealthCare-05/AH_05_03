@@ -158,6 +158,15 @@ export function LocalDomainProvider({
     [runtime],
   );
 
+  const purgeHealthRecord = useCallback(
+    async (recordId: string, expectedVersion: number) => {
+      if (!runtime) throw new Error("로컬 저장소를 준비하는 중입니다.");
+      const result = await runtime.healthRecords.purge(recordId, expectedVersion);
+      if (!result.ok) throw new Error(result.error.message);
+    },
+    [runtime],
+  );
+
   const hideProfile = useCallback(
     async (profileId: string, expectedVersion: number) => {
       if (!runtime) throw new Error("로컬 저장소를 준비하는 중입니다.");
@@ -207,6 +216,7 @@ export function LocalDomainProvider({
       updateHealthRecord,
       deleteHealthRecord,
       restoreHealthRecord,
+      purgeHealthRecord,
     }),
     [
       createHealthRecord,
@@ -222,6 +232,7 @@ export function LocalDomainProvider({
       runtime,
       restoreProfile,
       restoreHealthRecord,
+      purgeHealthRecord,
       updateProfile,
       updateHealthRecord,
     ],

@@ -1,0 +1,771 @@
+[
+  {
+    "target": "dm",
+    "tier": "lab",
+    "name": "당뇨",
+    "rule_domain": "diabetes",
+    "society": "대한당뇨병학회",
+    "n_assessed": 40785,
+    "rule_positive_rate_overall": 0.4972,
+    "positive_from": "CAUTION",
+    "anchor": [
+      {
+        "upper": 0.003578,
+        "n": 2777,
+        "rule_positive_rate": 0.0958,
+        "levels": {
+          "NORMAL": 0.9042,
+          "CAUTION": 0.094,
+          "HIGH": 0.0014,
+          "VERY_HIGH": 0.0004
+        }
+      },
+      {
+        "upper": 0.008219,
+        "n": 2181,
+        "rule_positive_rate": 0.1632,
+        "levels": {
+          "NORMAL": 0.8368,
+          "CAUTION": 0.1605,
+          "HIGH": 0.0028,
+          "VERY_HIGH": 0.0
+        }
+      },
+      {
+        "upper": 0.01239,
+        "n": 4891,
+        "rule_positive_rate": 0.212,
+        "levels": {
+          "NORMAL": 0.788,
+          "CAUTION": 0.2063,
+          "HIGH": 0.0045,
+          "VERY_HIGH": 0.0012
+        }
+      },
+      {
+        "upper": 0.01843,
+        "n": 1594,
+        "rule_positive_rate": 0.2817,
+        "levels": {
+          "NORMAL": 0.7183,
+          "CAUTION": 0.2767,
+          "HIGH": 0.0038,
+          "VERY_HIGH": 0.0013
+        }
+      },
+      {
+        "upper": 0.021119,
+        "n": 1495,
+        "rule_positive_rate": 0.3258,
+        "levels": {
+          "NORMAL": 0.6742,
+          "CAUTION": 0.3177,
+          "HIGH": 0.0054,
+          "VERY_HIGH": 0.0027
+        }
+      },
+      {
+        "upper": 0.041296,
+        "n": 2653,
+        "rule_positive_rate": 0.3619,
+        "levels": {
+          "NORMAL": 0.6381,
+          "CAUTION": 0.3464,
+          "HIGH": 0.0117,
+          "VERY_HIGH": 0.0038
+        }
+      },
+      {
+        "upper": 0.051084,
+        "n": 1527,
+        "rule_positive_rate": 0.4191,
+        "levels": {
+          "NORMAL": 0.5809,
+          "CAUTION": 0.3942,
+          "HIGH": 0.0196,
+          "VERY_HIGH": 0.0052
+        }
+      },
+      {
+        "upper": 0.054732,
+        "n": 1374,
+        "rule_positive_rate": 0.4571,
+        "levels": {
+          "NORMAL": 0.5429,
+          "CAUTION": 0.4272,
+          "HIGH": 0.0247,
+          "VERY_HIGH": 0.0051
+        }
+      },
+      {
+        "upper": 0.08114,
+        "n": 2678,
+        "rule_positive_rate": 0.4828,
+        "levels": {
+          "NORMAL": 0.5172,
+          "CAUTION": 0.4339,
+          "HIGH": 0.0392,
+          "VERY_HIGH": 0.0097
+        }
+      },
+      {
+        "upper": 0.087591,
+        "n": 1425,
+        "rule_positive_rate": 0.5333,
+        "levels": {
+          "NORMAL": 0.4667,
+          "CAUTION": 0.4688,
+          "HIGH": 0.0505,
+          "VERY_HIGH": 0.014
+        }
+      },
+      {
+        "upper": 0.120272,
+        "n": 2152,
+        "rule_positive_rate": 0.5725,
+        "levels": {
+          "NORMAL": 0.4275,
+          "CAUTION": 0.4977,
+          "HIGH": 0.0558,
+          "VERY_HIGH": 0.0191
+        }
+      },
+      {
+        "upper": 0.162379,
+        "n": 2163,
+        "rule_positive_rate": 0.6047,
+        "levels": {
+          "NORMAL": 0.3953,
+          "CAUTION": 0.5243,
+          "HIGH": 0.0629,
+          "VERY_HIGH": 0.0176
+        }
+      },
+      {
+        "upper": 0.210909,
+        "n": 1905,
+        "rule_positive_rate": 0.6436,
+        "levels": {
+          "NORMAL": 0.3564,
+          "CAUTION": 0.5113,
+          "HIGH": 0.1018,
+          "VERY_HIGH": 0.0304
+        }
+      },
+      {
+        "upper": 0.276774,
+        "n": 2740,
+        "rule_positive_rate": 0.6964,
+        "levels": {
+          "NORMAL": 0.3036,
+          "CAUTION": 0.5161,
+          "HIGH": 0.1277,
+          "VERY_HIGH": 0.0526
+        }
+      },
+      {
+        "upper": 0.343231,
+        "n": 1809,
+        "rule_positive_rate": 0.7396,
+        "levels": {
+          "NORMAL": 0.2604,
+          "CAUTION": 0.5108,
+          "HIGH": 0.1614,
+          "VERY_HIGH": 0.0674
+        }
+      },
+      {
+        "upper": 0.40381,
+        "n": 1855,
+        "rule_positive_rate": 0.7763,
+        "levels": {
+          "NORMAL": 0.2237,
+          "CAUTION": 0.4884,
+          "HIGH": 0.2022,
+          "VERY_HIGH": 0.0857
+        }
+      },
+      {
+        "upper": 0.527778,
+        "n": 1599,
+        "rule_positive_rate": 0.8374,
+        "levels": {
+          "NORMAL": 0.1626,
+          "CAUTION": 0.4371,
+          "HIGH": 0.2627,
+          "VERY_HIGH": 0.1376
+        }
+      },
+      {
+        "upper": 0.653169,
+        "n": 2055,
+        "rule_positive_rate": 0.8852,
+        "levels": {
+          "NORMAL": 0.1148,
+          "CAUTION": 0.3922,
+          "HIGH": 0.327,
+          "VERY_HIGH": 0.1659
+        }
+      },
+      {
+        "upper": 1.0,
+        "n": 1912,
+        "rule_positive_rate": 0.9367,
+        "levels": {
+          "NORMAL": 0.0633,
+          "CAUTION": 0.2087,
+          "HIGH": 0.397,
+          "VERY_HIGH": 0.3311
+        }
+      }
+    ],
+    "confusion": {
+      "high": {
+        "NORMAL": 832,
+        "CAUTION": 1212,
+        "HIGH": 1176,
+        "VERY_HIGH": 893
+      },
+      "low": {
+        "NORMAL": 16835,
+        "CAUTION": 10303,
+        "HIGH": 1183,
+        "VERY_HIGH": 383
+      },
+      "moderate": {
+        "NORMAL": 2841,
+        "CAUTION": 3286,
+        "HIGH": 1277,
+        "VERY_HIGH": 564
+      }
+    },
+    "disagreement": {
+      "ml_high_n": 4113,
+      "false_alarm_n": 832,
+      "false_alarm_rate": 0.2023,
+      "ml_low_n": 28704,
+      "missed_n": 1566,
+      "missed_rate": 0.0546
+    }
+  },
+  {
+    "target": "htn",
+    "tier": "lab",
+    "name": "고혈압",
+    "rule_domain": "hypertension",
+    "society": "대한고혈압학회",
+    "n_assessed": 40748,
+    "rule_positive_rate_overall": 0.5526,
+    "positive_from": "CAUTION",
+    "anchor": [
+      {
+        "upper": 0.035922,
+        "n": 2625,
+        "rule_positive_rate": 0.1436,
+        "levels": {
+          "NORMAL": 0.8564,
+          "CAUTION": 0.1402,
+          "HIGH": 0.003,
+          "VERY_HIGH": 0.0004
+        }
+      },
+      {
+        "upper": 0.055679,
+        "n": 1522,
+        "rule_positive_rate": 0.1886,
+        "levels": {
+          "NORMAL": 0.8114,
+          "CAUTION": 0.1813,
+          "HIGH": 0.0072,
+          "VERY_HIGH": 0.0
+        }
+      },
+      {
+        "upper": 0.063197,
+        "n": 2264,
+        "rule_positive_rate": 0.227,
+        "levels": {
+          "NORMAL": 0.773,
+          "CAUTION": 0.2151,
+          "HIGH": 0.011,
+          "VERY_HIGH": 0.0009
+        }
+      },
+      {
+        "upper": 0.099537,
+        "n": 1874,
+        "rule_positive_rate": 0.2609,
+        "levels": {
+          "NORMAL": 0.7391,
+          "CAUTION": 0.2417,
+          "HIGH": 0.0176,
+          "VERY_HIGH": 0.0016
+        }
+      },
+      {
+        "upper": 0.13834,
+        "n": 1980,
+        "rule_positive_rate": 0.3232,
+        "levels": {
+          "NORMAL": 0.6768,
+          "CAUTION": 0.2909,
+          "HIGH": 0.0273,
+          "VERY_HIGH": 0.0051
+        }
+      },
+      {
+        "upper": 0.180422,
+        "n": 2076,
+        "rule_positive_rate": 0.3873,
+        "levels": {
+          "NORMAL": 0.6127,
+          "CAUTION": 0.3459,
+          "HIGH": 0.0347,
+          "VERY_HIGH": 0.0067
+        }
+      },
+      {
+        "upper": 0.221799,
+        "n": 2535,
+        "rule_positive_rate": 0.4698,
+        "levels": {
+          "NORMAL": 0.5302,
+          "CAUTION": 0.3921,
+          "HIGH": 0.0663,
+          "VERY_HIGH": 0.0114
+        }
+      },
+      {
+        "upper": 0.270718,
+        "n": 2016,
+        "rule_positive_rate": 0.5025,
+        "levels": {
+          "NORMAL": 0.4975,
+          "CAUTION": 0.4033,
+          "HIGH": 0.0873,
+          "VERY_HIGH": 0.0119
+        }
+      },
+      {
+        "upper": 0.339605,
+        "n": 2045,
+        "rule_positive_rate": 0.5863,
+        "levels": {
+          "NORMAL": 0.4137,
+          "CAUTION": 0.4499,
+          "HIGH": 0.1174,
+          "VERY_HIGH": 0.0191
+        }
+      },
+      {
+        "upper": 0.407701,
+        "n": 3061,
+        "rule_positive_rate": 0.6243,
+        "levels": {
+          "NORMAL": 0.3757,
+          "CAUTION": 0.4639,
+          "HIGH": 0.1303,
+          "VERY_HIGH": 0.0301
+        }
+      },
+      {
+        "upper": 0.455869,
+        "n": 909,
+        "rule_positive_rate": 0.6942,
+        "levels": {
+          "NORMAL": 0.3058,
+          "CAUTION": 0.4708,
+          "HIGH": 0.1837,
+          "VERY_HIGH": 0.0396
+        }
+      },
+      {
+        "upper": 0.51149,
+        "n": 1974,
+        "rule_positive_rate": 0.696,
+        "levels": {
+          "NORMAL": 0.304,
+          "CAUTION": 0.461,
+          "HIGH": 0.1788,
+          "VERY_HIGH": 0.0562
+        }
+      },
+      {
+        "upper": 0.611737,
+        "n": 1624,
+        "rule_positive_rate": 0.6933,
+        "levels": {
+          "NORMAL": 0.3067,
+          "CAUTION": 0.4507,
+          "HIGH": 0.1872,
+          "VERY_HIGH": 0.0554
+        }
+      },
+      {
+        "upper": 0.644114,
+        "n": 2877,
+        "rule_positive_rate": 0.7383,
+        "levels": {
+          "NORMAL": 0.2617,
+          "CAUTION": 0.4512,
+          "HIGH": 0.2186,
+          "VERY_HIGH": 0.0685
+        }
+      },
+      {
+        "upper": 0.683753,
+        "n": 1363,
+        "rule_positive_rate": 0.7645,
+        "levels": {
+          "NORMAL": 0.2355,
+          "CAUTION": 0.4343,
+          "HIGH": 0.237,
+          "VERY_HIGH": 0.0932
+        }
+      },
+      {
+        "upper": 0.741015,
+        "n": 2373,
+        "rule_positive_rate": 0.7661,
+        "levels": {
+          "NORMAL": 0.2339,
+          "CAUTION": 0.4442,
+          "HIGH": 0.2377,
+          "VERY_HIGH": 0.0843
+        }
+      },
+      {
+        "upper": 0.778917,
+        "n": 1547,
+        "rule_positive_rate": 0.7815,
+        "levels": {
+          "NORMAL": 0.2185,
+          "CAUTION": 0.395,
+          "HIGH": 0.2741,
+          "VERY_HIGH": 0.1125
+        }
+      },
+      {
+        "upper": 0.822306,
+        "n": 2116,
+        "rule_positive_rate": 0.7897,
+        "levels": {
+          "NORMAL": 0.2103,
+          "CAUTION": 0.396,
+          "HIGH": 0.2647,
+          "VERY_HIGH": 0.129
+        }
+      },
+      {
+        "upper": 0.895535,
+        "n": 3139,
+        "rule_positive_rate": 0.7805,
+        "levels": {
+          "NORMAL": 0.2195,
+          "CAUTION": 0.3641,
+          "HIGH": 0.2641,
+          "VERY_HIGH": 0.1523
+        }
+      },
+      {
+        "upper": 1.0,
+        "n": 828,
+        "rule_positive_rate": 0.7838,
+        "levels": {
+          "NORMAL": 0.2162,
+          "CAUTION": 0.3116,
+          "HIGH": 0.2717,
+          "VERY_HIGH": 0.2005
+        }
+      }
+    ],
+    "confusion": {
+      "high": {
+        "NORMAL": 961,
+        "CAUTION": 1402,
+        "HIGH": 859,
+        "VERY_HIGH": 461
+      },
+      "low": {
+        "NORMAL": 14271,
+        "CAUTION": 10004,
+        "HIGH": 3165,
+        "VERY_HIGH": 973
+      },
+      "moderate": {
+        "NORMAL": 2997,
+        "CAUTION": 3483,
+        "HIGH": 1540,
+        "VERY_HIGH": 632
+      }
+    },
+    "disagreement": {
+      "ml_high_n": 3683,
+      "false_alarm_n": 961,
+      "false_alarm_rate": 0.2609,
+      "ml_low_n": 28413,
+      "missed_n": 4138,
+      "missed_rate": 0.1456
+    }
+  },
+  {
+    "target": "dlp",
+    "tier": "lab",
+    "name": "이상지질혈증",
+    "rule_domain": "dyslipidemia",
+    "society": "한국지질·동맥경화학회",
+    "n_assessed": 40812,
+    "rule_positive_rate_overall": 0.5731,
+    "positive_from": "CAUTION",
+    "anchor": [
+      {
+        "upper": 0.128535,
+        "n": 2682,
+        "rule_positive_rate": 0.1592,
+        "levels": {
+          "NORMAL": 0.8408,
+          "CAUTION": 0.1432,
+          "HIGH": 0.0145,
+          "VERY_HIGH": 0.0015
+        }
+      },
+      {
+        "upper": 0.177273,
+        "n": 1891,
+        "rule_positive_rate": 0.2538,
+        "levels": {
+          "NORMAL": 0.7462,
+          "CAUTION": 0.2205,
+          "HIGH": 0.0296,
+          "VERY_HIGH": 0.0037
+        }
+      },
+      {
+        "upper": 0.21709,
+        "n": 1688,
+        "rule_positive_rate": 0.3252,
+        "levels": {
+          "NORMAL": 0.6748,
+          "CAUTION": 0.2767,
+          "HIGH": 0.0456,
+          "VERY_HIGH": 0.003
+        }
+      },
+      {
+        "upper": 0.26784,
+        "n": 2017,
+        "rule_positive_rate": 0.4145,
+        "levels": {
+          "NORMAL": 0.5855,
+          "CAUTION": 0.3396,
+          "HIGH": 0.0689,
+          "VERY_HIGH": 0.0059
+        }
+      },
+      {
+        "upper": 0.329258,
+        "n": 2721,
+        "rule_positive_rate": 0.4715,
+        "levels": {
+          "NORMAL": 0.5285,
+          "CAUTION": 0.3752,
+          "HIGH": 0.0897,
+          "VERY_HIGH": 0.0066
+        }
+      },
+      {
+        "upper": 0.391982,
+        "n": 1394,
+        "rule_positive_rate": 0.4986,
+        "levels": {
+          "NORMAL": 0.5014,
+          "CAUTION": 0.3816,
+          "HIGH": 0.1119,
+          "VERY_HIGH": 0.005
+        }
+      },
+      {
+        "upper": 0.428571,
+        "n": 2246,
+        "rule_positive_rate": 0.5797,
+        "levels": {
+          "NORMAL": 0.4203,
+          "CAUTION": 0.4314,
+          "HIGH": 0.1362,
+          "VERY_HIGH": 0.012
+        }
+      },
+      {
+        "upper": 0.472816,
+        "n": 2668,
+        "rule_positive_rate": 0.5843,
+        "levels": {
+          "NORMAL": 0.4157,
+          "CAUTION": 0.4183,
+          "HIGH": 0.1529,
+          "VERY_HIGH": 0.0131
+        }
+      },
+      {
+        "upper": 0.538702,
+        "n": 2575,
+        "rule_positive_rate": 0.6575,
+        "levels": {
+          "NORMAL": 0.3425,
+          "CAUTION": 0.454,
+          "HIGH": 0.1864,
+          "VERY_HIGH": 0.0171
+        }
+      },
+      {
+        "upper": 0.5625,
+        "n": 953,
+        "rule_positive_rate": 0.596,
+        "levels": {
+          "NORMAL": 0.404,
+          "CAUTION": 0.4365,
+          "HIGH": 0.1417,
+          "VERY_HIGH": 0.0178
+        }
+      },
+      {
+        "upper": 0.608414,
+        "n": 2021,
+        "rule_positive_rate": 0.6482,
+        "levels": {
+          "NORMAL": 0.3518,
+          "CAUTION": 0.429,
+          "HIGH": 0.2004,
+          "VERY_HIGH": 0.0188
+        }
+      },
+      {
+        "upper": 0.613366,
+        "n": 2323,
+        "rule_positive_rate": 0.6453,
+        "levels": {
+          "NORMAL": 0.3547,
+          "CAUTION": 0.424,
+          "HIGH": 0.2019,
+          "VERY_HIGH": 0.0194
+        }
+      },
+      {
+        "upper": 0.636041,
+        "n": 2622,
+        "rule_positive_rate": 0.6636,
+        "levels": {
+          "NORMAL": 0.3364,
+          "CAUTION": 0.4481,
+          "HIGH": 0.1972,
+          "VERY_HIGH": 0.0183
+        }
+      },
+      {
+        "upper": 0.680111,
+        "n": 776,
+        "rule_positive_rate": 0.6675,
+        "levels": {
+          "NORMAL": 0.3325,
+          "CAUTION": 0.4407,
+          "HIGH": 0.2062,
+          "VERY_HIGH": 0.0206
+        }
+      },
+      {
+        "upper": 0.689017,
+        "n": 2195,
+        "rule_positive_rate": 0.6852,
+        "levels": {
+          "NORMAL": 0.3148,
+          "CAUTION": 0.4524,
+          "HIGH": 0.2073,
+          "VERY_HIGH": 0.0255
+        }
+      },
+      {
+        "upper": 0.725581,
+        "n": 2089,
+        "rule_positive_rate": 0.7142,
+        "levels": {
+          "NORMAL": 0.2858,
+          "CAUTION": 0.4658,
+          "HIGH": 0.2298,
+          "VERY_HIGH": 0.0187
+        }
+      },
+      {
+        "upper": 0.746352,
+        "n": 3703,
+        "rule_positive_rate": 0.7016,
+        "levels": {
+          "NORMAL": 0.2984,
+          "CAUTION": 0.4588,
+          "HIGH": 0.2204,
+          "VERY_HIGH": 0.0224
+        }
+      },
+      {
+        "upper": 0.77197,
+        "n": 1534,
+        "rule_positive_rate": 0.7523,
+        "levels": {
+          "NORMAL": 0.2477,
+          "CAUTION": 0.4811,
+          "HIGH": 0.2477,
+          "VERY_HIGH": 0.0235
+        }
+      },
+      {
+        "upper": 0.81418,
+        "n": 2303,
+        "rule_positive_rate": 0.792,
+        "levels": {
+          "NORMAL": 0.208,
+          "CAUTION": 0.4833,
+          "HIGH": 0.274,
+          "VERY_HIGH": 0.0347
+        }
+      },
+      {
+        "upper": 1.0,
+        "n": 411,
+        "rule_positive_rate": 0.8735,
+        "levels": {
+          "NORMAL": 0.1265,
+          "CAUTION": 0.4842,
+          "HIGH": 0.3285,
+          "VERY_HIGH": 0.0608
+        }
+      }
+    ],
+    "confusion": {
+      "high": {
+        "NORMAL": 663,
+        "CAUTION": 1662,
+        "HIGH": 1171,
+        "VERY_HIGH": 141
+      },
+      "low": {
+        "NORMAL": 14223,
+        "CAUTION": 10617,
+        "HIGH": 3512,
+        "VERY_HIGH": 322
+      },
+      "moderate": {
+        "NORMAL": 2536,
+        "CAUTION": 3981,
+        "HIGH": 1805,
+        "VERY_HIGH": 179
+      }
+    },
+    "disagreement": {
+      "ml_high_n": 3637,
+      "false_alarm_n": 663,
+      "false_alarm_rate": 0.1823,
+      "ml_low_n": 28674,
+      "missed_n": 3834,
+      "missed_rate": 0.1337
+    }
+  }
+]

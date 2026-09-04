@@ -1,8 +1,9 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { AuthContext } from "../../app/authContext";
 import { LocalDomainProvider } from "../../app/LocalDomainProvider";
 import { serverApiClient } from "../../shared/api/serverApiClient";
 import { AccountPage } from "./AccountPage";
@@ -49,42 +50,16 @@ afterEach(() => {
 });
 
 describe("AccountPage", () => {
-  it("가입 버튼은 가입 API를 먼저 호출한 뒤 로그인한다", async () => {
-    const user = userEvent.setup();
-    vi.spyOn(serverApiClient, "refresh").mockRejectedValue(new Error("no session"));
-    const signUp = vi.spyOn(serverApiClient, "signUp").mockResolvedValue({
-      account_id: "account-id",
-      email: "new@example.com",
-      status: "active",
-    });
-    const login = vi.spyOn(serverApiClient, "login").mockResolvedValue({
-      access_token: "access",
-      token_type: "bearer",
-      expires_in: 900,
-    });
+  /**
+   * 로그인·가입은 관문(`SignInPage`)이 한다. 이 화면은 **이미 로그인한 사람**만
+   * 보므로 여기서는 세션이 살아 있는 상태(`refresh` 성공)에서 시작한다.
+   * 인증 자체의 검사는 `SignInPage.test.tsx` 에 있다.
+   */
+  it("계정을 읽어 구독·가정·초대 관리 화면을 표시한다", async () => {
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
     mockAccountReads();
 
     renderAccountPage();
-    await user.type(screen.getByRole("textbox", { name: "이메일" }), "new@example.com");
-    await user.type(screen.getByLabelText("비밀번호"), "Password123!");
-    await user.click(screen.getByRole("button", { name: "가입" }));
-
-    expect(await screen.findByText("가입하고 로그인했습니다.")).toBeInTheDocument();
-    expect(signUp).toHaveBeenCalledWith("new@example.com", "Password123!");
-    expect(login).toHaveBeenCalledWith("new@example.com", "Password123!");
-    expect(signUp.mock.invocationCallOrder[0]).toBeLessThan(login.mock.invocationCallOrder[0] ?? 0);
-  });
-
-  it("로그인 후 구독·가정·초대 관리 화면을 표시한다", async () => {
-    const user = userEvent.setup();
-    vi.spyOn(serverApiClient, "refresh").mockRejectedValue(new Error("no session"));
-    vi.spyOn(serverApiClient, "login").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
-    mockAccountReads();
-
-    renderAccountPage();
-    await user.type(screen.getByRole("textbox", { name: "이메일" }), "member@example.com");
-    await user.type(screen.getByLabelText("비밀번호"), "Password123!");
-    await user.click(screen.getByRole("button", { name: "로그인" }));
 
     expect(await screen.findByRole("heading", { name: "member@example.com" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "가입한 가정 0개" })).toBeInTheDocument();
@@ -236,9 +211,11 @@ describe("AccountPage", () => {
     expect(screen.getByText(targetEmail)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "초대받은 계정으로 전환" }));
 
-    expect(await screen.findByRole("heading", { name: "초대받은 계정으로 계속하기" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "이메일" })).toHaveValue(targetEmail);
-    expect(window.location.hash).toContain("email=recipient%40example.com");
+    // 로그인 화면은 관문이 그린다. 이 화면이 지킬 것은 **초대 이메일을 주소에
+    // 남겨 관문이 미리 채울 수 있게 하는 것** 이다.
+    await waitFor(() => expect(window.location.hash).toContain("email=recipient%40example.com"));
+    expect(serverApiClient.logout).toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: "이 초대는 다른 계정으로 도착했습니다" })).not.toBeInTheDocument();
   });
 });
 
@@ -250,12 +227,27 @@ function mockAccountReads() {
   vi.spyOn(serverApiClient, "listProfileLinks").mockResolvedValue([]);
 }
 
+/**
+ * 관문은 붙이되 **진짜 `AuthProvider` 는 쓰지 않는다.** 그쪽은 마운트하자마자
+ * `refresh()` 를 던져서, 여기서 세운 spy 와 무관한 네트워크 호출이 섞인다.
+ * 이 파일이 보는 것은 계정 화면이지 세션 복구가 아니다.
+ */
+const AUTH_STUB = {
+  status: "signed-in" as const,
+  email: account.account.email,
+  signIn: async () => {},
+  signOut: async () => {},
+  markSignedOut: () => {},
+};
+
 function renderAccountPage() {
   render(
     <MemoryRouter>
-      <LocalDomainProvider databaseName={`ieobom-account-test-${crypto.randomUUID()}`}>
-        <AccountPage />
-      </LocalDomainProvider>
+      <AuthContext.Provider value={AUTH_STUB}>
+        <LocalDomainProvider databaseName={`ieobom-account-test-${crypto.randomUUID()}`}>
+          <AccountPage />
+        </LocalDomainProvider>
+      </AuthContext.Provider>
     </MemoryRouter>,
   );
 }

@@ -1,0 +1,31 @@
+# 커밋 전에 도는 것. **빠르고 안전한 것만 넣는다.**
+#
+# mypy·pytest 는 여기 없다. 둘 다 수십 초라 커밋마다 돌면 사람들이 `--no-verify`
+# 를 쓰기 시작하고 그러면 훅 전체가 무력해진다. 느린 게이트는 CI 가 맡는다.
+#
+# **줄바꿈 훅(`mixed-line-ending`)도 넣지 않았다.** 2026-09-03 에 켜 봤더니 윈도우
+# 체크아웃의 CRLF 파일 400여 개를 한꺼번에 고쳐서, 리뷰할 수 없는 디프가 되고
+# 팀원 작업과 충돌한다. 줄바꿈은 훅이 아니라 `.gitattributes` 로 다룬다.
+#
+#   uv run pre-commit install     # 한 번만. 이걸 해야 훅이 걸린다
+#   uv run pre-commit run -a      # 전체 파일에 수동 실행
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.2
+    hooks:
+      # 순서가 중요하다 — 고칠 수 있는 것을 먼저 고치고 포맷을 맞춘다.
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      # 큰 파일이 실수로 들어오는 것을 막는다. 모델 번들은 1MB 를 넘으므로
+      # `modeling/artifacts/` 는 제외한다 — 거기는 산출물이 사는 자리다.
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+        exclude: ^modeling/artifacts/

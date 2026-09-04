@@ -1,0 +1,101 @@
+"""규칙 기반 만성질환 판정 엔드포인트.
+
+판정은 `chronic_disease_engine`(PR #4, ts04042-cell)이 한다. 이 라우터는 요청 검증과
+봉투 응답만 담당하고 엔진 코드는 건드리지 않는다.
+
+ML 예측 엔드포인트(`/predictions/risk`)와의 차이:
+
+- 이쪽은 **국내 학회 지침의 임계값**을 비교해 5단계 등급을 낸다. 확률이 아니다
+- 검사값이 없으면 추정하지 않고 `INSUFFICIENT_DATA`를 돌려준다
+- 4개 영역(고혈압·비만·이상지질혈증·당뇨)을 독립적으로 판정한다
+
+무인증·무저장 정책은 ML 엔드포인트와 같다.
+"""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
+
+from app.core import config
+from app.core.errors import ErrorCode
+from app.dependencies.security import require_active_account
+from app.dependencies.services import get_rate_limiter
+from app.dtos.envelope import ApiResponse, error_responses
+from app.dtos.rule_assessment import (
+    DiseaseRiskAssessment,
+    DomainAssessment,
+    RuleAssessmentData,
+    RuleAssessmentRequest,
+)
+from app.models import ServiceAccount
+from app.services.rate_limit import RateLimiter
+
+rule_assessment_router = APIRouter(prefix="/assessments", tags=["assessments"])
+
+ENGINE_SOURCE = "chronic_disease_engine (AH_05_03 PR #4, ts04042-cell, c6943b14)"
+
+
+@rule_assessment_router.post(
+    "/rules",
+    response_model=ApiResponse[RuleAssessmentData],
+    responses=error_responses(ErrorCode.VALIDATION_ERROR),
+    summary="국내 지침 기반 만성질환 위험 판정 (저장하지 않음)",
+    description=(
+        "대한고혈압학회·대한비만학회·대한당뇨병학회·한국지질동맥경화학회 지침의 임계값으로 "
+        "고혈압·비만·이상지질혈증·당뇨 4개 영역을 독립 판정한다.\n\n"
+        "- 확률이 아니라 5단계 등급이다: `NORMAL` / `CAUTION` / `HIGH` / `VERY_HIGH`, "
+        "입력이 부족하면 `INSUFFICIENT_DATA`.\n"
+        "- 값을 추정하지 않는다. 검사값이 없으면 그 영역은 판정하지 않는다.\n"
+        "- 진단이 아니다. `sub_status`가 의학적 구간(예: 고혈압 1기)을 표기하지만 "
+        "단일 시점 측정값의 참고 분류일 뿐이다.\n"
+        "- `domains`와 별개로 `disease_risks`를 함께 낸다. 영역 판정이 '여러 수치 → 이 장기의 "
+        "현재 상태'라면 이쪽은 '수치 하나 → 여러 질환의 앞날'이다. 예를 들어 γ-GTP는 간 영역에서 "
+        "읽히지만 제2형 당뇨 발생도 예측하고, 알부민뇨는 eGFR과 독립적으로 심혈관 사망을 예측한다. "
+        "각 항목의 `contributors`가 어떤 값이 왜 위험을 올렸는지와 그 근거를 담는다.\n"
+        "- 요청 본문은 응답 생성 후 폐기한다."
+    ),
+)
+async def assess_by_rules(
+    payload: RuleAssessmentRequest,
+    account: Annotated[ServiceAccount, Depends(require_active_account)],
+    limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
+) -> ApiResponse[RuleAssessmentData]:
+    # 예측 경로와 같은 조건이다. 이쪽도 건강 수치를 본문으로 받으므로
+    # 무인증으로 열어 둘 이유가 없다 (ADR-009 §10).
+    await limiter.hit(
+        "assess-rules",
+        str(account.id),
+        config.PREDICTION_RATE_LIMIT,
+        config.PREDICTION_RATE_WINDOW_SECONDS,
+    )
+
+    # 엔진을 함수 안에서 불러온다. 앱 기동이 이 패키지 존재에 묶이지 않게 한다.
+    from app.services.disease_risk_matrix import assess_disease_risks
+    from app.services.lab_staging import assess_extra_domains
+    from chronic_disease_engine import assess_chronic_disease_risk
+
+    profile = payload.to_profile()
+    # 벤더 엔진 넷과 우리가 붙인 다섯을 같은 모양으로 합친다. 화면은 둘을 구분하지 않는다 —
+    # 사용자에게 "이건 팀원 코드, 이건 우리 코드"는 아무 뜻이 없다.
+    results = {**assess_chronic_disease_risk(profile), **assess_extra_domains(profile)}
+    domains = {name: DomainAssessment(**result) for name, result in results.items()}
+    insufficient = [name for name, d in domains.items() if d.risk_level == "INSUFFICIENT_DATA"]
+
+    # 같은 프로필을 반대 방향으로 한 번 더 읽는다. 위쪽이 장기별 현재 상태라면
+    # 이쪽은 수치 하나가 여러 질환에 걸쳐 무엇을 가리키는지다.
+    disease_risks = {name: DiseaseRiskAssessment(**result) for name, result in assess_disease_risks(profile).items()}
+
+    return ApiResponse(
+        data=RuleAssessmentData(
+            engine=ENGINE_SOURCE,
+            domains=domains,
+            evaluated=len(domains) - len(insufficient),
+            insufficient=insufficient,
+            disease_risks=disease_risks,
+        ),
+        message=(
+            "국내 지침 기준으로 판정했습니다. 입력값은 저장하지 않았습니다."
+            if insufficient
+            else "4개 영역을 모두 판정했습니다. 입력값은 저장하지 않았습니다."
+        ),
+    )

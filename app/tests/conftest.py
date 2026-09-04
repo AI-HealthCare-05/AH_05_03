@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from uuid import uuid4
 
 import pytest_asyncio
 from fakeredis.aioredis import FakeRedis
@@ -134,3 +135,33 @@ async def _override_redis(fake_redis: FakeRedis) -> AsyncIterator[None]:
 async def client() -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=ASGITransport(app=app), base_url=TEST_BASE_URL) as c:
         yield c
+
+
+@pytest_asyncio.fixture(loop_scope="session")
+async def authorized_client(client: AsyncClient) -> AsyncIterator[AsyncClient]:
+    """가입·로그인을 끝낸 클라이언트. `Authorization` 헤더가 기본으로 붙는다.
+
+    왜 필요했나
+    -----------
+    예측·판정 라우터에 인증이 붙으면서(ADR-009 §10) 그 경로를 부르던 테스트 23건이
+    한꺼번에 401 로 깨졌다. 테스트마다 로그인 절차를 복사하면 같은 다섯 줄이 스무 번
+    들어가고, 토큰 만료나 쿠키 이름이 바뀔 때 스무 곳을 고쳐야 한다.
+
+    이메일에 uuid 를 넣는 이유는 세션 스코프 DB 를 여러 테스트가 공유하기 때문이다.
+    고정 주소를 쓰면 두 번째 가입이 `EMAIL_ALREADY_EXISTS` 로 떨어진다.
+
+    **`client` 를 그대로 감싸므로 쿠키 저장소를 공유한다.** 리프레시 토큰이 쿠키로
+    내려오는 흐름을 테스트가 실제로 통과한다는 뜻이다.
+    """
+    email = f"fixture-{uuid4().hex}@example.com"
+    password = "Password123!"
+    await client.post("/api/v1/auth/signup", json={"email": email, "password": password})
+    response = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    token = response.json()["data"]["access_token"]
+
+    previous = dict(client.headers)
+    client.headers["Authorization"] = f"Bearer {token}"
+    yield client
+    # 헤더를 되돌린다. 같은 세션의 다른 테스트가 무인증을 기대할 수 있다.
+    client.headers.clear()
+    client.headers.update(previous)

@@ -1025,7 +1025,7 @@ main {
 
 .body-map-viewer {
   position: relative;
-  min-height: 430px;
+  height: 430px;
 }
 
 .body-map-viewer canvas {
@@ -2230,7 +2230,7 @@ main {
   }
 
   .body-map-viewer {
-    min-height: 380px;
+    height: 380px;
   }
 
   .vanatome-viewer {
@@ -2314,7 +2314,7 @@ main {
   }
 
   .body-map-viewer {
-    min-height: 340px;
+    height: 340px;
   }
 
   .vanatome-viewer {

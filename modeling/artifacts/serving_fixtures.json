@@ -1,0 +1,338 @@
+[
+  {
+    "name": "minimal",
+    "note": "필수 입력만. 선택 항목이 전부 비었을 때 죽지 않아야 한다",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3
+    }
+  },
+  {
+    "name": "all_labs",
+    "note": "검사값 전부. 정밀형 경로",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "fasting_glucose": 100.0,
+      "total_chol": 100.0,
+      "hdl": 100.0,
+      "ldl": 100.0,
+      "triglyceride": 100.0,
+      "ast": 100.0,
+      "alt": 100.0,
+      "ggt": 100.0,
+      "uric_acid": 100.0,
+      "creatinine": 100.0,
+      "egfr": 100.0,
+      "hemoglobin": 100.0,
+      "albumin": 100.0,
+      "urine_acr": 100.0,
+      "hba1c": 5.5
+    }
+  },
+  {
+    "name": "elderly_female",
+    "note": "70세 이상 여성 — 성능이 가장 낮은 구간",
+    "payload": {
+      "age": 78,
+      "sex": "F",
+      "height_cm": 155.0,
+      "weight_kg": 52.0,
+      "self_rated_health": 3
+    }
+  },
+  {
+    "name": "young_lean",
+    "note": "19세 저체중 — 나이·BMI 하한",
+    "payload": {
+      "age": 19,
+      "sex": "M",
+      "height_cm": 180.0,
+      "weight_kg": 52.0,
+      "self_rated_health": 3
+    }
+  },
+  {
+    "name": "extreme_obese",
+    "note": "BMI 상한 근처",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 160.0,
+      "weight_kg": 190.0,
+      "self_rated_health": 3,
+      "waist_cm": 165.0
+    }
+  },
+  {
+    "name": "srh_missing",
+    "note": "주관적 건강 미입력 — 결측 지시자 경로",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": null
+    }
+  },
+  {
+    "name": "boundary_dm_fasting_glucose",
+    "note": "당뇨 기준 공복혈당 >= 126.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "fasting_glucose": 126.0
+    }
+  },
+  {
+    "name": "boundary_dm_hba1c",
+    "note": "당뇨 기준 당화혈색소 >= 6.5 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "hba1c": 6.5
+    }
+  },
+  {
+    "name": "boundary_htn_sbp",
+    "note": "고혈압 기준 수축기 혈압 >= 140.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "sbp": 140.0
+    }
+  },
+  {
+    "name": "boundary_htn_dbp",
+    "note": "고혈압 기준 이완기 혈압 >= 90.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "dbp": 90.0
+    }
+  },
+  {
+    "name": "boundary_dlp_total_chol",
+    "note": "이상지질혈증 기준 총콜레스테롤 >= 240.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "total_chol": 240.0
+    }
+  },
+  {
+    "name": "boundary_dlp_ldl",
+    "note": "이상지질혈증 기준 LDL 콜레스테롤 >= 160.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "ldl": 160.0
+    }
+  },
+  {
+    "name": "boundary_dlp_triglyceride",
+    "note": "이상지질혈증 기준 중성지방 >= 200.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "triglyceride": 200.0
+    }
+  },
+  {
+    "name": "boundary_dlp_hdl",
+    "note": "이상지질혈증 기준 HDL 콜레스테롤 < 40.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "hdl": 40.0
+    }
+  },
+  {
+    "name": "boundary_hyperchol_total_chol",
+    "note": "고LDL콜레스테롤혈증 기준 총콜레스테롤 >= 240.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "total_chol": 240.0
+    }
+  },
+  {
+    "name": "boundary_hyperchol_ldl",
+    "note": "고LDL콜레스테롤혈증 기준 LDL 콜레스테롤 >= 160.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "ldl": 160.0
+    }
+  },
+  {
+    "name": "boundary_hypertg_triglyceride",
+    "note": "고중성지방혈증 기준 중성지방 >= 200.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "triglyceride": 200.0
+    }
+  },
+  {
+    "name": "boundary_low_hdl_hdl",
+    "note": "낮은 HDL 콜레스테롤 기준 HDL 콜레스테롤 < 40.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "hdl": 40.0
+    }
+  },
+  {
+    "name": "boundary_ckd_egfr",
+    "note": "신기능 확인 필요 기준 사구체여과율 < 60.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "egfr": 60.0
+    }
+  },
+  {
+    "name": "boundary_ckd_urine_acr",
+    "note": "신기능 확인 필요 기준 요알부민/크레아티닌비 >= 30.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "urine_acr": 30.0
+    }
+  },
+  {
+    "name": "boundary_egfr_low_egfr",
+    "note": "사구체여과율 저하 기준 사구체여과율 < 60.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "egfr": 60.0
+    }
+  },
+  {
+    "name": "boundary_liver_enzyme_high_alt",
+    "note": "간효소 상승 기준 ALT(SGPT) > 34.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "alt": 34.0
+    }
+  },
+  {
+    "name": "boundary_anemia_hemoglobin",
+    "note": "빈혈 기준 혈색소 < 13.0 에 정확히 걸친 값",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "hemoglobin": 13.0
+    }
+  },
+  {
+    "name": "contradiction_lipids",
+    "note": "총콜레스테롤이 HDL+LDL 보다 작다",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "total_chol": 100.0,
+      "hdl": 80.0,
+      "ldl": 90.0
+    }
+  },
+  {
+    "name": "contradiction_bp",
+    "note": "이완기가 수축기보다 높다",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "sbp": 90.0,
+      "dbp": 120.0
+    }
+  },
+  {
+    "name": "unit_error_glucose",
+    "note": "공복혈당을 mmol/L 로 적었다",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 172.0,
+      "weight_kg": 74.0,
+      "self_rated_health": 3,
+      "fasting_glucose": 5.5
+    }
+  },
+  {
+    "name": "unit_error_height",
+    "note": "키를 m 로 적었다",
+    "payload": {
+      "age": 45,
+      "sex": "M",
+      "height_cm": 1.72,
+      "weight_kg": 74.0,
+      "self_rated_health": 3
+    }
+  }
+]

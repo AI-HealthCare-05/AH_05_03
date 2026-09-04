@@ -1,5 +1,10 @@
 .DS_Store
+# `.env` 만 적으면 정확히 그 이름 하나만 걸린다. `.env.local`·`.env.production`
+# 처럼 뒤에 뭐가 붙으면 그대로 추적 대상이었다. 아래 `.*.env` 도 `.dev.env` 같은
+# **앞에** 점이 붙은 꼴만 잡아서 사이가 비어 있었다.
+# `envs/example.*.env` 는 basename 이 `.env` 로 시작하지 않으므로 계속 추적된다.
 .env
+.env.*
 __pycache__/
 work/
 *.py[oc]
@@ -18,3 +23,32 @@ wheels/
 .coverage
 *.coverage
 .coverage.*
+# 도구 캐시. **빠져 있어서 추적 대상이었다** — `.mypy_cache` 만 76MB 라 한 번
+# 커밋되면 되돌리기 번거롭다. 전부 재생성되는 것들이다.
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+frontend/dist/
+# Tesseract 학습 데이터. 내려받아 쓰는 바이너리라 저장소에 두지 않는다.
+*.traineddata
+
+# 로컬 보안 소프트웨어(Norton 등)의 TLS 가로채기용 개인 루트 인증서.
+# 팀원마다 다르고 재설치 시 바뀌므로 각자 로컬에서만 생성해서 쓴다.
+docker/certs/*.crt
+!docker/certs/.gitkeep
+
+# 모델링 원시·중간 자료. raw 364MB + processed 144MB 라 한 번 커밋되면 되돌리기 어렵다.
+# download_nhanes.py 와 load_*.py 로 동일하게 재현된다 — modeling/data/README.md 참조.
+modeling/data/raw/
+modeling/data/processed/
+modeling/**/__pycache__/
+# artifacts/models 는 제외하지 않는다. compose 가 API 컨테이너에 마운트하는
+# 서빙 번들이고 저장소에 두는 편이 배포가 단순하다.
+# (앙상블로 교체한 뒤 24MB 가 됐다. 늘어난 만큼 값은 한다 — 이 파일들이 곧 배포본이다.)
+
+# export_ensemble.py 의 출력 자리. 여기서 artifacts/models 로 복사해 배포하므로
+# 배포 후에는 두 디렉터리가 바이트 단위로 같다. 둘 다 담으면 같은 24MB 를 두 번
+# 넣는 셈이라 뺀다. 필요하면 export_ensemble.py 로 다시 만든다.
+# artifacts/models_singleton_backup 은 빼지 않는다 — 앙상블로 바꾸며 내려간 두 칸을
+# 되돌릴 원본이고(docs/30 §7) 2.4MB 라 값이 있다.
+modeling/artifacts/models_ensemble/
