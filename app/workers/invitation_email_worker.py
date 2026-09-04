@@ -45,7 +45,11 @@ def build_invitation_url(delivery: InvitationDelivery) -> str:
             "email": delivery.invitee_email,
         }
     )
-    return f"{config.INVITATION_WEB_ORIGIN.rstrip('/')}/account#{fragment}"
+    # 초대를 보낸 요청이 도착한 주소를 그대로 쓴다. 그래야 어느 도메인에 배포하든
+    # 설정 없이 열리는 링크가 나간다. 그 값이 없을 때만(이 필드가 생기기 전에 큐에
+    # 들어간 초대) 설정값으로 되돌아간다.
+    origin = delivery.web_origin or config.INVITATION_WEB_ORIGIN
+    return f"{origin.rstrip('/')}/account#{fragment}"
 
 
 def build_invitation_message(delivery: InvitationDelivery) -> EmailMessage:

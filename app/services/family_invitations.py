@@ -56,7 +56,10 @@ class FamilyInvitationService:
         self.invitation_store = invitation_store
 
     async def create(
-        self, account: ServiceAccount, request: FamilyInvitationCreateRequest
+        self,
+        account: ServiceAccount,
+        request: FamilyInvitationCreateRequest,
+        web_origin: str | None = None,
     ) -> FamilyInvitationCreatedData:
         email = str(request.invitee_email).lower()
         if email == account.email.lower():
@@ -86,7 +89,7 @@ class FamilyInvitationService:
         try:
             await self.invitation_repo.create(invitation)
             ttl = max(int((invitation.expires_at - now).total_seconds()), 1)
-            await self.invitation_store.register(invitation.id, email, raw_token, ttl)
+            await self.invitation_store.register(invitation.id, email, raw_token, ttl, web_origin)
             registered = True
             await self.session.commit()
             await self.session.refresh(invitation)
