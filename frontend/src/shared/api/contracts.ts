@@ -121,3 +121,32 @@ export interface AccountCloseData {
   subscription_status: "cancelled";
   local_data_deleted: false;
 }
+
+export interface ChatSessionData {
+  id: string;
+  account_id: string;
+  profile_id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatSessionListData {
+  items: ChatSessionData[];
+  total: number;
+}
+
+export interface ChatMessageData {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant";
+  content: string;
+  metadata: Record<string, unknown> | null;
+  sequence_number: number;
+  created_at: string;
+}
+
+export interface ChatMessageListData {
+  session_id: string;
+  items: ChatMessageData[];
+}
