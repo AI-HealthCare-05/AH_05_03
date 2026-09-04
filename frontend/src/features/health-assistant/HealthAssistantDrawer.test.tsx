@@ -1696,7 +1696,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       expect(sentMessages.at(-1)?.content).toBe("새 질문");
     });
 
-    it("새 대화 버튼 클릭 시 세션이 비워지고 초기 환영 메시지로 리셋된다", async () => {
+    it("열 때 대화 목록을 먼저 보여주고 새 대화 버튼을 제공한다", async () => {
       saveChatSession(mockProfile.id, [
         { id: "msg-1", role: "user", content: "이전 질문입니다" },
         { id: "msg-2", role: "assistant", content: "이전 답변입니다" },
@@ -1712,19 +1712,9 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       );
 
       expect(screen.getByText("이전 질문입니다")).toBeInTheDocument();
-      const clearBtn = screen.getByRole("button", { name: "새 대화 시작" });
-      expect(clearBtn).toBeInTheDocument();
-
-      fireEvent.click(clearBtn);
-
-      await waitFor(() => {
-        expect(screen.queryByText("이전 질문입니다")).not.toBeInTheDocument();
-        expect(screen.getByText(/홍길동님의 건강 비서 '봄이'입니다/)).toBeInTheDocument();
-      });
-
-      // sessionStorage에서도 제거되었는지 확인
-      const saved = loadChatSession(mockProfile.id);
-      expect(saved).toBeNull();
+      expect(screen.getByRole("region", { name: "대화 목록" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "새 대화" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "대화 목록" })).toBeInTheDocument();
     });
   });
 });
