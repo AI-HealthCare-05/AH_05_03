@@ -1,0 +1,24 @@
+{
+  "source": "/Users/fabxoe/Downloads/z-anatomy-female-fit-work-v33-foot-alignment.blend",
+  "output": "/Users/fabxoe/workbench/ieobom/frontend/public/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/triangle2m-v49-skeleton-corrected-upper-limb-hand-poses-skull-foot-aligned-v38.glb",
+  "bytes": 1998352,
+  "selectedObjects": 283,
+  "actuallySelectedObjects": 283,
+  "correctedUpperLimbMeshes": 60,
+  "fittedFemaleHeadMeshes": 50,
+  "handControllers": 32,
+  "animatedMeshObjects": 0,
+  "flattenedObjectHierarchy": false,
+  "poseTrackCounts": {
+    "Open Hand": 0,
+    "Fist": 30,
+    "Spread": 10,
+    "Point": 24
+  },
+  "poses": [
+    "Open Hand",
+    "Fist",
+    "Spread",
+    "Point"
+  ]
+}

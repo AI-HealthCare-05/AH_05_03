@@ -1,6 +1,6 @@
 # ADR-008: 개발 검증용 클라우드 OCR 기준선 허용
 
-- 상태: 승인
+- 상태: 부분 대체됨 — 제3자 OCR 통제는 유지하며 서버 비저장·로컬 보관 조항은 [ADR-011](0011-postgresql-health-data-and-server-ai.md) 참조
 - 결정일: 2026-08-20
 - 적용 대상: 한국어 건강문서 OCR 개발·데모, Naver CLOVA OCR 연동, OCR 결과의 로컬 저장 경계
 - 관련 결정: [ADR-001](0001-web-local-first-architecture.md), [ADR-002](0002-separate-server-api-and-local-domain-contract.md), [ADR-005](0005-vite-spa-local-first-frontend-foundation.md)

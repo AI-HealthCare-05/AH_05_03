@@ -1,0 +1,107 @@
+{
+  "id": "vanatome-male-reference",
+  "version": "1.4.0-shell-skeleton-first-v8-32693313",
+  "label": "남성 기준 · Vanatome",
+  "shortLabel": "Vanatome 남성",
+  "referenceSex": "male",
+  "adapter": "vanatome",
+  "experimental": false,
+  "description": "Z-Anatomy에서 파생된 기본 참조 아틀라스입니다. 첫 화면은 외피계와 전체 골격만 켜서 보여주고, 근육·관절·인대·막·혈관·신경과 장기 레이어는 동시에 백그라운드에서 준비합니다. 준비 후 계통 버튼은 추가 다운로드 없이 즉시 표시를 전환합니다. 갈비연골은 상반신 확대에서 근육계와 함께 볼 때 자동으로 투명해지고, 근육계를 끄면 접합부 확인을 위해 원래 표시 강도로 복원됩니다.",
+  "loadingLabel": "외피계와 골격계를 먼저 표시하는 중…",
+  "loadingSizeLabel": "약 7.1 MiB 외피·골격 우선 표시 · 나머지 계통은 백그라운드에서 미리 준비합니다",
+  "layerLabels": [
+    "반투명 외피",
+    "골격",
+    "관절·인대·막 독립 레이어·외늑간막과 내늑간막 포함",
+    "좌우 1~10번 갈비연골 20개·상반신 근육계 표시 시 감광·근육계 제거 시 복원",
+    "주요 장기",
+    "머리 확대 시 공식 Z-Anatomy 머리 구조 738개 지연 로드",
+    "두개골 64·관절·인대·막 14·근육 84·심혈관 198·림프 26·신경과 감각기관 352개",
+    "안구·각막·홍채·수정체·망막·공막·내이·신경핵 포함",
+    "상반신 확대 시 공식 Z-Anatomy 보충 구조 1,074개 지연 로드",
+    "상반신: 골격 7·관절·인대·막 145·근육 361·심혈관 294·림프 78·신경 138·세부 장기 51개",
+    "하반신·무릎·발 확대 시 공식 Z-Anatomy 보충 구조 625개 지연 로드·캐시 공유",
+    "하반신: 관절·인대·막 174·근육 231·심혈관 116·림프 10·신경 78·골반 장기 16개",
+    "손 확대 시 공식 Z-Anatomy 양손 구조 267개 지연 로드",
+    "손: 관절·인대·막 92·근육·건 98·혈관 43·신경 34개"
+  ],
+  "attributionLabel": "Z-Anatomy 기반 Vanatome · CC BY-SA 4.0 출처",
+  "attributionUrl": "/vendor/vanatome/ATTRIBUTION.txt",
+  "metadataUrl": "/vendor/vanatome/releases/1.4.0/full-body.metadata.json",
+  "assets": [
+    {
+      "url": "/vendor/vanatome/models/z-anatomy-1.4.0-shell-skeleton-core.glb",
+      "visualRole": "atlas",
+      "sha256": "22668554f77cfab6452629ebae85f3ca814c26b415f7cbb6d4aa53e2f329d65a"
+    },
+    {
+      "url": "/vendor/vanatome/layers/official-32693313/vanatome-official-costal-cartilages.glb",
+      "visualRole": "skeleton",
+      "adapter": "vanatome",
+      "system": "skeletal",
+      "sha256": "00325b6ae8f5ecca908dbb617f6baf31fce61ff14ea8b25b687e116e94ed6c20"
+    }
+  ],
+  "lazyLayers": [
+    {
+      "id": "remaining-core-systems",
+      "label": "핵심 장기 계통",
+      "triggerFocus": ["full", "head", "upper", "lower", "knee", "foot", "hand"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/models/z-anatomy-1.4.0-other-core.glb",
+          "visualRole": "organ",
+          "sha256": "3c191dbbc95fa623069f5f04d2f560735fe8e1f2df2b3f496247c68e9438bf02"
+        }
+      ]
+    },
+    {
+      "id": "complete-head",
+      "label": "머리 전체 해부 구조",
+      "triggerFocus": ["full", "head"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/layers/official-32693313/vanatome-official-complete-head.glb",
+          "visualRole": "organ",
+          "sha256": "af10c985c9669d3b30d3aaf8bbebd736476422af4c9ffba62641dd6d5b5de45d"
+        }
+      ]
+    },
+    {
+      "id": "complete-upper",
+      "label": "상반신 전체 해부 구조",
+      "triggerFocus": ["full", "upper"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/layers/official-32693313/vanatome-official-complete-upper.glb",
+          "visualRole": "organ",
+          "sha256": "a1a98fed8d2858d9a2fa3c757c9b443673a23ce3c8c89b2af1831890473fd33e"
+        }
+      ]
+    },
+    {
+      "id": "complete-lower",
+      "label": "하반신 전체 해부 구조",
+      "triggerFocus": ["full", "lower", "knee", "foot"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/layers/official-32693313/vanatome-official-complete-lower.glb",
+          "visualRole": "organ",
+          "sha256": "0371519768fa76596f1e6afc18aa164f2f4f1cb947233100767e2b8a544caa75"
+        }
+      ]
+    },
+    {
+      "id": "complete-hand",
+      "label": "손 전체 해부 구조",
+      "triggerFocus": ["full", "hand"],
+      "assets": [
+        {
+          "url": "/vendor/vanatome/layers/official-32693313/vanatome-official-complete-hand.glb",
+          "visualRole": "organ",
+          "sha256": "cfdee40b2f258da4390c48358e2b685af33328131d0f3e4804d5bd4f4f8a25a8"
+        }
+      ]
+    }
+  ]
+}

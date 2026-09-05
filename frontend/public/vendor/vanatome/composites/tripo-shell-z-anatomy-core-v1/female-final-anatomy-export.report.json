@@ -1,0 +1,70 @@
+{
+  "sourceBlend": "/Users/fabxoe/Downloads/models/low_polygon_work_6hour_finger-mak-hand-anatomy-female-fit-work-v34-explicit-navicular-anatomy-interface-exp.blend",
+  "layers": [
+    {
+      "file": "ieobom-female-shell-shared-frame-v5.glb",
+      "bytes": 159076,
+      "sha256": "a590a1b1dfd6d0b7ac9fcde01b2046ac62b5c143fec49108aafc3775f4ec49c5",
+      "objects": 1,
+      "system": "integumentary"
+    },
+    {
+      "file": "ieobom-female-organs-core-v2.glb",
+      "bytes": 824160,
+      "sha256": "79e628da69d68508b5a93188cb74f393941ffa70b9ff87976b98d6887bf6b73c",
+      "objects": 94,
+      "system": "regional-anatomy"
+    },
+    {
+      "file": "ieobom-female-muscles-v3-full-body.glb",
+      "bytes": 3315776,
+      "sha256": "f5ff2db271cab12ce9d7a95c1c81662d65fa938feece6012a1f804d655729e36",
+      "objects": 467,
+      "system": "muscular"
+    },
+    {
+      "file": "ieobom-female-support-v3-joints-ligaments.glb",
+      "bytes": 1397572,
+      "sha256": "d183a2982baf9d328b5d0e0213ffbd364df27204e7d51c1f40590fa4b1e2dc60",
+      "objects": 369,
+      "system": "joints"
+    },
+    {
+      "file": "ieobom-female-nervous-v4-central-major.glb",
+      "bytes": 922428,
+      "sha256": "e85e4d9d81633c4193e0032e209731bfa059914fef38d02bfab74d280f26bb24",
+      "objects": 152,
+      "system": "nervous"
+    },
+    {
+      "file": "ieobom-female-lymphatic-v3-curated.glb",
+      "bytes": 556816,
+      "sha256": "43b3441d447aed3a2cfde3d2f5e356d57d7dc7635a4a16b20d21ea3dc4f239a8",
+      "objects": 171,
+      "system": "lymphatic"
+    },
+    {
+      "file": "ieobom-female-reproductive-v2.glb",
+      "bytes": 441760,
+      "sha256": "a9a6477b24c33c2d9a3552cf76b8dfb10ebc68e872db94da375021a741362585",
+      "objects": 5,
+      "system": "reproductive"
+    },
+    {
+      "file": "ieobom-female-urinary-v2.glb",
+      "bytes": 416288,
+      "sha256": "5cf1ce08c61016ea58739aa911cace440f2933095debebd5e826c787996eefca",
+      "objects": 35,
+      "system": "urinary"
+    },
+    {
+      "file": "ieobom-female-mammary-v2.glb",
+      "bytes": 2273960,
+      "sha256": "5d02ec58419ee9a0c499b4f6eb20f08ce8e6dd9d036432c1e8fabdc59c440a5b",
+      "objects": 16,
+      "system": "mammary"
+    }
+  ],
+  "totalObjects": 1310,
+  "totalBytes": 10307836
+}

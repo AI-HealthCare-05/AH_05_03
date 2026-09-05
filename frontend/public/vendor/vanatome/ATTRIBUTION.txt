@@ -14,6 +14,40 @@ License URL: https://creativecommons.org/licenses/by-sa/4.0/
 
 Vanatome modifications include web export, structure selection identifiers,
 material adjustments, curve-to-mesh conversion, and geometry optimization.
+The Ieobom viewer also distributes separate, unmodified-coordinate lazy layers
+for available regional muscular meshes. These layers are split by viewer focus
+region only to reduce the initial browser download.
+
+The complete head lazy layer is extracted from the official
+Z-Anatomy/Models-of-human-anatomy repository at commit 32693313. Ieobom
+converts curves to meshes, assigns stable system metadata, removes two-vertex
+taxonomy helpers and redundant external surface regions, and exports the
+remaining 738 renderable head structures as a browser GLB.
+
+The complete upper-body lazy layer uses the same official source. Ieobom
+extracts the trunk and both upper limbs through the wrists, removes structures
+already present in the initial core plus the separately shipped costal
+cartilages, taxonomy helpers, external regions, hands, and pelvis-only
+structures, and exports 1,074 supplemental structures.
+Both complete-region GLBs use Draco geometry compression without removing
+anatomical objects. The browser decoder is distributed from Three.js under MIT.
+
+Ieobom preserves Z-Anatomy's system 3 joint classification as a separate
+viewer layer named “Joints, ligaments, and membranes” instead of folding it
+into the skeletal layer. This includes the external and internal intercostal
+membranes in the upper-body supplement.
+
+The complete lower-body lazy layer extracts the pelvis and both lower limbs,
+including the feet, from the same official source. Ieobom removes 66 structures
+already present in the initial core plus taxonomy helpers and external regions,
+and exports the remaining 625 muscles, joints, vessels, nerves, lymphatics, and
+pelvic-organ structures with Draco geometry compression.
+
+The complete hand lazy layer uses the official bilateral hand collections for
+bones, joints, and ligaments, then adds every upper-limb muscle, tendon, vessel,
+and nerve whose geometry intersects the padded hand envelopes. Ieobom removes
+58 structures already present in the initial core and exports 267 supplemental
+hand structures with Draco geometry compression.
 
 Z-Anatomy documents models derived from:
 “BodyParts3D — The Database Center for Life Science”

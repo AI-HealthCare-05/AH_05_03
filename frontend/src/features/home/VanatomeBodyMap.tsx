@@ -1,57 +1,114 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
+import {
+  adaptAnatomyMesh,
+  anatomyLayerSystem,
+  inheritAnatomyMetadata,
+  initiallyHiddenSystems,
+  lazyLayersForFocus,
+  loadAnatomyAtlasManifest,
+  loadAnatomyMetadata,
+  type AnatomyAtlasAsset,
+  type AnatomyFocus,
+  type AnatomyAtlasId,
+  type AnatomyAtlasManifest,
+  type AnatomyLazyLayer,
+} from "./anatomyAtlas";
+import {
+  applyCostalCartilageStyle,
+  createAdaptiveFlowGuideMaterial,
+  createFocusPresets,
+  createHolographicMaterials,
+  createMatteScalpMaterials,
+  INTERNALS_READABILITY_STYLE,
+  createRegionalBoundaryMaterial,
+  createSelectedMaterials,
+  materialsOf,
+  shouldReturnToFullBody,
+} from "./holographicAnatomyStyle";
 import { ProceduralBodyMap } from "./ProceduralBodyMap";
-import { REGION_COLOR, regionOfStructure, type RegionRisk } from "./bodyRisk";
+import { fetchCachedAnatomyResource } from "./anatomyResourceCache";
+import type { RegionRisk } from "./bodyRisk";
 
-type AnatomyMetadata = { id: string; name: string; system: string };
-type MetadataBundle = { structures: AnatomyMetadata[] };
 type SelectedStructure = { name: string; system?: string };
-type BodyFocus = "full" | "head" | "upper" | "lower" | "hand";
+type BodyFocus = AnatomyFocus | "leftHand" | "rightHand";
+type HandPose = "Open Hand" | "Fist" | "Spread" | "Point";
 
-const MODEL_URL = "/vendor/vanatome/models/z-anatomy-1.4.0-hologram-core.glb";
-const FULL_BODY_METADATA_URL = "/vendor/vanatome/releases/1.4.0/full-body.metadata.json";
-const ATTRIBUTION_URL = "/vendor/vanatome/ATTRIBUTION.txt";
-const SELECTED_COLOR = new THREE.Color(0x38bdf8);
-/** 범례에 쓰는 등급 이름. 판정 카드와 같은 말을 써야 두 화면이 같은 뜻으로 읽힌다. */
-const LEVEL_TEXT: Record<string, string> = {
-  NORMAL: "정상", CAUTION: "주의", HIGH: "높음", VERY_HIGH: "매우 높음",
+const CORE_ASSET_TIMEOUT_MS = 45_000;
+const LAZY_ASSET_TIMEOUT_MS = 45_000;
+
+const HAND_POSES: Array<{ id: HandPose; label: string }> = [
+  { id: "Open Hand", label: "손 펴기" },
+  { id: "Fist", label: "주먹" },
+  { id: "Spread", label: "손가락 벌리기" },
+  { id: "Point", label: "가리키기" },
+];
+
+const ANATOMY_SYSTEM_LAYERS = [
+  { id: "integumentary", label: "외피계" },
+  { id: "skeletal", label: "골격계" },
+  { id: "joints", label: "관절·인대·막" },
+  { id: "muscular", label: "근육계" },
+  { id: "cardiovascular", label: "심혈관계" },
+  { id: "nervous", label: "신경계" },
+  { id: "lymphatic", label: "림프계" },
+  { id: "digestive", label: "소화기계" },
+  { id: "respiratory", label: "호흡기계" },
+  { id: "endocrine", label: "내분비계" },
+  { id: "urinary", label: "비뇨기계" },
+  { id: "reproductive", label: "생식계" },
+] as const;
+
+const SUPPORTED_SYSTEMS_BY_ATLAS: Record<AnatomyAtlasId, ReadonlySet<string>> = {
+  "vanatome-male-reference": new Set(ANATOMY_SYSTEM_LAYERS.map((layer) => layer.id)),
+  "female-skeleton-controller-test": new Set(["skeletal"]),
+  "tripo-triangle2m-v49-internals-preview": new Set([
+    "integumentary", "skeletal", "joints", "muscular", "cardiovascular",
+    "nervous", "lymphatic", "digestive", "respiratory", "endocrine",
+    "urinary", "reproductive",
+  ]),
 };
-const INTERNAL_SYSTEMS = new Set([
-  "cardiovascular", "digestive", "endocrine", "respiratory", "skeletal", "urinary",
-]);
+
+const ATLAS_OPTIONS: Array<{ id: AnatomyAtlasId; label: string }> = [
+  { id: "vanatome-male-reference", label: "남성" },
+  { id: "tripo-triangle2m-v49-internals-preview", label: "여성" },
+];
+
+const DEFAULT_ANATOMY_ATLAS: AnatomyAtlasId = "vanatome-male-reference";
 
 export function VanatomeBodyMap({
   profileName,
-  risks,
-  risksAt,
 }: {
   profileName: string;
-  /** 고른 기록의 부위별 위험. 없으면 예전처럼 중립 색으로 둔다. */
   risks?: RegionRisk[];
-  /** 그 위험이 **언제 잰 몸**인가. 없으면 적지 않는다. */
   risksAt?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const clearSelectionRef = useRef<() => void>(() => undefined);
   const focusCameraRef = useRef<(focus: BodyFocus) => void>(() => undefined);
-  // 위험 색칠은 모델을 다시 읽지 않고 재질만 바꾼다. 기록을 바꿀 때마다 5MB 짜리
-  // GLB 를 다시 내려받으면 화면이 매번 깜빡인다.
-  const paintRisksRef = useRef<(risks: RegionRisk[] | undefined) => void>(() => undefined);
-  const focusRegionRef = useRef<(region: string) => void>(() => undefined);
-  const [focusedRegion, setFocusedRegion] = useState<string>();
-  // 모델 적재는 한 번뿐인데(의존성 [isTestEnvironment]) 위험은 기록을 바꿀 때마다
-  // 달라진다. 적재 완료 시점에 최신 값을 읽으려면 ref 여야 한다 — 클로저에 담으면
-  // 로딩 중에 기록을 바꾼 사용자가 옛 색을 본다.
-  const risksRef = useRef(risks);
+  const pelvicOrganFocusRef = useRef<(active: boolean) => void>(() => undefined);
+  const setHiddenSystemsRef = useRef<(systems: ReadonlySet<string>) => void>(() => undefined);
+  const playHandPoseRef = useRef<(pose: HandPose) => void>(() => undefined);
+  const [atlasId, setAtlasId] = useState<AnatomyAtlasId>(DEFAULT_ANATOMY_ATLAS);
+  const [manifest, setManifest] = useState<AnatomyAtlasManifest>();
   const [selectedStructure, setSelectedStructure] = useState<SelectedStructure>();
   const [activeFocus, setActiveFocus] = useState<BodyFocus>("full");
+  const [pelvicOrganFocus, setPelvicOrganFocus] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadError, setLoadError] = useState<string>();
+  const [hiddenSystems, setHiddenSystems] = useState<ReadonlySet<string>>(() => new Set());
+  const [readySystems, setReadySystems] = useState<ReadonlySet<string>>(() => new Set());
+  const [activeHandPose, setActiveHandPose] = useState<HandPose>("Open Hand");
   const [webGlUnavailable, setWebGlUnavailable] = useState(false);
+  const [sceneAttempt, setSceneAttempt] = useState(0);
   const isTestEnvironment = navigator.userAgent.includes("jsdom");
+  const systemLayers = ANATOMY_SYSTEM_LAYERS.filter(
+    (layer) => SUPPORTED_SYSTEMS_BY_ATLAS[atlasId].has(layer.id),
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -60,372 +117,85 @@ export function VanatomeBodyMap({
     setLoadProgress(0);
     setLoadError(undefined);
     setSelectedStructure(undefined);
-
-    let renderer: THREE.WebGLRenderer;
-    try {
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-    } catch {
-      queueMicrotask(() => setWebGlUnavailable(true));
-      return;
-    }
+    setActiveFocus("full");
+    setPelvicOrganFocus(false);
+    setManifest(undefined);
+    setReadySystems(new Set());
+    const initialHiddenSystems = initiallyHiddenSystems(
+      atlasId,
+      ANATOMY_SYSTEM_LAYERS.map((layer) => layer.id),
+    );
+    setHiddenSystems(initialHiddenSystems);
+    setActiveHandPose("Open Hand");
 
     let disposed = false;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    const sceneController = new AbortController();
+    let cleanupScene: () => void = () => undefined;
 
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x06131d);
-    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-    camera.position.set(0, 0.1, 6.8);
-
-    const controls = new OrbitControls(camera, canvas);
-    controls.enableDamping = false;
-    controls.enablePan = false;
-    controls.minDistance = 0.8;
-    controls.maxDistance = 11;
-    controls.target.set(0, 0.15, 0);
-
-    scene.add(new THREE.HemisphereLight(0xb9f6ff, 0x18344b, 1.8));
-    const keyLight = new THREE.DirectionalLight(0xbff8ff, 2.2);
-    keyLight.position.set(3, 5, 5);
-    scene.add(keyLight);
-    const fillLight = new THREE.DirectionalLight(0x38bdf8, 1.4);
-    fillLight.position.set(-4, 1, 3);
-    scene.add(fillLight);
-
-    const selectableMeshes: THREE.Mesh[] = [];
-    const ownedMaterials = new Set<THREE.Material>();
-    const originalMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
-    // 위험 색으로 칠한 재질. 클릭 선택을 풀 때 **여기로** 되돌려야 한다 —
-    // 원본으로 되돌리면 고른 기록의 색이 조용히 사라진다.
-    const riskMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
-    const regionMeshes = new Map<string, THREE.Mesh[]>();
-    let selectedMesh: THREE.Mesh | undefined;
-    let focusAnimationFrame: number | undefined;
-
-    const renderScene = () => renderer.render(scene, camera);
-    const resize = () => {
-      const width = Math.max(canvas.clientWidth, 1);
-      const height = Math.max(canvas.clientHeight, 1);
-      renderer.setSize(width, height, false);
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-      renderScene();
-    };
-    // **캔버스가 아니라 그것을 담은 상자를 본다.** 캔버스를 관찰하면
-    // `renderer.setSize` 가 바꾼 `width`/`height` 속성이 다시 관찰을 부르고,
-    // 픽셀비만큼 커진 값을 또 읽어 화면이 세로로 끝없이 자란다.
-    const resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(canvas.parentElement ?? canvas);
-    controls.addEventListener("change", renderScene);
-    resize();
-
-    focusCameraRef.current = (focus) => {
-      const presets: Record<BodyFocus, { position: THREE.Vector3; target: THREE.Vector3 }> = {
-        full: {
-          position: new THREE.Vector3(0, 0.1, 6.8),
-          target: new THREE.Vector3(0, 0.15, 0),
-        },
-        head: {
-          position: new THREE.Vector3(0, 2.02, 1.42),
-          target: new THREE.Vector3(0, 2.02, 0),
-        },
-        upper: {
-          position: new THREE.Vector3(0, 0.9, 3.15),
-          target: new THREE.Vector3(0, 0.9, 0),
-        },
-        lower: {
-          position: new THREE.Vector3(0, -1.15, 3.2),
-          target: new THREE.Vector3(0, -1.15, 0),
-        },
-        hand: {
-          position: new THREE.Vector3(0.74, -0.19, 1.35),
-          target: new THREE.Vector3(0.74, -0.19, 0.09),
-        },
-      };
-      const preset = presets[focus];
-      glideTo(preset.position, preset.target);
-    };
-
-    /** 카메라를 부드럽게 옮긴다. 프리셋과 부위 이동이 같은 움직임을 써야 한다. */
-    function glideTo(position: THREE.Vector3, target: THREE.Vector3) {
-      const startPosition = camera.position.clone();
-      const startTarget = controls.target.clone();
-      const startedAt = performance.now();
-      if (focusAnimationFrame !== undefined) window.cancelAnimationFrame(focusAnimationFrame);
-      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (reduceMotion) {
-        camera.position.copy(position);
-        controls.target.copy(target);
-        controls.update();
-        renderScene();
-        return;
-      }
-      const animateFocus = (now: number) => {
-        const elapsed = Math.min(1, (now - startedAt) / 420);
-        const eased = 1 - Math.pow(1 - elapsed, 3);
-        camera.position.lerpVectors(startPosition, position, eased);
-        controls.target.lerpVectors(startTarget, target, eased);
-        controls.update();
-        renderScene();
-        if (elapsed < 1) focusAnimationFrame = window.requestAnimationFrame(animateFocus);
-      };
-      focusAnimationFrame = window.requestAnimationFrame(animateFocus);
-    }
-
-    const clearSelectedMaterial = () => {
-      if (!selectedMesh) return;
-      materialsOf(selectedMesh.material).forEach((material) => {
-        if (!ownedMaterials.has(material)) material.dispose();
-      });
-      const restore = riskMaterials.get(selectedMesh) ?? originalMaterials.get(selectedMesh);
-      if (restore) selectedMesh.material = restore;
-      selectedMesh = undefined;
-      renderScene();
-    };
-    clearSelectionRef.current = () => {
-      clearSelectedMaterial();
-      setSelectedStructure(undefined);
-    };
-
-    const metadataPromise = fetch(FULL_BODY_METADATA_URL)
-      .then((response) => response.ok ? response.json() as Promise<MetadataBundle> : Promise.reject())
-      .then((metadata) => new Map(metadata.structures.map((structure) => [structure.id, structure])))
-      .catch(() => new Map<string, AnatomyMetadata>());
-    const loadTimeout = window.setTimeout(() => {
-      if (!disposed) setLoadError("해부학 인체 모델 로딩 시간이 초과되었습니다.");
-    }, 30_000);
-
-    new GLTFLoader().load(
-      MODEL_URL,
-      async (gltf) => {
+    const start = async () => {
+      try {
+        const nextManifest = await loadAnatomyAtlasManifest(atlasId);
         if (disposed) return;
-        window.clearTimeout(loadTimeout);
-        const metadata = await metadataPromise;
-        if (disposed) return;
-        const model = gltf.scene;
-        model.traverse((object) => {
-          if (!(object instanceof THREE.Mesh)) return;
-          const anatomyId = String(object.userData.anatomyId ?? "");
-          const anatomySystem = String(object.userData.anatomySystem ?? "regional-anatomy");
-          const bodyShell = anatomyId === "body-shell";
-          object.visible = bodyShell || INTERNAL_SYSTEMS.has(anatomySystem);
-          if (!object.visible) return;
-
-          const styledMaterials = materialsOf(object.material).map((material) => {
-            const styled = material.clone();
-            ownedMaterials.add(styled);
-            if (!(styled instanceof THREE.MeshStandardMaterial)) return styled;
-            styled.metalness = 0;
-            styled.roughness = 0.48;
-            if (bodyShell) {
-              styled.color.setHex(0x4de4ff);
-              styled.emissive.setHex(0x0b7895);
-              styled.emissiveIntensity = 0.75;
-              styled.transparent = true;
-              styled.opacity = 0.17;
-              styled.depthWrite = false;
-              styled.wireframe = true;
-              object.renderOrder = 4;
-            } else if (anatomySystem === "skeletal") {
-              styled.color.lerp(new THREE.Color(0xd9f7ff), 0.72);
-              styled.emissive.setHex(0x17475a);
-              styled.emissiveIntensity = 0.18;
-              styled.transparent = true;
-              styled.opacity = 0.72;
-            } else {
-              styled.emissive.copy(styled.color).multiplyScalar(0.12);
-              styled.emissiveIntensity = 0.25;
-              styled.transparent = false;
-              styled.opacity = 1;
-            }
-            return styled;
-          });
-          object.material = Array.isArray(object.material) ? styledMaterials : styledMaterials[0];
-          originalMaterials.set(object, object.material);
-          const structure = metadata.get(anatomyId);
-          object.userData.structureLabel = structure?.name ?? structureLabel(object.name);
-          object.userData.structureSystem = structure?.system ?? anatomySystem;
-          const region = regionOfStructure(String(object.userData.structureLabel));
-          if (region) {
-            object.userData.riskRegion = region;
-            const bucket = regionMeshes.get(region) ?? [];
-            bucket.push(object);
-            regionMeshes.set(region, bucket);
-          }
-          if (!bodyShell) selectableMeshes.push(object);
+        setManifest(nextManifest);
+        const nextCleanupScene = await createAnatomyScene({
+          canvas,
+          manifest: nextManifest,
+          signal: sceneController.signal,
+          isDisposed: () => disposed,
+          onProgress: setLoadProgress,
+          onReady: () => {
+            setLoadProgress(100);
+            setLoadError(undefined);
+          },
+          onWebGlUnavailable: () => setWebGlUnavailable(true),
+          onSelectedStructure: setSelectedStructure,
+          onFocusChange: setActiveFocus,
+          onSystemsReady: setReadySystems,
+          initialHiddenSystems,
+          clearSelectionRef,
+          focusCameraRef,
+          pelvicOrganFocusRef,
+          setHiddenSystemsRef,
+          playHandPoseRef,
         });
-
-        const bounds = new THREE.Box3().setFromObject(model);
-        const size = bounds.getSize(new THREE.Vector3());
-        const center = bounds.getCenter(new THREE.Vector3());
-        const scale = size.y > 0 ? 4.7 / size.y : 1;
-        model.scale.setScalar(scale);
-        model.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
-        model.updateMatrixWorld(true);
-        scene.add(model);
-
-        /**
-         * 부위별 위험을 재질에 입힌다. 위험이 없는 부위는 원래 색으로 되돌린다.
-         *
-         * 원본을 지우지 않고 `riskMaterials` 에 따로 쌓는 이유는 기록을 바꿔 가며
-         * 볼 때 매번 원본이 필요하기 때문이다. 색만 바꾸지 않고 `emissive` 를 같이
-         * 올린다 — 이 장면은 배경이 짙어서 색만 바꾸면 어두운 빨강이 검게 보인다.
-         */
-        const paintRisks = (next: RegionRisk[] | undefined) => {
-          const byRegion = new Map((next ?? []).map((risk) => [risk.region, risk]));
-          for (const [region, meshes] of regionMeshes) {
-            const risk = byRegion.get(region);
-            for (const mesh of meshes) {
-              const previous = riskMaterials.get(mesh);
-              if (previous) {
-                materialsOf(previous).forEach((material) => {
-                  if (!ownedMaterials.has(material)) material.dispose();
-                });
-                riskMaterials.delete(mesh);
-              }
-              const base = originalMaterials.get(mesh);
-              if (!base) continue;
-              if (!risk) {
-                if (mesh !== selectedMesh) mesh.material = base;
-                continue;
-              }
-              const painted = materialsOf(base).map((material) => {
-                const clone = material.clone();
-                if (clone instanceof THREE.MeshStandardMaterial) {
-                  clone.color.setHex(REGION_COLOR[risk.level]);
-                  clone.emissive.setHex(REGION_COLOR[risk.level]);
-                  clone.emissiveIntensity = risk.level === "NORMAL" ? 0.3 : 0.75;
-                  clone.transparent = false;
-                  clone.opacity = 1;
-                }
-                return clone;
-              });
-              const applied = Array.isArray(base) ? painted : painted[0];
-              riskMaterials.set(mesh, applied);
-              if (mesh !== selectedMesh) mesh.material = applied;
-            }
-          }
-          renderScene();
-        };
-        paintRisksRef.current = paintRisks;
-        paintRisks(risksRef.current);
-
-        /**
-         * 그 장기가 화면 가운데 오도록 카메라를 옮긴다.
-         *
-         * 프리셋(머리·상반신…)과 달리 좌표를 **모델에서 구한다.** 장기 위치를 상수로
-         * 박아 두면 모델이 바뀌는 날 조용히 엉뚱한 곳을 비춘다.
-         */
-        focusRegionRef.current = (region) => {
-          const meshes = regionMeshes.get(region);
-          if (!meshes?.length) return;
-          const box = new THREE.Box3();
-          for (const mesh of meshes) box.expandByObject(mesh);
-          if (box.isEmpty()) return;
-          const center = box.getCenter(new THREE.Vector3());
-          const size = box.getSize(new THREE.Vector3());
-          // 장기가 화면을 꽉 채우면 어디에 붙어 있는지를 잃는다. 주변이 조금 보이게 뺀다.
-          const distance = Math.max(size.length() * 2.4, 0.9);
-          glideTo(new THREE.Vector3(center.x, center.y, center.z + distance), center);
-        };
-
-        setLoadProgress(100);
-        setLoadError(undefined);
-        renderScene();
-      },
-      (event) => {
-        if (disposed || !event.total) return;
-        setLoadProgress(Math.min(99, Math.round((event.loaded / event.total) * 100)));
-      },
-      () => {
-        window.clearTimeout(loadTimeout);
-        if (!disposed) setLoadError("해부학 인체 모델을 불러오지 못했습니다.");
-      },
-    );
-
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
-    let pointerStart: { x: number; y: number } | undefined;
-    const handlePointerDown = (event: PointerEvent) => {
-      pointerStart = { x: event.clientX, y: event.clientY };
-    };
-    const handlePointerUp = (event: PointerEvent) => {
-      if (!pointerStart || Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 6) {
-        pointerStart = undefined;
-        return;
+        cleanupScene = nextCleanupScene;
+        if (disposed) cleanupScene();
+      } catch {
+        if (!disposed) setLoadError("해부학 참조 아틀라스를 불러오지 못했습니다.");
       }
-      pointerStart = undefined;
-      const bounds = canvas.getBoundingClientRect();
-      pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
-      pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObjects(selectableMeshes, false)[0];
-      if (!(hit?.object instanceof THREE.Mesh)) return;
-
-      clearSelectedMaterial();
-      const mesh = hit.object;
-      const highlighted = materialsOf(mesh.material).map((material) => {
-        const clone = material.clone();
-        if (clone instanceof THREE.MeshStandardMaterial) {
-          clone.color.copy(SELECTED_COLOR);
-          clone.emissive.setHex(0x0e7490);
-          clone.emissiveIntensity = 0.85;
-          clone.opacity = 1;
-          clone.transparent = false;
-        }
-        return clone;
-      });
-      mesh.material = Array.isArray(mesh.material) ? highlighted : highlighted[0];
-      selectedMesh = mesh;
-      setSelectedStructure({
-        name: String(mesh.userData.structureLabel ?? "선택한 해부 구조"),
-        system: systemLabel(String(mesh.userData.structureSystem ?? "")),
-      });
-      renderScene();
     };
-    canvas.addEventListener("pointerdown", handlePointerDown);
-    canvas.addEventListener("pointerup", handlePointerUp);
+    void start();
 
     return () => {
       disposed = true;
-      window.clearTimeout(loadTimeout);
-      canvas.removeEventListener("pointerdown", handlePointerDown);
-      canvas.removeEventListener("pointerup", handlePointerUp);
-      controls.removeEventListener("change", renderScene);
-      if (focusAnimationFrame !== undefined) window.cancelAnimationFrame(focusAnimationFrame);
-      controls.dispose();
-      resizeObserver.disconnect();
-      scene.traverse((object) => {
-        if (object instanceof THREE.Mesh) object.geometry.dispose();
-      });
-      riskMaterials.forEach((material) => {
-        materialsOf(material).forEach((entry) => {
-          if (!ownedMaterials.has(entry)) entry.dispose();
-        });
-      });
-      ownedMaterials.forEach((material) => material.dispose());
-      renderer.dispose();
+      sceneController.abort();
+      cleanupScene();
       clearSelectionRef.current = () => undefined;
       focusCameraRef.current = () => undefined;
-      paintRisksRef.current = () => undefined;
-      focusRegionRef.current = () => undefined;
+      pelvicOrganFocusRef.current = () => undefined;
+      setHiddenSystemsRef.current = () => undefined;
+      playHandPoseRef.current = () => undefined;
     };
-  }, [isTestEnvironment]);
-
-  // 기록을 바꾸면 재질만 다시 칠한다. 모델은 그대로 둔다.
-  useEffect(() => {
-    risksRef.current = risks;
-    paintRisksRef.current(risks);
-  }, [risks]);
+  }, [atlasId, isTestEnvironment, sceneAttempt]);
 
   if (isTestEnvironment || loadError || webGlUnavailable) {
     return (
       <div>
         {loadError || webGlUnavailable ? (
-          <p className="body-map-load-notice" role="status">
-            {loadError ?? "이 브라우저에서는 3D를 표시할 수 없습니다."} 기본 인체 미리보기를 표시합니다.
-          </p>
+          <div className="body-map-load-notice" role="status">
+            <p>{loadError ?? "WebGL 연결이 끊어졌습니다."} 기본 인체 미리보기를 표시합니다.</p>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                setLoadError(undefined);
+                setWebGlUnavailable(false);
+                setSceneAttempt((attempt) => attempt + 1);
+              }}
+            >
+              3D 다시 시도
+            </button>
+          </div>
         ) : null}
         <ProceduralBodyMap profileName={profileName} />
       </div>
@@ -433,129 +203,973 @@ export function VanatomeBodyMap({
   }
 
   return (
-    <section className="body-map-card vanatome-card" aria-labelledby="body-map-title">
+    <section className="body-map-card vanatome-card" aria-label="인체 모니터">
       <div className="body-map-copy">
-        <p className="section-kicker">해부 구조 미리보기</p>
-        <h3 id="body-map-title">{profileName}님의 3D 인체</h3>
-        <p>
-          {risks && risks.length > 0
-            ? `${risksAt ? `${risksAt} 판정` : "고른 판정"} 기준입니다. 아래 부위를 누르면 그 장기로 이동해요.`
-            : "인체를 돌려보거나 구조를 선택해 보세요. 아래 기록에서 판정을 고르면 해당 장기가 색으로 표시됩니다."}
-        </p>
-        {risks && risks.length > 0 ? (
-          <ul className="vanatome-risk-legend">
-            {risks.map((risk) => (
-              <li key={risk.region}>
-                {/* 목록이 아니라 **이동 장치**다. 색만 칠해 두면 사용자가 그 장기를
-                    인체에서 직접 찾아 돌려야 한다 — 콩팥은 뒤쪽이라 기본 각도에서 안 보인다. */}
+        <p className="section-kicker">인체 모니터</p>
+        <fieldset className="anatomy-atlas-switch">
+          <legend>참조 아틀라스</legend>
+          {ATLAS_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={atlasId === option.id}
+              onClick={() => setAtlasId(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </fieldset>
+        <fieldset className="vanatome-system-layers">
+          <legend>구조 레이어</legend>
+          <div className="vanatome-system-layer-actions">
+            <button
+              type="button"
+              disabled={loadProgress < 100}
+              onClick={() => {
+                const next = new Set<string>();
+                setHiddenSystems(next);
+                setHiddenSystemsRef.current(next);
+              }}
+            >
+              전체 켜기
+            </button>
+            <button
+              type="button"
+              disabled={loadProgress < 100}
+              onClick={() => {
+                const next = new Set(systemLayers.map((layer) => layer.id));
+                setHiddenSystems(next);
+                setHiddenSystemsRef.current(next);
+              }}
+            >
+              전체 끄기
+            </button>
+          </div>
+          <div className="vanatome-system-layer-buttons">
+            {systemLayers.map((layer) => {
+              const active = !hiddenSystems.has(layer.id);
+              return (
                 <button
+                  key={layer.id}
                   type="button"
-                  className="vanatome-risk-row"
-                  aria-pressed={focusedRegion === risk.region}
-                  disabled={loadProgress < 100}
+                  disabled={loadProgress < 100 || !readySystems.has(layer.id)}
+                  aria-pressed={active}
                   onClick={() => {
-                    setFocusedRegion(risk.region);
-                    setActiveFocus("full");
-                    focusRegionRef.current(risk.region);
+                    setHiddenSystems((current) => {
+                      const next = new Set(current);
+                      if (next.has(layer.id)) next.delete(layer.id);
+                      else next.add(layer.id);
+                      setHiddenSystemsRef.current(next);
+                      return next;
+                    });
                   }}
                 >
-                  <span
-                    className="vanatome-risk-dot"
-                    style={{ background: `#${REGION_COLOR[risk.level].toString(16).padStart(6, "0")}` }}
-                    aria-hidden="true"
-                  />
-                  <b>{risk.label}</b>
-                  <span className="vanatome-risk-level">{LEVEL_TEXT[risk.level]}</span>
-                  <small>{risk.diseases.map((disease) => disease.name).join(" · ")}</small>
+                  {layer.label}
                 </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="vanatome-layer-summary"><span>반투명 외피</span><span>골격</span><span>주요 장기</span></p>
-        )}
+              );
+            })}
+          </div>
+        </fieldset>
         <div className="vanatome-focus-control">
           <span>빠른 확대</span>
           <div className="vanatome-focus-buttons" aria-label="인체 부위 빠른 확대">
-            {(["head", "upper", "lower", "hand"] as const).map((focus) => (
+            {(["full", "head", "upper", "lower", "leftHand", "rightHand", "knee", "foot"] as const).map((focus) => (
               <button
                 key={focus}
                 type="button"
                 disabled={loadProgress < 100}
                 aria-pressed={activeFocus === focus}
                 onClick={() => {
+                  if (pelvicOrganFocus) {
+                    setPelvicOrganFocus(false);
+                    pelvicOrganFocusRef.current(false);
+                  }
                   setActiveFocus(focus);
                   focusCameraRef.current(focus);
                 }}
               >
-                {{ head: "머리", upper: "상반신", lower: "하반신", hand: "손" }[focus]}
+                {{
+                  full: "전체",
+                  head: "머리",
+                  upper: "상반신",
+                  lower: "하반신",
+                  knee: "무릎",
+                  foot: "발",
+                  leftHand: "왼손",
+                  rightHand: "오른손",
+                }[focus]}
               </button>
             ))}
           </div>
-          {activeFocus !== "full" ? (
+          {manifest?.referenceSex === "female"
+          && manifest.assets.some((asset) => asset.visualRole === "organ") ? (
             <button
-              className="vanatome-reset-focus"
+              className="vanatome-pelvic-focus"
               type="button"
+              disabled={loadProgress < 100}
+              aria-pressed={pelvicOrganFocus}
               onClick={() => {
-                setActiveFocus("full");
-                focusCameraRef.current("full");
+                const next = !pelvicOrganFocus;
+                setPelvicOrganFocus(next);
+                pelvicOrganFocusRef.current(next);
+                if (next) {
+                  setActiveFocus("lower");
+                  focusCameraRef.current("lower");
+                }
               }}
             >
-              전체 보기
+              {pelvicOrganFocus ? "골반 장기 보기 해제" : "골반 장기 보기"}
             </button>
           ) : null}
         </div>
+        {manifest?.assets.some((asset) => asset.animationClips?.length) ? (
+          <fieldset className="vanatome-hand-poses">
+            <legend>손 포즈</legend>
+            <div>
+              {HAND_POSES.filter((pose) => (
+                manifest.assets.some((asset) => asset.animationClips?.includes(pose.id))
+              )).map((pose) => (
+                <button
+                  key={pose.id}
+                  type="button"
+                  disabled={loadProgress < 100}
+                  aria-pressed={activeHandPose === pose.id}
+                  onClick={() => {
+                    setActiveHandPose(pose.id);
+                    playHandPoseRef.current(pose.id);
+                  }}
+                >
+                  {pose.label}
+                </button>
+              ))}
+            </div>
+            <small>양손에 함께 적용됩니다.</small>
+          </fieldset>
+        ) : null}
         <div className="body-map-selection" aria-live="polite">
           <span>선택한 구조</span>
           <strong>{selectedStructure?.name ?? "인체에서 구조를 선택하세요"}</strong>
           <small>
             {selectedStructure
               ? `${selectedStructure.system ? `${selectedStructure.system} · ` : ""}현재 선택은 저장되지 않습니다.`
-              : "드래그는 회전, 클릭은 구조 선택입니다."}
+              : "모델 드래그는 회전, 검은 배경 드래그는 상하 카메라 이동, 클릭은 구조 선택입니다."}
           </small>
         </div>
         <div className="vanatome-actions">
-          <button type="button" disabled={!selectedStructure} onClick={() => clearSelectionRef.current()}>선택 해제</button>
+          <button type="button" disabled={!selectedStructure} onClick={() => clearSelectionRef.current()}>
+            선택 해제
+          </button>
         </div>
-        <p className="vanatome-attribution">
-          모델: Z-Anatomy 기반 Vanatome ·{" "}
-          <a href={ATTRIBUTION_URL} target="_blank" rel="noreferrer">CC BY-SA 4.0 출처</a>
-        </p>
+        {manifest ? (
+          <p className="vanatome-attribution">
+            모델: {manifest.shortLabel} ·{" "}
+            <a href={manifest.attributionUrl} target="_blank" rel="noreferrer">
+              {manifest.attributionLabel}
+            </a>
+          </p>
+        ) : null}
       </div>
       <div className="body-map-viewer vanatome-viewer is-hologram">
-        {loadProgress < 100 ? <BodyMapLoading progress={loadProgress} /> : null}
-        <canvas ref={canvasRef} aria-label={`${profileName}님의 회전 가능한 해부학 3D 인체 미리보기`} />
-        <span className="body-map-hint">드래그하여 회전 · 클릭하여 선택</span>
+        <canvas ref={canvasRef} aria-label="회전 가능한 해부학 인체 모니터" />
+        <span className="body-map-hint">모델 드래그 회전 · 배경 드래그 상하 이동 · 클릭 선택</span>
       </div>
     </section>
   );
 }
 
-function BodyMapLoading({ progress }: { progress: number }) {
-  return (
-    <div className="vanatome-loading" role="status">
-      <span>외피·골격·주요 장기를 구성하는 중…</span>
-      <small>{progress > 0 ? `${progress}%` : "약 16 MB · 이 서버에서 직접 불러옵니다"}</small>
-    </div>
-  );
-}
+type CreateAnatomySceneOptions = {
+  canvas: HTMLCanvasElement;
+  manifest: AnatomyAtlasManifest;
+  signal: AbortSignal;
+  isDisposed: () => boolean;
+  onProgress: (progress: number) => void;
+  onReady: () => void;
+  onWebGlUnavailable: () => void;
+  onSelectedStructure: (structure: SelectedStructure | undefined) => void;
+  onFocusChange: (focus: BodyFocus) => void;
+  onSystemsReady: (systems: ReadonlySet<string>) => void;
+  initialHiddenSystems: ReadonlySet<string>;
+  clearSelectionRef: React.MutableRefObject<() => void>;
+  focusCameraRef: React.MutableRefObject<(focus: BodyFocus) => void>;
+  pelvicOrganFocusRef: React.MutableRefObject<(active: boolean) => void>;
+  setHiddenSystemsRef: React.MutableRefObject<(systems: ReadonlySet<string>) => void>;
+  playHandPoseRef: React.MutableRefObject<(pose: HandPose) => void>;
+};
 
-function materialsOf(material: THREE.Material | THREE.Material[]) {
-  return Array.isArray(material) ? material : [material];
-}
+async function createAnatomyScene(options: CreateAnatomySceneOptions) {
+  const {
+    canvas, manifest, signal, isDisposed, onProgress, onReady, onWebGlUnavailable,
+    onSelectedStructure, onFocusChange, onSystemsReady, initialHiddenSystems,
+    clearSelectionRef, focusCameraRef,
+    pelvicOrganFocusRef, setHiddenSystemsRef,
+    playHandPoseRef,
+  } = options;
+  let renderer: THREE.WebGLRenderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  } catch {
+    queueMicrotask(onWebGlUnavailable);
+    return () => undefined;
+  }
 
-function structureLabel(meshName: string) {
-  return meshName
-    .replace(/^body-shell__/, "")
-    .replace(/([lr])$/, (_, side: string) => side === "l" ? " (왼쪽)" : " (오른쪽)")
-    .replaceAll("_", " ");
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x06131d);
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+  camera.position.set(0, 0.1, 6.8);
+
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = false;
+  controls.enablePan = false;
+  controls.minDistance = 0.8;
+  controls.maxDistance = 11;
+  controls.target.set(0, 0.15, 0);
+
+  scene.add(new THREE.HemisphereLight(0xb9f6ff, 0x18344b, 1.8));
+  const keyLight = new THREE.DirectionalLight(0xbff8ff, 2.2);
+  keyLight.position.set(3, 5, 5);
+  scene.add(keyLight);
+  const fillLight = new THREE.DirectionalLight(0x38bdf8, 1.4);
+  fillLight.position.set(-4, 1, 3);
+  scene.add(fillLight);
+
+  const anatomyMeshes: THREE.Mesh[] = [];
+  const selectableMeshes: THREE.Mesh[] = [];
+  const ownedMaterials = new Set<THREE.Material>();
+  const sourceMaterials = new Set<THREE.Material>();
+  const originalMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+  const progressByUrl = new Map<string, { loaded: number; total: number }>();
+  let selectedMesh: THREE.Mesh | undefined;
+  let focusAnimationFrame: number | undefined;
+  let poseAnimationFrame: number | undefined;
+  let poseAnimationLastTime = 0;
+  let poseAnimationEndTime = 0;
+  let lazyLoadTimer: number | undefined;
+  let autoFullReturnAnimating = false;
+  let cleanedUp = false;
+  let hiddenSystems = new Set(initialHiddenSystems);
+  const readySystems = new Set<string>();
+  let activeBodyFocus: BodyFocus = "full";
+  let handleControlsStart: (() => void) | undefined;
+  let handleControlsEnd: (() => void) | undefined;
+  const lazyLayerGroups = new Map<string, THREE.Group>();
+  const lazyLayerControllers = new Map<string, AbortController>();
+  const digestiveMaterialStates = new Map<THREE.Material, {
+    opacity: number;
+    transparent: boolean;
+    depthWrite: boolean;
+  }>();
+  const animationMixers: THREE.AnimationMixer[] = [];
+  const handPoseActions = new Map<HandPose, THREE.AnimationAction>();
+  let activeHandPoseAction: THREE.AnimationAction | undefined;
+
+  const handleContextLost = (event: Event) => {
+    event.preventDefault();
+    if (!cleanedUp) queueMicrotask(onWebGlUnavailable);
+  };
+  canvas.addEventListener("webglcontextlost", handleContextLost);
+
+  const setCostalCartilageFocus = (upperBodyFocused: boolean) => {
+    for (const mesh of anatomyMeshes) {
+      if (mesh.userData.tissueType !== "costal-cartilage") continue;
+      applyCostalCartilageStyle(
+        originalMaterials.get(mesh) ?? mesh.material,
+        upperBodyFocused,
+      );
+    }
+  };
+
+  const renderScene = () => renderer.render(scene, camera);
+  const updatePoseAnimation = (now: number) => {
+    const deltaSeconds = Math.min((now - poseAnimationLastTime) / 1000, 0.05);
+    poseAnimationLastTime = now;
+    animationMixers.forEach((mixer) => mixer.update(deltaSeconds));
+    renderScene();
+    if (now < poseAnimationEndTime) {
+      poseAnimationFrame = window.requestAnimationFrame(updatePoseAnimation);
+    } else {
+      poseAnimationFrame = undefined;
+    }
+  };
+  const startPoseAnimationLoop = () => {
+    if (poseAnimationFrame !== undefined) window.cancelAnimationFrame(poseAnimationFrame);
+    poseAnimationLastTime = performance.now();
+    poseAnimationEndTime = poseAnimationLastTime + 700;
+    poseAnimationFrame = window.requestAnimationFrame(updatePoseAnimation);
+  };
+  const applyMeshVisibility = (mesh: THREE.Mesh) => {
+    const contextVisible = mesh.userData.contextVisible !== false;
+    mesh.visible = contextVisible && !hiddenSystems.has(String(mesh.userData.structureSystem ?? ""));
+  };
+  const viewport = canvas.parentElement;
+  let viewportWidth = 0;
+  let viewportHeight = 0;
+  const resize = () => {
+    const width = Math.max(viewport?.clientWidth ?? canvas.clientWidth, 1);
+    const height = Math.max(viewport?.clientHeight ?? canvas.clientHeight, 1);
+    if (width === viewportWidth && height === viewportHeight) return;
+    viewportWidth = width;
+    viewportHeight = height;
+    renderer.setSize(width, height, false);
+    camera.aspect = width / height;
+    camera.updateProjectionMatrix();
+    renderScene();
+  };
+  const resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(viewport ?? canvas);
+  controls.addEventListener("change", renderScene);
+  resize();
+
+  const clearSelectedMaterial = () => {
+    if (!selectedMesh) return;
+    materialsOf(selectedMesh.material).forEach((material) => {
+      if (!ownedMaterials.has(material)) material.dispose();
+    });
+    const original = originalMaterials.get(selectedMesh);
+    if (original) selectedMesh.material = original;
+    selectedMesh = undefined;
+    renderScene();
+  };
+  clearSelectionRef.current = () => {
+    clearSelectedMaterial();
+    onSelectedStructure(undefined);
+  };
+
+  setHiddenSystemsRef.current = (systems) => {
+    hiddenSystems = new Set(systems);
+    if (selectedMesh && hiddenSystems.has(String(selectedMesh.userData.structureSystem ?? ""))) {
+      clearSelectedMaterial();
+      onSelectedStructure(undefined);
+    }
+    anatomyMeshes.forEach(applyMeshVisibility);
+    setCostalCartilageFocus(
+      activeBodyFocus === "upper" && !hiddenSystems.has("muscular"),
+    );
+    renderScene();
+  };
+
+  pelvicOrganFocusRef.current = (active) => {
+    clearSelectedMaterial();
+    onSelectedStructure(undefined);
+    for (const mesh of anatomyMeshes) {
+      if (mesh.userData.structureSystem === "reproductive") {
+        // The full-body atlas starts with every anatomy layer visible.
+        // Pelvic focus only changes nearby-organ readability; it must not
+        // hide the reproductive layer again when the focus is released.
+        mesh.userData.contextVisible = true;
+        applyMeshVisibility(mesh);
+        continue;
+      }
+      if (mesh.userData.structureSystem !== "digestive") continue;
+      const original = originalMaterials.get(mesh) ?? mesh.material;
+      for (const material of materialsOf(original)) {
+        if (!digestiveMaterialStates.has(material)) {
+          digestiveMaterialStates.set(material, {
+            opacity: material.opacity,
+            transparent: material.transparent,
+            depthWrite: material.depthWrite,
+          });
+        }
+        const baseline = digestiveMaterialStates.get(material);
+        if (!baseline) continue;
+        material.opacity = active ? 0.1 : baseline.opacity;
+        material.transparent = active ? true : baseline.transparent;
+        material.depthWrite = active ? false : baseline.depthWrite;
+        material.needsUpdate = true;
+      }
+    }
+    renderScene();
+  };
+
+  const metadataPromise = loadAnatomyMetadata(manifest).catch(() => new Map());
+  const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath("/vendor/three/draco/gltf/");
+  const loader = new GLTFLoader();
+  loader.setDRACOLoader(dracoLoader);
+  const loadAsset = async (asset: AnatomyAtlasAsset) => {
+    const controller = new AbortController();
+    let timedOut = false;
+    const abort = () => controller.abort();
+    signal.addEventListener("abort", abort, { once: true });
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, CORE_ASSET_TIMEOUT_MS);
+    try {
+      const response = await fetchCachedAnatomyResource(asset.url, {
+        signal: controller.signal,
+        revision: asset.sha256,
+      });
+      if (!response.ok) throw new Error(`핵심 해부 자산 요청 실패: ${asset.url}`);
+      const buffer = await response.arrayBuffer();
+      const total = Number(response.headers.get("content-length")) || buffer.byteLength;
+      progressByUrl.set(asset.url, { loaded: buffer.byteLength, total });
+      const progressValues = [...progressByUrl.values()];
+      const loadedBytes = progressValues.reduce((sum, value) => sum + value.loaded, 0);
+      const totalBytes = progressValues.reduce((sum, value) => sum + value.total, 0);
+      if (!isDisposed() && totalBytes > 0) {
+        onProgress(Math.min(99, Math.round((loadedBytes / totalBytes) * 100)));
+      }
+      if (signal.aborted || isDisposed()) throw new DOMException("Aborted", "AbortError");
+      const gltf = await loader.parseAsync(buffer, "");
+      return { model: gltf.scene, animations: gltf.animations };
+    } catch (error) {
+      if (timedOut) {
+        throw new Error(`핵심 해부 자산 요청 시간 초과: ${asset.url}`, { cause: error });
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+      signal.removeEventListener("abort", abort);
+    }
+  };
+
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let pointerGesture: {
+    pointerId: number;
+    mode: "rotate" | "vertical-pan";
+    startX: number;
+    startY: number;
+    lastY: number;
+  } | undefined;
+  let verticalPanLimits = { min: -2.35, max: 2.35 };
+
+  const setPointerFromEvent = (event: PointerEvent) => {
+    const bounds = canvas.getBoundingClientRect();
+    pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
+    pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+  };
+  const pointerHitsVisibleModel = (event: PointerEvent) => {
+    setPointerFromEvent(event);
+    raycaster.setFromCamera(pointer, camera);
+    return raycaster.intersectObjects(
+      anatomyMeshes.filter((mesh) => mesh.visible),
+      false,
+    ).length > 0;
+  };
+  const handlePointerDown = (event: PointerEvent) => {
+    if (!event.isPrimary || event.button !== 0) return;
+    const mode = pointerHitsVisibleModel(event) ? "rotate" : "vertical-pan";
+    pointerGesture = {
+      pointerId: event.pointerId,
+      mode,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastY: event.clientY,
+    };
+    if (mode === "rotate") return;
+
+    // Capture before OrbitControls receives a background event. Model events
+    // continue to the existing orbit handler unchanged.
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    canvas.setPointerCapture(event.pointerId);
+    canvas.style.cursor = "ns-resize";
+    if (focusAnimationFrame !== undefined) {
+      window.cancelAnimationFrame(focusAnimationFrame);
+      focusAnimationFrame = undefined;
+    }
+  };
+  const handlePointerMove = (event: PointerEvent) => {
+    if (pointerGesture?.pointerId !== event.pointerId
+      || pointerGesture.mode !== "vertical-pan") return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    // Treat the background like a grabbed canvas: dragging downward pulls the
+    // rendered body downward, so the camera itself trucks upward.
+    const pixelDelta = event.clientY - pointerGesture.lastY;
+    pointerGesture.lastY = event.clientY;
+    const distance = camera.position.distanceTo(controls.target);
+    const visibleWorldHeight = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * distance;
+    const requestedDelta = pixelDelta * visibleWorldHeight
+      / Math.max(canvas.getBoundingClientRect().height, 1);
+    const nextTargetY = THREE.MathUtils.clamp(
+      controls.target.y + requestedDelta,
+      verticalPanLimits.min,
+      verticalPanLimits.max,
+    );
+    const appliedDelta = nextTargetY - controls.target.y;
+    camera.position.y += appliedDelta;
+    controls.target.y = nextTargetY;
+    controls.update();
+    renderScene();
+  };
+  const handlePointerUp = (event: PointerEvent) => {
+    const gesture = pointerGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    pointerGesture = undefined;
+    if (gesture.mode === "vertical-pan") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      canvas.style.cursor = "";
+      return;
+    }
+    if (Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > 6) {
+      camera.updateMatrixWorld(true);
+      renderScene();
+      return;
+    }
+    setPointerFromEvent(event);
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects(selectableMeshes, false)[0];
+    if (!(hit?.object instanceof THREE.Mesh)) return;
+
+    clearSelectedMaterial();
+    const mesh = hit.object;
+    mesh.material = createSelectedMaterials(mesh.material);
+    selectedMesh = mesh;
+    onSelectedStructure({
+      name: String(mesh.userData.structureLabel ?? "선택한 해부 구조"),
+      system: systemLabel(String(mesh.userData.structureSystem ?? "")),
+    });
+    renderScene();
+  };
+  const handlePointerCancel = (event: PointerEvent) => {
+    if (pointerGesture?.pointerId !== event.pointerId) return;
+    pointerGesture = undefined;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    canvas.style.cursor = "";
+  };
+  const handleCanvasWheel = (event: WheelEvent) => {
+    event.preventDefault();
+  };
+  canvas.addEventListener("wheel", handleCanvasWheel, { capture: true, passive: false });
+  canvas.addEventListener("pointerdown", handlePointerDown, true);
+  canvas.addEventListener("pointermove", handlePointerMove, true);
+  canvas.addEventListener("pointerup", handlePointerUp);
+  canvas.addEventListener("pointercancel", handlePointerCancel);
+
+  function cleanup() {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    if (lazyLoadTimer !== undefined) window.clearTimeout(lazyLoadTimer);
+    lazyLayerControllers.forEach((controller) => controller.abort());
+    lazyLayerControllers.clear();
+    canvas.removeEventListener("wheel", handleCanvasWheel, true);
+    canvas.removeEventListener("pointerdown", handlePointerDown, true);
+    canvas.removeEventListener("pointermove", handlePointerMove, true);
+    canvas.removeEventListener("pointerup", handlePointerUp);
+    canvas.removeEventListener("pointercancel", handlePointerCancel);
+    canvas.removeEventListener("webglcontextlost", handleContextLost);
+    canvas.style.cursor = "";
+    controls.removeEventListener("change", renderScene);
+    if (handleControlsStart) controls.removeEventListener("start", handleControlsStart);
+    if (handleControlsEnd) controls.removeEventListener("end", handleControlsEnd);
+    if (focusAnimationFrame !== undefined) window.cancelAnimationFrame(focusAnimationFrame);
+    if (poseAnimationFrame !== undefined) window.cancelAnimationFrame(poseAnimationFrame);
+    clearSelectedMaterial();
+    pelvicOrganFocusRef.current = () => undefined;
+    setHiddenSystemsRef.current = () => undefined;
+    playHandPoseRef.current = () => undefined;
+    animationMixers.forEach((mixer) => mixer.stopAllAction());
+    controls.dispose();
+    dracoLoader.dispose();
+    resizeObserver.disconnect();
+    scene.traverse((object) => {
+      if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
+        object.geometry.dispose();
+      }
+    });
+    sourceMaterials.forEach((material) => material.dispose());
+    ownedMaterials.forEach((material) => material.dispose());
+    renderer.dispose();
+  }
+
+  try {
+    const [metadata, loadedAssets] = await Promise.all([
+      metadataPromise,
+      Promise.all(manifest.assets.map(async (asset) => ({ asset, ...await loadAsset(asset) }))),
+    ]);
+    if (isDisposed()) return cleanup;
+
+    const atlasGroup = new THREE.Group();
+    const isStandaloneSkeletonAtlas = manifest.assets.every(
+      (asset) => asset.visualRole === "skeleton",
+    );
+    const dimsShellForReadableInternals = manifest.id
+      === "tripo-triangle2m-v49-internals-preview"
+      && manifest.assets.some((asset) => (
+        asset.visualRole === "skeleton" || asset.visualRole === "organ"
+      ));
+    for (const { asset, model, animations } of loadedAssets) {
+      model.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        materialsOf(object.material).forEach((material) => sourceMaterials.add(material));
+        inheritAnatomyMetadata(object);
+        const adapted = adaptAnatomyMesh(object, asset, manifest, metadata);
+        object.visible = Boolean(adapted);
+        if (!adapted) return;
+
+        const layerSystem = anatomyLayerSystem(adapted.system);
+
+        object.userData.anatomyId = adapted.anatomyId;
+        object.userData.anatomySourceKey = adapted.sourceKey;
+        object.userData.structureLabel = adapted.label;
+        object.userData.structureSystem = layerSystem;
+        object.userData.visualRole = adapted.visualRole;
+        object.userData.contextVisible = Boolean(adapted);
+        anatomyMeshes.push(object);
+        readySystems.add(layerSystem);
+        const isFemaleComposite = manifest.id === "tripo-triangle2m-v49-internals-preview";
+        const isAdaptiveSurfaceFlowGuide = isFemaleComposite
+          && asset.system === "adaptive-surface-flow-guide";
+        const isRegionalBoundaryGuide = isFemaleComposite
+          && asset.system === "regional-boundary-guide";
+        const isFemaleScalpAponeurosis = isFemaleComposite
+          && adapted.system === "muscular"
+          && adapted.anatomyId.includes("epicranial-aponeurosis");
+        object.material = isRegionalBoundaryGuide
+          ? createRegionalBoundaryMaterial(
+            ownedMaterials,
+            dimsShellForReadableInternals
+              ? INTERNALS_READABILITY_STYLE.regionalBoundaryOpacity
+              : undefined,
+          )
+          : isAdaptiveSurfaceFlowGuide
+          ? createAdaptiveFlowGuideMaterial(
+            ownedMaterials,
+            /Detail/i.test(object.name),
+            dimsShellForReadableInternals
+              ? (/Detail/i.test(object.name)
+                ? INTERNALS_READABILITY_STYLE.detailGuideOpacity
+                : INTERNALS_READABILITY_STYLE.bodyGuideOpacity)
+              : undefined,
+          )
+          : isFemaleScalpAponeurosis
+            ? createMatteScalpMaterials(object.material, ownedMaterials)
+          : isFemaleComposite && adapted.visualRole === "shell"
+            ? createHolographicMaterials(
+              object.material,
+              adapted.visualRole,
+              adapted.system,
+              ownedMaterials,
+            )
+          : createHolographicMaterials(
+            object.material,
+            adapted.visualRole,
+            adapted.system,
+            ownedMaterials,
+            dimsShellForReadableInternals
+              ? INTERNALS_READABILITY_STYLE.skeletonOpacity
+              : isStandaloneSkeletonAtlas ? 1 : undefined,
+          );
+        if (object.userData.tissueType === "costal-cartilage") {
+          applyCostalCartilageStyle(object.material, false);
+        }
+        originalMaterials.set(object, object.material);
+        // 초기 남성 화면은 외피·골격만 보인다. 다른 계통도 파싱해 scene에는 두되
+        // 사용자가 버튼으로 켜기 전까지 렌더링하지 않는다.
+        applyMeshVisibility(object);
+        if (adapted.visualRole === "shell") {
+          object.renderOrder = isRegionalBoundaryGuide
+            ? 7
+            : isAdaptiveSurfaceFlowGuide ? 6 : 4;
+          if (isRegionalBoundaryGuide || isAdaptiveSurfaceFlowGuide) {
+            object.raycast = () => undefined;
+          }
+        }
+        if (adapted.selectable) selectableMeshes.push(object);
+      });
+      const declaredClips = new Set(asset.animationClips ?? []);
+      if (declaredClips.size > 0 && animations.length > 0) {
+        const mixer = new THREE.AnimationMixer(model);
+        animationMixers.push(mixer);
+        for (const clip of animations) {
+          if (!declaredClips.has(clip.name)) continue;
+          const action = mixer.clipAction(clip);
+          action.setLoop(THREE.LoopOnce, 1);
+          action.clampWhenFinished = true;
+          handPoseActions.set(clip.name as HandPose, action);
+        }
+      }
+      atlasGroup.add(model);
+    }
+    onSystemsReady(new Set(readySystems));
+
+    playHandPoseRef.current = (pose) => {
+      const nextAction = handPoseActions.get(pose);
+      if (!nextAction || nextAction === activeHandPoseAction) return;
+      nextAction.reset();
+      nextAction.enabled = true;
+      nextAction.setEffectiveTimeScale(1);
+      nextAction.setEffectiveWeight(1);
+      nextAction.play();
+      if (activeHandPoseAction) {
+        nextAction.crossFadeFrom(activeHandPoseAction, 0.24, false);
+      } else {
+        nextAction.fadeIn(0.24);
+      }
+      activeHandPoseAction = nextAction;
+      startPoseAnimationLoop();
+    };
+
+    // 모든 골격(두개골 포함), 근육과 장기를 전신 초기 화면에 표시한다.
+    // 이 호출은 골반 확대용 소화기 감광 상태만 초기화한다.
+    pelvicOrganFocusRef.current(false);
+
+    const sourceBounds = new THREE.Box3().setFromObject(atlasGroup);
+    const sourceSize = sourceBounds.getSize(new THREE.Vector3());
+    const sourceCenter = sourceBounds.getCenter(new THREE.Vector3());
+    const scale = sourceSize.y > 0 ? 4.7 / sourceSize.y : 1;
+    atlasGroup.scale.setScalar(scale);
+    atlasGroup.position.set(-sourceCenter.x * scale, -sourceCenter.y * scale, -sourceCenter.z * scale);
+    atlasGroup.updateMatrixWorld(true);
+    scene.add(atlasGroup);
+
+    let activeLazyFocus: AnatomyFocus = "full";
+    const setLazyLayerVisible = (layerId: string, visible: boolean) => {
+      const group = lazyLayerGroups.get(layerId);
+      if (!group) return;
+      group.traverse((object) => {
+        if (object instanceof THREE.Mesh && object.userData.lazyLayerId === layerId) {
+          object.userData.contextVisible = visible;
+          applyMeshVisibility(object);
+        }
+      });
+    };
+    const isFemaleComposite = manifest.id === "tripo-triangle2m-v49-internals-preview";
+    const attachLazyModel = (
+      layer: AnatomyLazyLayer,
+      asset: AnatomyAtlasAsset,
+      model: THREE.Group,
+    ) => {
+      let layerGroup = lazyLayerGroups.get(layer.id);
+      if (!layerGroup) {
+        layerGroup = new THREE.Group();
+        layerGroup.name = `lazy-layer:${layer.id}`;
+        lazyLayerGroups.set(layer.id, layerGroup);
+        atlasGroup.add(layerGroup);
+      }
+      model.traverse((object) => {
+        if (!(object instanceof THREE.Mesh)) return;
+        materialsOf(object.material).forEach((material) => sourceMaterials.add(material));
+        inheritAnatomyMetadata(object);
+        const adapted = adaptAnatomyMesh(object, asset, manifest, metadata);
+        object.visible = Boolean(adapted) && layer.triggerFocus.includes(activeLazyFocus);
+        if (!adapted) return;
+
+        const layerSystem = anatomyLayerSystem(adapted.system);
+
+        object.userData.anatomyId = adapted.anatomyId;
+        object.userData.anatomySourceKey = adapted.sourceKey;
+        object.userData.structureLabel = adapted.label;
+        object.userData.structureSystem = layerSystem;
+        object.userData.visualRole = adapted.visualRole;
+        object.userData.lazyLayerId = layer.id;
+        object.userData.contextVisible = layer.triggerFocus.includes(activeLazyFocus);
+        anatomyMeshes.push(object);
+        readySystems.add(layerSystem);
+        selectableMeshes.push(object);
+        object.material = isFemaleComposite
+          && adapted.system === "muscular"
+          && adapted.anatomyId.includes("epicranial-aponeurosis")
+          ? createMatteScalpMaterials(object.material, ownedMaterials)
+          : createHolographicMaterials(
+            object.material,
+            adapted.visualRole,
+            adapted.system,
+            ownedMaterials,
+          );
+        if (object.userData.tissueType === "costal-cartilage") {
+          applyCostalCartilageStyle(object.material, activeLazyFocus === "upper");
+        }
+        originalMaterials.set(object, object.material);
+        applyMeshVisibility(object);
+      });
+      layerGroup.add(model);
+      atlasGroup.updateMatrixWorld(true);
+      onSystemsReady(new Set(readySystems));
+    };
+    const fetchLazyAsset = async (asset: AnatomyAtlasAsset, signal: AbortSignal) => {
+      const controller = new AbortController();
+      let timedOut = false;
+      const abort = () => controller.abort();
+      signal.addEventListener("abort", abort, { once: true });
+      const timeout = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, LAZY_ASSET_TIMEOUT_MS);
+      try {
+        const response = await fetchCachedAnatomyResource(asset.url, {
+          signal: controller.signal,
+          revision: asset.sha256,
+        });
+        if (!response.ok) throw new Error(`지연 자산 요청 실패: ${asset.url}`);
+        const buffer = await response.arrayBuffer();
+        const gltf = await loader.parseAsync(buffer, "");
+        return gltf.scene;
+      } catch (error) {
+        if (timedOut) {
+          throw new Error(`지연 자산 요청 시간 초과: ${asset.url}`, { cause: error });
+        }
+        throw error;
+      } finally {
+        window.clearTimeout(timeout);
+        signal.removeEventListener("abort", abort);
+      }
+    };
+    const loadLazyLayer = async (layer: AnatomyLazyLayer) => {
+      if (lazyLayerGroups.has(layer.id)) {
+        setLazyLayerVisible(layer.id, layer.triggerFocus.includes(activeLazyFocus));
+        return;
+      }
+      const controller = new AbortController();
+      lazyLayerControllers.set(layer.id, controller);
+      try {
+        const models = await Promise.all(
+          layer.assets.map((asset) => fetchLazyAsset(asset, controller.signal)),
+        );
+        if (controller.signal.aborted || isDisposed()) return;
+        models.forEach((model, index) => attachLazyModel(layer, layer.assets[index], model));
+      } finally {
+        lazyLayerControllers.delete(layer.id);
+      }
+    };
+    const preloadEveryLayer = manifest.id === "vanatome-male-reference"
+      || manifest.id === "tripo-triangle2m-v49-internals-preview";
+    const scheduleLazyLayers = (focus: AnatomyFocus) => {
+      activeLazyFocus = focus;
+      if (lazyLoadTimer !== undefined) window.clearTimeout(lazyLoadTimer);
+
+      const targets = lazyLayersForFocus(manifest, focus);
+      const targetIds = new Set(targets.map((layer) => layer.id));
+      lazyLayerGroups.forEach((_, layerId) => setLazyLayerVisible(layerId, targetIds.has(layerId)));
+      // 남성 모델은 한 번 시작한 보강 레이어 다운로드를 확대 전환 때문에 취소하지
+      // 않는다. 모두 준비돼 있어야 계통 버튼이 네트워크 요청 없이 즉시 반응한다.
+      if (!preloadEveryLayer) {
+        lazyLayerControllers.forEach((controller, layerId) => {
+          if (!targetIds.has(layerId)) controller.abort();
+        });
+      }
+      if (selectedMesh?.userData.lazyLayerId && !targetIds.has(selectedMesh.userData.lazyLayerId)) {
+        clearSelectedMaterial();
+        onSelectedStructure(undefined);
+      }
+      renderScene();
+
+      const loadTargets = preloadEveryLayer ? (manifest.lazyLayers ?? []) : targets;
+      const pending = loadTargets.filter((layer) => (
+        !lazyLayerGroups.has(layer.id) && !lazyLayerControllers.has(layer.id)
+      ));
+      if (pending.length === 0) return;
+      lazyLoadTimer = window.setTimeout(() => {
+        void Promise.all(pending.map(loadLazyLayer))
+          .then(() => {
+            if (activeLazyFocus !== focus || isDisposed()) return;
+            renderScene();
+          })
+          .catch((error: unknown) => {
+            if (error instanceof DOMException && error.name === "AbortError") return;
+          });
+      }, preloadEveryLayer ? 0 : 400);
+    };
+
+    const normalizedBounds = new THREE.Box3().setFromObject(atlasGroup);
+    verticalPanLimits = {
+      min: normalizedBounds.min.y,
+      max: normalizedBounds.max.y,
+    };
+    const presets = createFocusPresets(normalizedBounds);
+    camera.position.copy(presets.full.position);
+    controls.target.copy(presets.full.target);
+    controls.update();
+
+    const transitionToFocus = (
+      focus: BodyFocus,
+      options: { duration?: number; lockControls?: boolean } = {},
+    ) => {
+      const duration = options.duration ?? 620;
+      const lockControls = options.lockControls ?? false;
+      if (autoFullReturnAnimating) {
+        autoFullReturnAnimating = false;
+        controls.enabled = true;
+      }
+      if (lockControls) {
+        autoFullReturnAnimating = true;
+        controls.enabled = false;
+      }
+      activeBodyFocus = focus;
+      onFocusChange(focus);
+      // 빠른 확대는 카메라만 이동한다. 현재 표시 중인 계통과 부위별 보강
+      // 레이어의 가시성은 사용자가 구조 레이어 버튼으로 바꿀 때까지 유지한다.
+      const preset = presets[focus];
+      const startPosition = camera.position.clone();
+      const startTarget = controls.target.clone();
+      const startedAt = performance.now();
+      if (focusAnimationFrame !== undefined) window.cancelAnimationFrame(focusAnimationFrame);
+
+      const animateFocus = (now: number) => {
+        const elapsed = Math.min(1, (now - startedAt) / duration);
+        const eased = elapsed * elapsed * elapsed * (elapsed * (elapsed * 6 - 15) + 10);
+        camera.position.lerpVectors(startPosition, preset.position, eased);
+        controls.target.lerpVectors(startTarget, preset.target, eased);
+        controls.update();
+        renderScene();
+        if (elapsed < 1) {
+          focusAnimationFrame = window.requestAnimationFrame(animateFocus);
+        } else {
+          focusAnimationFrame = undefined;
+          if (lockControls) {
+            autoFullReturnAnimating = false;
+            controls.enabled = true;
+          }
+        }
+      };
+      focusAnimationFrame = window.requestAnimationFrame(animateFocus);
+    };
+    focusCameraRef.current = transitionToFocus;
+
+    const fullBodyDistance = presets.full.position.distanceTo(presets.full.target);
+    handleControlsStart = () => {
+      if (autoFullReturnAnimating) return;
+      if (focusAnimationFrame === undefined) return;
+      window.cancelAnimationFrame(focusAnimationFrame);
+      focusAnimationFrame = undefined;
+    };
+    handleControlsEnd = () => {
+      const cameraDistance = camera.position.distanceTo(controls.target);
+      if (shouldReturnToFullBody(activeBodyFocus, cameraDistance, fullBodyDistance)) {
+        transitionToFocus("full", { duration: 900, lockControls: true });
+      }
+    };
+    controls.addEventListener("start", handleControlsStart);
+    controls.addEventListener("end", handleControlsEnd);
+
+    // 핵심 모델이 준비되면 외피·골격 첫 프레임을 즉시 내보낸다. 남성 보강 레이어는
+    // 곧바로 전부 병렬 로드하되 숨김 상태로 붙인다. 그래서 첫 화면은 가볍고, 로드가
+    // 끝난 뒤 계통 버튼은 추가 네트워크 요청 없이 가시성만 바꾼다.
+    onReady();
+    renderScene();
+    scheduleLazyLayers("full");
+  } catch {
+    cleanup();
+    throw new Error(`아틀라스 자산을 불러오지 못했습니다: ${manifest.id}`);
+  }
+
+  return cleanup;
 }
 
 function systemLabel(system: string) {
   const labels: Record<string, string> = {
-    cardiovascular: "심혈관계", digestive: "소화기계", endocrine: "내분비계",
-    respiratory: "호흡기계", skeletal: "골격계", urinary: "비뇨기계",
+    cardiovascular: "심혈관계",
+    digestive: "소화기계",
+    endocrine: "내분비계",
+    integumentary: "외피계",
+    lymphatic: "림프계",
+    reproductive: "생식계",
+    mammary: "유방·유선",
+    muscular: "근육계",
+    nervous: "신경계",
+    respiratory: "호흡기계",
+    skeletal: "골격계",
+    joints: "관절·인대·막",
+    urinary: "비뇨기계",
     "regional-anatomy": "외부 해부 구조",
   };
-  return labels[system];
+  return labels[system] ?? system;
 }

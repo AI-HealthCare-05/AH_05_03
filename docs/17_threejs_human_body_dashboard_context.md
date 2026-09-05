@@ -6,7 +6,7 @@
 >
 > 원본 대화: [ChatGPT 공유 대화 — Three.js 인체 손상 대시보드](https://chatgpt.com/share/6a86b3e4-03d0-83e8-8e12-9cc50bc196e9)
 >
-> 관련 문서: [웹 로컬 우선 아키텍처](adr/0001-web-local-first-architecture.md), [로컬 모델 런타임 구현](11_local_model_runtime_implementation.md), [Figma 프론트엔드 로드맵](12_frontend_figma_implementation_roadmap.md), [OCR 로컬 대체 챌린지](16_ocr_cloud_baseline_local_replacement_challenge.md)
+> 관련 문서: [웹 로컬 우선 아키텍처](adr/0001-web-local-first-architecture.md), [로컬 모델 런타임 구현](11_local_model_runtime_implementation.md), [Figma 프론트엔드 로드맵](12_frontend_figma_implementation_roadmap.md), [OCR 로컬 대체 챌린지](16_ocr_cloud_baseline_local_replacement_challenge.md), [여성 근육 이식·볼륨 보정 작업 지침](19_female_muscle_transplant_workflow.md)
 
 이 문서는 다른 ChatGPT 대화에서 검토한 Three.js 기반 인체 대시보드 아이디어를 현재 이어봄 프로젝트로 이관한다. 원 대화에서 긍정적으로 선택한 방향뿐 아니라 아직 선택하지 않았거나 이어봄에 그대로 적용할 수 없는 방향도 함께 남긴다.
 
@@ -640,3 +640,290 @@ Vanatome의 별도 경량 전체 인체 모델은 약 11.1MB지만 349개 Mesh�
 - 전체 보기: 확대 후 최초 전신 구도로 복귀한다.
 
 카메라는 즉시 점프하지 않고 짧은 ease-out 전환으로 이동한다. 확대 상태에서도 구조 클릭과 회전 기능은 유지하며, 확대 선택 자체는 건강기록에 저장하지 않는다.
+
+## 12. 여성형 모델과 디자인 일관성 병렬 조사
+
+> 조사 상태: 2026-08-20 1차 조사 완료·자산 채택 미확정
+>
+> 질문 1: 남성형과 디자인 일관성을 유지하면서 Z-Anatomy를 변형해 여성형을 만들 수 있는가?
+>
+> 질문 2: HuBMAP Human Reference Atlas 자료를 사용해도 현재 홀로그램 디자인을 유지할 수 있는가?
+
+두 질문은 `같아 보이는가`만으로 판단하지 않는다. 다음 세 종류의 일관성을 분리한다.
+
+| 구분 | 의미 | 판정 기준 |
+| --- | --- | --- |
+| 시각 일관성 | 같은 이어봄 제품처럼 보이는가 | 외피·골격·장기 재질, 조명, 배경, 선택 강조 |
+| 상호작용 일관성 | 같은 조작법과 데이터 계약을 사용하는가 | 선택, 빠른 확대, 계층, `bodyRegionId`, 오류 대체 경로 |
+| 해부학 일관성 | 참조 성별의 구조가 타당한가 | 골격·장기 위치, 성별 특이 구조, 좌우·누락·관통 검증 |
+
+### 12.1 공통 디자인 계약
+
+현재 남성형 화면의 디자인은 Z-Anatomy 원본 재질만으로 만들어진 것이 아니다. [VanatomeBodyMap.tsx](../frontend/src/features/home/VanatomeBodyMap.tsx)에서 원본 Material을 복제하고 다음 규칙을 적용해 만든다.
+
+- 외피: 청록색 반투명 와이어프레임, `depthWrite: false`
+- 골격: 옅은 청록·백색 반투명 재질
+- 장기: 계통별 구분색과 제한적인 emissive 효과
+- 선택 구조: 동일한 하늘색 강조와 구조명·계통명 표시
+- 장면: 어두운 남색 배경과 동일한 조명
+- 조작: 회전·확대, Raycaster 선택, 머리·상반신·하반신·손 빠른 확대
+
+따라서 여성형 자산이 다른 출처이더라도 Geometry와 해부 메타데이터를 공급하고, 공통 렌더러가 위 시각 규칙을 적용하면 디자인 일관성을 유지할 수 있다. 모델 원본의 색과 Material을 제품 디자인 계약으로 사용하지 않는다.
+
+```text
+공통 Holographic Anatomy Renderer
+├─ material preset
+├─ lighting·background
+├─ selection·focus·camera
+├─ 2D 접근성 대체 경로
+└─ bodyRegionId 계약
+       ↑
+Atlas Adapter
+├─ Vanatome/Z-Anatomy adapter
+└─ HRA adapter
+       ↑
+출처·성별·버전별 GLB와 manifest
+```
+
+### 12.2 트랙 A: Z-Anatomy 파생 여성형
+
+#### 조사 답변
+
+**기술적·법적으로 파생 모델 제작은 가능하지만, 남성 전신 Mesh에 하나의 morph를 적용하는 방법은 채택하지 않는다.** Z-Anatomy는 현재 자료를 남성형 모델로 설명하고 있으며, 여성형 요청도 아직 열린 이슈다. 원본은 수정 가능한 Blender 자료이고 CC BY-SA 4.0은 변형과 재배포를 허용하지만 출처·변경 내용 표시와 동일조건변경허락 의무를 유지해야 한다.
+
+- [Z-Anatomy 모델 저장소](https://github.com/Z-Anatomy/Models-of-human-anatomy)
+- [Z-Anatomy 여성형 요청 이슈 #4](https://github.com/Z-Anatomy/Models-of-human-anatomy/issues/4)
+- [Z-Anatomy 출처와 라이선스](https://github.com/Z-Anatomy/Models-of-human-anatomy/blob/master/License.txt)
+- [Vanatome 변환 파이프라인](https://github.com/vixotic/Vanatome/blob/main/docs/anatomy-pipeline.md)
+- [Vanatome 안정 ID 계약](https://github.com/vixotic/Vanatome/blob/main/docs/atlas-contract.md)
+
+외피만 여성형처럼 변경한 것은 디자인 시제품으로 만들 수 있다. 그러나 이를 `여성 해부학 모델`이라고 부르려면 최소한 여성형 골반, 골반저, 요도, 비뇨생식계와 주변 혈관·신경을 별도 제작하거나 검증된 여성 자료로 교체해야 한다.
+
+단순 morph를 기각하는 이유:
+
+- 남성 골반과 전립선·정낭·고환 등 남성 전용 구조가 남을 수 있다.
+- 자궁·난소·난관·자궁경부·질과 여성 요도 등 필요한 구조가 새로 생기지 않는다.
+- 외피와 내부 장기를 함께 변형하면 메시 관통·왜곡·위치 오류가 생길 수 있다.
+- 외형상 여성처럼 보이는 모델을 해부학적으로 검증된 여성 모델로 오인하게 만든다.
+
+#### 권장 자산 구조
+
+남성형 파일을 덮어쓰지 않고 참조 성별과 검증 수준이 명시된 별도 아틀라스로 관리한다.
+
+```text
+atlas/
+├─ male-reference/
+│  └─ Z-Anatomy·Vanatome 기반 자산과 manifest
+└─ female-reference/
+   ├─ 여성형 외피
+   ├─ 여성형 골반·골반저
+   ├─ 여성 비뇨생식계
+   └─ 검증된 공통 장기와 manifest
+```
+
+- 심장·간·좌우 신장 같은 공통 의미 ID는 가능한 한 유지한다.
+- 여성 전용 구조에는 `uterus`, `ovaries-ovary-left`처럼 별도 ID를 추가한다.
+- 남성 전용 ID는 여성 아틀라스에 억지로 대응시키지 않는다.
+- 원점·축·스케일·기준 자세를 맞추고 GLB의 `anatomyId`, `anatomyParentId`, `anatomySystem`을 빌드 시 검증한다.
+- 현재 고정 숫자인 빠른 확대 카메라 좌표는 모델별 bounds와 landmark 기반 계산으로 교체한다.
+- 해부학 검토 전에는 `여성형 외형 시제품`으로 표시하고 `여성 해부 모델`이라고 표시하지 않는다.
+
+Z-Anatomy 라이선스 문서에는 일부 참고·포함 자료가 BY-NC 또는 BY-NC-SA로 기재되어 있다. 상용화 가능성을 남기려면 최종 파생 GLB에 포함된 Mesh별 출처를 추적하고 비상업 조건이 있는 자료의 포함 여부를 별도로 확인한다.
+
+### 12.3 트랙 B: HRA 여성형과 현재 디자인 결합
+
+#### 조사 답변
+
+**HRA 자료를 사용해도 시각·상호작용 일관성은 유지할 수 있다.** HRA는 여성·남성 Visible Human 자료를 기반으로 장기 GLB를 제공하며, 여성 피부와 여러 장기를 조립한 United 자료도 제공한다. HRA 3D reference object는 CC BY 4.0이고, 장기 전문가 검토와 해부학적 크기·위치 정보를 제공한다.
+
+- [HRA 3D Reference Object Library](https://humanatlas.io/3d-reference-library)
+- [HRA v2.0 릴리스 저장소](https://github.com/hubmapconsortium/ccf-releases/tree/main/v2.0)
+- [HRA 여성형 United 자료](https://github.com/hubmapconsortium/ccf-releases/blob/main/v2.0/markdown/ref-organs/3d-vh-f-united.md)
+- [HRA ASCT+B–3D crosswalk](https://github.com/hubmapconsortium/ccf-releases/blob/main/v2.0/models/asct-b-3d-models-crosswalk.csv)
+
+HRA v2.0 여성 United 원본은 2026-08-20 조사 기준 압축 해제 후 약 212MB, 888개 Mesh와 약 555만 개 삼각형으로 확인됐다. 현재 약 15.6MB인 Vanatome core를 그대로 대체할 수 있는 초기 화면용 자산은 아니다. 필요한 피부·골격·주요 장기만 추출하고 LOD와 Meshopt·Draco 후보를 비교하는 별도 웹 자산 파이프라인이 필요하다.
+
+같은 여성 기준 HRA 릴리스에서 나온 피부와 개별 장기는 전신 좌표를 보존하므로 함께 조립할 수 있다. 이때 각 장기 GLB를 개별 bounding box로 중앙 정렬하면 원래 위치가 깨진다. 여성 피부 또는 United 전신을 기준으로 계산한 하나의 공통 scale·translation을 모든 여성 장기에 적용해야 한다. HRA 남성·여성 자산은 각각 별도 기준 인체이므로 한 장면에서 임의로 혼합하지 않는다.
+
+HRA Mesh는 UBERON·FMA ontology ID와 node name을 제공하지만 ontology ID 하나가 여러 좌우·세부 Mesh에 반복될 수 있다. 이어봄은 원본 식별자를 건강기록에 직접 저장하지 않고 다음 정보를 가진 자산 매핑 테이블을 `bodyRegionId` 앞에 둔다.
+
+```text
+assetMappingKey
+├─ source digital object/PURL
+├─ asset version
+├─ reference sex
+├─ laterality
+├─ ontologyId
+└─ source nodeName
+        ↓
+stable bodyRegionId
+```
+
+#### 라이선스와 자산 경계
+
+HRA 여성 자산과 Vanatome 남성 자산을 하나의 GLB로 합치지 않는다. 별도 자산과 manifest·attribution을 유지하고 공통 렌더러에서만 같은 디자인을 적용한다.
+
+```text
+Vanatome 남성 자산: CC BY-SA 4.0 + Vanatome adapter
+HRA 여성 자산:      CC BY 4.0    + HRA adapter
+공통 이어봄 코드:   동일 material·lighting·selection·camera
+```
+
+이 구조는 출처와 변경 이력을 분리하면서도 사용자에게는 동일한 홀로그램 뷰어 경험을 제공한다. 두 자료를 하나의 파생 자산으로 합칠 필요가 생기면 ShareAlike 적용 범위와 양쪽 attribution을 배포 전에 다시 검토한다.
+
+### 12.4 현재 권장 결론
+
+| 후보 | 디자인 일관성 | 해부학적 신뢰 기반 | 초기 구현 비용 | 현재 판단 |
+| --- | --- | --- | --- | --- |
+| Z-Anatomy 외피 단순 morph | 높음 | 낮음 | 낮음 | 외형 실험만 허용, 제품 여성형으로 기각 |
+| Z-Anatomy 기반 별도 여성 아틀라스 제작 | 매우 높음 | 제작·검수 범위에 따라 결정 | 매우 높음 | 장기 연구 후보 |
+| HRA 여성형 + 공통 렌더러 | 높음 | 공식 여성 reference object 기반 | 중간~높음 | 우선 기술검증 후보 |
+| 남성 Vanatome과 여성 HRA를 하나의 GLB로 병합 | 높일 수 있음 | 출처별로 다름 | 높음 | 현 단계 기각 |
+
+현재 권장 방향은 **남성 Vanatome과 여성 HRA를 서로 독립된 아틀라스로 유지하고, 공통 렌더러와 자산 어댑터로 디자인·상호작용을 통일하는 것**이다. Z-Anatomy를 직접 여성형으로 변형하는 작업은 HRA 기술검증으로 해결할 수 없는 구조가 확인됐을 때 별도 연구 트랙으로 진행한다.
+
+여성형 HRA의 기반 인체는 특정 Visible Human Female 자료에 근거하므로 이를 모든 여성의 평균 체형으로 표현하지 않는다. 프로필의 성별 값만으로 모델을 자동 선택하지 않고, 참조 모델의 성격과 한계를 UI와 attribution에서 설명한다.
+
+### 12.5 추적 항목과 완료 조건
+
+- [x] Z-Anatomy 파생 제작과 ShareAlike 조건 1차 조사
+- [x] Z-Anatomy 여성형 공식 제공 여부 확인
+- [x] HRA 여성 United·개별 장기·crosswalk 제공 여부 확인
+- [x] 공통 Material override로 디자인 통일 가능 여부 확인
+- [ ] HRA 여성 core에 포함할 피부·골격·심장·폐·간·신장·뇌·안구 Mesh 목록 확정
+- [ ] HRA adapter의 `assetMappingKey → bodyRegionId` 매핑 초안 작성
+- [ ] HRA 공통 좌표 변환과 장기 지연 로딩 기술검증
+- [ ] 원본·LOD·Meshopt·Draco의 용량·디코딩·메모리·FPS 비교
+- [ ] 남성 Vanatome과 여성 HRA의 나란한 캡처로 재질·조명·카메라 일관성 평가
+- [ ] 모바일·저사양 기기에서 2D fallback 포함 검증
+- [x] 각 자산의 출처·변경 내용·라이선스 고지 자동 검증
+- [ ] 해부학 검토 범위와 검토 책임 기준 확정
+
+다음 실험의 성공 조건은 `같은 디자인처럼 보인다`에 그치지 않는다. 동일한 빠른 확대와 구조 선택이 동작하고, 장기 위치가 공통 좌표에서 유지되며, 안정 ID와 attribution이 보존되고, 합의한 기준 기기에서 초기 로딩·메모리·FPS가 허용 범위에 들어와야 한다.
+
+### 12.6 1차 권장 구조 기술검증 결과
+
+2026-08-20에 제품 채택이 아닌 **구조 검증용 실험**을 구현했다. 사용자가 UI에서 명시적으로 참조 아틀라스를 선택하며, 프로필 성별을 근거로 자동 선택하지 않는다.
+
+```text
+공통 React UI와 Three.js 렌더러
+├─ 공통 홀로그램 Material·조명·카메라·Raycaster
+├─ Vanatome adapter
+│  └─ 기존 남성 기준 core GLB + metadata
+└─ HRA adapter
+   └─ 여성 기준 GLB 6개 + HRA node metadata
+```
+
+HRA v1.2에서 피부, 골반, 심장, 자궁, 좌우 난소를 원본 GLB 상태로 포함했다. 이 자산들은 같은 Visible Human Female 좌표계를 유지하므로 장기마다 개별 중앙 정렬하지 않고 하나의 그룹으로 조립한 뒤 그룹 전체에 동일한 정규화 변환을 적용한다. 전체 용량은 약 26MiB이며 HRA 선택 전에는 로드하지 않는다.
+
+구현 경계는 다음과 같다.
+
+- [anatomyAtlas.ts](../frontend/src/features/home/anatomyAtlas.ts): 출처별 manifest와 mesh metadata를 공통 계약으로 변환한다.
+- [holographicAnatomyStyle.ts](../frontend/src/features/home/holographicAnatomyStyle.ts): 원본 Material과 무관한 공통 홀로그램 시각 규칙과 bounds 기반 카메라 프리셋을 제공한다.
+- [VanatomeBodyMap.tsx](../frontend/src/features/home/VanatomeBodyMap.tsx): 명시적 아틀라스 전환, 아틀라스 단위 지연 로딩, 선택과 확대를 담당한다.
+- `frontend/public/vendor/hra/`: Vanatome과 분리된 HRA manifest, attribution, license, 원본 GLB를 보관한다.
+- `npm run verify:anatomy-assets`: manifest 경로, attribution, metadata, 원본 HRA SHA-256을 검사한다.
+
+정적 검증에서는 자산 계약, ESLint, TypeScript, 단위 테스트와 프로덕션 빌드가 통과했다. 그러나 다음 사항 때문에 HRA 여성형을 제품 기본 모델로 확정하지 않는다.
+
+- 현재 subset에는 폐·간·신장·뇌·안구가 없으며 해부학적 core 범위가 미완성이다.
+- `assetMappingKey → bodyRegionId` 제품 매핑을 아직 확정하지 않았다.
+- 장기별 요청·해제까지 나누는 세부 지연 로딩과 LOD·압축 비교가 남아 있다.
+- 실제 브라우저의 남성/여성 나란한 캡처, 메모리·FPS, 모바일 fallback 검증이 남아 있다.
+- HRA 여성 기준 인체는 사용자 개인 신체의 디지털 트윈이 아니며 화면에서 참조 모델임을 계속 알려야 한다.
+
+따라서 이번 결과는 **서로 다른 해부 아틀라스를 병합하지 않고도 공통 디자인과 상호작용 계약으로 교체할 수 있음**을 입증하는 1차 기술검증으로만 기록한다.
+
+## 13. 여성 상지 교정본·두개골과 Three.js 손 포즈 v34
+
+2026-08-29에 Blender 저장본 `z-anatomy-female-fit-work-v32-clean-hand-origins.blend`의 양쪽 상지 교정 결과를 여성 웹 골격에 반영했다. `SKELETON_V27`에 남아 있는 숨김 원본 상지 60개는 내보내기 단계에서 제외하고, 동일한 `anatomyId`를 가진 `FEMALE_*_WORK` 메시 60개로 치환했다. 나머지 골격은 그대로 유지한다.
+
+- 웹 골격: `triangle2m-v49-skeleton-corrected-upper-limb-hand-poses-skull-v34.glb`
+- 재생성 스크립트: `frontend/scripts/export-female-upper-limb-pose-skeleton.py`
+- 전체 골격 메시: 231개
+- 고유 `anatomyId`: 231개, 중복 0개
+- 여성 두개골·하악골·치아: 별도 `HEAD` 계층에서 50개 추가
+- 포함 컨트롤 노드: 32개 손목·손가락 컨트롤
+- 포즈 클립: `Open Hand`, `Fist`, `Spread`, `Point`
+- `Point`: 양쪽 검지 컨트롤은 열린 상태를 유지하고 나머지 손가락은 주먹 상태를 사용
+- GLB SHA-256: `289af4ea9da0dbebf9a021e6e38b4eea776f3ed1dcf6d7c2fbfd5dab2da2359f`
+
+Blender 커스텀 프로퍼티와 드라이버는 glTF 런타임에 의존하지 않는다. 내보내기 스크립트가 드라이버 식을 평가해 네 개의 일반 NLA 애니메이션으로 베이크하고, Three.js는 `AnimationMixer`로 해당 클립을 0.24초 동안 교차 전환한다. 여성 아틀라스를 선택했을 때만 `손 펴기`, `주먹`, `손가락 벌리기`, `가리키기` 버튼을 표시하며 양손에 동시에 적용한다.
+
+GLB는 Draco 압축을 사용한다. `/vendor/three/draco/gltf/`에 현재 Three.js 버전과 일치하는 디코더를 배치하고 `DRACOLoader.setDecoderPath()`로 고정 경로를 지정했다. 개발 서버에서 manifest, GLB, WASM 디코더와 wrapper가 모두 HTTP 200으로 제공됨을 확인했다.
+
+정적 검증 결과:
+
+- TypeScript 빌드 통과
+- ESLint 통과
+- Vitest 13개 파일·56개 테스트 통과
+- Vite 프로덕션 빌드 통과
+- GLB 바이너리 검사에서 네 클립 각각 96개 채널 확인
+- 무클립 기본 자세와 `Open Hand` 첫 키프레임의 TRS 차이 0개 확인
+- `Fist` 30개, `Spread` 10개, `Point` 24개 회전 컨트롤 변화 확인
+
+현재 세션에서는 연결 가능한 로컬 브라우저가 없어 실제 버튼 클릭 캡처만 남아 있다. 다음 브라우저 검증에서는 여성 아틀라스 로딩, 네 포즈의 양손 동기 재생, 포즈 전환 중 구조 선택·회전·빠른 확대 유지, 콘솔 오류와 프레임 저하 여부를 확인한다.
+
+### 13.1 골격 컨트롤러 전용 웹 화면 분리
+
+여성 외피·근육·장기 배치가 완료되기 전에 복합 여성 아틀라스로 보이지 않도록, 현재 기본 웹 화면을 `female-skeleton-controller-test` manifest로 분리했다. 이 manifest는 두개골이 포함된 v34 골격 GLB 한 개만 로드하며 외피·표면 가이드·장기 GLB를 로드하지 않는다.
+
+- 기본 화면: 여성 골격 상지·손 컨트롤러 테스트
+- 표시 구조: 전신 골격 231개(두개골·하악골·치아 50개 포함)
+- 제외 구조: 여성 외피, 근육, 장기, 표면·구획 가이드
+- 유지 기능: 구조 선택, 빠른 확대, `Open Hand`, `Fist`, `Spread`, `Point`
+- 남성 Vanatome은 비교용 별도 아틀라스 선택지로만 유지
+
+기존 외피·골격·장기 복합 manifest는 이후 정합 작업을 위해 보존하되 현재 아틀라스 선택지에서는 노출하지 않는다.
+
+### 13.2 골격 단독 화면의 두개골 가독성 보정
+
+v34 GLB를 다시 가져와 검사한 결과, 두개골·하악골·치아 50개는 모두 포함되어 있었고 머리 최저점과 목뼈 최고점도 겹쳐 연결되어 있었다. 웹에서 두개골이 사라지거나 조각이 떠 있는 것처럼 보인 원인은 골격 단독 화면에도 복합 외피 내부 표시용 72% 투명 골격 재질을 사용한 것이었다. 가까운 거리와 비스듬한 각도에서 분절된 두개골 메시의 투명 정렬이 형상을 읽기 어렵게 만들었다.
+
+### 13.3 Blender 월드 좌표 그대로 다시 내보낸 v35
+
+브라우저에서 작업용 루트 계층의 변환을 재구성하지 않도록, Blender에서 실제로 보이는 231개 골격 메시의 평가된 월드 행렬을 독립 glTF 노드로 다시 내보냈다. 두개골·하악골·치아 50개도 같은 좌표계에 포함되며, `FEMALE_SKULL_ROOT`, `FEMALE_CERVICAL_ROOT`, 어깨·손 컨트롤러 같은 Blender 작업용 부모 노드는 웹 파일에 포함하지 않는다.
+
+계층을 제거하면 Blender 컨트롤러 애니메이션 상속도 사라지므로 `Open Hand`, `Fist`, `Spread`, `Point` 결과를 움직이는 손뼈 메시 30개의 위치·회전·스케일 트랙으로 직접 베이크했다. 따라서 v35는 Blender의 정적 배치를 그대로 유지하면서 Three.js에서도 네 포즈를 독립 애니메이션 클립으로 재생한다.
+
+- 웹 골격: `triangle2m-v49-skeleton-corrected-upper-limb-hand-poses-skull-flat-v35.glb`
+- 노드 구조: 루트 메시 231개, 부모 메시 0개
+- 머리 구성: 두개골·하악골·치아 50개
+- 애니메이션: 4개 클립, 각 30개 메시·90개 변환 채널
+
+### 13.4 Three.js 다중 primitive 메타데이터 상속
+
+두개골 GLB 자체와 Blender 재가져오기는 정상이지만 웹에서는 작은 머리 구조만 보였다. 원인은 여러 재질을 가진 glTF 메시를 `GLTFLoader`가 부모 `Group`과 여러 자식 `Mesh` primitive로 분해하면서 `anatomyId`, `anatomySystem`, `label`을 부모에만 보존한 것이었다. 기존 렌더러는 자식 `Mesh`만 어댑터에 전달하여 메타데이터 없는 두개골 primitive를 `regional-anatomy`로 판정하고 숨겼다.
+
+자식 `Mesh`를 변환하기 전에 가장 가까운 조상들의 해부 메타데이터를 상속하도록 수정했다. 이 처리는 기본 자산과 지연 로드 자산 양쪽에 공통 적용되며, 다중 재질 두개골의 모든 primitive가 `skeletal` 구조로 표시·선택된다.
+
+### 13.5 손 포즈 컨트롤러 계층 복원 v36
+
+v35는 Blender의 월드 배치를 보존하기 위해 231개 메시를 모두 독립 루트로 평탄화하고 손뼈 30개에 월드 변환 트랙을 직접 베이크했다. 정적 자세는 정확했지만 포즈 사이의 위치·회전 보간이 각 관절의 부모 축이 아니라 월드 좌표를 기준으로 수행되어 손가락 뼈들이 흩어졌다가 다시 합쳐지는 현상이 발생했다.
+
+두개골 누락의 실제 원인은 GLB 좌표가 아니라 Three.js 다중 primitive 메타데이터 상속이었으므로, 정적 평탄화본을 사용할 필요가 없다. v36 manifest는 두개골 포함 계층형 골격을 다시 사용한다. 손 포즈는 32개 Blender 손목·손가락 컨트롤러를 대상으로 하고, 278개 부모 연결을 유지하므로 관절 축을 따라 자연스럽게 보간된다. 두개골 표시는 13.4의 부모 메타데이터 상속으로 유지한다.
+
+- 골격 메시: 231개
+- glTF 노드: 283개, 부모 연결 노드 278개
+- 포즈 대상: 메시 직접 변환 0개, 컨트롤러 32개
+- 포즈 클립: `Open Hand`, `Fist`, `Spread`, `Point`
+
+골격 전용 아틀라스는 불투명도 1, `transparent=false`, `depthWrite=true`로 렌더링한다. 외피와 함께 표시하는 기존 복합 아틀라스의 96% 골격 재질은 유지한다. 머리 빠른 확대의 목표점도 전신 상단 10% 지점에서 4.5% 지점으로 올려 목보다 두개골 중심을 우선 표시하도록 변경했다.
+
+### 13.6 빠른 확대 후 줌아웃 시 전체 보기 자동 복귀
+
+`머리`, `상반신`, `하반신`, `무릎`, `발`, `손` 빠른 확대 상태에서 사용자가 휠 줌아웃으로 전신 카메라 거리의 45% 이상 멀어지면 기다리지 않고 버튼 클릭과 같은 `전체 보기` 전환을 시작한다. 카메라는 900ms 동안 smootherstep 가감속 곡선으로 서서히 이동한다. 전환 중에만 OrbitControls 입력을 잠가 트랙패드와 휠의 후속 이벤트가 카메라 애니메이션을 취소하지 못하게 하고, 완료 즉시 조작을 다시 활성화한다. 자동 복귀 시 내부 초점과 React 상태도 `full`로 동기화한다. 자동 전환 UX 검증이 끝날 때까지 `전체 보기` 버튼은 전신 상태에서도 계속 표시한다.
+
+3D 캔버스 위의 휠 이벤트는 캡처 단계에서 기본 페이지 스크롤을 차단한다. 따라서 모델 위에서는 카메라 줌만 동작하고, 캔버스 밖에서 휠을 사용할 때만 웹페이지가 스크롤된다. 자동 전환 중 OrbitControls가 잠시 비활성화된 상태에서도 남은 트랙패드 관성 입력이 페이지를 움직이지 않는다.
+
+### 13.7 오른발 발배뼈 메타데이터 복원 v37
+
+여성 골격의 오른발 등에서 족근골 하나가 비어 보이는 원인은 실제 형상 부재가 아니라 `FEMALE_HAND_R_16_WORK`에 남아 있던 잘못된 `appendicular-skeleton-navicular-bone-right` 메타데이터였다. 해당 객체의 형상은 오른손 삼각골이지만 내보내기기는 오른발 발배뼈의 교정 대체물로 판단해 `SKELETON_V27`의 실제 `Navicular bone.r`를 제외했다.
+
+오른손 16번을 `appendicular-skeleton-triquetrum-bone-right`로 교정하고 모든 좌우 손 교정본의 ID 대칭을 검증한 후 계층형 v37 GLB를 다시 생성했다. 새 파일에는 좌우 발배뼈가 각각 독립 메시로 포함되고, 오른손 삼각골도 올바른 ID를 갖는다.
+
+- 골격 구조 ID: 231개, 중복 0개
+- 좌우 발배뼈: 2개 모두 포함
+- 손 컨트롤러: 32개, 부모 연결 노드 278개 유지
+- 포즈: 4개 클립, 각 96채널
+- GLB SHA-256: `c18788adedd89cf6778d77ee4451ff48bebe8ec6d00f9a3f472bbfd3e116e7a2`
