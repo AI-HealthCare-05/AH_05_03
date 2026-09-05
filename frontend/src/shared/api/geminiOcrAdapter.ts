@@ -109,7 +109,7 @@ export class GeminiOcrAdapter {
       } catch (error) {
         if (!isTransientReadFailure(error)) throw error;
         if (Date.now() > deadline) {
-          throw new Error("문서 인식이 너무 오래 걸립니다. 잠시 후 다시 시도해 주세요.");
+          throw new Error("문서 인식이 너무 오래 걸립니다. 잠시 후 다시 시도해 주세요.", { cause: error });
         }
         // 작업은 서버에서 계속 돈다. 같은 job_id를 다시 조회해야 하며 새 작업을
         // 등록하면 Gemini 비용과 개인정보 원본 체류 시간만 늘어난다.
