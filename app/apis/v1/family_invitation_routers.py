@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, status
 
 from app.core.errors import ErrorCode
-from app.dependencies.security import require_active_account
+from app.dependencies.security import request_origin, require_active_account
 from app.dtos.envelope import ApiResponse, error_responses
 from app.dtos.family_invitations import (
     FamilyInvitationCreatedData,
@@ -56,8 +56,11 @@ async def create_family_invitation(
     request: FamilyInvitationCreateRequest,
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     service: Annotated[FamilyInvitationService, Depends(FamilyInvitationService)],
+    # 메일 링크의 앞부분. 여기서 잡아 두지 않으면 요청 문맥이 없는 메일 워커가
+    # 설정 기본값(`localhost:5173`)으로 링크를 만들어 보낸다.
+    web_origin: Annotated[str | None, Depends(request_origin)] = None,
 ) -> ApiResponse[FamilyInvitationCreatedData]:
-    return ApiResponse(data=await service.create(account, request), message="초대 전송을 예약했습니다.")
+    return ApiResponse(data=await service.create(account, request, web_origin), message="초대 전송을 예약했습니다.")
 
 
 @family_invitation_router.get(

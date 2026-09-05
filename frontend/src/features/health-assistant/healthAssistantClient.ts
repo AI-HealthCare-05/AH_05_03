@@ -1,4 +1,7 @@
 import { serverApiClient } from "../../shared/api/serverApiClient";
+import type { ChatMessageData, ChatSessionData } from "../../shared/api/contracts";
+
+export type { ChatMessageData, ChatSessionData };
 
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -134,16 +137,37 @@ export interface HealthAssistantResponse {
  * 왜 완성본이 따로 오나. 기록 초안은 JSON 이 끝나야 유효해지고 안전 검증도 완성본에만
  * 걸 수 있다 — 덜 온 문장으로 응급 판정을 하면 "가슴이 아" 에서 119 를 띄운다.
  */
+export async function createChatSession(profileId: string, title?: string): Promise<ChatSessionData> {
+  return serverApiClient.createChatSession(profileId, title);
+}
+
+export async function listChatSessions(profileId?: string): Promise<ChatSessionData[]> {
+  return serverApiClient.listChatSessions(profileId);
+}
+
+export async function listChatMessages(sessionId: string): Promise<ChatMessageData[]> {
+  return serverApiClient.listChatMessages(sessionId);
+}
+
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  return serverApiClient.deleteChatSession(sessionId);
+}
+
 export async function streamHealthAssistantMessage(
   messages: ChatMessage[],
   onDelta: (text: string) => void,
   profileContext?: ProfileContext,
   signal?: AbortSignal,
+  sessionId?: string,
 ): Promise<HealthAssistantResponse> {
   let final: HealthAssistantResponse | undefined;
   let failure: string | undefined;
   await serverApiClient.streamHealthAssistantChat(
-    { messages, profile_context: profileContext },
+    {
+      messages,
+      profile_context: profileContext,
+      session_id: sessionId,
+    },
     (event, data) => {
       if (event === "delta" && typeof data.text === "string") onDelta(data.text);
       else if (event === "result") final = data as unknown as HealthAssistantResponse;
@@ -159,9 +183,12 @@ export async function streamHealthAssistantMessage(
 export async function sendHealthAssistantMessage(
   messages: ChatMessage[],
   profileContext?: ProfileContext,
+  sessionId?: string,
 ): Promise<HealthAssistantResponse> {
   return serverApiClient.healthAssistantChat<HealthAssistantResponse>({
     messages,
     profile_context: profileContext,
+    session_id: sessionId,
   });
 }
+

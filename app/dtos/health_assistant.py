@@ -1,3 +1,4 @@
+import uuid
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -136,6 +137,7 @@ HealthIntent = Literal[
 class HealthAssistantChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=12, description="대화 이력 리스트")
     profile_context: ProfileContext | None = Field(default=None, description="현재 선택된 가족 구성원의 컨텍스트 정보")
+    session_id: uuid.UUID | None = Field(default=None, description="대화 세션 ID (DB 영구 보존용)")
 
 
 class HealthAssistantResponse(BaseModel):

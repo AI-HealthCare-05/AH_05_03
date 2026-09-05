@@ -249,3 +249,8 @@ class RateLimitedError(AppError):
 # --- challenge -----------------------------------------------------------
 class ChallengeNotFoundError(AppError):
     error_code = ErrorCode.CHALLENGE_NOT_FOUND
+
+
+# --- chat sessions -------------------------------------------------------
+class ChatSessionNotFoundError(AppError):
+    error_code = ErrorCode.CHAT_SESSION_NOT_FOUND

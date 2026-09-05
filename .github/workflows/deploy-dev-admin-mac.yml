@@ -1,0 +1,103 @@
+name: deploy-dev-admin-mac
+
+on:
+  push:
+    branches: [dev]
+    # 문서만 바뀐 병합은 실행하지 않는다. 앱, 모델 자산 또는 배포 설정 변경만 배포한다.
+    paths:
+      - '.github/workflows/deploy-dev-admin-mac.yml'
+      - 'app/**'
+      - 'chronic_disease_engine/**'
+      - 'frontend/**'
+      - 'infra/**'
+      - 'scripts/deploy_admin_mac.sh'
+      - 'scripts/configure_admin_cloudflare_tunnel.sh'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'alembic.ini'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-dev-admin-mac
+  # Mac 러너가 복구되었을 때 밀린 옛 배포를 순서대로 실행하지 않는다.
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, macOS, ieobom-admin]
+    environment: admin-macbook-dev
+    timeout-minutes: 15
+    env:
+      IEOBOM_ENV_FILE: ${{ vars.IEOBOM_DEV_ENV_FILE }}
+      IEOBOM_HTTP_PORT: ${{ vars.IEOBOM_DEV_HTTP_PORT }}
+      IEOBOM_DEV_TAILSCALE_HOST: ${{ vars.IEOBOM_DEV_TAILSCALE_HOST }}
+      IEOBOM_DEV_INVITATION_WEB_ORIGIN: ${{ vars.IEOBOM_DEV_INVITATION_WEB_ORIGIN }}
+      IEOBOM_DEV_CORS_ALLOW_ORIGINS: ${{ vars.IEOBOM_DEV_CORS_ALLOW_ORIGINS }}
+      IEOBOM_DEV_REFRESH_COOKIE_SECURE: ${{ vars.IEOBOM_DEV_REFRESH_COOKIE_SECURE }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      DEPLOY_SHA: ${{ github.sha }}
+      DEPLOY_BEFORE_SHA: ${{ github.event.before }}
+      DEPLOY_FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
+    steps:
+      - name: Check out the exact dev revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+          # 변경 서비스 판별에 직전 커밋이 필요하다.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify deployment revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${DEPLOY_SHA}"
+          echo "Deploying ${DEPLOY_SHA}"
+
+      - name: Locate Docker Desktop CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v docker >/dev/null 2>&1; then exit 0; fi
+          docker_cli_dir="/Applications/Docker.app/Contents/Resources/bin"
+          test -x "${docker_cli_dir}/docker"
+          echo "${docker_cli_dir}" >> "$GITHUB_PATH"
+
+      - name: Persist Gemini API key on the admin Mac
+        shell: bash
+        run: |
+          set -euo pipefail
+          env_file="${IEOBOM_ENV_FILE:-${HOME}/.config/ieobom/dev.env}"
+          mkdir -p "$(dirname "${env_file}")"
+          temp_file="$(mktemp "${env_file}.XXXXXX")"
+          if [[ -f "${env_file}" ]]; then
+            grep -v '^GEMINI_API_KEY=' "${env_file}" > "${temp_file}" || true
+          fi
+          printf 'GEMINI_API_KEY=%s\n' "${GEMINI_API_KEY}" >> "${temp_file}"
+          chmod 600 "${temp_file}"
+          mv "${temp_file}" "${env_file}"
+
+      - name: Deploy only changed services
+        shell: bash
+        timeout-minutes: 10
+        run: ./scripts/deploy_admin_mac.sh
+
+      - name: Verify persistent Cloudflare tunnel
+        shell: bash
+        timeout-minutes: 3
+        run: ./scripts/configure_admin_cloudflare_tunnel.sh
+
+      - name: Show service logs after a failed deployment
+        if: failure()
+        shell: bash
+        run: |
+          env_file="${IEOBOM_ENV_FILE:-$HOME/.config/ieobom/dev.env}"
+          docker compose --project-name ieobom-dev --env-file "${env_file}" \
+            --file infra/docker/docker-compose.dev-mac.yml ps || true
+          docker compose --project-name ieobom-dev --env-file "${env_file}" \
+            --file infra/docker/docker-compose.dev-mac.yml \
+            logs --tail 200 fastapi anatomy-assets nginx migrate mailpit email-worker || true

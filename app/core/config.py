@@ -149,6 +149,13 @@ class Config(BaseSettings):
     # --- api ----------------------------------------------------------
     # 오류 응답의 details는 비규격 필드다. 운영에서는 끈다.
     API_ERROR_INCLUDE_DETAILS: bool = False
+    # 대화형 문서(`/api/docs`·`/api/redoc`)와 `/api/openapi.json` 을 여는가.
+    #
+    # 기본은 켜짐이다 — 개발과 테스트가 이걸 본다. **운영에서는 끈다.** 2026-09-04
+    # 배포에서 `/api/openapi.json` 이 211KB 짜리 전체 스키마를 익명에게 그대로
+    # 내주고 있었다. 라우트·필드·오류 코드가 전부 들어 있어 공격자가 API 표면을
+    # 읽는 수고를 대신 해 준 셈이다. 인증이 붙어 있어도 표면을 알려 줄 이유는 없다.
+    API_DOCS_ENABLED: bool = True
     CORS_ALLOW_ORIGINS: list[str] = [
         "http://localhost:4173",
         "http://127.0.0.1:4173",
