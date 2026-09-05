@@ -1033,6 +1033,7 @@ main {
   height: 100%;
   display: block;
   touch-action: none;
+  overscroll-behavior: contain;
 }
 
 .body-map-hint {
@@ -1069,6 +1070,14 @@ main {
   color: #77561b;
   background: #fff9ea;
   font-size: 0.78rem;
+}
+
+.body-map-load-notice p {
+  margin: 0;
+}
+
+.body-map-load-notice .secondary-button {
+  margin-top: 8px;
 }
 
 .vanatome-card {
@@ -1165,43 +1174,6 @@ main {
   box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.08);
 }
 
-.anatomy-atlas-note {
-  display: grid;
-  gap: 3px;
-  margin-top: 10px !important;
-  border-left: 3px solid #8db4fc;
-  padding: 7px 9px;
-  color: var(--muted-strong) !important;
-  background: #f6f9ff;
-  font-size: 0.68rem !important;
-}
-
-.anatomy-atlas-note strong {
-  color: var(--ink);
-}
-
-.anatomy-atlas-note.is-experimental {
-  border-left-color: #d69b39;
-  background: #fff9ec;
-}
-
-.vanatome-layer-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px !important;
-}
-
-.vanatome-layer-summary span {
-  border: 1px solid #bfe8ee;
-  border-radius: 999px;
-  padding: 4px 8px;
-  color: #136478;
-  background: #edfbfd;
-  font-size: 0.66rem;
-  font-weight: 700;
-}
-
 .vanatome-system-layers {
   margin: 18px 0 0;
   border: 0;
@@ -1281,7 +1253,6 @@ main {
 }
 
 .vanatome-focus-buttons button,
-.vanatome-reset-focus,
 .vanatome-pelvic-focus {
   border: 1px solid var(--line);
   border-radius: 9px;
@@ -1314,12 +1285,52 @@ main {
   opacity: 0.45;
 }
 
-.vanatome-reset-focus {
-  margin-top: 7px;
-  border-color: transparent;
-  padding-inline: 0;
+.vanatome-hand-poses {
+  margin: 18px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  padding: 16px 0 0;
+}
+
+.vanatome-hand-poses legend {
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.vanatome-hand-poses > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.vanatome-hand-poses button {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 6px;
+  color: var(--muted-strong);
+  background: white;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.vanatome-hand-poses button[aria-pressed="true"] {
+  border-color: #85aefc;
   color: var(--blue-700);
-  background: transparent;
+  background: #edf4ff;
+}
+
+.vanatome-hand-poses button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.vanatome-hand-poses small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.65rem;
 }
 
 .vanatome-actions button {
@@ -1348,58 +1359,6 @@ main {
   color: var(--blue-700);
   text-decoration: underline;
   text-underline-offset: 2px;
-}
-
-.vanatome-loading {
-  position: absolute;
-  z-index: 4;
-  inset: 0;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 8px;
-  color: var(--muted-strong);
-  text-align: center;
-}
-
-.vanatome-loading small {
-  color: var(--muted);
-}
-
-.is-hologram .vanatome-loading {
-  color: #d8f8ff;
-}
-
-.is-hologram .vanatome-loading small {
-  color: #8dc7d5;
-}
-
-.vanatome-lazy-status {
-  position: absolute;
-  z-index: 4;
-  top: 14px;
-  left: 50%;
-  max-width: calc(100% - 28px);
-  transform: translateX(-50%);
-  border: 1px solid rgba(103, 232, 249, 0.42);
-  border-radius: 999px;
-  padding: 7px 12px;
-  color: #d8f8ff;
-  background: rgba(4, 16, 24, 0.86);
-  box-shadow: 0 8px 24px rgba(2, 12, 20, 0.28);
-  font-size: 0.72rem;
-  text-align: center;
-  pointer-events: none;
-}
-
-.vanatome-lazy-status.is-loaded {
-  border-color: rgba(110, 231, 183, 0.52);
-  color: #c9ffe9;
-}
-
-.vanatome-lazy-status.is-error {
-  border-color: rgba(251, 191, 36, 0.62);
-  color: #fff0b5;
 }
 
 .records-panel {

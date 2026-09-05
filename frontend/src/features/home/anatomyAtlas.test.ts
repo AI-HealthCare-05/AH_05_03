@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   adaptAnatomyMesh,
+  anatomyLayerSystem,
+  inheritAnatomyMetadata,
+  initiallyHiddenSystems,
   lazyLayersForFocus,
   validateAnatomyAtlasManifest,
 } from "./anatomyAtlas";
@@ -32,6 +35,47 @@ function manifest(
 }
 
 describe("final anatomy atlas adapters", () => {
+  it("유방 구조를 외피계 버튼으로 제어하되 다른 계통은 유지한다", () => {
+    expect(anatomyLayerSystem("mammary")).toBe("integumentary");
+    expect(anatomyLayerSystem("reproductive")).toBe("reproductive");
+    expect(anatomyLayerSystem("skeletal")).toBe("skeletal");
+  });
+
+  it("남녀 전신 모델의 첫 화면은 외피계와 골격계만 켠다", () => {
+    const systems = ["integumentary", "skeletal", "muscular", "nervous", "digestive"];
+
+    expect([...initiallyHiddenSystems("vanatome-male-reference", systems)]).toEqual([
+      "muscular",
+      "nervous",
+      "digestive",
+    ]);
+    expect([...initiallyHiddenSystems("tripo-triangle2m-v49-internals-preview", systems)]).toEqual([
+      "muscular",
+      "nervous",
+      "digestive",
+    ]);
+  });
+
+  it("다중 재질 glTF Group의 해부 메타데이터를 primitive Mesh에 상속한다", () => {
+    const parent = {
+      userData: {
+        anatomyId: "female-reference-head-frontal-bone",
+        anatomyParentId: "axial-skeleton",
+        anatomySystem: "skeletal",
+        label: "Frontal bone",
+      },
+      parent: null,
+    };
+    const primitive = { userData: {}, parent };
+
+    expect(inheritAnatomyMetadata(primitive)).toMatchObject({
+      anatomyId: "female-reference-head-frontal-bone",
+      anatomyParentId: "axial-skeleton",
+      anatomySystem: "skeletal",
+      label: "Frontal bone",
+    });
+  });
+
   it("남성 Vanatome 구조의 anatomyId와 계통을 유지한다", () => {
     const male = manifest({
       id: "vanatome-male-reference",
@@ -118,6 +162,27 @@ describe("final anatomy atlas adapters", () => {
     )).toMatchObject({ system: "reproductive", visualRole: "organ", selectable: true });
   });
 
+  it("Z-Anatomy joints 구조를 골격과 분리된 관절·인대·막 계층으로 유지한다", () => {
+    const male = manifest({
+      id: "vanatome-male-reference",
+      version: "1.4.0",
+      referenceSex: "male",
+      adapter: "vanatome",
+    });
+    expect(adaptAnatomyMesh(
+      {
+        name: "External intercostal membrane.l",
+        userData: {
+          anatomyId: "official-upper-external-intercostal-membrane-left",
+          anatomySystem: "joints",
+        },
+      },
+      { url: "/upper.glb", visualRole: "organ" },
+      male,
+      new Map(),
+    )).toMatchObject({ system: "joints", visualRole: "skeleton", selectable: true });
+  });
+
   it("Tripo v28의 Vanatome 장기 자산을 선택 가능한 장기로 유지한다", () => {
     expect(adaptAnatomyMesh(
       {
@@ -133,6 +198,36 @@ describe("final anatomy atlas adapters", () => {
       visualRole: "organ",
       selectable: true,
     });
+  });
+
+  it("여성 전신 근육을 외피가 아닌 Vanatome 근육 장기로 분류한다", () => {
+    const female = manifest({
+      version: "4.3.1-vanatome-system-adapter",
+      adapter: "vanatome",
+    });
+
+    expect(adaptAnatomyMesh(
+      {
+        name: "FEMALE_MUSCLE_TRUNK_Pectoralis_major",
+        userData: {
+          anatomyId: "female-pectoralis-major-left",
+          anatomySystem: "muscular",
+        },
+      },
+      { url: "/female-muscles.glb", visualRole: "organ", system: "muscular" },
+      female,
+      new Map(),
+    )).toMatchObject({
+      system: "muscular",
+      visualRole: "organ",
+      selectable: true,
+    });
+  });
+
+  it("비외피 자산이 기본 shell 어댑터로 잘못 분류되는 manifest를 거부한다", () => {
+    expect(() => validateAnatomyAtlasManifest(manifest({
+      assets: [{ url: "/female-muscles.glb", visualRole: "organ", system: "muscular" }],
+    }))).toThrow("비외피 자산이 shell 어댑터");
   });
 
   it("요청한 모델과 다른 manifest ID를 거부한다", () => {
@@ -175,6 +270,21 @@ describe("final anatomy atlas adapters", () => {
     expect(() => validateAnatomyAtlasManifest(male)).toThrow("중복 자산");
   });
 
+  it("손 포즈 자산의 고유한 애니메이션 클립 계약을 허용한다", () => {
+    const female = manifest({
+      assets: [{
+        url: "/female-skeleton-v33.glb",
+        visualRole: "skeleton",
+        adapter: "vanatome",
+        animationClips: ["Open Hand", "Fist", "Spread", "Point"],
+      }],
+    });
+
+    expect(() => validateAnatomyAtlasManifest(female)).not.toThrow();
+    female.assets[0].animationClips = ["Fist", "Fist"];
+    expect(() => validateAnatomyAtlasManifest(female)).toThrow("애니메이션 클립 계약");
+  });
+
   it("현재 확대 초점에 해당하는 계층만 선택한다", () => {
     const male = manifest({
       id: "vanatome-male-reference",
@@ -184,25 +294,25 @@ describe("final anatomy atlas adapters", () => {
         {
           id: "complete-head",
           label: "머리 전체 해부 구조",
-          triggerFocus: ["head"],
+          triggerFocus: ["full", "head"],
           assets: [{ url: "/complete-head.glb", visualRole: "organ" }],
         },
         {
           id: "complete-upper",
           label: "상반신 전체 해부 구조",
-          triggerFocus: ["upper"],
+          triggerFocus: ["full", "upper"],
           assets: [{ url: "/upper.glb", visualRole: "organ" }],
         },
         {
           id: "complete-lower",
           label: "하반신 전체 해부 구조",
-          triggerFocus: ["lower", "knee", "foot"],
+          triggerFocus: ["full", "lower", "knee", "foot"],
           assets: [{ url: "/lower.glb", visualRole: "organ" }],
         },
         {
           id: "complete-hand",
           label: "손 전체 해부 구조",
-          triggerFocus: ["hand"],
+          triggerFocus: ["full", "hand"],
           assets: [{ url: "/hand.glb", visualRole: "organ" }],
         },
       ],
@@ -226,6 +336,11 @@ describe("final anatomy atlas adapters", () => {
     expect(lazyLayersForFocus(male, "hand").map((layer) => layer.id)).toEqual([
       "complete-hand",
     ]);
-    expect(lazyLayersForFocus(male, "full")).toEqual([]);
+    expect(lazyLayersForFocus(male, "full").map((layer) => layer.id)).toEqual([
+      "complete-head",
+      "complete-upper",
+      "complete-lower",
+      "complete-hand",
+    ]);
   });
 });

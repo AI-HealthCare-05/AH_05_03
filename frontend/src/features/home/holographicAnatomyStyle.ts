@@ -10,6 +10,10 @@ export const INTERNALS_READABILITY_STYLE = {
   regionalBoundaryOpacity: 0.12,
   skeletonOpacity: 0.96,
 } as const;
+export const COSTAL_CARTILAGE_STYLE = {
+  defaultOpacity: 0.82,
+  upperFocusOpacity: 0.32,
+} as const;
 
 const ORGAN_COLORS: Record<string, number> = {
   cardiovascular: 0xe45f63,
@@ -47,11 +51,18 @@ export function createHolographicMaterials(
       clone.depthWrite = false;
       clone.wireframe = true;
     } else if (visualRole === "skeleton") {
-      clone.color.setHex(0xd9f7ff);
-      clone.emissive.setHex(0x17475a);
+      // Several Blender anatomy meshes carry diagnostic red/green COLOR_0
+      // attributes. GLTFLoader enables vertexColors for those primitives, which
+      // multiplies the atlas color and produces mismatched bones even though the
+      // Blender materials themselves were excluded from the static export.
+      clone.vertexColors = false;
+      clone.color.setHex(system === "joints" ? 0x9fcfd8 : 0xd9f7ff);
+      clone.emissive.setHex(system === "joints" ? 0x244b52 : 0x17475a);
       clone.emissiveIntensity = 0.18;
-      clone.transparent = true;
-      clone.opacity = skeletonOpacity;
+      clone.opacity = system === "joints" ? Math.min(skeletonOpacity, 0.68) : skeletonOpacity;
+      clone.transparent = clone.opacity < 1;
+      clone.depthWrite = true;
+      clone.needsUpdate = true;
     } else if (system === "mammary") {
       clone.color.setHex(ORGAN_COLORS.mammary);
       clone.emissive.copy(clone.color).multiplyScalar(0.1);
@@ -71,6 +82,50 @@ export function createHolographicMaterials(
     return clone;
   });
   return Array.isArray(source) ? styled : styled[0];
+}
+
+export function createMatteScalpMaterials(
+  source: THREE.Material | THREE.Material[],
+  ownedMaterials: Set<THREE.Material>,
+) {
+  const styled = materialsOf(source).map((material) => {
+    const matte = new THREE.MeshLambertMaterial({
+      color: ORGAN_COLORS.muscular,
+      emissive: new THREE.Color(ORGAN_COLORS.muscular).multiplyScalar(0.035),
+      emissiveIntensity: 0.12,
+      transparent: false,
+      opacity: 1,
+      depthWrite: true,
+      depthTest: true,
+      side: material.side,
+      vertexColors: false,
+    });
+    matte.name = `${material.name || "muscular"}-matte-scalp`;
+    ownedMaterials.add(matte);
+    return matte;
+  });
+  return Array.isArray(source) ? styled : styled[0];
+}
+
+export function applyCostalCartilageStyle(
+  source: THREE.Material | THREE.Material[],
+  upperBodyFocused: boolean,
+) {
+  for (const material of materialsOf(source)) {
+    if (!(material instanceof THREE.MeshStandardMaterial)) continue;
+    material.color.setHex(0xb9e2eb);
+    material.emissive.setHex(0x204c59);
+    material.emissiveIntensity = 0.2;
+    material.transparent = true;
+    material.opacity = upperBodyFocused
+      ? COSTAL_CARTILAGE_STYLE.upperFocusOpacity
+      : COSTAL_CARTILAGE_STYLE.defaultOpacity;
+    // Costal cartilage and ribs share an attachment boundary. Keeping depth
+    // writes enabled avoids transparent-object sorting that makes the
+    // cartilage appear posteriorly displaced from the rib ends.
+    material.depthWrite = true;
+    material.needsUpdate = true;
+  }
 }
 
 export function createStructuredFlowShellFillMaterials(
@@ -148,7 +203,8 @@ export function createRegionalBoundaryMaterial(
 export function createSelectedMaterials(source: THREE.Material | THREE.Material[]) {
   const highlighted = materialsOf(source).map((material) => {
     const clone = material.clone();
-    if (clone instanceof THREE.MeshStandardMaterial) {
+    if (clone instanceof THREE.MeshStandardMaterial || clone instanceof THREE.MeshLambertMaterial) {
+      clone.vertexColors = false;
       clone.color.copy(SELECTED_COLOR);
       clone.emissive.setHex(0x0e7490);
       clone.emissiveIntensity = 0.85;
@@ -174,7 +230,8 @@ export function createFocusPresets(bounds: THREE.Box3) {
   const upperDistance = Math.max(size.y * 0.68, 2.8);
   const kneeDistance = Math.max(size.y * 0.45, 1.85);
   const footDistance = Math.max(size.y * 0.46, 1.9);
-  const handX = center.x + size.x * 0.43;
+  const leftHandX = center.x + size.x * 0.43;
+  const rightHandX = center.x - size.x * 0.43;
   const waistY = center.y - size.y * 0.02;
   const kneeY = center.y - size.y * 0.31;
   const footY = bounds.min.y + size.y * 0.09;
@@ -185,8 +242,8 @@ export function createFocusPresets(bounds: THREE.Box3) {
       target: center.clone(),
     },
     head: {
-      position: new THREE.Vector3(center.x, bounds.max.y - size.y * 0.1, closeDistance),
-      target: new THREE.Vector3(center.x, bounds.max.y - size.y * 0.1, center.z),
+      position: new THREE.Vector3(center.x, bounds.max.y - size.y * 0.045, closeDistance),
+      target: new THREE.Vector3(center.x, bounds.max.y - size.y * 0.045, center.z),
     },
     upper: {
       position: new THREE.Vector3(center.x, center.y + size.y * 0.18, upperDistance),
@@ -205,8 +262,26 @@ export function createFocusPresets(bounds: THREE.Box3) {
       target: new THREE.Vector3(center.x, footY, center.z),
     },
     hand: {
-      position: new THREE.Vector3(handX, center.y - size.y * 0.04, closeDistance),
-      target: new THREE.Vector3(handX, center.y - size.y * 0.04, center.z),
+      position: new THREE.Vector3(leftHandX, center.y - size.y * 0.04, closeDistance),
+      target: new THREE.Vector3(leftHandX, center.y - size.y * 0.04, center.z),
+    },
+    leftHand: {
+      position: new THREE.Vector3(leftHandX, center.y - size.y * 0.04, closeDistance),
+      target: new THREE.Vector3(leftHandX, center.y - size.y * 0.04, center.z),
+    },
+    rightHand: {
+      position: new THREE.Vector3(rightHandX, center.y - size.y * 0.04, closeDistance),
+      target: new THREE.Vector3(rightHandX, center.y - size.y * 0.04, center.z),
     },
   };
+}
+
+export function shouldReturnToFullBody(
+  activeFocus: string,
+  cameraDistance: number,
+  fullBodyDistance: number,
+  thresholdRatio = 0.45,
+) {
+  return activeFocus !== "full"
+    && cameraDistance >= fullBodyDistance * thresholdRatio;
 }

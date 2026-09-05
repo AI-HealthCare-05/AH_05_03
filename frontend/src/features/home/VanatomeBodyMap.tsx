@@ -6,6 +6,9 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 import {
   adaptAnatomyMesh,
+  anatomyLayerSystem,
+  inheritAnatomyMetadata,
+  initiallyHiddenSystems,
   lazyLayersForFocus,
   loadAnatomyAtlasManifest,
   loadAnatomyMetadata,
@@ -16,25 +19,39 @@ import {
   type AnatomyLazyLayer,
 } from "./anatomyAtlas";
 import {
+  applyCostalCartilageStyle,
   createAdaptiveFlowGuideMaterial,
   createFocusPresets,
   createHolographicMaterials,
+  createMatteScalpMaterials,
   INTERNALS_READABILITY_STYLE,
   createRegionalBoundaryMaterial,
   createSelectedMaterials,
-  createStructuredFlowShellFillMaterials,
   materialsOf,
+  shouldReturnToFullBody,
 } from "./holographicAnatomyStyle";
 import { ProceduralBodyMap } from "./ProceduralBodyMap";
+import { fetchCachedAnatomyResource } from "./anatomyResourceCache";
 import type { RegionRisk } from "./bodyRisk";
 
 type SelectedStructure = { name: string; system?: string };
-type BodyFocus = AnatomyFocus;
-type LazyLayerStatus = { state: "loading" | "loaded" | "error"; label: string };
+type BodyFocus = AnatomyFocus | "leftHand" | "rightHand";
+type HandPose = "Open Hand" | "Fist" | "Spread" | "Point";
+
+const CORE_ASSET_TIMEOUT_MS = 45_000;
+const LAZY_ASSET_TIMEOUT_MS = 45_000;
+
+const HAND_POSES: Array<{ id: HandPose; label: string }> = [
+  { id: "Open Hand", label: "손 펴기" },
+  { id: "Fist", label: "주먹" },
+  { id: "Spread", label: "손가락 벌리기" },
+  { id: "Point", label: "가리키기" },
+];
 
 const ANATOMY_SYSTEM_LAYERS = [
   { id: "integumentary", label: "외피계" },
   { id: "skeletal", label: "골격계" },
+  { id: "joints", label: "관절·인대·막" },
   { id: "muscular", label: "근육계" },
   { id: "cardiovascular", label: "심혈관계" },
   { id: "nervous", label: "신경계" },
@@ -48,19 +65,20 @@ const ANATOMY_SYSTEM_LAYERS = [
 
 const SUPPORTED_SYSTEMS_BY_ATLAS: Record<AnatomyAtlasId, ReadonlySet<string>> = {
   "vanatome-male-reference": new Set(ANATOMY_SYSTEM_LAYERS.map((layer) => layer.id)),
+  "female-skeleton-controller-test": new Set(["skeletal"]),
   "tripo-triangle2m-v49-internals-preview": new Set([
-    "integumentary", "skeletal", "cardiovascular", "digestive", "respiratory",
-    "endocrine", "urinary",
+    "integumentary", "skeletal", "joints", "muscular", "cardiovascular",
+    "nervous", "lymphatic", "digestive", "respiratory", "endocrine",
+    "urinary", "reproductive",
   ]),
 };
 
 const ATLAS_OPTIONS: Array<{ id: AnatomyAtlasId; label: string }> = [
-  { id: "vanatome-male-reference", label: "남성 기준 · Vanatome" },
-  {
-    id: "tripo-triangle2m-v49-internals-preview",
-    label: "Tripo 단일 정면 · Triangle 2M 외피 + Z-Anatomy 내부 v49 · 흉곽·복부 장기 확대 v28",
-  },
+  { id: "vanatome-male-reference", label: "남성" },
+  { id: "tripo-triangle2m-v49-internals-preview", label: "여성" },
 ];
+
+const DEFAULT_ANATOMY_ATLAS: AnatomyAtlasId = "vanatome-male-reference";
 
 export function VanatomeBodyMap({
   profileName,
@@ -74,16 +92,19 @@ export function VanatomeBodyMap({
   const focusCameraRef = useRef<(focus: BodyFocus) => void>(() => undefined);
   const pelvicOrganFocusRef = useRef<(active: boolean) => void>(() => undefined);
   const setHiddenSystemsRef = useRef<(systems: ReadonlySet<string>) => void>(() => undefined);
-  const [atlasId, setAtlasId] = useState<AnatomyAtlasId>("vanatome-male-reference");
+  const playHandPoseRef = useRef<(pose: HandPose) => void>(() => undefined);
+  const [atlasId, setAtlasId] = useState<AnatomyAtlasId>(DEFAULT_ANATOMY_ATLAS);
   const [manifest, setManifest] = useState<AnatomyAtlasManifest>();
   const [selectedStructure, setSelectedStructure] = useState<SelectedStructure>();
   const [activeFocus, setActiveFocus] = useState<BodyFocus>("full");
   const [pelvicOrganFocus, setPelvicOrganFocus] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadError, setLoadError] = useState<string>();
-  const [lazyLayerStatus, setLazyLayerStatus] = useState<LazyLayerStatus>();
   const [hiddenSystems, setHiddenSystems] = useState<ReadonlySet<string>>(() => new Set());
+  const [readySystems, setReadySystems] = useState<ReadonlySet<string>>(() => new Set());
+  const [activeHandPose, setActiveHandPose] = useState<HandPose>("Open Hand");
   const [webGlUnavailable, setWebGlUnavailable] = useState(false);
+  const [sceneAttempt, setSceneAttempt] = useState(0);
   const isTestEnvironment = navigator.userAgent.includes("jsdom");
   const systemLayers = ANATOMY_SYSTEM_LAYERS.filter(
     (layer) => SUPPORTED_SYSTEMS_BY_ATLAS[atlasId].has(layer.id),
@@ -99,10 +120,16 @@ export function VanatomeBodyMap({
     setActiveFocus("full");
     setPelvicOrganFocus(false);
     setManifest(undefined);
-    setLazyLayerStatus(undefined);
-    setHiddenSystems(new Set());
+    setReadySystems(new Set());
+    const initialHiddenSystems = initiallyHiddenSystems(
+      atlasId,
+      ANATOMY_SYSTEM_LAYERS.map((layer) => layer.id),
+    );
+    setHiddenSystems(initialHiddenSystems);
+    setActiveHandPose("Open Hand");
 
     let disposed = false;
+    const sceneController = new AbortController();
     let cleanupScene: () => void = () => undefined;
 
     const start = async () => {
@@ -113,6 +140,7 @@ export function VanatomeBodyMap({
         const nextCleanupScene = await createAnatomyScene({
           canvas,
           manifest: nextManifest,
+          signal: sceneController.signal,
           isDisposed: () => disposed,
           onProgress: setLoadProgress,
           onReady: () => {
@@ -121,11 +149,14 @@ export function VanatomeBodyMap({
           },
           onWebGlUnavailable: () => setWebGlUnavailable(true),
           onSelectedStructure: setSelectedStructure,
-          onLazyLayerStatus: setLazyLayerStatus,
+          onFocusChange: setActiveFocus,
+          onSystemsReady: setReadySystems,
+          initialHiddenSystems,
           clearSelectionRef,
           focusCameraRef,
           pelvicOrganFocusRef,
           setHiddenSystemsRef,
+          playHandPoseRef,
         });
         cleanupScene = nextCleanupScene;
         if (disposed) cleanupScene();
@@ -137,21 +168,34 @@ export function VanatomeBodyMap({
 
     return () => {
       disposed = true;
+      sceneController.abort();
       cleanupScene();
       clearSelectionRef.current = () => undefined;
       focusCameraRef.current = () => undefined;
       pelvicOrganFocusRef.current = () => undefined;
       setHiddenSystemsRef.current = () => undefined;
+      playHandPoseRef.current = () => undefined;
     };
-  }, [atlasId, isTestEnvironment]);
+  }, [atlasId, isTestEnvironment, sceneAttempt]);
 
   if (isTestEnvironment || loadError || webGlUnavailable) {
     return (
       <div>
         {loadError || webGlUnavailable ? (
-          <p className="body-map-load-notice" role="status">
-            {loadError ?? "이 브라우저에서는 3D를 표시할 수 없습니다."} 기본 인체 미리보기를 표시합니다.
-          </p>
+          <div className="body-map-load-notice" role="status">
+            <p>{loadError ?? "WebGL 연결이 끊어졌습니다."} 기본 인체 미리보기를 표시합니다.</p>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => {
+                setLoadError(undefined);
+                setWebGlUnavailable(false);
+                setSceneAttempt((attempt) => attempt + 1);
+              }}
+            >
+              3D 다시 시도
+            </button>
+          </div>
         ) : null}
         <ProceduralBodyMap profileName={profileName} />
       </div>
@@ -159,11 +203,9 @@ export function VanatomeBodyMap({
   }
 
   return (
-    <section className="body-map-card vanatome-card" aria-labelledby="body-map-title">
+    <section className="body-map-card vanatome-card" aria-label="인체 모니터">
       <div className="body-map-copy">
-        <p className="section-kicker">해부 구조 미리보기</p>
-        <h3 id="body-map-title">{profileName}님의 3D 인체</h3>
-        <p>인체를 돌려보거나 구조를 선택해 보세요. 건강기록과 자동으로 연결되지는 않습니다.</p>
+        <p className="section-kicker">인체 모니터</p>
         <fieldset className="anatomy-atlas-switch">
           <legend>참조 아틀라스</legend>
           {ATLAS_OPTIONS.map((option) => (
@@ -177,19 +219,6 @@ export function VanatomeBodyMap({
             </button>
           ))}
         </fieldset>
-        {manifest ? (
-          <p className={`anatomy-atlas-note${manifest.experimental ? " is-experimental" : ""}`}>
-            <strong>{manifest.label}</strong>
-            <span>{manifest.description}</span>
-          </p>
-        ) : null}
-        {atlasId !== "tripo-triangle2m-v49-internals-preview" ? (
-          <p className="vanatome-layer-summary">
-            {(manifest?.layerLabels ?? ["반투명 외피", "골격", "주요 장기"]).map((label) => (
-              <span key={label}>{label}</span>
-            ))}
-          </p>
-        ) : null}
         <fieldset className="vanatome-system-layers">
           <legend>구조 레이어</legend>
           <div className="vanatome-system-layer-actions">
@@ -223,14 +252,16 @@ export function VanatomeBodyMap({
                 <button
                   key={layer.id}
                   type="button"
-                  disabled={loadProgress < 100}
+                  disabled={loadProgress < 100 || !readySystems.has(layer.id)}
                   aria-pressed={active}
                   onClick={() => {
-                    const next = new Set(hiddenSystems);
-                    if (active) next.add(layer.id);
-                    else next.delete(layer.id);
-                    setHiddenSystems(next);
-                    setHiddenSystemsRef.current(next);
+                    setHiddenSystems((current) => {
+                      const next = new Set(current);
+                      if (next.has(layer.id)) next.delete(layer.id);
+                      else next.add(layer.id);
+                      setHiddenSystemsRef.current(next);
+                      return next;
+                    });
                   }}
                 >
                   {layer.label}
@@ -242,7 +273,7 @@ export function VanatomeBodyMap({
         <div className="vanatome-focus-control">
           <span>빠른 확대</span>
           <div className="vanatome-focus-buttons" aria-label="인체 부위 빠른 확대">
-            {(["head", "upper", "lower", "knee", "foot", "hand"] as const).map((focus) => (
+            {(["full", "head", "upper", "lower", "leftHand", "rightHand", "knee", "foot"] as const).map((focus) => (
               <button
                 key={focus}
                 type="button"
@@ -258,33 +289,20 @@ export function VanatomeBodyMap({
                 }}
               >
                 {{
+                  full: "전체",
                   head: "머리",
                   upper: "상반신",
                   lower: "하반신",
                   knee: "무릎",
                   foot: "발",
-                  hand: "손",
+                  leftHand: "왼손",
+                  rightHand: "오른손",
                 }[focus]}
               </button>
             ))}
           </div>
-          {activeFocus !== "full" ? (
-            <button
-              className="vanatome-reset-focus"
-              type="button"
-              onClick={() => {
-                if (pelvicOrganFocus) {
-                  setPelvicOrganFocus(false);
-                  pelvicOrganFocusRef.current(false);
-                }
-                setActiveFocus("full");
-                focusCameraRef.current("full");
-              }}
-            >
-              전체 보기
-            </button>
-          ) : null}
-          {manifest?.referenceSex === "female" ? (
+          {manifest?.referenceSex === "female"
+          && manifest.assets.some((asset) => asset.visualRole === "organ") ? (
             <button
               className="vanatome-pelvic-focus"
               type="button"
@@ -304,13 +322,37 @@ export function VanatomeBodyMap({
             </button>
           ) : null}
         </div>
+        {manifest?.assets.some((asset) => asset.animationClips?.length) ? (
+          <fieldset className="vanatome-hand-poses">
+            <legend>손 포즈</legend>
+            <div>
+              {HAND_POSES.filter((pose) => (
+                manifest.assets.some((asset) => asset.animationClips?.includes(pose.id))
+              )).map((pose) => (
+                <button
+                  key={pose.id}
+                  type="button"
+                  disabled={loadProgress < 100}
+                  aria-pressed={activeHandPose === pose.id}
+                  onClick={() => {
+                    setActiveHandPose(pose.id);
+                    playHandPoseRef.current(pose.id);
+                  }}
+                >
+                  {pose.label}
+                </button>
+              ))}
+            </div>
+            <small>양손에 함께 적용됩니다.</small>
+          </fieldset>
+        ) : null}
         <div className="body-map-selection" aria-live="polite">
           <span>선택한 구조</span>
           <strong>{selectedStructure?.name ?? "인체에서 구조를 선택하세요"}</strong>
           <small>
             {selectedStructure
               ? `${selectedStructure.system ? `${selectedStructure.system} · ` : ""}현재 선택은 저장되지 않습니다.`
-              : "드래그는 회전, 클릭은 구조 선택입니다."}
+              : "모델 드래그는 회전, 검은 배경 드래그는 상하 카메라 이동, 클릭은 구조 선택입니다."}
           </small>
         </div>
         <div className="vanatome-actions">
@@ -328,21 +370,8 @@ export function VanatomeBodyMap({
         ) : null}
       </div>
       <div className="body-map-viewer vanatome-viewer is-hologram">
-        {loadProgress < 100 ? <BodyMapLoading progress={loadProgress} manifest={manifest} /> : null}
-        {lazyLayerStatus ? (
-          <span
-            className={`vanatome-lazy-status is-${lazyLayerStatus.state}`}
-            role="status"
-          >
-            {lazyLayerStatus.state === "loading"
-              ? `${lazyLayerStatus.label} 불러오는 중…`
-              : lazyLayerStatus.state === "loaded"
-                ? `${lazyLayerStatus.label} 준비 완료`
-                : `${lazyLayerStatus.label}을 불러오지 못했습니다`}
-          </span>
-        ) : null}
-        <canvas ref={canvasRef} aria-label={`${profileName}님의 회전 가능한 해부학 3D 인체 미리보기`} />
-        <span className="body-map-hint">드래그하여 회전 · 클릭하여 선택</span>
+        <canvas ref={canvasRef} aria-label="회전 가능한 해부학 인체 모니터" />
+        <span className="body-map-hint">모델 드래그 회전 · 배경 드래그 상하 이동 · 클릭 선택</span>
       </div>
     </section>
   );
@@ -351,23 +380,29 @@ export function VanatomeBodyMap({
 type CreateAnatomySceneOptions = {
   canvas: HTMLCanvasElement;
   manifest: AnatomyAtlasManifest;
+  signal: AbortSignal;
   isDisposed: () => boolean;
   onProgress: (progress: number) => void;
   onReady: () => void;
   onWebGlUnavailable: () => void;
   onSelectedStructure: (structure: SelectedStructure | undefined) => void;
-  onLazyLayerStatus: (status: LazyLayerStatus | undefined) => void;
+  onFocusChange: (focus: BodyFocus) => void;
+  onSystemsReady: (systems: ReadonlySet<string>) => void;
+  initialHiddenSystems: ReadonlySet<string>;
   clearSelectionRef: React.MutableRefObject<() => void>;
   focusCameraRef: React.MutableRefObject<(focus: BodyFocus) => void>;
   pelvicOrganFocusRef: React.MutableRefObject<(active: boolean) => void>;
   setHiddenSystemsRef: React.MutableRefObject<(systems: ReadonlySet<string>) => void>;
+  playHandPoseRef: React.MutableRefObject<(pose: HandPose) => void>;
 };
 
 async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   const {
-    canvas, manifest, isDisposed, onProgress, onReady, onWebGlUnavailable,
-    onSelectedStructure, onLazyLayerStatus, clearSelectionRef, focusCameraRef,
+    canvas, manifest, signal, isDisposed, onProgress, onReady, onWebGlUnavailable,
+    onSelectedStructure, onFocusChange, onSystemsReady, initialHiddenSystems,
+    clearSelectionRef, focusCameraRef,
     pelvicOrganFocusRef, setHiddenSystemsRef,
+    playHandPoseRef,
   } = options;
   let renderer: THREE.WebGLRenderer;
   try {
@@ -408,10 +443,17 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   const progressByUrl = new Map<string, { loaded: number; total: number }>();
   let selectedMesh: THREE.Mesh | undefined;
   let focusAnimationFrame: number | undefined;
+  let poseAnimationFrame: number | undefined;
+  let poseAnimationLastTime = 0;
+  let poseAnimationEndTime = 0;
   let lazyLoadTimer: number | undefined;
-  let lazyStatusClearTimer: number | undefined;
+  let autoFullReturnAnimating = false;
   let cleanedUp = false;
-  let hiddenSystems = new Set<string>();
+  let hiddenSystems = new Set(initialHiddenSystems);
+  const readySystems = new Set<string>();
+  let activeBodyFocus: BodyFocus = "full";
+  let handleControlsStart: (() => void) | undefined;
+  let handleControlsEnd: (() => void) | undefined;
   const lazyLayerGroups = new Map<string, THREE.Group>();
   const lazyLayerControllers = new Map<string, AbortController>();
   const digestiveMaterialStates = new Map<THREE.Material, {
@@ -419,8 +461,44 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     transparent: boolean;
     depthWrite: boolean;
   }>();
+  const animationMixers: THREE.AnimationMixer[] = [];
+  const handPoseActions = new Map<HandPose, THREE.AnimationAction>();
+  let activeHandPoseAction: THREE.AnimationAction | undefined;
+
+  const handleContextLost = (event: Event) => {
+    event.preventDefault();
+    if (!cleanedUp) queueMicrotask(onWebGlUnavailable);
+  };
+  canvas.addEventListener("webglcontextlost", handleContextLost);
+
+  const setCostalCartilageFocus = (upperBodyFocused: boolean) => {
+    for (const mesh of anatomyMeshes) {
+      if (mesh.userData.tissueType !== "costal-cartilage") continue;
+      applyCostalCartilageStyle(
+        originalMaterials.get(mesh) ?? mesh.material,
+        upperBodyFocused,
+      );
+    }
+  };
 
   const renderScene = () => renderer.render(scene, camera);
+  const updatePoseAnimation = (now: number) => {
+    const deltaSeconds = Math.min((now - poseAnimationLastTime) / 1000, 0.05);
+    poseAnimationLastTime = now;
+    animationMixers.forEach((mixer) => mixer.update(deltaSeconds));
+    renderScene();
+    if (now < poseAnimationEndTime) {
+      poseAnimationFrame = window.requestAnimationFrame(updatePoseAnimation);
+    } else {
+      poseAnimationFrame = undefined;
+    }
+  };
+  const startPoseAnimationLoop = () => {
+    if (poseAnimationFrame !== undefined) window.cancelAnimationFrame(poseAnimationFrame);
+    poseAnimationLastTime = performance.now();
+    poseAnimationEndTime = poseAnimationLastTime + 700;
+    poseAnimationFrame = window.requestAnimationFrame(updatePoseAnimation);
+  };
   const applyMeshVisibility = (mesh: THREE.Mesh) => {
     const contextVisible = mesh.userData.contextVisible !== false;
     mesh.visible = contextVisible && !hiddenSystems.has(String(mesh.userData.structureSystem ?? ""));
@@ -466,6 +544,9 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       onSelectedStructure(undefined);
     }
     anatomyMeshes.forEach(applyMeshVisibility);
+    setCostalCartilageFocus(
+      activeBodyFocus === "upper" && !hiddenSystems.has("muscular"),
+    );
     renderScene();
   };
 
@@ -474,7 +555,10 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     onSelectedStructure(undefined);
     for (const mesh of anatomyMeshes) {
       if (mesh.userData.structureSystem === "reproductive") {
-        mesh.userData.contextVisible = active;
+        // The full-body atlas starts with every anatomy layer visible.
+        // Pelvic focus only changes nearby-organ readability; it must not
+        // hide the reproductive layer again when the focus is released.
+        mesh.userData.contextVisible = true;
         applyMeshVisibility(mesh);
         continue;
       }
@@ -499,44 +583,138 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     renderScene();
   };
 
-  const loadTimeout = window.setTimeout(() => {
-    if (!isDisposed()) onProgress(0);
-  }, 30_000);
-
   const metadataPromise = loadAnatomyMetadata(manifest).catch(() => new Map());
   const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath("/vendor/three/draco/gltf/");
   const loader = new GLTFLoader();
   loader.setDRACOLoader(dracoLoader);
-  const loadAsset = (asset: AnatomyAtlasAsset) => new Promise<THREE.Group>((resolve, reject) => {
-    loader.load(
-      asset.url,
-      (gltf) => resolve(gltf.scene),
-      (event) => {
-        progressByUrl.set(asset.url, { loaded: event.loaded, total: event.total });
-        const progressValues = [...progressByUrl.values()];
-        const loaded = progressValues.reduce((sum, value) => sum + value.loaded, 0);
-        const total = progressValues.reduce((sum, value) => sum + value.total, 0);
-        if (!isDisposed() && total > 0) onProgress(Math.min(99, Math.round((loaded / total) * 100)));
-      },
-      reject,
-    );
-  });
+  const loadAsset = async (asset: AnatomyAtlasAsset) => {
+    const controller = new AbortController();
+    let timedOut = false;
+    const abort = () => controller.abort();
+    signal.addEventListener("abort", abort, { once: true });
+    const timeout = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, CORE_ASSET_TIMEOUT_MS);
+    try {
+      const response = await fetchCachedAnatomyResource(asset.url, {
+        signal: controller.signal,
+        revision: asset.sha256,
+      });
+      if (!response.ok) throw new Error(`핵심 해부 자산 요청 실패: ${asset.url}`);
+      const buffer = await response.arrayBuffer();
+      const total = Number(response.headers.get("content-length")) || buffer.byteLength;
+      progressByUrl.set(asset.url, { loaded: buffer.byteLength, total });
+      const progressValues = [...progressByUrl.values()];
+      const loadedBytes = progressValues.reduce((sum, value) => sum + value.loaded, 0);
+      const totalBytes = progressValues.reduce((sum, value) => sum + value.total, 0);
+      if (!isDisposed() && totalBytes > 0) {
+        onProgress(Math.min(99, Math.round((loadedBytes / totalBytes) * 100)));
+      }
+      if (signal.aborted || isDisposed()) throw new DOMException("Aborted", "AbortError");
+      const gltf = await loader.parseAsync(buffer, "");
+      return { model: gltf.scene, animations: gltf.animations };
+    } catch (error) {
+      if (timedOut) {
+        throw new Error(`핵심 해부 자산 요청 시간 초과: ${asset.url}`, { cause: error });
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+      signal.removeEventListener("abort", abort);
+    }
+  };
 
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
-  let pointerStart: { x: number; y: number } | undefined;
-  const handlePointerDown = (event: PointerEvent) => {
-    pointerStart = { x: event.clientX, y: event.clientY };
-  };
-  const handlePointerUp = (event: PointerEvent) => {
-    if (!pointerStart || Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 6) {
-      pointerStart = undefined;
-      return;
-    }
-    pointerStart = undefined;
+  let pointerGesture: {
+    pointerId: number;
+    mode: "rotate" | "vertical-pan";
+    startX: number;
+    startY: number;
+    lastY: number;
+  } | undefined;
+  let verticalPanLimits = { min: -2.35, max: 2.35 };
+
+  const setPointerFromEvent = (event: PointerEvent) => {
     const bounds = canvas.getBoundingClientRect();
     pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
     pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
+  };
+  const pointerHitsVisibleModel = (event: PointerEvent) => {
+    setPointerFromEvent(event);
+    raycaster.setFromCamera(pointer, camera);
+    return raycaster.intersectObjects(
+      anatomyMeshes.filter((mesh) => mesh.visible),
+      false,
+    ).length > 0;
+  };
+  const handlePointerDown = (event: PointerEvent) => {
+    if (!event.isPrimary || event.button !== 0) return;
+    const mode = pointerHitsVisibleModel(event) ? "rotate" : "vertical-pan";
+    pointerGesture = {
+      pointerId: event.pointerId,
+      mode,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastY: event.clientY,
+    };
+    if (mode === "rotate") return;
+
+    // Capture before OrbitControls receives a background event. Model events
+    // continue to the existing orbit handler unchanged.
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    canvas.setPointerCapture(event.pointerId);
+    canvas.style.cursor = "ns-resize";
+    if (focusAnimationFrame !== undefined) {
+      window.cancelAnimationFrame(focusAnimationFrame);
+      focusAnimationFrame = undefined;
+    }
+  };
+  const handlePointerMove = (event: PointerEvent) => {
+    if (pointerGesture?.pointerId !== event.pointerId
+      || pointerGesture.mode !== "vertical-pan") return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    // Treat the background like a grabbed canvas: dragging downward pulls the
+    // rendered body downward, so the camera itself trucks upward.
+    const pixelDelta = event.clientY - pointerGesture.lastY;
+    pointerGesture.lastY = event.clientY;
+    const distance = camera.position.distanceTo(controls.target);
+    const visibleWorldHeight = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * distance;
+    const requestedDelta = pixelDelta * visibleWorldHeight
+      / Math.max(canvas.getBoundingClientRect().height, 1);
+    const nextTargetY = THREE.MathUtils.clamp(
+      controls.target.y + requestedDelta,
+      verticalPanLimits.min,
+      verticalPanLimits.max,
+    );
+    const appliedDelta = nextTargetY - controls.target.y;
+    camera.position.y += appliedDelta;
+    controls.target.y = nextTargetY;
+    controls.update();
+    renderScene();
+  };
+  const handlePointerUp = (event: PointerEvent) => {
+    const gesture = pointerGesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    pointerGesture = undefined;
+    if (gesture.mode === "vertical-pan") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+      canvas.style.cursor = "";
+      return;
+    }
+    if (Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > 6) {
+      camera.updateMatrixWorld(true);
+      renderScene();
+      return;
+    }
+    setPointerFromEvent(event);
     raycaster.setFromCamera(pointer, camera);
     const hit = raycaster.intersectObjects(selectableMeshes, false)[0];
     if (!(hit?.object instanceof THREE.Mesh)) return;
@@ -551,25 +729,44 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     });
     renderScene();
   };
-  canvas.addEventListener("pointerdown", handlePointerDown);
+  const handlePointerCancel = (event: PointerEvent) => {
+    if (pointerGesture?.pointerId !== event.pointerId) return;
+    pointerGesture = undefined;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    canvas.style.cursor = "";
+  };
+  const handleCanvasWheel = (event: WheelEvent) => {
+    event.preventDefault();
+  };
+  canvas.addEventListener("wheel", handleCanvasWheel, { capture: true, passive: false });
+  canvas.addEventListener("pointerdown", handlePointerDown, true);
+  canvas.addEventListener("pointermove", handlePointerMove, true);
   canvas.addEventListener("pointerup", handlePointerUp);
+  canvas.addEventListener("pointercancel", handlePointerCancel);
 
   function cleanup() {
     if (cleanedUp) return;
     cleanedUp = true;
-    window.clearTimeout(loadTimeout);
     if (lazyLoadTimer !== undefined) window.clearTimeout(lazyLoadTimer);
-    if (lazyStatusClearTimer !== undefined) window.clearTimeout(lazyStatusClearTimer);
     lazyLayerControllers.forEach((controller) => controller.abort());
     lazyLayerControllers.clear();
-    onLazyLayerStatus(undefined);
-    canvas.removeEventListener("pointerdown", handlePointerDown);
+    canvas.removeEventListener("wheel", handleCanvasWheel, true);
+    canvas.removeEventListener("pointerdown", handlePointerDown, true);
+    canvas.removeEventListener("pointermove", handlePointerMove, true);
     canvas.removeEventListener("pointerup", handlePointerUp);
+    canvas.removeEventListener("pointercancel", handlePointerCancel);
+    canvas.removeEventListener("webglcontextlost", handleContextLost);
+    canvas.style.cursor = "";
     controls.removeEventListener("change", renderScene);
+    if (handleControlsStart) controls.removeEventListener("start", handleControlsStart);
+    if (handleControlsEnd) controls.removeEventListener("end", handleControlsEnd);
     if (focusAnimationFrame !== undefined) window.cancelAnimationFrame(focusAnimationFrame);
+    if (poseAnimationFrame !== undefined) window.cancelAnimationFrame(poseAnimationFrame);
     clearSelectedMaterial();
     pelvicOrganFocusRef.current = () => undefined;
     setHiddenSystemsRef.current = () => undefined;
+    playHandPoseRef.current = () => undefined;
+    animationMixers.forEach((mixer) => mixer.stopAllAction());
     controls.dispose();
     dracoLoader.dispose();
     resizeObserver.disconnect();
@@ -586,36 +783,46 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   try {
     const [metadata, loadedAssets] = await Promise.all([
       metadataPromise,
-      Promise.all(manifest.assets.map(async (asset) => ({ asset, model: await loadAsset(asset) }))),
+      Promise.all(manifest.assets.map(async (asset) => ({ asset, ...await loadAsset(asset) }))),
     ]);
     if (isDisposed()) return cleanup;
 
     const atlasGroup = new THREE.Group();
+    const isStandaloneSkeletonAtlas = manifest.assets.every(
+      (asset) => asset.visualRole === "skeleton",
+    );
     const dimsShellForReadableInternals = manifest.id
       === "tripo-triangle2m-v49-internals-preview"
       && manifest.assets.some((asset) => (
         asset.visualRole === "skeleton" || asset.visualRole === "organ"
       ));
-    for (const { asset, model } of loadedAssets) {
+    for (const { asset, model, animations } of loadedAssets) {
       model.traverse((object) => {
         if (!(object instanceof THREE.Mesh)) return;
         materialsOf(object.material).forEach((material) => sourceMaterials.add(material));
+        inheritAnatomyMetadata(object);
         const adapted = adaptAnatomyMesh(object, asset, manifest, metadata);
         object.visible = Boolean(adapted);
         if (!adapted) return;
 
+        const layerSystem = anatomyLayerSystem(adapted.system);
+
         object.userData.anatomyId = adapted.anatomyId;
         object.userData.anatomySourceKey = adapted.sourceKey;
         object.userData.structureLabel = adapted.label;
-        object.userData.structureSystem = adapted.system;
+        object.userData.structureSystem = layerSystem;
         object.userData.visualRole = adapted.visualRole;
         object.userData.contextVisible = Boolean(adapted);
         anatomyMeshes.push(object);
+        readySystems.add(layerSystem);
         const isFemaleComposite = manifest.id === "tripo-triangle2m-v49-internals-preview";
         const isAdaptiveSurfaceFlowGuide = isFemaleComposite
           && asset.system === "adaptive-surface-flow-guide";
         const isRegionalBoundaryGuide = isFemaleComposite
           && asset.system === "regional-boundary-guide";
+        const isFemaleScalpAponeurosis = isFemaleComposite
+          && adapted.system === "muscular"
+          && adapted.anatomyId.includes("epicranial-aponeurosis");
         object.material = isRegionalBoundaryGuide
           ? createRegionalBoundaryMaterial(
             ownedMaterials,
@@ -633,13 +840,14 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
                 : INTERNALS_READABILITY_STYLE.bodyGuideOpacity)
               : undefined,
           )
+          : isFemaleScalpAponeurosis
+            ? createMatteScalpMaterials(object.material, ownedMaterials)
           : isFemaleComposite && adapted.visualRole === "shell"
-            ? createStructuredFlowShellFillMaterials(
+            ? createHolographicMaterials(
               object.material,
+              adapted.visualRole,
+              adapted.system,
               ownedMaterials,
-              dimsShellForReadableInternals
-                ? INTERNALS_READABILITY_STYLE.shellFillOpacity
-                : undefined,
             )
           : createHolographicMaterials(
             object.material,
@@ -648,9 +856,15 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
             ownedMaterials,
             dimsShellForReadableInternals
               ? INTERNALS_READABILITY_STYLE.skeletonOpacity
-              : undefined,
+              : isStandaloneSkeletonAtlas ? 1 : undefined,
           );
+        if (object.userData.tissueType === "costal-cartilage") {
+          applyCostalCartilageStyle(object.material, false);
+        }
         originalMaterials.set(object, object.material);
+        // 초기 남성 화면은 외피·골격만 보인다. 다른 계통도 파싱해 scene에는 두되
+        // 사용자가 버튼으로 켜기 전까지 렌더링하지 않는다.
+        applyMeshVisibility(object);
         if (adapted.visualRole === "shell") {
           object.renderOrder = isRegionalBoundaryGuide
             ? 7
@@ -661,11 +875,41 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         }
         if (adapted.selectable) selectableMeshes.push(object);
       });
+      const declaredClips = new Set(asset.animationClips ?? []);
+      if (declaredClips.size > 0 && animations.length > 0) {
+        const mixer = new THREE.AnimationMixer(model);
+        animationMixers.push(mixer);
+        for (const clip of animations) {
+          if (!declaredClips.has(clip.name)) continue;
+          const action = mixer.clipAction(clip);
+          action.setLoop(THREE.LoopOnce, 1);
+          action.clampWhenFinished = true;
+          handPoseActions.set(clip.name as HandPose, action);
+        }
+      }
       atlasGroup.add(model);
     }
+    onSystemsReady(new Set(readySystems));
 
-    // 자궁·난소 같은 골반 생식계 구조는 사용자가 명시적으로
-    // "골반 장기 보기"를 켜기 전까지 노출하지 않는다.
+    playHandPoseRef.current = (pose) => {
+      const nextAction = handPoseActions.get(pose);
+      if (!nextAction || nextAction === activeHandPoseAction) return;
+      nextAction.reset();
+      nextAction.enabled = true;
+      nextAction.setEffectiveTimeScale(1);
+      nextAction.setEffectiveWeight(1);
+      nextAction.play();
+      if (activeHandPoseAction) {
+        nextAction.crossFadeFrom(activeHandPoseAction, 0.24, false);
+      } else {
+        nextAction.fadeIn(0.24);
+      }
+      activeHandPoseAction = nextAction;
+      startPoseAnimationLoop();
+    };
+
+    // 모든 골격(두개골 포함), 근육과 장기를 전신 초기 화면에 표시한다.
+    // 이 호출은 골반 확대용 소화기 감광 상태만 초기화한다.
     pelvicOrganFocusRef.current(false);
 
     const sourceBounds = new THREE.Box3().setFromObject(atlasGroup);
@@ -677,7 +921,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     atlasGroup.updateMatrixWorld(true);
     scene.add(atlasGroup);
 
-    let activeLazyFocus: BodyFocus = "full";
+    let activeLazyFocus: AnatomyFocus = "full";
     const setLazyLayerVisible = (layerId: string, visible: boolean) => {
       const group = lazyLayerGroups.get(layerId);
       if (!group) return;
@@ -688,6 +932,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         }
       });
     };
+    const isFemaleComposite = manifest.id === "tripo-triangle2m-v49-internals-preview";
     const attachLazyModel = (
       layer: AnatomyLazyLayer,
       asset: AnatomyAtlasAsset,
@@ -703,37 +948,70 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       model.traverse((object) => {
         if (!(object instanceof THREE.Mesh)) return;
         materialsOf(object.material).forEach((material) => sourceMaterials.add(material));
+        inheritAnatomyMetadata(object);
         const adapted = adaptAnatomyMesh(object, asset, manifest, metadata);
         object.visible = Boolean(adapted) && layer.triggerFocus.includes(activeLazyFocus);
         if (!adapted) return;
 
+        const layerSystem = anatomyLayerSystem(adapted.system);
+
         object.userData.anatomyId = adapted.anatomyId;
         object.userData.anatomySourceKey = adapted.sourceKey;
         object.userData.structureLabel = adapted.label;
-        object.userData.structureSystem = adapted.system;
+        object.userData.structureSystem = layerSystem;
         object.userData.visualRole = adapted.visualRole;
         object.userData.lazyLayerId = layer.id;
         object.userData.contextVisible = layer.triggerFocus.includes(activeLazyFocus);
         anatomyMeshes.push(object);
+        readySystems.add(layerSystem);
         selectableMeshes.push(object);
-        object.material = createHolographicMaterials(
-          object.material,
-          adapted.visualRole,
-          adapted.system,
-          ownedMaterials,
-        );
+        object.material = isFemaleComposite
+          && adapted.system === "muscular"
+          && adapted.anatomyId.includes("epicranial-aponeurosis")
+          ? createMatteScalpMaterials(object.material, ownedMaterials)
+          : createHolographicMaterials(
+            object.material,
+            adapted.visualRole,
+            adapted.system,
+            ownedMaterials,
+          );
+        if (object.userData.tissueType === "costal-cartilage") {
+          applyCostalCartilageStyle(object.material, activeLazyFocus === "upper");
+        }
         originalMaterials.set(object, object.material);
         applyMeshVisibility(object);
       });
       layerGroup.add(model);
       atlasGroup.updateMatrixWorld(true);
+      onSystemsReady(new Set(readySystems));
     };
     const fetchLazyAsset = async (asset: AnatomyAtlasAsset, signal: AbortSignal) => {
-      const response = await fetch(asset.url, { signal });
-      if (!response.ok) throw new Error(`지연 자산 요청 실패: ${asset.url}`);
-      const buffer = await response.arrayBuffer();
-      const gltf = await loader.parseAsync(buffer, "");
-      return gltf.scene;
+      const controller = new AbortController();
+      let timedOut = false;
+      const abort = () => controller.abort();
+      signal.addEventListener("abort", abort, { once: true });
+      const timeout = window.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, LAZY_ASSET_TIMEOUT_MS);
+      try {
+        const response = await fetchCachedAnatomyResource(asset.url, {
+          signal: controller.signal,
+          revision: asset.sha256,
+        });
+        if (!response.ok) throw new Error(`지연 자산 요청 실패: ${asset.url}`);
+        const buffer = await response.arrayBuffer();
+        const gltf = await loader.parseAsync(buffer, "");
+        return gltf.scene;
+      } catch (error) {
+        if (timedOut) {
+          throw new Error(`지연 자산 요청 시간 초과: ${asset.url}`, { cause: error });
+        }
+        throw error;
+      } finally {
+        window.clearTimeout(timeout);
+        signal.removeEventListener("abort", abort);
+      }
     };
     const loadLazyLayer = async (layer: AnatomyLazyLayer) => {
       if (lazyLayerGroups.has(layer.id)) {
@@ -752,55 +1030,73 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         lazyLayerControllers.delete(layer.id);
       }
     };
-    const scheduleLazyLayers = (focus: BodyFocus) => {
+    const preloadEveryLayer = manifest.id === "vanatome-male-reference"
+      || manifest.id === "tripo-triangle2m-v49-internals-preview";
+    const scheduleLazyLayers = (focus: AnatomyFocus) => {
       activeLazyFocus = focus;
       if (lazyLoadTimer !== undefined) window.clearTimeout(lazyLoadTimer);
-      if (lazyStatusClearTimer !== undefined) window.clearTimeout(lazyStatusClearTimer);
-      onLazyLayerStatus(undefined);
 
       const targets = lazyLayersForFocus(manifest, focus);
       const targetIds = new Set(targets.map((layer) => layer.id));
       lazyLayerGroups.forEach((_, layerId) => setLazyLayerVisible(layerId, targetIds.has(layerId)));
-      lazyLayerControllers.forEach((controller, layerId) => {
-        if (!targetIds.has(layerId)) controller.abort();
-      });
+      // 남성 모델은 한 번 시작한 보강 레이어 다운로드를 확대 전환 때문에 취소하지
+      // 않는다. 모두 준비돼 있어야 계통 버튼이 네트워크 요청 없이 즉시 반응한다.
+      if (!preloadEveryLayer) {
+        lazyLayerControllers.forEach((controller, layerId) => {
+          if (!targetIds.has(layerId)) controller.abort();
+        });
+      }
       if (selectedMesh?.userData.lazyLayerId && !targetIds.has(selectedMesh.userData.lazyLayerId)) {
         clearSelectedMaterial();
         onSelectedStructure(undefined);
       }
       renderScene();
 
-      const pending = targets.filter((layer) => (
+      const loadTargets = preloadEveryLayer ? (manifest.lazyLayers ?? []) : targets;
+      const pending = loadTargets.filter((layer) => (
         !lazyLayerGroups.has(layer.id) && !lazyLayerControllers.has(layer.id)
       ));
       if (pending.length === 0) return;
       lazyLoadTimer = window.setTimeout(() => {
-        const label = pending.map((layer) => layer.label).join(" · ");
-        onLazyLayerStatus({ state: "loading", label });
         void Promise.all(pending.map(loadLazyLayer))
           .then(() => {
             if (activeLazyFocus !== focus || isDisposed()) return;
-            onLazyLayerStatus({ state: "loaded", label });
             renderScene();
-            lazyStatusClearTimer = window.setTimeout(() => onLazyLayerStatus(undefined), 1800);
           })
           .catch((error: unknown) => {
             if (error instanceof DOMException && error.name === "AbortError") return;
-            if (activeLazyFocus !== focus || isDisposed()) return;
-            onLazyLayerStatus({ state: "error", label });
-            lazyStatusClearTimer = window.setTimeout(() => onLazyLayerStatus(undefined), 3000);
           });
-      }, 400);
+      }, preloadEveryLayer ? 0 : 400);
     };
 
     const normalizedBounds = new THREE.Box3().setFromObject(atlasGroup);
+    verticalPanLimits = {
+      min: normalizedBounds.min.y,
+      max: normalizedBounds.max.y,
+    };
     const presets = createFocusPresets(normalizedBounds);
     camera.position.copy(presets.full.position);
     controls.target.copy(presets.full.target);
     controls.update();
 
-    focusCameraRef.current = (focus) => {
-      scheduleLazyLayers(focus);
+    const transitionToFocus = (
+      focus: BodyFocus,
+      options: { duration?: number; lockControls?: boolean } = {},
+    ) => {
+      const duration = options.duration ?? 620;
+      const lockControls = options.lockControls ?? false;
+      if (autoFullReturnAnimating) {
+        autoFullReturnAnimating = false;
+        controls.enabled = true;
+      }
+      if (lockControls) {
+        autoFullReturnAnimating = true;
+        controls.enabled = false;
+      }
+      activeBodyFocus = focus;
+      onFocusChange(focus);
+      // 빠른 확대는 카메라만 이동한다. 현재 표시 중인 계통과 부위별 보강
+      // 레이어의 가시성은 사용자가 구조 레이어 버튼으로 바꿀 때까지 유지한다.
       const preset = presets[focus];
       const startPosition = camera.position.clone();
       const startTarget = controls.target.clone();
@@ -808,42 +1104,54 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       if (focusAnimationFrame !== undefined) window.cancelAnimationFrame(focusAnimationFrame);
 
       const animateFocus = (now: number) => {
-        const elapsed = Math.min(1, (now - startedAt) / 420);
-        const eased = 1 - Math.pow(1 - elapsed, 3);
+        const elapsed = Math.min(1, (now - startedAt) / duration);
+        const eased = elapsed * elapsed * elapsed * (elapsed * (elapsed * 6 - 15) + 10);
         camera.position.lerpVectors(startPosition, preset.position, eased);
         controls.target.lerpVectors(startTarget, preset.target, eased);
         controls.update();
         renderScene();
-        if (elapsed < 1) focusAnimationFrame = window.requestAnimationFrame(animateFocus);
+        if (elapsed < 1) {
+          focusAnimationFrame = window.requestAnimationFrame(animateFocus);
+        } else {
+          focusAnimationFrame = undefined;
+          if (lockControls) {
+            autoFullReturnAnimating = false;
+            controls.enabled = true;
+          }
+        }
       };
       focusAnimationFrame = window.requestAnimationFrame(animateFocus);
     };
+    focusCameraRef.current = transitionToFocus;
 
-    window.clearTimeout(loadTimeout);
+    const fullBodyDistance = presets.full.position.distanceTo(presets.full.target);
+    handleControlsStart = () => {
+      if (autoFullReturnAnimating) return;
+      if (focusAnimationFrame === undefined) return;
+      window.cancelAnimationFrame(focusAnimationFrame);
+      focusAnimationFrame = undefined;
+    };
+    handleControlsEnd = () => {
+      const cameraDistance = camera.position.distanceTo(controls.target);
+      if (shouldReturnToFullBody(activeBodyFocus, cameraDistance, fullBodyDistance)) {
+        transitionToFocus("full", { duration: 900, lockControls: true });
+      }
+    };
+    controls.addEventListener("start", handleControlsStart);
+    controls.addEventListener("end", handleControlsEnd);
+
+    // 핵심 모델이 준비되면 외피·골격 첫 프레임을 즉시 내보낸다. 남성 보강 레이어는
+    // 곧바로 전부 병렬 로드하되 숨김 상태로 붙인다. 그래서 첫 화면은 가볍고, 로드가
+    // 끝난 뒤 계통 버튼은 추가 네트워크 요청 없이 가시성만 바꾼다.
     onReady();
     renderScene();
+    scheduleLazyLayers("full");
   } catch {
-    window.clearTimeout(loadTimeout);
     cleanup();
     throw new Error(`아틀라스 자산을 불러오지 못했습니다: ${manifest.id}`);
   }
 
   return cleanup;
-}
-
-function BodyMapLoading({
-  progress,
-  manifest,
-}: {
-  progress: number;
-  manifest?: AnatomyAtlasManifest;
-}) {
-  return (
-    <div className="vanatome-loading" role="status">
-      <span>{manifest?.loadingLabel ?? "참조 아틀라스를 준비하는 중…"}</span>
-      <small>{progress > 0 ? `${progress}%` : manifest?.loadingSizeLabel ?? "manifest를 확인하고 있습니다"}</small>
-    </div>
-  );
 }
 
 function systemLabel(system: string) {
@@ -859,6 +1167,7 @@ function systemLabel(system: string) {
     nervous: "신경계",
     respiratory: "호흡기계",
     skeletal: "골격계",
+    joints: "관절·인대·막",
     urinary: "비뇨기계",
     "regional-anatomy": "외부 해부 구조",
   };

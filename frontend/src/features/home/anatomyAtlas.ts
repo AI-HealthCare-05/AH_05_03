@@ -1,7 +1,10 @@
 import type * as THREE from "three";
 
+import { fetchCachedAnatomyResource } from "./anatomyResourceCache";
+
 export type AnatomyAtlasId =
   | "vanatome-male-reference"
+  | "female-skeleton-controller-test"
   | "tripo-triangle2m-v49-internals-preview";
 export type AnatomyAdapterId = "vanatome" | "shell";
 export type AnatomyVisualRole = "atlas" | "shell" | "skeleton" | "organ";
@@ -13,6 +16,7 @@ export type AnatomyAtlasAsset = {
   visualRole: AnatomyVisualRole;
   adapter?: AnatomyAdapterId;
   system?: string;
+  animationClips?: string[];
   sourceUrl?: string;
   sha256?: string;
 };
@@ -57,15 +61,74 @@ export type AdaptedAnatomyMesh = {
   selectable: boolean;
 };
 
+type AnatomyMetadataObject = {
+  userData: Record<string, unknown>;
+  parent?: AnatomyMetadataObject | null;
+};
+
+const INHERITED_ANATOMY_METADATA_KEYS = [
+  "anatomyId",
+  "anatomyParentId",
+  "anatomySystem",
+  "sourceName",
+  "label",
+  "tissueType",
+] as const;
+
+const ANATOMY_REQUEST_TIMEOUT_MS = 20_000;
+
+async function fetchAnatomyJson(url: string, failureMessage: string, revision?: string) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), ANATOMY_REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetchCachedAnatomyResource(url, {
+      signal: controller.signal,
+      revision,
+    });
+    if (!response.ok) throw new Error(failureMessage);
+    return await response.json() as unknown;
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`${failureMessage} (요청 시간 초과)`, { cause: error });
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+/**
+ * GLTFLoader represents a multi-material glTF mesh as a metadata-bearing Group
+ * with one child THREE.Mesh per primitive. Copy the nearest available anatomy
+ * metadata down before adapting those primitive meshes.
+ */
+export function inheritAnatomyMetadata(object: AnatomyMetadataObject) {
+  let ancestor = object.parent;
+  while (ancestor) {
+    for (const key of INHERITED_ANATOMY_METADATA_KEYS) {
+      if (object.userData[key] == null && ancestor.userData[key] != null) {
+        object.userData[key] = ancestor.userData[key];
+      }
+    }
+    ancestor = ancestor.parent;
+  }
+  return object.userData;
+}
+
 const MANIFEST_URLS: Record<AnatomyAtlasId, string> = {
-  "vanatome-male-reference": "/vendor/vanatome/releases/1.4.0/ieobom-hologram.manifest.json",
-  "tripo-triangle2m-v49-internals-preview": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-triangle2m-shell-v49-internals.manifest.json",
+  // Manifests are served with a long immutable cache lifetime. Bump this
+  // revision whenever their loading contract changes so existing browsers do
+  // not keep an older lazy-layer trigger map.
+  "vanatome-male-reference": "/vendor/vanatome/releases/1.4.0/ieobom-hologram.manifest.json?rev=male-shell-skeleton-first-v3",
+  "female-skeleton-controller-test": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-skeleton-controller-test-v38.manifest.json",
+  "tripo-triangle2m-v49-internals-preview": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-triangle2m-shell-v49-internals.manifest.json?rev=female-anatomy-fit-v67",
 };
 
 export async function loadAnatomyAtlasManifest(atlasId: AnatomyAtlasId) {
-  const response = await fetch(MANIFEST_URLS[atlasId]);
-  if (!response.ok) throw new Error(`아틀라스 manifest를 불러오지 못했습니다: ${atlasId}`);
-  const manifest = await response.json() as AnatomyAtlasManifest;
+  const manifest = await fetchAnatomyJson(
+    MANIFEST_URLS[atlasId],
+    `아틀라스 manifest를 불러오지 못했습니다: ${atlasId}`,
+  ) as AnatomyAtlasManifest;
   validateAnatomyAtlasManifest(manifest, atlasId);
   return manifest;
 }
@@ -79,6 +142,19 @@ export function validateAnatomyAtlasManifest(
   }
   if (!Array.isArray(manifest.assets) || manifest.assets.length === 0) {
     throw new Error(`아틀라스 자산이 없습니다: ${manifest.id}`);
+  }
+
+  for (const asset of manifest.assets) {
+    if (asset.visualRole !== "shell" && (asset.adapter ?? manifest.adapter) === "shell") {
+      throw new Error(`비외피 자산이 shell 어댑터를 사용합니다: ${asset.url}`);
+    }
+    if (!asset.animationClips) continue;
+    const uniqueClips = new Set(asset.animationClips);
+    if (asset.animationClips.length === 0
+      || uniqueClips.size !== asset.animationClips.length
+      || asset.animationClips.some((clip) => !clip.trim())) {
+      throw new Error(`애니메이션 클립 계약이 올바르지 않습니다: ${asset.url}`);
+    }
   }
 
   for (const layer of manifest.lazyLayers ?? []) {
@@ -101,9 +177,11 @@ export function validateAnatomyAtlasManifest(
 
 export async function loadAnatomyMetadata(manifest: AnatomyAtlasManifest) {
   if (!manifest.metadataUrl) return new Map<string, AnatomyMetadata>();
-  const response = await fetch(manifest.metadataUrl);
-  if (!response.ok) throw new Error(`해부 메타데이터를 불러오지 못했습니다: ${manifest.id}`);
-  const metadata = await response.json() as AnatomyMetadataBundle;
+  const metadata = await fetchAnatomyJson(
+    manifest.metadataUrl,
+    `해부 메타데이터를 불러오지 못했습니다: ${manifest.id}`,
+    `${manifest.id}:${manifest.version}`,
+  ) as AnatomyMetadataBundle;
   return new Map(metadata.structures.map((structure) => [structure.id, structure]));
 }
 
@@ -112,6 +190,31 @@ export function lazyLayersForFocus(
   focus: AnatomyFocus,
 ) {
   return (manifest.lazyLayers ?? []).filter((layer) => layer.triggerFocus.includes(focus));
+}
+
+/**
+ * 첫 프레임에서 감출 계통.
+ *
+ * 전신 모델은 외피와 골격으로 윤곽을 먼저 설명하고, 나머지는 다운로드만
+ * 백그라운드에서 끝낸다.
+ */
+export function initiallyHiddenSystems(
+  atlasId: AnatomyAtlasId,
+  availableSystems: readonly string[],
+): Set<string> {
+  if (atlasId === "female-skeleton-controller-test") return new Set();
+  return new Set(availableSystems.filter((system) => (
+    system !== "integumentary" && system !== "skeletal"
+  )));
+}
+
+/**
+ * 화면의 계통 버튼은 유방 구조를 외피계에 포함해 제어한다.
+ * 원본 anatomySystem 값은 바꾸지 않으므로 차후 유방 표시 옵션을 다시
+ * 분리하더라도 GLB나 메타데이터를 재가공할 필요가 없다.
+ */
+export function anatomyLayerSystem(system: string) {
+  return system === "mammary" ? "integumentary" : system;
 }
 
 export function adaptAnatomyMesh(
@@ -152,7 +255,7 @@ function adaptVanatomeMesh(
   const shell = anatomyId === "body-shell";
   const visibleSystems = new Set([
     "cardiovascular", "digestive", "endocrine", "mammary", "muscular", "nervous",
-    "lymphatic", "reproductive", "respiratory", "skeletal", "urinary",
+    "joints", "lymphatic", "reproductive", "respiratory", "skeletal", "urinary",
   ]);
   if (!shell && !visibleSystems.has(system)) return undefined;
 
@@ -162,7 +265,7 @@ function adaptVanatomeMesh(
     sourceKey: `vanatome:${manifest.id}:${manifest.version}:${anatomyId || mesh.name}`,
     label: structure?.name ?? String(mesh.userData.label ?? readableStructureName(mesh.name)),
     system: shell ? "integumentary" : structure?.system ?? system,
-    visualRole: shell ? "shell" : system === "skeletal" ? "skeleton" : "organ",
+    visualRole: shell ? "shell" : system === "skeletal" || system === "joints" ? "skeleton" : "organ",
     selectable: !shell,
   };
 }
