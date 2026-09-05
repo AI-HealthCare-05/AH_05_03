@@ -1,6 +1,6 @@
 # ADR-002: 서버 API와 브라우저 로컬 도메인 계약 분리
 
-- 상태: 승인
+- 상태: 대체됨 — Local Domain·서버 미전송 경계는 [ADR-011](0011-postgresql-health-data-and-server-ai.md) 참조
 - 결정일: 2026-08-18
 - 적용 대상: React 프론트엔드, FastAPI, PostgreSQL, IndexedDB, OPFS, Web Crypto, 백업·이전 기능
 - 선행 결정: [ADR-001 웹 기반 로컬 우선 서비스 전환](0001-web-local-first-architecture.md)
