@@ -11,6 +11,7 @@ import {
   createChatSession,
   listChatSessions,
   listChatMessages,
+  type ChatSessionData,
   type HealthAssistantResponse,
   type ExerciseDraft,
   type BloodPressureDraft,
@@ -44,7 +45,6 @@ import {
   reviewItemsToText,
   loadChatSession,
   saveChatSession,
-  clearChatSession,
   createWelcomeMessage,
   mergeServerMessagesWithLocalUi,
 } from "./healthAssistantLogic";
@@ -87,10 +87,13 @@ export function HealthAssistantDrawer({
   });
   const messagesRef = useRef(messages);
   const activeSessionIdRef = useRef<string | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const sessionSyncPromiseRef = useRef<Promise<string | null> | null>(null);
   const skipNextCacheWriteRef = useRef(false);
   const activeProfileIdRef = useRef<string | null>(profile?.id ?? null);
   const [input, setInput] = useState("");
+  const [chatSessions, setChatSessions] = useState<ChatSessionData[]>([]);
+  const [showSessionList, setShowSessionList] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -203,7 +206,9 @@ export function HealthAssistantDrawer({
     activeProfileIdRef.current = currentProfileId;
     // 새 프로필의 세션을 찾는 동안 이전 프로필의 세션 id를 재사용하지 않는다.
     activeSessionIdRef.current = null;
+    setActiveSessionId(null);
     skipNextCacheWriteRef.current = true;
+    setShowSessionList(true);
 
     const saved = loadChatSession(currentProfileId);
     setMessages(saved && saved.length > 0 ? saved : [createWelcomeMessage(profileDisplayName)]);
@@ -216,10 +221,12 @@ export function HealthAssistantDrawer({
       try {
         const sessions = await listChatSessions(currentProfileId);
         if (!isSubscribed || activeProfileIdRef.current !== currentProfileId) return null;
+        setChatSessions(sessions);
 
         if (sessions.length > 0) {
           const latest = sessions[0];
           activeSessionIdRef.current = latest.id;
+          setActiveSessionId(latest.id);
           const dbMessages = await listChatMessages(latest.id);
           if (!isSubscribed || activeProfileIdRef.current !== currentProfileId) return null;
 
@@ -236,12 +243,8 @@ export function HealthAssistantDrawer({
           }
           return latest.id;
         } else {
-          const newSession = await createChatSession(currentProfileId);
-          if (!isSubscribed || activeProfileIdRef.current !== currentProfileId) return null;
-          activeSessionIdRef.current = newSession.id;
           setMessages([createWelcomeMessage(profileDisplayName)]);
-          clearChatSession(currentProfileId);
-          return newSession.id;
+          return null;
         }
       } catch (err) {
         console.warn("대화 세션 서버 동기화 실패 (오프라인 캐시 유지):", err);
@@ -270,10 +273,9 @@ export function HealthAssistantDrawer({
     saveChatSession(profile.id, messages);
   }, [profile, messages]);
 
-  // 대화 비우기 및 새 대화 시작 (PostgreSQL 서버에 새 세션 생성)
-  async function handleClearChat() {
+  // 새 대화는 기존 대화를 지우지 않고 별도 세션으로 만든다.
+  async function handleCreateChat() {
     if (!profile) return;
-    clearChatSession(profile.id);
     setMessages([createWelcomeMessage(profile.displayName)]);
     setSelectedImage(null);
     setImagePreview(null);
@@ -281,8 +283,28 @@ export function HealthAssistantDrawer({
     try {
       const newSession = await createChatSession(profile.id);
       activeSessionIdRef.current = newSession.id;
+      setActiveSessionId(newSession.id);
+      setChatSessions((previous) => [newSession, ...previous]);
+      setShowSessionList(false);
     } catch (err) {
       console.warn("새 대화 세션 생성 실패:", err);
+    }
+  }
+
+  async function handleSelectChat(session: ChatSessionData) {
+    if (!profile) return;
+    setError(undefined);
+    try {
+      const dbMessages = await listChatMessages(session.id);
+      if (activeProfileIdRef.current !== profile.id) return;
+      const mapped = mergeServerMessagesWithLocalUi(dbMessages, loadChatSession(profile.id) ?? []);
+      activeSessionIdRef.current = session.id;
+      setActiveSessionId(session.id);
+      setMessages(mapped.length > 0 ? mapped : [createWelcomeMessage(profile.displayName)]);
+      setShowSessionList(false);
+    } catch (err) {
+      console.warn("대화 내용을 불러오지 못했습니다:", err);
+      setError("대화 내용을 불러오지 못했습니다. 다시 선택해 주세요.");
     }
   }
 
@@ -516,6 +538,7 @@ export function HealthAssistantDrawer({
           const newSession = await createChatSession(profile.id);
           sessionId = newSession.id;
           activeSessionIdRef.current = sessionId;
+          setActiveSessionId(sessionId);
         } catch (sessionError) {
           // 세션 저장 장애가 기존 챗봇 자체를 막아서는 안 된다. 대화는 계속하고
           // sessionStorage 캐시로 복구하며 다음 요청에서 다시 서버 세션을 시도한다.
@@ -682,6 +705,8 @@ export function HealthAssistantDrawer({
           assistantMsgId,
         );
       }
+      // 첫 사용자 질문이 세션 제목으로 저장되므로 목록도 최신 상태로 갱신한다.
+      void listChatSessions(profile.id).then((sessions) => setChatSessions(sessions)).catch(() => undefined);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "응답을 받지 못했습니다. 다시 시도해 주세요.");
     } finally {
@@ -1183,22 +1208,54 @@ export function HealthAssistantDrawer({
             </div>
           </div>
           <div className="assistant-header-actions">
-            {messages.length > 1 && (
-              <button
-                className="assistant-clear-btn"
-                type="button"
-                onClick={handleClearChat}
-                title="대화 내용을 비우고 새 대화를 시작합니다"
-                aria-label="새 대화 시작"
-              >
-                새 대화
-              </button>
-            )}
+            <button
+              className="assistant-clear-btn"
+              type="button"
+              onClick={() => setShowSessionList(true)}
+              aria-label="대화 목록"
+            >
+              대화 목록
+            </button>
             <button className="assistant-close-btn" type="button" onClick={onClose} aria-label="닫기">
               ×
             </button>
           </div>
         </header>
+
+        {showSessionList && (
+          <section className="chat-session-list" aria-label="대화 목록">
+            <div className="chat-session-list-heading">
+              <div>
+                <strong>대화 목록</strong>
+                <p>봄이와 나눈 대화를 다시 열 수 있어요.</p>
+              </div>
+              <button type="button" className="new-chat-button" onClick={() => void handleCreateChat()}>
+                <span aria-hidden="true">+</span> 새 대화
+              </button>
+            </div>
+            {chatSessions.length === 0 ? (
+              <div className="chat-session-empty">
+                <strong>아직 나눈 대화가 없어요.</strong>
+                <p>새 대화에서 건강 기록이나 궁금한 점을 물어보세요.</p>
+              </div>
+            ) : (
+              <ul>
+                {chatSessions.map((session) => (
+                  <li key={session.id}>
+                    <button
+                      type="button"
+                      className={activeSessionId === session.id ? "active" : ""}
+                      onClick={() => void handleSelectChat(session)}
+                    >
+                      <strong>{session.title || "새 건강 상담"}</strong>
+                      <time dateTime={session.updated_at}>{new Date(session.updated_at).toLocaleDateString("ko-KR")}</time>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
 
         {/* 메시지 리스트 */}
         <div ref={messagesContainerRef} className="assistant-messages-container">

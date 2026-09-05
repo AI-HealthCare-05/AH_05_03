@@ -24,8 +24,88 @@
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
+  position: relative;
   animation: slideLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* 카카오톡처럼 먼저 대화방을 고르고, 없으면 여기서 새 대화를 만든다. */
+.chat-session-list {
+  position: absolute;
+  z-index: 2;
+  inset: 71px 0 0;
+  overflow-y: auto;
+  background: #ffffff;
+  padding: 18px 16px;
+}
+
+.chat-session-list-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 4px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.chat-session-list-heading strong {
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.chat-session-list-heading p,
+.chat-session-empty p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.new-chat-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: #10b981;
+  color: white;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.new-chat-button span { font-size: 17px; line-height: 12px; }
+.new-chat-button:hover { background: #059669; }
+
+.chat-session-list ul {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.chat-session-list li + li { border-top: 1px solid #f1f5f9; }
+
+.chat-session-list li button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 10px;
+  border: 0;
+  border-radius: 8px;
+  color: #1e293b;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-session-list li button:hover,
+.chat-session-list li button.active { background: #ecfdf5; }
+.chat-session-list li strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-session-list li time { color: #94a3b8; font-size: 11px; white-space: nowrap; }
+
+.chat-session-empty { padding: 52px 20px; text-align: center; color: #334155; }
 
 @keyframes slideLeft {
   from { transform: translateX(100%); }
