@@ -10,6 +10,11 @@ import {
   resolveHealthRecordDateTime,
   resolveMedicationTakenAt,
   shouldAutoSaveHealthRecord,
+  deserializeChatSession,
+  loadChatSession,
+  mergeServerMessagesWithLocalUi,
+  saveChatSession,
+  serializeChatSession,
 } from "./healthAssistantLogic";
 import type { FamilyProfile, HealthRecord } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
@@ -74,6 +79,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
   });
 
   afterEach(() => {
@@ -1177,6 +1183,548 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
         expect(screen.getByText(/2022년 종합검진/)).toBeInTheDocument();
         expect(screen.getByText(/2026년 일반건강검진/)).toBeInTheDocument();
       });
+    });
+
+    it("다음 질문을 보내도 이전 답변에 붙은 조회 결과는 유지된다", async () => {
+      const queryRuntime = {
+        healthRecords: {
+          create: vi.fn(),
+          query: vi.fn().mockResolvedValue({
+            ok: true,
+            value: [{
+              id: "rec-bp-1",
+              profileId: "profile-1",
+              recordType: "blood_pressure",
+              recordedAt: "2026-09-04T13:45:00Z",
+              source: "local_ai",
+              payload: { systolicMmHg: 120, diastolicMmHg: 80, note: "혈압 120/80" },
+            }],
+          }),
+        },
+      } as unknown as LocalDomainRuntime;
+      vi.spyOn(clientModule, "streamHealthAssistantMessage")
+        .mockResolvedValueOnce({
+          intent: "query_records",
+          assistant_message: "최근 혈압 기록입니다.",
+          query_draft: { record_type: "blood_pressure", time_range: "recent" },
+          missing_fields: [],
+          needs_confirmation: false,
+          suggested_quick_replies: [],
+        })
+        .mockResolvedValueOnce({
+          intent: "general_chat",
+          assistant_message: "다른 질문도 도와드릴게요.",
+          missing_fields: [],
+          needs_confirmation: false,
+          suggested_quick_replies: [],
+        });
+
+      render(
+        <HealthAssistantDrawer profile={mockProfile} runtime={queryRuntime} isOpen onClose={mockOnClose} />,
+      );
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+      fireEvent.change(input, { target: { value: "최근 혈압 기록 조회" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+      await waitFor(() => expect(screen.getByText(/조회된 건강 기록/)).toBeInTheDocument());
+
+      fireEvent.change(input, { target: { value: "고마워" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+      await waitFor(() => expect(screen.getByText("다른 질문도 도와드릴게요.")).toBeInTheDocument());
+
+      expect(screen.getByText(/조회된 건강 기록/)).toBeInTheDocument();
+      expect(screen.getByText("120/80 mmHg")).toBeInTheDocument();
+    });
+
+    it("원본 서류 요청 시 AI 인텐트가 health_advice여도 서류 미리보기가 표시되고 다음 질문 후에도 유지된다", async () => {
+      const docRuntime = {
+        healthRecords: {
+          create: vi.fn(),
+          query: vi.fn().mockResolvedValue({
+            ok: true,
+            value: [{
+              id: "rec-scr-1",
+              profileId: "profile-1",
+              recordType: "health_screening",
+              recordedAt: "2026-08-28T09:00:00Z",
+              source: "local_ai",
+              sourceDocumentId: "doc-scan-1",
+              payload: { screeningName: "2026 건강검진표" },
+            }],
+          }),
+        },
+        documents: {
+          list: vi.fn().mockResolvedValue({
+            ok: true,
+            value: [{ id: "doc-scan-1", fileName: "2026_검진표.jpg" }],
+          }),
+          readById: vi.fn().mockResolvedValue({
+            ok: true,
+            value: { id: "doc-scan-1", fileName: "2026_검진표.jpg", file: new Blob(["dummy"], { type: "image/jpeg" }) },
+          }),
+        },
+      } as unknown as LocalDomainRuntime;
+
+      vi.spyOn(clientModule, "streamHealthAssistantMessage")
+        .mockResolvedValueOnce({
+          intent: "health_advice",
+          assistant_message: "가장 최근 2026년 8월 28일에 실시하신 건강검진 원본 서류입니다. 아래에서 확인해 보세요.",
+          safety_disclaimer: "제공된 건강 조언은 참고용입니다.",
+          missing_fields: [],
+          needs_confirmation: false,
+          suggested_quick_replies: [],
+        })
+        .mockResolvedValueOnce({
+          intent: "general_chat",
+          assistant_message: "추가로 궁금한 점이 있으신가요?",
+          missing_fields: [],
+          needs_confirmation: false,
+          suggested_quick_replies: [],
+        });
+
+      render(
+        <HealthAssistantDrawer profile={mockProfile} runtime={docRuntime} isOpen onClose={mockOnClose} />,
+      );
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+
+      // 1턴: 최근 건강검진 결과 원본 보여줘
+      fireEvent.change(input, { target: { value: "최근 건강검진 결과 원본 보여줘" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+      await waitFor(() => expect(screen.getByText("가장 최근 2026년 8월 28일에 실시하신 건강검진 원본 서류입니다. 아래에서 확인해 보세요.")).toBeInTheDocument());
+
+      // 원본 서류 미리보기 카드 확인
+      await waitFor(() => expect(screen.getByText("원본 서류")).toBeInTheDocument());
+      expect(screen.getByText("2026_검진표.jpg")).toBeInTheDocument();
+
+      // 2턴: 다음 질문 전송
+      fireEvent.change(input, { target: { value: "다른 질문할게" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+      await waitFor(() => expect(screen.getByText("추가로 궁금한 점이 있으신가요?")).toBeInTheDocument());
+
+      // 이전 답변에 붙어있던 원본 서류 카드가 사라지지 않고 그대로 유지됨
+      expect(screen.getByText("원본 서류")).toBeInTheDocument();
+      expect(screen.getByText("2026_검진표.jpg")).toBeInTheDocument();
+    });
+
+    it("동일한 원본 서류 질문을 2번 연속 보내도 각각의 답변에 서류 미리보기가 모두 유지된다", async () => {
+      const docRuntime = {
+        healthRecords: {
+          create: vi.fn(),
+          query: vi.fn().mockResolvedValue({
+            ok: true,
+            value: [{
+              id: "rec-scr-1",
+              profileId: "profile-1",
+              recordType: "health_screening",
+              recordedAt: "2026-08-28T09:00:00Z",
+              source: "local_ai",
+              sourceDocumentId: "doc-scan-1",
+              payload: { screeningName: "2026 건강검진표" },
+            }],
+          }),
+        },
+        documents: {
+          list: vi.fn().mockResolvedValue({
+            ok: true,
+            value: [{ id: "doc-scan-1", fileName: "2026_검진표.jpg" }],
+          }),
+          readById: vi.fn().mockResolvedValue({
+            ok: true,
+            value: { id: "doc-scan-1", fileName: "2026_검진표.jpg", file: new Blob(["dummy"], { type: "image/jpeg" }) },
+          }),
+        },
+      } as unknown as LocalDomainRuntime;
+
+      vi.spyOn(clientModule, "streamHealthAssistantMessage")
+        .mockResolvedValueOnce({
+          intent: "health_advice",
+          assistant_message: "가장 최근 2026년 8월 28일에 실시하신 건강검진 원본 서류입니다. 아래에서 확인해 보세요.",
+          safety_disclaimer: "제공된 건강 조언은 참고용입니다.",
+          missing_fields: [],
+          needs_confirmation: false,
+          suggested_quick_replies: [],
+        })
+        .mockResolvedValueOnce({
+          intent: "health_advice",
+          assistant_message: "가장 최근 2026년 8월 28일에 실시하신 건강검진 원본 서류입니다. 아래에서 확인해 보세요.",
+          safety_disclaimer: "제공된 건강 조언은 참고용입니다.",
+          missing_fields: [],
+          needs_confirmation: false,
+          suggested_quick_replies: [],
+        });
+
+      render(
+        <HealthAssistantDrawer profile={mockProfile} runtime={docRuntime} isOpen onClose={mockOnClose} />,
+      );
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+
+      // 1턴: 원본 서류 요청
+      fireEvent.change(input, { target: { value: "최근 건강검진 결과 원본 보여줘" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+      await waitFor(() => expect(screen.getAllByText("가장 최근 2026년 8월 28일에 실시하신 건강검진 원본 서류입니다. 아래에서 확인해 보세요.")).toHaveLength(1));
+      await waitFor(() => expect(screen.getAllByText("원본 서류")).toHaveLength(1));
+
+      // 2턴: 같은 요청 다시 전송
+      fireEvent.change(input, { target: { value: "최근 건강검진 결과 원본 보여줘" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+      await waitFor(() => expect(screen.getAllByText("가장 최근 2026년 8월 28일에 실시하신 건강검진 원본 서류입니다. 아래에서 확인해 보세요.")).toHaveLength(2));
+
+      // 두 답변 모두에 각각 원본 서류 카드가 유지되어 총 2개 존재
+      await waitFor(() => expect(screen.getAllByText("원본 서류")).toHaveLength(2));
+      expect(screen.getAllByText("2026_검진표.jpg")).toHaveLength(2);
+    });
+
+    it("시계열 그래프 요청 시 AI 인텐트가 health_advice여도 추이 차트가 표시되고 다음 질문 후에도 유지된다", async () => {
+      const trendRuntime = {
+        healthRecords: {
+          create: vi.fn(),
+          query: vi.fn().mockResolvedValue({
+            ok: true,
+            value: [
+              {
+                id: "bp-1",
+                profileId: "profile-1",
+                recordType: "blood_pressure",
+                recordedAt: "2026-08-01T09:00:00Z",
+                source: "local_ai",
+                payload: { systolicMmHg: 130, diastolicMmHg: 85 },
+              },
+              {
+                id: "bp-2",
+                profileId: "profile-1",
+                recordType: "blood_pressure",
+                recordedAt: "2026-08-20T09:00:00Z",
+                source: "local_ai",
+                payload: { systolicMmHg: 120, diastolicMmHg: 80 },
+              },
+            ],
+          }),
+        },
+      } as unknown as LocalDomainRuntime;
+
+      vi.spyOn(clientModule, "streamHealthAssistantMessage")
+        .mockResolvedValueOnce({
+          intent: "health_advice",
+          assistant_message: "최근 검진 및 측정 수치 변화 그래프를 조회해 드립니다. 아래 차트에서 변화 추이를 확인해 보세요.",
+          safety_disclaimer: "제공된 건강 조언은 참고용입니다.",
+          missing_fields: [],
+          needs_confirmation: false,
+          suggested_quick_replies: [],
+        })
+        .mockResolvedValueOnce({
+          intent: "general_chat",
+          assistant_message: "수치가 안정적이네요!",
+          missing_fields: [],
+          needs_confirmation: false,
+          suggested_quick_replies: [],
+        });
+
+      render(
+        <HealthAssistantDrawer profile={mockProfile} runtime={trendRuntime} isOpen onClose={mockOnClose} />,
+      );
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+
+      // 1턴: 검진 수치 변화 그래프
+      fireEvent.change(input, { target: { value: "검진 수치 변화 그래프" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+      await waitFor(() => expect(screen.getByText(/최근 검진 및 측정 수치 변화 그래프/)).toBeInTheDocument());
+
+      // 트렌드 차트 카드 확인 (수치 변화 그래프 키커 및 정상 수축기 범례)
+      await waitFor(() => expect(screen.getByText("수치 변화 그래프")).toBeInTheDocument());
+      expect(screen.getByText("정상 수축기: 120 이하")).toBeInTheDocument();
+
+      // 2턴: 다음 질문 전송
+      fireEvent.change(input, { target: { value: "어때 보여?" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+      await waitFor(() => expect(screen.getByText("수치가 안정적이네요!")).toBeInTheDocument());
+
+      // 이전 답변의 트렌드 차트 카드가 사라지지 않고 유지됨
+      expect(screen.getByText("수치 변화 그래프")).toBeInTheDocument();
+      expect(screen.getByText("정상 수축기: 120 이하")).toBeInTheDocument();
+    });
+  });
+
+
+  describe("대화 세션 보존 및 복원 (Session Persistence & Restoration)", () => {
+    beforeEach(() => {
+      sessionStorage.clear();
+    });
+
+    it("직렬화 및 역직렬화 시 imageFile 등 비직렬화 필드를 안전하게 정제한다", () => {
+      const mockMessages = [
+        {
+          id: "msg-1",
+          role: "user" as const,
+          content: "어제 30분 걸었어",
+          imageBlobUrl: "blob:fake-url",
+          imageFile: new File(["dummy"], "doc.jpg", { type: "image/jpeg" }),
+        },
+        {
+          id: "msg-2",
+          role: "assistant" as const,
+          content: "운동 기록을 보관함에 안전하게 저장했습니다.",
+          saved: true,
+        },
+      ];
+
+      const serialized = serializeChatSession(mockMessages);
+      expect(serialized).not.toContain("dummy");
+      const deserialized = deserializeChatSession(serialized);
+      expect(deserialized).toHaveLength(2);
+      expect(deserialized[0].content).toBe("어제 30분 걸었어");
+      expect(deserialized[1].saved).toBe(true);
+    });
+
+    it("서버 이력을 복원해도 로컬 조회 카드 상태를 같은 답변에 다시 붙인다", () => {
+      const restored = mergeServerMessagesWithLocalUi(
+        [{
+          id: "server-answer",
+          session_id: "session-1",
+          role: "assistant",
+          content: "최근 혈압 기록입니다.",
+          metadata: { intent: "query_records" },
+          sequence_number: 2,
+          created_at: "2026-09-04T00:00:00Z",
+        }],
+        [{
+          id: "local-answer",
+          role: "assistant",
+          content: "최근 혈압 기록입니다.",
+          queriedRecords: [{
+            id: "bp-1",
+            profileId: mockProfile.id,
+            householdId: mockProfile.householdId,
+            recordType: "blood_pressure",
+            recordedAt: "2026-09-04T00:00:00Z",
+            source: "local_ai",
+            sourceDocumentId: null,
+            deletedAt: null,
+            createdAt: "2026-09-04T00:00:00Z",
+            updatedAt: "2026-09-04T00:00:00Z",
+            version: 1,
+            payload: { systolicMmHg: 120, diastolicMmHg: 80 },
+          }],
+        }],
+      );
+
+      expect(restored[0].id).toBe("server-answer");
+      expect(restored[0].queriedRecords?.[0].id).toBe("bp-1");
+    });
+
+    it("동일한 내용의 질문/답변이 반복된 세션도 순서대로 매칭하여 각각의 로컬 UI 상태를 보존한다", () => {
+      const restored = mergeServerMessagesWithLocalUi(
+        [
+          {
+            id: "server-answer-1",
+            session_id: "session-1",
+            role: "assistant",
+            content: "가장 최근 건강검진 원본 서류입니다.",
+            metadata: { intent: "health_advice" },
+            sequence_number: 2,
+            created_at: "2026-09-04T00:00:00Z",
+          },
+          {
+            id: "server-answer-2",
+            session_id: "session-1",
+            role: "assistant",
+            content: "가장 최근 건강검진 원본 서류입니다.",
+            metadata: { intent: "health_advice" },
+            sequence_number: 4,
+            created_at: "2026-09-04T00:01:00Z",
+          },
+        ],
+        [
+          {
+            id: "local-answer-1",
+            role: "assistant",
+            content: "가장 최근 건강검진 원본 서류입니다.",
+            attachedDocuments: [{ id: "doc-1", fileName: "2026_검진.pdf" }],
+          },
+          {
+            id: "local-answer-2",
+            role: "assistant",
+            content: "가장 최근 건강검진 원본 서류입니다.",
+            attachedDocuments: [{ id: "doc-2", fileName: "2026_검진2.pdf" }],
+          },
+        ],
+      );
+
+      expect(restored).toHaveLength(2);
+      expect(restored[0].id).toBe("server-answer-1");
+      expect(restored[0].attachedDocuments?.[0].id).toBe("doc-1");
+      expect(restored[1].id).toBe("server-answer-2");
+      expect(restored[1].attachedDocuments?.[0].id).toBe("doc-2");
+    });
+
+
+    it("이전에 저장된 세션이 있으면 마운트 시 이전 대화를 복원한다", () => {
+      saveChatSession(mockProfile.id, [
+        {
+          id: "prev-1",
+          role: "user",
+          content: "지난주 혈압 어땠어?",
+        },
+        {
+          id: "prev-2",
+          role: "assistant",
+          content: "지난주 평균 수축기 혈압은 125였습니다.",
+        },
+      ]);
+
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={mockRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+        />,
+      );
+
+      expect(screen.getByText("지난주 혈압 어땠어?")).toBeInTheDocument();
+      expect(screen.getByText("지난주 평균 수축기 혈압은 125였습니다.")).toBeInTheDocument();
+    });
+
+    it("대화가 진행되면 sessionStorage에 실시간으로 자동 보존된다", async () => {
+      vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+        intent: "general_chat",
+        assistant_message: "네, 건강 관리 꾸준히 해보아요!",
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: [],
+      });
+
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={mockRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+        />,
+      );
+
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+      fireEvent.change(input, { target: { value: "오늘 컨디션 좋아" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("오늘 컨디션 좋아")).toBeInTheDocument();
+        expect(screen.getByText("네, 건강 관리 꾸준히 해보아요!")).toBeInTheDocument();
+      });
+
+      const saved = loadChatSession(mockProfile.id);
+      expect(saved).not.toBeNull();
+      expect(saved?.some((m) => m.content === "오늘 컨디션 좋아")).toBe(true);
+      expect(saved?.some((m) => m.content === "네, 건강 관리 꾸준히 해보아요!")).toBe(true);
+    });
+
+    it("가족 프로필이 전환되면 각 프로필의 대화 세션이 분리되어 유지된다", () => {
+      const fatherProfile: FamilyProfile = {
+        ...mockProfile,
+        id: "profile-father",
+        displayName: "아버지",
+        relationship: "부",
+      };
+
+      // 본인 세션과 아버지 세션을 각각 저장
+      saveChatSession(mockProfile.id, [
+        { id: "my-1", role: "user", content: "내 체중 70kg" },
+      ]);
+      saveChatSession(fatherProfile.id, [
+        { id: "fa-1", role: "user", content: "아버지 당뇨약 복용" },
+      ]);
+
+      const { rerender } = render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={mockRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+        />,
+      );
+
+      expect(screen.getByText("내 체중 70kg")).toBeInTheDocument();
+      expect(screen.queryByText("아버지 당뇨약 복용")).not.toBeInTheDocument();
+
+      // 프로필을 아버지로 전환
+      rerender(
+        <HealthAssistantDrawer
+          profile={fatherProfile}
+          runtime={mockRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+        />,
+      );
+
+      expect(screen.getByText("아버지 당뇨약 복용")).toBeInTheDocument();
+      expect(screen.queryByText("내 체중 70kg")).not.toBeInTheDocument();
+      expect(loadChatSession(mockProfile.id)?.[0].content).toBe("내 체중 70kg");
+      expect(loadChatSession(fatherProfile.id)?.[0].content).toBe("아버지 당뇨약 복용");
+    });
+
+    it("긴 세션을 복원해도 AI 요청에는 가장 최근 메시지 12개만 보낸다", async () => {
+      const oldMessages = Array.from({ length: 14 }, (_, index) => ({
+        id: `old-${index}`,
+        role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        content: `이전 대화 ${index + 1}`,
+      }));
+      saveChatSession(mockProfile.id, oldMessages);
+      const streamSpy = vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+        intent: "general_chat",
+        assistant_message: "새 답변",
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: [],
+      });
+
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={mockRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+        />,
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), {
+        target: { value: "새 질문" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      await waitFor(() => expect(streamSpy).toHaveBeenCalled());
+      const sentMessages = streamSpy.mock.calls[0][0];
+      expect(sentMessages).toHaveLength(12);
+      expect(sentMessages[0].content).toBe("이전 대화 4");
+      expect(sentMessages.at(-1)?.content).toBe("새 질문");
+    });
+
+    it("새 대화 버튼 클릭 시 세션이 비워지고 초기 환영 메시지로 리셋된다", async () => {
+      saveChatSession(mockProfile.id, [
+        { id: "msg-1", role: "user", content: "이전 질문입니다" },
+        { id: "msg-2", role: "assistant", content: "이전 답변입니다" },
+      ]);
+
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={mockRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+        />,
+      );
+
+      expect(screen.getByText("이전 질문입니다")).toBeInTheDocument();
+      const clearBtn = screen.getByRole("button", { name: "새 대화 시작" });
+      expect(clearBtn).toBeInTheDocument();
+
+      fireEvent.click(clearBtn);
+
+      await waitFor(() => {
+        expect(screen.queryByText("이전 질문입니다")).not.toBeInTheDocument();
+        expect(screen.getByText(/홍길동님의 건강 비서 '봄이'입니다/)).toBeInTheDocument();
+      });
+
+      // sessionStorage에서도 제거되었는지 확인
+      const saved = loadChatSession(mockProfile.id);
+      expect(saved).toBeNull();
     });
   });
 });

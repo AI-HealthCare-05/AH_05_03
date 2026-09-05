@@ -4,6 +4,7 @@ from app.apis.v1.account_routers import account_router
 from app.apis.v1.assessment_summary_routers import assessment_summary_router
 from app.apis.v1.auth_routers import auth_router
 from app.apis.v1.challenge_routers import challenge_router
+from app.apis.v1.chat_session_routers import chat_session_router
 from app.apis.v1.dev_ocr_routers import dev_ocr_router
 from app.apis.v1.family_invitation_routers import family_invitation_router
 from app.apis.v1.health_assistant_routers import health_assistant_router
@@ -33,5 +34,7 @@ v1_routers.include_router(challenge_router)
 # 대화 경로 둘. 외부 유료 API 를 부르므로 인증 + 계정별 상한이 붙어 있다.
 v1_routers.include_router(health_assistant_router)
 v1_routers.include_router(pain_chat_router)
+# 대화 세션 및 메시지 영구 보존
+v1_routers.include_router(chat_session_router)
 # Gemini 문서 인식 개발 브리지 (PR #24). 기본 꺼짐 — `ENABLE_DEV_OCR_BRIDGE`.
 v1_routers.include_router(dev_ocr_router)

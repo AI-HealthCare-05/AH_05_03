@@ -8,7 +8,7 @@
 
 import json
 from collections.abc import AsyncIterator
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -23,6 +23,7 @@ from app.dtos.health_assistant import (
     HealthAssistantResponse,
 )
 from app.models.service_accounts import ServiceAccount
+from app.services.chat_session_service import ChatSessionService
 from app.services.health_assistant import HealthAssistantService
 from app.services.rate_limit import RateLimiter
 
@@ -34,6 +35,7 @@ _ERRORS = (
     ErrorCode.TOKEN_EXPIRED,
     ErrorCode.RATE_LIMITED,
     ErrorCode.VALIDATION_ERROR,
+    ErrorCode.CHAT_SESSION_NOT_FOUND,
     # 503 은 우리 쪽 사정(키 없음)만. 업스트림 실패는 502, 지연은 504 로 가른다.
     ErrorCode.LLM_UNAVAILABLE,
     ErrorCode.LLM_PROVIDER_FAILED,
@@ -56,6 +58,7 @@ async def chat_with_assistant(
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
     service: Annotated[HealthAssistantService, Depends(get_health_assistant_service)],
+    chat_session_service: Annotated[ChatSessionService, Depends(ChatSessionService)],
 ) -> ApiResponse[HealthAssistantResponse]:
     await limiter.hit(
         "health-assistant",
@@ -63,7 +66,26 @@ async def chat_with_assistant(
         config.LLM_CHAT_RATE_LIMIT,
         config.LLM_CHAT_RATE_WINDOW_SECONDS,
     )
+    if request.session_id is not None:
+        await chat_session_service.get_session(account, request.session_id)
+        await chat_session_service.add_message(
+            account=account,
+            session_id=request.session_id,
+            role="user",
+            content=request.messages[-1].content,
+        )
+
     data = await service.respond(request)
+
+    if request.session_id is not None:
+        await chat_session_service.add_message(
+            account=account,
+            session_id=request.session_id,
+            role="assistant",
+            content=data.assistant_message,
+            metadata=data.model_dump(),
+        )
+
     return ApiResponse(data=data, message="건강 어시스턴트 응답을 처리했습니다.")
 
 
@@ -77,6 +99,7 @@ async def stream_chat_with_assistant(
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
     service: Annotated[HealthAssistantService, Depends(get_health_assistant_service)],
+    chat_session_service: Annotated[ChatSessionService, Depends(ChatSessionService)],
 ) -> StreamingResponse:
     """`text/event-stream`. 두 이벤트를 보낸다.
 
@@ -97,11 +120,33 @@ async def stream_chat_with_assistant(
         config.LLM_CHAT_RATE_WINDOW_SECONDS,
     )
 
+    if request.session_id is not None:
+        await chat_session_service.get_session(account, request.session_id)
+        await chat_session_service.add_message(
+            account=account,
+            session_id=request.session_id,
+            role="user",
+            content=request.messages[-1].content,
+        )
+
     async def frames() -> AsyncIterator[str]:
+        final_payload: dict[str, Any] | None = None
         try:
             async for name, payload in service.stream(request):
+                if name == "result" and isinstance(payload, dict):
+                    final_payload = payload
                 body = json.dumps(payload, ensure_ascii=False)
                 yield f"event: {name}\ndata: {body}\n\n"
+
+            if request.session_id is not None and final_payload is not None:
+                assistant_text = final_payload.get("assistant_message", "")
+                await chat_session_service.add_message(
+                    account=account,
+                    session_id=request.session_id,
+                    role="assistant",
+                    content=assistant_text,
+                    metadata=final_payload,
+                )
         except Exception as error:  # noqa: BLE001 - 이미 200 이라 프레임으로 알린다
             # 200 으로 열린 뒤에는 오류 봉투를 쓸 수 없다. 프런트가 읽을 수 있게
             # `error` 프레임으로 알리고 끊는다 — 조용히 끝나면 화면이 영영 기다린다.

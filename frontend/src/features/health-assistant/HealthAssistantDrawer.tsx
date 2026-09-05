@@ -8,6 +8,9 @@ import { GeminiOcrAdapter } from "../../shared/api/geminiOcrAdapter";
 
 import {
   streamHealthAssistantMessage,
+  createChatSession,
+  listChatSessions,
+  listChatMessages,
   type HealthAssistantResponse,
   type ExerciseDraft,
   type BloodPressureDraft,
@@ -39,6 +42,11 @@ import {
   normalizeBloodGlucoseTiming,
   removeMedicationSavePrompt,
   reviewItemsToText,
+  loadChatSession,
+  saveChatSession,
+  clearChatSession,
+  createWelcomeMessage,
+  mergeServerMessagesWithLocalUi,
 } from "./healthAssistantLogic";
 import "./healthAssistantDrawer.css";
 
@@ -71,17 +79,27 @@ export function HealthAssistantDrawer({
   onRecordSaved,
   onNavigateToRecords,
 }: HealthAssistantDrawerProps) {
-  const [messages, setMessages] = useState<ExtendedChatMessage[]>([]);
+  // 초기 메시지는 이전 세션이 있으면 복원하고, 없으면 환영 메시지로 시작한다.
+  const [messages, setMessages] = useState<ExtendedChatMessage[]>(() => {
+    if (!profile) return [];
+    const saved = loadChatSession(profile.id);
+    return saved && saved.length > 0 ? saved : [createWelcomeMessage(profile.displayName)];
+  });
+  const messagesRef = useRef(messages);
+  const activeSessionIdRef = useRef<string | null>(null);
+  const sessionSyncPromiseRef = useRef<Promise<string | null> | null>(null);
+  const skipNextCacheWriteRef = useRef(false);
+  const activeProfileIdRef = useRef<string | null>(profile?.id ?? null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
-  const [queriedRecords, setQueriedRecords] = useState<HealthRecord[] | null>(null);
-  const [queriedRecordsTitle, setQueriedRecordsTitle] = useState<string>();
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [sourcePreviewModal, setSourcePreviewModal] = useState<{ url: string; name: string } | null>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isInitialScrollRef = useRef(true);
 
   // 건강 서류 상세 검토 및 저장 모달 상태
   const [ocrModalOpen, setOcrModalOpen] = useState(false);
@@ -137,38 +155,136 @@ export function HealthAssistantDrawer({
   // 인사말은 초기 상태에서 만든다(위 `useState` 참조). effect 로 넣으면 첫 렌더 뒤
   // 한 번 더 그리게 되고 그 사이 한 프레임 동안 빈 대화가 보인다.
 
-  const scrollToBottom = () => {
-    if (typeof messagesEndRef.current?.scrollIntoView === "function") {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    const doScroll = () => {
+      if (messagesContainerRef.current) {
+        if (typeof messagesContainerRef.current.scrollTo === "function") {
+          messagesContainerRef.current.scrollTo({
+            top: messagesContainerRef.current.scrollHeight,
+            behavior,
+          });
+        } else {
+          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+        }
+      } else if (typeof messagesEndRef.current?.scrollIntoView === "function") {
+        messagesEndRef.current.scrollIntoView({ behavior });
+      }
+    };
+
+    doScroll();
+    requestAnimationFrame(doScroll);
+    setTimeout(doScroll, 60);
+    setTimeout(doScroll, 260);
   };
 
+  // 서랍을 열거나 재진입할 때, 이전 대화 목록이 복원되면 사용자가 마지막으로 나눈 대화(최하단)를 즉시 보여준다.
   useEffect(() => {
-    if (isOpen) {
-      scrollToBottom();
+    if (!isOpen) {
+      isInitialScrollRef.current = true;
+      return;
+    }
+
+    if (isInitialScrollRef.current) {
+      isInitialScrollRef.current = false;
+      scrollToBottom("auto");
+    } else {
+      scrollToBottom("smooth");
     }
   }, [messages, loading, isOpen]);
 
-  // 구성원이 바뀌면 대화를 처음으로 되돌린다. 안 되돌리면 아버지 화면에 내 통증
-  // 이야기가 그대로 남는다 — 같은 서랍을 두 사람이 쓰는 꼴이다. 첫 인사말은 이
-  // 서랍이 무엇을 받아 주는지 알려 주는 유일한 안내이기도 하다.
+  // 구성원이 바뀌거나 서랍이 열리면 해당 구성원의 대화 세션을 복원한다.
+  // 1. 빠른 화면 렌더를 위해 sessionStorage 캐시를 우선 즉시 표시한다.
+  // 2. 단일 진실 원천인 PostgreSQL 서버에서 해당 프로필의 대화 세션과 메시지 목록을 가져와 동기화한다.
+  // 프로필 전환 시 빠른 클릭으로 인한 응답 역전(레이스 컨디션)은 activeProfileIdRef 로 차단한다.
   useEffect(() => {
-    if (!profile) return;
-    setMessages([
-      {
-        id: "welcome",
-        role: "assistant",
-        content: `안녕하세요! ${profile.displayName}님의 건강 비서 '봄이'입니다.
+    if (!profile || !isOpen) return;
+    const currentProfileId = profile.id;
+    const profileDisplayName = profile.displayName;
+    activeProfileIdRef.current = currentProfileId;
+    // 새 프로필의 세션을 찾는 동안 이전 프로필의 세션 id를 재사용하지 않는다.
+    activeSessionIdRef.current = null;
+    skipNextCacheWriteRef.current = true;
 
-평소 운동, 혈압, 복약 정보를 편하게 말씀해 주시거나, 하단 + 버튼으로 검진표/서류 사진을 올리시면 기록과 조회를 도와드릴게요!`,
-      },
-    ]);
-    setQueriedRecords(null);
-    setQueriedRecordsTitle(undefined);
+    const saved = loadChatSession(currentProfileId);
+    setMessages(saved && saved.length > 0 ? saved : [createWelcomeMessage(profileDisplayName)]);
     setSelectedImage(null);
     setImagePreview(null);
+
+    let isSubscribed = true;
+
+    async function syncSession(): Promise<string | null> {
+      try {
+        const sessions = await listChatSessions(currentProfileId);
+        if (!isSubscribed || activeProfileIdRef.current !== currentProfileId) return null;
+
+        if (sessions.length > 0) {
+          const latest = sessions[0];
+          activeSessionIdRef.current = latest.id;
+          const dbMessages = await listChatMessages(latest.id);
+          if (!isSubscribed || activeProfileIdRef.current !== currentProfileId) return null;
+
+          if (dbMessages.length > 0) {
+            const currentLocal =
+              messagesRef.current.length > 0
+                ? messagesRef.current
+                : (loadChatSession(currentProfileId) ?? saved);
+            const mapped = mergeServerMessagesWithLocalUi(dbMessages, currentLocal);
+            setMessages(mapped);
+            saveChatSession(currentProfileId, mapped);
+          } else {
+            setMessages([createWelcomeMessage(profileDisplayName)]);
+          }
+          return latest.id;
+        } else {
+          const newSession = await createChatSession(currentProfileId);
+          if (!isSubscribed || activeProfileIdRef.current !== currentProfileId) return null;
+          activeSessionIdRef.current = newSession.id;
+          setMessages([createWelcomeMessage(profileDisplayName)]);
+          clearChatSession(currentProfileId);
+          return newSession.id;
+        }
+      } catch (err) {
+        console.warn("대화 세션 서버 동기화 실패 (오프라인 캐시 유지):", err);
+        return null;
+      }
+    }
+
+    sessionSyncPromiseRef.current = syncSession();
+
+    return () => {
+      isSubscribed = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.id, profile?.displayName]);
+  }, [profile?.id, profile?.displayName, isOpen]);
+
+  // 대화가 갱신되면 현재 구성원의 임시 세션 저장소에 자동 캐싱한다 (화면 복구 및 오프라인용).
+  useEffect(() => {
+    messagesRef.current = messages;
+    if (!profile || messages.length === 0) return;
+    // 프로필이 바뀐 그 렌더에는 아직 직전 프로필의 messages가 남아 있다.
+    // 그 값을 새 프로필의 캐시에 쓰지 않고, setMessages 이후 렌더부터 저장한다.
+    if (skipNextCacheWriteRef.current) {
+      skipNextCacheWriteRef.current = false;
+      return;
+    }
+    saveChatSession(profile.id, messages);
+  }, [profile, messages]);
+
+  // 대화 비우기 및 새 대화 시작 (PostgreSQL 서버에 새 세션 생성)
+  async function handleClearChat() {
+    if (!profile) return;
+    clearChatSession(profile.id);
+    setMessages([createWelcomeMessage(profile.displayName)]);
+    setSelectedImage(null);
+    setImagePreview(null);
+
+    try {
+      const newSession = await createChatSession(profile.id);
+      activeSessionIdRef.current = newSession.id;
+    } catch (err) {
+      console.warn("새 대화 세션 생성 실패:", err);
+    }
+  }
 
   // 이미지 미리보기 메모리 정리
   useEffect(() => {
@@ -360,8 +476,6 @@ export function HealthAssistantDrawer({
     setInput("");
     setLoading(true);
     setError(undefined);
-    setQueriedRecords(null);
-    setQueriedRecordsTitle(undefined);
 
     try {
       // 일반 대화/기록 입력에는 과거 건강정보를 보내지 않는다.
@@ -374,8 +488,8 @@ export function HealthAssistantDrawer({
       const recentSummary = await fetchRecentRecordsSummary(contextRecordTypes);
 
       // AI 전송용 메시지 배열 구성 (OCR 텍스트가 있으면 함께 포함)
-      const promptMessages = nextMessages.map((m, idx) => {
-        if (idx === nextMessages.length - 1 && ocrAttachedText) {
+      const promptMessages = nextMessages.slice(-12).map((m, idx, recentMessages) => {
+        if (idx === recentMessages.length - 1 && ocrAttachedText) {
           return {
             role: m.role,
             content: `${m.content}\n\n[업로드된 검사 서류 추출 내용]\n${ocrAttachedText}`,
@@ -392,22 +506,53 @@ export function HealthAssistantDrawer({
       const streamingId = messageId("assistant");
       let streamed = "";
       setMessages((prev) => [...prev, { id: streamingId, role: "assistant", content: "" }]);
-      const res = await streamHealthAssistantMessage(
-        promptMessages,
-        (delta) => {
-          streamed += delta;
-          setMessages((prev) => prev.map((m) => (m.id === streamingId ? { ...m, content: streamed } : m)));
-        },
-        {
-          profile_name: profile.displayName,
-          relationship: profile.relationship,
-          birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
-          recent_records_summary: recentSummary,
-        },
-      );
-      // 흘리며 세운 거품은 지운다. 아래에서 완성본으로 다시 세운다 — 초안과 빠른답장이
-      // 붙어야 저장 버튼이 생기고, 그 계약을 두 곳에서 만들면 갈라진다.
-      setMessages((prev) => prev.filter((m) => m.id !== streamingId));
+      let sessionId = activeSessionIdRef.current;
+      if (!sessionId && sessionSyncPromiseRef.current) {
+        sessionId = await sessionSyncPromiseRef.current;
+      }
+      // 초기 동기화가 실패했더라도 온라인 요청이 가능한 시점이면 세션을 다시 만든다.
+      if (!sessionId && activeProfileIdRef.current === profile.id) {
+        try {
+          const newSession = await createChatSession(profile.id);
+          sessionId = newSession.id;
+          activeSessionIdRef.current = sessionId;
+        } catch (sessionError) {
+          // 세션 저장 장애가 기존 챗봇 자체를 막아서는 안 된다. 대화는 계속하고
+          // sessionStorage 캐시로 복구하며 다음 요청에서 다시 서버 세션을 시도한다.
+          console.warn("대화 세션 생성 실패 (로컬 캐시로 계속):", sessionError);
+        }
+      }
+
+      const res = sessionId
+        ? await streamHealthAssistantMessage(
+            promptMessages,
+            (delta) => {
+              streamed += delta;
+              setMessages((prev) => prev.map((m) => (m.id === streamingId ? { ...m, content: streamed } : m)));
+            },
+            {
+              profile_name: profile.displayName,
+              relationship: profile.relationship,
+              birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
+              recent_records_summary: recentSummary,
+            },
+            undefined,
+            sessionId,
+          )
+        : await streamHealthAssistantMessage(
+            promptMessages,
+            (delta) => {
+              streamed += delta;
+              setMessages((prev) => prev.map((m) => (m.id === streamingId ? { ...m, content: streamed } : m)));
+            },
+            {
+              profile_name: profile.displayName,
+              relationship: profile.relationship,
+              birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
+              recent_records_summary: recentSummary,
+            },
+          );
+
 
       // OCR에서 추출된 날짜가 있고 AI가 날짜를 채우지 않았거나 오늘로 채운 경우 보정
       if (res.lab_result_draft && extractedExamDate && (!res.lab_result_draft.recorded_at || res.lab_result_draft.recorded_at === new Date().toISOString().slice(0, 10))) {
@@ -483,7 +628,13 @@ export function HealthAssistantDrawer({
         imageFile: currentImage ?? undefined,
       };
 
-      setMessages((prev) => [...prev, assistantMsg]);
+      setMessages((prev) => {
+        const hasStreaming = prev.some((m) => m.id === streamingId);
+        if (hasStreaming) {
+          return prev.map((m) => (m.id === streamingId ? assistantMsg : m));
+        }
+        return [...prev, assistantMsg];
+      });
 
       if (shouldAutoSave) {
         const saved = await saveStructuredDraftAutomatically(res, assistantMsgId);
@@ -507,10 +658,22 @@ export function HealthAssistantDrawer({
       // 화면에서 한다.
 
       // 조회 질의이거나 질문인 경우 IndexedDB에서 데이터 조회 수행
-      const isRegexMatch = /(?:원본|서류|사진|스캔|문서|이미지|보여줘|그래프|변화|추이|트렌드|수치)/.test(textToSend);
-      const isBlocked = res.intent === "general_chat" || res.intent === "health_advice";
+      const isExplicitDocRequest =
+        /(?:원본|서류|사진|스캔|문서|이미지)/.test(textToSend) ||
+        /(?:원본|서류|서류함).*(?:확인|보여|아래)/.test(res.assistant_message);
+      const isTrendRequest =
+        /(?:그래프|변화\s*추이|추이|트렌드)/.test(textToSend) ||
+        /(?:검진|측정|수치).*(?:변화|추이|그래프)/.test(textToSend) ||
+        /(?:그래프|추이|차트).*(?:확인|보여|아래)/.test(res.assistant_message);
+      const isExplicitRecordQuery =
+        res.intent === "query_records" ||
+        /(?:기록|검진\s*결과|내역|이력).*(?:보여|알려|조회|확인|찾아)/.test(textToSend);
 
-      if ((res.intent === "query_records" || (isRegexMatch && !isBlocked)) && runtime) {
+      const shouldExecuteQuery =
+        Boolean(runtime) &&
+        (res.intent === "query_records" || isExplicitDocRequest || isTrendRequest || isExplicitRecordQuery);
+
+      if (shouldExecuteQuery) {
         await executeLocalQuery(
           res.query_draft?.record_type,
           res.query_draft?.time_range,
@@ -567,18 +730,28 @@ export function HealthAssistantDrawer({
           list = list.filter((r) => JSON.stringify(r.payload).includes(validKeyword));
         }
 
-        // 1) 트렌드 질의이거나, 2) 명시적 원본 서류 요청인 경우에는 하단 OCR 텍스트 테이블을 숨김
-        if (isTrendQuery || isExplicitOriginalDocRequest) {
-          setQueriedRecords(null);
-          setQueriedRecordsTitle(undefined);
-        } else {
-          setQueriedRecords(list);
-          setQueriedRecordsTitle(undefined);
-        }
-
         // 시계열 그래프용 지표 추출 (전체 기록 또는 조회 기록 대상)
         const metrics = extractMetricsFromRecords(qRes.value);
         const trendInitialKey = rawQueryText ? detectMetricKeyFromQuery(rawQueryText) : "bp";
+        const hasTrendData = Boolean(isTrendQuery && metrics.length > 0);
+
+        // 조회 결과는 드로어 전역 임시 상태가 아니라 이 답변 메시지에 붙인다.
+        // 그래야 다음 질문을 보내도 이전 표·원본 서류·그래프가 그 대화 자리에 남는다.
+        let queriedRecords: HealthRecord[] | undefined;
+        let queriedRecordsTitle: string | undefined;
+
+        if (isExplicitOriginalDocRequest) {
+          queriedRecords = undefined;
+        } else if (hasTrendData) {
+          queriedRecords = undefined;
+        } else if (isTrendQuery) {
+          if (list.length > 0) {
+            queriedRecords = list;
+            queriedRecordsTitle = "수치 변화 그래프를 그릴 수 있는 측정 데이터가 부족하여 관련 기록 목록을 표시합니다.";
+          }
+        } else {
+          queriedRecords = list.length > 0 ? list : undefined;
+        }
 
         // 사용자가 명시적으로 원본 서류를 요청한 경우에만 attachedDocs 수집
         const attachedDocs: Array<{ id: string; fileName?: string }> = [];
@@ -649,19 +822,28 @@ export function HealthAssistantDrawer({
         if (assistantMsgId) {
           const emptyOriginalDocumentMessage =
             "저장된 원본 검진 서류를 찾지 못했습니다. 먼저 검진표 이미지를 업로드하고 저장해 주세요.";
+          const emptyTrendMessage =
+            "시계열 수치 변화 그래프를 그릴 수 있는 검진 또는 측정 기록을 찾지 못했습니다. 건강검진 결과나 혈압·혈당 기록을 먼저 등록해 주세요.";
+
+          let finalContent: string | undefined;
+          if (isExplicitOriginalDocRequest && attachedDocs.length === 0) {
+            finalContent = emptyOriginalDocumentMessage;
+          } else if (isTrendQuery && !hasTrendData && (!queriedRecords || queriedRecords.length === 0)) {
+            finalContent = emptyTrendMessage;
+          }
+
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsgId
                 ? {
                     ...m,
-                    content:
-                      isExplicitOriginalDocRequest && attachedDocs.length === 0
-                        ? emptyOriginalDocumentMessage
-                        : m.content,
+                    content: finalContent ?? m.content,
                     attachedDocuments: attachedDocs.length > 0 ? attachedDocs : undefined,
-                    showTrendChart: Boolean(isTrendQuery && metrics.length > 0),
-                    trendMetrics: metrics.length > 0 ? metrics : undefined,
-                    trendInitialKey: isTrendQuery ? trendInitialKey : undefined,
+                    queriedRecords,
+                    queriedRecordsTitle,
+                    showTrendChart: hasTrendData,
+                    trendMetrics: hasTrendData ? metrics : undefined,
+                    trendInitialKey: hasTrendData ? trendInitialKey : undefined,
                   }
                 : m,
             ),
@@ -740,8 +922,17 @@ export function HealthAssistantDrawer({
       });
       if (todayResult.ok) {
         const todayExercises = filterRecordsByTimeRange(todayResult.value, "today");
-        setQueriedRecords(todayExercises);
-        setQueriedRecordsTitle(`오늘 운동 기록 (${todayExercises.length}건)`);
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === msgId
+              ? {
+                  ...message,
+                  queriedRecords: todayExercises,
+                  queriedRecordsTitle: `오늘 운동 기록 (${todayExercises.length}건)`,
+                }
+              : message,
+          ),
+        );
       }
       return true;
     } catch (caught) {
@@ -991,13 +1182,26 @@ export function HealthAssistantDrawer({
               </p>
             </div>
           </div>
-          <button className="assistant-close-btn" type="button" onClick={onClose} aria-label="닫기">
-            ×
-          </button>
+          <div className="assistant-header-actions">
+            {messages.length > 1 && (
+              <button
+                className="assistant-clear-btn"
+                type="button"
+                onClick={handleClearChat}
+                title="대화 내용을 비우고 새 대화를 시작합니다"
+                aria-label="새 대화 시작"
+              >
+                새 대화
+              </button>
+            )}
+            <button className="assistant-close-btn" type="button" onClick={onClose} aria-label="닫기">
+              ×
+            </button>
+          </div>
         </header>
 
         {/* 메시지 리스트 */}
-        <div className="assistant-messages-container">
+        <div ref={messagesContainerRef} className="assistant-messages-container">
           {messages.map((msg) => (
             <div key={msg.id} className={`assistant-message-row ${msg.role}`}>
               {msg.role === "assistant" && (
@@ -1012,9 +1216,15 @@ export function HealthAssistantDrawer({
                 )}
 
                 <div className="msg-bubble">
-                  {msg.content.split("\n\n").map((para, i) => (
-                    <p key={i}>{para}</p>
-                  ))}
+                  {msg.content ? (
+                    msg.content.split("\n\n").map((para, i) => (
+                      <p key={i}>{para}</p>
+                    ))
+                  ) : (
+                    <div className="loading-dots">
+                      <span>.</span><span>.</span><span>.</span>
+                    </div>
+                  )}
 
                   {/* 응급 주의사항 배너 */}
                   {msg.responseDraft?.emergency_notice && (
@@ -1122,6 +1332,15 @@ export function HealthAssistantDrawer({
                   <HealthMetricsTrendCard seriesList={msg.trendMetrics} initialKey={msg.trendInitialKey} />
                 )}
 
+                {msg.queriedRecords && (
+                  <QueriedRecordsView
+                    records={msg.queriedRecords}
+                    title={msg.queriedRecordsTitle}
+                    onNavigate={onNavigateToRecords}
+                    onOpenDocument={openSourceDocument}
+                  />
+                )}
+
                 {/* AI 추천 퀵 리플라이 칩 */}
                 {msg.responseDraft?.suggested_quick_replies &&
                   msg.responseDraft.suggested_quick_replies.length > 0 &&
@@ -1142,25 +1361,6 @@ export function HealthAssistantDrawer({
               </div>
             </div>
           ))}
-
-          {/* 로컬 조회 결과 렌더링 카드 (원본 서류 보기 지원) */}
-          {queriedRecords && (
-            <QueriedRecordsView
-              records={queriedRecords}
-              title={queriedRecordsTitle}
-              onNavigate={onNavigateToRecords}
-              onOpenDocument={openSourceDocument}
-            />
-          )}
-
-          {loading && (
-            <div className="assistant-message-row assistant">
-              <span className="msg-avatar" aria-hidden="true">봄</span>
-              <div className="msg-bubble loading-dots">
-                <span>.</span><span>.</span><span>.</span>
-              </div>
-            </div>
-          )}
 
           {error && <div className="assistant-error-alert">{error}</div>}
           <div ref={messagesEndRef} />

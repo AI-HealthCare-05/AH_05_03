@@ -4,6 +4,10 @@ import type {
   AccountSummary,
   ApiEnvelope,
   ApiErrorEnvelope,
+  ChatMessageData,
+  ChatMessageListData,
+  ChatSessionData,
+  ChatSessionListData,
   FamilyInvitationCreatedData,
   FamilyInvitationData,
   FamilyInvitationListData,
@@ -200,6 +204,43 @@ export class ServerApiClient {
       throw new ServerApiError(response.status, "STREAM_UNSUPPORTED", "이 브라우저는 스트리밍을 지원하지 않습니다.");
     }
     await readServerSentEvents(response.body, onEvent);
+  }
+
+  public createChatSession(profileId: string, title?: string): Promise<ChatSessionData> {
+    return this.request<ChatSessionData>("/chat-sessions", {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify({ profile_id: profileId, title }),
+    });
+  }
+
+  public async listChatSessions(profileId?: string): Promise<ChatSessionData[]> {
+    const query = profileId ? `?profile_id=${encodeURIComponent(profileId)}` : "";
+    const res = await this.request<ChatSessionListData>(`/chat-sessions${query}`, {
+      authenticated: true,
+    });
+    return res.items;
+  }
+
+  public getChatSession(sessionId: string): Promise<ChatSessionData> {
+    return this.request<ChatSessionData>(`/chat-sessions/${encodeURIComponent(sessionId)}`, {
+      authenticated: true,
+    });
+  }
+
+  public async deleteChatSession(sessionId: string): Promise<void> {
+    await this.request(`/chat-sessions/${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+      authenticated: true,
+    });
+  }
+
+  public async listChatMessages(sessionId: string): Promise<ChatMessageData[]> {
+    const res = await this.request<ChatMessageListData>(
+      `/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
+      { authenticated: true },
+    );
+    return res.items;
   }
 
   public getChallengeSettings<T>(): Promise<T> {
