@@ -37,7 +37,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 STATIC_DIR = Path(os.environ.get("FRONTEND_DIST", "/app/static"))
 REPO_STATIC_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
-# `frontend/nginx.conf` 의 add_header 를 그대로 옮긴 것. 값은 한 글자도 바꾸지 않는다.
+# `frontend/nginx.conf` 와 같은 정적 응답 정책을 유지한다.
 #
 # 예외가 하나 생겼다 — `img-src` 의 `blob:`.
 # 판정 화면이 **올린 검진표를 폼 옆에 띄워** 사용자가 원본과 대조하게 한다. 그 원본은
@@ -45,12 +45,17 @@ REPO_STATIC_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 # 걸 수밖에 없다. `blob:` 이 빠져 있으면 **아무 오류 없이 이미지만 안 뜬다** —
 # CSP 위반은 예외를 던지지 않아서, 화면에 빈 칸이 남는 것으로만 드러난다.
 # `blob:` URL 은 스크립트가 만들고 같은 출처에서만 살아 있어서 외부 유입 통로가 아니다.
+#
+# Draco 가 압축된 glTF 를 풀 때 WebAssembly 모듈을 컴파일한다. `script-src 'self'`만
+# 두면 운영 응답에서 그 컴파일이 차단되어 3D 로더가 99%에서 멈춘다.
+# `'wasm-unsafe-eval'`은 WebAssembly 컴파일만 허용하며 일반 JavaScript의 eval은
+# 계속 차단한다. 범위가 더 넓은 `'unsafe-eval'`은 의도적으로 허용하지 않는다.
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Content-Security-Policy": (
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; "
+        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; "
         "connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; "
         "frame-ancestors 'none'"
     ),
