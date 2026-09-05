@@ -21,7 +21,7 @@ import { useChallengeTodayQuery, useHouseholdGardenQuery, useToggleCheckMutation
 import { ServerApiError } from "../../shared/api/serverApiClient";
 
 function earnedIds(today: ChallengeToday | null | undefined): AnimalId[] {
-  return (today?.garden.animals ?? []).filter((animal) => animal.earned).map((animal) => animal.id);
+  return (today?.garden?.animals ?? []).filter((animal) => animal.earned).map((animal) => animal.id);
 }
 
 export function ChallengePage() {

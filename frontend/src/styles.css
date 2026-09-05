@@ -22,6 +22,18 @@
   --danger: #b43e47;
   --danger-soft: #fff0f1;
   --shadow: 0 18px 50px rgba(35, 61, 112, 0.09);
+
+  /* 정원 일러스트 전용. 버튼·링크·내비게이션·뱃지에 쓰지 않는다.
+   *
+   * DESIGN.md §2 가 상태 색 3종을 "위험도 표기·차트·뱃지에서만" 으로 묶어 뒀다.
+   * 나무에 그 초록(--safe)을 쓰면 나무가 저위험 표시로 읽히는데, 나무는 건강 상태를
+   * 반영하지 않는다 — 행동 점수로만 자란다. 그래서 의도적으로 채도를 낮춰 상태
+   * 초록과 갈리게 뒀다. 갈색·흙색은 디자인 시스템에 아예 없어서 혼동 위험이 없다. */
+  --garden-leaf: #6e9b6a;
+  --garden-leaf-deep: #477048;
+  --garden-trunk: #8a6142;
+  --garden-soil: #b08968;
+  --garden-fruit: #c25e52;
 }
 
 * {
@@ -135,13 +147,16 @@ main {
   font-size: 0.72rem;
 }
 
+/* 항목이 셋에서 여섯으로 늘었다(2026-09-03). 좁은 화면에서 줄바꿈이 나야 하고,
+   넘칠 때는 가로로 밀 수 있어야 한다 — 잘리면 마지막 항목에 영영 못 간다. */
 .primary-navigation {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
-
 .primary-navigation a,
 .navigation-future {
   padding: 10px 14px;
@@ -149,11 +164,35 @@ main {
   color: var(--muted-strong);
   font-size: 0.92rem;
   font-weight: 700;
+  text-decoration: none;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.primary-navigation a:hover {
+  color: var(--blue-700);
+  background: var(--blue-50, #f1f5fd);
 }
 
 .primary-navigation a.active {
   color: var(--blue-700);
   background: var(--blue-100);
+}
+
+.primary-navigation a.navigation-external {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted-strong);
+}
+
+.primary-navigation a.navigation-external i {
+  font-size: 0.78em;
+  font-style: normal;
+  opacity: 0.65;
+}
+
+.primary-navigation a.navigation-external:hover {
+  color: var(--blue-600);
 }
 
 .navigation-future {
@@ -185,8 +224,7 @@ main {
 }
 
 .header-status button,
-.header-status > a,
-.menu-button {
+.header-status > a {
   border: 1px solid var(--line);
   border-radius: 11px;
   padding: 9px 13px;
@@ -453,10 +491,6 @@ main {
 .invitation-list span {
   color: var(--muted);
   font-size: 0.78rem;
-}
-
-.menu-button {
-  display: none;
 }
 
 .product-page,
@@ -746,14 +780,6 @@ main {
   white-space: nowrap;
 }
 
-.member-storage-label {
-  position: absolute;
-  right: 12px;
-  bottom: 9px;
-  color: #718099;
-  font-size: 0.63rem;
-  font-weight: 700;
-}
 
 .member-dashboard-actions {
   display: flex;
@@ -893,6 +919,423 @@ main {
 
 .member-dashboard-main {
   padding: 26px;
+}
+
+.family-switcher-panel {
+  position: sticky;
+  top: 96px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 20px;
+  background: white;
+  box-shadow: 0 10px 32px rgba(35, 61, 112, 0.05);
+}
+
+.family-switcher-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.family-switcher-header h2 {
+  margin-top: 3px;
+  font-size: 1.25rem;
+}
+
+.family-switcher-description {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.family-switcher-list {
+  margin-top: 16px;
+  display: grid;
+  gap: 9px;
+}
+
+.family-switcher-card {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  padding: 11px;
+  color: var(--ink);
+  background: #fafbfe;
+  text-align: left;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.family-switcher-card:hover {
+  border-color: #afc5f3;
+  background: var(--blue-50);
+  transform: translateY(-1px);
+}
+
+.family-switcher-card.is-selected {
+  border-color: var(--blue-500);
+  background: var(--blue-50);
+  box-shadow: inset 0 0 0 1px rgba(36, 99, 235, 0.18);
+}
+
+.family-switcher-card .member-avatar,
+.family-switcher-card .add-member-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+}
+
+.family-switcher-copy {
+  min-width: 0;
+}
+
+.family-switcher-copy strong,
+.family-switcher-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.family-switcher-copy strong {
+  font-size: 0.9rem;
+}
+
+.family-switcher-copy small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.family-switcher-current {
+  border-radius: 999px;
+  padding: 4px 7px;
+  color: var(--blue-700);
+  background: #dfeaff;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.family-switcher-add {
+  grid-template-columns: auto minmax(0, 1fr);
+  border-style: dashed;
+  background: white;
+}
+
+.family-switcher-hidden {
+  width: 100%;
+  margin-top: 13px;
+  border: 0;
+  padding: 7px 0 0;
+  color: var(--blue-700);
+  background: transparent;
+  font-size: 0.76rem;
+  font-weight: 750;
+  text-align: left;
+}
+
+.health-data-heading {
+  align-items: flex-end;
+}
+
+.period-filter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.period-filter button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: var(--muted-strong);
+  background: white;
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+
+.period-filter button.is-active {
+  border-color: var(--blue-600);
+  color: white;
+  background: var(--blue-600);
+  box-shadow: 0 7px 18px rgba(37, 99, 235, 0.2);
+}
+
+.health-data-layout {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: 20px;
+}
+
+.health-data-main {
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+
+.health-insight-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  border: 1px solid #c9dcff;
+  border-radius: 22px;
+  padding: 22px;
+  background: linear-gradient(135deg, #f7faff, #eaf2ff);
+  box-shadow: 0 10px 30px rgba(35, 61, 112, 0.05);
+}
+
+.health-insight-card > span {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  color: white;
+  background: var(--blue-600);
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.health-insight-card strong,
+.health-insight-card small {
+  display: block;
+}
+
+.health-insight-card strong {
+  margin-top: 4px;
+  font-size: 1.15rem;
+}
+
+.health-insight-card small {
+  margin-top: 7px;
+  color: var(--muted);
+}
+
+.health-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.health-summary-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  padding: 19px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(35, 61, 112, 0.04);
+}
+
+.health-summary-card > span,
+.health-summary-card > strong,
+.health-summary-card > p,
+.health-summary-card > em {
+  display: block;
+}
+
+.health-summary-card > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.health-summary-card > strong {
+  margin-top: 10px;
+  font-size: 1.55rem;
+}
+
+.health-summary-card > strong small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.health-summary-card > p {
+  margin-top: 8px;
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+}
+
+.health-summary-card > em {
+  margin-top: 6px;
+  color: var(--blue-700);
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.health-summary-card.is-empty {
+  background: #fafbfe;
+}
+
+.health-summary-card.is-empty > strong {
+  color: var(--muted-strong);
+  font-size: 1.1rem;
+}
+
+.health-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.health-chart-card:last-child {
+  grid-column: 1 / -1;
+}
+
+.health-data-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 22px;
+  background: white;
+  box-shadow: 0 10px 32px rgba(35, 61, 112, 0.05);
+}
+
+.health-data-panel .panel-heading h2 {
+  font-size: 1.15rem;
+}
+
+.health-data-panel .panel-heading p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.time-series-chart {
+  margin-top: 16px;
+  min-width: 0;
+}
+
+.time-series-chart svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.time-series-chart text {
+  fill: #718099;
+  font-size: 11px;
+}
+
+.chart-grid-line {
+  stroke: #e7ebf2;
+  stroke-width: 1;
+}
+
+.chart-unit {
+  font-weight: 700;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: var(--muted-strong);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.health-chart-empty {
+  min-height: 210px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.health-chart-empty > span {
+  font-size: 2rem;
+}
+
+.health-chart-empty strong {
+  margin-top: 8px;
+  color: var(--muted-strong);
+}
+
+.health-chart-empty p {
+  margin-top: 6px;
+  font-size: 0.78rem;
+}
+
+.lab-metric-select {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.lab-metric-select select {
+  min-width: 180px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 9px 11px;
+  color: var(--ink);
+  background: white;
+}
+
+.screening-history-list {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.screening-history-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 15px;
+  padding: 14px;
+  background: #fafbfe;
+}
+
+.screening-history-list time,
+.screening-history-list strong,
+.screening-history-list p {
+  display: block;
+}
+
+.screening-history-list time {
+  color: var(--blue-700);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.screening-history-list strong {
+  margin-top: 4px;
+}
+
+.screening-history-list p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
 .metric-grid {
@@ -1361,6 +1804,58 @@ main {
   text-underline-offset: 2px;
 }
 
+.vanatome-risk-legend {
+  list-style: none;
+  margin: 12px 0 0 !important;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.vanatome-risk-legend li { display: block; }
+.vanatome-risk-row {
+  display: grid;
+  grid-template-columns: 10px auto 1fr;
+  align-items: baseline;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+.vanatome-risk-row:hover:not(:disabled) { background: rgba(77, 228, 255, 0.09); }
+.vanatome-risk-row[aria-pressed="true"] { border-color: currentColor; background: rgba(77, 228, 255, 0.13); }
+.vanatome-risk-row:disabled { cursor: default; opacity: 0.6; }
+.vanatome-risk-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  align-self: center;
+}
+.vanatome-risk-legend b { font-weight: 600; }
+.vanatome-risk-level { font-weight: 600; font-size: 0.74rem; }
+.vanatome-risk-legend small {
+  grid-column: 2 / -1;
+  font-size: 0.74rem;
+  opacity: 0.72;
+  line-height: 1.5;
+}
+
+.vanatome-layer-summary span {
+  border: 1px solid #bfe8ee;
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #136478;
+  background: #edfbfd;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
 .records-panel {
   margin-top: 18px;
   border: 1px solid var(--line-soft);
@@ -1749,6 +2244,35 @@ main {
   align-items: center;
 }
 
+.health-files-tabs {
+  position: sticky;
+  top: 74px;
+  z-index: 5;
+  width: fit-content;
+  margin-top: 18px;
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.health-files-tabs a {
+  border-radius: 999px;
+  padding: 9px 15px;
+  color: var(--muted-strong);
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.health-files-tabs a:hover {
+  background: var(--surface-soft);
+  color: var(--primary);
+}
+
 .data-boundary-card {
   margin-top: 30px;
   display: grid;
@@ -1822,7 +2346,52 @@ main {
 }
 
 .ocr-review-modal {
-  width: min(720px, 100%);
+  width: min(1040px, 100%);
+}
+
+.ocr-review-meta-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 0.75fr 1fr 1fr;
+  gap: 12px;
+}
+
+.ocr-review-meta-grid label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.ocr-review-meta-grid input,
+.ocr-review-item input {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: white;
+}
+
+.ocr-review-items {
+  margin-top: 18px;
+  display: grid;
+  gap: 7px;
+  max-height: 310px;
+  overflow-y: auto;
+}
+
+.ocr-review-item {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.4fr) minmax(90px, 0.8fr) minmax(80px, 0.7fr) minmax(120px, 1fr);
+  gap: 8px;
+}
+
+.ocr-review-item-heading {
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 0.76rem;
 }
 
 .ocr-review-field {
@@ -2105,6 +2674,26 @@ main {
     grid-template-columns: 1fr;
   }
 
+  .health-data-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .family-switcher-panel {
+    position: static;
+  }
+
+  .family-switcher-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .health-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .health-chart-card:last-child {
+    grid-column: auto;
+  }
+
   .body-map-card {
     grid-template-columns: minmax(220px, 0.7fr) minmax(300px, 1fr);
   }
@@ -2130,32 +2719,41 @@ main {
     width: min(100% - 28px, 1240px);
   }
 
+  /* 좁은 화면에서는 헤더를 두 줄로 쓴다. 브랜드·계정이 윗줄, 탭이 아랫줄을
+     가득 채운다 - 접어 두는 것보다 한 줄을 더 쓰는 편이 낫다. */
   .header-inner {
     min-height: 68px;
+    padding-bottom: 8px;
     grid-template-columns: 1fr auto;
+    grid-template-areas: "brand status" "nav nav";
+    gap: 10px 12px;
   }
 
-  .brand-copy small,
-  .header-status { display: none; }
+  .brand { grid-area: brand; }
+  .header-status { grid-area: status; }
+  .primary-navigation { grid-area: nav; }
 
-  .menu-button { display: inline-flex; }
+  .brand-copy small { display: none; }
+  .header-status { gap: 8px; }
+  .header-status > span { display: none; }
+  .header-account { display: none; }
 
   .primary-navigation {
-    position: absolute;
-    top: 60px;
-    right: 14px;
-    display: none;
-    min-width: 210px;
-    flex-direction: column;
-    align-items: stretch;
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    padding: 8px;
-    background: white;
-    box-shadow: var(--shadow);
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 6px;
+    padding: 4px;
+    border-radius: 12px;
+    background: var(--blue-50, #f1f5fd);
   }
 
-  .primary-navigation.is-open { display: flex; }
+  .primary-navigation a {
+    justify-content: center;
+    text-align: center;
+    padding: 9px 6px;
+    font-size: 0.86rem;
+  }
 
   .product-page { padding-top: 32px; }
 
@@ -2189,13 +2787,7 @@ main {
   }
 
   .body-map-viewer {
-    height: 380px;
-  }
-
-  .vanatome-viewer {
-    height: min(68vh, 560px);
     min-height: 380px;
-    max-height: 560px;
   }
 
   .empty-household {
@@ -2237,7 +2829,6 @@ main {
     flex-direction: column;
   }
 }
-
 @media (max-width: 480px) {
   .dashboard-heading h1 { font-size: 2rem; }
 
@@ -2264,6 +2855,35 @@ main {
     padding: 20px;
   }
 
+  .family-switcher-panel {
+    padding: 18px;
+  }
+
+  .family-switcher-list {
+    grid-template-columns: 1fr;
+  }
+
+  .health-data-heading {
+    align-items: flex-start;
+  }
+
+  .health-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .period-filter {
+    justify-content: flex-start;
+  }
+
+  .health-insight-card {
+    align-items: flex-start;
+  }
+
+  .screening-history-list article {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .member-dashboard-main > .section-title-row {
     flex-direction: column;
   }
@@ -2273,13 +2893,7 @@ main {
   }
 
   .body-map-viewer {
-    height: 340px;
-  }
-
-  .vanatome-viewer {
-    height: min(64vh, 480px);
     min-height: 340px;
-    max-height: 480px;
   }
 
   .record-list li {
@@ -2911,3 +3525,1994 @@ main {
     flex-direction: column;
   }
 }
+
+/* 라우터 오류 화면. 토큰은 :root 의 것을 그대로 쓴다 — 이 화면만 다른 색을
+   쓰면 "여기는 다른 서비스인가" 하는 인상을 준다. */
+.error-page {
+  padding: 72px 0 96px;
+}
+
+.error-card {
+  max-width: 640px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 36px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.error-card h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.6rem;
+  letter-spacing: -0.04em;
+}
+
+.error-lede {
+  margin: 12px 0 0;
+  color: var(--muted-strong);
+  line-height: 1.65;
+}
+
+.error-actions {
+  margin-top: 26px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.error-actions > a,
+.error-actions > button {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 10px 16px;
+  color: var(--muted-strong);
+  background: white;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.error-actions > .error-primary {
+  border-color: transparent;
+  color: white;
+  background: var(--blue-600);
+}
+
+.error-detail {
+  margin-top: 24px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 16px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.error-detail summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.error-detail p {
+  margin: 10px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.error-detail code {
+  border-radius: 6px;
+  padding: 2px 7px;
+  background: var(--blue-50);
+  color: var(--blue-700);
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .error-page {
+    padding: 48px 0 64px;
+  }
+
+  .error-card {
+    padding: 26px;
+  }
+}
+
+/* SPA 밖으로 나가는 링크(예측 데모). 같은 내비게이션에 있지만 클릭하면 페이지가
+   통째로 바뀌므로, 눌러 보기 전에 그 사실이 보여야 한다 — 화살표가 그 신호다. */
+
+
+/* ── 위험 판정 화면 (features/assessment) ─────────────────────────────
+   카드 색이 등급이다. 배지만으로는 스무 장 넘는 카드에서 눈에 안 들어온다.
+   왼쪽 테두리를 굵게 주는 방식은 계정 화면의 `danger-zone` 과 같은 어법이다. */
+
+.assess-page { display: flex; flex-direction: column; gap: 1.75rem; }
+.assess-intro h1 { margin: 0 0 0.5rem; }
+.assess-intro p { color: var(--muted-strong); margin: 0; max-width: 62ch; }
+
+.assess-form { display: flex; flex-direction: column; gap: 1rem; }
+.assess-group { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.25rem 1.25rem; background: var(--surface); }
+.assess-group legend { font-weight: 600; padding: 0 0.4rem; }
+.assess-group-note { margin: 0 0 0.85rem; color: var(--muted); font-size: 0.85rem; max-width: 70ch; }
+.assess-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.75rem 1rem; }
+.assess-field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; }
+.assess-field-label { color: var(--muted-strong); font-weight: 500; }
+.assess-field em { color: var(--danger); font-style: normal; }
+.assess-unit { color: var(--muted); font-weight: 400; }
+.assess-hint { color: var(--muted); font-size: 0.75rem; }
+.assess-field input, .assess-field select { padding: 0.45rem 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+
+/* 눌러 본 뒤에만 붙는다. 폼을 열자마자 붉으면 아직 아무것도 안 했는데 틀린 것처럼 읽힌다. */
+.assess-field.is-blank input,
+.assess-field.is-blank select { border-color: var(--danger); background: var(--danger-soft); }
+.assess-blank-hint { color: var(--danger); font-size: 0.75rem; }
+
+/* 서버가 되돌려준 칸. 비어 있는 칸(`is-blank`)보다 강하게 세운다 — 저쪽은 "아직
+   안 썼다"이고 이쪽은 **써 넣은 값이 틀렸다**라, 눈이 먼저 가야 하는 쪽이 이쪽이다.
+   테두리를 두껍게 하는 대신 `box-shadow` 를 쓴다. `border-width` 를 바꾸면 칸 높이가
+   1px 씩 달라져 옆 칸과 밑줄이 어긋난다. `is-from-document` 의 파란 테두리보다 뒤에
+   와야 파란색을 덮는다 — 검진표에서 읽어 온 값이 범위를 벗어난 경우가 대부분이다. */
+.assess-field.is-rejected input,
+.assess-field.is-rejected select {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  box-shadow: 0 0 0 2px var(--danger-soft);
+}
+.assess-field.is-rejected .assess-field-label { color: var(--danger); }
+.assess-range-hint { color: var(--danger); font-size: 0.75rem; font-weight: 500; }
+
+/* 비어 있는 칸을 이름으로 세우고, 누르면 그리로 옮겨 준다. */
+.assess-required-alert p { margin: 0; }
+.assess-required-alert ul { margin: 0.5rem 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.assess-required-alert button {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.assess-required-alert button:hover { background: var(--surface); }
+
+.assess-submit { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.assess-submit button { padding: 0.65rem 1.4rem; border-radius: 10px; border: 0; background: var(--blue-600); color: #fff; font-weight: 600; cursor: pointer; }
+.assess-submit button:disabled { background: var(--line); color: var(--muted); cursor: not-allowed; }
+
+.assess-summary { border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.25rem; background: var(--surface); }
+.assess-summary h2 { margin: 0 0 0.6rem; font-size: 1.05rem; }
+.assess-summary ul { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.9rem; }
+
+.assess-axis-title { margin: 1.5rem 0 0.35rem; font-size: 1.05rem; display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+.assess-axis-note { margin: 0 0 0.9rem; color: var(--muted); font-size: 0.85rem; max-width: 78ch; }
+.assess-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 0.9rem; }
+
+.assess-card { border: 1px solid var(--line); border-left-width: 5px; border-radius: 12px; padding: 0.9rem 1.05rem; background: var(--surface); display: flex; flex-direction: column; gap: 0.45rem; }
+.assess-card header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; }
+.assess-card h3 { margin: 0; font-size: 1rem; }
+.assess-substatus { margin: 0; font-weight: 600; font-size: 0.9rem; }
+.assess-label { margin: 0; font-size: 0.9rem; }
+.assess-recommend { margin: 0; font-size: 0.83rem; color: var(--muted-strong); }
+.assess-missing { margin: 0; font-size: 0.8rem; color: var(--blue-700); }
+.assess-flag { margin: 0; font-size: 0.78rem; color: var(--muted); }
+.assess-muted { color: var(--muted); font-weight: 400; font-size: 0.85em; }
+.assess-fineprint { margin: 0.5rem 0 0; font-size: 0.72rem; color: var(--muted); line-height: 1.5; }
+
+.assess-badge { padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+.assess-engine-tag { align-self: flex-start; padding: 0.1rem 0.45rem; border-radius: 6px; font-size: 0.7rem; font-weight: 700; border: 1px solid var(--line); }
+.engine-e1 { background: var(--safe-soft); color: var(--safe); }
+.engine-e2 { background: var(--blue-50); color: var(--blue-700); }
+.engine-e3 { background: var(--blue-100); color: var(--blue-800); }
+
+.assess-reference { font-size: 0.8rem; border-top: 1px dashed var(--line-soft); padding-top: 0.45rem; }
+.assess-reference summary { cursor: pointer; color: var(--muted-strong); }
+.assess-reference dl { display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.7rem; margin: 0.5rem 0 0; }
+.assess-reference dt { color: var(--muted); }
+.assess-reference dd { margin: 0; }
+
+/* 의심 상위 세 가지 — 판정 화면 맨 위 */
+.suspect-panel { margin: 0 0 1.6rem; padding: 1rem 1.1rem 0.9rem; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.suspect-panel h3 { margin: 0 0 0.25rem; font-size: 1.05rem; }
+.suspect-lead { margin: 0 0 0.9rem; font-size: 0.8rem; line-height: 1.6; max-width: 62ch; }
+.suspect-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); gap: 0.7rem; align-items: start; }
+
+.suspect-card {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 0.75rem 0.85rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--surface);
+}
+/* 의심과 자리채움을 **투명도가 아니라 구조로** 가른다. opacity 는 글자까지 흐려
+   대비를 떨어뜨리는데, 자리채움 카드도 읽히긴 해야 한다. 대신 왼쪽 띠와 배경으로
+   가르고, 자리채움에는 숫자 블록 자체가 붙지 않아 높이로도 구분된다. */
+.suspect-card.is-suspected { border-left: 3px solid var(--danger); }
+.suspect-card.is-filler { background: var(--blue-50); border-color: transparent; }
+.suspect-card.is-filler .suspect-reason { color: var(--muted); }
+
+.suspect-card header { display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; }
+.suspect-card h4 { margin: 0; font-size: 0.98rem; flex: 1 1 auto; line-height: 1.35; }
+.suspect-rank { font-weight: 700; color: var(--muted); font-size: 0.78rem; margin-right: 0.15rem; }
+.suspect-tags { display: inline-flex; align-items: center; gap: 0.3rem; flex: 0 0 auto; }
+.suspect-level { font-size: 0.75rem; font-weight: 700; color: var(--muted-strong); }
+.suspect-basis { font-size: 0.68rem; font-weight: 700; padding: 0.05rem 0.35rem; border-radius: 999px; }
+.suspect-basis.is-measured { background: var(--safe-soft); color: var(--safe); }
+.suspect-basis.is-estimated { background: var(--blue-100); color: var(--muted-strong); }
+.suspect-reason { margin: 0; font-size: 0.78rem; color: var(--muted-strong); line-height: 1.55; }
+.suspect-none { margin: 0; font-size: 0.78rem; }
+
+/* 지평 둘이라 곡선 대신 숫자를 놓는다. 두 점을 잇는 선은 정보를 더하지 않으면서
+   "그 사이를 안다" 는 인상만 준다. */
+.suspect-series { border-top: 1px solid var(--line-soft); padding-top: 0.55rem; }
+.suspect-series h5 { margin: 0 0 0.45rem; font-size: 0.75rem; font-weight: 600; color: var(--muted-strong); }
+.suspect-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.45rem; }
+.suspect-row {
+  display: grid;
+  grid-template-columns: 3.4rem auto 1fr;
+  grid-template-areas: "when value gauge" ".    peer  peer";
+  align-items: center;
+  column-gap: 0.5rem;
+  row-gap: 0.1rem;
+}
+.suspect-when { grid-area: when; font-size: 0.72rem; color: var(--muted); }
+.suspect-value { grid-area: value; font-size: 1.2rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.suspect-peer { grid-area: peer; font-size: 0.68rem; color: var(--muted); font-style: normal; }
+
+/* 같은 축(0~100%) 위에 나(채움)와 동년배(눈금)를 둔다. 글자로만 두면 "2.5배" 가
+   읽는 사람 머릿속 산수로 남는다. 축을 카드마다 다르게 잡으면 카드 사이 비교가
+   거짓이 되므로 0~100% 로 고정한다. */
+.suspect-gauge {
+  grid-area: gauge;
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line-soft);
+  overflow: visible;
+}
+.suspect-gauge-fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--danger); }
+.suspect-card.is-filler .suspect-gauge-fill { background: var(--muted); }
+.suspect-gauge-peer {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 12px;
+  border-radius: 1px;
+  background: var(--muted-strong);
+  transform: translateX(-1px);
+}
+
+/* 기준 초과는 부차적이라 한 줄로 접는다. 위 발병 숫자와 같은 크기로 두면 매번
+   제목을 다시 읽어야 무엇이 무엇인지 안다. */
+.suspect-prevalence {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.76rem;
+  color: var(--muted-strong);
+  font-variant-numeric: tabular-nums;
+}
+.suspect-prevalence-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: var(--line-soft);
+}
+.suspect-prevalence b { font-weight: 700; color: var(--ink); }
+.suspect-note { margin: 0.9rem 0 0; padding-top: 0.7rem; border-top: 1px solid var(--line-soft); max-width: 72ch; }
+
+/* 발병 궤적 — 카드 앞면 한 줄과 모달의 선 그래프·표 */
+/* 판정 카드 앞면의 앞날 칸. 5년과 10년을 나란히 둔다 — 마지막 하나만 적으면
+   "당장은 어떤가" 를 물어볼 자리가 없고 두 숫자 사이의 기울기도 사라진다.
+   위쪽 `assess-figures`(측정값)와 헷갈리지 않게 점선으로 가르고 배경을 깐다. */
+.assess-trajectory-line {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.9rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  background: var(--blue-50);
+}
+.assess-trajectory-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+  flex: 0 0 auto;
+}
+.assess-trajectory-values { display: flex; flex-wrap: wrap; gap: 0.3rem 1.1rem; }
+.assess-trajectory-step { display: flex; align-items: baseline; gap: 0.3rem; }
+.assess-trajectory-step b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.assess-trajectory-step small { font-size: 0.7rem; color: var(--muted); }
+.assess-trajectory { border-top: 1px dashed var(--line-soft); padding-top: 0.5rem; font-size: 0.8rem; }
+.assess-trajectory h4 { margin: 0 0 0.35rem; font-size: 0.9rem; }
+.assess-trajectory-figure { margin: 0; }
+.assess-trajectory-figure svg { width: 100%; max-width: 320px; height: auto; display: block; }
+.trajectory-axis { stroke: var(--line); stroke-width: 1; }
+.trajectory-tick { font-size: 9px; fill: var(--muted); }
+.trajectory-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.trajectory-line.is-mine { stroke: var(--danger); }
+.trajectory-line.is-peer { stroke: var(--muted); stroke-dasharray: 4 3; }
+.trajectory-dot.is-mine { fill: var(--danger); }
+.assess-trajectory-legend { display: flex; gap: 0.9rem; font-size: 0.72rem; color: var(--muted-strong); margin-top: 0.15rem; }
+.assess-trajectory-legend span::before { content: ""; display: inline-block; width: 14px; height: 0; border-top: 2px solid; margin-right: 0.3rem; vertical-align: middle; }
+.assess-trajectory-legend .legend-mine::before { border-color: var(--danger); }
+.assess-trajectory-legend .legend-peer::before { border-color: var(--muted); border-top-style: dashed; }
+.assess-trajectory-table { border-collapse: collapse; margin-top: 0.4rem; width: 100%; max-width: 320px; }
+.assess-trajectory-table th, .assess-trajectory-table td { padding: 0.15rem 0.3rem; text-align: right; font-variant-numeric: tabular-nums; }
+.assess-trajectory-table th[scope="row"] { text-align: left; color: var(--muted); font-weight: 500; }
+.assess-trajectory-table thead th { color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--line-soft); }
+
+.assess-contributors { list-style: none; margin: 0.2rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.assess-contributors li { display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.78rem; padding-left: 0.6rem; border-left: 3px solid var(--line); }
+.assess-contributors li.weight-3 { border-left-color: var(--danger); }
+.assess-contributors li.weight-2 { border-left-color: var(--blue-500); }
+.assess-contrib-label { font-weight: 600; font-size: 0.83rem; }
+.assess-contrib-detail { color: var(--muted-strong); }
+.assess-contrib-effect { color: var(--ink); }
+
+.assess-disclaimers { margin-top: 1.5rem; border-top: 1px solid var(--line-soft); padding-top: 0.9rem; }
+.assess-disclaimers p { margin: 0 0 0.3rem; font-size: 0.76rem; color: var(--muted); }
+
+/* 등급 색. 카드 테두리와 배지가 같은 색을 쓴다. */
+.assess-card.level-very-high { border-left-color: var(--danger); }
+.assess-card.level-high { border-left-color: var(--danger); }
+.assess-card.level-caution { border-left-color: var(--blue-500); }
+.assess-card.level-normal { border-left-color: var(--safe); }
+.assess-card.level-unknown { border-left-color: var(--line); }
+.assess-badge.level-very-high { background: var(--danger); color: #fff; }
+.assess-badge.level-high { background: var(--danger-soft); color: var(--danger); }
+.assess-badge.level-caution { background: var(--blue-50); color: var(--blue-700); }
+.assess-badge.level-normal { background: var(--safe-soft); color: var(--safe); }
+.assess-badge.level-unknown { background: var(--line-soft); color: var(--muted); }
+
+@media (max-width: 640px) {
+  .assess-fields { grid-template-columns: 1fr 1fr; }
+  .assess-cards { grid-template-columns: 1fr; }
+}
+
+/* ── 추적 대시보드 (features/assessment/TrendChart) ────────────────── */
+
+.assess-keep { display: flex; align-items: flex-end; gap: 0.9rem; flex-wrap: wrap; margin-top: 0.9rem; padding-top: 0.9rem; border-top: 1px dashed var(--line-soft); }
+.assess-keep button { padding: 0.5rem 1rem; border-radius: 9px; border: 1px solid var(--blue-600); background: transparent; color: var(--blue-700); font-weight: 600; cursor: pointer; }
+.assess-keep button:hover { background: var(--blue-50); }
+.assess-keep .assess-muted { flex: 1 1 18rem; }
+
+.trend-wrap { display: flex; flex-direction: column; gap: 0.9rem; }
+.trend-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
+.trend-card { margin: 0; border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.7rem 0.2rem; background: var(--surface); }
+.trend-card figcaption { display: flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; font-size: 0.82rem; }
+.trend-label { color: var(--muted-strong); font-weight: 600; }
+.trend-latest { margin-left: auto; font-weight: 700; }
+.trend-delta { font-size: 0.75rem; font-weight: 700; padding: 0.05rem 0.35rem; border-radius: 5px; }
+.trend-delta.up { background: var(--danger-soft); color: var(--danger); }
+.trend-delta.down { background: var(--safe-soft); color: var(--safe); }
+.trend-delta.flat { background: var(--line-soft); color: var(--muted); }
+.trend-card svg { width: 100%; height: auto; display: block; }
+.trend-line { stroke: var(--blue-600); stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+.trend-dot { fill: var(--blue-600); }
+.trend-axis { fill: var(--muted); font-size: 9px; }
+
+.trend-heading { margin: 0.6rem 0 0; font-size: 0.95rem; }
+.trend-tracks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+.trend-track { display: grid; grid-template-columns: 8rem 1fr; gap: 0.3rem 0.7rem; align-items: center; }
+.trend-track-name { font-size: 0.85rem; font-weight: 600; }
+.trend-track-cells { list-style: none; margin: 0; padding: 0; display: flex; gap: 3px; }
+.trend-cell { position: relative; flex: 1 1 0; min-width: 0; padding: 0.3rem 0.2rem; border-radius: 5px; font-size: 0.7rem; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trend-cell.level-very-high { background: var(--danger); color: #fff; }
+.trend-cell.level-high { background: var(--danger-soft); color: var(--danger); }
+.trend-cell.level-caution { background: var(--blue-50); color: var(--blue-700); }
+.trend-cell.level-normal { background: var(--safe-soft); color: var(--safe); }
+.trend-cell.level-unknown { background: var(--line-soft); color: var(--muted); }
+.trend-engine-flag { position: absolute; top: -1px; left: 2px; font-size: 0.55rem; opacity: 0.85; }
+.trend-track-note { grid-column: 2; font-size: 0.72rem; color: var(--muted); }
+
+@media (max-width: 640px) {
+  .trend-track { grid-template-columns: 1fr; }
+  .trend-track-note { grid-column: 1; }
+}
+
+/* ---------------------------------------------------------------------------
+ * 챌린지 — 생활습관 챌린지와 정원 (docs/37 §14~§16)
+ *
+ * 색은 --garden-* 토큰만 쓴다. 상태 색(--safe/--danger)을 쓰지 않는 이유는
+ * styles.css 상단 토큰 주석과 .omd/preferences.md 에 적어 뒀다.
+ * ------------------------------------------------------------------------ */
+
+.challenge-page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 24px 20px 64px;
+  display: grid;
+  gap: 20px;
+}
+
+.challenge-head h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+}
+
+.challenge-sub {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 16px;
+}
+
+.challenge-empty,
+.challenge-error {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 16px;
+}
+
+.challenge-error {
+  color: var(--danger);
+}
+
+.challenge-page section {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+}
+
+.challenge-page section h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
+.challenge-dim {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.challenge-garden-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px;
+}
+
+.challenge-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 14px 24px;
+  margin: 0;
+  flex: 1 1 220px;
+}
+
+.challenge-stats dt {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.challenge-stats dd {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.challenge-next {
+  margin: 14px 0 0;
+  color: var(--muted-strong);
+  font-size: 15px;
+}
+
+.challenge-week p {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.challenge-list ul,
+.challenge-animals ul,
+.challenge-rank {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.challenge-list label {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  /* 44px 터치 타깃. DESIGN.md 접근성 강령 — 주 사용자가 30~60대다. */
+  min-height: 44px;
+  padding: 8px 4px;
+  cursor: pointer;
+}
+
+.challenge-list input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--garden-leaf-deep);
+  flex: none;
+}
+
+.challenge-item-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.challenge-list p {
+  margin: 10px 0 0;
+}
+
+.challenge-animals ul {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+.challenge-animals li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  color: var(--muted);
+}
+
+.challenge-animals li.is-earned {
+  color: var(--ink);
+}
+
+.challenge-rank {
+  gap: 8px;
+}
+
+.challenge-rank li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 12px;
+}
+
+.challenge-rank li.is-me {
+  background: var(--blue-50);
+}
+
+.challenge-rank li > div {
+  display: grid;
+  gap: 2px;
+}
+
+.challenge-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--blue-50);
+  font-size: 16px;
+}
+
+.challenge-toast button {
+  flex: none;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.garden-tree {
+  flex: none;
+}
+
+/* 물을 준 직후 한 번 흔든다. 시드는 연출은 없다 — 안 하면 그냥 안 자란다. */
+.garden-tree--watered {
+  animation: garden-sway 620ms ease-in-out;
+  transform-origin: 50% 92%;
+}
+
+@keyframes garden-sway {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  30% {
+    transform: rotate(-2.2deg);
+  }
+  65% {
+    transform: rotate(1.6deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .garden-tree--watered {
+    animation: none;
+  }
+}
+
+/* 대시보드에 얹는 챌린지 요약 카드 */
+.challenge-card-body {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.challenge-card-facts {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 240px;
+}
+
+.challenge-card-lead {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.challenge-card-facts p {
+  margin: 0;
+}
+
+/* lazy 라우트 청크를 받는 동안의 자리 */
+.route-loading {
+  padding: 48px 20px;
+  color: var(--muted);
+  font-size: 16px;
+  text-align: center;
+}
+
+/* 주간 달력 — 못 한 날/오늘/한 날을 색으로 가른다.
+ * 색만으로 뜻을 전달하지 않도록 칸마다 aria-label 에 말로도 적는다. */
+.week-calendar {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.week-day {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 10px 2px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  min-height: 76px;
+}
+
+.week-day-name {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.week-day-date {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.week-day-dots {
+  display: flex;
+  gap: 2px;
+}
+
+.week-day-dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.week-day-dots i.is-on {
+  background: var(--garden-leaf-deep);
+}
+
+.week-day-measured {
+  font-size: 10px;
+  color: var(--garden-trunk);
+  line-height: 1;
+}
+
+/* 물을 준 날 */
+.week-day.is-done {
+  background: #eaf5ea;
+  border-color: var(--garden-leaf);
+}
+
+/* 일부만 한 날 — 못 한 날과 구분한다 */
+.week-day.is-partial {
+  background: #fdf6e8;
+  border-color: #e3cf9a;
+}
+
+/* 못 한 날. 지나간 날에만 붙는다 */
+.week-day.is-missed {
+  background: #fdeeef;
+  border-color: #e6b9bd;
+}
+
+.week-day.is-missed .week-day-date {
+  color: #9a4048;
+}
+
+/* 아직 오지 않은 날. 실패가 아니므로 빨갛게 칠하지 않는다 */
+.week-day.is-future {
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.week-day.is-future .week-day-date {
+  color: var(--muted);
+}
+
+/* 오늘 */
+.week-day.is-cursor {
+  border-color: #d9a520;
+  border-width: 2px;
+  background: #fff8e3;
+}
+
+.week-day.is-cursor.is-done {
+  background: #eaf5ea;
+  border-color: #d9a520;
+}
+
+/* 세션 만료 배너 — 페이지 맨 위, 눈에 띄게 */
+.challenge-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid #e6b9bd;
+  background: var(--danger-soft);
+}
+
+.challenge-banner strong {
+  display: block;
+  font-size: 16px;
+}
+
+.challenge-banner p {
+  margin: 2px 0 0;
+  color: var(--muted-strong);
+  font-size: 14px;
+}
+
+.challenge-invite {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--blue-50);
+}
+
+.challenge-invite p {
+  margin: 0;
+  font-size: 15px;
+}
+
+/* 셋업 화면 */
+.challenge-setup .setup-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.setup-card {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  padding: 18px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.setup-card.is-picked {
+  border-color: var(--blue-600);
+  border-width: 2px;
+  background: var(--blue-50);
+}
+
+.setup-card-title,
+.setup-goal-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.setup-goals {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.setup-goals label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 14px 16px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.setup-goals label.is-picked {
+  border-color: var(--blue-600);
+  border-width: 2px;
+  background: var(--blue-50);
+}
+
+.setup-goals input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--blue-600);
+  grid-row: span 2;
+}
+
+.setup-weekdays {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.setup-weekday {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.setup-weekday.is-picked {
+  border-color: var(--blue-600);
+  border-width: 2px;
+  background: var(--blue-50);
+}
+
+.setup-submit {
+  min-height: 52px;
+  font-size: 17px;
+}
+
+/* 측정 입력 폼 */
+.challenge-measures li {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.challenge-measures li:last-of-type {
+  border-bottom: none;
+}
+
+.measure-form {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--blue-50);
+}
+
+.measure-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 14px;
+}
+
+.measure-field {
+  display: grid;
+  gap: 4px;
+}
+
+.measure-field-label {
+  font-size: 13px;
+  color: var(--muted-strong);
+}
+
+.measure-field-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.measure-field-input input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 10px;
+  font-size: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.measure-field.is-bad input {
+  border-color: var(--danger);
+}
+
+.measure-field-unit {
+  font-size: 13px;
+  color: var(--muted);
+  flex: none;
+}
+
+.measure-field-hint {
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.measure-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.measure-done {
+  margin: 0;
+}
+
+/* 집 공동 목표 */
+.household-goal {
+  margin: 12px 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.household-goal.is-reached {
+  border-color: var(--garden-leaf);
+  background: #eaf5ea;
+}
+
+.household-goal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.household-goal-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--garden-leaf);
+  color: #ffffff;
+}
+
+.household-goal-bar {
+  height: 8px;
+  border-radius: 9999px;
+  background: #f0f0f2;
+  overflow: hidden;
+}
+
+.household-goal-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--garden-leaf-deep);
+}
+
+/* 인식한 수치 — 채택한 것과 확인이 필요한 것을 **눈으로 갈라 놓는다.**
+   섞어 놓으면 사용자가 한 덩어리로 읽고 그대로 넘긴다. 검사명 오독은 숫자만
+   보면 멀쩡해 보이기 때문에, 걸러 낸 이유가 값 옆에 붙어 있어야 한다. */
+.ocr-measurements {
+  margin-top: 20px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 16px;
+}
+
+.ocr-measurements h3 {
+  margin: 14px 0 8px;
+  font-size: 0.86rem;
+  font-weight: 750;
+  color: var(--muted-strong);
+}
+
+.ocr-measurements h3:first-child {
+  margin-top: 0;
+}
+
+.ocr-measurement-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ocr-measurement-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 4px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.ocr-measurement-label {
+  font-weight: 700;
+}
+
+.ocr-measurement-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-strong);
+}
+
+/* 사유는 값 아래 한 줄을 통째로 쓴다 — 줄여 쓰면 안 읽힌다. */
+.ocr-measurement-reason {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.ocr-measurement-review li {
+  border-color: color-mix(in srgb, var(--line) 60%, transparent);
+  background: color-mix(in srgb, var(--line-soft) 35%, transparent);
+}
+
+.assess-prefilled {
+  margin-bottom: 18px;
+}
+
+/* ── 검진표를 폼 옆에 두는 판정 화면 ─────────────────────────────────────────
+ *
+ * 두 칸으로 가르는 이유는 하나다 — 사용자가 확인해야 하는 것이 "이 숫자가 저 표의
+ * 그 줄과 같은가" 라서, 둘이 동시에 보여야 대조가 성립한다. 세로로 쌓으면 스크롤로
+ * 오가며 기억에 의존하게 된다.
+ *
+ * 문서 칸을 왼쪽에 고정(sticky)하는 이유도 같다. 폼은 36칸이라 길고, 스크롤이
+ * 내려가면 원본이 화면 밖으로 나간다.
+ */
+.assess-workspace { display: block; }
+
+.assess-workspace.has-document {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.checkup-pane {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  background: var(--surface);
+  /* 원본이 길어도 왼쪽 칸만 스크롤한다. 화면 전체가 밀리면 폼이 따라 올라간다. */
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.checkup-pane-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.checkup-pane-head h2 { margin: 0; font-size: 1rem; }
+
+.checkup-zoom { display: flex; gap: 4px; flex: none; }
+.checkup-zoom button {
+  min-width: 40px;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.checkup-zoom button.is-active { border-color: var(--blue-600); color: var(--blue-600); background: var(--blue-50); }
+
+.checkup-picker { display: block; }
+.checkup-picker input { display: block; width: 100%; font-size: 0.84rem; }
+.checkup-picker span { display: block; margin-top: 6px; color: var(--muted); font-size: 0.78rem; }
+
+.checkup-privacy { margin: 0; color: var(--muted); font-size: 0.75rem; line-height: 1.6; }
+.checkup-progress { margin: 0; color: var(--blue-600); font-size: 0.82rem; }
+
+/* 확대는 이미지 폭으로 준다. `transform: scale` 은 둘러싼 칸의 스크롤 범위를 안
+ * 늘려서, 키운 만큼이 잘려 나가고 그 부분을 볼 방법이 없다. */
+.checkup-viewer {
+  overflow: auto;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--blue-50);
+}
+.checkup-viewer img { display: block; max-width: none; }
+
+.checkup-filled {
+  margin: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--safe);
+  background: var(--safe-soft);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.checkup-review { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 0.8rem; }
+.checkup-review summary { cursor: pointer; color: var(--danger); font-weight: 600; }
+.checkup-review p { margin: 8px 0; color: var(--muted); line-height: 1.6; }
+.checkup-review ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.checkup-review li { display: flex; flex-direction: column; gap: 2px; border-top: 1px solid var(--line-soft); padding-top: 8px; }
+.checkup-review-label { font-weight: 600; }
+.checkup-review-reason { color: var(--muted); font-size: 0.75rem; }
+.checkup-review code { color: var(--muted-strong); font-size: 0.72rem; word-break: break-all; }
+
+/* 검진표에서 읽어 온 칸. 사람이 고치면 즉시 사라진다. */
+.assess-field.is-from-document input,
+.assess-field.is-from-document select { border-color: var(--blue-600); background: var(--blue-50); }
+/* 읽어 온 값이 범위를 벗어났으면 빨강이 이긴다. 이 규칙이 위 파란색 **뒤에** 있어야
+   하는 이유가 그것이다 — 앞에 두면 같은 특정도라 파란색이 덮는다. */
+.assess-field.is-rejected.is-from-document input,
+.assess-field.is-rejected.is-from-document select {
+  border-color: var(--danger);
+  background: var(--danger-soft);
+  box-shadow: 0 0 0 2px var(--danger-soft);
+}
+.assess-read-mark {
+  margin-left: 6px;
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: var(--blue-600);
+  background: var(--blue-100);
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+/* 좁은 화면에서는 대조가 어차피 안 되므로 세로로 쌓고 sticky 를 푼다. */
+@media (max-width: 900px) {
+  .assess-workspace.has-document { grid-template-columns: 1fr; }
+  .checkup-pane { position: static; max-height: none; }
+}
+
+/* ── 구성원 카드의 최근 판정 한 줄 ─────────────────────────────────────────
+ *
+ * 등급 색은 판정 카드(.assess-badge)와 같은 값을 쓴다. 같은 등급이 화면마다 다른
+ * 색이면 사용자가 색으로 등급을 읽는 법을 배우지 못한다.
+ */
+.member-verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+.member-verdict strong { font-weight: 700; }
+.member-verdict small { color: inherit; opacity: 0.72; }
+.member-verdict.is-empty { color: var(--muted); background: var(--line-soft); }
+.member-verdict.tone-very-high { color: var(--surface); background: var(--danger); }
+.member-verdict.tone-high { color: var(--danger); background: var(--danger-soft); }
+.member-verdict.tone-caution { color: #8a5a12; background: #fdf3e2; }
+.member-verdict.tone-normal { color: var(--safe); background: var(--safe-soft); }
+.member-verdict.tone-unknown { color: var(--muted); background: var(--line-soft); }
+
+/* ── 기록 작성 갈림길 ──────────────────────────────────────────────────── */
+.record-choice { display: grid; gap: 12px; margin-bottom: 14px; }
+.record-choice-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.record-choice-card:hover { border-color: var(--blue-600); background: var(--blue-50); }
+.record-choice-card.is-primary { border-color: var(--blue-600); background: var(--blue-50); }
+.record-choice-card strong { font-size: 0.98rem; }
+.record-choice-card small { color: var(--muted); font-size: 0.82rem; line-height: 1.6; }
+.record-choice-meta { color: var(--muted); font-size: 0.72rem; }
+
+@media (min-width: 640px) {
+  .record-choice { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── 로그인 관문 ───────────────────────────────────────────────────────────
+ *
+ * 헤더도 내비게이션도 없는 화면이라 여기서 브랜드를 한 번 보여 준다. 그게 없으면
+ * 사용자는 자기가 어느 서비스에 로그인하는지 모른 채 비밀번호를 넣게 된다.
+ */
+.signin-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+  background: var(--blue-50);
+}
+
+.signin-panel {
+  width: min(480px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.signin-brand { display: flex; align-items: center; gap: 10px; }
+.signin-brand strong { display: block; font-size: 1rem; }
+.signin-brand small { color: var(--muted); font-size: 0.78rem; }
+
+.signin-panel h1 { margin: 0; font-size: 1.5rem; }
+.signin-lead { margin: 0; color: var(--muted-strong); font-size: 0.88rem; line-height: 1.7; }
+
+.signin-notes { margin: 0; padding-left: 1.1rem; color: var(--muted); font-size: 0.78rem; line-height: 1.8; }
+
+/* ── 건강 현황 ─────────────────────────────────────────────────────────── */
+.insights-picker { display: flex; align-items: center; gap: 8px; font-size: 0.84rem; color: var(--muted-strong); }
+.insights-picker select {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* ── 질환 카드 v2 — 훑을 수 있게 ────────────────────────────────────────────
+ *
+ * 카드 열세 장을 놓고 사용자가 하는 일은 "급한 게 어느 것인가" 하나다. 예전 카드는
+ * 그 답이 오른쪽 위 작은 배지에만 있었고 나머지를 문단 일곱 개가 채웠다. 이제
+ * **등급 막대 → 큰 숫자 → 한 줄** 까지만 펼쳐 두고 나머지는 접는다.
+ */
+.assess-cards { grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 12px; }
+.assess-card { gap: 0.55rem; padding: 1rem 1.1rem; }
+.assess-card h3 { font-size: 1.05rem; font-weight: 700; }
+
+/* 네 칸을 항상 그리고 해당 칸만 채운다. 위치가 색보다 먼저 읽혀서 색을 구분하기
+ * 어려운 사람도 훑을 수 있다. */
+.level-bar { display: flex; flex-direction: column; gap: 4px; }
+.level-bar-track { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+.level-bar-cell { height: 7px; border-radius: 999px; background: var(--line-soft); }
+.level-bar-cell.is-at.level-normal { background: var(--safe); }
+.level-bar-cell.is-at.level-caution { background: #d98324; }
+.level-bar-cell.is-at.level-high { background: var(--danger); }
+.level-bar-cell.is-at.level-very-high { background: #8c2c34; }
+.level-bar-labels { display: grid; grid-template-columns: repeat(4, 1fr); font-size: 0.66rem; color: var(--muted); text-align: center; }
+.level-bar-labels .is-at { color: var(--ink); font-weight: 700; }
+
+/* 큰 숫자. 검사값을 넣었으면 그 값, 안 넣었으면 추정 확률. 둘을 같은 크기로 두면
+ * 구분이 안 되므로 추정 쪽은 색을 죽이고 `~` 를 붙인다. */
+.assess-figures { display: flex; flex-wrap: wrap; gap: 14px; }
+.assess-figure { display: flex; flex-direction: column; line-height: 1.15; }
+.assess-figure b { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.assess-figure small { color: var(--muted); font-size: 0.7rem; }
+.assess-figure.is-estimate b { color: var(--muted-strong); font-weight: 600; }
+
+.assess-need { margin: 0; color: var(--muted-strong); font-size: 0.76rem; line-height: 1.6; }
+.assess-need strong { color: var(--ink); }
+
+/* 근거로 들어가는 문. 카드 안에서 펼치지 않고 모달을 연다 — 격자에서 한 장이
+ * 부풀면 같은 줄 카드까지 키가 늘고 아래가 통째로 밀린다. */
+.assess-why-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: auto;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0;
+  padding: 0.55rem 0 0;
+  background: transparent;
+  color: var(--muted-strong);
+  font: inherit;
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+}
+.assess-why-button::after { content: "›"; margin-left: auto; font-size: 1rem; color: var(--muted); }
+.assess-why-button:hover { color: var(--blue-600); }
+.assess-why-button:hover::after { color: var(--blue-600); }
+
+/* 근거 모달. 카드보다 넓어서 나열 대신 항목으로 가른다. */
+.verdict-modal { width: min(620px, 100%); }
+
+/* 모달을 **판정 → 근거 → 참고** 세 켜로 나눈다.
+ *
+ * 예전에는 등급·수치·설명·정의 목록·ML 참고가 같은 간격으로 이어져 한 덩어리로
+ * 읽혔다. 여기까지 들어온 사람이 찾는 것은 "그래서 왜 이 등급인가" 하나인데,
+ * 그 답이 어디서 시작하는지 화면이 말하지 않았다. 지금은 답(위)과 근거(가운데)를
+ * 실선으로, 근거와 밀려난 참고값(아래)을 다시 한 번 가른다. */
+.verdict-modal-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 0 12px;
+}
+.verdict-modal-top strong { font-size: 1.05rem; line-height: 1.4; }
+.verdict-modal .assess-figures { margin: 14px 0; }
+.verdict-modal .assess-label {
+  margin: 14px 0 0;
+  font-size: 1rem;
+  line-height: 1.65;
+  font-weight: 600;
+}
+.verdict-modal .assess-trajectory-line { margin: 14px 0 0; }
+
+/* 라벨을 옆이 아니라 **위**에 둔다. `auto 1fr` 두 칸이던 때는 라벨이 좁고 본문이
+   넓어 글줄이 60자를 훌쩍 넘겼고, 라벨 길이가 제각각(“무엇을 보고” / “어느 엔진이
+   왜”)이라 본문 시작선도 매번 달랐다. 위로 올리면 본문이 모달 폭을 그대로 쓰고
+   시작선이 하나로 맞는다. */
+.verdict-facts {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 0.88rem;
+}
+.verdict-facts dt {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+.verdict-facts dd { margin: 0; line-height: 1.7; max-width: 62ch; }
+
+/* 밀려난 ML 참고값. 정본이 아니므로 배경으로 한 단 내려 앉힌다 — 지우지는
+   않는다(ADR-009 §4). 위 근거와 같은 평면에 두면 어느 쪽이 답인지 흐려진다. */
+.verdict-modal .assess-reference {
+  margin-top: 18px;
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 14px 14px;
+  background: var(--blue-50);
+  font-size: 0.83rem;
+}
+.verdict-modal .assess-reference h4 { margin: 0 0 10px; font-size: 0.88rem; font-weight: 700; }
+.verdict-modal .assess-reference dl { grid-template-columns: auto 1fr; gap: 4px 14px; }
+.verdict-modal .assess-reference .assess-fineprint { margin-top: 10px; }
+.verdict-modal > .assess-fineprint:last-child {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+/* ── 건강기록 한 줄 — 판정은 메모가 아니다 ──────────────────────────────────
+ *
+ * 판정 스냅샷에는 `note` 가 없다. 담긴 것은 그날 넣은 수치와 질환별 등급이라,
+ * 메모 자리에 그대로 두면 "저장된 건강기록"만 반복된다.
+ * 등급 색은 구성원 카드(.member-verdict)와 같은 값을 쓴다.
+ */
+.record-assessment { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.record-assessment-meta { color: var(--muted); font-size: 0.78rem; }
+.record-assessment-values { flex: 1 1 100%; color: var(--muted-strong); font-size: 0.78rem; line-height: 1.6; }
+
+.record-level {
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.record-level.tone-very-high { color: var(--surface); background: var(--danger); }
+.record-level.tone-high { color: var(--danger); background: var(--danger-soft); }
+.record-level.tone-caution { color: #8a5a12; background: #fdf3e2; }
+.record-level.tone-normal { color: var(--safe); background: var(--safe-soft); }
+.record-level.tone-unknown { color: var(--muted); background: var(--line-soft); }
+
+/* 판정 기록 모달 */
+.record-detail-top { display: flex; align-items: center; gap: 10px; margin: 14px 0 6px; font-size: 0.86rem; color: var(--muted-strong); }
+.record-detail-heading { margin: 20px 0 8px; font-size: 0.88rem; font-weight: 600; }
+
+.record-level-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.record-level-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); padding-bottom: 6px; font-size: 0.85rem; }
+
+/* 값이 서른 개 넘게 올 수 있어 두 칸으로 접는다. */
+.record-input-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; margin: 0; font-size: 0.82rem; }
+.record-input-list > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--line-soft); padding-bottom: 4px; }
+.record-input-list dt { color: var(--muted); }
+.record-input-list dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+@media (max-width: 560px) {
+  .record-input-list { grid-template-columns: 1fr; }
+}
+
+/* ── 헤더 계정 영역 ────────────────────────────────────────────────────────
+ *
+ * "내 계정" 링크를 뺀 자리. 주 메뉴에 이미 "계정" 이 있어서 같은 곳으로 가는 문이
+ * 둘이었다. 헤더에는 지금 누구로 들어와 있는지와 나가는 문만 둔다.
+ */
+.header-account {
+  max-width: 18ch;
+  overflow: hidden;
+  color: var(--muted) !important;
+  font-weight: 500 !important;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-signout {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--muted-strong);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.header-signout:hover { border-color: var(--blue-600); color: var(--blue-600); }
+
+/* 가입/로그인 전환 */
+.auth-hint { color: var(--muted); font-size: 0.75rem; }
+.auth-switch { margin: 14px 0 0; color: var(--muted); font-size: 0.82rem; }
+.auth-switch button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--blue-600);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* 좁은 화면에서는 이메일을 접는다. 로그아웃 버튼이 밀려나면 안 된다. */
+@media (max-width: 720px) {
+  .header-account { display: none; }
+}
+
+/* 판정 기록 모달은 카드를 담아서 근거 모달보다 넓어야 한다. */
+.record-detail-modal { width: min(880px, 100%); }
+.record-detail-modal .assess-cards { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.record-detail-modal .form-actions { margin-top: 20px; }
+
+/* 건강 비서 런처 — **드로어 CSS 가 아니라 여기 있어야 한다.**
+ *
+ * 드로어는 지연 적재라 그 스타일시트도 누를 때 같이 온다. 런처는 그 전부터 화면에
+ * 떠 있으므로 저기 두면 **처음 여는 순간까지 맨 글자로 보인다** — 검은 텍스트가
+ * 본문 흐름에 얹혀 버튼처럼 보이지 않는다. 늘 보이는 것은 늘 로드되는 곳에 둔다.
+ */
+/* 우측 하단 봄이 런처 플로팅 버튼 */
+.health-assistant-launcher-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4), 0 2px 6px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  z-index: 999;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.health-assistant-launcher-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5), 0 3px 8px rgba(0, 0, 0, 0.12);
+}
+
+.health-assistant-launcher-btn:active {
+  transform: translateY(0);
+}
+
+.health-assistant-launcher-btn .launcher-icon {
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.25);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 지난 판정으로 채우기 — 폼 맨 위. 수치 하나만 바꿔 다시 돌려 보는 것이 이 화면에서
+   가장 자주 하는 일인데, 예전에는 그때마다 가족 홈을 거쳐야 했다. */
+.assess-history {
+  margin: 0 0 1.2rem;
+  padding: 0.9rem 1rem 1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--blue-50);
+}
+.assess-history h3 { margin: 0 0 0.2rem; font-size: 0.95rem; }
+.assess-history p { margin: 0 0 0.7rem; font-size: 0.78rem; }
+.assess-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.assess-history-list button {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.assess-history-list button:hover { border-color: var(--blue-500); }
+.assess-history-list time { font-size: 0.8rem; font-weight: 600; }
+.assess-history-list small { grid-column: 1 / -1; font-size: 0.72rem; color: var(--muted); }
+
+/* 영구 삭제 확인. 복원 버튼 바로 옆이라 한 번에 지워지면 안 된다 — 누르려던 것과
+   다른 것이 사라지고, 그건 되돌릴 수 없다. */
+.record-purge-confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.record-purge-confirm > span { font-size: 0.75rem; color: var(--danger); font-weight: 600; }
+
+/* ==========================================================================
+   건강 데이터 (Health Data Page) & OCR 검토 모달 스타일 복원
+   ========================================================================== */
+.health-data-heading {
+  align-items: flex-end;
+}
+
+.period-filter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.period-filter button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: var(--muted-strong);
+  background: white;
+  font-size: 0.8rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.period-filter button.is-active {
+  border-color: var(--blue-600);
+  color: white;
+  background: var(--blue-600);
+  box-shadow: 0 7px 18px rgba(37, 99, 235, 0.2);
+}
+
+.health-data-layout {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: 20px;
+}
+
+.health-data-main {
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+
+.health-insight-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  border: 1px solid #c9dcff;
+  border-radius: 22px;
+  padding: 22px;
+  background: linear-gradient(135deg, #f7faff, #eaf2ff);
+  box-shadow: 0 10px 30px rgba(35, 61, 112, 0.05);
+}
+
+.health-insight-card > span {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  color: white;
+  background: var(--blue-600);
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.health-insight-card strong,
+.health-insight-card small {
+  display: block;
+}
+
+.health-insight-card strong {
+  margin-top: 4px;
+  font-size: 1.15rem;
+}
+
+.health-insight-card small {
+  margin-top: 7px;
+  color: var(--muted);
+}
+
+.health-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.health-summary-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  padding: 19px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(35, 61, 112, 0.04);
+}
+
+.health-summary-card > span,
+.health-summary-card > strong,
+.health-summary-card > p,
+.health-summary-card > em {
+  display: block;
+}
+
+.health-summary-card > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.health-summary-card > strong {
+  margin-top: 10px;
+  font-size: 1.55rem;
+}
+
+.health-summary-card > strong small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.health-summary-card > p {
+  margin-top: 8px;
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+}
+
+.health-summary-card > em {
+  margin-top: 6px;
+  color: var(--blue-700);
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.health-summary-card.is-empty {
+  background: #fafbfe;
+}
+
+.health-summary-card.is-empty > strong {
+  color: var(--muted-strong);
+  font-size: 1.1rem;
+}
+
+.health-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.health-chart-card:last-child {
+  grid-column: 1 / -1;
+}
+
+.health-data-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 22px;
+  background: white;
+  box-shadow: 0 10px 32px rgba(35, 61, 112, 0.05);
+}
+
+.health-data-panel .panel-heading h2 {
+  font-size: 1.15rem;
+}
+
+.health-data-panel .panel-heading p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.time-series-chart {
+  margin-top: 16px;
+  min-width: 0;
+}
+
+.time-series-chart svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.time-series-chart text {
+  fill: #718099;
+  font-size: 11px;
+}
+
+.chart-grid-line {
+  stroke: #e7ebf2;
+  stroke-width: 1;
+}
+
+.chart-unit {
+  font-weight: 700;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: var(--muted-strong);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.health-chart-empty {
+  min-height: 210px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.health-chart-empty > span {
+  font-size: 2rem;
+}
+
+.health-chart-empty strong {
+  margin-top: 8px;
+  color: var(--muted-strong);
+}
+
+.health-chart-empty p {
+  margin-top: 6px;
+  font-size: 0.78rem;
+}
+
+.lab-metric-select {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.lab-metric-select select {
+  min-width: 180px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 9px 11px;
+  color: var(--ink);
+  background: white;
+}
+
+.screening-history-list {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.screening-history-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 15px;
+  padding: 14px;
+  background: #fafbfe;
+}
+
+.screening-history-list time,
+.screening-history-list strong,
+.screening-history-list p {
+  display: block;
+}
+
+.screening-history-list time {
+  color: var(--blue-700);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.screening-history-list strong {
+  margin-top: 4px;
+}
+
+.screening-history-list p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.health-files-tabs {
+  position: sticky;
+  top: 74px;
+  z-index: 5;
+  width: fit-content;
+  margin-top: 18px;
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.health-files-tabs a {
+  border-radius: 999px;
+  padding: 9px 15px;
+  color: var(--muted-strong);
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.health-files-tabs a:hover {
+  background: var(--surface-soft);
+  color: var(--primary);
+}
+
+.ocr-review-modal {
+  width: min(1040px, 100%);
+}
+
+.ocr-review-meta-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 0.75fr 1fr 1fr;
+  gap: 12px;
+}
+
+.ocr-review-meta-grid label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.ocr-review-meta-grid input,
+.ocr-review-item input {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: white;
+}
+
+.ocr-review-items {
+  margin-top: 18px;
+  display: grid;
+  gap: 7px;
+  max-height: 310px;
+  overflow-y: auto;
+}
+
+.ocr-review-item {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.4fr) minmax(90px, 0.8fr) minmax(80px, 0.7fr) minmax(120px, 1fr);
+  gap: 8px;
+}
+
+.ocr-review-item-heading {
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+@media (max-width: 1080px) {
+  .health-data-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .health-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .health-chart-card:last-child {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .health-data-heading {
+    align-items: flex-start;
+  }
+
+  .health-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .period-filter {
+    justify-content: flex-start;
+  }
+
+  .health-insight-card {
+    align-items: flex-start;
+  }
+
+  .screening-history-list article {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
