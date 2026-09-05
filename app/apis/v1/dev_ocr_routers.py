@@ -226,7 +226,9 @@ async def stream_job(
     try:
         initial = await store.read(job_id)
     except RedisError as error:
-        raise OcrQueueUnavailableError("문서 인식 진행 상황을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.") from error
+        raise OcrQueueUnavailableError(
+            "문서 인식 진행 상황을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
+        ) from error
     if initial is None:
         raise OcrJobNotFoundError("작업을 찾을 수 없습니다. 시간이 지나 정리됐을 수 있습니다.")
 
