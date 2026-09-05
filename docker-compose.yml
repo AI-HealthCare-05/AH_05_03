@@ -102,12 +102,15 @@ services:
       DB_NAME: ${DB_NAME:-ai_health}
       DB_TEST_NAME: ${DB_TEST_NAME:-ai_health_test}
       REDIS_URL: redis://redis:6379/0
-      CORS_ALLOW_ORIGINS: '["http://localhost","http://localhost:4173","http://127.0.0.1:4173","http://localhost:5173","http://127.0.0.1:5173"]'
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
+      # 인증 요청은 CORS 미들웨어뿐 아니라 CSRF 방어용 Origin 검사도 통과해야 한다.
+      # 배포에서는 이 값을 환경별 JSON 배열로 덮어쓰고, 아래 기본값은 정식 공개
+      # 도메인과 로컬 개발 주소만 허용한다. 수명이 짧은 Quick Tunnel URL은 넣지 않는다.
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-["https://ieobom.cromtind.uk","http://localhost","http://127.0.0.1","http://localhost:4173","http://127.0.0.1:4173","http://localhost:5173","http://127.0.0.1:5173"]}
       # 로컬 HTTP 실험에서는 __Host- Secure 쿠키를 사용할 수 없다.
       REFRESH_COOKIE_NAME: ieobom_refresh
       REFRESH_COOKIE_SECURE: "false"
-      ENABLE_DEV_OCR_BRIDGE: ${ENABLE_DEV_OCR_BRIDGE:-false}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      ENABLE_DEV_OCR_BRIDGE: ${ENABLE_DEV_OCR_BRIDGE:-true}
       # **예비 공급자다 (2026-09-03).** Gemini 가 앞이고 이쪽이 뒤다 — 무료 등급
       # 할당량은 모델마다 하루로 따로 세서, 소진되는 날 이게 없으면 인식이 멈춘다.
       # 순서는 `DEV_OCR_MODELS` 가 정한다.
@@ -215,8 +218,8 @@ services:
       SECRET_KEY: ${SECRET_KEY:-local-only-secret-key-change-before-deploy}
       REDIS_URL: redis://redis:6379/0
       # 워커가 Gemini 를 직접 부른다. fastapi 와 같은 값을 봐야 두 경로의 결과가 갈리지 않는다.
-      ENABLE_DEV_OCR_BRIDGE: ${ENABLE_DEV_OCR_BRIDGE:-false}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      ENABLE_DEV_OCR_BRIDGE: ${ENABLE_DEV_OCR_BRIDGE:-true}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
       # **예비 공급자다 (2026-09-03).** Gemini 가 앞이고 이쪽이 뒤다 — 무료 등급
       # 할당량은 모델마다 하루로 따로 세서, 소진되는 날 이게 없으면 인식이 멈춘다.
       # 순서는 `DEV_OCR_MODELS` 가 정한다.
