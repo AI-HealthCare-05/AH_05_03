@@ -82,8 +82,10 @@ const DEFAULT_ANATOMY_ATLAS: AnatomyAtlasId = "vanatome-male-reference";
 
 export function VanatomeBodyMap({
   profileName,
+  gender,
 }: {
   profileName: string;
+  gender?: "male" | "female" | null;
   risks?: RegionRisk[];
   risksAt?: string;
 }) {
@@ -93,7 +95,17 @@ export function VanatomeBodyMap({
   const pelvicOrganFocusRef = useRef<(active: boolean) => void>(() => undefined);
   const setHiddenSystemsRef = useRef<(systems: ReadonlySet<string>) => void>(() => undefined);
   const playHandPoseRef = useRef<(pose: HandPose) => void>(() => undefined);
-  const [atlasId, setAtlasId] = useState<AnatomyAtlasId>(DEFAULT_ANATOMY_ATLAS);
+  const [atlasId, setAtlasId] = useState<AnatomyAtlasId>(() =>
+    gender === "female" ? "tripo-triangle2m-v49-internals-preview" : DEFAULT_ANATOMY_ATLAS,
+  );
+
+  useEffect(() => {
+    if (gender === "female") {
+      setAtlasId("tripo-triangle2m-v49-internals-preview");
+    } else if (gender === "male") {
+      setAtlasId("vanatome-male-reference");
+    }
+  }, [gender]);
   const [manifest, setManifest] = useState<AnatomyAtlasManifest>();
   const [selectedStructure, setSelectedStructure] = useState<SelectedStructure>();
   const [activeFocus, setActiveFocus] = useState<BodyFocus>("full");

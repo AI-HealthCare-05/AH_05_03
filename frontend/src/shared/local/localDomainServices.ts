@@ -3,6 +3,7 @@ import type {
   DashboardSummary,
   FamilyHistory,
   FamilyProfile,
+  Gender,
   HealthRecord,
   HealthRecordType,
   ISODate,
@@ -26,6 +27,7 @@ export class LocalProfileService {
     displayName: string;
     relationship: string;
     birthDate?: ISODate;
+    gender?: Gender | null;
   }): Promise<LocalResult<FamilyProfile>> {
     const validationError = validateProfileInput(input);
     if (validationError) {
@@ -38,6 +40,7 @@ export class LocalProfileService {
       displayName: input.displayName.trim(),
       relationship: input.relationship.trim(),
       birthDate: input.birthDate ?? null,
+      gender: input.gender ?? null,
       opaqueServerRef: null,
       serverRefState: "none",
       status: "active",
@@ -93,7 +96,13 @@ export class LocalProfileService {
 
   public async update(
     profileId: string,
-    input: { displayName: string; relationship: string; birthDate?: ISODate; expectedVersion: number },
+    input: {
+      displayName: string;
+      relationship: string;
+      birthDate?: ISODate;
+      gender?: Gender | null;
+      expectedVersion: number;
+    },
   ): Promise<LocalResult<FamilyProfile>> {
     const current = await this.get(profileId);
     if (!current.ok) return current;
@@ -107,6 +116,7 @@ export class LocalProfileService {
       displayName: input.displayName.trim(),
       relationship: input.relationship.trim(),
       birthDate: input.birthDate ?? null,
+      gender: input.gender !== undefined ? input.gender : current.value.gender ?? null,
       updatedAt: new Date().toISOString(),
       version: current.value.version + 1,
     };
@@ -766,6 +776,7 @@ function validateProfileInput(input: {
   displayName: string;
   relationship: string;
   birthDate?: ISODate;
+  gender?: Gender | null;
 }): string | undefined {
   if (!input.householdId) return "가정 식별자가 필요합니다.";
   if (input.displayName.trim().length < 1 || input.displayName.trim().length > 100) {
@@ -777,12 +788,16 @@ function validateProfileInput(input: {
   if (input.birthDate && !/^\d{4}-\d{2}-\d{2}$/u.test(input.birthDate)) {
     return "생년 정보는 YYYY-MM-DD 형식이어야 합니다.";
   }
+  if (input.gender !== undefined && input.gender !== null && input.gender !== "male" && input.gender !== "female") {
+    return "성별 값이 올바르지 않습니다.";
+  }
   return undefined;
 }
 
 function normalizeFamilyProfile(profile: FamilyProfile): FamilyProfile {
   return {
     ...profile,
+    gender: profile.gender === "male" || profile.gender === "female" ? profile.gender : null,
     opaqueServerRef: profile.opaqueServerRef ?? null,
     serverRefState: profile.serverRefState ?? "none",
     mergedIntoProfileId: profile.mergedIntoProfileId ?? null,
