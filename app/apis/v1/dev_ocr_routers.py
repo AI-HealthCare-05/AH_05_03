@@ -22,6 +22,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
+from redis.exceptions import RedisError
 
 from app.core import config
 from app.core.errors import ErrorCode
@@ -35,6 +36,7 @@ from app.exceptions import (
     OcrFileTooLargeError,
     OcrJobNotFoundError,
     OcrNoFileError,
+    OcrQueueUnavailableError,
     OcrUnavailableError,
 )
 from app.models.service_accounts import ServiceAccount
@@ -105,9 +107,14 @@ async def enqueue_job(
 
     store = OcrJobStore(request.app.state.redis)
     # base64 로 싣는 이유는 `ocr_contract.py` 참조 — Redis 연결이 텍스트 모드다.
-    job_id = await store.enqueue(
-        {"files": [{"mime": mime, "b64": base64.b64encode(content).decode()} for content, mime in collected]}
-    )
+    try:
+        job_id = await store.enqueue(
+            {"files": [{"mime": mime, "b64": base64.b64encode(content).decode()} for content, mime in collected]}
+        )
+    except RedisError as error:
+        # Redis 예외를 그대로 두면 공통 핸들러가 500 INTERNAL_ERROR 로 덮는다.
+        # 큐 순단은 재시도 가능한 503 이어야 클라이언트와 프록시가 의미를 안다.
+        raise OcrQueueUnavailableError("문서 인식 작업을 등록하지 못했습니다. 잠시 후 다시 시도해 주세요.") from error
     return ApiResponse(
         data=OcrJobAcceptedData(
             job_id=job_id,
@@ -130,7 +137,10 @@ async def read_job(
     account: Annotated[ServiceAccount, Depends(require_active_account)],
 ) -> ApiResponse[OcrJobStatusData]:
     store = OcrJobStore(request.app.state.redis)
-    fields = await store.read(job_id)
+    try:
+        fields = await store.read(job_id)
+    except RedisError as error:
+        raise OcrQueueUnavailableError("문서 인식 결과를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.") from error
     if fields is None:
         # TTL 이 지났거나 없는 작업. 어느 쪽인지 구분해 알려 주지 않는다 — 무작위
         # job_id 를 긁어 남의 작업 존재 여부를 알아내는 것을 막는다.
@@ -213,7 +223,11 @@ async def stream_job(
     # 없는 작업에 연결을 열어 두지 않는다. 여기서 확인해야 404 를 **SSE 프레임이 아니라
     # 오류 봉투로** 돌려줄 수 있다 — 200 으로 스트림을 연 뒤 오류를 알리면 프런트의
     # 공통 오류 처리가 안 걸린다.
-    if await store.read(job_id) is None:
+    try:
+        initial = await store.read(job_id)
+    except RedisError as error:
+        raise OcrQueueUnavailableError("문서 인식 진행 상황을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.") from error
+    if initial is None:
         raise OcrJobNotFoundError("작업을 찾을 수 없습니다. 시간이 지나 정리됐을 수 있습니다.")
 
     return StreamingResponse(

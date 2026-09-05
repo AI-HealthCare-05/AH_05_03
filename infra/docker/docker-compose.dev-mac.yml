@@ -66,7 +66,8 @@ services:
       DB_NAME: ${DB_NAME:?DB_NAME is required}
       DB_TEST_NAME: ${DB_TEST_NAME:-ai_health_test}
       REDIS_URL: redis://redis:6379/0
-      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-["http://localhost:8080"]}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-["https://ieobom.cromtind.uk","http://localhost:8080"]}
       REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-ieobom_refresh}
       REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-false}
       REFRESH_COOKIE_SAMESITE: ${REFRESH_COOKIE_SAMESITE:-lax}

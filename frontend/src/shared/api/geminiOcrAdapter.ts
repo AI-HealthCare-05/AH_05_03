@@ -11,7 +11,7 @@
  * 공짜로 얻는다.
  */
 
-import { serverApiClient } from "./serverApiClient";
+import { ServerApiError, serverApiClient } from "./serverApiClient";
 
 /** 표에서 읽어 낸 행 하나. `source` 는 원문 4열이라 화면이 원본과 대조할 수 있다. */
 export interface OcrMeasurementRow {
@@ -63,6 +63,13 @@ interface JobStatus {
 const MAX_WAIT_MS = 180_000;
 const MIN_INTERVAL_MS = 800;
 
+/** 네트워크 순단이나 5xx 한 번으로 이미 성공한 OCR 작업을 버리지 않는다. */
+function isTransientReadFailure(error: unknown): boolean {
+  if (error instanceof ServerApiError) return error.status >= 500 || error.status === 429;
+  // fetch 자체가 응답을 못 받은 경우(TypeError 등)도 다음 폴링에서 복구할 수 있다.
+  return error instanceof TypeError;
+}
+
 /** 인식 중 화면에 보여 줄 진행 상황. */
 export interface OcrProgress {
   /** 지금까지 인식된 글. 이어 붙인 결과다. */
@@ -96,7 +103,19 @@ export class GeminiOcrAdapter {
     const deadline = Date.now() + MAX_WAIT_MS;
 
     for (;;) {
-      const job = await serverApiClient.readDocumentJob<JobStatus>(accepted.job_id);
+      let job: JobStatus;
+      try {
+        job = await serverApiClient.readDocumentJob<JobStatus>(accepted.job_id);
+      } catch (error) {
+        if (!isTransientReadFailure(error)) throw error;
+        if (Date.now() > deadline) {
+          throw new Error("문서 인식이 너무 오래 걸립니다. 잠시 후 다시 시도해 주세요.");
+        }
+        // 작업은 서버에서 계속 돈다. 같은 job_id를 다시 조회해야 하며 새 작업을
+        // 등록하면 Gemini 비용과 개인정보 원본 체류 시간만 늘어난다.
+        await new Promise((resolve) => setTimeout(resolve, interval));
+        continue;
+      }
       if (job.status === "succeeded" && job.result) return job.result;
       if (job.status === "failed") throw new Error(messageFor(job.error ?? ""));
       if (Date.now() > deadline) {
@@ -162,7 +181,8 @@ const OCR_MESSAGES: Record<string, string> = {
   OCR_FILE_TOO_LARGE: "파일이 너무 큽니다. 크기를 줄이거나 여러 장으로 나눠 올려 주세요.",
   OCR_JOB_NOT_FOUND: "인식 결과가 만료됐어요. 다시 올려 주세요.",
   OCR_PROVIDER_FAILED: "문서 인식이 실패했어요. 잠시 후 다시 시도해 주세요.",
-  OCR_UNAVAILABLE: "문서 인식 기능을 사용할 수 없습니다. 설정을 확인해 주세요.",
+  OCR_UNAVAILABLE: "문서 인식 기능을 잠시 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+  SERVICE_UNAVAILABLE: "문서 인식 서버 연결이 잠시 불안정합니다. 잠시 후 다시 시도해 주세요.",
   TIMEOUT: "문서 인식이 너무 오래 걸립니다. 잠시 후 다시 시도해 주세요.",
   EXPIRED: "문서 인식이 너무 오래 걸립니다. 잠시 후 다시 시도해 주세요.",
 };
