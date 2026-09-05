@@ -34,6 +34,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     displayName: "홍길동",
     relationship: "본인",
     birthDate: "1990-01-01",
+    gender: "male",
     opaqueServerRef: null,
     serverRefState: "none",
     status: "active",

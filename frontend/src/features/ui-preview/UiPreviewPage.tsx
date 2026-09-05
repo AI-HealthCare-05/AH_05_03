@@ -2,8 +2,10 @@ import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react
 import { NavLink } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
+import { BirthDateInput } from "../../shared/ui/BirthDateInput";
 import type {
   DashboardSummary,
+  Gender,
   HealthRecord,
   HealthRecordType,
 } from "../../shared/local/domainContracts";
@@ -79,6 +81,7 @@ export function UiPreviewPage() {
         displayName: String(form.get("displayName") ?? ""),
         relationship: String(form.get("relationship") ?? ""),
         birthDate: optionalDate(form.get("birthDate")),
+        gender: optionalGender(form.get("gender")),
       });
       setSelectedProfileId(profile.id);
       setProfileDialogOpen(false);
@@ -277,7 +280,15 @@ export function UiPreviewPage() {
                 {RELATIONSHIPS.map((relationship) => <option key={relationship}>{relationship}</option>)}
               </select>
             </label>
-            <label>생년월일 <small>선택</small><input name="birthDate" type="date" /></label>
+            <label>
+              성별
+              <select name="gender" defaultValue="">
+                <option value="" disabled>남성 또는 여성</option>
+                <option value="male">남성</option>
+                <option value="female">여성</option>
+              </select>
+            </label>
+            <BirthDateInput />
             <div className="ui-preview-form-actions">
               <button type="button" onClick={() => setProfileDialogOpen(false)}>취소</button>
               <button className="ui-preview-primary" type="submit" disabled={saving}>
@@ -334,6 +345,11 @@ function PreviewDialog({ title, onClose, children }: { title: string; onClose: (
 function optionalDate(value: FormDataEntryValue | null): `${number}-${number}-${number}` | undefined {
   const date = String(value ?? "");
   return date ? (date as `${number}-${number}-${number}`) : undefined;
+}
+
+function optionalGender(value: FormDataEntryValue | null): Gender | null {
+  const str = String(value ?? "");
+  return str === "male" || str === "female" ? str : null;
 }
 
 function messageFrom(caught: unknown, fallback: string): string {

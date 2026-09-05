@@ -2,6 +2,7 @@ import { lazy, Suspense, type FormEvent, useCallback, useEffect, useMemo, useSta
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
+import { BirthDateInput } from "../../shared/ui/BirthDateInput";
 import { Modal } from "../../shared/ui/Modal";
 // 모달은 눌러야 뜬다. 정적으로 두면 판정 카드 일체가 홈의 첫 청크에 실린다.
 const RecordDetail = lazy(() => import("./RecordDetail").then((m) => ({ default: m.RecordDetail })));
@@ -14,6 +15,7 @@ import { RecordSummary } from "./RecordSummary";
 import type {
   DashboardSummary,
   FamilyProfile,
+  Gender,
   HealthRecord,
   HealthRecordType,
 } from "../../shared/local/domainContracts";
@@ -208,6 +210,7 @@ export function HomePage() {
         displayName: String(form.get("displayName") ?? ""),
         relationship: String(form.get("relationship") ?? ""),
         birthDate: optionalDate(form.get("birthDate")),
+        gender: optionalGender(form.get("gender")),
       });
       setSelectedProfileId(profile.id);
       void navigate(`/members/${profile.id}`);
@@ -255,6 +258,7 @@ export function HomePage() {
         displayName: String(form.get("displayName") ?? ""),
         relationship: String(form.get("relationship") ?? ""),
         birthDate: optionalDate(form.get("birthDate")),
+        gender: optionalGender(form.get("gender")),
         expectedVersion: selectedProfile.version,
       });
       setProfileEditDialogOpen(false);
@@ -449,7 +453,7 @@ export function HomePage() {
                 </span>
                 <span className="member-card-copy">
                   <strong>{profile.displayName}</strong>
-                  <small>{profile.relationship}{profile.birthDate ? ` · ${profile.birthDate.slice(0, 4)}년생` : ""}</small>
+                  <small>{formatProfileDescription(profile)}</small>
                 </span>
                 <MemberVerdict summary={verdicts[profile.id]} />
               </button>
@@ -504,6 +508,7 @@ export function HomePage() {
             <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
               <VanatomeBodyMap
                 profileName={selectedProfile.displayName}
+                gender={selectedProfile.gender}
                 risks={bodyRisks}
                 risksAt={activeBodyRecord ? formatDateTime(activeBodyRecord.recordedAt) : undefined}
               />
@@ -618,9 +623,14 @@ export function HomePage() {
               </select>
             </label>
             <label>
-              생년월일 <span className="optional-label">선택</span>
-              <input name="birthDate" type="date" />
+              성별
+              <select name="gender" defaultValue="">
+                <option value="" disabled>남성 또는 여성</option>
+                <option value="male">남성</option>
+                <option value="female">여성</option>
+              </select>
             </label>
+            <BirthDateInput />
             <div className="form-actions">
               <button className="secondary-button" type="button" onClick={() => setProfileDialogOpen(false)}>취소</button>
               <button className="primary-button" type="submit" disabled={saving}>{saving ? "저장 중…" : "프로필 저장"}</button>
@@ -821,9 +831,14 @@ export function HomePage() {
               </select>
             </label>
             <label>
-              생년월일 <span className="optional-label">선택</span>
-              <input name="birthDate" type="date" defaultValue={selectedProfile.birthDate ?? ""} />
+              성별
+              <select name="gender" defaultValue={selectedProfile.gender ?? ""}>
+                <option value="" disabled>남성 또는 여성</option>
+                <option value="male">남성</option>
+                <option value="female">여성</option>
+              </select>
             </label>
+            <BirthDateInput defaultValue={selectedProfile.birthDate ?? ""} />
             <div className="form-actions">
               <button className="secondary-button" type="button" onClick={() => setProfileEditDialogOpen(false)}>취소</button>
               <button className="primary-button" type="submit" disabled={saving}>{saving ? "저장 중…" : "변경사항 저장"}</button>
@@ -890,7 +905,7 @@ export function HomePage() {
                 <article key={profile.id} className="hidden-profile-row">
                   <div>
                     <strong>{profile.displayName}</strong>
-                    <small>{profile.relationship}{profile.birthDate ? ` · ${profile.birthDate.slice(0, 4)}년생` : ""}</small>
+                    <small>{formatProfileDescription(profile)}</small>
                   </div>
                   <button
                     className="secondary-button"
@@ -1014,6 +1029,17 @@ function MetricCard({ label, value, helper, tone }: { label: string; value: stri
 function optionalDate(value: FormDataEntryValue | null): `${number}-${number}-${number}` | undefined {
   const date = String(value ?? "");
   return date ? (date as `${number}-${number}-${number}`) : undefined;
+}
+
+function optionalGender(value: FormDataEntryValue | null): Gender | null {
+  const str = String(value ?? "");
+  return str === "male" || str === "female" ? str : null;
+}
+
+function formatProfileDescription(profile: FamilyProfile): string {
+  const genderLabel = profile.gender === "male" ? "남성" : profile.gender === "female" ? "여성" : "";
+  const birthYear = profile.birthDate ? `${profile.birthDate.slice(0, 4)}년생` : "";
+  return [profile.relationship, genderLabel, birthYear].filter(Boolean).join(" · ");
 }
 
 function messageFrom(caught: unknown, fallback: string): string {
