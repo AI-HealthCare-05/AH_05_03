@@ -34,7 +34,7 @@ if head is None:
 
 SYSTEM_COLLECTIONS = {
     "1: Skeletal system": "skeletal",
-    "3: Joints": "skeletal",
+    "3: Joints": "joints",
     "4: Muscular system": "muscular",
     "5: Cardiovascular system": "cardiovascular",
     "6: Lymphoid organs": "lymphatic",
@@ -42,6 +42,7 @@ SYSTEM_COLLECTIONS = {
 }
 SYSTEM_COLORS = {
     "skeletal": (0.76, 0.90, 0.96, 1.0),
+    "joints": (0.62, 0.82, 0.86, 1.0),
     "muscular": (0.68, 0.27, 0.20, 1.0),
     "cardiovascular": (0.72, 0.12, 0.16, 1.0),
     "lymphatic": (0.25, 0.62, 0.38, 1.0),

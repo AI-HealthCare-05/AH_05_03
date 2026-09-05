@@ -33,7 +33,7 @@ REGION_COLLECTIONS = ("Trunk", "Left upper limb", "Right upper limb")
 EXCLUDED_REGION_COLLECTIONS = {"Pelvis", "Left hand", "Right hand"}
 SYSTEM_COLLECTIONS = {
     "1: Skeletal system": "skeletal",
-    "3: Joints": "skeletal",
+    "3: Joints": "joints",
     "4: Muscular system": "muscular",
     "5: Cardiovascular system": "cardiovascular",
     "6: Lymphoid organs": "lymphatic",
@@ -41,6 +41,7 @@ SYSTEM_COLLECTIONS = {
 }
 SYSTEM_COLORS = {
     "skeletal": (0.76, 0.90, 0.96, 1.0),
+    "joints": (0.62, 0.82, 0.86, 1.0),
     "muscular": (0.68, 0.27, 0.20, 1.0),
     "cardiovascular": (0.72, 0.12, 0.16, 1.0),
     "lymphatic": (0.25, 0.62, 0.38, 1.0),
@@ -51,6 +52,9 @@ SYSTEM_COLORS = {
     "respiratory": (0.42, 0.67, 0.80, 1.0),
     "urinary": (0.60, 0.42, 0.68, 1.0),
 }
+COSTAL_CARTILAGE_PATTERN = re.compile(
+    r"^Costal cartilage of (first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth) rib\.[lr]$"
+)
 
 
 def normalized_name(value):
@@ -129,6 +133,10 @@ def is_renderable_region_anatomy(obj):
 def is_renderable_supplement(obj):
     if not is_renderable_region_anatomy(obj):
         return False
+    # These 20 structures ship in the initial male atlas as a small dedicated
+    # layer. Keeping them here would double-render them after upper-body zoom.
+    if COSTAL_CARTILAGE_PATTERN.fullmatch(obj.name):
+        return False
     if normalized_name(obj.name) in core_names:
         return False
     return True
@@ -139,8 +147,7 @@ source_objects = sorted(
     key=lambda obj: obj.name,
 )
 core_duplicates_excluded = sum(
-    is_renderable_region_anatomy(obj) and normalized_name(obj.name) in core_names
-    for obj in region_objects
+    is_renderable_region_anatomy(obj) and normalized_name(obj.name) in core_names for obj in region_objects
 )
 anatomy_ids = [slugify(obj.name) for obj in source_objects]
 if len(anatomy_ids) != len(set(anatomy_ids)):
@@ -205,7 +212,7 @@ bpy.ops.export_scene.gltf(
 
 report = {
     "source": "Z-Anatomy official Models-of-human-anatomy@32693313",
-    "policy": "renderable trunk and bilateral upper-limb structures through the wrists; excludes initial-core duplicates, taxonomy helpers, external regions, hands, and pelvis-only structures",
+    "policy": "renderable trunk and bilateral upper-limb structures through the wrists; excludes initial-core duplicates, the 20 separately shipped costal cartilages, taxonomy helpers, external regions, hands, and pelvis-only structures",
     "coreStructureNames": len(core_names),
     "coreDuplicatesExcluded": core_duplicates_excluded,
     "objects": len(exported_objects),

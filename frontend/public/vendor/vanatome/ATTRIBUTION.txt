@@ -26,10 +26,16 @@ remaining 738 renderable head structures as a browser GLB.
 
 The complete upper-body lazy layer uses the same official source. Ieobom
 extracts the trunk and both upper limbs through the wrists, removes structures
-already present in the initial core plus taxonomy helpers, external regions,
-hands, and pelvis-only structures, and exports 1,094 supplemental structures.
+already present in the initial core plus the separately shipped costal
+cartilages, taxonomy helpers, external regions, hands, and pelvis-only
+structures, and exports 1,074 supplemental structures.
 Both complete-region GLBs use Draco geometry compression without removing
 anatomical objects. The browser decoder is distributed from Three.js under MIT.
+
+Ieobom preserves Z-Anatomy's system 3 joint classification as a separate
+viewer layer named “Joints, ligaments, and membranes” instead of folding it
+into the skeletal layer. This includes the external and internal intercostal
+membranes in the upper-body supplement.
 
 The complete lower-body lazy layer extracts the pelvis and both lower limbs,
 including the feet, from the same official source. Ieobom removes 66 structures

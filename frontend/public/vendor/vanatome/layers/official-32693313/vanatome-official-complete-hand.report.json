@@ -12,13 +12,13 @@
   },
   "systems": {
     "cardiovascular": 43,
+    "joints": 92,
     "muscular": 98,
-    "nervous": 34,
-    "skeletal": 92
+    "nervous": 34
   },
   "vertices": 346578,
   "triangles": 418601,
-  "bytes": 2071328,
-  "sha256": "c25148326f8ed76b4af66b37cdf70c77134ed66c859e480efd0aee53801006b9",
+  "bytes": 2071140,
+  "sha256": "cfdee40b2f258da4390c48358e2b685af33328131d0f3e4804d5bd4f4f8a25a8",
   "output": "vanatome-official-complete-hand.glb"
 }

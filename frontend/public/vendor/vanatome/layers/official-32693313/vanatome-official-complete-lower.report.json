@@ -10,16 +10,16 @@
   },
   "systems": {
     "cardiovascular": 116,
+    "joints": 174,
     "lymphatic": 10,
     "muscular": 231,
     "nervous": 78,
     "reproductive": 14,
-    "skeletal": 174,
     "urinary": 2
   },
   "vertices": 806228,
   "triangles": 1068459,
-  "bytes": 5110396,
-  "sha256": "68d20d666c29cfe26759822d5fce5c1bf57791f60aecc8bb5d05f565066d5922",
+  "bytes": 5110048,
+  "sha256": "0371519768fa76596f1e6afc18aa164f2f4f1cb947233100767e2b8a544caa75",
   "output": "vanatome-official-complete-lower.glb"
 }

@@ -1,0 +1,36 @@
+{
+  "source": "Z-Anatomy official Models-of-human-anatomy@32693313",
+  "policy": "individual left and right first-through-tenth costal cartilages; excludes labels and aggregate/helper meshes",
+  "objects": 20,
+  "systems": {
+    "skeletal": 20
+  },
+  "tissueType": "costal-cartilage",
+  "vertices": 48780,
+  "triangles": 48740,
+  "names": [
+    "Costal cartilage of first rib.l.001",
+    "Costal cartilage of first rib.r.001",
+    "Costal cartilage of second rib.l.001",
+    "Costal cartilage of second rib.r.001",
+    "Costal cartilage of third rib.l.001",
+    "Costal cartilage of third rib.r.001",
+    "Costal cartilage of fourth rib.l.001",
+    "Costal cartilage of fourth rib.r.001",
+    "Costal cartilage of fifth rib.l.001",
+    "Costal cartilage of fifth rib.r.001",
+    "Costal cartilage of sixth rib.l.001",
+    "Costal cartilage of sixth rib.r.001",
+    "Costal cartilage of seventh rib.l.001",
+    "Costal cartilage of seventh rib.r.001",
+    "Costal cartilage of eighth rib.l.001",
+    "Costal cartilage of eighth rib.r.001",
+    "Costal cartilage of ninth rib.l.001",
+    "Costal cartilage of ninth rib.r.001",
+    "Costal cartilage of tenth rib.l.001",
+    "Costal cartilage of tenth rib.r.001"
+  ],
+  "bytes": 310920,
+  "sha256": "00325b6ae8f5ecca908dbb617f6baf31fce61ff14ea8b25b687e116e94ed6c20",
+  "output": "vanatome-official-costal-cartilages.glb"
+}

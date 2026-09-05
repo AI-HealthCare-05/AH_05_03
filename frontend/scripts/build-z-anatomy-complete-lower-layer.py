@@ -33,7 +33,7 @@ report_path.parent.mkdir(parents=True, exist_ok=True)
 REGION_COLLECTIONS = ("Pelvis", "Left lower limb", "Right lower limb")
 SYSTEM_COLLECTIONS = {
     "1: Skeletal system": "skeletal",
-    "3: Joints": "skeletal",
+    "3: Joints": "joints",
     "4: Muscular system": "muscular",
     "5: Cardiovascular system": "cardiovascular",
     "6: Lymphoid organs": "lymphatic",
@@ -41,6 +41,7 @@ SYSTEM_COLLECTIONS = {
 }
 SYSTEM_COLORS = {
     "skeletal": (0.76, 0.90, 0.96, 1.0),
+    "joints": (0.62, 0.82, 0.86, 1.0),
     "muscular": (0.68, 0.27, 0.20, 1.0),
     "cardiovascular": (0.72, 0.12, 0.16, 1.0),
     "lymphatic": (0.25, 0.62, 0.38, 1.0),
@@ -128,8 +129,7 @@ source_objects = sorted(
     key=lambda obj: obj.name,
 )
 core_duplicates_excluded = sum(
-    is_renderable_region_anatomy(obj) and normalized_name(obj.name) in core_names
-    for obj in region_objects
+    is_renderable_region_anatomy(obj) and normalized_name(obj.name) in core_names for obj in region_objects
 )
 anatomy_ids = [slugify(obj.name) for obj in source_objects]
 if len(anatomy_ids) != len(set(anatomy_ids)):

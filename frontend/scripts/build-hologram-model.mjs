@@ -13,10 +13,16 @@ const DEFAULT_SYSTEMS = new Set([
   "urinary",
 ]);
 
-const [inputArgument, outputArgument] = process.argv.slice(2);
+const [inputArgument, outputArgument, profile = "default"] = process.argv.slice(2);
 if (!inputArgument || !outputArgument) {
-  console.error("Usage: node scripts/build-hologram-model.mjs <full-body.glb> <hologram-core.glb>");
+  console.error(
+    "Usage: node scripts/build-hologram-model.mjs <input.glb> <output.glb> "
+    + " [default|shell-skeleton|without-shell-skeleton]",
+  );
   process.exit(1);
+}
+if (!["default", "shell-skeleton", "without-shell-skeleton"].includes(profile)) {
+  throw new Error(`Unknown export profile: ${profile}`);
 }
 
 class NodeFileReader {
@@ -57,7 +63,12 @@ gltf.scene.traverse((object) => {
   if (!object.isMesh) return;
   const anatomyId = String(object.userData.anatomyId ?? "");
   const anatomySystem = String(object.userData.anatomySystem ?? "regional-anatomy");
-  object.visible = anatomyId === "body-shell" || DEFAULT_SYSTEMS.has(anatomySystem);
+  const shellOrSkeleton = anatomyId === "body-shell" || anatomySystem === "skeletal";
+  object.visible = profile === "shell-skeleton"
+    ? shellOrSkeleton
+    : profile === "without-shell-skeleton"
+      ? !shellOrSkeleton
+      : anatomyId === "body-shell" || DEFAULT_SYSTEMS.has(anatomySystem);
   if (object.visible) keptMeshes += 1;
   else removedMeshes += 1;
 });
@@ -74,4 +85,5 @@ console.log(JSON.stringify({
   outputBytes: exported.byteLength,
   keptMeshes,
   removedMeshes,
+  profile,
 }, null, 2));

@@ -35,7 +35,7 @@ HAND_COLLECTIONS = ("Left hand", "Right hand")
 UPPER_LIMB_COLLECTIONS = ("Left upper limb", "Right upper limb")
 SYSTEM_COLLECTIONS = {
     "1: Skeletal system": "skeletal",
-    "3: Joints": "skeletal",
+    "3: Joints": "joints",
     "4: Muscular system": "muscular",
     "5: Cardiovascular system": "cardiovascular",
     "6: Lymphoid organs": "lymphatic",
@@ -43,6 +43,7 @@ SYSTEM_COLLECTIONS = {
 }
 SYSTEM_COLORS = {
     "skeletal": (0.76, 0.90, 0.96, 1.0),
+    "joints": (0.62, 0.82, 0.86, 1.0),
     "muscular": (0.68, 0.27, 0.20, 1.0),
     "cardiovascular": (0.72, 0.12, 0.16, 1.0),
     "lymphatic": (0.25, 0.62, 0.38, 1.0),
@@ -138,10 +139,7 @@ for collection_name in HAND_COLLECTIONS:
         raise RuntimeError(f"official Z-Anatomy collection was not found: {collection_name}")
     hand_seed_objects.update(obj for obj in collection.objects if is_renderable_anatomy(obj))
 
-side_seeds = {
-    side: [obj for obj in hand_seed_objects if side_of(obj) == side]
-    for side in ("left", "right")
-}
+side_seeds = {side: [obj for obj in hand_seed_objects if side_of(obj) == side] for side in ("left", "right")}
 if any(not objects for objects in side_seeds.values()):
     raise RuntimeError("could not establish bilateral official hand envelopes")
 hand_envelopes = {side: envelope(objects) for side, objects in side_seeds.items()}
@@ -156,8 +154,7 @@ for collection_name in UPPER_LIMB_COLLECTIONS:
 spatial_objects = {
     obj
     for obj in upper_limb_objects
-    if is_renderable_anatomy(obj)
-    and overlaps(world_bounds(obj), hand_envelopes[side_of(obj)])
+    if is_renderable_anatomy(obj) and overlaps(world_bounds(obj), hand_envelopes[side_of(obj)])
 }
 complete_hand_objects = hand_seed_objects | spatial_objects
 source_objects = sorted(

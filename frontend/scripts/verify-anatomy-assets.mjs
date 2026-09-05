@@ -7,6 +7,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const publicRoot = path.join(projectRoot, "public");
 const manifestPaths = [
   "vendor/vanatome/releases/1.4.0/ieobom-hologram.manifest.json",
+  "vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-skeleton-controller-test-v38.manifest.json",
   "vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-triangle2m-shell-v49-internals.manifest.json",
 ];
 

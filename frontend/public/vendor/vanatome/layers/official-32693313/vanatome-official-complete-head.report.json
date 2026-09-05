@@ -8,14 +8,15 @@
   },
   "systems": {
     "cardiovascular": 198,
+    "joints": 14,
     "lymphatic": 26,
     "muscular": 84,
     "nervous": 352,
-    "skeletal": 78
+    "skeletal": 64
   },
   "vertices": 1600866,
   "triangles": 1946792,
-  "bytes": 8810224,
-  "sha256": "23fb328975b5d3ce57cfb61dcf2e7c8f1bd4d9ab0c44bcf00c2be86361e80dc0",
+  "bytes": 8810380,
+  "sha256": "af10c985c9669d3b30d3aaf8bbebd736476422af4c9ffba62641dd6d5b5de45d",
   "output": "vanatome-official-complete-head.glb"
 }
