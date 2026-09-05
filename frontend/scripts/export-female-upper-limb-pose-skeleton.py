@@ -383,7 +383,8 @@ def make_static_world_baked_meshes(
                 duplicate.data.vertices[triangle.vertices[1]].co.cross(
                     duplicate.data.vertices[triangle.vertices[2]].co,
                 ),
-            ) / 6.0
+            )
+            / 6.0
             for triangle in duplicate.data.loop_triangles
         )
         if signed_volume < 0.0:
@@ -592,15 +593,14 @@ def main() -> None:
                 "IEOBOM_STATIC_SHELL_EXPORT",
             )
             export_static_selection(shell_meshes, shell_output)
-            report.update({
-                "shellOutput": str(shell_output),
-                "shellBytes": shell_output.stat().st_size,
-                "shellVertices": len(next(iter(shell_meshes)).data.vertices),
-                "shellTriangles": sum(
-                    len(p.vertices) - 2
-                    for p in next(iter(shell_meshes)).data.polygons
-                ),
-            })
+            report.update(
+                {
+                    "shellOutput": str(shell_output),
+                    "shellBytes": shell_output.stat().st_size,
+                    "shellVertices": len(next(iter(shell_meshes)).data.vertices),
+                    "shellTriangles": sum(len(p.vertices) - 2 for p in next(iter(shell_meshes)).data.polygons),
+                }
+            )
         report_path = Path(args.report).expanduser().resolve() if args.report else output.with_suffix(".report.json")
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(report, ensure_ascii=False))

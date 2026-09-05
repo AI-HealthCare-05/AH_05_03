@@ -64,7 +64,10 @@ def fit_head_affine() -> tuple[np.ndarray, float, int]:
 
 def bounds(points: list[np.ndarray]) -> dict[str, list[float]]:
     return {
-        axis: [round(float(min(point[index] for point in points)), 6), round(float(max(point[index] for point in points)), 6)]
+        axis: [
+            round(float(min(point[index] for point in points)), 6),
+            round(float(max(point[index] for point in points)), 6),
+        ]
         for index, axis in enumerate(("x", "y", "z"))
     }
 
@@ -117,33 +120,37 @@ def main() -> None:
             for index, axis in enumerate(("x", "y", "z"))
         )
         total_axis_checks = len(after) * 3
-        records.append({
-            "maleSource": male_name,
-            "femaleTarget": female_name,
-            "vertices": len(after),
-            "polygons": len(female.data.polygons),
-            "topologyChanged": False,
-            "beforeBounds": bounds(before),
-            "afterBounds": bounds(after),
-            "movementMm": {
-                "min": round(min(moves) * 1000.0, 3),
-                "max": round(max(moves) * 1000.0, 3),
-                "mean": round(sum(moves) * 1000.0 / len(moves), 3),
-            },
-            "mappedTongueBoundsAxisContainmentPercent": round(
-                inside_mapped_tongue_bounds * 100.0 / total_axis_checks,
-                3,
-            ),
-        })
+        records.append(
+            {
+                "maleSource": male_name,
+                "femaleTarget": female_name,
+                "vertices": len(after),
+                "polygons": len(female.data.polygons),
+                "topologyChanged": False,
+                "beforeBounds": bounds(before),
+                "afterBounds": bounds(after),
+                "movementMm": {
+                    "min": round(min(moves) * 1000.0, 3),
+                    "max": round(max(moves) * 1000.0, 3),
+                    "mean": round(sum(moves) * 1000.0 / len(moves), 3),
+                },
+                "mappedTongueBoundsAxisContainmentPercent": round(
+                    inside_mapped_tongue_bounds * 100.0 / total_axis_checks,
+                    3,
+                ),
+            }
+        )
 
     output = Path(args.output).expanduser().resolve()
     report_path = Path(args.report).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    bpy.context.scene["IEOBOM_V58_GENIOGLOSSUS_ALIGNMENT"] = json.dumps({
-        "objects": [female for _, female in PAIRS],
-        "headAffineRmseMm": affine_rmse_mm,
-    })
+    bpy.context.scene["IEOBOM_V58_GENIOGLOSSUS_ALIGNMENT"] = json.dumps(
+        {
+            "objects": [female for _, female in PAIRS],
+            "headAffineRmseMm": affine_rmse_mm,
+        }
+    )
     bpy.ops.wm.save_as_mainfile(filepath=str(output), compress=True)
     report = {
         "sourceBlend": source_blend,

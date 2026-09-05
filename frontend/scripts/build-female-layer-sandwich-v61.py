@@ -135,7 +135,9 @@ def make_patch(region_name, settings, shell, muscle_tree, bone_tree, collection,
         # closest existing muscle/bone whenever the available gap permits it.
         structure_distance = min(muscle_distance, bone_distance)
         inset = max(MIN_SHELL_INSET, min(MAX_SHELL_INSET, structure_distance * CLEARANCE_RATIO))
-        vertex_data.append((shell_point, normal, bone_point, muscle_point, bone_distance, muscle_distance, inset, eligible))
+        vertex_data.append(
+            (shell_point, normal, bone_point, muscle_point, bone_distance, muscle_distance, inset, eligible)
+        )
 
     selected_faces = set()
     for polygon in shell.data.polygons:
@@ -144,14 +146,8 @@ def make_patch(region_name, settings, shell, muscle_tree, bone_tree, collection,
 
     used_indices = sorted({index for face in selected_faces for index in shell.data.polygons[face].vertices})
     remap = {source: target for target, source in enumerate(used_indices)}
-    vertices = [
-        tuple(vertex_data[index][0] - vertex_data[index][1] * vertex_data[index][6])
-        for index in used_indices
-    ]
-    faces = [
-        tuple(remap[index] for index in shell.data.polygons[face].vertices)
-        for face in sorted(selected_faces)
-    ]
+    vertices = [tuple(vertex_data[index][0] - vertex_data[index][1] * vertex_data[index][6]) for index in used_indices]
+    faces = [tuple(remap[index] for index in shell.data.polygons[face].vertices) for face in sorted(selected_faces)]
     mesh = bpy.data.meshes.new(f"IEOBOM_FEMALE_{region_name.upper()}_V61_MESH")
     mesh.from_pydata(vertices, [], faces)
     mesh.update(calc_edges=True)
@@ -201,7 +197,17 @@ def main() -> None:
     records = []
     for region_name, settings in REGIONS.items():
         bones = [obj for obj in skeleton if settings["pattern"].search(obj.name)]
-        records.append(make_patch(region_name, settings, shell_objects[0], muscle_tree, tree_from_objects(bones), collection, matte_material()))
+        records.append(
+            make_patch(
+                region_name,
+                settings,
+                shell_objects[0],
+                muscle_tree,
+                tree_from_objects(bones),
+                collection,
+                matte_material(),
+            )
+        )
         print("IEOBOM_V61_PROGRESS", json.dumps(records[-1]), flush=True)
 
     imported = shell_objects + skeleton

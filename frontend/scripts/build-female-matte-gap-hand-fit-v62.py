@@ -43,7 +43,7 @@ REGIONS = {
 
 
 def parse_args():
-    values = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    values = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     parser = argparse.ArgumentParser()
     parser.add_argument("--shell", required=True)
     parser.add_argument("--skeleton", required=True)
@@ -188,14 +188,17 @@ def make_gap_patch(region_name, settings, shell, muscle_tree, bone_tree, collect
         normal = (normal_matrix @ vertex.normal).normalized()
         bone_distance = bone_tree.find(point)[2]
         muscle_distance = muscle_tree.find(point)[2]
-        eligible = inside_bounds(point, settings["bounds"]) and bone_distance <= settings["boneLimit"] and muscle_distance >= settings["muscleGap"]
+        eligible = (
+            inside_bounds(point, settings["bounds"])
+            and bone_distance <= settings["boneLimit"]
+            and muscle_distance >= settings["muscleGap"]
+        )
         # Local bone-aware inset: always inside the shell, but outward of a
         # shallow bone whenever that is geometrically possible.
         inset = max(0.0001, min(0.0020, bone_distance * 0.25, muscle_distance * 0.35))
         data.append((point, normal, inset, eligible))
     selected_faces = {
-        polygon.index for polygon in shell.data.polygons
-        if sum(data[index][3] for index in polygon.vertices) >= 1
+        polygon.index for polygon in shell.data.polygons if sum(data[index][3] for index in polygon.vertices) >= 1
     }
     indices = sorted({index for face in selected_faces for index in shell.data.polygons[face].vertices})
     remap = {source: target for target, source in enumerate(indices)}
@@ -231,9 +234,22 @@ def main():
     muscle_work = bpy.data.collections.get("FEMALE_MUSCLE_WORK")
     if muscle_work is None:
         raise RuntimeError("FEMALE_MUSCLE_WORK missing")
-    muscle_objects = {obj for obj in recursive_objects(muscle_work) if obj.type == "MESH" and obj.data.polygons and not bool(obj.get("IEOBOM_webExclude"))}
-    all_work_collections = [collection for collection in bpy.data.collections if collection.name.startswith("FEMALE_") and "WORK" in collection.name]
-    all_work_objects = {obj for collection in all_work_collections for obj in recursive_objects(collection) if obj.type == "MESH" and obj.data.polygons}
+    muscle_objects = {
+        obj
+        for obj in recursive_objects(muscle_work)
+        if obj.type == "MESH" and obj.data.polygons and not bool(obj.get("IEOBOM_webExclude"))
+    }
+    all_work_collections = [
+        collection
+        for collection in bpy.data.collections
+        if collection.name.startswith("FEMALE_") and "WORK" in collection.name
+    ]
+    all_work_objects = {
+        obj
+        for collection in all_work_collections
+        for obj in recursive_objects(collection)
+        if obj.type == "MESH" and obj.data.polygons
+    }
     before_digest = geometry_digest(list(muscle_objects))
     shell_objects = import_glb(Path(args.shell).resolve(), "V64_SHELL")
     skeleton = import_glb(Path(args.skeleton).resolve(), "V64_BONE")
@@ -248,7 +264,11 @@ def main():
     coverage = []
     for region_name, settings in REGIONS.items():
         bones = [obj for obj in skeleton if settings["pattern"].search(obj.name)]
-        coverage.append(make_gap_patch(region_name, settings, shell, muscle_tree, tree_from_objects(bones), collection, fascia_material))
+        coverage.append(
+            make_gap_patch(
+                region_name, settings, shell, muscle_tree, tree_from_objects(bones), collection, fascia_material
+            )
+        )
         print("IEOBOM_V64_COVERAGE", json.dumps(coverage[-1]), flush=True)
 
     imported = shell_objects + skeleton

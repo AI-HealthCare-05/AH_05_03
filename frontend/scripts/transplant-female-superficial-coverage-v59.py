@@ -92,11 +92,15 @@ def make_deformation_field(
         tree.insert(point, index)
         displacements.append(displacement)
     tree.balance()
-    return tree, displacements, {
-        "sameTopologyPairs": pair_count,
-        "sourceCorrespondenceVertices": source_vertices,
-        "fieldSamples": len(samples),
-    }
+    return (
+        tree,
+        displacements,
+        {
+            "sameTopologyPairs": pair_count,
+            "sourceCorrespondenceVertices": source_vertices,
+            "fieldSamples": len(samples),
+        },
+    )
 
 
 def deform_point(tree: KDTree, displacements: list[Vector], point: Vector) -> tuple[Vector, float]:
@@ -131,9 +135,9 @@ def main() -> None:
     female_names = {canonical_name(obj).casefold() for obj in female_before}
     missing = sorted(
         (
-            obj for obj in male
-            if any(term in obj.name.casefold() for term in SURFACE_TERMS)
-            and obj.name.casefold() not in female_names
+            obj
+            for obj in male
+            if any(term in obj.name.casefold() for term in SURFACE_TERMS) and obj.name.casefold() not in female_names
         ),
         key=lambda item: item.name,
     )
@@ -179,21 +183,23 @@ def main() -> None:
         target.hide_viewport = web_excluded
         target.hide_render = web_excluded
         all_distances.extend(distances)
-        records.append({
-            "source": source.name,
-            "target": target.name,
-            "vertices": len(mesh.vertices),
-            "polygons": len(mesh.polygons),
-            "webExcludedUnplacedTemplate": web_excluded,
-            "nearestFieldDistanceMm": {
-                "mean": round(mean_distance * 1000.0, 3),
-                "max": round(max(distances) * 1000.0, 3) if distances else 0.0,
-            },
-            "movementMm": {
-                "mean": round(sum(movement) * 1000.0 / len(movement), 3) if movement else 0.0,
-                "max": round(max(movement) * 1000.0, 3) if movement else 0.0,
-            },
-        })
+        records.append(
+            {
+                "source": source.name,
+                "target": target.name,
+                "vertices": len(mesh.vertices),
+                "polygons": len(mesh.polygons),
+                "webExcludedUnplacedTemplate": web_excluded,
+                "nearestFieldDistanceMm": {
+                    "mean": round(mean_distance * 1000.0, 3),
+                    "max": round(max(distances) * 1000.0, 3) if distances else 0.0,
+                },
+                "movementMm": {
+                    "mean": round(sum(movement) * 1000.0 / len(movement), 3) if movement else 0.0,
+                    "max": round(max(movement) * 1000.0, 3) if movement else 0.0,
+                },
+            }
+        )
         if number % 10 == 0 or number == len(missing):
             print(f"IEOBOM_V59_PROGRESS {number}/{len(missing)}", flush=True)
 
@@ -239,10 +245,22 @@ def main() -> None:
         ],
     }
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
-    print("IEOBOM_V59_COMPLETE", json.dumps({key: report[key] for key in (
-        "outputBlend", "transplantedObjects", "renderableObjects",
-        "existingFemaleGeometryUnchanged", "nearestFieldDistanceMm",
-    )}), flush=True)
+    print(
+        "IEOBOM_V59_COMPLETE",
+        json.dumps(
+            {
+                key: report[key]
+                for key in (
+                    "outputBlend",
+                    "transplantedObjects",
+                    "renderableObjects",
+                    "existingFemaleGeometryUnchanged",
+                    "nearestFieldDistanceMm",
+                )
+            }
+        ),
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

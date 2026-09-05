@@ -69,9 +69,7 @@ def main() -> None:
     changed_matrices = []
     for obj, matrix in matrix_before.items():
         if obj.name in bpy.data.objects and any(
-            abs(obj.matrix_world[row][column] - matrix[row][column]) > 1e-8
-            for row in range(4)
-            for column in range(4)
+            abs(obj.matrix_world[row][column] - matrix[row][column]) > 1e-8 for row in range(4) for column in range(4)
         ):
             changed_matrices.append(obj.name)
     if changed_matrices:

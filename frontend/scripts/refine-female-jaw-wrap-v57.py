@@ -191,28 +191,32 @@ def main() -> None:
             if result is not None:
                 after_distances.append(result[0])
         obj["IEOBOM_jawWrapVersion"] = "v57"
-        records.append({
-            "name": name,
-            "headAffineMappedVertices": head_mapped,
-            "maxHeadAffineMoveMm": round(max_head_move * 1000.0, 3),
-            "movedVertices": moved,
-            "maxMoveMm": round(max_move * 1000.0, 3),
-            "recoloredUpperTendonFaces": recolored_faces,
-            "beforeUpperRegion": stats(before_distances),
-            "afterJawBand": stats(after_distances),
-        })
+        records.append(
+            {
+                "name": name,
+                "headAffineMappedVertices": head_mapped,
+                "maxHeadAffineMoveMm": round(max_head_move * 1000.0, 3),
+                "movedVertices": moved,
+                "maxMoveMm": round(max_move * 1000.0, 3),
+                "recoloredUpperTendonFaces": recolored_faces,
+                "beforeUpperRegion": stats(before_distances),
+                "afterJawBand": stats(after_distances),
+            }
+        )
 
     output = Path(args.output).expanduser().resolve()
     report_path = Path(args.report).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    bpy.context.scene["IEOBOM_V57_JAW_WRAP"] = json.dumps({
-        "objects": list(PLATYSMA_NAMES),
-        "blendStartZ": BLEND_START_Z,
-        "fullFitZ": FULL_FIT_Z,
-        "shellMarginMm": SHELL_MARGIN * 1000.0,
-        "headBlendZ": [HEAD_BLEND_START_Z, HEAD_BLEND_END_Z],
-    })
+    bpy.context.scene["IEOBOM_V57_JAW_WRAP"] = json.dumps(
+        {
+            "objects": list(PLATYSMA_NAMES),
+            "blendStartZ": BLEND_START_Z,
+            "fullFitZ": FULL_FIT_Z,
+            "shellMarginMm": SHELL_MARGIN * 1000.0,
+            "headBlendZ": [HEAD_BLEND_START_Z, HEAD_BLEND_END_Z],
+        }
+    )
     bpy.ops.wm.save_as_mainfile(filepath=str(output), compress=True)
     report = {
         "sourceBlend": source_blend,

@@ -29,7 +29,8 @@ def main() -> None:
     args = parse_args()
     helpers = load_export_helpers()
     sources = {
-        obj for obj in helpers.collection_objects("FEMALE_MUSCLE_WORK")
+        obj
+        for obj in helpers.collection_objects("FEMALE_MUSCLE_WORK")
         if obj.type in {"MESH", "CURVE", "SURFACE"}
         and not bool(obj.get("IEOBOM_webExclude"))
         and (obj.type != "MESH" or bool(obj.data.polygons))

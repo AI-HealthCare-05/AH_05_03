@@ -61,7 +61,10 @@ def main() -> None:
     output = Path(args.output).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
-    print("IEOBOM_HEAD_AFFINE", json.dumps({k: report[k] for k in ("sampleCount", "rmseMm", "medianErrorMm", "maxErrorMm")}))
+    print(
+        "IEOBOM_HEAD_AFFINE",
+        json.dumps({k: report[k] for k in ("sampleCount", "rmseMm", "medianErrorMm", "maxErrorMm")}),
+    )
 
 
 if __name__ == "__main__":

@@ -43,7 +43,7 @@ REGIONS = {
 
 
 def parse_args():
-    values = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    values = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     parser = argparse.ArgumentParser()
     parser.add_argument("--shell", required=True)
     parser.add_argument("--skeleton", required=True)
@@ -234,18 +234,17 @@ def make_bone_gap_patch(name, settings, shell, shell_points, shell_faces, muscle
             }
         )
     seed_faces = {
-        polygon.index
-        for polygon in shell.data.polygons
-        if any(data[index]["eligible"] for index in polygon.vertices)
+        polygon.index for polygon in shell.data.polygons if any(data[index]["eligible"] for index in polygon.vertices)
     }
     seed_vertices = {index for face_index in seed_faces for index in shell_faces[face_index]}
     selected_faces = set(seed_faces)
     for polygon in shell.data.polygons:
         if polygon.index in selected_faces or not any(index in seed_vertices for index in polygon.vertices):
             continue
-        if all(inside_bounds(shell_points[index], settings["bounds"]) for index in polygon.vertices) and min(
-            data[index]["boneDistance"] for index in polygon.vertices
-        ) <= settings["boneLimit"] * 1.10:
+        if (
+            all(inside_bounds(shell_points[index], settings["bounds"]) for index in polygon.vertices)
+            and min(data[index]["boneDistance"] for index in polygon.vertices) <= settings["boneLimit"] * 1.10
+        ):
             selected_faces.add(polygon.index)
     return create_patch(
         name,
@@ -270,9 +269,7 @@ def make_hand_patch(shell, shell_points, shell_faces, center, hand_bone_tree, co
         inset = 0.0008
         data.append({"position": point - normal * inset, "inset": inset, "eligible": eligible})
     selected_faces = {
-        polygon.index
-        for polygon in shell.data.polygons
-        if any(data[index]["eligible"] for index in polygon.vertices)
+        polygon.index for polygon in shell.data.polygons if any(data[index]["eligible"] for index in polygon.vertices)
     }
     return create_patch(
         "hands_digits",
@@ -378,16 +375,10 @@ def make_exposed_bone_sheath(name, label, bones, muscle_tree, shell_bvh, center,
         for vertex in bone.data.vertices:
             point = bone.matrix_world @ vertex.co
             normal = (normal_matrix @ vertex.normal).normalized()
-            eligible = (
-                inside_bounds(point, bounds)
-                and normal.y > -0.10
-                and muscle_tree.find(point)[2] >= 0.002
-            )
+            eligible = inside_bounds(point, bounds) and normal.y > -0.10 and muscle_tree.find(point)[2] >= 0.002
             data.append((point, normal, eligible))
         selected_faces = [
-            polygon
-            for polygon in bone.data.polygons
-            if sum(data[index][2] for index in polygon.vertices) >= 1
+            polygon for polygon in bone.data.polygons if sum(data[index][2] for index in polygon.vertices) >= 1
         ]
         if not selected_faces:
             continue
@@ -485,9 +476,7 @@ def main():
     coverage = []
     thorax_bones = [obj for obj in skeleton if re.search(r"scapula|rib", searchable(obj), re.I)]
     pelvis_bones = [
-        obj
-        for obj in skeleton
-        if re.search(r"hip.?bone|sacrum|coccyx|vertebra[ _-]l[45]", searchable(obj), re.I)
+        obj for obj in skeleton if re.search(r"hip.?bone|sacrum|coccyx|vertebra[ _-]l[45]", searchable(obj), re.I)
     ]
     coverage.append(
         make_bone_gap_patch(

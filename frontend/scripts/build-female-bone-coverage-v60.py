@@ -136,11 +136,7 @@ def make_patch(
             seed_faces.add(polygon.index)
 
     # Add one constrained topology ring to remove pinholes and soften boundaries.
-    seed_vertices = {
-        index
-        for face_index in seed_faces
-        for index in shell.data.polygons[face_index].vertices
-    }
+    seed_vertices = {index for face_index in seed_faces for index in shell.data.polygons[face_index].vertices}
     selected_faces = set(seed_faces)
     for polygon in shell.data.polygons:
         if polygon.index in selected_faces or not any(index in seed_vertices for index in polygon.vertices):
@@ -152,11 +148,9 @@ def make_patch(
         ):
             selected_faces.add(polygon.index)
 
-    used_indices = sorted({
-        index
-        for face_index in selected_faces
-        for index in shell.data.polygons[face_index].vertices
-    })
+    used_indices = sorted(
+        {index for face_index in selected_faces for index in shell.data.polygons[face_index].vertices}
+    )
     remap = {source: target for target, source in enumerate(used_indices)}
     vertices = []
     for source_index in used_indices:
@@ -204,10 +198,7 @@ def main() -> None:
         raise RuntimeError(f"{COLLECTION_NAME} already exists")
     existing = [obj for obj in recursive_objects(work) if obj.type == "MESH"]
     existing_digest = geometry_digest(existing)
-    visible_muscles = [
-        obj for obj in existing
-        if obj.data.polygons and not bool(obj.get("IEOBOM_webExclude"))
-    ]
+    visible_muscles = [obj for obj in existing if obj.data.polygons and not bool(obj.get("IEOBOM_webExclude"))]
     muscle_tree = tree_from_objects(visible_muscles, 500_000)
     shell_objects = import_glb(Path(args.shell).resolve(), "V60_SHELL")
     skeleton = import_glb(Path(args.skeleton).resolve(), "V60_BONE")
@@ -223,15 +214,17 @@ def main() -> None:
         bones = [obj for obj in skeleton if settings["pattern"].search(obj.name)]
         if not bones:
             raise RuntimeError(f"No bones found for {region_name}")
-        records.append(make_patch(
-            region_name,
-            settings,
-            shell,
-            muscle_tree,
-            tree_from_objects(bones),
-            coverage_collection,
-            material,
-        ))
+        records.append(
+            make_patch(
+                region_name,
+                settings,
+                shell,
+                muscle_tree,
+                tree_from_objects(bones),
+                coverage_collection,
+                material,
+            )
+        )
         print("IEOBOM_V60_PROGRESS", json.dumps(records[-1]), flush=True)
 
     # Imported QA references must not become part of the authoring file.

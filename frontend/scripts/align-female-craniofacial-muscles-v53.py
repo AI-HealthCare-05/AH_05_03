@@ -48,9 +48,7 @@ def world_bounds(obj: bpy.types.Object) -> tuple[list[float], list[float]]:
 def main() -> None:
     values = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     if len(values) != 2:
-        raise SystemExit(
-            "usage: blender -b SOURCE.blend --python SCRIPT -- OUTPUT.blend REPORT.json"
-        )
+        raise SystemExit("usage: blender -b SOURCE.blend --python SCRIPT -- OUTPUT.blend REPORT.json")
     output_blend = Path(values[0]).resolve()
     report_path = Path(values[1]).resolve()
     source_blend = bpy.data.filepath
@@ -62,8 +60,7 @@ def main() -> None:
         (
             obj
             for obj in recursive_objects(collection)
-            if obj.type in {"MESH", "CURVE", "SURFACE"}
-            and obj.name.startswith(TARGET_PREFIXES)
+            if obj.type in {"MESH", "CURVE", "SURFACE"} and obj.name.startswith(TARGET_PREFIXES)
         ),
         key=lambda obj: obj.name,
     )

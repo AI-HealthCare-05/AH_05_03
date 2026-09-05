@@ -20,7 +20,7 @@ SAFE_DEPTH = 0.001
 
 
 def parse_args():
-    values = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+    values = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     parser = argparse.ArgumentParser()
     parser.add_argument("--shell", required=True)
     parser.add_argument("--skeleton", required=True)
@@ -45,7 +45,9 @@ def load_helpers():
 
 
 def searchable(obj):
-    return " ".join((obj.name, str(obj.get("sourceName", "")), str(obj.get("label", "")), str(obj.get("anatomyId", ""))))
+    return " ".join(
+        (obj.name, str(obj.get("sourceName", "")), str(obj.get("label", "")), str(obj.get("anatomyId", "")))
+    )
 
 
 def fit(objects, bvh, center):
@@ -88,12 +90,20 @@ def main():
     imported_skeleton = import_meshes(Path(args.skeleton).resolve())
     imported_records = fit(imported_skeleton, bvh, center)
     authoring_skeleton = [
-        obj for obj in bpy.data.objects
-        if obj.type == "MESH" and obj not in imported_skeleton and obj is not shell
-        and (str(obj.get("anatomySystem", "")).lower() == "skeletal" or any(collection.name == "SKELETON_V27" for collection in obj.users_collection))
+        obj
+        for obj in bpy.data.objects
+        if obj.type == "MESH"
+        and obj not in imported_skeleton
+        and obj is not shell
+        and (
+            str(obj.get("anatomySystem", "")).lower() == "skeletal"
+            or any(collection.name == "SKELETON_V27" for collection in obj.users_collection)
+        )
     ]
     authoring_records = fit(authoring_skeleton, bvh, center)
-    export_report = load_helpers().export_layer(Path(args.skeleton_output).resolve(), set(imported_skeleton), "skeletal")
+    export_report = load_helpers().export_layer(
+        Path(args.skeleton_output).resolve(), set(imported_skeleton), "skeletal"
+    )
 
     imported = imported_skeleton + shell_objects
     imported_collections = {collection for obj in imported for collection in obj.users_collection}
@@ -108,11 +118,13 @@ def main():
 
     output = Path(args.output).expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
-    bpy.context.scene["IEOBOM_V65_EXPOSED_BONE_FIT"] = json.dumps({
-        "safeDepthMm": SAFE_DEPTH * 1000,
-        "authoringObjects": len(authoring_records),
-        "authoringVertices": sum(record["vertices"] for record in authoring_records),
-    })
+    bpy.context.scene["IEOBOM_V65_EXPOSED_BONE_FIT"] = json.dumps(
+        {
+            "safeDepthMm": SAFE_DEPTH * 1000,
+            "authoringObjects": len(authoring_records),
+            "authoringVertices": sum(record["vertices"] for record in authoring_records),
+        }
+    )
     bpy.ops.wm.save_as_mainfile(filepath=str(output), compress=True)
     report = {
         "version": "v65-exposed-bone-fit",
@@ -130,13 +142,19 @@ def main():
         ],
     }
     Path(args.report).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
-    print("IEOBOM_V65_COMPLETE", json.dumps({
-        "authoringObjects": len(authoring_records),
-        "authoringVertices": sum(record["vertices"] for record in authoring_records),
-        "skeletonObjects": len(imported_records),
-        "skeletonVertices": sum(record["vertices"] for record in imported_records),
-        "skeletonExport": export_report,
-    }), flush=True)
+    print(
+        "IEOBOM_V65_COMPLETE",
+        json.dumps(
+            {
+                "authoringObjects": len(authoring_records),
+                "authoringVertices": sum(record["vertices"] for record in authoring_records),
+                "skeletonObjects": len(imported_records),
+                "skeletonVertices": sum(record["vertices"] for record in imported_records),
+                "skeletonExport": export_report,
+            }
+        ),
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

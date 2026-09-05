@@ -21,9 +21,7 @@ Z_MAX_METERS = 0.77
 def main() -> None:
     values = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     if len(values) != 2:
-        raise SystemExit(
-            "usage: blender -b SOURCE.blend --python SCRIPT -- OUTPUT.blend REPORT.json"
-        )
+        raise SystemExit("usage: blender -b SOURCE.blend --python SCRIPT -- OUTPUT.blend REPORT.json")
     output_blend = Path(values[0]).resolve()
     report_path = Path(values[1]).resolve()
     source_blend = bpy.data.filepath
@@ -41,9 +39,7 @@ def main() -> None:
     }
     matrix = shell.matrix_world
     world_points = [matrix @ vertex.co for vertex in shell.data.vertices]
-    center_x = (
-        min(point.x for point in world_points) + max(point.x for point in world_points)
-    ) / 2
+    center_x = (min(point.x for point in world_points) + max(point.x for point in world_points)) / 2
 
     mesh = bmesh.new()
     mesh.from_mesh(shell.data)
@@ -84,9 +80,13 @@ def main() -> None:
     changed_non_shell = []
     for name, signature in non_shell_signatures.items():
         obj = bpy.data.objects.get(name)
-        current = None if obj is None else (
-            obj.type,
-            len(obj.data.vertices) if obj.type == "MESH" else None,
+        current = (
+            None
+            if obj is None
+            else (
+                obj.type,
+                len(obj.data.vertices) if obj.type == "MESH" else None,
+            )
         )
         if current != signature:
             changed_non_shell.append({"name": name, "before": signature, "after": current})
