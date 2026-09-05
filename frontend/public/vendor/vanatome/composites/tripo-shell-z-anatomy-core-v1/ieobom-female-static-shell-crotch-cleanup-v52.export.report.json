@@ -1,0 +1,15 @@
+{
+  "source": "/Users/fabxoe/Downloads/models/low_polygon_work_6hour-female-shell-v52-crotch-cleanup.blend",
+  "skeletonOutput": "/private/tmp/ieobom-v52-export-validation-skeleton.glb",
+  "skeletonBytes": 5501904,
+  "skeletonMeshes": 231,
+  "correctedWorkMeshes": 60,
+  "fittedFemaleHeadMeshes": 50,
+  "staticWorldBaked": true,
+  "controllers": 0,
+  "animations": 0,
+  "shellOutput": "/Users/fabxoe/workbench/ieobom/frontend/public/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-static-shell-crotch-cleanup-v52.glb",
+  "shellBytes": 4305216,
+  "shellVertices": 79497,
+  "shellTriangles": 158954
+}

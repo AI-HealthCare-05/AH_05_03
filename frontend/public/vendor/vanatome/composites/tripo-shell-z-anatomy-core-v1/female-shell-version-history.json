@@ -1,0 +1,95 @@
+{
+  "asset": "ieobom female web shell",
+  "currentVersion": "v52",
+  "versions": [
+    {
+      "version": "v1",
+      "vertices": 979805,
+      "triangles": 1959610,
+      "bytes": 7038156,
+      "sha256": "c27fc69c1dab2d9cfa1e87fc90717c6e2f5a674a1d8c0bc27986d30f23045259",
+      "status": "superseded",
+      "note": "원본 고밀도 웹 외피"
+    },
+    {
+      "version": "v2",
+      "vertices": 119999,
+      "triangles": 239998,
+      "bytes": 506412,
+      "sha256": "518704d2a6939393d30ed00d8f92fe89646de8aff2a4fcb29fc4ce96a22dbed1",
+      "status": "retained-for-rollback",
+      "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-shell-shared-frame-v2.glb",
+      "note": "손가락·발가락 끝 밀도 3배 보호, 장면 작업 메타데이터 제거"
+    },
+    {
+      "version": "v3",
+      "vertices": 80000,
+      "triangles": 160000,
+      "bytes": 354008,
+      "sha256": "db3724154302a6cfa06ed5a6b9419c078ac9cd0100943370de2406d543dd48c7",
+      "status": "retained-for-rollback",
+      "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-shell-shared-frame-v3.glb",
+      "note": "v2의 말단 3배 밀도 편향을 유지한 균일 감축"
+    },
+    {
+      "version": "v4",
+      "vertices": 30000,
+      "triangles": 60000,
+      "bytes": 145556,
+      "sha256": "864ac9dce879e069610f7c5367fff5e6d012666d4645cf53e1c9251c9f589453",
+      "status": "retained-for-rollback",
+      "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-shell-shared-frame-v4.glb",
+      "note": "몸통·다리 와이어 밀도를 추가 감축하고 손가락·발가락 말단은 3배 가중 보호"
+    },
+    {
+      "version": "v5",
+      "vertices": 36205,
+      "quads": 35924,
+      "triangles": 72398,
+      "bytes": 159076,
+      "sha256": "a590a1b1dfd6d0b7ac9fcde01b2046ac62b5c143fec49108aafc3775f4ec49c5",
+      "status": "superseded",
+      "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-shell-shared-frame-v5.glb",
+      "note": "쿼드 리토폴로지 후 원본 표면 재투영, 손·발 말단은 쿼드 세분화로 최소 3배 이상 보호하고 GLB에서 대각선 삼각분할"
+    },
+    {
+      "version": "v50",
+      "vertices": 32610,
+      "quads": 32606,
+      "triangles": 65212,
+      "bytes": 4127608,
+      "sha256": "0fa81fbe8feb138b40e4bdac8d17a911cfa41565ecedaa60ea1617ea3ddb4aba",
+      "status": "rejected-visual-qa",
+      "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-static-shell-uniform-quad-flow-v50.glb",
+      "note": "전신 공통 5 mm 복셀 쿼드 흐름. 손가락·발가락 사이가 합쳐져 서비스 미채택"
+    },
+    {
+      "version": "v51",
+      "vertices": 79498,
+      "quads": 79496,
+      "triangles": 158992,
+      "bytes": 4305596,
+      "sha256": "8929f120a89e01625f9a28e725955fc345e0503554f80bad26205d5b0aeeb321",
+      "status": "superseded",
+      "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-static-shell-uniform-quad-flow-v51.glb",
+      "note": "손·발끝 예외 없이 전신 공통 3.2 mm 복셀 리메시와 원본 표면 재투영. Blender 100% 쿼드, GLB 대각선 삼각분할"
+    },
+    {
+      "version": "v52",
+      "vertices": 79497,
+      "quads": 79477,
+      "triangles": 158954,
+      "bytes": 4305216,
+      "sha256": "94ac40071d5cbf33c5df3aef1c3133c4f345a4cf4e1fc173a183d04ce0df69c2",
+      "status": "active",
+      "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-static-shell-crotch-cleanup-v52.glb",
+      "note": "v51에서 가랑이 중앙을 가로지르던 8~28 mm 장거리 쿼드 19개만 제거. 허벅지·손발·골격 변경 없음"
+    }
+  ],
+  "maleReference": {
+    "vertices": 85772,
+    "triangles": 134265,
+    "note": "z-anatomy-1.4.0-shell-skeleton-core.glb 중 anatomyId=body-shell 합계"
+  },
+  "blendRollback": "/Users/fabxoe/Downloads/models/low_polygon_work_6hour_finger-mak-hand-anatomy-female-fit-work-v34-explicit-navicular-anatomy-interface-exp.pre-shell-v5-quad-20260904.blend"
+}
