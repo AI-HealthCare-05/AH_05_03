@@ -82,7 +82,11 @@ def main() -> None:
     changed_protected = []
     for name, matrix in protected.items():
         obj = bpy.data.objects.get(name)
-        if obj is None or any(abs(a - b) > 1e-9 for row_a, row_b in zip(obj.matrix_world, matrix) for a, b in zip(row_a, row_b)):
+        if obj is None or any(
+            abs(a - b) > 1e-9
+            for row_a, row_b in zip(obj.matrix_world, matrix, strict=True)
+            for a, b in zip(row_a, row_b, strict=True)
+        ):
             changed_protected.append(name)
     if changed_protected:
         raise RuntimeError(f"Protected objects changed: {changed_protected[:10]}")

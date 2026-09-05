@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix
 from mathutils.kdtree import KDTree
 
 

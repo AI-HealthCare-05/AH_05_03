@@ -266,7 +266,6 @@ def make_hand_patch(shell, shell_points, shell_faces, center, hand_bone_tree, co
     for index, vertex in enumerate(shell.data.vertices):
         point = shell_points[index]
         normal = (normal_matrix @ vertex.normal).normalized()
-        bone_distance = hand_bone_tree.find(point)[2]
         eligible = is_hand_point(point, center.x)
         inset = 0.0008
         data.append({"position": point - normal * inset, "inset": inset, "eligible": eligible})

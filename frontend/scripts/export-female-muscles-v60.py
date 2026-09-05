@@ -7,8 +7,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-import bpy
-
 
 def parse_args() -> argparse.Namespace:
     values = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
