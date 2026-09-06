@@ -11,6 +11,7 @@ from app.dtos.households import (
     HouseholdListData,
     HouseholdMembershipData,
     HouseholdMembershipListData,
+    TransferMasterRequest,
 )
 from app.models.service_accounts import ServiceAccount
 from app.services.households import HouseholdService
@@ -82,6 +83,26 @@ async def list_household_memberships(
     service: Annotated[HouseholdService, Depends(HouseholdService)],
 ) -> ApiResponse[HouseholdMembershipListData]:
     return ApiResponse(data=await service.list_members(household_id, account), message="멤버십을 조회했습니다.")
+
+
+@household_router.post(
+    "/{household_id}/transfer-master",
+    response_model=ApiResponse[HouseholdData],
+    responses=error_responses(
+        *_AUTH_ERRORS,
+        ErrorCode.HOUSEHOLD_NOT_FOUND,
+        ErrorCode.HOUSEHOLD_STATE_CONFLICT,
+    ),
+    summary="가정 마스터 권한 위임",
+)
+async def transfer_household_master(
+    household_id: uuid.UUID,
+    payload: TransferMasterRequest,
+    account: Annotated[ServiceAccount, Depends(require_active_account)],
+    service: Annotated[HouseholdService, Depends(HouseholdService)],
+) -> ApiResponse[HouseholdData]:
+    data = await service.transfer_master(household_id, account, payload.target_account_id)
+    return ApiResponse(data=data, message="가정 마스터 권한을 위임했습니다.")
 
 
 @household_router.post(

@@ -111,12 +111,14 @@ export class ServerApiClient {
     });
   }
 
+
   public getAccount(): Promise<AccountSummary> {
     return this.request("/account", { authenticated: true });
   }
 
-  public closeAccount(): Promise<AccountCloseData> {
-    return this.request("/account", { method: "DELETE", authenticated: true });
+  public closeAccount(purgeHealthData: boolean = false): Promise<AccountCloseData> {
+    const query = purgeHealthData ? "?purge_health_data=true" : "";
+    return this.request(`/account${query}`, { method: "DELETE", authenticated: true });
   }
 
   public getSubscription(): Promise<SubscriptionData> {
@@ -496,6 +498,14 @@ export class ServerApiClient {
     return this.request(`/households/${encodeURIComponent(householdId)}/leave`, {
       method: "POST",
       authenticated: true,
+    });
+  }
+
+  public transferHouseholdMaster(householdId: string, targetAccountId: string): Promise<HouseholdData> {
+    return this.request(`/households/${encodeURIComponent(householdId)}/transfer-master`, {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify({ target_account_id: targetAccountId }),
     });
   }
 

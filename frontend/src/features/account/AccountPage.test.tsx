@@ -72,6 +72,7 @@ describe("AccountPage", () => {
     mockAccountReads();
     vi.mocked(serverApiClient.listHouseholds).mockResolvedValue([{
       id: "household-id",
+      master_account_id: "account-id",
       status: "active",
       created_at: "2026-08-20T00:00:00Z",
       row_version: 1,
@@ -119,8 +120,88 @@ describe("AccountPage", () => {
     await user.type(within(dialog).getByRole("textbox", { name: "계정 이메일 입력" }), "member@example.com");
     await user.click(within(dialog).getByRole("button", { name: "계정 종료" }));
 
-    expect(await screen.findByText("서비스 계정을 종료했습니다. 이 브라우저의 로컬 건강정보는 삭제되지 않았습니다.")).toBeInTheDocument();
+    expect(await screen.findByText("서비스 계정을 종료했습니다. 건강정보는 보존됩니다.")).toBeInTheDocument();
     expect(serverApiClient.closeAccount).toHaveBeenCalledOnce();
+  });
+
+  it("이미 활성 가정이 있으면 가정 만들기 버튼이 비활성화된다", async () => {
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    mockAccountReads();
+    vi.mocked(serverApiClient.listHouseholds).mockResolvedValue([{
+      id: "household-1",
+      master_account_id: "account-id",
+      status: "active",
+      created_at: "2026-08-20T00:00:00Z",
+      row_version: 1,
+    }]);
+
+    renderAccountPage();
+    await screen.findByRole("heading", { name: "member@example.com" });
+
+    const createButton = screen.getByRole("button", { name: "가정 만들기" });
+    expect(createButton).toBeDisabled();
+    expect(screen.getByText("가정은 계정당 1개만 소속될 수 있습니다 (1계정 1가정 원칙).")).toBeInTheDocument();
+  });
+
+  it("마스터는 다른 활성 멤버에게 마스터 권한을 위임할 수 있다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    mockAccountReads();
+    vi.mocked(serverApiClient.listHouseholds).mockResolvedValue([{
+      id: "household-1",
+      master_account_id: "account-id",
+      status: "active",
+      created_at: "2026-08-20T00:00:00Z",
+      row_version: 1,
+    }]);
+    vi.spyOn(serverApiClient, "listHouseholdMemberships").mockResolvedValue([
+      {
+        id: "mem-1",
+        household_id: "household-1",
+        account_id: "account-id",
+        masked_email: "mem***@example.com",
+        local_profile_ref: null,
+        status: "active",
+        joined_at: "2026-08-20T00:00:00Z",
+        left_at: null,
+        row_version: 1,
+        is_master: true,
+      },
+      {
+        id: "mem-2",
+        household_id: "household-1",
+        account_id: "other-id",
+        masked_email: "oth***@example.com",
+        local_profile_ref: null,
+        status: "active",
+        joined_at: "2026-08-21T00:00:00Z",
+        left_at: null,
+        row_version: 1,
+        is_master: false,
+      },
+    ]);
+    const transferSpy = vi.spyOn(serverApiClient, "transferHouseholdMaster").mockResolvedValue({
+      id: "household-1",
+      master_account_id: "other-id",
+      status: "active",
+      created_at: "2026-08-20T00:00:00Z",
+      row_version: 2,
+    });
+
+    renderAccountPage();
+    await screen.findByRole("heading", { name: "member@example.com" });
+    await user.click(screen.getByRole("button", { name: "멤버 보기" }));
+
+    const transferButton = await screen.findByRole("button", { name: "마스터 위임" });
+    expect(transferButton).toBeInTheDocument();
+    await user.click(transferButton);
+
+    const dialog = screen.getByRole("alertdialog", { name: "가정 마스터 권한을 위임할까요?" });
+    expect(dialog).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "마스터 위임" }));
+
+    expect(transferSpy).toHaveBeenCalledWith("household-1", "other-id");
+    expect(await screen.findByText("oth***@example.com 님에게 가정 마스터 권한을 위임했습니다.")).toBeInTheDocument();
   });
 
   it("메일 링크 fragment의 토큰을 일치하는 받은 초대에만 채운다", async () => {

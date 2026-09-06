@@ -81,6 +81,36 @@ export async function setupE2eServerMocks(
       }),
   );
 
+  // 1-1. Password Reset Request
+  await page.route(
+    (url) => url.pathname === "/api/v1/auth/password-reset/request",
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: null,
+          message: "입력하신 이메일로 비밀번호 재설정 안내를 전송했습니다.",
+        }),
+      }),
+  );
+
+  // 1-2. Password Reset Confirm
+  await page.route(
+    (url) => url.pathname === "/api/v1/auth/password-reset/confirm",
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          data: null,
+          message: "비밀번호가 성공적으로 변경되었습니다.",
+        }),
+      }),
+  );
+
   // 2. Account
   await page.route(
     (url) => url.pathname === "/api/v1/account",

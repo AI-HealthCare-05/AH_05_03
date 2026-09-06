@@ -472,6 +472,16 @@ main {
   font-weight: 800;
 }
 
+.master-badge {
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: #854d0e;
+  background: #fef9c3;
+  font-size: 0.7rem;
+  font-weight: 800;
+  margin-left: 4px;
+}
+
 .membership-panel time,
 .membership-panel span,
 .profile-link-row span {

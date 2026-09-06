@@ -55,6 +55,8 @@ export interface PlanChangeData extends SubscriptionData {
 
 export interface HouseholdData {
   id: string;
+  created_by_account_id?: string;
+  master_account_id: string;
   status: "active" | "closed";
   created_at: string;
   row_version: number;
@@ -73,6 +75,7 @@ export interface HouseholdMembershipData {
 export interface HouseholdMembershipListItemData extends HouseholdMembershipData {
   masked_email: string;
   local_profile_ref: string | null;
+  is_master?: boolean;
 }
 
 export interface ProfileLinkData {
@@ -120,6 +123,7 @@ export interface AccountCloseData {
   closed_at: string;
   subscription_status: "cancelled";
   local_data_deleted: false;
+  health_data_purged?: boolean;
 }
 
 export interface ChatSessionData {
