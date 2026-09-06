@@ -76,6 +76,12 @@ services:
       REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-false}
       REFRESH_COOKIE_SAMESITE: ${REFRESH_COOKIE_SAMESITE:-lax}
       API_ERROR_INCLUDE_DETAILS: ${API_ERROR_INCLUDE_DETAILS:-false}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@ieobom.local}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-이어봄}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      SMTP_USE_STARTTLS: ${SMTP_USE_STARTTLS:-false}
     networks:
       - app
     depends_on:
