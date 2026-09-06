@@ -121,7 +121,38 @@ describe("AccountPage", () => {
     await user.click(within(dialog).getByRole("button", { name: "계정 종료" }));
 
     expect(await screen.findByText("서비스 계정을 종료했습니다. 건강정보는 보존됩니다.")).toBeInTheDocument();
-    expect(serverApiClient.closeAccount).toHaveBeenCalledOnce();
+    expect(serverApiClient.closeAccount).toHaveBeenCalledWith(false);
+  });
+
+  it("계정 종료 시 건강정보 영구 폐기를 선택하면 purge=true로 닫고 폐기 완료 메시지를 보여준다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    const closeSpy = vi.spyOn(serverApiClient, "closeAccount").mockResolvedValue({
+      account_id: "account-id",
+      status: "closed",
+      closed_at: "2026-08-20T00:00:00Z",
+      subscription_status: "cancelled",
+      local_data_deleted: false,
+      health_data_purged: true,
+    });
+    mockAccountReads();
+
+    renderAccountPage();
+    await screen.findByRole("heading", { name: "member@example.com" });
+    await user.click(screen.getByRole("button", { name: "계정 종료" }));
+    const dialog = screen.getByRole("alertdialog", { name: "서비스 계정을 종료할까요?" });
+    expect(dialog).toBeInTheDocument();
+
+    expect(within(dialog).getByRole("button", { name: ".ieobom 백업 다운로드" })).toBeInTheDocument();
+    const purgeCheckbox = within(dialog).getByRole("checkbox", { name: "서버에 저장된 내 건강정보를 즉시 영구 폐기합니다" });
+    expect(purgeCheckbox).toBeInTheDocument();
+    await user.click(purgeCheckbox);
+
+    await user.type(within(dialog).getByRole("textbox", { name: "계정 이메일 입력" }), "member@example.com");
+    await user.click(within(dialog).getByRole("button", { name: "계정 종료" }));
+
+    expect(await screen.findByText("서비스 계정을 종료하고 서버의 건강정보를 영구 폐기했습니다.")).toBeInTheDocument();
+    expect(closeSpy).toHaveBeenCalledWith(true);
   });
 
   it("이미 활성 가정이 있으면 가정 만들기 버튼이 비활성화된다", async () => {
