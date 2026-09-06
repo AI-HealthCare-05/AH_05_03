@@ -2106,6 +2106,95 @@ main {
   font-weight: 500;
 }
 
+.birth-date-field {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.birth-date-field legend {
+  margin-bottom: 7px;
+  padding: 0;
+  color: var(--muted-strong);
+  font-size: 0.83rem;
+  font-weight: 750;
+}
+
+.birth-date-input {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(64px, 1.5fr) auto minmax(36px, 0.7fr) auto minmax(36px, 0.7fr) auto 32px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 10px;
+  background: white;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.birth-date-input:focus-within {
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(57, 118, 246, 0.14);
+}
+
+.product-form .birth-date-input input,
+.ui-preview-form .birth-date-input input {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 12px 2px;
+  outline: 0;
+  background: transparent;
+  text-align: center;
+}
+
+.birth-date-input > span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.product-form .birth-date-input .birth-date-native,
+.ui-preview-form .birth-date-input .birth-date-native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.birth-date-calendar {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  color: var(--muted-strong);
+  background: transparent;
+  cursor: pointer;
+}
+
+.birth-date-calendar:hover {
+  color: var(--blue-700);
+  background: var(--blue-50);
+}
+
+.birth-date-calendar svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
 .form-actions {
   margin-top: 3px;
   display: flex;
@@ -5515,4 +5604,3 @@ main {
     flex-direction: column;
   }
 }
-

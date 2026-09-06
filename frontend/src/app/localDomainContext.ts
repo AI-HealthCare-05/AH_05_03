@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 
-import type { FamilyProfile, HealthRecord, HealthRecordType } from "../shared/local/domainContracts";
+import type { FamilyProfile, Gender, HealthRecord, HealthRecordType } from "../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../shared/local/localDomainRuntime";
 
 export const PRIMARY_HOUSEHOLD_ID = "ieobom-primary-household";
@@ -9,6 +9,7 @@ export interface CreateProfileInput {
   displayName: string;
   relationship: string;
   birthDate?: `${number}-${number}-${number}`;
+  gender?: Gender | null;
 }
 
 export interface UpdateProfileInput extends CreateProfileInput {
