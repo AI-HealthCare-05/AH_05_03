@@ -201,6 +201,15 @@ if ! curl --fail --silent --show-error "http://127.0.0.1:${HTTP_PORT}/healthz" >
   exit 1
 fi
 
+echo "Verifying 20 risk bundles and trajectory table"
+if ! compose exec -T fastapi python -c \
+  "import json, urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/v1/predictions/model-info'))['data']; assert len(data['models']) == 20, len(data['models']); assert data['trajectory']['available']"; then
+  echo "Model bundle deployment check failed." >&2
+  compose ps >&2
+  compose logs --tail 200 fastapi ai-worker >&2
+  exit 1
+fi
+
 mailpit_address="$(compose port mailpit 8025)"
 echo "Waiting for Mailpit at http://${mailpit_address}"
 for attempt in $(seq 1 15); do
