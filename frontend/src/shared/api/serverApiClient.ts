@@ -93,6 +93,10 @@ export class ServerApiClient {
     this.accessToken = undefined;
   }
 
+  public isAuthenticated(): boolean {
+    return Boolean(this.accessToken);
+  }
+
   public getAccount(): Promise<AccountSummary> {
     return this.request("/account", { authenticated: true });
   }

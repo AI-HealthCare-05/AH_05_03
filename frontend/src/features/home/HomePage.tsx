@@ -377,16 +377,6 @@ export function HomePage() {
           <p className="page-kicker">우리 가족 건강 홈</p>
           <h1>가족의 건강 흐름을 한곳에서 이어보세요</h1>
         </div>
-        <div className="heading-actions">
-          <button
-            className="primary-button"
-            type="button"
-            disabled={!localStorageReady}
-            onClick={() => setProfileDialogOpen(true)}
-          >
-            구성원 추가
-          </button>
-        </div>
       </section>
 
       {error ? <div className="alert error-alert" role="alert">{error}</div> : null}

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { setupE2eServerMocks } from "./mockServerApis";
 
 test("남녀 핵심 인체를 먼저 표시하고 세부 레이어와 재방문 캐시를 준비한다", async ({ page }, testInfo) => {
   test.setTimeout(180_000);
@@ -16,53 +17,7 @@ test("남녀 핵심 인체를 먼저 표시하고 세부 레이어와 재방문 
     if (message.type() === "error") browserErrors.push(message.text());
   });
 
-  await page.route("**/api/v1/auth/refresh", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        success: true,
-        data: { access_token: "webgl-token", token_type: "bearer", expires_in: 900 },
-      }),
-    }),
-  );
-  await page.route("**/api/v1/account", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        success: true,
-        data: {
-          account: { id: "webgl-account", email: "webgl@example.com", status: "active" },
-          subscription: { plan: "FREE", status: "active", renewed_at: null },
-        },
-      }),
-    }),
-  );
-  await page.route("**/api/v1/challenges/today", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        success: true,
-        data: {
-          today: "2026-09-04",
-          daily: [],
-          measures: [],
-          water_requirement: 4,
-          checked_count: 0,
-          watered_today: false,
-          garden: {
-            total_points: 0,
-            tree: { key: "seed", label: "씨앗", index: 1, total: 6, points_to_next: 10, next_label: "새싹" },
-            nutrition: { label: "보통", current_streak: 0 },
-            animals: [],
-            week: { water_days: 0, water_required: 5, measure_count: 0, measure_required: 1 },
-          },
-        },
-      }),
-    }),
-  );
+  await setupE2eServerMocks(page);
   await page.route("**/vanatome-official-complete-*.glb", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1_500));
     await route.continue();
