@@ -62,51 +62,73 @@ export function LocalDomainProvider({
           return;
         }
 
-        // 실제 앱 모드: 서버(PostgreSQL) 우선
-        let activeHouseholdId = PRIMARY_HOUSEHOLD_ID;
+        // 실제 앱 모드: 서버(PostgreSQL) 우선. 서버 연결 가능 시 서버 런타임, 불가능 시 로컬 런타임 fallback
+        let activeHouseholdId: string | undefined;
         try {
           const households = await serverApiClient.listHouseholds();
-          if (households.length > 0) {
+          if (households && households.length > 0) {
             activeHouseholdId = households[0].id;
           } else {
             const created = await serverApiClient.createHousehold();
             activeHouseholdId = created.id;
           }
         } catch {
-          // 비로그인 상태일 때는 기본 가정을 유지
+          // 비로그인 상태이거나 서버 연결 불가/E2E 모드
+          activeHouseholdId = undefined;
         }
         if (disposed) return;
-        setHouseholdId(activeHouseholdId);
 
-        // 과거 브라우저(IndexedDB)에 저장된 데이터가 있다면 서버로 1회 안전 마이그레이션
-        if (typeof window !== "undefined" && window.indexedDB) {
-          try {
-            const legacyRuntime = await createLocalDomainRuntime("ieobom-local").catch(() => undefined);
-            if (legacyRuntime) {
-              const localList = await legacyRuntime.profiles.list(PRIMARY_HOUSEHOLD_ID);
-              if (localList.ok && localList.value.length > 0) {
-                await migrateLocalDataToPostgres(legacyRuntime, serverApiClient, activeHouseholdId).catch(() => undefined);
+        if (activeHouseholdId) {
+          setHouseholdId(activeHouseholdId);
+
+          // 과거 브라우저(IndexedDB)에 저장된 데이터가 있다면 서버로 1회 안전 마이그레이션
+          if (typeof window !== "undefined" && window.indexedDB) {
+            try {
+              const legacyRuntime = await createLocalDomainRuntime("ieobom-local").catch(() => undefined);
+              if (legacyRuntime) {
+                const localList = await legacyRuntime.profiles.list(PRIMARY_HOUSEHOLD_ID);
+                if (localList.ok && localList.value.length > 0) {
+                  await migrateLocalDataToPostgres(legacyRuntime, serverApiClient, activeHouseholdId).catch(() => undefined);
+                }
+                legacyRuntime.close();
               }
-              legacyRuntime.close();
+            } catch {
+              // 마이그레이션 오류는 무시하고 계속 진행
             }
-          } catch {
-            // 마이그레이션 오류는 무시하고 계속 진행
           }
+          if (disposed) return;
+
+          // 서버 런타임 생성
+          activeRuntime = createServerDomainRuntime(activeHouseholdId, serverApiClient);
+          setRuntime(activeRuntime);
+
+          const [result, hiddenResult] = await Promise.all([
+            activeRuntime.profiles.list(activeHouseholdId),
+            activeRuntime.profiles.listHidden(activeHouseholdId),
+          ]);
+          if (disposed) return;
+          if (result.ok) setProfiles(result.value);
+          if (hiddenResult.ok) setHiddenProfiles(hiddenResult.value);
+          setError(undefined);
+        } else {
+          // 서버 연결 없음 / 비로그인 / E2E 테스트 모드: 로컬 런타임 fallback
+          setHouseholdId(PRIMARY_HOUSEHOLD_ID);
+          activeRuntime = await createLocalDomainRuntime(databaseName || "ieobom-local");
+          if (disposed) {
+            activeRuntime.close();
+            return;
+          }
+          setRuntime(activeRuntime);
+
+          const [result, hiddenResult] = await Promise.all([
+            activeRuntime.profiles.list(PRIMARY_HOUSEHOLD_ID),
+            activeRuntime.profiles.listHidden(PRIMARY_HOUSEHOLD_ID),
+          ]);
+          if (disposed) return;
+          if (result.ok) setProfiles(result.value);
+          if (hiddenResult.ok) setHiddenProfiles(hiddenResult.value);
+          setError(undefined);
         }
-        if (disposed) return;
-
-        // 서버 런타임 생성
-        activeRuntime = createServerDomainRuntime(activeHouseholdId, serverApiClient);
-        setRuntime(activeRuntime);
-
-        const [result, hiddenResult] = await Promise.all([
-          activeRuntime.profiles.list(activeHouseholdId),
-          activeRuntime.profiles.listHidden(activeHouseholdId),
-        ]);
-        if (disposed) return;
-        if (result.ok) setProfiles(result.value);
-        if (hiddenResult.ok) setHiddenProfiles(hiddenResult.value);
-        setError(undefined);
       } catch (caught: unknown) {
         if (!disposed) {
           setError(errorMessage(caught, "저장소를 준비하지 못했습니다."));
