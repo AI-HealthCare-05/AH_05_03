@@ -92,6 +92,8 @@ services:
       dockerfile: app/Dockerfile
     restart: unless-stopped
     environment: *app_environment
+    volumes:
+      - ../../modeling/artifacts/models:/app/models:ro
     networks:
       - app
     depends_on:
