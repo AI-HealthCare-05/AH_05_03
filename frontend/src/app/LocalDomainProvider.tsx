@@ -66,8 +66,9 @@ export function LocalDomainProvider({
         let activeHouseholdId: string | undefined;
         try {
           const households = await serverApiClient.listHouseholds();
-          if (households && households.length > 0) {
-            activeHouseholdId = households[0].id;
+          const activeHousehold = households?.find((h) => h.status === "active") ?? households?.[0];
+          if (activeHousehold) {
+            activeHouseholdId = activeHousehold.id;
           } else {
             const created = await serverApiClient.createHousehold();
             activeHouseholdId = created.id;

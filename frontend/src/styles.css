@@ -389,8 +389,7 @@ main {
   gap: 10px;
 }
 
-.household-list article,
-.membership-panel > div {
+.household-list article {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -398,6 +397,20 @@ main {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
   padding: 14px;
+}
+
+.membership-panel > div {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.4fr) minmax(200px, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  padding: 14px 18px;
+}
+
+.membership-panel > div .row-actions {
+  justify-self: end;
 }
 
 .household-list article.is-selected {
@@ -5024,7 +5037,7 @@ main {
  * 둘이었다. 헤더에는 지금 누구로 들어와 있는지와 나가는 문만 둔다.
  */
 .header-account {
-  max-width: 18ch;
+  max-width: 32ch;
   overflow: hidden;
   color: var(--muted) !important;
   font-weight: 500 !important;

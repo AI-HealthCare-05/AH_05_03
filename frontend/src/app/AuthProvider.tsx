@@ -14,6 +14,7 @@ import { AuthContext, type AuthStatus } from "./authContext";
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("checking");
   const [email, setEmail] = useState<string>();
+  const [accountId, setAccountId] = useState<string>();
 
   useEffect(() => {
     let cancelled = false;
@@ -23,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((account) => {
         if (!cancelled) {
           setEmail(account.account.email);
+          setAccountId(account.account.id);
           setStatus("signed-in");
         }
       })
@@ -40,12 +42,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await serverApiClient.login(address, password);
     const account = await serverApiClient.getAccount();
     setEmail(account.account.email);
+    setAccountId(account.account.id);
     setStatus("signed-in");
   }, []);
 
   const markSignedOut = useCallback(() => {
     setEmail(undefined);
+    setAccountId(undefined);
     setStatus("signed-out");
+  }, []);
+
+  const updateAccount = useCallback((newEmail: string, newAccountId?: string) => {
+    setEmail(newEmail);
+    if (newAccountId) setAccountId(newAccountId);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -60,8 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [markSignedOut]);
 
   const value = useMemo(
-    () => ({ status, email, signIn, signOut, markSignedOut }),
-    [status, email, signIn, signOut, markSignedOut],
+    () => ({ status, email, accountId, signIn, signOut, markSignedOut, updateAccount }),
+    [status, email, accountId, signIn, signOut, markSignedOut, updateAccount],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
