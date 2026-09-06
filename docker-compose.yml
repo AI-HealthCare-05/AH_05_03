@@ -130,6 +130,10 @@ services:
       # 대화 공급자 시도 순서. 표기는 위와 같다.
       HEALTH_ASSISTANT_MODELS: ${HEALTH_ASSISTANT_MODELS:-["gemini-3.5-flash-lite","openai:gpt-4o-mini"]}
       DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS: ${DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS:-25}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@ieobom.local}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-이어봄}
     # **이제 `uv` 를 부르지 않는다.** 예전에는 `uv run --no-sync ...` 였고, `--no-sync`
     # 를 한 번 빠뜨렸을 때 `uv run` 이 기동할 때마다 락파일과 환경을 맞추면서
     # **기본 그룹인 dev 를 설치했다** — 기동 로그에 `Downloading ruff (10.5MiB)` ·
@@ -300,7 +304,21 @@ services:
     networks:
       - ws
 
-  # 7. Frontend (Vite production build를 정적 제공)
+  anatomy-assets:
+    container_name: anatomy-assets
+    build:
+      context: ./frontend/public/vendor/vanatome
+      dockerfile: Dockerfile
+    image: ieobom-anatomy-assets:local
+    restart: always
+    networks:
+      - ws
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/vendor/vanatome/ATTRIBUTION.txt"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
   # 8. Nginx (프론트엔드와 API 요청을 리버스 프록시로 전달)
   nginx:
     container_name: nginx
@@ -324,6 +342,8 @@ services:
     depends_on:
       # 조건 없이 두면 컨테이너가 뜨자마자 트래픽을 넘겨 기동 창에서 502 가 난다.
       fastapi:
+        condition: service_healthy
+      anatomy-assets:
         condition: service_healthy
 
 volumes:
