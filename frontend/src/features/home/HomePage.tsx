@@ -376,12 +376,8 @@ export function HomePage() {
         <div>
           <p className="page-kicker">우리 가족 건강 홈</p>
           <h1>가족의 건강 흐름을 한곳에서 이어보세요</h1>
-          <p>기록은 서버가 아니라 현재 브라우저에 암호화되어 저장됩니다.</p>
         </div>
         <div className="heading-actions">
-          <span className="local-status-badge">
-            {localStorageReady ? "이 브라우저에 저장 중" : "로컬 저장소 확인 필요"}
-          </span>
           <button
             className="primary-button"
             type="button"
@@ -391,15 +387,6 @@ export function HomePage() {
             구성원 추가
           </button>
         </div>
-      </section>
-
-      <section className="privacy-strip" aria-label="데이터 보관 안내">
-        <span className="privacy-strip-mark" aria-hidden="true">로컬</span>
-        <div>
-          <strong>민감한 건강정보는 이 기기 안에서 처리합니다.</strong>
-          <p>현재 버전은 같은 브라우저 프로필의 사용자별 보관함 잠금을 아직 지원하지 않습니다. 공용 PC에서는 각자 다른 OS·브라우저 프로필을 사용하세요.</p>
-        </div>
-        <NavLink to="/data">백업 관리</NavLink>
       </section>
 
       {error ? <div className="alert error-alert" role="alert">{error}</div> : null}
