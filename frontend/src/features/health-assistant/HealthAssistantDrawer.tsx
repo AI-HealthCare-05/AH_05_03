@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from "react";
+import { useState, useRef, useEffect, useMemo, type FormEvent, type ChangeEvent } from "react";
 import type { FamilyProfile, HealthRecord, HealthRecordType } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 // PR 은 전용 `DevServerOcrAdapter` 를 썼는데, project 에는 같은 응답을 큐·스트리밍으로
@@ -18,6 +18,7 @@ import {
   type BloodGlucoseDraft,
   type MedicationDraft,
   type PainDraft,
+  type PainDiaryToolCall,
   type LabResultDraft,
   type ChallengeDraft,
 } from "./healthAssistantClient";
@@ -69,6 +70,7 @@ interface HealthAssistantDrawerProps {
   onRecordSaved?: () => Promise<void> | void;
   onChallengeSaved?: () => Promise<void> | void;
   onNavigateToRecords?: () => void;
+  onNavigateToDiary?: (dateKey: string) => void;
 }
 
 export function HealthAssistantDrawer({
@@ -78,6 +80,7 @@ export function HealthAssistantDrawer({
   onClose,
   onRecordSaved,
   onNavigateToRecords,
+  onNavigateToDiary,
 }: HealthAssistantDrawerProps) {
   // 초기 메시지는 이전 세션이 있으면 복원하고, 없으면 환영 메시지로 시작한다.
   const [messages, setMessages] = useState<ExtendedChatMessage[]>(() => {
@@ -1107,6 +1110,49 @@ export function HealthAssistantDrawer({
     }
   }
 
+  // 툴콜링(format_pain_diary) 결과 통증 다이어리 로컬 저장
+  async function savePainDiaryFromTool(
+    tool: PainDiaryToolCall,
+    msgId: string,
+  ): Promise<boolean> {
+    if (!runtime || !profile || !tool.body_area) return false;
+    setLoading(true);
+    try {
+      const recordDate = tool.date_str
+        ? new Date(`${tool.date_str}T12:00:00`).toISOString()
+        : new Date().toISOString();
+
+      const result = await runtime.healthRecords.create({
+        householdId: PRIMARY_HOUSEHOLD_ID,
+        profileId: profile.id,
+        recordType: "pain",
+        recordedAt: recordDate,
+        source: "local_ai",
+        payload: {
+          type: "pain",
+          bodyArea: tool.body_area,
+          intensity: typeof tool.intensity === "number" ? tool.intensity : 5,
+          sensation: tool.sensation || undefined,
+          aggravatingFactors: tool.aggravating_factors || undefined,
+          note: tool.formatted_diary,
+        },
+      });
+
+      if (!result.ok) throw new Error(result.error.message);
+
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msgId ? { ...m, saved: true } : m)),
+      );
+      if (onRecordSaved) await onRecordSaved();
+      return true;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "통증 다이어리 저장에 실패했습니다.");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // 검진/검사 서류 결과 로컬 저장 (원본 이미지 문서 보관 연계)
   async function saveLabResult(draft: LabResultDraft, msgId: string, imageFile?: File) {
     if (!runtime || !profile) return;
@@ -1358,6 +1404,23 @@ export function HealthAssistantDrawer({
                     draft={msg.responseDraft.pain_draft}
                     saved={Boolean(msg.saved)}
                     onSave={(updated) => savePain(updated, msg.id)}
+                  />
+                )}
+
+                {/* 통증 다이어리 툴콜링(format_pain_diary) 카드 */}
+                {msg.responseDraft?.pain_diary_tool && msg.role === "assistant" && (
+                  <PainDiaryToolCard
+                    toolCall={msg.responseDraft.pain_diary_tool}
+                    saved={Boolean(msg.saved)}
+                    onSave={(updated) => savePainDiaryFromTool(updated, msg.id)}
+                    onNavigateToDiary={(dateKey) => {
+                      onClose();
+                      if (onNavigateToDiary) {
+                        onNavigateToDiary(dateKey);
+                      } else {
+                        window.location.href = `/pain-diary?date=${dateKey}`;
+                      }
+                    }}
                   />
                 )}
 
@@ -2742,6 +2805,146 @@ function ChallengeConfirmationCard({
         onClick={() => onSave({ ...draft, title, goal })}
       >
         🚀 이 챌린지 시작하기 (홈 화면 등록)
+      </button>
+    </div>
+  );
+}
+
+function PainDiaryToolCard({
+  toolCall,
+  saved,
+  onSave,
+  onNavigateToDiary,
+}: {
+  toolCall: PainDiaryToolCall;
+  saved: boolean;
+  onSave: (updated: PainDiaryToolCall) => void;
+  onNavigateToDiary: (dateKey: string) => void;
+}) {
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }, []);
+  const [diaryDate, setDiaryDate] = useState(toolCall.date_str || todayStr);
+  const [bodyArea, setBodyArea] = useState(toolCall.body_area || "");
+  const [intensity, setIntensity] = useState(toolCall.intensity ?? 5);
+  const [sensation, setSensation] = useState(toolCall.sensation || "");
+  const [aggravatingFactors, setAggravatingFactors] = useState(toolCall.aggravating_factors || "");
+  const [formattedDiary, setFormattedDiary] = useState(toolCall.formatted_diary || "");
+
+  if (saved) {
+    return (
+      <div className="draft-confirm-card is-saved pain-tool-card">
+        <span className="saved-badge">✨ 통증 다이어리에 안전하게 저장되었습니다.</span>
+        <p>
+          <strong>{bodyArea}</strong> ({diaryDate}): 강도 {intensity}/10 {sensation ? `(${sensation})` : ""}
+        </p>
+        <p className="tool-saved-diary">{formattedDiary}</p>
+        <button
+          type="button"
+          className="button button-outline view-diary-btn"
+          onClick={() => onNavigateToDiary(diaryDate)}
+        >
+          📅 통증 다이어리 캘린더에서 확인하기
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="draft-confirm-card pain-tool-card">
+      <div className="card-header">
+        <div className="tool-badge-row">
+          <span className="tool-calling-badge">🛠️ [Tool Calling] format_pain_diary</span>
+          <span className="tool-name">AI 맞춤법 교정 &amp; 구조화</span>
+        </div>
+        <small>맞춤법을 교정하고 정리한 일기입니다. 확인 후 저장해 주세요.</small>
+      </div>
+
+      <div className="card-inputs">
+        <label>
+          정제된 통증 다이어리 본문
+          <textarea
+            className="formatted-diary-textarea"
+            rows={4}
+            value={formattedDiary}
+            onChange={(e) => setFormattedDiary(e.target.value)}
+            placeholder="맞춤법이 교정된 통증 일기 본문"
+          />
+        </label>
+
+        <div className="input-row">
+          <label>
+            기록 날짜
+            <input
+              type="date"
+              value={diaryDate}
+              onChange={(e) => setDiaryDate(e.target.value)}
+            />
+          </label>
+          <label>
+            통증 부위
+            <input
+              value={bodyArea}
+              onChange={(e) => setBodyArea(e.target.value)}
+              placeholder="팔꿈치, 왼쪽 고관절 등"
+            />
+          </label>
+          <label>
+            통증 강도 ({intensity}/10)
+            <div className="pain-intensity-slider-wrap">
+              <input
+                type="range"
+                min="0"
+                max="10"
+                value={intensity}
+                onChange={(e) => setIntensity(Number(e.target.value))}
+              />
+              <span className="pain-intensity-val">{intensity}</span>
+            </div>
+          </label>
+        </div>
+
+        <div className="input-row">
+          <label>
+            통증 양상
+            <input
+              value={sensation}
+              onChange={(e) => setSensation(e.target.value)}
+              placeholder="욱신거림, 이물감 등"
+            />
+          </label>
+          <label>
+            악화 요인
+            <input
+              value={aggravatingFactors}
+              onChange={(e) => setAggravatingFactors(e.target.value)}
+              placeholder="웨이트 트레이닝 후 등"
+            />
+          </label>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="confirm-save-btn"
+        disabled={!bodyArea.trim() || !formattedDiary.trim()}
+        onClick={() =>
+          onSave({
+            tool_name: "format_pain_diary",
+            date_str: diaryDate,
+            body_area: bodyArea.trim(),
+            intensity,
+            sensation: sensation.trim() || undefined,
+            aggravating_factors: aggravatingFactors.trim() || undefined,
+            formatted_diary: formattedDiary.trim(),
+          })
+        }
+      >
+        📝 통증 다이어리에 저장하기
       </button>
     </div>
   );

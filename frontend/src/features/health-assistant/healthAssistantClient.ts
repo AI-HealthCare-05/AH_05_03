@@ -56,6 +56,16 @@ export interface PainDraft {
   note?: string | null;
 }
 
+export interface PainDiaryToolCall {
+  tool_name: "format_pain_diary";
+  body_area: string;
+  intensity: number;
+  sensation?: string | null;
+  aggravating_factors?: string | null;
+  formatted_diary: string;
+  date_str?: string | null;
+}
+
 export interface LabResultDraft {
   screening_name?: string | null;
   institution?: string | null;
@@ -112,6 +122,7 @@ export interface HealthAssistantResponse {
   blood_glucose_draft?: BloodGlucoseDraft | null;
   medication_draft?: MedicationDraft | null;
   pain_draft?: PainDraft | null;
+  pain_diary_tool?: PainDiaryToolCall | null;
   lab_result_draft?: LabResultDraft | null;
   challenge_draft?: ChallengeDraft | null;
   query_draft?: QueryDraft | null;

@@ -19,6 +19,7 @@ const DEMO_PAGES = [
 
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
+  { to: "/pain-diary", label: "통증 다이어리", end: false },
   { to: "/assessment", label: "위험 판정", end: false },
   { to: "/challenge", label: "챌린지", end: false },
   { to: "/insights", label: "건강 현황", end: false },
