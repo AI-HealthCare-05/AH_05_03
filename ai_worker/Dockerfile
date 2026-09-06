@@ -31,6 +31,8 @@ RUN uv sync --group app --no-dev --frozen
 
 FROM python:3.13-slim
 
+LABEL com.ieobom.service="ai-worker"
+
 WORKDIR /app
 
 ENV PATH="/app/.venv/bin:$PATH" \

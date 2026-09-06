@@ -81,7 +81,7 @@ else
         app_changed=true
         migrations_changed=true
         ;;
-      app/*|chronic_disease_engine/*|frontend/*|pyproject.toml|uv.lock)
+      app/*|ai_worker/*|chronic_disease_engine/*|frontend/*|pyproject.toml|uv.lock)
         app_changed=true
         ;;
       infra/*|scripts/deploy_admin_mac.sh)
@@ -97,6 +97,9 @@ fi
 if ! docker image inspect ieobom-dev-fastapi:current >/dev/null 2>&1; then
   app_changed=true
   migrations_changed=true
+fi
+if ! docker image inspect ieobom-dev-ai-worker:current >/dev/null 2>&1; then
+  app_changed=true
 fi
 if ! docker image inspect ieobom-dev-anatomy-assets:current >/dev/null 2>&1; then
   assets_changed=true
@@ -127,7 +130,8 @@ remove_legacy_image_tags() {
 build_services=()
 if [[ "${app_changed}" == true ]]; then
   rotate_image_tags ieobom-dev-fastapi
-  build_services+=(fastapi)
+  rotate_image_tags ieobom-dev-ai-worker
+  build_services+=(fastapi ai-worker)
 fi
 if [[ "${assets_changed}" == true ]]; then
   rotate_image_tags ieobom-dev-anatomy-assets
@@ -168,8 +172,8 @@ else
   echo "Mailpit image is already present; skipping pull"
 fi
 
-echo "Starting application services and development invitation inbox"
-compose up -d --remove-orphans mailpit email-worker fastapi anatomy-assets
+echo "Starting application services, OCR workers, and development invitation inbox"
+compose up -d --remove-orphans --wait --wait-timeout 120 mailpit email-worker ai-worker fastapi anatomy-assets
 
 # The nginx image resolves Docker service names when nginx starts. Reusing an
 # existing nginx container after frontend or FastAPI is recreated can leave it
@@ -193,7 +197,7 @@ done
 if ! curl --fail --silent --show-error "http://127.0.0.1:${HTTP_PORT}/healthz" >/dev/null; then
   echo "Application deployment health check failed." >&2
   compose ps >&2
-  compose logs --tail 200 fastapi anatomy-assets nginx migrate mailpit email-worker >&2
+  compose logs --tail 200 fastapi ai-worker anatomy-assets nginx migrate mailpit email-worker >&2
   exit 1
 fi
 
@@ -207,6 +211,7 @@ for attempt in $(seq 1 15); do
     docker image prune --force --filter "label=com.ieobom.service=fastapi" --filter "until=24h" >/dev/null
     docker image prune --force --filter "label=com.ieobom.service=anatomy-assets" --filter "until=24h" >/dev/null
     remove_legacy_image_tags ieobom-dev-fastapi
+    remove_legacy_image_tags ieobom-dev-ai-worker
     remove_legacy_image_tags ieobom-dev-frontend
     remove_legacy_image_tags ieobom-dev-anatomy-assets
     state_dir="${HOME}/.local/state/ieobom-deploy"

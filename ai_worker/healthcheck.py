@@ -9,8 +9,8 @@
 세 가지를 본다.
 
 1. Redis 에 닿는가
-2. 소비자 그룹에 **내 이름이 등록돼 있는가** — `run_forever` 가 `XREADGROUP` 을 한 번은
-   돌았다는 뜻이다. 기동만 하고 루프에 못 들어간 상태를 가른다
+2. 예측·OCR 소비자 그룹 **둘 다** 내 이름이 등록돼 있는가 — 각 `run_forever` 가
+   `XREADGROUP` 을 한 번은 돌았다는 뜻이다. 한쪽 루프만 죽은 상태도 가른다
 3. 위험도 모델이 적재됐는가
 
 종료 코드 0 이면 건강, 1 이면 아니다. 출력은 도커 로그에 남으므로 **건강 수치를 찍지
@@ -44,24 +44,33 @@ async def check() -> tuple[bool, str]:
     redis = build_redis()
     try:
         await redis.ping()
-        consumers = cast(
-            list[dict[str, Any]],
-            await cast(Any, redis).xinfo_consumers(
-                f"{config.REDIS_KEY_PREFIX}:predict:stream",
-                config.PREDICTION_JOB_STREAM_GROUP,
-            ),
+        targets = (
+            ("predict", f"{config.REDIS_KEY_PREFIX}:predict:stream", config.PREDICTION_JOB_STREAM_GROUP),
+            ("ocr", f"{config.REDIS_KEY_PREFIX}:ocr:stream", config.DEV_OCR_JOB_STREAM_GROUP),
         )
+        consumers_by_target = {
+            target: cast(
+                list[dict[str, Any]],
+                await cast(Any, redis).xinfo_consumers(stream, group),
+            )
+            for target, stream, group in targets
+        }
     except RedisError as err:
         return False, f"Redis 에 닿지 못했다: {type(err).__name__}"
     finally:
         await redis.aclose()
 
-    mine = [c for c in consumers if str(c.get("name", "")).startswith(f"{HOSTNAME}-")]
-    if not mine:
-        return False, f"소비자 그룹에 {HOSTNAME} 등록이 없다 — 아직 루프에 못 들어갔다"
+    mine_by_target = {
+        target: [c for c in consumers if str(c.get("name", "")).startswith(f"{HOSTNAME}-")]
+        for target, consumers in consumers_by_target.items()
+    }
+    missing = [target for target, mine in mine_by_target.items() if not mine]
+    if missing:
+        return False, f"소비자 그룹({','.join(missing)})에 {HOSTNAME} 등록이 없다 — 해당 루프에 못 들어갔다"
 
+    mine = [consumer for consumers in mine_by_target.values() for consumer in consumers]
     idle = min(int(c.get("idle", 0) or 0) for c in mine)
-    return True, f"consumer={mine[0].get('name')} idle={idle}ms targets={len(registry.targets())}"
+    return True, f"consumer={mine[0].get('name')} queues=2 idle={idle}ms targets={len(registry.targets())}"
 
 
 def main() -> int:
