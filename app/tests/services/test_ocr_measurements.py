@@ -45,6 +45,25 @@ class TestReadsWhatItShould:
         """`120/80` 을 한 칸에 찍는 검진표가 있다. 행 하나가 값 둘이다."""
         assert extract(table(["혈압", "128/82", "mmHg", "정상"])).values == {"sbp": 128.0, "dbp": 82.0}
 
+    def test_splits_height_and_weight_printed_in_one_cell(self) -> None:
+        """`키 (cm) 및 몸무게 (kg)` 에 `172.2 / 76.2` 를 한 칸에 찍는 검진표."""
+        assert extract(table(["비만/복부비만: 키 (cm) 및 몸무게 (kg)", "172.2 / 76.2", "cm / kg", ""])).values == {
+            "height_cm": 172.2,
+            "weight_kg": 76.2,
+        }
+
+        # 표기 변형: 신장/체중, 키/몸무게, 단위 표기 포함
+        assert extract(table(["신장/체중", "172.2/76.2", "", ""])).values == {"height_cm": 172.2, "weight_kg": 76.2}
+        assert extract(table(["키 (cm) 및 체중 (kg)", "172.2cm / 76.2kg", "", ""])).values == {
+            "height_cm": 172.2,
+            "weight_kg": 76.2,
+        }
+        # 순서가 반대인 경우(체중/신장 76.2/172.2)도 정상 판별
+        assert extract(table(["체중 / 신장", "76.2 / 172.2", "", ""])).values == {
+            "height_cm": 172.2,
+            "weight_kg": 76.2,
+        }
+
     def test_reads_fullwidth_characters(self) -> None:
         """검진표가 전각 영숫자(`ＡＬＴ`)를 쓰는 일이 있다."""
         assert extract(table(["ＡＬＴ", "２２", "U/L", "정상 (0~40)"])).values == {"alt": 22.0}
