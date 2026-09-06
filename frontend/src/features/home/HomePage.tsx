@@ -942,6 +942,7 @@ export function HomePage() {
                 onClose={() => setAssistantOpen(false)}
                 onRecordSaved={() => refreshDashboard(selectedProfile.id)}
                 onNavigateToRecords={() => setDeletedRecordsDialogOpen(false)}
+                onNavigateToDiary={(dateKey) => navigate(`/pain-diary?date=${dateKey}`)}
               />
             </Suspense>
           ) : null}
