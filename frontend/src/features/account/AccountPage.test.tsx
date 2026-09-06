@@ -62,7 +62,7 @@ describe("AccountPage", () => {
     renderAccountPage();
 
     expect(await screen.findByRole("heading", { name: "member@example.com" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "가입한 가정 0개" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "소속 가정" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "기존 로컬 프로필에 서비스 계정 초대" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "계정 종료" })).toBeInTheDocument();
   });
@@ -91,7 +91,6 @@ describe("AccountPage", () => {
 
     renderAccountPage();
     await screen.findByRole("heading", { name: "member@example.com" });
-    await userEvent.setup().click(screen.getByRole("button", { name: "멤버 보기" }));
 
     expect(await screen.findByText("내 계정", { selector: ".membership-identity strong" })).toBeInTheDocument();
     expect(screen.getByText("나")).toBeInTheDocument();
@@ -171,7 +170,7 @@ describe("AccountPage", () => {
 
     const createButton = screen.getByRole("button", { name: "가정 만들기" });
     expect(createButton).toBeDisabled();
-    expect(screen.getByText("가정은 계정당 1개만 소속될 수 있습니다 (1계정 1가정 원칙).")).toBeInTheDocument();
+    expect(createButton).toHaveAttribute("title", "이미 소속된 가정이 있어 새 가정을 만들 수 없습니다.");
   });
 
   it("마스터는 다른 활성 멤버에게 마스터 권한을 위임할 수 있다", async () => {
@@ -221,7 +220,6 @@ describe("AccountPage", () => {
 
     renderAccountPage();
     await screen.findByRole("heading", { name: "member@example.com" });
-    await user.click(screen.getByRole("button", { name: "멤버 보기" }));
 
     const transferButton = await screen.findByRole("button", { name: "마스터 위임" });
     expect(transferButton).toBeInTheDocument();

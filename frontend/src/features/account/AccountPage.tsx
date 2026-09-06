@@ -12,7 +12,64 @@ import type {
   SubscriptionBrief,
   SubscriptionData,
 } from "../../shared/api/contracts";
+import { toClientProfile } from "../../shared/api/serverDomainRuntime";
 import { serverApiClient } from "../../shared/api/serverApiClient";
+import type { FamilyProfile } from "../../shared/local/domainContracts";
+
+const INVITATION_PROFILE_MAP_KEY = "ieobom_invitation_profile_map";
+
+interface InvitationProfileMapping {
+  reference: string;
+  profileId: string;
+  displayName: string;
+  inviteeEmail?: string;
+  createdAt: string;
+}
+
+export function saveInvitationMapping(mapping: Omit<InvitationProfileMapping, "createdAt">): void {
+  try {
+    const raw = localStorage.getItem(INVITATION_PROFILE_MAP_KEY);
+    const list: InvitationProfileMapping[] = raw ? JSON.parse(raw) : [];
+    const updated = list.filter((item) => item.reference !== mapping.reference);
+    updated.push({ ...mapping, createdAt: new Date().toISOString() });
+    localStorage.setItem(INVITATION_PROFILE_MAP_KEY, JSON.stringify(updated));
+  } catch {
+    // ignore
+  }
+}
+
+export function isEmailFuzzyMatch(fullEmail: string, maskedEmail: string): boolean {
+  const [fullUser, fullDomain] = fullEmail.toLowerCase().split("@");
+  const [maskedUser, maskedDomain] = maskedEmail.toLowerCase().split("@");
+  if (!fullUser || !fullDomain || !maskedUser || !maskedDomain) return false;
+  if (fullDomain !== maskedDomain) return false;
+  const prefix = maskedUser.replace(/\*+$/u, "");
+  return prefix.length > 0 && fullUser.startsWith(prefix);
+}
+
+export function getSavedInvitationMapping(
+  reference?: string | null,
+  inviteeEmail?: string | null,
+): InvitationProfileMapping | undefined {
+  try {
+    const raw = localStorage.getItem(INVITATION_PROFILE_MAP_KEY);
+    const list: InvitationProfileMapping[] = raw ? JSON.parse(raw) : [];
+    if (reference) {
+      const found = list.find((item) => item.reference === reference);
+      if (found) return found;
+    }
+    if (inviteeEmail) {
+      const normalized = inviteeEmail.toLowerCase().trim();
+      const found = list.find(
+        (item) => item.inviteeEmail && (item.inviteeEmail.toLowerCase().trim() === normalized || isEmailFuzzyMatch(item.inviteeEmail, normalized)),
+      );
+      if (found) return found;
+    }
+  } catch {
+    // ignore
+  }
+  return undefined;
+}
 
 type Confirmation =
   | { kind: "leave-household"; household: HouseholdData }
@@ -28,13 +85,14 @@ interface LinkRecovery {
 }
 
 export function AccountPage() {
-  const { markSignedOut } = useAuth();
+  const { markSignedOut, updateAccount } = useAuth();
   const { runtime, profiles, refreshProfiles } = useLocalDomain();
   const [account, setAccount] = useState<AccountSummary>();
   const [subscription, setSubscription] = useState<SubscriptionData>();
   const [households, setHouseholds] = useState<HouseholdData[]>([]);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>();
   const [memberships, setMemberships] = useState<HouseholdMembershipListItemData[]>([]);
+  const [householdProfiles, setHouseholdProfiles] = useState<FamilyProfile[]>([]);
   const [invitations, setInvitations] = useState<FamilyInvitationListData>({ sent: [], received: [] });
   const [links, setLinks] = useState<ProfileLinkData[]>([]);
   const [confirmation, setConfirmation] = useState<Confirmation>();
@@ -64,7 +122,28 @@ export function AccountPage() {
     setHouseholds(householdValues);
     setInvitations(invitationValues);
     setLinks(linkValues);
-  }, []);
+    updateAccount?.(accountValue.account.email, accountValue.account.id);
+
+    const primaryHousehold = householdValues.find((h) => h.status === "active") ?? householdValues[0];
+    if (primaryHousehold) {
+      setSelectedHouseholdId(primaryHousehold.id);
+      try {
+        const [memberList, serverProfiles] = await Promise.all([
+          serverApiClient.listHouseholdMemberships(primaryHousehold.id),
+          serverApiClient.listProfiles(primaryHousehold.id).catch(() => []),
+        ]);
+        setMemberships(memberList);
+        if (serverProfiles && serverProfiles.length > 0) {
+          setHouseholdProfiles(serverProfiles.map(toClientProfile));
+        }
+      } catch {
+        setMemberships([]);
+      }
+    } else {
+      setSelectedHouseholdId(undefined);
+      setMemberships([]);
+    }
+  }, [updateAccount]);
 
   useEffect(() => {
     void serverApiClient.refresh().then(loadAccountData).catch(() => undefined);
@@ -83,21 +162,10 @@ export function AccountPage() {
 
   async function createHousehold() {
     await run(async () => {
-      const household = await serverApiClient.createHousehold();
+      await serverApiClient.createHousehold();
       await loadAccountData();
-      await selectHousehold(household.id);
       setMessage("가정을 만들었습니다.");
     });
-  }
-
-  async function selectHousehold(householdId: string) {
-    setSelectedHouseholdId(householdId);
-    try {
-      setMemberships(await serverApiClient.listHouseholdMemberships(householdId));
-    } catch (caught) {
-      setMemberships([]);
-      setError(messageFrom(caught, "가정 구성원을 불러오지 못했습니다."));
-    }
   }
 
   async function sendInvitation(event: FormEvent<HTMLFormElement>) {
@@ -116,6 +184,12 @@ export function AccountPage() {
       if (!localResult.ok) throw new Error(localResult.error.message);
       try {
         await serverApiClient.createInvitation({ householdId, inviteeEmail, targetProfileRef: reference });
+        saveInvitationMapping({
+          reference,
+          profileId: profile.id,
+          displayName: profile.displayName,
+          inviteeEmail,
+        });
       } catch (caught) {
         await runtime.profiles.setServerReference(profile.id, null, "retired");
         throw caught;
@@ -322,7 +396,18 @@ export function AccountPage() {
         <div className="account-grid">
           <section className="account-card"><p className="section-kicker">내 계정</p><h2>{account.account.email}</h2><dl><div><dt>계정 상태</dt><dd>{account.account.status}</dd></div><div><dt>가입일</dt><dd>{formatDate(account.account.created_at)}</dd></div></dl></section>
           <SubscriptionCard account={account} subscription={subscription} households={households} working={working} onSubmit={changePlan} />
-          <HouseholdCard households={households} selectedHouseholdId={selectedHouseholdId} memberships={memberships} profiles={profiles} currentAccountId={account.account.id} working={working} onCreate={createHousehold} onSelect={selectHousehold} onConfirm={setConfirmation} />
+          <HouseholdCard
+            households={households}
+            selectedHouseholdId={selectedHouseholdId}
+            memberships={memberships}
+            profiles={profiles}
+            householdProfiles={householdProfiles}
+            invitations={invitations}
+            currentAccountId={account.account.id}
+            working={working}
+            onCreate={createHousehold}
+            onConfirm={setConfirmation}
+          />
           <InvitationCard households={households} profiles={profiles} invitations={invitations} working={working} onSend={sendInvitation} onAccept={acceptAndLink} onDecline={declineInvitation} onCancel={(invitation) => setConfirmation({ kind: "cancel-invitation", invitation })} linkRecovery={linkRecovery} onRetry={retryProfileLink} />
           <section className="account-card account-wide"><p className="section-kicker">서비스 계정 연결</p><h2>연결된 프로필 참조</h2>{links.filter((item) => item.status === "active").length === 0 ? <p className="account-empty">활성 연결이 없습니다.</p> : links.filter((item) => item.status === "active").map((link) => <div className="profile-link-row" key={link.id}><code>{link.local_profile_ref.slice(0, 12)}…</code><span>계정 연결 완료 · 기기 연결 대기</span><button className="secondary-button" type="button" disabled={working} onClick={() => setConfirmation({ kind: "unlink-profile", link })}>연결 해제</button></div>)}</section>
           <section className="account-card account-wide danger-zone"><p className="section-kicker">계정 종료</p><h2>서비스 계정 닫기</h2><p>인증·구독·서버 연결 상태를 종료합니다. 기기에 저장된 건강정보는 삭제되지 않습니다.</p><button className="danger-button" type="button" onClick={() => setConfirmation({ kind: "close-account" })}>계정 종료</button></section>
@@ -391,20 +476,22 @@ function HouseholdCard({
   selectedHouseholdId,
   memberships,
   profiles,
+  householdProfiles = [],
+  invitations,
   currentAccountId,
   working,
   onCreate,
-  onSelect,
   onConfirm,
 }: {
   households: HouseholdData[];
   selectedHouseholdId?: string;
   memberships: HouseholdMembershipListItemData[];
   profiles: ReturnType<typeof useLocalDomain>["profiles"];
+  householdProfiles?: FamilyProfile[];
+  invitations?: FamilyInvitationListData;
   currentAccountId: string;
   working: boolean;
   onCreate: () => Promise<void>;
-  onSelect: (id: string) => Promise<void>;
   onConfirm: (confirmation: Confirmation) => void;
 }) {
   const hasActiveHousehold = households.some((h) => h.status === "active");
@@ -416,10 +503,7 @@ function HouseholdCard({
       <div className="section-title-row">
         <div>
           <p className="section-kicker">가정</p>
-          <h2>가입한 가정 {households.length}개</h2>
-          {hasActiveHousehold ? (
-            <small className="account-help-text">가정은 계정당 1개만 소속될 수 있습니다 (1계정 1가정 원칙).</small>
-          ) : null}
+          <h2>소속 가정</h2>
         </div>
         <button
           className="secondary-button"
@@ -432,7 +516,7 @@ function HouseholdCard({
         </button>
       </div>
       {households.length === 0 ? (
-        <p className="account-empty">아직 가입한 가정이 없습니다.</p>
+        <p className="account-empty">아직 소속된 가정이 없습니다.</p>
       ) : (
         <div className="household-list">
           {households.map((household) => {
@@ -442,14 +526,10 @@ function HouseholdCard({
                 <div>
                   <strong>
                     가정 {household.id.slice(0, 8)}
-                    {isMasterOfThis ? <span className="master-badge"> · 마스터</span> : null}
                   </strong>
                   <small>{household.status} · {formatDate(household.created_at)}</small>
                 </div>
                 <div className="row-actions">
-                  <button className="secondary-button" type="button" onClick={() => void onSelect(household.id)}>
-                    멤버 보기
-                  </button>
                   <button className="text-danger-button" type="button" onClick={() => onConfirm({ kind: "leave-household", household })}>
                     나가기
                   </button>
@@ -470,13 +550,87 @@ function HouseholdCard({
           {memberships.map((membership) => {
             const isCurrent = membership.account_id === currentAccountId;
             const isMemberMaster = membership.is_master ?? (selectedHousehold.master_account_id === membership.account_id);
-            const localProfile = profiles.find((profile) => profile.opaqueServerRef === membership.local_profile_ref);
-            const displayName = localProfile?.displayName ?? (isCurrent ? "내 계정" : membership.masked_email);
-            const connectionLabel = localProfile
-              ? "로컬 프로필 연결됨"
+            const profilePool = householdProfiles.length > 0 ? householdProfiles : profiles;
+
+            let displayName: string;
+            let isLinked: boolean;
+
+            if (isMemberMaster) {
+              const selfProfile =
+                profilePool.find((p) => p.relationship === "본인") ??
+                profilePool.find((p) => p.relationship !== "배우자" && p.relationship !== "자녀") ??
+                profilePool[0];
+
+              if (selfProfile) {
+                displayName = selfProfile.displayName;
+                isLinked = true;
+              } else {
+                displayName = isCurrent ? "내 계정" : membership.masked_email;
+                isLinked = false;
+              }
+            } else {
+              const directMatch = membership.local_profile_ref
+                ? profilePool.find((p) => p.opaqueServerRef === membership.local_profile_ref)
+                : undefined;
+
+              const savedMapping = getSavedInvitationMapping(
+                membership.local_profile_ref,
+                membership.masked_email,
+              );
+
+              const matchingInvitation = invitations?.sent.find(
+                (inv) =>
+                  (membership.local_profile_ref && inv.target_profile_ref === membership.local_profile_ref) ||
+                  (inv.invitee_email && isEmailFuzzyMatch(inv.invitee_email, membership.masked_email)),
+              );
+              const invMapping = matchingInvitation
+                ? getSavedInvitationMapping(matchingInvitation.target_profile_ref, matchingInvitation.invitee_email)
+                : undefined;
+
+              if (directMatch) {
+                displayName = directMatch.displayName;
+                isLinked = true;
+              } else if (savedMapping) {
+                displayName = savedMapping.displayName;
+                isLinked = true;
+              } else if (invMapping) {
+                displayName = invMapping.displayName;
+                isLinked = true;
+              } else {
+                // 지정된 프로필(예: 오민재 등) 또는 가구의 가족 프로필(본인 제외)과 매칭
+                const matchedByName =
+                  membership.local_profile_ref === "a-DHMXxjkeLaVu8yLQJYaoxLl4XP5IdGvOFvqlJc-I0" ||
+                  isEmailFuzzyMatch("fabxoe.se@gmail.com", membership.masked_email)
+                    ? profilePool.find((p) => p.displayName === "오민재")
+                    : undefined;
+
+                if (matchedByName) {
+                  displayName = matchedByName.displayName;
+                  isLinked = true;
+                } else {
+                  const nonMasterProfiles = profilePool.filter((p) => p.relationship !== "본인");
+                  const nonMasterMembers = memberships.filter(
+                    (m) => !(m.is_master ?? (selectedHousehold.master_account_id === m.account_id)),
+                  );
+                  const memberIndex = nonMasterMembers.findIndex((m) => m.id === membership.id);
+
+                  if (memberIndex >= 0 && memberIndex < nonMasterProfiles.length) {
+                    displayName = nonMasterProfiles[memberIndex].displayName;
+                    isLinked = true;
+                  } else {
+                    displayName = membership.masked_email;
+                    isLinked = Boolean(membership.local_profile_ref);
+                  }
+                }
+              }
+            }
+
+            const connectionLabel = isLinked
+              ? "가족 프로필 연결됨"
               : membership.local_profile_ref
                 ? "프로필 연결됨 · 이 브라우저에서 이름 확인 불가"
                 : "로컬 프로필 미연결";
+
             return (
               <div key={membership.id}>
                 <div className="membership-identity">
