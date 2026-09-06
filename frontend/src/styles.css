@@ -5570,3 +5570,664 @@ main {
     flex-direction: column;
   }
 }
+
+/* ==========================================================================
+   통증 다이어리 (Pain Diary) & 우측 하단 캘린더
+   ========================================================================== */
+
+.pain-diary-page {
+  display: flex;
+  min-height: calc(100vh - 72px);
+}
+
+.pain-diary-main {
+  flex: 1;
+  min-width: 0;
+  padding: 32px 40px 60px;
+}
+
+.pain-diary-header {
+  margin-bottom: 28px;
+}
+
+.pain-diary-header h1 {
+  margin: 4px 0 8px;
+  font-size: 1.85rem;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.pain-diary-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.95fr);
+  gap: 28px;
+  align-items: start;
+}
+
+/* 좌측 일기 폼 카드 */
+.pain-diary-form-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+.pain-diary-form-card .card-header .title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pain-diary-form-card .card-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.status-tag {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.status-tag.is-new {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.status-tag.is-edit {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.date-hint {
+  margin: 6px 0 20px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.diary-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-group-row .flex-1 {
+  flex: 1;
+}
+
+.form-group-row .flex-2 {
+  flex: 2;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group > span {
+  font-size: 0.84rem;
+  font-weight: 650;
+  color: var(--muted-strong);
+}
+
+.form-group input[type="text"],
+.form-group input[type="date"],
+.form-group textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.92rem;
+  color: var(--ink);
+  background: #fafbfc;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  background: white;
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  outline: none;
+}
+
+.intensity-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.86rem;
+  color: var(--muted-strong);
+}
+
+.intensity-pill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #f8fafc;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line-soft);
+}
+
+.slider-min,
+.slider-max {
+  font-size: 0.76rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.intensity-slider {
+  flex: 1;
+  accent-color: var(--blue-600);
+  cursor: pointer;
+}
+
+.diary-note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-refine-btn {
+  font-size: 0.8rem;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfeff 100%);
+  border: 1px solid #99f6e4;
+  color: #0d9488;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ai-refine-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ccfbf1 0%, #d1fae5 100%);
+  border-color: #5eead4;
+  transform: translateY(-1px);
+}
+
+.ai-refine-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.diary-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.save-btn {
+  flex: 1;
+  padding: 13px 20px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border-radius: 12px;
+  background: var(--blue-600);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: var(--blue-700);
+}
+
+.delete-btn {
+  padding: 13px 18px;
+  font-size: 0.88rem;
+  font-weight: 650;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  cursor: pointer;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+/* 우측 사이드바 */
+.pain-diary-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* 최근 요약 카드 */
+.diary-summary-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+.diary-summary-card h3 {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  text-align: left;
+  background: #fafbfc;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.summary-item:hover {
+  background: #f1f5f9;
+  border-color: var(--line);
+}
+
+.summary-item.is-selected {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.summary-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summary-item-header strong {
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+
+.summary-date {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.summary-item-meta {
+  font-size: 0.8rem;
+  display: flex;
+  gap: 6px;
+}
+
+.summary-intensity {
+  font-weight: 700;
+}
+
+.summary-sensation {
+  color: var(--muted);
+}
+
+/* 우측 하단 캘린더 카드 */
+.pain-calendar-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.month-title strong {
+  font-size: 1.15rem;
+  font-weight: 750;
+  color: var(--ink);
+}
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.month-nav .nav-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--muted-strong);
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.month-nav .nav-btn:hover {
+  background: #f8fafc;
+  color: var(--ink);
+}
+
+.month-nav .today-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: white;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+
+.month-nav .today-btn:hover {
+  background: #f8fafc;
+  color: var(--ink);
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.weekday-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar-cell {
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  padding: 2px;
+}
+
+.calendar-cell.empty {
+  cursor: default;
+}
+
+.calendar-cell.day:hover {
+  background: #f1f5f9;
+}
+
+.calendar-cell.today .day-number {
+  color: var(--blue-600);
+  font-weight: 800;
+}
+
+.calendar-cell.selected {
+  background: #eff6ff !important;
+  border-color: #3b82f6 !important;
+}
+
+.calendar-cell .day-number {
+  font-size: 0.82rem;
+  color: var(--ink);
+  font-weight: 550;
+}
+
+.calendar-cell.selected .day-number {
+  color: #1d4ed8;
+  font-weight: 750;
+}
+
+.calendar-cell .record-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-top: 2px;
+}
+
+.calendar-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* 챗봇 통증 다이어리 툴콜링 카드 */
+.pain-tool-card {
+  border-left: 4px solid #06b6d4 !important;
+}
+
+.tool-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.tool-calling-badge {
+  display: inline-block;
+  background: #ecfeff;
+  color: #0e7490;
+  border: 1px solid #a5f3fc;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.tool-name {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.formatted-diary-textarea {
+  background: #f0fdf4 !important;
+  border-color: #bbf7d0 !important;
+  color: #166534 !important;
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.tool-saved-diary {
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.view-diary-btn {
+  margin-top: 10px;
+  width: 100%;
+  font-size: 0.84rem;
+  font-weight: 650;
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: var(--blue-600);
+  border: 1px solid var(--blue-300);
+  background: white;
+  cursor: pointer;
+}
+
+.view-diary-btn:hover {
+  background: #eff6ff;
+}
+
+/* 날짜별 복수 기록 탭 */
+.day-records-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line-soft);
+}
+
+.day-record-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.day-record-tab:hover {
+  background: #e2e8f0;
+}
+
+.day-record-tab.is-active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.day-record-tab.add-tab {
+  background: white;
+  border: 1px dashed var(--blue-400);
+  color: var(--blue-600);
+  font-weight: 650;
+}
+
+.day-record-tab.add-tab:hover {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+
+.tab-intensity-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tab-title {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-intensity-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted-strong);
+}
+
+/* 캘린더 일자별 다중 기록 카운트 뱃지 */
+.calendar-count-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #2563eb;
+  background: #dbeafe;
+  border-radius: 999px;
+  min-width: 13px;
+  height: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+/* 프로필 없음 빈 상태 알림 */
+.empty-profile-alert {
+  background: #fefce8;
+  border: 1px solid #fde047;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.empty-profile-alert p {
+  margin: 0;
+  color: #854d0e;
+  font-size: 0.92rem;
+}
+
+.empty-profile-alert .button {
+  margin-top: 8px;
+}
+
+@media (max-width: 1024px) {
+  .pain-diary-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
