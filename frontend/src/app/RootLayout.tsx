@@ -1,8 +1,10 @@
-import { Suspense } from "react";
+import { Suspense, useContext, useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
 import { SignInPage } from "../features/account/SignInPage";
+import { serverApiClient } from "../shared/api/serverApiClient";
 import { useAuth } from "./authContext";
+import { LocalDomainContext } from "./localDomainContext";
 
 // 가족 홈이 "관리"(구성원·기록·검진표), 건강 현황이 "지금 어떤가"(챌린지·수치) 다.
 // **2026-09-03 에 뒤집었다.** 예전에는 판정·챌린지·데이터 관리를 메뉴에서 뺐다 —
@@ -30,6 +32,37 @@ const NAVIGATION = [
 
 export function RootLayout() {
   const { status, email, signOut } = useAuth();
+  const localDomain = useContext(LocalDomainContext);
+  const profiles = useMemo(() => localDomain?.profiles ?? [], [localDomain?.profiles]);
+  const [matchedProfileName, setMatchedProfileName] = useState<string>();
+
+  useEffect(() => {
+    if (status !== "signed-in") {
+      setMatchedProfileName(undefined);
+      return;
+    }
+    let cancelled = false;
+    void serverApiClient
+      .listProfileLinks()
+      .then((links) => {
+        if (cancelled) return;
+        const activeLink = links.find((l) => l.status === "active");
+        if (activeLink) {
+          const profile = profiles.find((p) => p.opaqueServerRef === activeLink.local_profile_ref);
+          if (profile) {
+            setMatchedProfileName(profile.displayName);
+            return;
+          }
+        }
+        setMatchedProfileName(undefined);
+      })
+      .catch(() => {
+        if (!cancelled) setMatchedProfileName(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [status, email, profiles]);
 
   // 갱신 토큰으로 세션을 되살리는 동안 아무것도 그리지 않는다. 로그인 화면을 먼저
   // 띄우면 **이미 로그인한 사용자에게 로그인 화면이 한 번 깜빡인다.**
@@ -77,7 +110,11 @@ export function RootLayout() {
               것은 **지금 누구로 들어와 있는가** 와 나가는 문이다. */}
           <div className="header-status">
             <span title="현재 버전은 공용 브라우저의 사용자별 보관함 잠금을 지원하지 않습니다."><i aria-hidden="true" /> 기기 로컬</span>
-            {email ? <span className="header-account" title={email}>{email}</span> : null}
+            {email ? (
+              <span className="header-account" title={email}>
+                {matchedProfileName ? `${matchedProfileName} (${email})` : email}
+              </span>
+            ) : null}
             <button type="button" className="header-signout" onClick={() => void signOut()}>
               로그아웃
             </button>
