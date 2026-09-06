@@ -79,9 +79,6 @@ test("남녀 핵심 인체를 먼저 표시하고 세부 레이어와 재방문 
   await page.getByRole("button", { name: "프로필 저장" }).click();
   await expect(page.getByRole("heading", { name: "WebGL 진단님의 건강기록" })).toBeVisible();
 
-  await expect(page.locator(".anatomy-atlas-switch")
-    .getByRole("button", { name: "남성", exact: true }))
-    .toHaveAttribute("aria-pressed", "true", { timeout: 45_000 });
   await expect(page.locator(".vanatome-loading")).toHaveCount(0);
   await expect(page.locator(".vanatome-lazy-status")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "외피계", exact: true })).toBeEnabled({ timeout: 45_000 });
@@ -111,9 +108,9 @@ test("남녀 핵심 인체를 먼저 표시하고 세부 레이어와 재방문 
   expect(canvasAfterMuscle.equals(canvasBeforeMuscle)).toBe(false);
   expect(maleGlbRequests).toHaveLength(requestsBeforeToggle);
 
-  await page.locator(".anatomy-atlas-switch")
-    .getByRole("button", { name: "여성", exact: true })
-    .click();
+  await page.getByRole("button", { name: "프로필 관리" }).click();
+  await page.getByRole("combobox", { name: "성별" }).selectOption("female");
+  await page.getByRole("button", { name: "변경사항 저장" }).click();
   const femaleAssets = [
     "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-static-shell-crotch-cleanup-v52.glb",
     "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-static-skeleton-exposed-bone-fit-v66.glb",
@@ -161,13 +158,13 @@ test("남녀 핵심 인체를 먼저 표시하고 세부 레이어와 재방문 
   }, femaleAssets), { timeout: 15_000 }).toBe(femaleAssets.length);
 
   const femaleRequestsBeforeRevisit = maleGlbRequests.filter((path) => femaleAssets.includes(path)).length;
-  await page.locator(".anatomy-atlas-switch")
-    .getByRole("button", { name: "남성", exact: true })
-    .click();
+  await page.getByRole("button", { name: "프로필 관리" }).click();
+  await page.getByRole("combobox", { name: "성별" }).selectOption("male");
+  await page.getByRole("button", { name: "변경사항 저장" }).click();
   await expect(page.getByRole("button", { name: "외피계", exact: true })).toBeEnabled({ timeout: 45_000 });
-  await page.locator(".anatomy-atlas-switch")
-    .getByRole("button", { name: "여성", exact: true })
-    .click();
+  await page.getByRole("button", { name: "프로필 관리" }).click();
+  await page.getByRole("combobox", { name: "성별" }).selectOption("female");
+  await page.getByRole("button", { name: "변경사항 저장" }).click();
   await expect(page.getByRole("button", { name: "근육계", exact: true })).toBeEnabled({ timeout: 120_000 });
   const femaleRequestsAfterRevisit = maleGlbRequests.filter((path) => femaleAssets.includes(path)).length;
   expect(femaleRequestsAfterRevisit).toBe(femaleRequestsBeforeRevisit);
