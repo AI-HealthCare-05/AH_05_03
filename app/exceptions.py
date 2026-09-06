@@ -254,3 +254,16 @@ class ChallengeNotFoundError(AppError):
 # --- chat sessions -------------------------------------------------------
 class ChatSessionNotFoundError(AppError):
     error_code = ErrorCode.CHAT_SESSION_NOT_FOUND
+
+
+# --- profiles & health records -------------------------------------------
+class ProfileNotFoundError(AppError):
+    error_code = ErrorCode.PROFILE_NOT_FOUND
+
+
+class HealthRecordNotFoundError(AppError):
+    error_code = ErrorCode.HEALTH_RECORD_NOT_FOUND
+
+
+class ProfileAccessDeniedError(AppError):
+    error_code = ErrorCode.PROFILE_ACCESS_DENIED

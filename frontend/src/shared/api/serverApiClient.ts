@@ -16,6 +16,10 @@ import type {
   HouseholdMembershipListItemData,
   PlanChangeData,
   ProfileLinkData,
+  ProfileServerData,
+  ProfileServerListData,
+  HealthRecordServerData,
+  HealthRecordServerListData,
   SignUpData,
   SubscriptionBrief,
   SubscriptionData,
@@ -240,6 +244,165 @@ export class ServerApiClient {
       `/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
       { authenticated: true },
     );
+    return res.items;
+  }
+
+  // --- Profiles (PostgreSQL) ------------------------------------------------
+  public createProfile(body: {
+    id?: string;
+    household_id: string;
+    display_name: string;
+    relationship: string;
+    birth_date?: string | null;
+    gender?: "male" | "female" | null;
+  }): Promise<ProfileServerData> {
+    return this.request<ProfileServerData>("/profiles", {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify(body),
+    });
+  }
+
+  public async listProfiles(householdId: string, includeHidden = false): Promise<ProfileServerData[]> {
+    const hiddenQuery = includeHidden ? "&include_hidden=true" : "";
+    const res = await this.request<ProfileServerListData>(
+      `/profiles?household_id=${encodeURIComponent(householdId)}${hiddenQuery}`,
+      { authenticated: true },
+    );
+    return res.items;
+  }
+
+  public getProfile(profileId: string): Promise<ProfileServerData> {
+    return this.request<ProfileServerData>(`/profiles/${encodeURIComponent(profileId)}`, {
+      authenticated: true,
+    });
+  }
+
+  public updateProfile(
+    profileId: string,
+    body: {
+      display_name?: string;
+      relationship?: string;
+      birth_date?: string | null;
+      gender?: "male" | "female" | null;
+      status?: "active" | "hidden" | "deleted";
+    },
+  ): Promise<ProfileServerData> {
+    return this.request<ProfileServerData>(`/profiles/${encodeURIComponent(profileId)}`, {
+      method: "PATCH",
+      authenticated: true,
+      body: JSON.stringify(body),
+    });
+  }
+
+  public async deleteProfile(profileId: string): Promise<void> {
+    await this.request(`/profiles/${encodeURIComponent(profileId)}`, {
+      method: "DELETE",
+      authenticated: true,
+    });
+  }
+
+  public async syncProfiles(
+    profiles: Array<{
+      id: string;
+      household_id: string;
+      display_name: string;
+      relationship: string;
+      birth_date?: string | null;
+      gender?: "male" | "female" | null;
+      status?: string;
+      row_version?: number;
+    }>,
+  ): Promise<ProfileServerData[]> {
+    const res = await this.request<ProfileServerListData>("/profiles/sync", {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify({ profiles }),
+    });
+    return res.items;
+  }
+
+  // --- Health Records (PostgreSQL) ------------------------------------------
+  public createHealthRecord(body: {
+    id?: string;
+    profile_id: string;
+    record_type: string;
+    recorded_at: string;
+    source?: string;
+    payload: Record<string, unknown>;
+    note?: string | null;
+  }): Promise<HealthRecordServerData> {
+    return this.request<HealthRecordServerData>("/health-records", {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify(body),
+    });
+  }
+
+  public async listHealthRecords(
+    profileId: string,
+    options?: { recordType?: string; limit?: number; offset?: number },
+  ): Promise<HealthRecordServerData[]> {
+    const params = new URLSearchParams({ profile_id: profileId });
+    if (options?.recordType) params.set("record_type", options.recordType);
+    if (options?.limit) params.set("limit", String(options.limit));
+    if (options?.offset) params.set("offset", String(options.offset));
+
+    const res = await this.request<HealthRecordServerListData>(`/health-records?${params.toString()}`, {
+      authenticated: true,
+    });
+    return res.items;
+  }
+
+  public getHealthRecord(recordId: string): Promise<HealthRecordServerData> {
+    return this.request<HealthRecordServerData>(`/health-records/${encodeURIComponent(recordId)}`, {
+      authenticated: true,
+    });
+  }
+
+  public updateHealthRecord(
+    recordId: string,
+    body: {
+      record_type?: string;
+      recorded_at?: string;
+      source?: string;
+      payload?: Record<string, unknown>;
+      note?: string | null;
+      status?: string;
+    },
+  ): Promise<HealthRecordServerData> {
+    return this.request<HealthRecordServerData>(`/health-records/${encodeURIComponent(recordId)}`, {
+      method: "PATCH",
+      authenticated: true,
+      body: JSON.stringify(body),
+    });
+  }
+
+  public async deleteHealthRecord(recordId: string): Promise<void> {
+    await this.request(`/health-records/${encodeURIComponent(recordId)}`, {
+      method: "DELETE",
+      authenticated: true,
+    });
+  }
+
+  public async syncHealthRecords(
+    records: Array<{
+      id: string;
+      profile_id: string;
+      record_type: string;
+      recorded_at: string;
+      source?: string;
+      payload: Record<string, unknown>;
+      note?: string | null;
+      status?: string;
+      row_version?: number;
+    }>,
+  ): Promise<HealthRecordServerData[]> {
+    const res = await this.request<HealthRecordServerListData>("/health-records/sync", {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify({ records }),
+    });
     return res.items;
   }
 

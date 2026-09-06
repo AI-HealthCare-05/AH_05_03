@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitForElementToBeRemoved, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
@@ -121,6 +121,7 @@ describe("HomePage", () => {
 
     await user.click(screen.getByRole("button", { name: "삭제" }));
     await user.click(screen.getByRole("button", { name: "삭제 목록으로 이동" }));
+    await waitForElementToBeRemoved(() => screen.queryByRole("dialog"));
     await user.click(await screen.findByRole("button", { name: "삭제된 기록 1건" }));
     await user.click(screen.getByRole("button", { name: "복원" }));
     expect(await screen.findByText("수정 후 기록")).toBeInTheDocument();

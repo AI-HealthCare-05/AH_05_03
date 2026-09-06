@@ -80,6 +80,10 @@ class ErrorCode(StrEnum):
     CHALLENGE_NOT_FOUND = "CHALLENGE_NOT_FOUND"
     # --- chat sessions ---------------------------------------------
     CHAT_SESSION_NOT_FOUND = "CHAT_SESSION_NOT_FOUND"
+    # --- profiles & health records ---------------------------------
+    PROFILE_NOT_FOUND = "PROFILE_NOT_FOUND"
+    HEALTH_RECORD_NOT_FOUND = "HEALTH_RECORD_NOT_FOUND"
+    PROFILE_ACCESS_DENIED = "PROFILE_ACCESS_DENIED"
 
 
 ERROR_STATUS: dict[ErrorCode, int] = {
@@ -137,6 +141,9 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     ErrorCode.PROFILE_LINK_INVITATION_MISMATCH: status.HTTP_409_CONFLICT,
     ErrorCode.CHALLENGE_NOT_FOUND: status.HTTP_404_NOT_FOUND,
     ErrorCode.CHAT_SESSION_NOT_FOUND: status.HTTP_404_NOT_FOUND,
+    ErrorCode.PROFILE_NOT_FOUND: status.HTTP_404_NOT_FOUND,
+    ErrorCode.HEALTH_RECORD_NOT_FOUND: status.HTTP_404_NOT_FOUND,
+    ErrorCode.PROFILE_ACCESS_DENIED: status.HTTP_403_FORBIDDEN,
 }
 
 DEFAULT_MESSAGE: dict[ErrorCode, str] = {
@@ -189,6 +196,9 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.PROFILE_LINK_INVITATION_MISMATCH: "초대와 프로필 연결 정보가 일치하지 않습니다.",
     ErrorCode.CHALLENGE_NOT_FOUND: "그런 챌린지가 없습니다.",
     ErrorCode.CHAT_SESSION_NOT_FOUND: "대화 세션을 찾을 수 없습니다.",
+    ErrorCode.PROFILE_NOT_FOUND: "프로필을 찾을 수 없습니다.",
+    ErrorCode.HEALTH_RECORD_NOT_FOUND: "건강 기록을 찾을 수 없습니다.",
+    ErrorCode.PROFILE_ACCESS_DENIED: "해당 프로필에 접근할 권한이 없습니다.",
 }
 
 # 프레임워크가 직접 올리는 오류(라우터 404·405, HTTPBearer 401)만 여기로 온다.
