@@ -18,6 +18,7 @@ class ProfileContext(BaseModel):
     서버가 기록을 갖고 있지 않아 클라이언트가 보내는 것은 맞지만, 그만큼
     길이를 묶어 두지 않으면 지시문을 통째로 덮어쓸 수 있다."""
 
+    profile_id: uuid.UUID | None = Field(default=None, description="서버 프로필 ID (선택)")
     profile_name: str = Field(max_length=100)
     relationship: str | None = Field(default=None, max_length=50)
     birth_year: int | None = Field(default=None, ge=1900, le=2100)

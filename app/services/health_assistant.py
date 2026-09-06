@@ -4,11 +4,13 @@ from typing import Any
 from app.dtos.health_assistant import (
     HealthAssistantChatRequest,
     HealthAssistantResponse,
+    ProfileContext,
 )
 from app.exceptions import LlmProviderFailedError
 from app.integrations.llm.chain import shared_chat_client
 from app.integrations.llm.protocol import LLMClientProtocol
 from app.prompts.health_assistant import build_system_instruction
+from app.repositories.health_record_repository import HealthRecordRepository
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.ocr_partial import PartialJsonTextReader
 
@@ -21,10 +23,29 @@ class HealthAssistantService:
     """
 
     def __init__(
-        self, llm_client: LLMClientProtocol | None = None, safety_service: HealthAssistantSafetyService | None = None
+        self,
+        llm_client: LLMClientProtocol | None = None,
+        safety_service: HealthAssistantSafetyService | None = None,
+        record_repo: HealthRecordRepository | None = None,
     ):
         self._llm_client = llm_client
         self.safety_service = safety_service or HealthAssistantSafetyService()
+        self.record_repo = record_repo
+
+    async def _enrich_context(self, context: ProfileContext | None) -> ProfileContext | None:
+        if context is None or context.recent_records_summary or not context.profile_id or not self.record_repo:
+            return context
+        try:
+            records = await self.record_repo.list_by_profile(context.profile_id, limit=5)
+            if records:
+                summaries = []
+                for r in records:
+                    date_str = r.recorded_at.strftime("%Y-%m-%d")
+                    summaries.append(f"[{date_str}] {r.record_type}: {r.payload}")
+                context.recent_records_summary = "; ".join(summaries)[:2000]
+        except Exception:
+            pass
+        return context
 
     @property
     def llm_client(self) -> LLMClientProtocol:
@@ -42,7 +63,8 @@ class HealthAssistantService:
         if safety_check:
             return safety_check
 
-        system_instruction = build_system_instruction(request.profile_context)
+        profile_context = await self._enrich_context(request.profile_context)
+        system_instruction = build_system_instruction(profile_context)
 
         response = await self.llm_client.generate_structured_response(
             system_instruction=system_instruction,
@@ -74,7 +96,8 @@ class HealthAssistantService:
             yield "result", safety_check.model_dump(mode="json")
             return
 
-        system_instruction = build_system_instruction(request.profile_context)
+        profile_context = await self._enrich_context(request.profile_context)
+        system_instruction = build_system_instruction(profile_context)
         reader = PartialJsonTextReader("assistant_message")
         raw = ""
         async for piece in self.llm_client.stream_structured_response(

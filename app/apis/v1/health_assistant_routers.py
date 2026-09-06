@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from app.core import config
+from app.core.db.session import SessionDep
 from app.core.errors import ErrorCode
 from app.dependencies.security import require_active_account
 from app.dependencies.services import get_rate_limiter
@@ -23,6 +24,7 @@ from app.dtos.health_assistant import (
     HealthAssistantResponse,
 )
 from app.models.service_accounts import ServiceAccount
+from app.repositories.health_record_repository import HealthRecordRepository
 from app.services.chat_session_service import ChatSessionService
 from app.services.health_assistant import HealthAssistantService
 from app.services.rate_limit import RateLimiter
@@ -43,8 +45,10 @@ _ERRORS = (
 )
 
 
-def get_health_assistant_service() -> HealthAssistantService:
-    return HealthAssistantService()
+def get_health_assistant_service(
+    session: SessionDep,
+) -> HealthAssistantService:
+    return HealthAssistantService(record_repo=HealthRecordRepository(session))
 
 
 @health_assistant_router.post(
