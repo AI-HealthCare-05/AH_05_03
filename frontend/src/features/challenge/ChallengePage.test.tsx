@@ -442,7 +442,7 @@ describe("ChallengePage", () => {
   it("집 공동 목표를 보여 준다", async () => {
     vi.spyOn(serverApiClient, "getChallengeToday").mockResolvedValue(today());
     vi.spyOn(serverApiClient, "listHouseholds").mockResolvedValue([
-      { id: HOUSEHOLD.household_id, status: "active", created_at: "2026-08-01T00:00:00Z", row_version: 1 },
+      { id: HOUSEHOLD.household_id, master_account_id: "master-id", status: "active", created_at: "2026-08-01T00:00:00Z", row_version: 1 },
     ]);
     vi.spyOn(serverApiClient, "getHouseholdGarden").mockResolvedValue(HOUSEHOLD);
 
@@ -454,7 +454,7 @@ describe("ChallengePage", () => {
   it("가족 순위는 시즌 점수 순이고 누적 나무 크기로 매기지 않는다", async () => {
     vi.spyOn(serverApiClient, "getChallengeToday").mockResolvedValue(today());
     vi.spyOn(serverApiClient, "listHouseholds").mockResolvedValue([
-      { id: HOUSEHOLD.household_id, status: "active", created_at: "2026-08-01T00:00:00Z", row_version: 1 },
+      { id: HOUSEHOLD.household_id, master_account_id: "master-id", status: "active", created_at: "2026-08-01T00:00:00Z", row_version: 1 },
     ]);
     vi.spyOn(serverApiClient, "getHouseholdGarden").mockResolvedValue(HOUSEHOLD);
 
@@ -476,7 +476,7 @@ describe("ChallengePage", () => {
   it("정원과 리더보드에는 측정값이 없다", async () => {
     vi.spyOn(serverApiClient, "getChallengeToday").mockResolvedValue(today());
     vi.spyOn(serverApiClient, "listHouseholds").mockResolvedValue([
-      { id: HOUSEHOLD.household_id, status: "active", created_at: "2026-08-01T00:00:00Z", row_version: 1 },
+      { id: HOUSEHOLD.household_id, master_account_id: "master-id", status: "active", created_at: "2026-08-01T00:00:00Z", row_version: 1 },
     ]);
     vi.spyOn(serverApiClient, "getHouseholdGarden").mockResolvedValue(HOUSEHOLD);
 

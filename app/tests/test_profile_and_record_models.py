@@ -22,7 +22,7 @@ async def test_family_profile_and_health_records_crud(db_session: AsyncSession) 
     db_session.add(account)
     await db_session.flush()
 
-    household = Household(created_by_account_id=account.id)
+    household = Household(created_by_account_id=account.id, master_account_id=account.id)
     db_session.add(household)
     await db_session.flush()
 
