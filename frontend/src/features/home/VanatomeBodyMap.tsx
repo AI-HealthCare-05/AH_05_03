@@ -73,11 +73,6 @@ const SUPPORTED_SYSTEMS_BY_ATLAS: Record<AnatomyAtlasId, ReadonlySet<string>> = 
   ]),
 };
 
-const ATLAS_OPTIONS: Array<{ id: AnatomyAtlasId; label: string }> = [
-  { id: "vanatome-male-reference", label: "남성" },
-  { id: "tripo-triangle2m-v49-internals-preview", label: "여성" },
-];
-
 const DEFAULT_ANATOMY_ATLAS: AnatomyAtlasId = "vanatome-male-reference";
 
 export function VanatomeBodyMap({
@@ -95,17 +90,9 @@ export function VanatomeBodyMap({
   const pelvicOrganFocusRef = useRef<(active: boolean) => void>(() => undefined);
   const setHiddenSystemsRef = useRef<(systems: ReadonlySet<string>) => void>(() => undefined);
   const playHandPoseRef = useRef<(pose: HandPose) => void>(() => undefined);
-  const [atlasId, setAtlasId] = useState<AnatomyAtlasId>(() =>
-    gender === "female" ? "tripo-triangle2m-v49-internals-preview" : DEFAULT_ANATOMY_ATLAS,
-  );
-
-  useEffect(() => {
-    if (gender === "female") {
-      setAtlasId("tripo-triangle2m-v49-internals-preview");
-    } else if (gender === "male") {
-      setAtlasId("vanatome-male-reference");
-    }
-  }, [gender]);
+  const atlasId: AnatomyAtlasId = gender === "female"
+    ? "tripo-triangle2m-v49-internals-preview"
+    : DEFAULT_ANATOMY_ATLAS;
   const [manifest, setManifest] = useState<AnatomyAtlasManifest>();
   const [selectedStructure, setSelectedStructure] = useState<SelectedStructure>();
   const [activeFocus, setActiveFocus] = useState<BodyFocus>("full");
@@ -218,19 +205,6 @@ export function VanatomeBodyMap({
     <section className="body-map-card vanatome-card" aria-label="인체 모니터">
       <div className="body-map-copy">
         <p className="section-kicker">인체 모니터</p>
-        <fieldset className="anatomy-atlas-switch">
-          <legend>참조 아틀라스</legend>
-          {ATLAS_OPTIONS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              aria-pressed={atlasId === option.id}
-              onClick={() => setAtlasId(option.id)}
-            >
-              {option.label}
-            </button>
-          ))}
-        </fieldset>
         <fieldset className="vanatome-system-layers">
           <legend>구조 레이어</legend>
           <div className="vanatome-system-layer-actions">
