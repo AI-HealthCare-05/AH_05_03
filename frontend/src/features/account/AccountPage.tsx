@@ -187,6 +187,22 @@ export function AccountPage() {
     await loadAccountData();
   }
 
+  async function exportBackup() {
+    if (!runtime) return;
+    try {
+      const blob = await runtime.backup.exportAll("ieobom");
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `ieobom-backup-${new Date().toISOString().slice(0, 10)}.ieobom`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("건강기록 백업 파일(.ieobom)을 다운로드했습니다.");
+    } catch {
+      setError("백업 파일을 생성하지 못했습니다.");
+    }
+  }
+
   async function confirmAction(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (!confirmation) return;
@@ -219,13 +235,18 @@ export function AccountPage() {
         await serverApiClient.unlinkProfileLink(confirmation.link.id);
         setMessage("서비스 계정 연결을 해제했습니다. 이 브라우저의 로컬 프로필과 건강정보는 변경하지 않았습니다.");
       } else {
-        await serverApiClient.closeAccount();
+        const purgeHealthData = Boolean(new FormData(event?.currentTarget).get("purge-health-data"));
+        const closeRes = await serverApiClient.closeAccount(purgeHealthData);
         serverApiClient.clearAccessToken();
         clearAccountState();
         // 로그아웃과 같은 이유로 관문에도 알린다 — 종료한 계정으로 화면이 남으면
         // 누르는 것마다 401 이 된다.
         markSignedOut();
-        setMessage("서비스 계정을 종료했습니다. 건강정보는 보존됩니다.");
+        setMessage(
+          closeRes.health_data_purged
+            ? "서비스 계정을 종료하고 서버의 건강정보를 영구 폐기했습니다."
+            : "서비스 계정을 종료했습니다. 건강정보는 보존됩니다.",
+        );
       }
       setConfirmation(undefined);
       if (confirmation.kind !== "close-account") {
@@ -307,7 +328,16 @@ export function AccountPage() {
           <section className="account-card account-wide danger-zone"><p className="section-kicker">계정 종료</p><h2>서비스 계정 닫기</h2><p>인증·구독·서버 연결 상태를 종료합니다. 기기에 저장된 건강정보는 삭제되지 않습니다.</p><button className="danger-button" type="button" onClick={() => setConfirmation({ kind: "close-account" })}>계정 종료</button></section>
         </div>
       )}
-      {confirmation ? <ConfirmationDialog confirmation={confirmation} email={account?.account.email} working={working} onCancel={() => setConfirmation(undefined)} onConfirm={confirmAction} /> : null}
+      {confirmation ? (
+        <ConfirmationDialog
+          confirmation={confirmation}
+          email={account?.account.email}
+          working={working}
+          onCancel={() => setConfirmation(undefined)}
+          onConfirm={confirmAction}
+          onExportBackup={exportBackup}
+        />
+      ) : null}
     </div>
   );
 }
@@ -499,12 +529,14 @@ function ConfirmationDialog({
   working,
   onCancel,
   onConfirm,
+  onExportBackup,
 }: {
   confirmation: Confirmation;
   email?: string;
   working: boolean;
   onCancel: () => void;
   onConfirm: (event?: FormEvent<HTMLFormElement>) => Promise<void>;
+  onExportBackup?: () => Promise<void>;
 }) {
   const content = confirmationCopy(confirmation);
   return (
@@ -522,10 +554,24 @@ function ConfirmationDialog({
         <p className="confirmation-copy">{content.description}</p>
         <form className="product-form" onSubmit={(event) => void onConfirm(event)}>
           {confirmation.kind === "close-account" ? (
-            <label>
-              계정 이메일 입력
-              <input name="email-confirmation" type="email" placeholder={email} autoComplete="off" required />
-            </label>
+            <>
+              <div style={{ marginBottom: "1rem", padding: "0.75rem", background: "var(--color-surface-subtle, #f4f6f8)", borderRadius: "8px" }}>
+                <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.875rem" }}>
+                  탈퇴 전 건강기록을 안전하게 파일로 보관하세요. 추후 재가입 시 복원할 수 있습니다.
+                </p>
+                <button className="secondary-button" type="button" onClick={() => void onExportBackup?.()}>
+                  .ieobom 백업 다운로드
+                </button>
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+                <input name="purge-health-data" type="checkbox" value="true" />
+                <span>서버에 저장된 내 건강정보를 즉시 영구 폐기합니다</span>
+              </label>
+              <label>
+                계정 이메일 입력
+                <input name="email-confirmation" type="email" placeholder={email} autoComplete="off" required />
+              </label>
+            </>
           ) : null}
           <div className="form-actions">
             <button className="secondary-button" type="button" onClick={onCancel}>
