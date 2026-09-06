@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/deploy-dev-admin-mac.yml'
       - 'app/**'
+      - 'ai_worker/**'
       - 'chronic_disease_engine/**'
       - 'frontend/**'
       - 'infra/**'
@@ -100,4 +101,4 @@ jobs:
             --file infra/docker/docker-compose.dev-mac.yml ps || true
           docker compose --project-name ieobom-dev --env-file "${env_file}" \
             --file infra/docker/docker-compose.dev-mac.yml \
-            logs --tail 200 fastapi anatomy-assets nginx migrate mailpit email-worker || true
+            logs --tail 200 fastapi ai-worker anatomy-assets nginx migrate mailpit email-worker || true
