@@ -5,9 +5,9 @@ import { useLocalDomain } from "../../app/localDomainContext";
 import { Modal } from "../../shared/ui/Modal";
 import { detectLocalCapabilities } from "../../shared/local/capabilities";
 import type { BackupPreview } from "../../shared/local/localBackupService";
-import type { LocalDocument } from "../../shared/local/domainContracts";
+import type { FamilyProfile, LocalDocument } from "../../shared/local/domainContracts";
 import { GeminiOcrAdapter, type OcrMeasurements } from "../../shared/api/geminiOcrAdapter";
-import { FIELD_META } from "../assessment/fields";
+import { calculateAgeFromBirthDate, FIELD_META, profileGenderToSex } from "../assessment/fields";
 
 /**
  * 선택한 구성원의 서류만 남긴다.
@@ -19,6 +19,30 @@ import { FIELD_META } from "../assessment/fields";
 export function filterDocumentsByProfile(documents: LocalDocument[], profileId: string): LocalDocument[] {
   if (!profileId) return [];
   return documents.filter((document) => document.profileId === profileId);
+}
+
+/**
+ * OCR로 읽은 수치에 해당 구성원의 프로필 기본값(성별, 생년월일 기반 나이)을 결합하여
+ * 위험 판정 폼 초기값으로 넘길 페이로드를 구성한다.
+ */
+export function buildAssessmentPrefill(
+  values: Record<string, number>,
+  profile?: FamilyProfile | null,
+): Record<string, number | string | boolean> {
+  const combined: Record<string, number | string | boolean> = { ...values };
+  if (!profile) return combined;
+
+  if (!combined.sex && profile.gender) {
+    const sex = profileGenderToSex(profile.gender);
+    if (sex) combined.sex = sex;
+  }
+  if (!combined.age && profile.birthDate) {
+    const age = calculateAgeFromBirthDate(profile.birthDate);
+    if (age !== undefined && age >= 19 && age <= 100) {
+      combined.age = age;
+    }
+  }
+  return combined;
 }
 
 export function DataManagementPage() {
@@ -375,9 +399,18 @@ export function DataManagementPage() {
             <MeasurementPanel
               measurements={ocrMeasurements}
               onUse={(values) => {
+                const docProfile = profiles.find((p) => p.id === ocrDocument?.profileId);
+                const prefill = buildAssessmentPrefill(values, docProfile);
+                const targetProfileId = ocrDocument?.profileId;
                 setOcrDocument(undefined);
                 setOcrMeasurements(undefined);
-                void navigate("/assessment", { state: { prefill: values } });
+                void navigate("/assessment", {
+                  state: {
+                    prefill,
+                    profileId: targetProfileId,
+                    prefillSource: "document",
+                  },
+                });
               }}
             />
             <div className="form-actions"><button className="secondary-button" type="button" onClick={() => { setOcrDocument(undefined); setOcrMeasurements(undefined); }}>취소</button><button className="primary-button" type="button" disabled={working || !ocrText.trim()} onClick={() => void saveOcrResult()}>확인하고 건강기록에 저장</button></div>
