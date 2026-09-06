@@ -97,6 +97,20 @@ export class ServerApiClient {
     return Boolean(this.accessToken);
   }
 
+  public async requestPasswordReset(email: string): Promise<void> {
+    await this.request<null>("/auth/password-reset/request", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  public async confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+    await this.request<null>("/auth/password-reset/confirm", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+  }
+
   public getAccount(): Promise<AccountSummary> {
     return this.request("/account", { authenticated: true });
   }

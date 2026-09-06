@@ -107,4 +107,42 @@ describe("SignInPage", () => {
     expect(screen.getByLabelText("이메일")).toHaveValue("invited@example.com");
     expect(screen.getByText(/invited@example.com 주소로 초대받았습니다/)).toBeInTheDocument();
   });
+
+  it("비밀번호 찾기를 누르면 링크 요청 화면으로 전환되고 전송 완료 메시지를 보여준다", async () => {
+    const user = userEvent.setup();
+    const { serverApiClient } = await import("../../shared/api/serverApiClient");
+    const spy = vi.spyOn(serverApiClient, "requestPasswordReset").mockResolvedValue(undefined);
+
+    renderSignIn();
+
+    await user.click(screen.getByRole("button", { name: "비밀번호 찾기" }));
+    expect(screen.getByRole("heading", { name: "비밀번호 찾기", level: 1 })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("이메일"), "lost@example.com");
+    await user.click(screen.getByRole("button", { name: "재설정 링크 받기" }));
+
+    expect(spy).toHaveBeenCalledWith("lost@example.com");
+    expect(await screen.findByRole("status")).toHaveTextContent("비밀번호 재설정 링크를 전송했습니다");
+  });
+
+  it("비밀번호 재설정 링크로 들어오면 새 비밀번호 설정 화면이 열리고 변경을 완료한다", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/#reset_token=valid_tok&email=reset%40example.com");
+
+    const { serverApiClient } = await import("../../shared/api/serverApiClient");
+    const spy = vi.spyOn(serverApiClient, "confirmPasswordReset").mockResolvedValue(undefined);
+
+    renderSignIn();
+
+    expect(screen.getByRole("heading", { name: "새 비밀번호 설정", level: 1 })).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("새 비밀번호"), "NewPassword123!");
+    await user.type(screen.getByLabelText("새 비밀번호 확인"), "NewPassword123!");
+    await user.click(screen.getByRole("button", { name: "비밀번호 변경하기" }));
+
+    expect(spy).toHaveBeenCalledWith("valid_tok", "NewPassword123!");
+    expect(await screen.findByRole("status")).toHaveTextContent("비밀번호가 성공적으로 변경되었습니다");
+    expect(screen.getByRole("heading", { name: "로그인하고 시작하세요", level: 1 })).toBeInTheDocument();
+  });
 });
+
