@@ -14,13 +14,12 @@
  * - `RecordDetail`  — 모달. 그날 넣은 값 전부와 질환별 등급 전부
  */
 
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { DISEASE_NAMES, LEVEL_ORDER, type RiskLevel } from "../assessment/contracts";
 import { LEVEL_TONE, levelLabel, snapshot } from "./recordSummaryData";
 import type { DiseaseRisk, DiseaseVerdict } from "../assessment/contracts";
-import { MatrixCard, VerdictCard, VerdictDetail } from "../assessment/VerdictCards";
+import { MatrixCard, VerdictCard } from "../assessment/VerdictCards";
 import { FIELD_LABELS, FIELD_UNITS } from "../assessment/fields";
 import type { HealthRecord } from "../../shared/local/domainContracts";
 import { Modal } from "../../shared/ui/Modal";
@@ -38,7 +37,6 @@ import { Modal } from "../../shared/ui/Modal";
 export function RecordDetail({ record, onClose }: { record: HealthRecord; onClose: () => void }) {
   const navigate = useNavigate();
   const payload = snapshot(record);
-  const [openVerdict, setOpenVerdict] = useState<string>();
 
   const inputs = Object.entries(payload.inputs ?? {}).filter(
     ([, value]) => value !== null && value !== undefined && value !== "",
@@ -59,7 +57,6 @@ export function RecordDetail({ record, onClose }: { record: HealthRecord; onClos
     (a, b) => order.indexOf(a[1]) - order.indexOf(b[1]),
   );
 
-  const open = verdicts.find((verdict) => verdict.key === openVerdict);
 
   return (
     <>
@@ -88,7 +85,6 @@ export function RecordDetail({ record, onClose }: { record: HealthRecord; onClos
                   key={verdict.key}
                   verdict={verdict}
                   values={values}
-                  onOpen={() => setOpenVerdict(verdict.key)}
                 />
               ))}
             </div>
@@ -172,7 +168,6 @@ export function RecordDetail({ record, onClose }: { record: HealthRecord; onClos
       </Modal>
 
       {/* 카드의 "판정 근거" 는 판정 화면과 같은 모달을 연다. 기록 모달 위에 겹친다. */}
-      {open ? <VerdictDetail verdict={open} values={values} onClose={() => setOpenVerdict(undefined)} /> : null}
     </>
   );
 }

@@ -30,6 +30,7 @@ import {
 } from "react";
 import { useLocation } from "react-router-dom";
 
+import { useAuth } from "../../app/authContext";
 import { useLocalDomain } from "../../app/localDomainContext";
 import {
   ServerApiError,
@@ -37,14 +38,18 @@ import {
 } from "../../shared/api/serverApiClient";
 import type { AssessmentSummaryData, RiskLevel } from "./contracts";
 import { LEVEL_ORDER } from "./contracts";
+import { DetailReport } from "./DetailReport";
 import { DocumentPane, type DocumentReading } from "./DocumentPane";
+import type { ModelSpec } from "./Evidence";
+import { ASSESSMENT_PRESETS, type AssessmentPreset, presetValues } from "./presets";
 import { SuspectPanel } from "./SuspectPanel";
-import { LevelBadge, MatrixCard, VerdictCard, VerdictDetail } from "./VerdictCards";
+import { LevelBadge, MatrixCard, VerdictCard } from "./VerdictCards";
 import {
   calculateAgeFromBirthDate,
   FIELD_GROUPS,
   FIELD_LABELS,
   LAB_FIELDS,
+  outOfRangeFields,
   profileGenderToSex,
   REQUIRED_FIELDS,
   rejectedFields,
@@ -122,8 +127,20 @@ function revealField(
   });
 }
 
+/**
+ * 401 인가. 세션이 풀렸다는 뜻이고, 그때 할 일은 오류를 띄우는 게 아니라
+ * 로그인 관문으로 돌려보내는 것이다.
+ *
+ * 코드까지 같이 보는 이유: 갱신 토큰 쿠키가 없으면 `TOKEN_INVALID`, 접근 토큰만
+ * 없으면 `AUTH_REQUIRED` 로 서로 다른 코드가 온다. 둘 다 사용자에게는 같은 상황이다.
+ */
+function isAuthError(cause: unknown): cause is ServerApiError {
+  return cause instanceof ServerApiError && cause.status === 401;
+}
+
 export function AssessmentPage() {
   const { runtime, profiles } = useLocalDomain();
+  const { markSignedOut } = useAuth();
   const location = useLocation();
   // **effect 가 아니라 초기값으로 받는다.** effect 에서 setState 를 부르면 연쇄 렌더가
   // 되고(`react-hooks/set-state-in-effect`), 사용자가 그 사이에 고친 값을 덮어쓴다.
@@ -142,8 +159,18 @@ export function AssessmentPage() {
   // 값과 읽어 온 값을 구분하지 못해, 원본과 대조할 자리를 고를 수 없다.
   // 사용자가 그 칸을 고치는 순간 표시를 뗀다 — 그때부터는 사람이 쓴 값이다.
   const [readFields, setReadFields] = useState<Set<string>>(new Set());
-  // 근거를 펼쳐 볼 질환. 한 번에 하나만 연다.
-  const [openVerdict, setOpenVerdict] = useState<string>();
+  // 예측 근거 전체 리포트를 열었는가. 질환 하나가 아니라 열 장을 한 화면에 세운다.
+  const [openDetail, setOpenDetail] = useState(false);
+  /**
+   * 적재된 모델의 입력 목록. 카드의 "모델이 쓰지 않은 입력" 을 계산하는 데 쓴다.
+   *
+   * **판정과 함께 부르지 않고 화면이 뜰 때 한 번 받는다.** 사용자 입력과 무관한
+   * 배포 메타데이터라 판정마다 다시 물을 이유가 없고, 실패하면 그 블록만 빠진다.
+   */
+  const [models, setModels] = useState<ModelSpec[]>([]);
+  // 어느 테스트 프로필로 채웠는가. 채운 뒤 손으로 고쳐도 표시는 남긴다 —
+  // 결과를 보고 "이게 내가 넣은 값인가 프리셋인가" 를 되짚을 자리가 필요하다.
+  const [preset, setPreset] = useState<string>();
   // 눌러 보기 전에는 아무 칸도 붉게 칠하지 않는다. 폼을 열자마자 다섯 칸이 빨가면
   // 아직 아무것도 안 했는데 뭘 틀린 것처럼 읽힌다.
   const [attempted, setAttempted] = useState(false);
@@ -177,6 +204,22 @@ export function AssessmentPage() {
     (location.state as { profileId?: string } | null)?.profileId ??
     profiles[0]?.id;
   const activeProfile = profiles.find((item) => item.id === activeProfileId);
+
+  useEffect(() => {
+    let cancelled = false;
+    void serverApiClient
+      .modelInfo<{ models: ModelSpec[] }>()
+      .then((data) => {
+        if (!cancelled) setModels(data.models ?? []);
+      })
+      .catch(() => {
+        // 없는 것을 없다고 말할 수 없을 뿐이다. 나머지 근거는 그대로 나간다.
+        if (!cancelled) setModels([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // 구성원의 기본 정보(성별, 생년월일 기반 나이)가 있고 폼의 해당 칸이 비어 있으면 채워 준다.
   useEffect(() => {
@@ -282,6 +325,31 @@ export function AssessmentPage() {
   // 한 번 시도한 사용자에게는 그게 맞다.
   const flagged = attempted ? missingRequired : [];
 
+  /**
+   * 칸을 떠나는 순간 그 칸만 검사한다.
+   *
+   * **글자를 칠 때마다 하지 않는 이유.** `sbp` 의 하한은 60 인데, 120 을 넣으려면
+   * "1" → "12" → "120" 을 지나간다. 앞의 둘은 범위 밖이라 치는 내내 빨간색이
+   * 깜빡이고, 사용자는 자기가 뭘 잘못했는지 모른 채 경고를 본다. 다 치고 나가는
+   * 순간이 "값을 넣었다"에 해당하는 시점이다.
+   *
+   * 판정 버튼을 누를 때 한 번 더 전체를 본다(`submit`). 여기는 일찍 알려 주는
+   * 것이고, 거기는 놓친 칸이 없게 하는 것이다.
+   */
+  const checkField = useCallback((name: string, value: string) => {
+    setRejected((prev) => {
+      const hit = outOfRangeFields({ [name]: value })[name];
+      if (hit === undefined) {
+        if (!(name in prev)) return prev;
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      }
+      if (prev[name] === hit) return prev;
+      return { ...prev, [name]: hit };
+    });
+  }, []);
+
   const setField = useCallback((name: string, value: string) => {
     setValues((prev) => ({ ...prev, [name]: value }));
     // 고치는 즉시 그 칸의 빨간 표시를 푼다. 다시 제출해야 풀리면 사용자는
@@ -325,6 +393,26 @@ export function AssessmentPage() {
     setReadFields(new Set(applied.map(([name]) => name)));
   }, []);
 
+  /**
+   * 테스트 프로필로 폼을 채운다. **덮어쓴다** — 비어 있는 칸만 채우는 방식이면
+   * 프로필을 바꿔 눌렀을 때 앞 프로필의 값이 남아 섞인 사람이 만들어진다.
+   *
+   * **채우고 채점은 하지 않는다.** 프로필을 고른 뒤 몇 칸을 손으로 고쳐 보는 것이
+   * 이 기능의 쓸모인데, 자동으로 돌면 고치기 전 결과가 먼저 떠서 헷갈린다.
+   * 예측 데모(`app/apis/demo_routers.py` 의 `applyProfile`)가 같은 이유로 그랬다.
+   */
+  const applyPreset = useCallback((chosen: AssessmentPreset) => {
+    setValues(presetValues(chosen));
+    setPreset(chosen.key);
+    // 프리셋 값은 사람이 넣은 것도 문서에서 읽은 것도 아니다. 문서 표시를 지운다 —
+    // 안 지우면 "검진표에서 읽음" 배지가 프리셋 값에 붙는다.
+    setReadFields(new Set());
+    setResult(undefined);
+    setError(undefined);
+    setRejected({});
+    setAttempted(false);
+  }, []);
+
   const submit = useCallback(
     async (event: FormEvent) => {
       event.preventDefault();
@@ -338,6 +426,20 @@ export function AssessmentPage() {
       // 눌러 보게 두고, 비어 있는 칸을 이름으로 세운 뒤 첫 칸으로 커서를 옮긴다.
       if (missingRequired.length > 0) {
         revealField(fieldRefs.current[missingRequired[0]]);
+        return;
+      }
+
+      // **보내기 전에 범위를 본다.** 예전에는 서버의 422 만 믿었는데, 판정 API 는
+      // 인증을 요구하므로 세션이 풀린 상태에서는 422 가 아니라 401 이 먼저 온다 —
+      // 그러면 `rejectedFields` 가 아무 칸도 못 찾아 빨간 표시도 스크롤도 없이
+      // 영문 오류 한 줄만 떴다. 사용자에게는 "틀린 값을 넣었는데 아무 반응이 없다".
+      const badRange = outOfRangeFields(values);
+      const badNames = Object.keys(badRange);
+      if (badNames.length > 0) {
+        setRejected(badRange);
+        // 그룹 순서대로 위에 있는 칸부터 데려간다. `FIELD_GROUPS` 를 훑어 만든
+        // 객체라 키 순서가 곧 화면 순서다.
+        revealField(fieldRefs.current[badNames[0]]);
         return;
       }
 
@@ -378,7 +480,16 @@ export function AssessmentPage() {
         // 쓰면 사용자가 고칠 수 없다. 칸을 집어내 빨갛게 세우고 커서를 옮긴다 —
         // 값이 검진표에서 자동으로 들어온 경우가 많아, 어느 칸인지 말해 주지 않으면
         // 사용자는 자기가 적지도 않은 값을 서른 몇 칸에서 찾아야 한다.
-        if (cause instanceof ServerApiError) {
+        // **인증 실패를 먼저 가른다.** 서버는 "Refresh Token 쿠키가 필요합니다"
+        // 처럼 토큰 사정을 그대로 말하는데, 그 문장은 사용자가 할 일을 알려 주지
+        // 않는다 — 화면에 그대로 떠 있었다. 세션이 풀린 것이므로 관문으로 돌린다.
+        // `markSignedOut` 이 상태를 내리면 `RootLayout` 이 로그인 화면을 대신
+        // 그리므로, 아래 메시지는 관문이 없는 화면에서만 보이는 안전망이다.
+        if (isAuthError(cause)) {
+          setRejected({});
+          setError("로그인이 필요합니다. 로그인한 뒤 다시 판정해 주세요.");
+          markSignedOut();
+        } else if (cause instanceof ServerApiError) {
           const bad = rejectedFields(cause.message);
           const names = Object.keys(bad);
           if (names.length > 0) {
@@ -398,7 +509,16 @@ export function AssessmentPage() {
         setWorking(false);
       }
     },
-    [values, missingRequired, runtime, activeProfileId, reloadSnapshots, readFields, withDocument],
+    [
+      values,
+      missingRequired,
+      runtime,
+      activeProfileId,
+      reloadSnapshots,
+      readFields,
+      withDocument,
+      markSignedOut,
+    ],
   );
 
   // 정렬을 렌더마다 하면 **입력창에 글자 하나 칠 때마다** 스무 장 넘는 카드를 다시
@@ -424,8 +544,8 @@ export function AssessmentPage() {
       <header className="assess-intro">
         <h1>만성질환 위험 판정</h1>
         <p>
-          필수 다섯 개만 채우면 판정이 나옵니다. 검진결과지 수치를 넣을수록
-          답하는 칸이 늘고,{" "}
+          기본 정보와 혈압·공복혈당을 채우면 판정이 나옵니다. 나머지 검진결과지
+          수치를 넣을수록 답하는 칸이 늘고,{" "}
           <strong>
             넣은 값이 있는 질환은 추정이 아니라 학회 기준 대조로 넘어갑니다.
           </strong>
@@ -567,6 +687,39 @@ export function AssessmentPage() {
         말풍선은 문구를 못 바꾸고, 다른 칸을 건드리면 사라져 버린다.
         `required` 속성은 그대로 둔다. 검사에는 안 쓰이지만 보조기술에는 여전히 필요하다.
       */}
+          {/* **테스트 프로필. 폼 맨 위, 기본 칸 위에 선다.**
+              예측 데모(`/api/demo`)가 갖고 있던 것을 여기로 옮겼다 — 수치 34칸을 손으로
+              채우지 않고도 "당뇨인 사람" 을 한 번에 넣어 볼 수 있다는 것이 그 화면의
+              쓸모 절반이었고, 데모를 지우면서 그 절반을 데려왔다.
+
+              **필수 다섯 칸이 어느 프로필에서나 채워진다**(`presets.test.ts` 가 고정).
+              그래서 프리셋을 누르면 곧바로 판정할 수 있다. */}
+          <section className="assess-presets" aria-labelledby="assess-presets-heading">
+            <h3 id="assess-presets-heading">테스트로 돌려보기</h3>
+            <p className="assess-group-note">
+              학회 기준에 맞춘 예시 수치로 폼을 한 번에 채웁니다. 채운 뒤 몇 칸을 고쳐 보면 무엇이 판정을 움직이는지
+              보입니다. <strong>채우기만 하고 판정은 하지 않습니다.</strong>
+            </p>
+            <div className="assess-preset-buttons">
+              {ASSESSMENT_PRESETS.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={preset === item.key ? "assess-preset is-active" : "assess-preset"}
+                  aria-pressed={preset === item.key}
+                  onClick={() => applyPreset(item)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            {preset && (
+              <p className="assess-preset-note">
+                {ASSESSMENT_PRESETS.find((item) => item.key === preset)?.note}
+              </p>
+            )}
+          </section>
+
           <form className="assess-form" onSubmit={submit} noValidate>
             {FIELD_GROUPS.map((group) => (
               <fieldset key={group.key} className="assess-group">
@@ -625,6 +778,11 @@ export function AssessmentPage() {
                             value={values[field.name] ?? ""}
                             onChange={(event) =>
                               setField(field.name, event.target.value)
+                            }
+                            // 다 치고 칸을 떠날 때 그 칸만 검사한다. 치는 도중에는
+                            // 하지 않는다 — 120 을 향해 가는 "1" 이 매번 빨개진다.
+                            onBlur={(event) =>
+                              checkField(field.name, event.target.value)
                             }
                             required={field.required}
                             aria-invalid={blank || Boolean(outOfRange) || undefined}
@@ -712,30 +870,12 @@ export function AssessmentPage() {
         <section className="assess-result">
           <header className="assess-summary">
             <h2>판정 요약</h2>
-            <ul>
-              <li>
-                <strong>
-                  {result.summary.evaluated} / {result.summary.total}
-                </strong>{" "}
-                칸 판정 · 최고 등급{" "}
-                <LevelBadge level={result.summary.highest_level} />
-              </li>
-              <li>
-                엔진별 —{" "}
-                {Object.entries(result.summary.by_engine)
-                  .map(([engine, count]) => `${engine} ${count}칸`)
-                  .join(" · ")}
-              </li>
-              <li>
-                수치가 가리키는 질환{" "}
-                <strong>{result.summary.matrix_evaluated}</strong> /{" "}
-                {result.summary.matrix_total} 칸
-              </li>
-              <li>
-                입력 {result.inputs_provided} / {result.inputs_total} · BMI{" "}
-                {result.bmi}
-              </li>
-            </ul>
+            {/* **예측 근거 전체를 여는 한 곳.** 카드마다 있는 "판정 근거" 는 질환
+                하나를 설명하는데, 열 장을 나란히 놓고 게이지·정확도·안 쓴 입력까지
+                보려면 자리가 따로 있어야 한다. 예측 데모가 그 자리였다. */}
+            <button type="button" className="secondary-button" onClick={() => setOpenDetail(true)}>
+              예측 근거 자세히 보기
+            </button>
             {!result.model_available && (
               <p className="alert error-alert">
                 예측 모델이 적재되지 않아 규칙·공식으로만 판정했습니다.
@@ -790,7 +930,7 @@ export function AssessmentPage() {
                 key={verdict.key}
                 verdict={verdict}
                 values={values}
-                onOpen={() => setOpenVerdict(verdict.key)}
+                models={models}
               />
             ))}
           </div>
@@ -802,7 +942,10 @@ export function AssessmentPage() {
             위가 "지금 어떤가"라면 여기는 "이 값이 앞으로 무엇을 부르는가"입니다. 같은 질환이 양쪽에 나올 수
             있어요 — 예를 들어 γ-GTP 는 간 수치이면서 당뇨 발생도 예고합니다.
           </p>
-          <div className="assess-cards">
+          {/* **판정 카드와 다른 격자를 쓴다.** 이쪽은 넷뿐인데 신호 목록이 붙어
+              카드가 훨씬 길다. 같은 격자에 두면 판정 카드용 최소 행 높이(15.5rem)와
+              싸우고, 좁은 칸에 네 줄짜리 신호가 접혀 글 벽이 된다. */}
+          <div className="assess-matrix-grid">
             {matrix.map((risk) => (
               <MatrixCard key={risk.category} risk={risk} />
             ))}
@@ -844,14 +987,12 @@ export function AssessmentPage() {
 
       {/* 근거 모달. `verdicts` 에서 다시 찾는 이유는 재판정하면 같은 키의 내용이
           바뀌기 때문이다 — 열어 둔 채 판정하면 옛 값이 남는다. */}
-      {openVerdict
-        ? (() => {
-            const found = verdicts.find((v) => v.key === openVerdict);
-            return found ? (
-              <VerdictDetail verdict={found} values={values} onClose={() => setOpenVerdict(undefined)} />
-            ) : null;
-          })()
-        : null}
+
+      {/* 같은 이유로 결과가 없으면 닫는다. `result` 를 캡처해 두면 다시 판정한 뒤에도
+          옛 리포트가 열린 채 남는다. */}
+      {openDetail && result ? (
+        <DetailReport result={result} values={values} models={models} onClose={() => setOpenDetail(false)} />
+      ) : null}
     </section>
   );
 }

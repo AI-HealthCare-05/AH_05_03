@@ -17,6 +17,7 @@ import { SignInPage } from "./SignInPage";
 
 afterEach(() => {
   cleanup();
+  window.localStorage?.clear();
   window.history.replaceState(null, "", "/");
   vi.restoreAllMocks();
 });
@@ -143,6 +144,30 @@ describe("SignInPage", () => {
     expect(spy).toHaveBeenCalledWith("valid_tok", "NewPassword123!");
     expect(await screen.findByRole("status")).toHaveTextContent("비밀번호가 성공적으로 변경되었습니다");
     expect(screen.getByRole("heading", { name: "로그인하고 시작하세요", level: 1 })).toBeInTheDocument();
+  });
+
+  it("초대 상태에서 비밀번호를 재설정하면 완료 후 초대 해시를 복원한다", async () => {
+    const user = userEvent.setup();
+    // 1. 초대 링크로 진입하여 스토리지에 초대 정보 보존
+    window.history.replaceState(null, "", "/#invitation=inv-target&token=tok-target&email=target%40example.com");
+    const { readAndPreserveInvitation } = await import("./invitationStorage");
+    readAndPreserveInvitation();
+
+    // 2. 메일의 비밀번호 재설정 링크 클릭으로 hash 교체
+    window.history.replaceState(null, "", "/#reset_token=reset123&email=target%40example.com");
+
+    const { serverApiClient } = await import("../../shared/api/serverApiClient");
+    vi.spyOn(serverApiClient, "confirmPasswordReset").mockResolvedValue(undefined);
+
+    renderSignIn();
+
+    await user.type(screen.getByLabelText("새 비밀번호"), "NewPassword123!");
+    await user.type(screen.getByLabelText("새 비밀번호 확인"), "NewPassword123!");
+    await user.click(screen.getByRole("button", { name: "비밀번호 변경하기" }));
+
+    // 3. 재설정 완료 후 URL 해시에 초대 토큰이 복원되어야 함
+    expect(window.location.hash).toContain("invitation=inv-target");
+    expect(window.location.hash).toContain("token=tok-target");
   });
 
   it("눈꺼풀 아이콘 버튼을 클릭하면 비밀번호 표시와 숨김이 토글된다", async () => {

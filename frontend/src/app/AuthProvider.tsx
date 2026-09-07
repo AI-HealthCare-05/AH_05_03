@@ -10,6 +10,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react
 
 import { serverApiClient } from "../shared/api/serverApiClient";
 import { AuthContext, type AuthStatus } from "./authContext";
+import { readAndPreserveInvitation } from "../features/account/invitationStorage";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("checking");
@@ -18,6 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    readAndPreserveInvitation();
 
     // 비밀번호 재설정 링크(#reset_token=...)로 들어온 경우 기존 세션을 갱신하지 않고
     // 즉시 로그아웃시켜 새 비밀번호 설정 관문을 안전하게 열 수 있도록 한다.
@@ -49,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleHashChange = () => {
+      readAndPreserveInvitation();
       const params = new URLSearchParams(window.location.hash.replace(/^#/u, ""));
       if (params.has("reset_token")) {
         void serverApiClient.logout().catch(() => {});

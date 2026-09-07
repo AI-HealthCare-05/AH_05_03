@@ -141,13 +141,14 @@ class FamilyInvitationService:
         restore_ttl = self._remaining_ttl(invitation)
         await self.invitation_store.consume(invitation.id, request.token)
         try:
+            await self.household_repo.prepare_for_household_transfer(account.id, invitation.household_id)
             await self.household_repo.ensure_active_membership(invitation.household_id, account.id)
             invitation.status = InvitationStatus.ACCEPTED
             invitation.accepted_by_account_id = account.id
             invitation.accepted_at = datetime.now(tz=timezone.utc)
             invitation.row_version += 1
             await self.session.commit()
-        except SQLAlchemyError:
+        except Exception:
             await self.session.rollback()
             await self._best_effort_restore(invitation_id, request.token, restore_ttl)
             raise
@@ -155,23 +156,32 @@ class FamilyInvitationService:
         return self._serialize(invitation)
 
     async def decline(
-        self, invitation_id: uuid.UUID, account: ServiceAccount, request: InvitationTokenRequest
+        self, invitation_id: uuid.UUID, account: ServiceAccount, request: InvitationTokenRequest | None = None
     ) -> FamilyInvitationData:
         await self.invitation_store.enforce_transition_rate(account.id, invitation_id)
         invitation = await self._require_recipient(invitation_id, account)
         await self._require_pending(invitation)
-        self._verify_hash(invitation, request.token)
-        restore_ttl = self._remaining_ttl(invitation)
-        await self.invitation_store.consume(invitation.id, request.token)
-        try:
+
+        if request is not None and request.token:
+            self._verify_hash(invitation, request.token)
+            restore_ttl = self._remaining_ttl(invitation)
+            await self.invitation_store.consume(invitation.id, request.token)
+            try:
+                invitation.status = InvitationStatus.DECLINED
+                invitation.declined_at = datetime.now(tz=timezone.utc)
+                invitation.row_version += 1
+                await self.session.commit()
+            except SQLAlchemyError:
+                await self.session.rollback()
+                await self._best_effort_restore(invitation_id, request.token, restore_ttl)
+                raise
+        else:
             invitation.status = InvitationStatus.DECLINED
             invitation.declined_at = datetime.now(tz=timezone.utc)
             invitation.row_version += 1
             await self.session.commit()
-        except SQLAlchemyError:
-            await self.session.rollback()
-            await self._best_effort_restore(invitation_id, request.token, restore_ttl)
-            raise
+            await self._best_effort_revoke(invitation)
+
         await self.session.refresh(invitation)
         return self._serialize(invitation)
 

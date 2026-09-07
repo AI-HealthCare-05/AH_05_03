@@ -1,7 +1,7 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Body, Depends, status
 
 from app.core.errors import ErrorCode
 from app.dependencies.security import request_origin, require_active_account
@@ -99,9 +99,9 @@ async def accept_family_invitation(
 )
 async def decline_family_invitation(
     invitation_id: uuid.UUID,
-    request: InvitationTokenRequest,
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     service: Annotated[FamilyInvitationService, Depends(FamilyInvitationService)],
+    request: Annotated[InvitationTokenRequest | None, Body()] = None,
 ) -> ApiResponse[FamilyInvitationData]:
     return ApiResponse(data=await service.decline(invitation_id, account, request), message="초대를 거절했습니다.")
 

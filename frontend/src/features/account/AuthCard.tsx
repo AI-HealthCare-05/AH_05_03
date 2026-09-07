@@ -2,7 +2,7 @@
  * 가입, 로그인, 비밀번호 찾기, 비밀번호 재설정 카드. 한 번에 **하나만** 그린다.
  */
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, type ReactNode, useState } from "react";
 
 export type AuthMode = "signin" | "signup" | "forgot-password" | "reset-password";
 
@@ -52,6 +52,7 @@ export function AuthCard({
   invitationEmail,
   onSubmit,
   onSwitchMode,
+  footer,
 }: {
   mode: AuthMode;
   working: boolean;
@@ -59,6 +60,14 @@ export function AuthCard({
   invitationEmail?: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onSwitchMode?: (targetMode: AuthMode) => void;
+  /**
+   * 카드 아래로 내려가는 안내. **카드가 정하지 않고 호출부가 넘긴다.**
+   *
+   * `/signup` 은 주소가 갈라져 있어(`SignUpPage`) 여기서 모드를 바꿀 수 없다 —
+   * `onSwitchMode` 를 안 받으므로 위의 전환 링크가 통째로 빠지고, 그 자리에 넣을
+   * 문구가 페이지마다 다르다. 그래서 카드가 문구를 갖지 않는다.
+   */
+  footer?: ReactNode;
 }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -243,6 +252,7 @@ export function AuthCard({
           ) : null}
         </div>
       ) : null}
+      {footer}
     </section>
   );
 }

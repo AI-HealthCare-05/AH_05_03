@@ -7,7 +7,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from redis.exceptions import RedisError
 
 from app.apis import spa
-from app.apis.demo_routers import demo_router
 from app.apis.exception_handlers import register_exception_handlers
 from app.apis.v1 import v1_routers
 from app.core import config
@@ -66,10 +65,13 @@ app.add_middleware(
 register_exception_handlers(app)
 
 app.include_router(v1_routers)
-# 예측 API를 사람이 눌러 확인하는 데모 화면. /api/ 아래 두는 규칙은 그대로 지킨다 —
-# 아래 SPA 폴백이 /api 로 시작하는 경로를 건드리지 않기 때문이다.
-# ML 모델과 규칙 엔진을 한 화면에서 스위치로 바꿔 돌린다.
-app.include_router(demo_router)
+# **예측 데모(`/api/demo`)를 뺐다.** 두 엔진을 한 화면에서 눌러 보는 단일 HTML 이었고,
+# React 앱이 들어오기 전까지 예측 API 가 실제로 동작하는지 확인하는 자리였다. 지금은
+# `/assessment` 가 그 일을 한다 — 테스트 프로필로 폼을 한 번에 채우고(데모의 `PROFILES`),
+# "예측 근거 자세히 보기" 가 게이지·정확도·안 쓴 입력까지 보여준다(데모의 결과 화면).
+# 화면이 둘이면 판단도 둘이 되고, 그 판단이 서버에 없다는 것이 ADR-009 가 메우려던
+# 구멍이었다. 데모가 지키던 계약 검사는 `app/tests/model/test_frontend_form_contract.py`
+# 로 옮겼다 — 대상만 데모 HTML 에서 `fields.ts` 로 바뀌었다.
 
 
 # 빌드된 프런트엔드. 별도 nginx 컨테이너가 하던 일을 여기로 옮겼다.

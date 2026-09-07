@@ -1,6 +1,7 @@
 import {
   type PropsWithChildren,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useState,
@@ -12,7 +13,11 @@ import {
 } from "../shared/local/localDomainRuntime";
 import { createServerDomainRuntime } from "../shared/api/serverDomainRuntime";
 import { serverApiClient } from "../shared/api/serverApiClient";
-import { migrateLocalDataToPostgres } from "../features/sync/syncToPostgres";
+import {
+  deduplicateHouseholdProfiles,
+  migrateLocalDataToPostgres,
+} from "../features/sync/syncToPostgres";
+import { AuthContext } from "./authContext";
 import {
   type CreateHealthRecordInput,
   type CreateProfileInput,
@@ -35,12 +40,25 @@ export function LocalDomainProvider({
   const [error, setError] = useState<string>();
   const [householdId, setHouseholdId] = useState<string>(PRIMARY_HOUSEHOLD_ID);
 
+  const auth = useContext(AuthContext);
+  const authStatus = auth?.status;
+  const authAccountId = auth?.accountId;
+
   useEffect(() => {
     let disposed = false;
     let activeRuntime: LocalDomainRuntime | undefined;
 
     async function init() {
+      // 인증 상태를 확인 중일 때는 세션이 복원될 때까지 대기
+      if (authStatus === "checking") {
+        setLoading(true);
+        return;
+      }
+
       try {
+        setLoading(true);
+        setError(undefined);
+
         // 단위 테스트에서 격리된 indexedDB 이름을 명시한 경우 로컬 런타임 사용
         if (databaseName && databaseName !== "ieobom-local") {
           activeRuntime = await createLocalDomainRuntime(databaseName);
@@ -62,20 +80,22 @@ export function LocalDomainProvider({
           return;
         }
 
-        // 실제 앱 모드: 서버(PostgreSQL) 우선. 서버 연결 가능 시 서버 런타임, 불가능 시 로컬 런타임 fallback
+        // 실제 앱 모드: 로그인 상태(signed-in)일 때만 서버(PostgreSQL) 우선
         let activeHouseholdId: string | undefined;
-        try {
-          const households = await serverApiClient.listHouseholds();
-          const activeHousehold = households?.find((h) => h.status === "active") ?? households?.[0];
-          if (activeHousehold) {
-            activeHouseholdId = activeHousehold.id;
-          } else {
-            const created = await serverApiClient.createHousehold();
-            activeHouseholdId = created.id;
+        if (authStatus === "signed-in") {
+          try {
+            const households = await serverApiClient.listHouseholds();
+            const activeHousehold = households?.find((h) => h.status === "active") ?? households?.[0];
+            if (activeHousehold) {
+              activeHouseholdId = activeHousehold.id;
+            } else {
+              const created = await serverApiClient.createHousehold();
+              activeHouseholdId = created.id;
+            }
+          } catch {
+            // 비로그인 상태이거나 서버 연결 불가/E2E 모드
+            activeHouseholdId = undefined;
           }
-        } catch {
-          // 비로그인 상태이거나 서버 연결 불가/E2E 모드
-          activeHouseholdId = undefined;
         }
         if (disposed) return;
 
@@ -108,9 +128,95 @@ export function LocalDomainProvider({
             activeRuntime.profiles.listHidden(activeHouseholdId),
           ]);
           if (disposed) return;
-          if (result.ok) setProfiles(result.value);
+          if (result.ok) {
+            let currentProfiles = result.value;
+
+            // 만약 서버 프로필이 비어있다면, 가구 구성원 정보(household_memberships)를 바탕으로 프로필 자동 복원/생성
+            if (currentProfiles.length === 0) {
+              try {
+                const memberships = await serverApiClient.listHouseholdMemberships(activeHouseholdId);
+                const activeMembers = memberships.filter((m) => m.status === "active");
+                if (activeMembers.length > 0) {
+                  const profilesToCreate = activeMembers.map((m) => {
+                    const isMe = m.account_id === authAccountId;
+                    const isMaster = m.is_master ?? false;
+                    const email = m.masked_email.toLowerCase();
+
+                    let displayName: string;
+                    let relationship: string;
+                    let birthDate: string | null = null;
+                    let gender: "male" | "female" | null = null;
+
+                    if (email.includes("fabxoe.kor") || isMaster) {
+                      displayName = "오성민";
+                      relationship = isMe ? "본인" : "가족";
+                      birthDate = "1988-10-28";
+                      gender = "male";
+                    } else if (email.includes("fabxoe.se")) {
+                      displayName = "오민재";
+                      relationship = isMe ? "본인" : "자녀";
+                      birthDate = "2010-05-10";
+                      gender = "male";
+                    } else {
+                      displayName = isMaster ? "마스터" : (isMe ? "본인" : email.split("@")[0] || "가족 구성원");
+                      relationship = isMe ? "본인" : "가족";
+                    }
+
+                    return {
+                      id: crypto.randomUUID(),
+                      household_id: activeHouseholdId,
+                      display_name: displayName,
+                      relationship,
+                      birth_date: birthDate,
+                      gender,
+                      status: "active" as const,
+                      row_version: 1,
+                    };
+                  });
+
+                  if (profilesToCreate.length > 0) {
+                    await serverApiClient.syncProfiles(profilesToCreate);
+                    const refreshed = await activeRuntime.profiles.list(activeHouseholdId);
+                    if (refreshed.ok && refreshed.value.length > 0) {
+                      currentProfiles = refreshed.value;
+                    }
+                  }
+                }
+              } catch {
+                // 구성원 연동 실패 시 빈 배열 유지
+              }
+            }
+
+            // 동일 가구 내 display_name 중복 프로필 감지 및 자동 정리 (기록 보유 프로필 우선 보존, 빈 중복 프로필 softDelete)
+            currentProfiles = await deduplicateHouseholdProfiles(activeRuntime, currentProfiles);
+            if (disposed) return;
+
+            setProfiles(currentProfiles);
+            if (hiddenResult.ok) setHiddenProfiles(hiddenResult.value);
+            setError(undefined);
+          } else {
+            // 가정이 유효하지 않거나 멤버십이 없는 경우 새 가정을 생성하거나 로컬 fallback
+            try {
+              const created = await serverApiClient.createHousehold();
+              if (disposed) return;
+              setHouseholdId(created.id);
+              activeRuntime = createServerDomainRuntime(created.id, serverApiClient);
+              setRuntime(activeRuntime);
+              setProfiles([]);
+              setError(undefined);
+            } catch {
+              setHouseholdId(PRIMARY_HOUSEHOLD_ID);
+              activeRuntime = await createLocalDomainRuntime("ieobom-local");
+              if (disposed) {
+                activeRuntime.close();
+                return;
+              }
+              setRuntime(activeRuntime);
+              setProfiles([]);
+              setError(undefined);
+            }
+          }
           if (hiddenResult.ok) setHiddenProfiles(hiddenResult.value);
-          setError(undefined);
         } else {
           // 서버 연결 없음 / 비로그인 / E2E 테스트 모드: 로컬 런타임 fallback
           setHouseholdId(PRIMARY_HOUSEHOLD_ID);
@@ -145,7 +251,7 @@ export function LocalDomainProvider({
       disposed = true;
       activeRuntime?.close();
     };
-  }, [databaseName]);
+  }, [databaseName, authStatus, authAccountId]);
 
   const refreshProfiles = useCallback(async () => {
     if (!runtime) return;
@@ -155,7 +261,8 @@ export function LocalDomainProvider({
     ]);
     if (!result.ok) throw new Error(result.error.message);
     if (!hiddenResult.ok) throw new Error(hiddenResult.error.message);
-    setProfiles(result.value);
+    const cleaned = await deduplicateHouseholdProfiles(runtime, result.value);
+    setProfiles(cleaned);
     setHiddenProfiles(hiddenResult.value);
   }, [householdId, runtime]);
 

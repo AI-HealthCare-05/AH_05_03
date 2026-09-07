@@ -160,3 +160,19 @@ class TestFamilyInvitationAPI:
         assert cancelled.json()["data"]["status"] == "cancelled"
         assert accepted.status_code == status.HTTP_409_CONFLICT
         assert accepted.json()["error_code"] == "INVITATION_STATE_CONFLICT"
+
+    async def test_recipient_can_decline_without_token(self, client: AsyncClient) -> None:
+        inviter_headers = await _login(client, "decline-owner@example.com")
+        recipient_headers = await _login(client, "decline-member@example.com")
+        household_id = await _household(client, inviter_headers)
+        created = await _invite(client, inviter_headers, household_id, "decline-member@example.com")
+        invitation_id = created.json()["data"]["invitation"]["id"]
+
+        declined = await client.post(
+            f"/api/v1/family-invitations/{invitation_id}/decline",
+            headers=recipient_headers,
+        )
+
+        assert declined.status_code == status.HTTP_200_OK
+        assert declined.json()["data"]["status"] == "declined"
+        assert declined.json()["data"]["declined_at"] is not None

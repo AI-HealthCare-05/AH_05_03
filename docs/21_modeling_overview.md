@@ -349,8 +349,7 @@ docker compose up -d --build
 | `app/services/risk.py` | 그 JSON을 순수 파이썬으로 채점한다. 외부 의존성 없음 |
 | `app/dtos/predictions.py` | 필수 4개 + 선택 12개. 키·몸무게로 BMI를 계산한다 |
 | `app/apis/v1/prediction_routers.py` | 예측·모델정보 엔드포인트 |
-| `app/apis/demo_routers.py` | 데모 화면 (단일 HTML). nginx가 `/api/`만 프록시하므로 그 아래 둔다. 엔진 스위치로 규칙 엔진과 함께 돌린다 |
-| `app/apis/demo_style.py` | 화면 스타일. 두 엔진 결과가 같은 껍데기를 쓴다 — 화면 차이가 모델 차이로 오해되면 안 된다 |
+| ~~`app/apis/demo_routers.py`·`demo_style.py`~~ | **삭제됨.** 데모 화면(`/api/demo`)을 `/assessment` 로 합쳤다 — 테스트 프로필은 `frontend/src/features/assessment/presets.ts`, 결과 상세는 `DetailReport.tsx` 다 |
 | `modeling/refine.py` | 특징 확장 5개 구성 비교 |
 | `modeling/diagnose_serving.py` | 출처 누출·응답 민감도 진단 |
 | `modeling/diagnose_targets.py` | 타깃별·연령대별·미진단자 AUROC 진단 (§4.7·§4.8) |
@@ -519,6 +518,7 @@ KoGES·AI-Hub와 같은 벽이 아니므로 다시 확인해 볼 값어치가 �
 | [22_two_engines_comparison.md](22_two_engines_comparison.md) | 팀원의 규칙 엔진(PR #4)과 이 모델의 실측 비교, 데모 두 화면 |
 | [41_onset_trajectory.md](41_onset_trajectory.md) | 2단계 발병 궤적 — §7.4 의 "발병 예측" 공백을 종단 자료 없이 어디까지 메웠는지 |
 | [42_ml_evaluation_strategy.md](42_ml_evaluation_strategy.md) | 라우팅 결정 · 평가 자료 4종 · 약한 모델 · 순환성 판정 |
+| [45_ml_design_pipeline_and_plan.md](45_ml_design_pipeline_and_plan.md) | 설계·전처리·파인튜닝·모델 인벤토리를 한 곳에서. 5년 사망 위험 모델 |
 | [09_chronic_disease_model_plan.md](09_chronic_disease_model_plan.md) | BRFSS 2024 단독 시절의 계획과 1차 평가 |
 | `modeling/data/README.md` | 데이터 취득 런북 |
 | `modeling/data/VARIABLE_MAP.md` | 온보딩 입력 ↔ 데이터셋 변수 대조표 |
