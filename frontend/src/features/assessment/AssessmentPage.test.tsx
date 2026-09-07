@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { AuthContext, type AuthContextValue } from "../../app/authContext";
 import { LocalDomainProvider } from "../../app/LocalDomainProvider";
 import { ServerApiError, serverApiClient } from "../../shared/api/serverApiClient";
 import { AssessmentPage } from "./AssessmentPage";
@@ -12,12 +13,14 @@ import { FIELD_LABELS, toRequestBody } from "./fields";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  // 모듈 바깥에서 만든 스파이는 restoreAllMocks 가 건드리지 않는다.
+  markSignedOut.mockClear();
 });
 
 /**
  * 화면이 지켜야 하는 것 넷.
  *
- * 1. 필수 다섯 개를 안 채우면 보내지 않는다
+ * 1. 필수 칸을 안 채우면 보내지 않는다
  * 2. **어느 엔진이 왜 답했는지가 화면에 있다** — 이게 없으면 검사값을 넣었을 때
  *    숫자가 왜 바뀌었는지 사용자가 알 수 없다
  * 3. 밀려난 ML 확률을 지우지 않는다
@@ -179,26 +182,57 @@ const RESPONSE: AssessmentSummaryData = {
 };
 
 
+/**
+ * 진짜 `AuthProvider` 를 쓰지 않는 이유: 그쪽은 마운트하자마자 `refresh()` 를 던져
+ * 네트워크를 탄다. 이 화면이 auth 에서 쓰는 것은 401 을 만났을 때 부르는
+ * `markSignedOut` 하나뿐이라, 그 하나만 지켜보면 된다.
+ */
+const markSignedOut = vi.fn();
+
+function authValue(): AuthContextValue {
+  return {
+    status: "signed-in",
+    email: "tester@example.com",
+    signIn: vi.fn(),
+    signOut: vi.fn(),
+    markSignedOut,
+  };
+}
+
 function renderPage(state?: unknown) {
   return render(
     <MemoryRouter initialEntries={[{ pathname: "/assessment", state }]}>
-      <LocalDomainProvider databaseName={`ieobom-assess-test-${crypto.randomUUID()}`}>
-        <AssessmentPage />
-      </LocalDomainProvider>
+      <AuthContext.Provider value={authValue()}>
+        <LocalDomainProvider databaseName={`ieobom-assess-test-${crypto.randomUUID()}`}>
+          <AssessmentPage />
+        </LocalDomainProvider>
+      </AuthContext.Provider>
     </MemoryRouter>,
   );
 }
 
+/** 이미 값이 있는 칸에 이어 붙지 않도록 지우고 넣는다 — "54" 를 두 번 치면 5454 다. */
+async function retype(user: ReturnType<typeof userEvent.setup>, name: RegExp, value: string) {
+  const input = screen.getByRole("spinbutton", { name });
+  await user.clear(input);
+  await user.type(input, value);
+}
+
 async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
-  await user.type(screen.getByRole("spinbutton", { name: /나이/ }), "54");
+  await retype(user, /나이/, "54");
   await user.selectOptions(screen.getByRole("combobox", { name: /성별/ }), "M");
-  await user.type(screen.getByRole("spinbutton", { name: /^키/ }), "173");
-  await user.type(screen.getByRole("spinbutton", { name: /체중/ }), "78");
+  await retype(user, /^키/, "173");
+  await retype(user, /체중/, "78");
   await user.selectOptions(screen.getByRole("combobox", { name: /전반적 건강/ }), "3");
+  // 혈압·공복혈당도 필수다. 검진결과지에서 옮겨 적는 화면이라 이 값들은 거의
+  // 항상 손에 있고, 있는 값을 안 받으면 고혈압·당뇨를 추정으로만 답하게 된다.
+  await retype(user, /수축기/, "128");
+  await retype(user, /이완기/, "82");
+  await retype(user, /공복혈당/, "113");
 }
 
 describe("AssessmentPage", () => {
-  it("필수 다섯 개를 채우기 전에는 보내지 않는다", async () => {
+  it("필수 칸을 채우기 전에는 보내지 않는다", async () => {
     const user = userEvent.setup();
     const spy = vi.spyOn(serverApiClient, "assessSummary");
     renderPage();
@@ -221,7 +255,7 @@ describe("AssessmentPage", () => {
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent(/필수 항목 5개가 비어 있어요/);
+    expect(alert).toHaveTextContent(/필수 항목 8개가 비어 있어요/);
     // 몇 개인지가 아니라 **어느 칸인지**를 말한다.
     expect(within(alert).getByRole("button", { name: "전반적 건강" })).toBeInTheDocument();
     // 첫 칸에 커서가 가 있다.
@@ -247,7 +281,7 @@ describe("AssessmentPage", () => {
 
     await user.type(screen.getByRole("spinbutton", { name: /나이/ }), "54");
     expect(screen.getByRole("spinbutton", { name: /나이/ })).not.toHaveAttribute("aria-invalid");
-    expect(screen.getByRole("alert")).toHaveTextContent(/필수 항목 4개가 비어 있어요/);
+    expect(screen.getByRole("alert")).toHaveTextContent(/필수 항목 7개가 비어 있어요/);
 
     await fillRequired(user);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -411,7 +445,7 @@ describe("AssessmentPage", () => {
     renderPage();
 
     await fillRequired(user);
-    await user.type(screen.getByRole("spinbutton", { name: /수축기/ }), "148");
+    await retype(user, /수축기/, "148");
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
     // 고혈압은 값을 넣었으므로 그 값을 그대로 보여 준다 — 판정 문장에서 뽑아 오지 않는다.
@@ -505,9 +539,9 @@ describe("AssessmentPage", () => {
 
   it("서버가 되돌려준 칸을 빨갛게 세우고 그 칸으로 커서를 옮긴다", async () => {
     const user = userEvent.setup();
-    // 검진표에서 읽은 값이 범위를 벗어나 422 가 되는 상황. 사용자는 자기가 적지도
-    // 않은 값을 서른 몇 칸에서 찾아야 하므로, 어느 칸인지 말해 주지 않으면 못 고친다.
-    vi.spyOn(serverApiClient, "assessSummary").mockRejectedValue(
+    // **화면 검사를 통과한 값**이어야 요청이 실제로 나간다. 서버가 화면보다 좁게
+    // 볼 수 있으므로(교차 검사·범위 조정) 이 경로는 따로 살아 있어야 한다.
+    const assess = vi.spyOn(serverApiClient, "assessSummary").mockRejectedValue(
       new ServerApiError(
         422,
         "VALIDATION_ERROR",
@@ -516,9 +550,11 @@ describe("AssessmentPage", () => {
     );
     renderPage();
     await fillRequired(user);
-    await user.type(screen.getByRole("spinbutton", { name: /^당화혈색소/ }), "61");
-    await user.type(screen.getByRole("spinbutton", { name: /^혈색소/ }), "145");
+    await user.type(screen.getByRole("spinbutton", { name: /^당화혈색소/ }), "6.1");
+    await user.type(screen.getByRole("spinbutton", { name: /^혈색소/ }), "14.5");
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    expect(assess).toHaveBeenCalledTimes(1);
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/값이 범위를 벗어난 칸이 2개/);
@@ -531,15 +567,47 @@ describe("AssessmentPage", () => {
     expect(hba1c).toHaveFocus();
   });
 
+  it("범위를 벗어난 값은 서버에 묻지 않고 그 자리에서 세운다", async () => {
+    const user = userEvent.setup();
+    // 판정 API 는 인증을 요구한다. 세션이 풀려 있으면 422 대신 401 이 먼저 와서
+    // 어느 칸이 틀렸는지 끝내 못 말했다 — 그래서 보내기 전에 화면이 먼저 본다.
+    const assess = vi.spyOn(serverApiClient, "assessSummary");
+    renderPage();
+    await fillRequired(user);
+    await user.type(screen.getByRole("spinbutton", { name: /^당화혈색소/ }), "61");
+    await user.type(screen.getByRole("spinbutton", { name: /^혈색소/ }), "145");
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    expect(assess).not.toHaveBeenCalled();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/값이 범위를 벗어난 칸이 2개/);
+    expect(alert).toHaveTextContent(/2~20 % 사이여야 해요/);
+
+    const hba1c = screen.getByRole("spinbutton", { name: /^당화혈색소/ });
+    expect(hba1c).toHaveAttribute("aria-invalid", "true");
+    expect(hba1c).toHaveFocus();
+  });
+
+  it("칸을 떠나는 순간 그 칸만 붉어진다 — 판정을 누를 필요가 없다", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    const sbp = screen.getByRole("spinbutton", { name: /수축기/ });
+    await user.type(sbp, "999");
+    // 치는 동안에는 조용하다. 120 을 향해 가는 "1" 이 매번 빨개지면 안 된다.
+    expect(sbp).not.toHaveAttribute("aria-invalid");
+
+    await user.tab();
+    expect(sbp).toHaveAttribute("aria-invalid", "true");
+    // 칸 옆에 붙는 안내. 위쪽 요약에도 같은 문구가 있어 id 로 집는다.
+    expect(document.getElementById("sbp-range")).toHaveTextContent(
+      /60~260 mmHg 사이여야 해요/,
+    );
+  });
+
   it("값을 고치면 그 칸의 표시만 즉시 풀린다", async () => {
     const user = userEvent.setup();
-    vi.spyOn(serverApiClient, "assessSummary").mockRejectedValue(
-      new ServerApiError(
-        422,
-        "VALIDATION_ERROR",
-        "hba1c: Input should be less than or equal to 20; hemoglobin: Input should be less than or equal to 25",
-      ),
-    );
     renderPage();
     await fillRequired(user);
     await user.type(screen.getByRole("spinbutton", { name: /^당화혈색소/ }), "61");
@@ -557,6 +625,43 @@ describe("AssessmentPage", () => {
       "true",
     );
     expect(screen.getByRole("alert")).toHaveTextContent(/칸이 1개/);
+  });
+
+  it("세션이 풀렸으면 토큰 사정이 아니라 로그인하라고 말한다", async () => {
+    const user = userEvent.setup();
+    // 서버가 실제로 내는 문구. 그대로 띄우면 사용자가 할 일을 알 수 없다.
+    vi.spyOn(serverApiClient, "assessSummary").mockRejectedValue(
+      new ServerApiError(401, "TOKEN_INVALID", "Refresh Token 쿠키가 필요합니다."),
+    );
+    renderPage();
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/로그인이 필요합니다/);
+    expect(alert).not.toHaveTextContent(/Refresh Token/);
+    // 관문에도 알린다 — `RootLayout` 이 로그인 화면으로 바꿔 그린다.
+    expect(markSignedOut).toHaveBeenCalledTimes(1);
+  });
+
+  it("혈압과 공복혈당이 없으면 판정을 보내지 않는다", async () => {
+    const user = userEvent.setup();
+    const assess = vi.spyOn(serverApiClient, "assessSummary");
+    renderPage();
+
+    // 예전의 "필수 다섯" 만 채운 상태.
+    await retype(user, /나이/, "54");
+    await user.selectOptions(screen.getByRole("combobox", { name: /성별/ }), "M");
+    await retype(user, /^키/, "173");
+    await retype(user, /체중/, "78");
+    await user.selectOptions(screen.getByRole("combobox", { name: /전반적 건강/ }), "3");
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    expect(assess).not.toHaveBeenCalled();
+    const alert = screen.getByRole("alert");
+    expect(within(alert).getByRole("button", { name: "수축기" })).toBeInTheDocument();
+    expect(within(alert).getByRole("button", { name: "이완기" })).toBeInTheDocument();
+    expect(within(alert).getByRole("button", { name: "공복혈당" })).toBeInTheDocument();
   });
 });
 

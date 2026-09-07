@@ -39,9 +39,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 # 있으면 Pydantic 이 Rust 쪽에서 곧장 JSON 바이트로 직렬화한다** — 커스텀 응답
 # 클래스보다 빠르다. 우리 라우트는 전부 봉투 DTO 를 선언하고 있으므로 그 경로를 탄다.
 app = FastAPI(
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    # `None` 이면 FastAPI 가 그 라우트를 아예 만들지 않는다. 404 를 돌려주는 게
+    # 아니라 존재하지 않게 되므로 우회할 경로가 남지 않는다. 운영은 셋 다 끈다 —
+    # `API_DOCS_ENABLED` 주석 참조.
+    docs_url="/api/docs" if config.API_DOCS_ENABLED else None,
+    redoc_url="/api/redoc" if config.API_DOCS_ENABLED else None,
+    openapi_url="/api/openapi.json" if config.API_DOCS_ENABLED else None,
     lifespan=lifespan,
     # 앱 레벨에 걸면 모든 라우트로 전파된다. FastAPI는 422가 이미 선언돼
     # 있으면 기본 HTTPValidationError를 넣지 않으므로, 이 한 줄이 전역에서

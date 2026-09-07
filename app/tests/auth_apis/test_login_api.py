@@ -43,6 +43,59 @@ class TestLoginAPI:
         assert response.status_code == status.HTTP_403_FORBIDDEN
         assert response.json()["error_code"] == "ORIGIN_NOT_ALLOWED"
 
+    async def test_same_origin_is_allowed_without_configuration(self, client: AsyncClient) -> None:
+        """배포 도메인을 `CORS_ALLOW_ORIGINS` 에 안 적어도 로그인이 된다.
+
+        SPA 를 FastAPI 가 직접 서빙하므로 프런트의 Origin 은 곧 요청이 도착한
+        주소다. 이 통로가 없으면 새 도메인에 배포할 때마다 회원가입·로그인이
+        전부 403 이 된다 — 2026-09-04 배포에서 실제로 그랬다.
+        """
+        email = "same-origin@example.com"
+        await client.post("/api/v1/auth/signup", json={"email": email, "password": "Password123!"})
+        own_origin = str(client.base_url)
+        assert own_origin not in config.CORS_ALLOW_ORIGINS
+
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": "Password123!"},
+            headers={"Origin": own_origin},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+    async def test_tls_terminating_proxy_scheme_mismatch_still_passes(self, client: AsyncClient) -> None:
+        """스킴이 어긋나도 호스트가 같으면 통과한다.
+
+        Cloudflare 같은 앞단이 TLS 를 끊고 평문으로 넘기면 뒤쪽은 자기가 http 라고
+        믿는다. 브라우저는 `https://` Origin 을 보내므로 스킴까지 맞추라고 하면 그
+        배포에서는 로그인이 영영 안 된다. 2026-09-04 에 그 조합을 재현해 확인했다.
+        """
+        email = "proxy-scheme@example.com"
+        await client.post("/api/v1/auth/signup", json={"email": email, "password": "Password123!"})
+
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": "Password123!"},
+            headers={"Origin": "http://test"},  # 클라이언트는 https://test 로 붙어 있다
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+    async def test_a_different_port_is_a_different_origin(self, client: AsyncClient) -> None:
+        """호스트 비교는 포트를 포함한다.
+
+        스킴을 안 본다고 해서 아무 이웃이나 들어오면 안 된다. 같은 기계의 다른
+        포트에서 도는 앱은 남이다.
+        """
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "someone@example.com", "password": "Password123!"},
+            headers={"Origin": "https://test:8443"},
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json()["error_code"] == "ORIGIN_NOT_ALLOWED"
+
     async def test_trusted_browser_origin_receives_credentialed_cors_headers(self, client: AsyncClient) -> None:
         email = "trusted-origin@example.com"
         await client.post("/api/v1/auth/signup", json={"email": email, "password": "Password123!"})

@@ -519,6 +519,7 @@ KoGES·AI-Hub와 같은 벽이 아니므로 다시 확인해 볼 값어치가 �
 | [22_two_engines_comparison.md](22_two_engines_comparison.md) | 팀원의 규칙 엔진(PR #4)과 이 모델의 실측 비교, 데모 두 화면 |
 | [41_onset_trajectory.md](41_onset_trajectory.md) | 2단계 발병 궤적 — §7.4 의 "발병 예측" 공백을 종단 자료 없이 어디까지 메웠는지 |
 | [42_ml_evaluation_strategy.md](42_ml_evaluation_strategy.md) | 라우팅 결정 · 평가 자료 4종 · 약한 모델 · 순환성 판정 |
+| [45_ml_design_pipeline_and_plan.md](45_ml_design_pipeline_and_plan.md) | 설계·전처리·파인튜닝·모델 인벤토리를 한 곳에서. 5년 사망 위험 모델 |
 | [09_chronic_disease_model_plan.md](09_chronic_disease_model_plan.md) | BRFSS 2024 단독 시절의 계획과 1차 평가 |
 | `modeling/data/README.md` | 데이터 취득 런북 |
 | `modeling/data/VARIABLE_MAP.md` | 온보딩 입력 ↔ 데이터셋 변수 대조표 |

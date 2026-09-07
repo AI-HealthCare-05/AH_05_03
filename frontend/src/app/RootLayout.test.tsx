@@ -7,12 +7,23 @@
  * 3. 로그인하면 원래 가려던 주소가 그대로 뜬다 — 관문은 리다이렉트가 아니다
  */
 
-import { cleanup, render, screen } from "@testing-library/react";
+/// <reference types="node" />
+// `tsconfig.app.json` 은 브라우저 코드용이라 node 타입을 안 싣는다. 이 파일만
+// 스타일시트를 파일에서 읽으므로 여기서만 끌어온다.
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { AuthContext, type AuthContextValue, type AuthStatus } from "./authContext";
 import { RootLayout } from "./RootLayout";
+
+// 스타일시트 원문. `import ... from "../styles.css?raw"` 로는 못 읽는다 — vitest 가
+// CSS 임포트를 빈 문자열로 갈아 끼워서 조용히 0바이트가 온다(실측). 파일에서 직접
+// 읽되 경로는 `import.meta.dirname` 기준이라 실행 위치와 무관하다.
+const styleSheet = readFileSync(resolve(import.meta.dirname, "../styles.css"), "utf8");
 
 afterEach(cleanup);
 
@@ -61,12 +72,54 @@ describe("RootLayout 로그인 관문", () => {
     expect(screen.getByRole("navigation", { name: "주 메뉴" })).toBeInTheDocument();
   });
 
-  it("메뉴는 가족 홈·건강 현황·계정 셋이다", () => {
+  it("메뉴에 가족 홈·건강 현황·계정이 있다", () => {
     renderAt("signed-in");
 
     const navigation = screen.getByRole("navigation", { name: "주 메뉴" });
     expect(navigation).toHaveTextContent("가족 홈");
     expect(navigation).toHaveTextContent("건강 현황");
     expect(navigation).toHaveTextContent("계정");
+  });
+
+  it("메뉴 항목은 전부 앱 안 라우트다 — 죽은 바깥 링크를 두지 않는다", () => {
+    renderAt("signed-in");
+
+    const links = within(screen.getByRole("navigation", { name: "주 메뉴" })).getAllByRole("link");
+    expect(links.length).toBeGreaterThan(0);
+    // `/api/demo` 가 여기 있었다. `app/apis/demo_routers.py` 가 삭제되면서 404 가
+    // 됐는데 메뉴에만 남아, 누르면 오류 화면으로 떨어졌다.
+    for (const link of links) {
+      expect(link.getAttribute("href")).not.toMatch(/^\/api\//u);
+    }
+  });
+
+  it("현재 위치는 한 곳만 표시한다", () => {
+    renderAt("signed-in");
+
+    const current = within(screen.getByRole("navigation", { name: "주 메뉴" }))
+      .getAllByRole("link")
+      .filter((link) => link.getAttribute("aria-current") === "page");
+
+    expect(current).toHaveLength(1);
+    expect(current[0]).toHaveTextContent("위험 판정");
+  });
+
+  /**
+   * 실제로 난 CSS 회귀를 여기서 막는다.
+   *
+   * `.primary-navigation a` 의 선언 블록이 통째로 사라져 선택자가 바로 아래
+   * `.active` 규칙에 얹힌 적이 있다. 결과는 **일곱 항목이 전부 활성 색**이고
+   * padding·radius 는 0 — 메뉴가 현재 위치를 말하지 못했다.
+   *
+   * jsdom 은 외부 스타일시트를 적용하지 않아서 렌더로는 잡히지 않는다. 그래서
+   * 규칙이 제 몸을 갖고 있는지를 원문에서 확인한다.
+   */
+  it("기본 메뉴 링크 규칙이 자기 선언 블록을 갖고 있다", () => {
+    const blocks = [...styleSheet.matchAll(/\.primary-navigation a\s*\{([^}]*)\}/gu)].map(
+      (match) => match[1],
+    );
+
+    expect(blocks.length).toBeGreaterThan(0);
+    expect(blocks.some((body) => /padding:/u.test(body) && /border-radius:/u.test(body))).toBe(true);
   });
 });

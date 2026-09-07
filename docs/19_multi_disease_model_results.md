@@ -4,6 +4,7 @@
 > 짝 문서: [23_multi_disease_model_design.md](23_multi_disease_model_design.md) — 이 작업의 설계
 > 원본 지표: `modeling/artifacts/multi_target_results.json` · `tier_comparison.json`
 > 재현: `modeling/README.md` 의 빠른 실행
+> 이후 정리: [45_ml_design_pipeline_and_plan.md](45_ml_design_pipeline_and_plan.md) — 설계·전처리·파인튜닝·모델 인벤토리와 5년 사망 위험 모델
 
 ## 0. 세 줄
 

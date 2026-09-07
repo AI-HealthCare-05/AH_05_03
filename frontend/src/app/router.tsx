@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 
 import { ErrorPage } from "./ErrorPage";
+import { SignUpPage } from "../features/account/SignUpPage";
 import { HomePage } from "../features/home/HomePage";
 // 라우트 단위 코드 분할. 정적 임포트로 두면 페이지 일곱이 한 청크에 뭉쳐서,
 // 홈만 보는 사용자도 판정 폼 36필드와 개발용 화면까지 받아 간다.
@@ -19,8 +20,13 @@ import { RootLayout } from "./RootLayout";
 
 export const router = createBrowserRouter([
   {
-    path: "/ui-preview",
-    element: <UiPreviewPage />,
+    // **관문 밖에 있는 유일한 화면.** 로그인 관문은 `RootLayout` 이 `Outlet` 대신
+    // 그리는 것이라 주소가 없는데, 가입은 사람에게 링크로 건네야 해서 주소가
+    // 필요하다. 밖에 둘 수 있는 조건은 하나 — 기기 안 건강기록을 읽지 않을 것.
+    // `SignUpPage` 는 `useLocalDomain` 을 쓰지 않고, 로그인한 사람이 오면 스스로
+    // 비킨다. 이 예외가 하나뿐이라는 것은 `router.test.tsx` 가 지킨다.
+    path: "/signup",
+    element: <SignUpPage />,
     errorElement: <ErrorPage />,
   },
   {
@@ -89,6 +95,14 @@ export const router = createBrowserRouter([
       {
         path: "dev/architecture",
         element: <ArchitecturePage />,
+      },
+      {
+        // **`RootLayout` 밖에 있었다.** 그래서 로그인 관문을 거치지 않았는데,
+        // 이 화면은 `useLocalDomain()` 으로 기기 안 프로필과 건강기록을 읽는다 —
+        // 로그인하지 않은 사람이 주소만 치면 그게 그대로 보였다. 내비게이션에서
+        // 링크를 뺐어도 주소는 살아 있으므로 링크를 빼는 것으로는 막히지 않는다.
+        path: "ui-preview",
+        element: <UiPreviewPage />,
       },
       // 레이아웃 안에서 잡는 404. 헤더와 내비게이션이 남아 있어야 사용자가
       // 막다른 길에 서지 않는다. 주소를 잘못 친 경우도 여기로 온다.

@@ -14,23 +14,27 @@
  * 쳤을 때 로그인이 나간다. **한 폼에 목적이 다른 submit 두 개를 두는 것 자체가
  * 문제다.** 그래서 화면을 갈랐다 — 폼마다 submit 이 하나뿐이니 Enter 가 무엇을
  * 하는지 물어볼 필요가 없다.
+ *
+ * 지금은 화면이 아니라 **주소**까지 갈라져 있다(`/signup`). 아래로 내려가는 링크는
+ * 페이지마다 다르므로 이 카드가 정하지 않고 `footer` 로 받는다.
  */
 
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 
 export function AuthCard({
   mode,
   working,
   invitationEmail,
   onSubmit,
-  onSwitchMode,
+  footer,
 }: {
   mode: "signin" | "signup";
   working: boolean;
   /** 초대 링크로 들어온 경우의 이메일. 그 주소로만 수락할 수 있다. */
   invitationEmail?: string;
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
-  onSwitchMode?: () => void;
+  /** 다른 화면으로 건너가는 안내. 로그인이면 가입으로, 가입이면 로그인으로. */
+  footer?: ReactNode;
 }) {
   const signup = mode === "signup";
 
@@ -80,15 +84,7 @@ export function AuthCard({
         </div>
       </form>
 
-      {onSwitchMode ? (
-        <p className="auth-switch">
-          {signup ? "이미 계정이 있으신가요?" : "아직 계정이 없으신가요?"}{" "}
-          {/* `type="button"` 이 없으면 폼 밖이어도 브라우저가 submit 으로 읽는 일이 있다. */}
-          <button type="button" onClick={onSwitchMode}>
-            {signup ? "로그인" : "회원가입"}
-          </button>
-        </p>
-      ) : null}
+      {footer ? <p className="auth-switch">{footer}</p> : null}
     </section>
   );
 }

@@ -61,6 +61,51 @@ fi
 echo "Validating Compose configuration"
 compose config --quiet
 
+# A non-interactive self-hosted runner can block indefinitely while Docker
+# Desktop waits for its macOS credential helper. Every public image this script
+# needs is therefore pulled with an empty temporary Docker config, which skips
+# the helper entirely. Keep the current daemon endpoint explicit because Docker
+# contexts live under the normal Docker config directory.
+docker_host="$(docker context inspect "$(docker context show)" --format '{{.Endpoints.docker.Host}}')"
+anonymous_docker_config="$(mktemp -d "${TMPDIR:-/tmp}/ieobom-docker-config.XXXXXX")"
+cleanup_anonymous_docker_config() {
+  rm -rf "${anonymous_docker_config}"
+}
+trap cleanup_anonymous_docker_config EXIT
+printf '{"auths":{}}\n' > "${anonymous_docker_config}/config.json"
+
+anonymous_pull() {
+  docker \
+    --config "${anonymous_docker_config}" \
+    --host "${docker_host}" \
+    pull "$1"
+}
+
+# The FastAPI image copies the uv binary out of a pinned GHCR image during the
+# build. `compose build` runs under the normal Docker config, so that one line
+# reaches the credential helper and hangs:
+#
+#   #14 [fastapi internal] load metadata for ghcr.io/astral-sh/uv:0.12.7
+#   #14 ERROR: DeadlineExceeded: context deadline exceeded
+#
+# That failure took the 2026-09-03 dev deployment down and left the tailnet host
+# serving the previous commit. It stayed hidden while the Dockerfile said
+# `uv:latest`, because that tag was already in this Mac's local image store —
+# BuildKit resolves locally first and only then asks the registry. So pull the
+# pinned tag here, anonymously, and the build finds it without the helper.
+#
+# The reference is read out of the Dockerfile rather than repeated, so bumping
+# the pin in one place cannot silently un-fix this.
+uv_builder_image="$(awk 'match($0, /ghcr\.io\/astral-sh\/uv:[^ ]+/) { print substr($0, RSTART, RLENGTH); exit }' "${ROOT_DIR}/app/Dockerfile")"
+if [[ -n "${uv_builder_image}" ]]; then
+  echo "Pre-pulling ${uv_builder_image} without the macOS Docker credential helper"
+  # Not fatal. A cached copy still builds, and a genuinely unreachable registry
+  # fails the build below with a message that says so.
+  anonymous_pull "${uv_builder_image}" || echo "Could not pre-pull ${uv_builder_image}; relying on the local image store." >&2
+else
+  echo "No uv builder image found in app/Dockerfile; skipping the pre-pull." >&2
+fi
+
 echo "Building application images for ${DEPLOY_VERSION}"
 # Do not force a registry refresh on every dev deployment. BuildKit still
 # downloads missing base images, while cached images keep deployments working
@@ -74,23 +119,10 @@ echo "Applying Alembic migrations once"
 compose run --rm migrate
 
 echo "Pulling Mailpit without the macOS Docker credential helper"
-# A non-interactive self-hosted runner can block indefinitely while Docker
-# Desktop waits for its macOS credential helper. Mailpit is a public image, so
-# resolve the Compose-selected image first and pull it with an empty temporary
-# Docker config. Keep the current daemon endpoint explicit because Docker
-# contexts live under the normal Docker config directory.
+# Mailpit is a public image, so resolve the Compose-selected reference and pull
+# it through the same anonymous config set up above.
 mailpit_image="$(compose config --images mailpit)"
-docker_host="$(docker context inspect "$(docker context show)" --format '{{.Endpoints.docker.Host}}')"
-anonymous_docker_config="$(mktemp -d "${TMPDIR:-/tmp}/ieobom-docker-config.XXXXXX")"
-cleanup_anonymous_docker_config() {
-  rm -rf "${anonymous_docker_config}"
-}
-trap cleanup_anonymous_docker_config EXIT
-printf '{"auths":{}}\n' > "${anonymous_docker_config}/config.json"
-docker \
-  --config "${anonymous_docker_config}" \
-  --host "${docker_host}" \
-  pull "${mailpit_image}"
+anonymous_pull "${mailpit_image}"
 
 echo "Starting application services and development invitation inbox"
 compose up -d --remove-orphans mailpit email-worker fastapi frontend

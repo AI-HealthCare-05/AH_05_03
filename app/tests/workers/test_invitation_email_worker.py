@@ -36,6 +36,40 @@ class TestInvitationEmailWorker:
         assert plain_body is not None
         assert url in plain_body.get_content()
 
+    def test_invitation_link_uses_the_origin_the_invite_came_from(self, monkeypatch) -> None:
+        """배포 도메인을 설정에 안 적어도 열리는 링크가 나간다.
+
+        메일은 요청 문맥이 없는 워커가 보내므로, 초대를 만든 요청의 오리진을 실어
+        보내지 않으면 설정 기본값(`localhost:5173`)이 그대로 메일에 박힌다.
+        """
+        monkeypatch.setattr("app.core.config.INVITATION_WEB_ORIGIN", "http://localhost:5173")
+        delivery = InvitationDelivery(
+            uuid.uuid4(), "recipient@example.com", "a" * 43, web_origin="https://ieobom.example"
+        )
+
+        url = build_invitation_url(delivery)
+
+        assert url.startswith("https://ieobom.example/account#invitation=")
+        assert "localhost" not in url
+
+    async def test_delivery_origin_survives_the_redis_round_trip(self, fake_redis: FakeRedis) -> None:
+        """워커가 읽어 갈 때까지 오리진이 살아 있어야 링크가 맞다."""
+        invitation_id = uuid.uuid4()
+        store = InvitationStore(fake_redis)
+
+        await store.register(invitation_id, "recipient@example.com", "a" * 43, 300, "https://ieobom.example")
+        delivery = await store.take_delivery(invitation_id)
+
+        assert delivery is not None
+        assert delivery.web_origin == "https://ieobom.example"
+
+        # SMTP 실패 뒤 재시도해도 첫 메일과 같은 주소로 가야 한다.
+        await store.requeue_delivery(delivery, 300)
+        requeued = await store.take_delivery(invitation_id)
+
+        assert requeued is not None
+        assert requeued.web_origin == "https://ieobom.example"
+
     async def test_stream_event_is_sent_and_acknowledged(self, fake_redis: FakeRedis) -> None:
         invitation_id = uuid.uuid4()
         store = InvitationStore(fake_redis)

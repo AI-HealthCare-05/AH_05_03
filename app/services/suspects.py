@@ -43,9 +43,59 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.services.trajectory import TRAJECTORY_TARGETS
+
 #: 화면에 올리는 개수. 사용자가 "최소 3개" 를 요구했고, 후보가 모자라면 등급이 낮은
 #: 것으로 채우되 `suspected=False` 로 표시해 "의심이라서 올라온 게 아님" 을 알린다.
 TOP_N = 3
+
+#: 상위 셋을 **무엇으로** 고르는가. 한 줄로 갈아 끼운다.
+#:
+#: ``"arbitrated"``
+#:     신호강도 × 근거가중 × 동년배배수. 신호강도는 규칙 엔진·공개 공식이 측정값으로
+#:     낸 판정을 먼저 쓰고, 없을 때만 ML 등급으로 내려간다. 확진(HIGH·VERY_HIGH)은
+#:     후보에서 빠진다. 이 저장소가 2026-09-03 까지 쓰던 방식이다.
+#:
+#: ``"ml_probability"``
+#:     **ML 확률만으로 내림차순.** 규칙 엔진을 순위에서 완전히 뺀다 — 판정 카드는
+#:     그대로 규칙·공식이 정본이지만, 상위 셋을 고르는 일에는 관여하지 않는다.
+#:
+#: 두 방식이 뽑는 것이 실제로 다르므로(같은 프로필에서 셋 중 둘이 바뀐다) 어느 쪽이
+#: 제품에 맞는지는 데이터가 아니라 결정 사항이다. 바꾸기 전에 아래 대가를 읽는다.
+#:
+#: **``ml_probability`` 의 대가 셋.**
+#:
+#: 1. **유병률이 높은 질환이 늘 이긴다.** 이상지질혈증 47% · 고혈압 42% 대 미진단
+#:    당뇨 3.5% 다. 절대 확률로 정렬하면 개인화가 사라지고 거의 모든 사용자가 같은
+#:    셋을 본다. ``EVIDENCE`` 와 동년배배수가 그 자리를 메우고 있었다.
+#:  2. **근거가 약한 축이 위로 온다.** 낮은 HDL 의 사망연계 C 는 0.506 으로 동전
+#:    던지기인데(``EVIDENCE`` 표) 확률만 보면 신기능(C 0.842)보다 위에 설 수 있다.
+#: 3. **라벨을 만드는 검사값은 그 질환의 ML 입력에서 차단돼 있다**(`modeling/targets.py`
+#:    의 ``blocked``). ``low_hdl`` 모델은 HDL 을 못 본다. 그래서 HDL 81 인 사람도
+#:    확률이 낮게 나오지 않고, 사용자가 바로 위 카드에서 "기준 안에 있어요" 를 읽은
+#:    항목이 상위 셋에 올라올 수 있다. 2026-09-03 에 실측 140 프로파일에서 25 건 났다.
+RANK_SOURCE = "ml_probability"
+
+#: 확률 순위의 **후보 집합**. `RANK_SOURCE = "ml_probability"` 일 때만 읽는다.
+#:
+#: ``"trajectory"``
+#:     2단계가 곡선을 낼 수 있는 질환만 — 비가역 3종(당뇨·고혈압·신기능).
+#:     뽑힌 셋이 **전부** 5년 발병 확률을 갖는다.
+#:
+#: ``"all"``
+#:     열 질환 전부.
+#:
+#: **왜 기본이 `"trajectory"` 인가.** 2026-09-04 에 `"all"` 로 한 번 돌려 보고 정했다.
+#: 같은 프로필(52세 남성 · 134/86 · 공복혈당 112)에서 상위 셋이 이상지질(0.636) ·
+#: 지방간(0.583) · 대사증후군(0.452) 으로 뽑혔는데, **셋 다 발병 궤적이 붙지 않는
+#: 질환이라 5년 곡선이 하나도 안 나왔다**(`onset_status` 3/3 `not_applicable`).
+#: 발병 궤적은 비가역 질환에만 정의돼 있기 때문이다(`docs/41` §2.3) — 이상지질은
+#: 지질강하제로 되돌아가므로 "언제 걸리나" 가 성립하지 않는다.
+#:
+#: 대가는 분명하다. 후보가 셋이고 `TOP_N` 도 셋이라 **뽑히는 질환은 언제나 같고
+#: 순서만 바뀐다.** 선별의 성격이 옅어지는 대신 뽑힌 셋이 전부 곡선을 갖는다.
+#: 가역 질환까지 궤적을 확장하면 그때 `"all"` 로 되돌릴 자리다.
+RANK_POOL = "trajectory"
 
 #: ML 의학 등급 → 신호 강도. "낮음" 은 0 이라 곱하면 떨어진다.
 #:
@@ -186,6 +236,12 @@ def reason_text(detail: dict[str, Any], suspected: bool) -> str:
     level = LEVEL_LABEL.get(detail["level"], detail["level"])
     if detail["basis"] == "측정":
         parts = [f"입력한 검사값으로 '{level}' 판정"]
+    elif detail["basis"] == "확률":
+        # `RANK_SOURCE = "ml_probability"`. 확률만으로 뽑았으므로 그렇게 말한다 —
+        # "검사값 없이 추정" 이라고 하면 검사값을 넣은 사용자에게 거짓말이 된다.
+        probability = detail.get("probability")
+        head = f"예측 모델이 매긴 확률이 상위 {f'({probability:.0%})' if probability is not None else ''}".strip()
+        parts = [head]
     else:
         parts = [f"검사값 없이 추정한 등급이 '{level}'"]
     ratio = detail["peer_ratio"]
@@ -218,21 +274,44 @@ def rank_suspects(
     known = known or set()
     verdicts = verdicts or {}
     scored = []
-    for condition in conditions:
-        target = condition.get("target", "")
-        if target in known:
-            continue
-        score, detail = score_one(condition, age, verdicts.get(target))
-        scored.append((score, condition, detail))
 
-    # 점수 내림차순. 동점이면 ① 측정이 이미 "기준 이내" 라고 답한 카드를 뒤로,
-    # ② 확률이 높은 쪽, ③ 카드 순서(안정 정렬)를 따른다. ①이 ②보다 앞서는 이유는
-    # `settled` 설명에 적어 두었다 — 확률은 라벨 검사값을 못 보기 때문이다.
-    scored.sort(key=lambda row: (-row[0], row[2]["settled"], -(row[1].get("probability") or 0.0)))
+    if RANK_SOURCE == "ml_probability":
+        # **규칙 엔진을 순위에서 뺀다.** `verdicts` 도 `known` 도 보지 않는다 —
+        # 확진 질환을 거르던 것까지 같이 빠지므로, 이미 아는 질환이 다시 상위에
+        # 오를 수 있다. 그게 이 방식의 정의다(확률만 본다).
+        for condition in conditions:
+            if RANK_POOL == "trajectory" and condition.get("target") not in TRAJECTORY_TARGETS:
+                continue
+            probability = condition.get("probability")
+            score = float(probability) if probability is not None else 0.0
+            _, detail = score_one(condition, age, verdicts.get(condition.get("target", "")))
+            # 화면이 읽는 값들은 그대로 두되, 무엇으로 뽑혔는지는 바꿔 적는다.
+            detail["basis"] = "확률"
+            detail["probability"] = probability
+            scored.append((score, condition, detail))
+        # 확률 내림차순. 동점이면 카드 순서(안정 정렬).
+        scored.sort(key=lambda row: -row[0])
+    else:
+        for condition in conditions:
+            target = condition.get("target", "")
+            if target in known:
+                continue
+            score, detail = score_one(condition, age, verdicts.get(target))
+            scored.append((score, condition, detail))
+
+        # 점수 내림차순. 동점이면 ① 측정이 이미 "기준 이내" 라고 답한 카드를 뒤로,
+        # ② 확률이 높은 쪽, ③ 카드 순서(안정 정렬)를 따른다. ①이 ②보다 앞서는 이유는
+        # `settled` 설명에 적어 두었다 — 확률은 라벨 검사값을 못 보기 때문이다.
+        scored.sort(key=lambda row: (-row[0], row[2]["settled"], -(row[1].get("probability") or 0.0)))
 
     out = []
     for rank, (score, condition, detail) in enumerate(scored[:top_n], start=1):
-        suspected = score > 0
+        if RANK_SOURCE == "ml_probability":
+            # 확률은 0 이 되지 않으므로 `score > 0` 로는 전부 "의심" 이 된다.
+            # 모델 자신의 등급이 '낮음' 이 아닌 것만 의심으로 표시한다.
+            suspected = detail["level"] != "낮음"
+        else:
+            suspected = score > 0
         out.append(
             {
                 "target": condition.get("target"),

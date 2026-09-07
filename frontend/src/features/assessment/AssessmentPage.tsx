@@ -30,6 +30,7 @@ import {
 } from "react";
 import { useLocation } from "react-router-dom";
 
+import { useAuth } from "../../app/authContext";
 import { useLocalDomain } from "../../app/localDomainContext";
 import {
   ServerApiError,
@@ -44,6 +45,7 @@ import {
   FIELD_GROUPS,
   FIELD_LABELS,
   LAB_FIELDS,
+  outOfRangeFields,
   REQUIRED_FIELDS,
   rejectedFields,
   valuesFromInputs,
@@ -120,8 +122,20 @@ function revealField(
   });
 }
 
+/**
+ * 401 인가. 세션이 풀렸다는 뜻이고, 그때 할 일은 오류를 띄우는 게 아니라
+ * 로그인 관문으로 돌려보내는 것이다.
+ *
+ * 코드까지 같이 보는 이유: 갱신 토큰 쿠키가 없으면 `TOKEN_INVALID`, 접근 토큰만
+ * 없으면 `AUTH_REQUIRED` 로 서로 다른 코드가 온다. 둘 다 사용자에게는 같은 상황이다.
+ */
+function isAuthError(cause: unknown): cause is ServerApiError {
+  return cause instanceof ServerApiError && cause.status === 401;
+}
+
 export function AssessmentPage() {
   const { runtime, profiles } = useLocalDomain();
+  const { markSignedOut } = useAuth();
   const location = useLocation();
   // **effect 가 아니라 초기값으로 받는다.** effect 에서 setState 를 부르면 연쇄 렌더가
   // 되고(`react-hooks/set-state-in-effect`), 사용자가 그 사이에 고친 값을 덮어쓴다.
@@ -256,6 +270,31 @@ export function AssessmentPage() {
   // 한 번 시도한 사용자에게는 그게 맞다.
   const flagged = attempted ? missingRequired : [];
 
+  /**
+   * 칸을 떠나는 순간 그 칸만 검사한다.
+   *
+   * **글자를 칠 때마다 하지 않는 이유.** `sbp` 의 하한은 60 인데, 120 을 넣으려면
+   * "1" → "12" → "120" 을 지나간다. 앞의 둘은 범위 밖이라 치는 내내 빨간색이
+   * 깜빡이고, 사용자는 자기가 뭘 잘못했는지 모른 채 경고를 본다. 다 치고 나가는
+   * 순간이 "값을 넣었다"에 해당하는 시점이다.
+   *
+   * 판정 버튼을 누를 때 한 번 더 전체를 본다(`submit`). 여기는 일찍 알려 주는
+   * 것이고, 거기는 놓친 칸이 없게 하는 것이다.
+   */
+  const checkField = useCallback((name: string, value: string) => {
+    setRejected((prev) => {
+      const hit = outOfRangeFields({ [name]: value })[name];
+      if (hit === undefined) {
+        if (!(name in prev)) return prev;
+        const next = { ...prev };
+        delete next[name];
+        return next;
+      }
+      if (prev[name] === hit) return prev;
+      return { ...prev, [name]: hit };
+    });
+  }, []);
+
   const setField = useCallback((name: string, value: string) => {
     setValues((prev) => ({ ...prev, [name]: value }));
     // 고치는 즉시 그 칸의 빨간 표시를 푼다. 다시 제출해야 풀리면 사용자는
@@ -315,6 +354,20 @@ export function AssessmentPage() {
         return;
       }
 
+      // **보내기 전에 범위를 본다.** 예전에는 서버의 422 만 믿었는데, 판정 API 는
+      // 인증을 요구하므로 세션이 풀린 상태에서는 422 가 아니라 401 이 먼저 온다 —
+      // 그러면 `rejectedFields` 가 아무 칸도 못 찾아 빨간 표시도 스크롤도 없이
+      // 영문 오류 한 줄만 떴다. 사용자에게는 "틀린 값을 넣었는데 아무 반응이 없다".
+      const badRange = outOfRangeFields(values);
+      const badNames = Object.keys(badRange);
+      if (badNames.length > 0) {
+        setRejected(badRange);
+        // 그룹 순서대로 위에 있는 칸부터 데려간다. `FIELD_GROUPS` 를 훑어 만든
+        // 객체라 키 순서가 곧 화면 순서다.
+        revealField(fieldRefs.current[badNames[0]]);
+        return;
+      }
+
       // 새로 판정했으면 지난 저장 안내를 지운다. 안 지우면 값을 바꿔 다시 판정한
       // 뒤에도 "기록에 남겼습니다"가 남아, 방금 것이 저장된 줄로 읽힌다.
       setSaved(undefined);
@@ -352,7 +405,16 @@ export function AssessmentPage() {
         // 쓰면 사용자가 고칠 수 없다. 칸을 집어내 빨갛게 세우고 커서를 옮긴다 —
         // 값이 검진표에서 자동으로 들어온 경우가 많아, 어느 칸인지 말해 주지 않으면
         // 사용자는 자기가 적지도 않은 값을 서른 몇 칸에서 찾아야 한다.
-        if (cause instanceof ServerApiError) {
+        // **인증 실패를 먼저 가른다.** 서버는 "Refresh Token 쿠키가 필요합니다"
+        // 처럼 토큰 사정을 그대로 말하는데, 그 문장은 사용자가 할 일을 알려 주지
+        // 않는다 — 화면에 그대로 떠 있었다. 세션이 풀린 것이므로 관문으로 돌린다.
+        // `markSignedOut` 이 상태를 내리면 `RootLayout` 이 로그인 화면을 대신
+        // 그리므로, 아래 메시지는 관문이 없는 화면에서만 보이는 안전망이다.
+        if (isAuthError(cause)) {
+          setRejected({});
+          setError("로그인이 필요합니다. 로그인한 뒤 다시 판정해 주세요.");
+          markSignedOut();
+        } else if (cause instanceof ServerApiError) {
           const bad = rejectedFields(cause.message);
           const names = Object.keys(bad);
           if (names.length > 0) {
@@ -372,7 +434,16 @@ export function AssessmentPage() {
         setWorking(false);
       }
     },
-    [values, missingRequired, runtime, activeProfileId, reloadSnapshots, readFields, withDocument],
+    [
+      values,
+      missingRequired,
+      runtime,
+      activeProfileId,
+      reloadSnapshots,
+      readFields,
+      withDocument,
+      markSignedOut,
+    ],
   );
 
   // 정렬을 렌더마다 하면 **입력창에 글자 하나 칠 때마다** 스무 장 넘는 카드를 다시
@@ -398,8 +469,8 @@ export function AssessmentPage() {
       <header className="assess-intro">
         <h1>만성질환 위험 판정</h1>
         <p>
-          필수 다섯 개만 채우면 판정이 나옵니다. 검진결과지 수치를 넣을수록
-          답하는 칸이 늘고,{" "}
+          기본 정보와 혈압·공복혈당을 채우면 판정이 나옵니다. 나머지 검진결과지
+          수치를 넣을수록 답하는 칸이 늘고,{" "}
           <strong>
             넣은 값이 있는 질환은 추정이 아니라 학회 기준 대조로 넘어갑니다.
           </strong>
@@ -599,6 +670,11 @@ export function AssessmentPage() {
                             value={values[field.name] ?? ""}
                             onChange={(event) =>
                               setField(field.name, event.target.value)
+                            }
+                            // 다 치고 칸을 떠날 때 그 칸만 검사한다. 치는 도중에는
+                            // 하지 않는다 — 120 을 향해 가는 "1" 이 매번 빨개진다.
+                            onBlur={(event) =>
+                              checkField(field.name, event.target.value)
                             }
                             required={field.required}
                             aria-invalid={blank || Boolean(outOfRange) || undefined}

@@ -30,6 +30,13 @@ class InvitationDelivery:
     invitation_id: uuid.UUID
     invitee_email: str
     token: str
+    #: 초대를 보낸 요청이 도착한 오리진. 메일 링크의 앞부분이 된다.
+    #:
+    #: 메일은 요청 문맥이 없는 워커가 보내므로, 링크 주소를 만들 재료가 여기 실려
+    #: 있지 않으면 `INVITATION_WEB_ORIGIN` 기본값(`localhost:5173`)이 그대로 메일로
+    #: 나간다. 받는 사람은 열 수 없는 링크를 받고, 우리는 아무 오류도 못 본다.
+    #: 예전 payload 에는 이 키가 없으므로 `None` 이면 설정값으로 되돌아간다.
+    web_origin: str | None = None
 
 
 class InvitationStore:
@@ -133,10 +140,16 @@ class InvitationStore:
         invitee_email: str,
         raw_token: str,
         ttl_seconds: int,
+        web_origin: str | None = None,
     ) -> None:
         token_hash_hex = self._hash_hex(raw_token)
         payload = json.dumps(
-            {"invitation_id": str(invitation_id), "invitee_email": invitee_email, "token": raw_token},
+            {
+                "invitation_id": str(invitation_id),
+                "invitee_email": invitee_email,
+                "token": raw_token,
+                "web_origin": web_origin,
+            },
             separators=(",", ":"),
         )
         try:
@@ -216,6 +229,8 @@ class InvitationStore:
             invitation_id=uuid.UUID(data["invitation_id"]),
             invitee_email=data["invitee_email"],
             token=data["token"],
+            # 이 키가 생기기 전에 큐에 들어간 초대가 Redis 에 남아 있을 수 있다.
+            web_origin=data.get("web_origin"),
         )
 
     async def requeue_delivery(self, delivery: InvitationDelivery, ttl_seconds: int) -> None:
@@ -230,6 +245,9 @@ class InvitationStore:
                 "invitation_id": str(delivery.invitation_id),
                 "invitee_email": delivery.invitee_email,
                 "token": delivery.token,
+                # 재시도해도 같은 주소로 가야 한다. 빠뜨리면 첫 메일과 재시도 메일의
+                # 링크가 달라진다.
+                "web_origin": delivery.web_origin,
             },
             separators=(",", ":"),
         )

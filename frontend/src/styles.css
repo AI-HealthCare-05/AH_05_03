@@ -147,23 +147,66 @@ main {
   font-size: 0.72rem;
 }
 
-/* 항목이 셋에서 여섯으로 늘었다(2026-09-03). 좁은 화면에서 줄바꿈이 나야 하고,
-   넘칠 때는 가로로 밀 수 있어야 한다 — 잘리면 마지막 항목에 영영 못 간다. */
+/* 항목이 셋에서 일곱으로 늘었다(2026-09-03). 좁은 화면에서 줄바꿈이 나야 하고,
+   넘칠 때는 가로로 밀 수 있어야 한다 — 잘리면 마지막 항목에 영영 못 간다.
+
+   **옅은 레일로 감싼다.** 활성 알약이 흰 헤더 위에 홀로 떠 있으면 "지금 어디"가
+   배경색 하나에만 실린다. 레일이 깔리면 활성 항목만 흰색으로 떠올라 대비가 한 겹
+   더 생긴다 — 좁은 화면에서 이미 쓰던 방식을 넓은 화면으로 올린 것이다.
+
+   `inline-flex` + `justify-self: center` 로 내용만큼만 차지한다. `flex` 로 두고
+   `justify-content: center` 를 주면 레일이 1fr 칸을 가로로 다 먹어서, 항목 일곱이
+   가운데 몰린 채 양옆으로 빈 띠가 길게 남는다. */
 .primary-navigation {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
+  justify-self: center;
+  gap: 2px;
   flex-wrap: wrap;
   max-width: 100%;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--blue-50);
 }
-.primary-navigation a { white-space: nowrap; }
 
-.primary-navigation a,
+/* **이 규칙의 선언 블록이 통째로 비어 있었다.** `.primary-navigation a,` 뒤에 여는
+   중괄호가 없어서 선택자가 아래 `.active` 규칙에 얹혔고, 결과가 이랬다 —
+   일곱 항목이 **전부** 활성 색(`--blue-100`)을 쓰고, padding·radius 는 0 이라
+   파란 사각형들이 4px 간격으로 붙어 한 덩어리로 보였다. 지금 어디에 있는지를
+   메뉴가 말해 주지 못했다. */
+.primary-navigation a {
+  padding: 9px 14px;
+  border-radius: 10px;
+  color: var(--muted-strong);
+  font-size: 0.9rem;
+  font-weight: 650;
+  white-space: nowrap;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
 
+.primary-navigation a:hover {
+  color: var(--ink);
+  /* 레일보다 밝게. 활성 항목의 흰색과 겹치지 않도록 반투명으로 둔다 — 완전한
+     흰색이면 마우스를 얹은 항목이 현재 위치처럼 보인다. */
+  background: rgba(255, 255, 255, 0.66);
+}
+
+/* 현재 위치. 색만으로 말하지 않는다 — 흰 바탕 + 얇은 테두리 + 그림자로 레일 위에
+   떠 있게 만들어, 색을 구분하기 어려운 사람에게도 형태가 남는다.
+   `aria-current="page"` 는 `NavLink` 가 이미 붙인다. */
 .primary-navigation a.active {
   color: var(--blue-700);
-  background: var(--blue-100);
+  background: var(--surface);
+  box-shadow:
+    0 1px 2px rgba(35, 61, 112, 0.12),
+    0 0 0 1px rgba(36, 99, 235, 0.16);
+  font-weight: 750;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary-navigation a { transition: none; }
 }
 
 .navigation-future {
@@ -2585,20 +2628,27 @@ main {
   .header-status > span { display: none; }
   .header-account { display: none; }
 
+  /* **균등 분할을 그만뒀다.** 항목이 셋일 때는 `grid-auto-columns: 1fr` 로 한 줄을
+     꽉 채우는 게 맞았는데, 일곱이 된 지금 320px 화면에서는 한 칸이 40px 남짓이라
+     "건강 데이터"가 글자째 뭉개진다. 자연 너비로 두고 가로로 민다 — 넓은 화면에서
+     내린 판단("잘리는 것보다 미는 편이 낫다")과 같다. */
   .primary-navigation {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
-    gap: 6px;
-    padding: 4px;
+    justify-self: stretch;
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     border-radius: 12px;
-    background: var(--blue-50, #f1f5fd);
+    /* 레일이 4px 패딩이라 늘 보이는 스크롤바가 뜨면 알약을 눌러 버린다. 터치와
+       트랙패드로는 그대로 밀리고, 키보드는 탭으로 옮겨 다닌다. */
+    scrollbar-width: none;
   }
 
+  .primary-navigation::-webkit-scrollbar { display: none; }
+
   .primary-navigation a {
-    justify-content: center;
+    flex: 0 0 auto;
     text-align: center;
-    padding: 9px 6px;
+    padding: 9px 12px;
     font-size: 0.86rem;
   }
 
