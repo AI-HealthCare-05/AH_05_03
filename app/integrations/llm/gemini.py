@@ -9,8 +9,8 @@
 """
 
 import asyncio
-from collections.abc import AsyncIterator
-from typing import TypeVar
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any, TypeVar, cast
 
 from google import genai
 from google.genai import types
@@ -25,19 +25,22 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class GeminiLLMClient(LLMClientProtocol):
+    """구조화 JSON 출력을 강제하는 Gemini 클라이언트."""
+
     def __init__(
         self,
-        api_key: str | None,
+        api_key: str | None = None,
         model_name: str | None = None,
-        temperature: float = 0.0,
-        timeout: float | None = None,
-    ):
-        if not api_key:
-            raise LlmUnavailableError("Gemini API 키가 설정되지 않았습니다.")
-        self.client = genai.Client(api_key=api_key)
+        timeout: float = 30.0,
+        temperature: float = 0.2,
+    ) -> None:
+        self.api_key = api_key or config.GEMINI_API_KEY
+        if not self.api_key:
+            raise LlmUnavailableError("GEMINI_API_KEY 가 설정되지 않았습니다.")
         self.model_name = model_name or config.GEMINI_CHAT_MODEL
+        self.timeout = timeout
         self.temperature = temperature
-        self.timeout = timeout if timeout is not None else config.LLM_CHAT_TIMEOUT_SECONDS
+        self.client = genai.Client(api_key=self.api_key)
 
     async def generate_structured_response(
         self,
@@ -45,23 +48,18 @@ class GeminiLLMClient(LLMClientProtocol):
         messages: list[ChatMessage],
         response_schema: type[T],
     ) -> T:
-        # `list[Content]` 그대로 넘기면 mypy 가 막는다. SDK 가 받는 타입이
-        # `list[Content | str | Part | ...]` 인데 리스트는 불변(invariant)이라
-        # `list[Content]` 가 그 하위 타입이 아니다 — 런타임에는 문제가 없고
-        # 타입 검사에서만 걸린다. 원소 타입을 넓혀 선언해 푼다.
-        gemini_contents: list[types.ContentUnion] = [
+        gemini_contents = [
             types.Content(
                 role="user" if m.role == "user" else "model",
                 parts=[types.Part.from_text(text=m.content)],
             )
             for m in messages
         ]
-
         try:
             response = await asyncio.wait_for(
                 self.client.aio.models.generate_content(
                     model=self.model_name,
-                    contents=gemini_contents,
+                    contents=cast(Any, gemini_contents),
                     config=types.GenerateContentConfig(
                         system_instruction=system_instruction,
                         response_mime_type="application/json",
@@ -71,53 +69,223 @@ class GeminiLLMClient(LLMClientProtocol):
                 ),
                 timeout=self.timeout,
             )
+            if not response.text:
+                raise LlmProviderFailedError("Gemini 응답 본문이 비어 있습니다.")
+            return response_schema.model_validate_json(response.text)
         except asyncio.TimeoutError as ex:
             raise LlmTimeoutError() from ex
         except Exception as ex:
-            # 모델명 오류·인증 실패·레이트리밋이 여기 모인다. 전부 업스트림 사정이라
-            # 502 다 — 우리 쪽이 죽은 것처럼 503 으로 덮으면 원인을 못 찾는다.
             raise LlmProviderFailedError(f"Gemini 호출 실패: {type(ex).__name__}") from ex
 
-        if not response or not response.text:
-            raise LlmProviderFailedError("Gemini 가 빈 응답을 돌려줬습니다.")
-
-        try:
-            return response_schema.model_validate_json(response.text)
-        except Exception as ex:
-            raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex
-
-    async def stream_structured_response(
+    def stream_structured_response(
         self,
         system_instruction: str,
         messages: list[ChatMessage],
         response_schema: type[T],
     ) -> AsyncIterator[str]:
-        """같은 요청을 스트리밍으로. 조각은 **원본 JSON 문자열**이다.
-
-        해독은 호출부가 한다 — 어느 필드를 화면에 흘릴지는 공급자가 알 일이 아니다.
-        타임아웃은 여기서 걸지 않는다. 스트림은 "첫 조각까지" 와 "조각 사이" 를 갈라
-        재야 하는데(`dev_ocr._stream_once` 참조) 그 판단도 호출부에 있다.
-        """
-        gemini_contents: list[types.ContentUnion] = [
+        gemini_contents = [
             types.Content(
                 role="user" if m.role == "user" else "model",
                 parts=[types.Part.from_text(text=m.content)],
             )
             for m in messages
         ]
-        try:
-            stream = await self.client.aio.models.generate_content_stream(
-                model=self.model_name,
-                contents=gemini_contents,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    response_mime_type="application/json",
-                    response_schema=response_schema,
-                    temperature=self.temperature,
-                ),
+
+        async def _stream() -> AsyncIterator[str]:
+            try:
+                stream = await self.client.aio.models.generate_content_stream(
+                    model=self.model_name,
+                    contents=cast(Any, gemini_contents),
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        response_mime_type="application/json",
+                        response_schema=response_schema,
+                        temperature=self.temperature,
+                    ),
+                )
+                async for chunk in stream:
+                    if chunk.text:
+                        yield chunk.text
+            except Exception as ex:
+                raise LlmProviderFailedError(f"Gemini 스트리밍 실패: {type(ex).__name__}") from ex
+
+        return _stream()
+
+    async def generate_structured_response_with_tools(
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        response_schema: type[T],
+        tools: list[Any] | None = None,
+        tool_executor: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None,
+    ) -> tuple[T, Any | None]:
+        if not tools or not tool_executor:
+            res = await self.generate_structured_response(
+                system_instruction=system_instruction,
+                messages=messages,
+                response_schema=response_schema,
             )
-            async for chunk in stream:
-                if chunk.text:
-                    yield chunk.text
+            return res, None
+
+        gemini_contents = [
+            types.Content(
+                role="user" if m.role == "user" else "model",
+                parts=[types.Part.from_text(text=m.content)],
+            )
+            for m in messages
+        ]
+
+        try:
+            first_turn = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=cast(Any, gemini_contents),
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        tools=cast(Any, tools),
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                        temperature=0.0,
+                    ),
+                ),
+                timeout=self.timeout,
+            )
+        except asyncio.TimeoutError as ex:
+            raise LlmTimeoutError() from ex
         except Exception as ex:
-            raise LlmProviderFailedError(f"Gemini 스트리밍 실패: {type(ex).__name__}") from ex
+            raise LlmProviderFailedError(f"Gemini 도구 판별 호출 실패: {type(ex).__name__}") from ex
+
+        function_calls = getattr(first_turn, "function_calls", None)
+        if function_calls:
+            fc = function_calls[0]
+            fc_name = fc.name or ""
+            fc_args = fc.args or {}
+            tool_result = await tool_executor(fc_name, fc_args)
+
+            candidates = first_turn.candidates or []
+            model_turn = (
+                candidates[0].content if candidates and candidates[0].content else types.Content(role="model", parts=[])
+            )
+            result_payload = tool_result.model_dump(mode="json") if hasattr(tool_result, "model_dump") else tool_result
+            tool_turn = types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_function_response(
+                        name=fc_name,
+                        response={"result": result_payload},
+                    )
+                ],
+            )
+            final_contents: list[Any] = [*gemini_contents, model_turn, tool_turn]
+
+            try:
+                second_turn = await asyncio.wait_for(
+                    self.client.aio.models.generate_content(
+                        model=self.model_name,
+                        contents=cast(Any, final_contents),
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_instruction,
+                            response_mime_type="application/json",
+                            response_schema=response_schema,
+                            temperature=self.temperature,
+                        ),
+                    ),
+                    timeout=self.timeout,
+                )
+                if not second_turn.text:
+                    raise LlmProviderFailedError("Gemini 도구 실행 후 응답 본문이 비어 있습니다.")
+                return response_schema.model_validate_json(second_turn.text), tool_result
+            except asyncio.TimeoutError as ex:
+                raise LlmTimeoutError() from ex
+            except Exception as ex:
+                raise LlmProviderFailedError(f"Gemini 도구 실행 후 응답 생성 실패: {type(ex).__name__}") from ex
+
+        res = await self.generate_structured_response(
+            system_instruction=system_instruction,
+            messages=messages,
+            response_schema=response_schema,
+        )
+        return res, None
+
+    async def stream_structured_response_with_tools(
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        response_schema: type[T],
+        tools: list[Any] | None = None,
+        tool_executor: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None,
+    ) -> tuple[AsyncIterator[str], Any | None]:
+        if not tools or not tool_executor:
+            return self.stream_structured_response(system_instruction, messages, response_schema), None
+
+        gemini_contents = [
+            types.Content(
+                role="user" if m.role == "user" else "model",
+                parts=[types.Part.from_text(text=m.content)],
+            )
+            for m in messages
+        ]
+
+        try:
+            first_turn = await asyncio.wait_for(
+                self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=cast(Any, gemini_contents),
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        tools=cast(Any, tools),
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                        temperature=0.0,
+                    ),
+                ),
+                timeout=self.timeout,
+            )
+        except asyncio.TimeoutError as ex:
+            raise LlmTimeoutError() from ex
+        except Exception as ex:
+            raise LlmProviderFailedError(f"Gemini 도구 판별 스트림 실패: {type(ex).__name__}") from ex
+
+        function_calls = getattr(first_turn, "function_calls", None)
+        if function_calls:
+            fc = function_calls[0]
+            fc_name = fc.name or ""
+            fc_args = fc.args or {}
+            tool_result = await tool_executor(fc_name, fc_args)
+
+            candidates = first_turn.candidates or []
+            model_turn = (
+                candidates[0].content if candidates and candidates[0].content else types.Content(role="model", parts=[])
+            )
+            result_payload = tool_result.model_dump(mode="json") if hasattr(tool_result, "model_dump") else tool_result
+            tool_turn = types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_function_response(
+                        name=fc_name,
+                        response={"result": result_payload},
+                    )
+                ],
+            )
+            final_contents: list[Any] = [*gemini_contents, model_turn, tool_turn]
+
+            try:
+                stream = await self.client.aio.models.generate_content_stream(
+                    model=self.model_name,
+                    contents=cast(Any, final_contents),
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        response_mime_type="application/json",
+                        response_schema=response_schema,
+                        temperature=self.temperature,
+                    ),
+                )
+
+                async def _stream_chunks() -> AsyncIterator[str]:
+                    async for chunk in stream:
+                        if chunk.text:
+                            yield chunk.text
+
+                return _stream_chunks(), tool_result
+            except Exception as ex:
+                raise LlmProviderFailedError(f"Gemini 도구 실행 후 스트리밍 실패: {type(ex).__name__}") from ex
+
+        return self.stream_structured_response(system_instruction, messages, response_schema), None

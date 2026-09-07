@@ -91,6 +91,38 @@ export interface ChallengeDraft {
   set_rest_day?: boolean;
 }
 
+export interface FacilityItem {
+  name: string;
+  category?: string | null;
+  address: string;
+  phone?: string | null;
+  emergency_room_phone?: string | null;
+  distance_m?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  available_beds?: string | null;
+  operating_hours?: string | null;
+  homepage?: string | null;
+  additional_info?: Record<string, unknown>;
+}
+
+export interface FacilitySearchResult {
+  facility_type: "emergency_room" | "hospital" | "pharmacy";
+  total_count: number;
+  search_type?: string | null;
+  count?: number | null;
+  items: FacilityItem[];
+  emergency_notice?: string | null;
+  message?: string | null;
+  error?: string | null;
+}
+
+export interface UserLocation {
+  latitude: number;
+  longitude: number;
+  accuracy?: number | null;
+}
+
 export interface HealthAssistantResponse {
   intent:
     | "record_exercise"
@@ -103,6 +135,7 @@ export interface HealthAssistantResponse {
     | "create_challenge"
     | "adjust_challenge"
     | "complete_challenge"
+    | "search_facility"
     | "health_advice"
     | "general_chat"
     | "unknown";
@@ -115,6 +148,7 @@ export interface HealthAssistantResponse {
   lab_result_draft?: LabResultDraft | null;
   challenge_draft?: ChallengeDraft | null;
   query_draft?: QueryDraft | null;
+  facility_search_draft?: FacilitySearchResult | null;
   missing_fields: string[];
   needs_confirmation: boolean;
   auto_save?: boolean;
@@ -159,6 +193,7 @@ export async function streamHealthAssistantMessage(
   profileContext?: ProfileContext,
   signal?: AbortSignal,
   sessionId?: string,
+  userLocation?: UserLocation,
 ): Promise<HealthAssistantResponse> {
   let final: HealthAssistantResponse | undefined;
   let failure: string | undefined;
@@ -167,6 +202,7 @@ export async function streamHealthAssistantMessage(
       messages,
       profile_context: profileContext,
       session_id: sessionId,
+      user_location: userLocation,
     },
     (event, data) => {
       if (event === "delta" && typeof data.text === "string") onDelta(data.text);
@@ -184,11 +220,13 @@ export async function sendHealthAssistantMessage(
   messages: ChatMessage[],
   profileContext?: ProfileContext,
   sessionId?: string,
+  userLocation?: UserLocation,
 ): Promise<HealthAssistantResponse> {
   return serverApiClient.healthAssistantChat<HealthAssistantResponse>({
     messages,
     profile_context: profileContext,
     session_id: sessionId,
+    user_location: userLocation,
   });
 }
 

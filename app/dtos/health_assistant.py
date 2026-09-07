@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.dtos.medical_facility import FacilitySearchResult
+
 
 class ChatMessage(BaseModel):
     # `system` 을 받지 않는다. `gemini.py` 가 user 가 아닌 role 을 전부 `model` 로
@@ -117,6 +119,16 @@ class QueryDraft(BaseModel):
     keyword: str | None = Field(default=None, description="검색 키워드 (예: 원본, 건강검진 등)")
 
 
+class UserLocation(BaseModel):
+    """클라이언트가 제공하는 현재 사용자 위치 정보."""
+
+    latitude: float = Field(ge=-90.0, le=90.0, description="위도 (WGS84)")
+    longitude: float = Field(ge=-180.0, le=180.0, description="경도 (WGS84)")
+    address: str | None = Field(
+        default=None, max_length=200, description="현재 주소 또는 동/구 명칭 (예: 서울특별시 강남구 역삼동)"
+    )
+
+
 HealthIntent = Literal[
     "record_exercise",
     "record_blood_pressure",
@@ -129,6 +141,7 @@ HealthIntent = Literal[
     "create_challenge",
     "adjust_challenge",
     "complete_challenge",
+    "search_facility",
     "general_chat",
     "unknown",
 ]
@@ -137,6 +150,9 @@ HealthIntent = Literal[
 class HealthAssistantChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=12, description="대화 이력 리스트")
     profile_context: ProfileContext | None = Field(default=None, description="현재 선택된 가족 구성원의 컨텍스트 정보")
+    user_location: UserLocation | None = Field(
+        default=None, description="사용자의 현재 위치 (주변 병원·약국·응급실 조회용)"
+    )
     session_id: uuid.UUID | None = Field(default=None, description="대화 세션 ID (DB 영구 보존용)")
 
 
@@ -151,6 +167,9 @@ class HealthAssistantResponse(BaseModel):
     lab_result_draft: LabResultDraft | None = Field(default=None, description="검사/검진 서류 결과 초안")
     query_draft: QueryDraft | None = Field(default=None, description="기록 조회 조건 초안")
     challenge_draft: ChallengeDraft | None = Field(default=None, description="챌린지 생성·조정·완료 초안")
+    facility_search_draft: FacilitySearchResult | None = Field(
+        default=None, description="주변 의료시설(응급실, 병원, 약국) 조회 결과"
+    )
     missing_fields: list[str] = Field(
         default_factory=list, description="초안 완성을 위해 사용자에게 추가 확인이 필요한 필드 목록"
     )
