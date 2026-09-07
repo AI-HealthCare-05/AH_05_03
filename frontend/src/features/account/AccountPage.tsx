@@ -75,6 +75,7 @@ type Confirmation =
   | { kind: "leave-household"; household: HouseholdData }
   | { kind: "close-household"; household: HouseholdData }
   | { kind: "transfer-master"; household: HouseholdData; targetMember: HouseholdMembershipListItemData }
+  | { kind: "delete-member-history"; household: HouseholdData; targetMember: HouseholdMembershipListItemData }
   | { kind: "cancel-invitation"; invitation: FamilyInvitationData }
   | { kind: "unlink-profile"; link: ProfileLinkData }
   | { kind: "close-account" };
@@ -297,6 +298,9 @@ export function AccountPage() {
       } else if (confirmation.kind === "transfer-master") {
         await serverApiClient.transferHouseholdMaster(confirmation.household.id, confirmation.targetMember.account_id);
         setMessage(`${confirmation.targetMember.masked_email} 님에게 가정 마스터 권한을 위임했습니다.`);
+      } else if (confirmation.kind === "delete-member-history") {
+        await serverApiClient.deleteHouseholdMembership(confirmation.household.id, confirmation.targetMember.id);
+        setMessage("구성원 이력을 삭제했습니다.");
       } else if (confirmation.kind === "cancel-invitation") {
         await serverApiClient.cancelInvitation(confirmation.invitation.id);
         if (runtime) {
@@ -324,9 +328,15 @@ export function AccountPage() {
       }
       setConfirmation(undefined);
       if (confirmation.kind !== "close-account") {
-        setSelectedHouseholdId(undefined);
-        setMemberships([]);
+        if (confirmation.kind !== "delete-member-history") {
+          setSelectedHouseholdId(undefined);
+          setMemberships([]);
+        }
         await loadAccountData();
+        if (confirmation.kind === "delete-member-history") {
+          const updatedMembers = await serverApiClient.listHouseholdMemberships(confirmation.household.id);
+          setMemberships(updatedMembers);
+        }
       }
     });
   }
@@ -651,23 +661,35 @@ function HouseholdCard({
                   </div>
                   <div className="membership-state">
                     <span>{membership.status === "active" ? "활동 중" : "나감"}</span>
-                  <small>{connectionLabel}</small>
+                    {membership.status === "active" && connectionLabel ? <small>{connectionLabel}</small> : null}
+                  </div>
+                  <div className="row-actions">
+                    {isCurrentMaster && !isCurrent && membership.status === "active" ? (
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={working}
+                        onClick={() => onConfirm({ kind: "transfer-master", household: selectedHousehold, targetMember: membership })}
+                      >
+                        마스터 위임
+                      </button>
+                    ) : null}
+                    <time>{formatDate(membership.joined_at)}</time>
+                    {membership.status === "left" && (isCurrentMaster || isCurrent) ? (
+                      <button
+                        className="member-delete-button"
+                        type="button"
+                        title="구성원 이력 삭제"
+                        aria-label={`${displayName} 이력 삭제`}
+                        disabled={working}
+                        onClick={() => onConfirm({ kind: "delete-member-history", household: selectedHousehold, targetMember: membership })}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="row-actions">
-                  {isCurrentMaster && !isCurrent && membership.status === "active" ? (
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={working}
-                      onClick={() => onConfirm({ kind: "transfer-master", household: selectedHousehold, targetMember: membership })}
-                    >
-                      마스터 위임
-                    </button>
-                  ) : null}
-                  <time>{formatDate(membership.joined_at)}</time>
-                </div>
-              </div>
-            );
+              );
           })}
         </div>
       ) : null}
@@ -753,6 +775,7 @@ function confirmationCopy(confirmation: Confirmation) {
   if (confirmation.kind === "leave-household") return { title: "가정에서 나갈까요?", description: "서버 멤버십과 연결 상태가 변경됩니다. 이 브라우저의 로컬 건강정보는 유지됩니다.", action: "가정 나가기" };
   if (confirmation.kind === "close-household") return { title: "가정을 종료할까요?", description: "다른 활성 멤버가 있으면 서버가 종료를 거절합니다. 로컬 건강정보는 삭제되지 않습니다.", action: "가정 종료" };
   if (confirmation.kind === "transfer-master") return { title: "가정 마스터 권한을 위임할까요?", description: `${confirmation.targetMember.masked_email} 님에게 마스터 권한을 위임합니다. 위임 후 귀하는 일반 멤버가 되며, 가정 구독 관리 권한도 이전됩니다.`, action: "마스터 위임" };
+  if (confirmation.kind === "delete-member-history") return { title: "구성원 이력을 삭제할까요?", description: `${confirmation.targetMember.masked_email} 님의 구성원 탈퇴 이력을 목록에서 삭제합니다.`, action: "이력 삭제" };
   if (confirmation.kind === "cancel-invitation") return { title: "초대를 취소할까요?", description: "초대 참조값을 더 이상 사용할 수 없게 하고 로컬 프로필의 대기 연결도 폐기합니다.", action: "초대 취소" };
   if (confirmation.kind === "unlink-profile") return { title: "프로필 연결을 해제할까요?", description: "서비스 계정과의 연결만 해제합니다. 로컬 프로필과 건강정보는 보존됩니다.", action: "연결 해제" };
   return { title: "서비스 계정을 종료할까요?", description: "구독과 서버 연결을 종료합니다. 마스터인 경우 다른 가족에게 마스터 권한이 자동 승계됩니다. 확인을 위해 현재 계정 이메일을 입력하세요.", action: "계정 종료" };

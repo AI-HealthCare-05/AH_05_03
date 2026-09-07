@@ -327,6 +327,66 @@ describe("AccountPage", () => {
     expect(serverApiClient.logout).toHaveBeenCalled();
     expect(screen.queryByRole("heading", { name: "이 초대는 다른 계정으로 도착했습니다" })).not.toBeInTheDocument();
   });
+
+  it("나간 구성원은 가족 프로필 연결됨 문구를 숨기고 x 버튼으로 이력을 삭제할 수 있다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    mockAccountReads();
+    vi.mocked(serverApiClient.listHouseholds).mockResolvedValue([{
+      id: "household-id",
+      master_account_id: "account-id",
+      status: "active",
+      created_at: "2026-08-20T00:00:00Z",
+      row_version: 1,
+    }]);
+    vi.spyOn(serverApiClient, "listHouseholdMemberships").mockResolvedValue([
+      {
+        id: "membership-master",
+        household_id: "household-id",
+        account_id: "account-id",
+        masked_email: "member@example.com",
+        local_profile_ref: null,
+        status: "active",
+        joined_at: "2026-08-20T00:00:00Z",
+        left_at: null,
+        row_version: 1,
+      },
+      {
+        id: "membership-left",
+        household_id: "household-id",
+        account_id: "other-account-id",
+        masked_email: "left-user@example.com",
+        local_profile_ref: "dummy-profile-ref",
+        status: "left",
+        joined_at: "2026-08-20T00:00:00Z",
+        left_at: "2026-08-21T00:00:00Z",
+        row_version: 2,
+      },
+    ]);
+    const deleteSpy = vi.spyOn(serverApiClient, "deleteHouseholdMembership").mockResolvedValue();
+
+    renderAccountPage();
+    await screen.findByRole("heading", { name: "member@example.com" });
+
+    // 나간 구성원(left-user@example.com) 영역 확인
+    expect(screen.getByText("나감")).toBeInTheDocument();
+    // 나간 구성원은 "가족 프로필 연결됨" 문구가 표시되지 않아야 함
+    expect(screen.queryByText("가족 프로필 연결됨")).not.toBeInTheDocument();
+
+    // x 버튼(이력 삭제) 클릭
+    const deleteBtn = screen.getByRole("button", { name: /이력 삭제/u });
+    expect(deleteBtn).toBeInTheDocument();
+    await user.click(deleteBtn);
+
+    // 확인 모달 확인
+    const dialog = screen.getByRole("alertdialog", { name: "구성원 이력을 삭제할까요?" });
+    expect(dialog).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "이력 삭제" }));
+
+    // API 호출 검증
+    expect(deleteSpy).toHaveBeenCalledWith("household-id", "membership-left");
+    expect(await screen.findByText("구성원 이력을 삭제했습니다.")).toBeInTheDocument();
+  });
 });
 
 function mockAccountReads() {

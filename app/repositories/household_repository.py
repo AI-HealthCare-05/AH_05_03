@@ -127,6 +127,14 @@ class HouseholdRepository:
             .with_for_update()
         )
 
+    async def get_membership_by_id_for_update(self, membership_id: uuid.UUID) -> HouseholdMembership | None:
+        return await self.session.scalar(
+            select(HouseholdMembership).where(HouseholdMembership.id == membership_id).with_for_update()
+        )
+
+    async def delete_membership(self, membership: HouseholdMembership) -> None:
+        await self.session.delete(membership)
+
     async def count_other_active_members(self, household_id: uuid.UUID, account_id: uuid.UUID) -> int:
         return int(
             await self.session.scalar(
