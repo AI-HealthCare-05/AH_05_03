@@ -4336,10 +4336,29 @@ main {
 
 /* 대시보드에 얹는 챌린지 요약 카드 */
 .challenge-card-body {
-  display: flex;
+  margin-top: 14px;
+  margin-left: -8px;
+  display: inline-flex;
   align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
+  gap: 18px;
+  text-decoration: none;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 8px 16px 8px 8px;
+  border-radius: 16px;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.challenge-card-body:hover,
+.challenge-card-body:focus-visible {
+  background-color: rgba(36, 99, 235, 0.05);
+  outline: none;
+}
+
+.challenge-card-body:active {
+  transform: scale(0.99);
 }
 
 .challenge-card-facts {
