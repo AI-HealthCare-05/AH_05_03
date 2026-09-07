@@ -3878,9 +3878,10 @@ main {
   gap: 0.9rem;
   /* **접힌 카드는 전부 같은 키다.** 15.5rem 으로 뒀을 때는 행 안에서만 맞고
      행끼리는 달랐다(실측 323·362·294·248px) — 훑어 내려가면 계단처럼 어긋난다.
-     접힌 상태의 최대치(362px ≈ 22.6rem)를 최소 높이로 잡아 전부 같게 만든다.
+     접힌 상태의 최대치(376px ≈ 23.5rem)를 최소 높이로 잡아 전부 같게 만든다.
+     "더 넣으면 좋아지는 값" 두 줄이 붙으면서 362 → 376 으로 올렸다.
      짧은 카드에 생기는 여백은 버튼을 바닥으로 밀어(`margin-top: auto`) 흡수한다. */
-  grid-auto-rows: minmax(22.6rem, auto);
+  grid-auto-rows: minmax(23.5rem, auto);
 }
 
 .assess-card { border: 1px solid var(--line); border-left-width: 5px; border-radius: 12px; padding: 0.9rem 1.05rem; background: var(--surface); display: flex; flex-direction: column; gap: 0.45rem; }
@@ -6539,10 +6540,16 @@ main {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
   gap: 0.9rem;
-  align-items: start;
+  /* 넷을 `align-items: start` 로 두었더니 한 줄 안에서 키가 제각각이었다
+     (실측 507·280·280·280px). 기여 신호 수가 카드마다 달라서 생기는 차이인데,
+     그걸 그대로 두면 "짧은 카드는 덜 중요하다" 로 읽힌다. 줄 단위로 맞춘다. */
+  align-items: stretch;
 }
 
 .assess-matrix { gap: 0.55rem; }
+/* 줄 높이를 맞추면 짧은 카드에 빈 자리가 생긴다. 그 여백은 **마지막 줄 위**로
+   보낸다 — 권고문이 카드마다 다른 높이에 뜨면 눈이 매번 다시 찾는다. */
+.assess-matrix .assess-recommend { margin-top: auto; }
 .assess-matrix .assess-label { color: var(--muted-strong); font-size: 0.86rem; }
 
 .assess-contributors { gap: 0.6rem; }
@@ -6668,3 +6675,44 @@ main {
 .assess-engine-step.is-verdict.engine-e1 { background: var(--safe-soft); color: var(--safe); }
 .assess-engine-step.is-verdict.engine-e3 { background: var(--blue-100); color: var(--blue-800); }
 .assess-engine-arrow { align-self: center; color: var(--muted); font-size: 0.8rem; flex: none; }
+
+/* ---------------------------------------------------------------------------
+ * "더 넣으면 무엇이 좋아지나" — 질환마다 두 줄
+ *
+ * 판정(등급이 바뀔 수 있다)과 예측(확률만 정밀해진다)을 태그로 가른다. 왼쪽 태그
+ * 폭을 고정해서 두 줄의 본문이 같은 자리에서 시작하게 둔다 — 어긋나면 훑을 때
+ * 눈이 매번 왼쪽 끝을 다시 찾는다.
+ * ------------------------------------------------------------------------- */
+.assess-needs { display: grid; gap: 0.28rem; }
+.assess-need { display: flex; align-items: flex-start; gap: 0.4rem; }
+.assess-need-tag {
+  flex: none;
+  margin-top: 0.1rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+}
+/* 색은 하나(파랑)로 두고 **채움 정도**로 가른다. 등급을 바꿀 수 있는 쪽이 채운
+   쪽이다. 여기서 빨강을 쓰면 "값을 안 넣은 것" 이 경고로 읽히는데, 검진에서 안 한
+   검사가 있는 건 정상이다. */
+.assess-need.is-decisive .assess-need-tag { background: var(--blue-600); color: #fff; }
+.assess-need.is-refining .assess-need-tag { background: var(--blue-100); color: var(--blue-800); }
+/* 다 넣은 카드도 이 자리를 비우지 않는다 — 비우면 카드마다 높이가 달라진다. */
+.assess-need.is-done { color: var(--muted); }
+
+/* ---------------------------------------------------------------------------
+ * 만성질환 발병 예측 — 세 장의 키를 맞춘다
+ *
+ * 카드마다 붙는 블록이 다르다(궤적 두 줄 · 기준 초과 한 줄 · 확진 안내). 그대로
+ * 두면 한 줄에 선 세 장의 아래 끝이 제각각이라 "왜 이건 짧지" 를 읽는 사람이
+ * 해석하게 된다. 행 높이를 맞추고, 마지막 블록을 바닥으로 민다.
+ * ------------------------------------------------------------------------- */
+.suspect-grid { align-items: stretch; grid-auto-rows: 1fr; }
+.suspect-card { height: 100%; }
+.suspect-card > .suspect-series,
+.suspect-card > .suspect-prevalence,
+.suspect-card > .suspect-now,
+.suspect-card > .suspect-none { margin-top: auto; }

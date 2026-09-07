@@ -259,14 +259,15 @@ describe("HomePage", () => {
     expect(within(modal).getByText("고혈압 1기")).toBeInTheDocument();
     expect(within(modal).queryByText(/이 기록에는 등급만 남아 있어요/)).not.toBeInTheDocument();
 
-    // 카드의 근거를 열면 그날의 엔진 사유와 밀려난 ML 확률까지 남아 있다.
-    await user.click(within(modal).getByRole("button", { name: /고혈압 판정 근거/ }));
-    const detail = screen.getAllByRole("dialog").at(-1) as HTMLElement;
-    expect(within(detail).getByText(/측정값이 있어 규칙 엔진이 정본입니다/)).toBeInTheDocument();
-    expect(within(detail).getByText(/밀린 ML 예측/)).toBeInTheDocument();
+    // 카드의 근거를 펼치면 그날의 엔진 사유와 밀려난 ML 확률까지 남아 있다.
+    // 카드마다 있던 근거 모달은 없앴다 — 카드 안 접이가 같은 것을 그린다.
+    const card = within(modal).getByRole("heading", { name: "고혈압" }).closest("article") as HTMLElement;
+    await user.click(within(card).getByText(/고혈압 판정 근거 자세히/));
+    expect(within(card).getByText(/측정값이 있어 규칙 엔진이 정본입니다/)).toBeInTheDocument();
+    expect(within(card).getByText(/밀린 ML 예측/)).toBeInTheDocument();
     // 큰 숫자는 소수부를 `<small>` 로 쪼개 그린다(`Evidence.tsx`). 내용으로 찾는다.
     expect(
-      within(detail).getByText(
+      within(card).getByText(
         (_, element) => element?.tagName === "STRONG" && element.textContent === "80.0%",
       ),
     ).toBeInTheDocument();

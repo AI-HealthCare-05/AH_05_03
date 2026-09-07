@@ -12,11 +12,11 @@
  * 다시 판정한 결과와 달라지므로, 그날 본 화면을 재현하려면 저장본이어야 한다.
  */
 
-import { Modal } from "../../shared/ui/Modal";
 import type { DiseaseRisk, DiseaseVerdict, OnsetTrajectory, RiskLevel } from "./contracts";
 import { ENGINE_SHORT, LEVEL_LABEL } from "./contracts";
 import { Evidence, type ModelSpec } from "./Evidence";
 import { DISEASE_MEASURES, FIELD_LABELS, FIELD_UNITS, readableField, readableSentence } from "./fields";
+import { briefList, objectParticle, precisionGains } from "./precision";
 
 const LEVEL_CLASS: Record<RiskLevel, string> = {
   VERY_HIGH: "level-very-high",
@@ -161,6 +161,129 @@ export function TrajectoryLine({ verdict }: { verdict: DiseaseVerdict }) {
           </span>
         ))}
       </span>
+    </div>
+  );
+}
+
+/**
+ * 카드마다 다른 "더 넣으면 무엇이 좋아지나".
+ *
+ * 예전에는 `missing_fields` 한 줄뿐이었고, 그 값은 규칙 엔진이 **단계를 못 정했을
+ * 때만** 채워진다. 그래서 이미 판정이 난 열두 장에는 아무것도 안 떴다 — 더 넣을 게
+ * 없어서가 아니라, 화면이 ML 쪽을 안 물어봤기 때문이다(`precision.ts` 머리말).
+ *
+ * 두 줄을 가르는 기준은 **등급이 바뀔 수 있는가** 하나다. 위는 바뀔 수 있고 아래는
+ * 확률만 정밀해진다. 섞어 두면 사용자는 어느 쪽인지 알 수 없다.
+ */
+export function PrecisionHints({
+  verdict,
+  values,
+  models,
+}: {
+  verdict: DiseaseVerdict;
+  values: Record<string, string>;
+  models: ModelSpec[];
+}) {
+  const gain = precisionGains(verdict, values, models);
+  const decisive = briefList(gain.decisive);
+  const refining = briefList(gain.refining);
+
+  if (!decisive && !refining) {
+    // 모델 목록을 못 받았으면(기록 화면·`model-info` 실패) "전부 들어왔다" 고 말할
+    // 근거가 없다. 모르는 것을 안다고 적지 않는다.
+    if (models.length === 0) return null;
+    // 아무 줄도 없으면 카드마다 이 자리의 높이가 달라진다. "없다" 도 정보다 —
+    // 사용자가 "내가 뭘 빠뜨렸나" 를 다시 확인하러 폼으로 올라가지 않아도 된다.
+    return (
+      <p className="assess-need is-done">
+        {gain.noModel
+          ? "이 질환은 규칙 엔진이 검사값으로 직접 판정해요. 더 넣을 값은 없어요."
+          : "이 질환이 쓰는 값은 전부 들어왔어요."}
+      </p>
+    );
+  }
+
+  return (
+    <div className="assess-needs">
+      {decisive ? (
+        <p className="assess-need is-decisive">
+          <span className="assess-need-tag">판정</span>
+          <span>
+            <strong>{decisive}</strong>
+            {objectParticle(decisive)} 넣으면 정확해져요
+          </span>
+        </p>
+      ) : null}
+      {refining ? (
+        <p className="assess-need is-refining">
+          <span className="assess-need-tag">예측</span>
+          <span>
+            <strong>{refining}</strong>
+            {objectParticle(refining)} 넣으면 {gain.tierUp ? "정밀형으로 바뀌어요" : "예측이 정밀해져요"}
+          </span>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * 정본 엔진이 무엇을 보고 그 등급을 냈는가 — 모달에만 있던 블록.
+ *
+ * `VerdictDetail` 모달을 없애면서 카드 접이로 옮겼다. 모달과 카드가 **같은 것을
+ * 두 번** 보여주고 있었다 — 둘 다 `Evidence` 를 그리는데 모달은 그 위에 이 표를
+ * 더 얹은 정도였고, 사용자에게는 "눌렀더니 똑같은 게 나온다" 로 읽혔다.
+ */
+export function VerdictFacts({ verdict }: { verdict: DiseaseVerdict }) {
+  const hasAny =
+    verdict.engine_reason ||
+    verdict.reason ||
+    verdict.recommendation ||
+    verdict.criteria_reference ||
+    verdict.flags.length > 0;
+  if (!hasAny) return null;
+  return (
+    <div className="verdict-facts-block">
+      <p className="verdict-facts-title">
+        <span className={`assess-engine-tag engine-${verdict.engine.toLowerCase()}`}>
+          {ENGINE_SHORT[verdict.engine]}
+        </span>
+        이 판정의 근거
+      </p>
+      <dl className="verdict-facts">
+        {/* **왜 이 엔진이 정본인가.** 세 엔진이 같이 도는데 답은 하나만 실린다
+            (ADR-009). 그 선택의 이유가 화면에 없으면, 카드 앞면의 "ML 12% → 규칙
+            엔진 매우 높음" 이 왜 뒤쪽을 따르는지 알 길이 없다. */}
+        {verdict.engine_reason ? (
+          <>
+            <dt>어느 엔진이 왜</dt>
+            <dd>{verdict.engine_reason}</dd>
+          </>
+        ) : null}
+        {verdict.reason ? (
+          <>
+            <dt>무엇을 보고</dt>
+            <dd>{readableSentence(verdict.reason)}</dd>
+          </>
+        ) : null}
+        {verdict.recommendation ? (
+          <>
+            <dt>권하는 것</dt>
+            <dd>{verdict.recommendation}</dd>
+          </>
+        ) : null}
+        {verdict.criteria_reference ? (
+          <>
+            <dt>기준 출처</dt>
+            <dd>{verdict.criteria_reference}</dd>
+          </>
+        ) : null}
+      </dl>
+      {verdict.flags.map((flag) => (
+        <p className="assess-flag" key={flag}>
+          {flag}
+        </p>
+      ))}
     </div>
   );
 }
@@ -330,13 +453,11 @@ export function VerdictCard({
   verdict,
   values,
   models = [],
-  onOpen,
 }: {
   verdict: DiseaseVerdict;
   values: Record<string, string>;
   /** `/predictions/model-info` 의 모델 목록. 없으면 "안 쓴 입력" 블록만 빠진다. */
   models?: ModelSpec[];
-  onOpen: () => void;
 }) {
   const short = verdict.sub_status || LEVEL_LABEL[verdict.risk_level];
   const enough = verdict.risk_level !== "INSUFFICIENT_DATA";
@@ -382,11 +503,7 @@ export function VerdictCard({
       <KeyFigures verdict={verdict} values={values} />
       <TrajectoryLine verdict={verdict} />
 
-      {verdict.missing_fields.length > 0 && (
-        <p className="assess-need">
-          <strong>{verdict.missing_fields.map(readableField).join(", ")}</strong>를 넣으면 정확해져요
-        </p>
-      )}
+      <PrecisionHints verdict={verdict} values={values} models={models} />
 
       {/* **ML 근거를 카드 안에서 펼친다 — 예측 데모의 "모델 내부 값" 자리다.**
           모달로만 두던 때는 같은 값을 두 화면이 각자 그리면서 서로 다른 숫자를 크게
@@ -396,93 +513,16 @@ export function VerdictCard({
           격자에서 접이를 펼치면 같은 줄 카드까지 키가 늘어 아래가 밀리는 문제가
           있었다. `.assess-cards` 를 `grid-auto-rows` 없이 `align-items: start` 로
           두어 펼친 카드만 늘어나게 했다(`styles.css`). */}
-      {hasEvidence ? (
-        <details className="assess-card-evidence">
-          <summary>{verdict.superseded_by ? "이 예측의 근거와 정확도" : "이 예측의 근거와 정확도"}</summary>
-          <Evidence verdict={verdict} values={values} models={models} />
-        </details>
-      ) : null}
-
-      {/* 질환 이름을 접근성 이름에 넣는다. 카드가 열세 장이라 "판정 근거"만 있으면
-          화면 낭독기가 같은 이름의 버튼 열세 개를 읽는다. */}
-      <button type="button" className="assess-why-button" onClick={onOpen}>
-        <span>{verdict.name} 판정 근거 전체</span>
-      </button>
+      {/* **모달을 없애고 여기 하나로 모았다.** 예전에는 카드 접이와 "판정 근거 전체"
+          모달이 둘 다 `Evidence` 를 그려서, 눌러도 같은 것이 나왔다. 모달에만 있던
+          판정 근거표와 궤적 표를 여기로 옮기고 버튼을 뺐다. */}
+      <details className="assess-card-evidence">
+        <summary>{verdict.name} 판정 근거 자세히</summary>
+        <VerdictFacts verdict={verdict} />
+        <TrajectoryBlock verdict={verdict} />
+        {hasEvidence ? <Evidence verdict={verdict} values={values} models={models} /> : null}
+      </details>
     </article>
-  );
-}
-
-/** 카드에서 접었던 것 전부. 좁은 카드가 아니라 모달이라 나열하지 않고 항목으로 가른다. */
-export function VerdictDetail({
-  verdict,
-  values,
-  models = [],
-  onClose,
-}: {
-  verdict: DiseaseVerdict;
-  values: Record<string, string>;
-  models?: ModelSpec[];
-  onClose: () => void;
-}) {
-  return (
-    <Modal title={verdict.name} kicker="판정 근거" className="verdict-modal" onClose={onClose}>
-      <div className="verdict-modal-top">
-        <LevelBadge level={verdict.risk_level} />
-        <strong>{verdict.sub_status || LEVEL_LABEL[verdict.risk_level]}</strong>
-      </div>
-
-      {verdict.risk_level !== "INSUFFICIENT_DATA" ? <LevelBar level={verdict.risk_level} /> : null}
-      <KeyFigures verdict={verdict} values={values} />
-      <TrajectoryBlock verdict={verdict} />
-
-      <p className="assess-label">{verdict.display_label}</p>
-
-      <dl className="verdict-facts">
-        {verdict.reason ? (
-          <>
-            <dt>무엇을 보고</dt>
-            <dd>{readableSentence(verdict.reason)}</dd>
-          </>
-        ) : null}
-        <dt>어느 엔진이 왜</dt>
-        <dd>
-          <span className={`assess-engine-tag engine-${verdict.engine.toLowerCase()}`}>
-            {verdict.engine} {ENGINE_SHORT[verdict.engine]}
-          </span>{" "}
-          {verdict.engine_reason}
-        </dd>
-        {verdict.recommendation ? (
-          <>
-            <dt>권하는 것</dt>
-            <dd>{verdict.recommendation}</dd>
-          </>
-        ) : null}
-        {verdict.missing_fields.length > 0 ? (
-          <>
-            <dt>넣으면 정확해지는 값</dt>
-            <dd>{verdict.missing_fields.map(readableField).join(", ")}</dd>
-          </>
-        ) : null}
-        {verdict.criteria_reference ? (
-          <>
-            <dt>기준 출처</dt>
-            <dd>{verdict.criteria_reference}</dd>
-          </>
-        ) : null}
-      </dl>
-
-      {verdict.flags.map((flag) => (
-        <p className="assess-flag" key={flag}>
-          {flag}
-        </p>
-      ))}
-
-      {/* **카드와 같은 컴포넌트다.** `ReferenceBlock` 이 여기 있었고 카드에는 아무것도
-          없어서, 같은 ML 값을 두 화면이 각자 다르게 그렸다. 이제 한 곳이 낸다. */}
-      <Evidence verdict={verdict} values={values} models={models} />
-
-      {verdict.disclaimer ? <p className="assess-fineprint">{verdict.disclaimer}</p> : null}
-    </Modal>
   );
 }
 

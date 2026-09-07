@@ -43,7 +43,7 @@ import { DocumentPane, type DocumentReading } from "./DocumentPane";
 import type { ModelSpec } from "./Evidence";
 import { ASSESSMENT_PRESETS, type AssessmentPreset, presetValues } from "./presets";
 import { SuspectPanel } from "./SuspectPanel";
-import { LevelBadge, MatrixCard, VerdictCard, VerdictDetail } from "./VerdictCards";
+import { LevelBadge, MatrixCard, VerdictCard } from "./VerdictCards";
 import {
   calculateAgeFromBirthDate,
   FIELD_GROUPS,
@@ -159,8 +159,6 @@ export function AssessmentPage() {
   // 값과 읽어 온 값을 구분하지 못해, 원본과 대조할 자리를 고를 수 없다.
   // 사용자가 그 칸을 고치는 순간 표시를 뗀다 — 그때부터는 사람이 쓴 값이다.
   const [readFields, setReadFields] = useState<Set<string>>(new Set());
-  // 근거를 펼쳐 볼 질환. 한 번에 하나만 연다.
-  const [openVerdict, setOpenVerdict] = useState<string>();
   // 예측 근거 전체 리포트를 열었는가. 질환 하나가 아니라 열 장을 한 화면에 세운다.
   const [openDetail, setOpenDetail] = useState(false);
   /**
@@ -872,30 +870,6 @@ export function AssessmentPage() {
         <section className="assess-result">
           <header className="assess-summary">
             <h2>판정 요약</h2>
-            <ul>
-              <li>
-                <strong>
-                  {result.summary.evaluated} / {result.summary.total}
-                </strong>{" "}
-                칸 판정 · 최고 등급{" "}
-                <LevelBadge level={result.summary.highest_level} />
-              </li>
-              <li>
-                엔진별 —{" "}
-                {Object.entries(result.summary.by_engine)
-                  .map(([engine, count]) => `${engine} ${count}칸`)
-                  .join(" · ")}
-              </li>
-              <li>
-                수치가 가리키는 질환{" "}
-                <strong>{result.summary.matrix_evaluated}</strong> /{" "}
-                {result.summary.matrix_total} 칸
-              </li>
-              <li>
-                입력 {result.inputs_provided} / {result.inputs_total} · BMI{" "}
-                {result.bmi}
-              </li>
-            </ul>
             {/* **예측 근거 전체를 여는 한 곳.** 카드마다 있는 "판정 근거" 는 질환
                 하나를 설명하는데, 열 장을 나란히 놓고 게이지·정확도·안 쓴 입력까지
                 보려면 자리가 따로 있어야 한다. 예측 데모가 그 자리였다. */}
@@ -957,7 +931,6 @@ export function AssessmentPage() {
                 verdict={verdict}
                 values={values}
                 models={models}
-                onOpen={() => setOpenVerdict(verdict.key)}
               />
             ))}
           </div>
@@ -1014,19 +987,6 @@ export function AssessmentPage() {
 
       {/* 근거 모달. `verdicts` 에서 다시 찾는 이유는 재판정하면 같은 키의 내용이
           바뀌기 때문이다 — 열어 둔 채 판정하면 옛 값이 남는다. */}
-      {openVerdict
-        ? (() => {
-            const found = verdicts.find((v) => v.key === openVerdict);
-            return found ? (
-              <VerdictDetail
-                verdict={found}
-                values={values}
-                models={models}
-                onClose={() => setOpenVerdict(undefined)}
-              />
-            ) : null;
-          })()
-        : null}
 
       {/* 같은 이유로 결과가 없으면 닫는다. `result` 를 캡처해 두면 다시 판정한 뒤에도
           옛 리포트가 열린 채 남는다. */}
