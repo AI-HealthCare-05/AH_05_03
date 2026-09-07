@@ -1,0 +1,33 @@
+{
+  "id": "female-skeleton-controller-test",
+  "version": "1.3.0-controller-hierarchy-foot-alignment-v38",
+  "label": "여성 골격 · 양발 발등·중족부 정렬·Blender 컨트롤러 계층 테스트 v38",
+  "shortLabel": "여성 골격 발 정렬 v38",
+  "referenceSex": "female",
+  "adapter": "vanatome",
+  "coordinatePolicy": "presentation-fitted",
+  "referenceFrameId": "blender-female-controller-hierarchy-foot-alignment-v38",
+  "experimental": true,
+  "description": "두개골·하악골·치아를 포함한 여성 골격과 Blender 손 컨트롤러 부모 계층을 함께 표시합니다. 남성 기준 발의 상대 배치를 참고해 양발의 좁고 겹쳐 보이던 족근골과 중족골 기저부를 여성 외피 안에서 정렬했으며, 발가락뼈 원형과 네 손 포즈 계층은 그대로 유지합니다.",
+  "loadingLabel": "양발 발등·중족부를 정렬한 Blender 컨트롤러 골격을 준비하는 중…",
+  "loadingSizeLabel": "약 1.9 MiB · 골격 231개와 계층형 손 포즈 4개를 불러옵니다",
+  "layerLabels": [
+    "두개골·하악골·치아 50개 포함",
+    "양발 27개씩 발뼈 정렬을 포함한 전신 골격 231개",
+    "발가락뼈 원형과 손목·손가락 컨트롤러 부모 계층 유지",
+    "Open Hand·Fist·Spread·Point 계층형 포즈"
+  ],
+  "attributionLabel": "Z-Anatomy/Vanatome 파생 골격 출처·사용 제한",
+  "attributionUrl": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ATTRIBUTION.txt",
+  "assets": [
+    {
+      "url": "/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/triangle2m-v49-skeleton-corrected-upper-limb-hand-poses-skull-foot-aligned-v38.glb",
+      "visualRole": "skeleton",
+      "adapter": "vanatome",
+      "system": "skeletal",
+      "animationClips": ["Open Hand", "Fist", "Spread", "Point"],
+      "sourceUrl": "https://github.com/Z-Anatomy/Models-of-human-anatomy",
+      "sha256": "a90df5f164a24b17f442a2a991c71753b0d8b5f0f5e2f786a8abfde3fdf8fc17"
+    }
+  ]
+}

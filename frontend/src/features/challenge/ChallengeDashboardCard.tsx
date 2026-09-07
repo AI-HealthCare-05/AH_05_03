@@ -15,7 +15,7 @@ import { useChallengeTodayQuery } from "./queries";
 export function ChallengeDashboardCard() {
   const { data, isError } = useChallengeTodayQuery();
 
-  if (isError || !data) return null;
+  if (isError || !data || !data.garden || !Array.isArray(data.garden.animals)) return null;
 
   const { garden } = data;
   const animals = garden.animals.filter((animal) => animal.earned);

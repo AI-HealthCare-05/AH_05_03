@@ -79,7 +79,7 @@ export function DocumentPane({
       // 같은 파일을 다시 고를 수 있어야 한다. 값을 비우지 않으면 두 번째 선택에서
       // `change` 가 아예 안 뜬다.
       event.currentTarget.value = "";
-      if (!file || !runtime?.documents) return;
+      if (!file) return;
 
       const run = runRef.current + 1;
       runRef.current = run;
@@ -100,16 +100,18 @@ export function DocumentPane({
         if (!current()) return built.release();
         swapPreview(built);
 
-        setProgress("이 브라우저에 암호화해 저장하는 중이에요…");
-        const saved = await runtime.documents.save({
-          householdId,
-          profileId,
-          file,
-          fileName: file.name,
-        });
-        if (!current()) return;
-        if (!saved.ok) throw new Error(saved.error.message);
-        setDocument(saved.value);
+        if (runtime?.documents) {
+          setProgress("이 브라우저에 암호화해 저장하는 중이에요…");
+          const saved = await runtime.documents.save({
+            householdId,
+            profileId,
+            file,
+            fileName: file.name,
+          });
+          if (!current()) return;
+          if (!saved.ok) throw new Error(saved.error.message);
+          setDocument(saved.value);
+        }
 
         setProgress("검진표를 읽고 있어요… 7~20초쯤 걸려요");
         const result = await new GeminiOcrAdapter().recognize(file, file.name, {

@@ -1,3 +1,4 @@
+import uuid
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -17,6 +18,7 @@ class ProfileContext(BaseModel):
     서버가 기록을 갖고 있지 않아 클라이언트가 보내는 것은 맞지만, 그만큼
     길이를 묶어 두지 않으면 지시문을 통째로 덮어쓸 수 있다."""
 
+    profile_id: uuid.UUID | None = Field(default=None, description="서버 프로필 ID (선택)")
     profile_name: str = Field(max_length=100)
     relationship: str | None = Field(default=None, max_length=50)
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
@@ -68,6 +70,24 @@ class PainDraft(BaseModel):
     sensation: str | None = Field(default=None, description="통증 양상 (예: 욱신거림, 찌르는 듯함 등)")
     onset_at: str | None = Field(default=None, description="통증 시작 시점")
     note: str | None = Field(default=None, description="추가 메모")
+
+
+class PainDiaryToolCall(BaseModel):
+    tool_name: Literal["format_pain_diary"] = Field(
+        default="format_pain_diary", description="호출된 도구명 ('format_pain_diary')"
+    )
+    body_area: str = Field(description="통증 부위 (예: 팔꿈치, 왼쪽 고관절, 왼쪽 발바닥 등)")
+    intensity: int = Field(default=5, ge=0, le=10, description="통증 강도 (0~10)")
+    sensation: str | None = Field(
+        default=None, description="통증 양상 (예: 욱신거림, 이물감, 찌르는 듯함, 지지력 약화 등)"
+    )
+    aggravating_factors: str | None = Field(
+        default=None, description="통증 발생 및 악화 상황 (예: 웨이트 트레이닝 후, 보행 시 등)"
+    )
+    formatted_diary: str = Field(
+        description="사용자의 거친 구어체/오탈자를 맞춤법과 띄어쓰기에 맞추고 구조화된 높은 품질의 통증 일기 본문으로 정제한 문장"
+    )
+    date_str: str | None = Field(default=None, description="기록 일자 (YYYY-MM-DD, 기본값 오늘)")
 
 
 class LabResultDraft(BaseModel):
@@ -136,6 +156,7 @@ HealthIntent = Literal[
 class HealthAssistantChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=12, description="대화 이력 리스트")
     profile_context: ProfileContext | None = Field(default=None, description="현재 선택된 가족 구성원의 컨텍스트 정보")
+    session_id: uuid.UUID | None = Field(default=None, description="대화 세션 ID (DB 영구 보존용)")
 
 
 class HealthAssistantResponse(BaseModel):
@@ -146,6 +167,10 @@ class HealthAssistantResponse(BaseModel):
     blood_glucose_draft: BloodGlucoseDraft | None = Field(default=None, description="혈당 기록 초안")
     medication_draft: MedicationDraft | None = Field(default=None, description="복약 기록 초안")
     pain_draft: PainDraft | None = Field(default=None, description="통증 기록 초안")
+    pain_diary_tool: PainDiaryToolCall | None = Field(
+        default=None,
+        description="통증 일기 작성/정제 요청 시 맞춤법을 맞추고 구조화된 품질 좋은 문장으로 정제하는 도구 호출 결과",
+    )
     lab_result_draft: LabResultDraft | None = Field(default=None, description="검사/검진 서류 결과 초안")
     query_draft: QueryDraft | None = Field(default=None, description="기록 조회 조건 초안")
     challenge_draft: ChallengeDraft | None = Field(default=None, description="챌린지 생성·조정·완료 초안")

@@ -9,6 +9,7 @@
  */
 
 import type { ChatMessage, HealthAssistantResponse } from "./healthAssistantClient";
+import type { ChatMessageData } from "../../shared/api/contracts";
 import type { GeminiOcrResult } from "../../shared/api/geminiOcrAdapter";
 import type { HealthRecord, HealthRecordType } from "../../shared/local/domainContracts";
 
@@ -39,6 +40,8 @@ export interface ExtendedChatMessage extends ChatMessage {
   imageBlobUrl?: string;
   imageFile?: File;
   attachedDocuments?: Array<{ id: string; fileName?: string }>;
+  queriedRecords?: HealthRecord[];
+  queriedRecordsTitle?: string;
   showTrendChart?: boolean;
   trendMetrics?: MetricSeries[];
   trendInitialKey?: string;
@@ -571,3 +574,185 @@ export function extractMetricsFromRecords(records: HealthRecord[]): MetricSeries
 
   return series;
 }
+
+/**
+ * 대화 세션 로컬 보존 — 43번 설계 §6
+ *
+ * 서버는 무상태이므로 대화는 브라우저(sessionStorage)에 프로필 단위로 격리 보존한다.
+ * 서랍을 닫거나 다른 메뉴로 이동해도 해당 구성원의 대화가 유지된다.
+ */
+export function chatSessionStorageKey(profileId: string): string {
+  return `ieobom_chat_session_${profileId}`;
+}
+
+export function serializeChatSession(messages: ExtendedChatMessage[]): string {
+  const serializable = messages.map((msg) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { imageFile, imageBlobUrl, ...rest } = msg;
+    return rest;
+  });
+  return JSON.stringify(serializable);
+}
+
+export function deserializeChatSession(raw: string): ExtendedChatMessage[] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is ExtendedChatMessage =>
+        item &&
+        typeof item === "object" &&
+        typeof item.id === "string" &&
+        (item.role === "user" || item.role === "assistant") &&
+        typeof item.content === "string",
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function loadChatSession(
+  profileId: string,
+  storage?: Storage,
+): ExtendedChatMessage[] | null {
+  if (!profileId) return null;
+  const targetStorage = storage ?? (typeof window !== "undefined" ? window.sessionStorage : undefined);
+  if (!targetStorage) return null;
+
+  try {
+    const raw = targetStorage.getItem(chatSessionStorageKey(profileId));
+    if (!raw) return null;
+    const messages = deserializeChatSession(raw);
+    return messages.length > 0 ? messages : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveChatSession(
+  profileId: string,
+  messages: ExtendedChatMessage[],
+  storage?: Storage,
+): void {
+  if (!profileId || messages.length === 0) return;
+  // 환영 메시지만 있는 초기 상태는 별도로 저장하지 않고 비운다.
+  if (messages.length === 1 && messages[0].id === "welcome") {
+    clearChatSession(profileId, storage);
+    return;
+  }
+  const targetStorage = storage ?? (typeof window !== "undefined" ? window.sessionStorage : undefined);
+  if (!targetStorage) return;
+
+  try {
+    const serialized = serializeChatSession(messages);
+    targetStorage.setItem(chatSessionStorageKey(profileId), serialized);
+  } catch (err) {
+    console.warn("Failed to persist chat session:", err);
+  }
+}
+
+export function clearChatSession(
+  profileId: string,
+  storage?: Storage,
+): void {
+  if (!profileId) return;
+  const targetStorage = storage ?? (typeof window !== "undefined" ? window.sessionStorage : undefined);
+  if (!targetStorage) return;
+
+  try {
+    targetStorage.removeItem(chatSessionStorageKey(profileId));
+  } catch (err) {
+    console.warn("Failed to clear chat session:", err);
+  }
+}
+
+export function createWelcomeMessage(profileName: string): ExtendedChatMessage {
+  return {
+    id: "welcome",
+    role: "assistant",
+    content: `안녕하세요! ${profileName}님의 건강 비서 '봄이'입니다.
+
+평소 운동, 혈압, 복약 정보를 편하게 말씀해 주시거나, 하단 + 버튼으로 검진표/서류 사진을 올리시면 기록과 조회를 도와드릴게요!`,
+  };
+}
+
+export function dbMessageToExtendedChatMessage(dbMsg: ChatMessageData): ExtendedChatMessage {
+  return {
+    id: dbMsg.id,
+    role: dbMsg.role,
+    content: dbMsg.content,
+    responseDraft: dbMsg.metadata ? (dbMsg.metadata as unknown as HealthAssistantResponse) : undefined,
+  };
+}
+
+/**
+ * 서버가 저장한 대화 본문·AI 응답에, 이 기기에서만 만들 수 있는 조회 카드 상태를
+ * 다시 붙인다. 건강기록 원문은 로컬 보관함에 있으므로 서버 이력만으로는 표·그래프를
+ * 다시 그릴 수 없다. 같은 역할·본문의 캐시 메시지에만 보조 UI 상태를 승계한다.
+ */
+export function mergeServerMessagesWithLocalUi(
+  dbMessages: ChatMessageData[],
+  cachedMessages: ExtendedChatMessage[] | null,
+): ExtendedChatMessage[] {
+  if (!cachedMessages || cachedMessages.length === 0) {
+    return dbMessages.map(dbMessageToExtendedChatMessage);
+  }
+
+  // 1. ID로 빠른 조회가 가능하도록 맵 구성
+  const cachedById = new Map<string, ExtendedChatMessage>();
+  for (const m of cachedMessages) {
+    if (m.id) {
+      cachedById.set(m.id, m);
+    }
+  }
+
+  // 2. 동일한 질문/답변이 반복되어도 순서대로 매칭될 수 있도록 role + content FIFO 큐 구성
+  const signatureQueues = new Map<string, ExtendedChatMessage[]>();
+  for (const m of cachedMessages) {
+    const sig = `${m.role}\u0000${m.content.trim()}`;
+    const queue = signatureQueues.get(sig) ?? [];
+    queue.push(m);
+    signatureQueues.set(sig, queue);
+  }
+
+  const usedCached = new Set<ExtendedChatMessage>();
+
+  return dbMessages.map((dbMessage) => {
+    const serverMessage = dbMessageToExtendedChatMessage(dbMessage);
+
+    // 1) 정확한 ID 매칭
+    let cached = cachedById.get(dbMessage.id);
+
+    // 2) ID가 다르면 (로컬 임시 id vs 서버 생성 id) signature 큐에서 선입선출 매칭
+    if (!cached || usedCached.has(cached)) {
+      const sig = `${serverMessage.role}\u0000${serverMessage.content.trim()}`;
+      const queue = signatureQueues.get(sig);
+      if (queue && queue.length > 0) {
+        while (queue.length > 0) {
+          const candidate = queue.shift()!;
+          if (!usedCached.has(candidate)) {
+            cached = candidate;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!cached) return serverMessage;
+    usedCached.add(cached);
+
+    return {
+      ...serverMessage,
+      saved: cached.saved,
+      attachedDocuments: cached.attachedDocuments,
+      queriedRecords: cached.queriedRecords,
+      queriedRecordsTitle: cached.queriedRecordsTitle,
+      showTrendChart: cached.showTrendChart,
+      trendMetrics: cached.trendMetrics,
+      trendInitialKey: cached.trendInitialKey,
+      imageBlobUrl: cached.imageBlobUrl,
+      imageFile: cached.imageFile,
+    };
+  });
+}
+

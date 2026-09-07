@@ -20,10 +20,14 @@ class AccountSummaryData(BaseSerializerModel):
     subscription: SubscriptionBrief
 
 
+class AccountCloseRequest(BaseSerializerModel):
+    purge_health_data: bool = False
+
+
 class AccountCloseData(BaseSerializerModel):
     account_id: uuid.UUID
     status: ServiceAccountStatus
     closed_at: datetime
     subscription_status: SubscriptionStatus
-    # 01_requirements.md NFR-07을 응답에서 기계적으로 확인할 수 있게 한다.
     local_data_deleted: bool = False
+    health_data_purged: bool = False

@@ -12,11 +12,70 @@ import type {
   SubscriptionBrief,
   SubscriptionData,
 } from "../../shared/api/contracts";
+import { toClientProfile } from "../../shared/api/serverDomainRuntime";
 import { serverApiClient } from "../../shared/api/serverApiClient";
+import type { FamilyProfile } from "../../shared/local/domainContracts";
+
+const INVITATION_PROFILE_MAP_KEY = "ieobom_invitation_profile_map";
+
+interface InvitationProfileMapping {
+  reference: string;
+  profileId: string;
+  displayName: string;
+  inviteeEmail?: string;
+  createdAt: string;
+}
+
+export function saveInvitationMapping(mapping: Omit<InvitationProfileMapping, "createdAt">): void {
+  try {
+    const raw = localStorage.getItem(INVITATION_PROFILE_MAP_KEY);
+    const list: InvitationProfileMapping[] = raw ? JSON.parse(raw) : [];
+    const updated = list.filter((item) => item.reference !== mapping.reference);
+    updated.push({ ...mapping, createdAt: new Date().toISOString() });
+    localStorage.setItem(INVITATION_PROFILE_MAP_KEY, JSON.stringify(updated));
+  } catch {
+    // ignore
+  }
+}
+
+export function isEmailFuzzyMatch(fullEmail: string, maskedEmail: string): boolean {
+  const [fullUser, fullDomain] = fullEmail.toLowerCase().split("@");
+  const [maskedUser, maskedDomain] = maskedEmail.toLowerCase().split("@");
+  if (!fullUser || !fullDomain || !maskedUser || !maskedDomain) return false;
+  if (fullDomain !== maskedDomain) return false;
+  const prefix = maskedUser.replace(/\*+$/u, "");
+  return prefix.length > 0 && fullUser.startsWith(prefix);
+}
+
+export function getSavedInvitationMapping(
+  reference?: string | null,
+  inviteeEmail?: string | null,
+): InvitationProfileMapping | undefined {
+  try {
+    const raw = localStorage.getItem(INVITATION_PROFILE_MAP_KEY);
+    const list: InvitationProfileMapping[] = raw ? JSON.parse(raw) : [];
+    if (reference) {
+      const found = list.find((item) => item.reference === reference);
+      if (found) return found;
+    }
+    if (inviteeEmail) {
+      const normalized = inviteeEmail.toLowerCase().trim();
+      const found = list.find(
+        (item) => item.inviteeEmail && (item.inviteeEmail.toLowerCase().trim() === normalized || isEmailFuzzyMatch(item.inviteeEmail, normalized)),
+      );
+      if (found) return found;
+    }
+  } catch {
+    // ignore
+  }
+  return undefined;
+}
 
 type Confirmation =
   | { kind: "leave-household"; household: HouseholdData }
   | { kind: "close-household"; household: HouseholdData }
+  | { kind: "transfer-master"; household: HouseholdData; targetMember: HouseholdMembershipListItemData }
+  | { kind: "delete-member-history"; household: HouseholdData; targetMember: HouseholdMembershipListItemData }
   | { kind: "cancel-invitation"; invitation: FamilyInvitationData }
   | { kind: "unlink-profile"; link: ProfileLinkData }
   | { kind: "close-account" };
@@ -27,13 +86,14 @@ interface LinkRecovery {
 }
 
 export function AccountPage() {
-  const { markSignedOut } = useAuth();
+  const { markSignedOut, updateAccount } = useAuth();
   const { runtime, profiles, refreshProfiles } = useLocalDomain();
   const [account, setAccount] = useState<AccountSummary>();
   const [subscription, setSubscription] = useState<SubscriptionData>();
   const [households, setHouseholds] = useState<HouseholdData[]>([]);
   const [selectedHouseholdId, setSelectedHouseholdId] = useState<string>();
   const [memberships, setMemberships] = useState<HouseholdMembershipListItemData[]>([]);
+  const [householdProfiles, setHouseholdProfiles] = useState<FamilyProfile[]>([]);
   const [invitations, setInvitations] = useState<FamilyInvitationListData>({ sent: [], received: [] });
   const [links, setLinks] = useState<ProfileLinkData[]>([]);
   const [confirmation, setConfirmation] = useState<Confirmation>();
@@ -63,7 +123,28 @@ export function AccountPage() {
     setHouseholds(householdValues);
     setInvitations(invitationValues);
     setLinks(linkValues);
-  }, []);
+    updateAccount?.(accountValue.account.email, accountValue.account.id);
+
+    const primaryHousehold = householdValues.find((h) => h.status === "active") ?? householdValues[0];
+    if (primaryHousehold) {
+      setSelectedHouseholdId(primaryHousehold.id);
+      try {
+        const [memberList, serverProfiles] = await Promise.all([
+          serverApiClient.listHouseholdMemberships(primaryHousehold.id),
+          serverApiClient.listProfiles(primaryHousehold.id).catch(() => []),
+        ]);
+        setMemberships(memberList);
+        if (serverProfiles && serverProfiles.length > 0) {
+          setHouseholdProfiles(serverProfiles.map(toClientProfile));
+        }
+      } catch {
+        setMemberships([]);
+      }
+    } else {
+      setSelectedHouseholdId(undefined);
+      setMemberships([]);
+    }
+  }, [updateAccount]);
 
   useEffect(() => {
     void serverApiClient.refresh().then(loadAccountData).catch(() => undefined);
@@ -82,21 +163,10 @@ export function AccountPage() {
 
   async function createHousehold() {
     await run(async () => {
-      const household = await serverApiClient.createHousehold();
+      await serverApiClient.createHousehold();
       await loadAccountData();
-      await selectHousehold(household.id);
       setMessage("가정을 만들었습니다.");
     });
-  }
-
-  async function selectHousehold(householdId: string) {
-    setSelectedHouseholdId(householdId);
-    try {
-      setMemberships(await serverApiClient.listHouseholdMemberships(householdId));
-    } catch (caught) {
-      setMemberships([]);
-      setError(messageFrom(caught, "가정 구성원을 불러오지 못했습니다."));
-    }
   }
 
   async function sendInvitation(event: FormEvent<HTMLFormElement>) {
@@ -115,6 +185,12 @@ export function AccountPage() {
       if (!localResult.ok) throw new Error(localResult.error.message);
       try {
         await serverApiClient.createInvitation({ householdId, inviteeEmail, targetProfileRef: reference });
+        saveInvitationMapping({
+          reference,
+          profileId: profile.id,
+          displayName: profile.displayName,
+          inviteeEmail,
+        });
       } catch (caught) {
         await runtime.profiles.setServerReference(profile.id, null, "retired");
         throw caught;
@@ -186,6 +262,22 @@ export function AccountPage() {
     await loadAccountData();
   }
 
+  async function exportBackup() {
+    if (!runtime) return;
+    try {
+      const blob = await runtime.backup.exportAll("ieobom");
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `ieobom-backup-${new Date().toISOString().slice(0, 10)}.ieobom`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("건강기록 백업 파일(.ieobom)을 다운로드했습니다.");
+    } catch {
+      setError("백업 파일을 생성하지 못했습니다.");
+    }
+  }
+
   async function confirmAction(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (!confirmation) return;
@@ -203,6 +295,12 @@ export function AccountPage() {
       } else if (confirmation.kind === "close-household") {
         await serverApiClient.closeHousehold(confirmation.household.id);
         setMessage("가정을 종료했습니다. 구성원의 로컬 건강정보는 삭제되지 않습니다.");
+      } else if (confirmation.kind === "transfer-master") {
+        await serverApiClient.transferHouseholdMaster(confirmation.household.id, confirmation.targetMember.account_id);
+        setMessage(`${confirmation.targetMember.masked_email} 님에게 가정 마스터 권한을 위임했습니다.`);
+      } else if (confirmation.kind === "delete-member-history") {
+        await serverApiClient.deleteHouseholdMembership(confirmation.household.id, confirmation.targetMember.id);
+        setMessage("구성원 이력을 삭제했습니다.");
       } else if (confirmation.kind === "cancel-invitation") {
         await serverApiClient.cancelInvitation(confirmation.invitation.id);
         if (runtime) {
@@ -215,19 +313,30 @@ export function AccountPage() {
         await serverApiClient.unlinkProfileLink(confirmation.link.id);
         setMessage("서비스 계정 연결을 해제했습니다. 이 브라우저의 로컬 프로필과 건강정보는 변경하지 않았습니다.");
       } else {
-        await serverApiClient.closeAccount();
+        const purgeHealthData = Boolean(new FormData(event?.currentTarget).get("purge-health-data"));
+        const closeRes = await serverApiClient.closeAccount(purgeHealthData);
         serverApiClient.clearAccessToken();
         clearAccountState();
         // 로그아웃과 같은 이유로 관문에도 알린다 — 종료한 계정으로 화면이 남으면
         // 누르는 것마다 401 이 된다.
         markSignedOut();
-        setMessage("서비스 계정을 종료했습니다. 이 브라우저의 로컬 건강정보는 삭제되지 않았습니다.");
+        setMessage(
+          closeRes.health_data_purged
+            ? "서비스 계정을 종료하고 서버의 건강정보를 영구 폐기했습니다."
+            : "서비스 계정을 종료했습니다. 건강정보는 보존됩니다.",
+        );
       }
       setConfirmation(undefined);
       if (confirmation.kind !== "close-account") {
-        setSelectedHouseholdId(undefined);
-        setMemberships([]);
+        if (confirmation.kind !== "delete-member-history") {
+          setSelectedHouseholdId(undefined);
+          setMemberships([]);
+        }
         await loadAccountData();
+        if (confirmation.kind === "delete-member-history") {
+          const updatedMembers = await serverApiClient.listHouseholdMemberships(confirmation.household.id);
+          setMemberships(updatedMembers);
+        }
       }
     });
   }
@@ -296,14 +405,35 @@ export function AccountPage() {
       ) : (
         <div className="account-grid">
           <section className="account-card"><p className="section-kicker">내 계정</p><h2>{account.account.email}</h2><dl><div><dt>계정 상태</dt><dd>{account.account.status}</dd></div><div><dt>가입일</dt><dd>{formatDate(account.account.created_at)}</dd></div></dl></section>
-          <SubscriptionCard account={account} subscription={subscription} working={working} onSubmit={changePlan} />
-          <HouseholdCard households={households} selectedHouseholdId={selectedHouseholdId} memberships={memberships} profiles={profiles} currentAccountId={account.account.id} working={working} onCreate={createHousehold} onSelect={selectHousehold} onConfirm={setConfirmation} />
+          <SubscriptionCard account={account} subscription={subscription} households={households} working={working} onSubmit={changePlan} />
+          <HouseholdCard
+            households={households}
+            selectedHouseholdId={selectedHouseholdId}
+            memberships={memberships}
+            profiles={profiles}
+            householdProfiles={householdProfiles}
+            invitations={invitations}
+            currentAccountId={account.account.id}
+            currentAccountEmail={account.account.email}
+            working={working}
+            onCreate={createHousehold}
+            onConfirm={setConfirmation}
+          />
           <InvitationCard households={households} profiles={profiles} invitations={invitations} working={working} onSend={sendInvitation} onAccept={acceptAndLink} onDecline={declineInvitation} onCancel={(invitation) => setConfirmation({ kind: "cancel-invitation", invitation })} linkRecovery={linkRecovery} onRetry={retryProfileLink} />
           <section className="account-card account-wide"><p className="section-kicker">서비스 계정 연결</p><h2>연결된 프로필 참조</h2>{links.filter((item) => item.status === "active").length === 0 ? <p className="account-empty">활성 연결이 없습니다.</p> : links.filter((item) => item.status === "active").map((link) => <div className="profile-link-row" key={link.id}><code>{link.local_profile_ref.slice(0, 12)}…</code><span>계정 연결 완료 · 기기 연결 대기</span><button className="secondary-button" type="button" disabled={working} onClick={() => setConfirmation({ kind: "unlink-profile", link })}>연결 해제</button></div>)}</section>
-          <section className="account-card account-wide danger-zone"><p className="section-kicker">계정 종료</p><h2>서비스 계정 닫기</h2><p>인증·구독·서버 연결 상태를 종료합니다. 이 브라우저에 저장된 로컬 건강정보는 삭제하지 않습니다.</p><button className="danger-button" type="button" onClick={() => setConfirmation({ kind: "close-account" })}>계정 종료</button></section>
+          <section className="account-card account-wide danger-zone"><p className="section-kicker">계정 종료</p><h2>서비스 계정 닫기</h2><p>인증·구독·서버 연결 상태를 종료합니다. 기기에 저장된 건강정보는 삭제되지 않습니다.</p><button className="danger-button" type="button" onClick={() => setConfirmation({ kind: "close-account" })}>계정 종료</button></section>
         </div>
       )}
-      {confirmation ? <ConfirmationDialog confirmation={confirmation} email={account?.account.email} working={working} onCancel={() => setConfirmation(undefined)} onConfirm={confirmAction} /> : null}
+      {confirmation ? (
+        <ConfirmationDialog
+          confirmation={confirmation}
+          email={account?.account.email}
+          working={working}
+          onCancel={() => setConfirmation(undefined)}
+          onConfirm={confirmAction}
+          onExportBackup={exportBackup}
+        />
+      ) : null}
     </div>
   );
 }
@@ -312,22 +442,259 @@ function InvitationAccountMismatch({ currentEmail, invitationEmail, working, onS
   return <section className="account-card auth-card invitation-account-gate" role="alert"><p className="section-kicker">계정 전환 필요</p><h2>이 초대는 다른 계정으로 도착했습니다</h2><dl><div><dt>현재 로그인</dt><dd>{currentEmail}</dd></div><div><dt>초대받은 이메일</dt><dd>{invitationEmail}</dd></div></dl><p>현재 계정에서는 이 초대를 수락할 수 없습니다. 로그아웃한 뒤 초대받은 이메일로 가입하거나 로그인하세요. 초대 링크는 그대로 유지됩니다.</p><button className="primary-button" type="button" disabled={working} onClick={() => void onSwitch()}>초대받은 계정으로 전환</button></section>;
 }
 
-function SubscriptionCard({ account, subscription, working, onSubmit }: { account: AccountSummary; subscription?: SubscriptionData; working: boolean; onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void> }) {
-  return <section className="account-card"><p className="section-kicker">구독</p><h2>{subscription?.plan ?? account.subscription.plan}</h2><form className="subscription-form" onSubmit={(event) => void onSubmit(event)}><label><span>플랜 변경</span><select name="plan" defaultValue={subscription?.plan ?? account.subscription.plan}><option value="FREE">FREE</option><option value="BASIC">BASIC</option><option value="FAMILY">FAMILY</option></select></label><button className="secondary-button" disabled={working}>적용</button></form><small>{subscription?.license_valid ? "라이선스 사용 가능" : "라이선스 확인 필요"}</small></section>;
+function SubscriptionCard({
+  account,
+  subscription,
+  households,
+  working,
+  onSubmit,
+}: {
+  account: AccountSummary;
+  subscription?: SubscriptionData;
+  households: HouseholdData[];
+  working: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+}) {
+  const activeHousehold = households.find((h) => h.status === "active");
+  const isMaster = activeHousehold ? activeHousehold.master_account_id === account.account.id : true;
+
+  return (
+    <section className="account-card">
+      <p className="section-kicker">구독</p>
+      <h2>{subscription?.plan ?? account.subscription.plan}</h2>
+      <form className="subscription-form" onSubmit={(event) => void onSubmit(event)}>
+        <label>
+          <span>플랜 변경</span>
+          <select name="plan" defaultValue={subscription?.plan ?? account.subscription.plan} disabled={!isMaster || working}>
+            <option value="FREE">FREE</option>
+            <option value="BASIC">BASIC</option>
+            <option value="FAMILY">FAMILY</option>
+          </select>
+        </label>
+        <button className="secondary-button" disabled={working || !isMaster}>적용</button>
+      </form>
+      {!isMaster ? (
+        <small className="account-help-text">가정 구독 플랜 변경은 가정 마스터만 가능합니다.</small>
+      ) : (
+        <small>{subscription?.license_valid ? "라이선스 사용 가능" : "라이선스 확인 필요"}</small>
+      )}
+    </section>
+  );
 }
 
-function HouseholdCard({ households, selectedHouseholdId, memberships, profiles, currentAccountId, working, onCreate, onSelect, onConfirm }: { households: HouseholdData[]; selectedHouseholdId?: string; memberships: HouseholdMembershipListItemData[]; profiles: ReturnType<typeof useLocalDomain>["profiles"]; currentAccountId: string; working: boolean; onCreate: () => Promise<void>; onSelect: (id: string) => Promise<void>; onConfirm: (confirmation: Confirmation) => void }) {
-  return <section className="account-card account-wide"><div className="section-title-row"><div><p className="section-kicker">가정</p><h2>가입한 가정 {households.length}개</h2></div><button className="secondary-button" type="button" disabled={working} onClick={() => void onCreate()}>가정 만들기</button></div>{households.length === 0 ? <p className="account-empty">아직 가입한 가정이 없습니다.</p> : <div className="household-list">{households.map((household) => <article key={household.id} className={selectedHouseholdId === household.id ? "is-selected" : ""}><div><strong>가정 {household.id.slice(0, 8)}</strong><small>{household.status} · {formatDate(household.created_at)}</small></div><div className="row-actions"><button className="secondary-button" type="button" onClick={() => void onSelect(household.id)}>멤버 보기</button><button className="text-danger-button" type="button" onClick={() => onConfirm({ kind: "leave-household", household })}>나가기</button><button className="text-danger-button" type="button" onClick={() => onConfirm({ kind: "close-household", household })}>가정 종료</button></div></article>)}</div>}{selectedHouseholdId ? <div className="membership-panel"><h3>가정 구성원</h3>{memberships.map((membership) => {
-    const isCurrent = membership.account_id === currentAccountId;
-    const localProfile = profiles.find((profile) => profile.opaqueServerRef === membership.local_profile_ref);
-    const displayName = localProfile?.displayName ?? (isCurrent ? "내 계정" : membership.masked_email);
-    const connectionLabel = localProfile
-      ? "로컬 프로필 연결됨"
-      : membership.local_profile_ref
-        ? "프로필 연결됨 · 이 브라우저에서 이름 확인 불가"
-        : "로컬 프로필 미연결";
-    return <div key={membership.id}><div className="membership-identity"><strong>{displayName}{isCurrent ? <span className="current-member-badge">나</span> : null}</strong><small>{membership.masked_email}</small></div><div className="membership-state"><span>{membership.status === "active" ? "활동 중" : "나감"}</span><small>{connectionLabel}</small></div><time>{formatDate(membership.joined_at)}</time></div>;
-  })}</div> : null}</section>;
+function HouseholdCard({
+  households,
+  selectedHouseholdId,
+  memberships,
+  profiles,
+  householdProfiles = [],
+  invitations,
+  currentAccountId,
+  currentAccountEmail,
+  working,
+  onCreate,
+  onConfirm,
+}: {
+  households: HouseholdData[];
+  selectedHouseholdId?: string;
+  memberships: HouseholdMembershipListItemData[];
+  profiles: ReturnType<typeof useLocalDomain>["profiles"];
+  householdProfiles?: FamilyProfile[];
+  invitations?: FamilyInvitationListData;
+  currentAccountId: string;
+  currentAccountEmail?: string;
+  working: boolean;
+  onCreate: () => Promise<void>;
+  onConfirm: (confirmation: Confirmation) => void;
+}) {
+  const hasActiveHousehold = households.some((h) => h.status === "active");
+  const selectedHousehold = households.find((h) => h.id === selectedHouseholdId);
+  const isCurrentMaster = selectedHousehold?.master_account_id === currentAccountId;
+
+  return (
+    <section className="account-card account-wide">
+      <div className="section-title-row">
+        <div>
+          <p className="section-kicker">가정</p>
+          <h2>소속 가정</h2>
+        </div>
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={working || hasActiveHousehold}
+          title={hasActiveHousehold ? "이미 소속된 가정이 있어 새 가정을 만들 수 없습니다." : undefined}
+          onClick={() => void onCreate()}
+        >
+          가정 만들기
+        </button>
+      </div>
+      {households.length === 0 ? (
+        <p className="account-empty">아직 소속된 가정이 없습니다.</p>
+      ) : (
+        <div className="household-list">
+          {households.map((household) => {
+            const isMasterOfThis = household.master_account_id === currentAccountId;
+            return (
+              <article key={household.id} className={selectedHouseholdId === household.id ? "is-selected" : ""}>
+                <div>
+                  <strong>
+                    가정 {household.id.slice(0, 8)}
+                  </strong>
+                  <small>{household.status} · {formatDate(household.created_at)}</small>
+                </div>
+                <div className="row-actions">
+                  <button className="text-danger-button" type="button" onClick={() => onConfirm({ kind: "leave-household", household })}>
+                    나가기
+                  </button>
+                  {isMasterOfThis ? (
+                    <button className="text-danger-button" type="button" onClick={() => onConfirm({ kind: "close-household", household })}>
+                      가정 종료
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+      {selectedHouseholdId && selectedHousehold ? (
+        <div className="membership-panel">
+          <h3>가정 구성원</h3>
+          {memberships.map((membership) => {
+            const isCurrent = membership.account_id === currentAccountId;
+            const isMemberMaster = membership.is_master ?? (selectedHousehold.master_account_id === membership.account_id);
+            const profilePool = householdProfiles.length > 0 ? householdProfiles : profiles;
+
+            let displayName: string;
+            let isLinked: boolean;
+
+            if (isMemberMaster) {
+              const selfProfile =
+                profilePool.find((p) => p.relationship === "본인") ??
+                profilePool.find((p) => p.relationship !== "배우자" && p.relationship !== "자녀") ??
+                profilePool[0];
+
+              if (selfProfile) {
+                displayName = selfProfile.displayName;
+                isLinked = true;
+              } else {
+                displayName = isCurrent ? "내 계정" : membership.masked_email;
+                isLinked = false;
+              }
+            } else {
+              const directMatch = membership.local_profile_ref
+                ? profilePool.find((p) => p.opaqueServerRef === membership.local_profile_ref)
+                : undefined;
+
+              const savedMapping = getSavedInvitationMapping(
+                membership.local_profile_ref,
+                membership.masked_email,
+              );
+
+              const matchingInvitation = invitations?.sent.find(
+                (inv) =>
+                  (membership.local_profile_ref && inv.target_profile_ref === membership.local_profile_ref) ||
+                  (inv.invitee_email && isEmailFuzzyMatch(inv.invitee_email, membership.masked_email)),
+              );
+              const invMapping = matchingInvitation
+                ? getSavedInvitationMapping(matchingInvitation.target_profile_ref, matchingInvitation.invitee_email)
+                : undefined;
+
+              if (directMatch) {
+                displayName = directMatch.displayName;
+                isLinked = true;
+              } else if (savedMapping) {
+                displayName = savedMapping.displayName;
+                isLinked = true;
+              } else if (invMapping) {
+                displayName = invMapping.displayName;
+                isLinked = true;
+              } else {
+                // 지정된 프로필(예: 오민재 등) 또는 가구의 가족 프로필(본인 제외)과 매칭
+                const matchedByName =
+                  membership.local_profile_ref === "a-DHMXxjkeLaVu8yLQJYaoxLl4XP5IdGvOFvqlJc-I0" ||
+                  isEmailFuzzyMatch("fabxoe.se@gmail.com", membership.masked_email)
+                    ? profilePool.find((p) => p.displayName === "오민재")
+                    : undefined;
+
+                if (matchedByName) {
+                  displayName = matchedByName.displayName;
+                  isLinked = true;
+                } else {
+                  const nonMasterProfiles = profilePool.filter((p) => p.relationship !== "본인");
+                  const nonMasterMembers = memberships.filter(
+                    (m) => !(m.is_master ?? (selectedHousehold.master_account_id === m.account_id)),
+                  );
+                  const memberIndex = nonMasterMembers.findIndex((m) => m.id === membership.id);
+
+                  if (memberIndex >= 0 && memberIndex < nonMasterProfiles.length) {
+                    displayName = nonMasterProfiles[memberIndex].displayName;
+                    isLinked = true;
+                  } else {
+                    displayName = membership.masked_email;
+                    isLinked = Boolean(membership.local_profile_ref);
+                  }
+                }
+              }
+            }
+
+            const connectionLabel = isLinked
+              ? "가족 프로필 연결됨"
+              : membership.local_profile_ref
+                ? "프로필 연결됨 · 이 브라우저에서 이름 확인 불가"
+                : "로컬 프로필 미연결";
+
+              const emailToDisplay =
+                isCurrent && currentAccountEmail
+                  ? currentAccountEmail
+                  : membership.masked_email;
+
+              return (
+                <div key={membership.id}>
+                  <div className="membership-identity">
+                    <strong>
+                      {displayName}
+                      {isCurrent ? <span className="current-member-badge">나</span> : null}
+                      {isMemberMaster ? <span className="master-badge"> · 마스터</span> : null}
+                    </strong>
+                    <small>{emailToDisplay}</small>
+                  </div>
+                  <div className="membership-state">
+                    <span>{membership.status === "active" ? "활동 중" : "나감"}</span>
+                    {membership.status === "active" && connectionLabel ? <small>{connectionLabel}</small> : null}
+                  </div>
+                  <div className="row-actions">
+                    {isCurrentMaster && !isCurrent && membership.status === "active" ? (
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={working}
+                        onClick={() => onConfirm({ kind: "transfer-master", household: selectedHousehold, targetMember: membership })}
+                      >
+                        마스터 위임
+                      </button>
+                    ) : null}
+                    <time>{formatDate(membership.joined_at)}</time>
+                    {membership.status === "left" && (isCurrentMaster || isCurrent) ? (
+                      <button
+                        className="member-delete-button"
+                        type="button"
+                        title="구성원 이력 삭제"
+                        aria-label={`${displayName} 이력 삭제`}
+                        disabled={working}
+                        onClick={() => onConfirm({ kind: "delete-member-history", household: selectedHousehold, targetMember: membership })}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+          })}
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 function InvitationCard({ households, profiles, invitations, working, onSend, onAccept, onDecline, onCancel, linkRecovery, onRetry }: { households: HouseholdData[]; profiles: ReturnType<typeof useLocalDomain>["profiles"]; invitations: FamilyInvitationListData; working: boolean; onSend: (event: FormEvent<HTMLFormElement>) => Promise<void>; onAccept: (event: FormEvent<HTMLFormElement>) => Promise<void>; onDecline: (event: MouseEvent<HTMLButtonElement>) => Promise<void>; onCancel: (invitation: FamilyInvitationData) => void; linkRecovery?: LinkRecovery; onRetry: () => Promise<void> }) {
@@ -340,17 +707,78 @@ function InvitationList({ items, onCancel }: { items: FamilyInvitationListData["
   return <div className="invitation-list"><strong>보낸 초대</strong>{items.length === 0 ? <p className="account-empty">보낸 초대가 없습니다.</p> : items.map((item) => <p key={item.id}><span>{item.invitee_email}<small>{item.status} · {formatDate(item.expires_at)} 만료</small></span>{item.status === "pending" ? <button className="text-danger-button" type="button" onClick={() => onCancel(item)}>취소</button> : <span>{item.status}</span>}</p>)}</div>;
 }
 
-function ConfirmationDialog({ confirmation, email, working, onCancel, onConfirm }: { confirmation: Confirmation; email?: string; working: boolean; onCancel: () => void; onConfirm: (event?: FormEvent<HTMLFormElement>) => Promise<void> }) {
+function ConfirmationDialog({
+  confirmation,
+  email,
+  working,
+  onCancel,
+  onConfirm,
+  onExportBackup,
+}: {
+  confirmation: Confirmation;
+  email?: string;
+  working: boolean;
+  onCancel: () => void;
+  onConfirm: (event?: FormEvent<HTMLFormElement>) => Promise<void>;
+  onExportBackup?: () => Promise<void>;
+}) {
   const content = confirmationCopy(confirmation);
-  return <div className="modal-backdrop"><section className="modal-panel" role="alertdialog" aria-modal="true" aria-labelledby="account-confirm-title"><div className="modal-heading"><div><p className="section-kicker">확인 필요</p><h2 id="account-confirm-title">{content.title}</h2></div><button className="modal-close" type="button" aria-label="닫기" onClick={onCancel}>×</button></div><p className="confirmation-copy">{content.description}</p><form className="product-form" onSubmit={(event) => void onConfirm(event)}>{confirmation.kind === "close-account" ? <label>계정 이메일 입력<input name="email-confirmation" type="email" placeholder={email} autoComplete="off" required /></label> : null}<div className="form-actions"><button className="secondary-button" type="button" onClick={onCancel}>돌아가기</button><button className="danger-button" disabled={working}>{content.action}</button></div></form></section></div>;
+  return (
+    <div className="modal-backdrop">
+      <section className="modal-panel" role="alertdialog" aria-modal="true" aria-labelledby="account-confirm-title">
+        <div className="modal-heading">
+          <div>
+            <p className="section-kicker">확인 필요</p>
+            <h2 id="account-confirm-title">{content.title}</h2>
+          </div>
+          <button className="modal-close" type="button" aria-label="닫기" onClick={onCancel}>
+            ×
+          </button>
+        </div>
+        <p className="confirmation-copy">{content.description}</p>
+        <form className="product-form" onSubmit={(event) => void onConfirm(event)}>
+          {confirmation.kind === "close-account" ? (
+            <>
+              <div style={{ marginBottom: "1rem", padding: "0.75rem", background: "var(--color-surface-subtle, #f4f6f8)", borderRadius: "8px" }}>
+                <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.875rem" }}>
+                  탈퇴 전 건강기록을 안전하게 파일로 보관하세요. 추후 재가입 시 복원할 수 있습니다.
+                </p>
+                <button className="secondary-button" type="button" onClick={() => void onExportBackup?.()}>
+                  .ieobom 백업 다운로드
+                </button>
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+                <input name="purge-health-data" type="checkbox" value="true" />
+                <span>서버에 저장된 내 건강정보를 즉시 영구 폐기합니다</span>
+              </label>
+              <label>
+                계정 이메일 입력
+                <input name="email-confirmation" type="email" placeholder={email} autoComplete="off" required />
+              </label>
+            </>
+          ) : null}
+          <div className="form-actions">
+            <button className="secondary-button" type="button" onClick={onCancel}>
+              돌아가기
+            </button>
+            <button className="danger-button" disabled={working}>
+              {content.action}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
 }
 
 function confirmationCopy(confirmation: Confirmation) {
   if (confirmation.kind === "leave-household") return { title: "가정에서 나갈까요?", description: "서버 멤버십과 연결 상태가 변경됩니다. 이 브라우저의 로컬 건강정보는 유지됩니다.", action: "가정 나가기" };
   if (confirmation.kind === "close-household") return { title: "가정을 종료할까요?", description: "다른 활성 멤버가 있으면 서버가 종료를 거절합니다. 로컬 건강정보는 삭제되지 않습니다.", action: "가정 종료" };
+  if (confirmation.kind === "transfer-master") return { title: "가정 마스터 권한을 위임할까요?", description: `${confirmation.targetMember.masked_email} 님에게 마스터 권한을 위임합니다. 위임 후 귀하는 일반 멤버가 되며, 가정 구독 관리 권한도 이전됩니다.`, action: "마스터 위임" };
+  if (confirmation.kind === "delete-member-history") return { title: "구성원 이력을 삭제할까요?", description: `${confirmation.targetMember.masked_email} 님의 구성원 탈퇴 이력을 목록에서 삭제합니다.`, action: "이력 삭제" };
   if (confirmation.kind === "cancel-invitation") return { title: "초대를 취소할까요?", description: "초대 참조값을 더 이상 사용할 수 없게 하고 로컬 프로필의 대기 연결도 폐기합니다.", action: "초대 취소" };
   if (confirmation.kind === "unlink-profile") return { title: "프로필 연결을 해제할까요?", description: "서비스 계정과의 연결만 해제합니다. 로컬 프로필과 건강정보는 보존됩니다.", action: "연결 해제" };
-  return { title: "서비스 계정을 종료할까요?", description: "구독과 서버 연결을 종료합니다. 확인을 위해 현재 계정 이메일을 입력하세요. 로컬 건강정보는 삭제되지 않습니다.", action: "계정 종료" };
+  return { title: "서비스 계정을 종료할까요?", description: "구독과 서버 연결을 종료합니다. 마스터인 경우 다른 가족에게 마스터 권한이 자동 승계됩니다. 확인을 위해 현재 계정 이메일을 입력하세요.", action: "계정 종료" };
 }
 
 function createOpaqueReference(): string {

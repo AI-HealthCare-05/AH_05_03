@@ -62,7 +62,7 @@ describe("AccountPage", () => {
     renderAccountPage();
 
     expect(await screen.findByRole("heading", { name: "member@example.com" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "가입한 가정 0개" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "소속 가정" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "기존 로컬 프로필에 서비스 계정 초대" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "계정 종료" })).toBeInTheDocument();
   });
@@ -72,6 +72,7 @@ describe("AccountPage", () => {
     mockAccountReads();
     vi.mocked(serverApiClient.listHouseholds).mockResolvedValue([{
       id: "household-id",
+      master_account_id: "account-id",
       status: "active",
       created_at: "2026-08-20T00:00:00Z",
       row_version: 1,
@@ -90,11 +91,10 @@ describe("AccountPage", () => {
 
     renderAccountPage();
     await screen.findByRole("heading", { name: "member@example.com" });
-    await userEvent.setup().click(screen.getByRole("button", { name: "멤버 보기" }));
 
     expect(await screen.findByText("내 계정", { selector: ".membership-identity strong" })).toBeInTheDocument();
     expect(screen.getByText("나")).toBeInTheDocument();
-    expect(screen.getByText("mem***@example.com")).toBeInTheDocument();
+    expect(screen.getByText("member@example.com", { selector: ".membership-identity small" })).toBeInTheDocument();
     expect(screen.getByText("로컬 프로필 미연결")).toBeInTheDocument();
     expect(screen.queryByText(/account-id/u)).not.toBeInTheDocument();
   });
@@ -119,8 +119,118 @@ describe("AccountPage", () => {
     await user.type(within(dialog).getByRole("textbox", { name: "계정 이메일 입력" }), "member@example.com");
     await user.click(within(dialog).getByRole("button", { name: "계정 종료" }));
 
-    expect(await screen.findByText("서비스 계정을 종료했습니다. 이 브라우저의 로컬 건강정보는 삭제되지 않았습니다.")).toBeInTheDocument();
-    expect(serverApiClient.closeAccount).toHaveBeenCalledOnce();
+    expect(await screen.findByText("서비스 계정을 종료했습니다. 건강정보는 보존됩니다.")).toBeInTheDocument();
+    expect(serverApiClient.closeAccount).toHaveBeenCalledWith(false);
+  });
+
+  it("계정 종료 시 건강정보 영구 폐기를 선택하면 purge=true로 닫고 폐기 완료 메시지를 보여준다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    const closeSpy = vi.spyOn(serverApiClient, "closeAccount").mockResolvedValue({
+      account_id: "account-id",
+      status: "closed",
+      closed_at: "2026-08-20T00:00:00Z",
+      subscription_status: "cancelled",
+      local_data_deleted: false,
+      health_data_purged: true,
+    });
+    mockAccountReads();
+
+    renderAccountPage();
+    await screen.findByRole("heading", { name: "member@example.com" });
+    await user.click(screen.getByRole("button", { name: "계정 종료" }));
+    const dialog = screen.getByRole("alertdialog", { name: "서비스 계정을 종료할까요?" });
+    expect(dialog).toBeInTheDocument();
+
+    expect(within(dialog).getByRole("button", { name: ".ieobom 백업 다운로드" })).toBeInTheDocument();
+    const purgeCheckbox = within(dialog).getByRole("checkbox", { name: "서버에 저장된 내 건강정보를 즉시 영구 폐기합니다" });
+    expect(purgeCheckbox).toBeInTheDocument();
+    await user.click(purgeCheckbox);
+
+    await user.type(within(dialog).getByRole("textbox", { name: "계정 이메일 입력" }), "member@example.com");
+    await user.click(within(dialog).getByRole("button", { name: "계정 종료" }));
+
+    expect(await screen.findByText("서비스 계정을 종료하고 서버의 건강정보를 영구 폐기했습니다.")).toBeInTheDocument();
+    expect(closeSpy).toHaveBeenCalledWith(true);
+  });
+
+  it("이미 활성 가정이 있으면 가정 만들기 버튼이 비활성화된다", async () => {
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    mockAccountReads();
+    vi.mocked(serverApiClient.listHouseholds).mockResolvedValue([{
+      id: "household-1",
+      master_account_id: "account-id",
+      status: "active",
+      created_at: "2026-08-20T00:00:00Z",
+      row_version: 1,
+    }]);
+
+    renderAccountPage();
+    await screen.findByRole("heading", { name: "member@example.com" });
+
+    const createButton = screen.getByRole("button", { name: "가정 만들기" });
+    expect(createButton).toBeDisabled();
+    expect(createButton).toHaveAttribute("title", "이미 소속된 가정이 있어 새 가정을 만들 수 없습니다.");
+  });
+
+  it("마스터는 다른 활성 멤버에게 마스터 권한을 위임할 수 있다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    mockAccountReads();
+    vi.mocked(serverApiClient.listHouseholds).mockResolvedValue([{
+      id: "household-1",
+      master_account_id: "account-id",
+      status: "active",
+      created_at: "2026-08-20T00:00:00Z",
+      row_version: 1,
+    }]);
+    vi.spyOn(serverApiClient, "listHouseholdMemberships").mockResolvedValue([
+      {
+        id: "mem-1",
+        household_id: "household-1",
+        account_id: "account-id",
+        masked_email: "mem***@example.com",
+        local_profile_ref: null,
+        status: "active",
+        joined_at: "2026-08-20T00:00:00Z",
+        left_at: null,
+        row_version: 1,
+        is_master: true,
+      },
+      {
+        id: "mem-2",
+        household_id: "household-1",
+        account_id: "other-id",
+        masked_email: "oth***@example.com",
+        local_profile_ref: null,
+        status: "active",
+        joined_at: "2026-08-21T00:00:00Z",
+        left_at: null,
+        row_version: 1,
+        is_master: false,
+      },
+    ]);
+    const transferSpy = vi.spyOn(serverApiClient, "transferHouseholdMaster").mockResolvedValue({
+      id: "household-1",
+      master_account_id: "other-id",
+      status: "active",
+      created_at: "2026-08-20T00:00:00Z",
+      row_version: 2,
+    });
+
+    renderAccountPage();
+    await screen.findByRole("heading", { name: "member@example.com" });
+
+    const transferButton = await screen.findByRole("button", { name: "마스터 위임" });
+    expect(transferButton).toBeInTheDocument();
+    await user.click(transferButton);
+
+    const dialog = screen.getByRole("alertdialog", { name: "가정 마스터 권한을 위임할까요?" });
+    expect(dialog).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "마스터 위임" }));
+
+    expect(transferSpy).toHaveBeenCalledWith("household-1", "other-id");
+    expect(await screen.findByText("oth***@example.com 님에게 가정 마스터 권한을 위임했습니다.")).toBeInTheDocument();
   });
 
   it("메일 링크 fragment의 토큰을 일치하는 받은 초대에만 채운다", async () => {
@@ -216,6 +326,66 @@ describe("AccountPage", () => {
     await waitFor(() => expect(window.location.hash).toContain("email=recipient%40example.com"));
     expect(serverApiClient.logout).toHaveBeenCalled();
     expect(screen.queryByRole("heading", { name: "이 초대는 다른 계정으로 도착했습니다" })).not.toBeInTheDocument();
+  });
+
+  it("나간 구성원은 가족 프로필 연결됨 문구를 숨기고 x 버튼으로 이력을 삭제할 수 있다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    mockAccountReads();
+    vi.mocked(serverApiClient.listHouseholds).mockResolvedValue([{
+      id: "household-id",
+      master_account_id: "account-id",
+      status: "active",
+      created_at: "2026-08-20T00:00:00Z",
+      row_version: 1,
+    }]);
+    vi.spyOn(serverApiClient, "listHouseholdMemberships").mockResolvedValue([
+      {
+        id: "membership-master",
+        household_id: "household-id",
+        account_id: "account-id",
+        masked_email: "member@example.com",
+        local_profile_ref: null,
+        status: "active",
+        joined_at: "2026-08-20T00:00:00Z",
+        left_at: null,
+        row_version: 1,
+      },
+      {
+        id: "membership-left",
+        household_id: "household-id",
+        account_id: "other-account-id",
+        masked_email: "left-user@example.com",
+        local_profile_ref: "dummy-profile-ref",
+        status: "left",
+        joined_at: "2026-08-20T00:00:00Z",
+        left_at: "2026-08-21T00:00:00Z",
+        row_version: 2,
+      },
+    ]);
+    const deleteSpy = vi.spyOn(serverApiClient, "deleteHouseholdMembership").mockResolvedValue();
+
+    renderAccountPage();
+    await screen.findByRole("heading", { name: "member@example.com" });
+
+    // 나간 구성원(left-user@example.com) 영역 확인
+    expect(screen.getByText("나감")).toBeInTheDocument();
+    // 나간 구성원은 "가족 프로필 연결됨" 문구가 표시되지 않아야 함
+    expect(screen.queryByText("가족 프로필 연결됨")).not.toBeInTheDocument();
+
+    // x 버튼(이력 삭제) 클릭
+    const deleteBtn = screen.getByRole("button", { name: /이력 삭제/u });
+    expect(deleteBtn).toBeInTheDocument();
+    await user.click(deleteBtn);
+
+    // 확인 모달 확인
+    const dialog = screen.getByRole("alertdialog", { name: "구성원 이력을 삭제할까요?" });
+    expect(dialog).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "이력 삭제" }));
+
+    // API 호출 검증
+    expect(deleteSpy).toHaveBeenCalledWith("household-id", "membership-left");
+    expect(await screen.findByText("구성원 이력을 삭제했습니다.")).toBeInTheDocument();
   });
 });
 

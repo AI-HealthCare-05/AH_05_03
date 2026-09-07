@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
@@ -46,6 +46,20 @@ describe("HomePage", () => {
 
     expect(await screen.findByRole("heading", { name: "오성민님의 건강기록" })).toBeInTheDocument();
     expect(screen.getByRole("listitem")).toHaveTextContent("오성민");
+  });
+
+  it("구성원 추가 시 성별을 선택하면 멤버 카드에 성별이 표시된다", async () => {
+    const user = userEvent.setup();
+    renderHomePage();
+
+    await user.click(await screen.findByRole("button", { name: "첫 구성원 등록" }));
+    await user.type(screen.getByRole("textbox", { name: "이름 또는 호칭" }), "엄마");
+    await user.selectOptions(screen.getByRole("combobox", { name: "관계" }), "부모");
+    await user.selectOptions(screen.getByRole("combobox", { name: /성별/ }), "여성");
+    await user.click(screen.getByRole("button", { name: "프로필 저장" }));
+
+    expect(await screen.findByRole("heading", { name: "엄마님의 건강기록" })).toBeInTheDocument();
+    expect(screen.getByRole("listitem")).toHaveTextContent("부모 · 여성");
   });
 
   it("프로필과 기록을 보존한 채 숨기고 가족 목록으로 복원한다", async () => {
@@ -107,6 +121,7 @@ describe("HomePage", () => {
 
     await user.click(screen.getByRole("button", { name: "삭제" }));
     await user.click(screen.getByRole("button", { name: "삭제 목록으로 이동" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await user.click(await screen.findByRole("button", { name: "삭제된 기록 1건" }));
     await user.click(screen.getByRole("button", { name: "복원" }));
     expect(await screen.findByText("수정 후 기록")).toBeInTheDocument();

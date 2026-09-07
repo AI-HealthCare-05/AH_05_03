@@ -14,6 +14,7 @@ import {
   DataManagementPage,
   HealthDataPage,
   InsightsPage,
+  PainDiaryPage,
   UiPreviewPage,
 } from "./lazyRoutes";
 import { RootLayout } from "./RootLayout";
@@ -60,6 +61,11 @@ export const router = createBrowserRouter([
         // 판정 화면. 검진표를 옆에 두고 수치를 고쳐 예측까지 한 화면에서 한다.
         path: "assessment",
         element: <AssessmentPage />,
+      },
+      {
+        // 통증 다이어리. 매일의 통증 기록과 캘린더 조회/수정 및 AI 툴콜링 연동.
+        path: "pain-diary",
+        element: <PainDiaryPage />,
       },
       {
         // 생활습관 챌린지. Talos 필수 셋 중 마지막으로 비어 있던 칸 (docs/37 §14~§16).

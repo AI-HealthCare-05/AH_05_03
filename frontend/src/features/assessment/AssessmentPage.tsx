@@ -42,10 +42,12 @@ import { DocumentPane, type DocumentReading } from "./DocumentPane";
 import { SuspectPanel } from "./SuspectPanel";
 import { LevelBadge, MatrixCard, VerdictCard, VerdictDetail } from "./VerdictCards";
 import {
+  calculateAgeFromBirthDate,
   FIELD_GROUPS,
   FIELD_LABELS,
   LAB_FIELDS,
   outOfRangeFields,
+  profileGenderToSex,
   REQUIRED_FIELDS,
   rejectedFields,
   valuesFromInputs,
@@ -189,6 +191,30 @@ export function AssessmentPage() {
     (location.state as { profileId?: string } | null)?.profileId ??
     profiles[0]?.id;
   const activeProfile = profiles.find((item) => item.id === activeProfileId);
+
+  // 구성원의 기본 정보(성별, 생년월일 기반 나이)가 있고 폼의 해당 칸이 비어 있으면 채워 준다.
+  useEffect(() => {
+    if (!activeProfile) return;
+    setValues((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      if (!next.sex && activeProfile.gender) {
+        const sex = profileGenderToSex(activeProfile.gender);
+        if (sex) {
+          next.sex = sex;
+          changed = true;
+        }
+      }
+      if (!next.age && activeProfile.birthDate) {
+        const age = calculateAgeFromBirthDate(activeProfile.birthDate);
+        if (age !== undefined && age >= 19 && age <= 100) {
+          next.age = String(age);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [activeProfile]);
 
   const reloadSnapshots = useCallback(async () => {
     if (!runtime || !activeProfileId) return;

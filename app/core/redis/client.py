@@ -19,8 +19,9 @@ def create_redis_pool() -> Redis:
     `BlockingConnectionPool` 은 조건 변수로 **대기했다가** `timeout` 이 지나야 포기한다.
     큐가 잠깐 몰리면 밀리초 단위로 순서를 기다릴 뿐 요청이 죽지 않는다.
 
-    `socket_timeout` 은 그대로 둔다. 그건 명령 왕복 상한이고 여기서 늘린 것은 풀 대기
-    상한이다 — Redis 가 진짜 죽으면 여전히 0.5 초에 끊긴다.
+    `socket_timeout` 은 명령 왕복 상한이고, 풀 대기 상한과는 별개다. OCR 이미지처럼 큰
+    명령은 전송 시간을 확보하되 Redis 에 연결조차 못 하는 경우는 짧은
+    `socket_connect_timeout` 으로 끊는다.
     """
     pool = BlockingConnectionPool.from_url(
         config.REDIS_URL,
@@ -28,7 +29,7 @@ def create_redis_pool() -> Redis:
         max_connections=config.REDIS_MAX_CONNECTIONS,
         # 풀이 빌 때까지 기다리는 상한. `ConnectionPool` 에는 없는 인자다.
         timeout=config.REDIS_POOL_WAIT_TIMEOUT,
-        # 타임아웃을 짧게 잡아, 장애 시 매달리지 않고 빠르게 503으로 떨어지게 한다.
+        # 큰 OCR payload 왕복 상한과 연결 실패 상한은 서로 다른 설정이다.
         socket_timeout=config.REDIS_SOCKET_TIMEOUT,
         socket_connect_timeout=config.REDIS_SOCKET_CONNECT_TIMEOUT,
         health_check_interval=30,

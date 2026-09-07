@@ -1,13 +1,21 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Header, Response, status
 
 from app.core import config
 from app.core.errors import ErrorCode
 from app.dependencies.security import get_access_token_payload, get_refresh_token_cookie, require_trusted_origin
-from app.dtos.auth import AccessTokenData, LoginRequest, SignUpData, SignUpRequest
+from app.dtos.auth import (
+    AccessTokenData,
+    LoginRequest,
+    PasswordResetConfirmRequest,
+    PasswordResetRequest,
+    SignUpData,
+    SignUpRequest,
+)
 from app.dtos.envelope import ApiResponse, error_responses
 from app.services.auth import AuthService, IssuedTokens
+from app.services.password_reset import PasswordResetService
 
 auth_router = APIRouter(prefix="/auth", tags=["auth"], dependencies=[Depends(require_trusted_origin)])
 
@@ -117,3 +125,37 @@ async def logout(
     await auth_service.logout(payload)
     _delete_refresh_cookie(response)
     return ApiResponse[None](data=None, message="로그아웃되었습니다.")
+
+
+@auth_router.post(
+    "/password-reset/request",
+    response_model=ApiResponse[None],
+    summary="비밀번호 재설정 링크 이메일 발송",
+    description="가입된 이메일인 경우 일회용 재설정 링크(15분 유효)를 발송한다. 이메일 열거 방지를 위해 미등록 이메일도 동일하게 성공 응답을 반환한다.",
+)
+async def request_password_reset(
+    request_dto: PasswordResetRequest,
+    reset_service: Annotated[PasswordResetService, Depends(PasswordResetService)],
+    origin: Annotated[str | None, Header(alias="origin")] = None,
+) -> ApiResponse[None]:
+    await reset_service.request_reset(str(request_dto.email), web_origin=origin)
+    return ApiResponse[None](data=None, message="입력하신 이메일로 비밀번호 재설정 안내를 전송했습니다.")
+
+
+@auth_router.post(
+    "/password-reset/confirm",
+    response_model=ApiResponse[None],
+    responses=error_responses(
+        ErrorCode.TOKEN_INVALID,
+        ErrorCode.ACCOUNT_NOT_FOUND,
+        ErrorCode.ACCOUNT_CLOSED,
+    ),
+    summary="새 비밀번호로 재설정 확정",
+    description="일회용 재설정 토큰을 검증하고 새 비밀번호로 변경한다. 기존 세션은 모두 로그아웃된다.",
+)
+async def confirm_password_reset(
+    confirm_dto: PasswordResetConfirmRequest,
+    reset_service: Annotated[PasswordResetService, Depends(PasswordResetService)],
+) -> ApiResponse[None]:
+    await reset_service.confirm_reset(confirm_dto.token, confirm_dto.new_password)
+    return ApiResponse[None](data=None, message="비밀번호가 성공적으로 변경되었습니다.")

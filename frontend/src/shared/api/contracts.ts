@@ -55,6 +55,8 @@ export interface PlanChangeData extends SubscriptionData {
 
 export interface HouseholdData {
   id: string;
+  created_by_account_id?: string;
+  master_account_id: string;
   status: "active" | "closed";
   created_at: string;
   row_version: number;
@@ -73,6 +75,7 @@ export interface HouseholdMembershipData {
 export interface HouseholdMembershipListItemData extends HouseholdMembershipData {
   masked_email: string;
   local_profile_ref: string | null;
+  is_master?: boolean;
 }
 
 export interface ProfileLinkData {
@@ -120,4 +123,72 @@ export interface AccountCloseData {
   closed_at: string;
   subscription_status: "cancelled";
   local_data_deleted: false;
+  health_data_purged?: boolean;
 }
+
+export interface ChatSessionData {
+  id: string;
+  account_id: string;
+  profile_id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatSessionListData {
+  items: ChatSessionData[];
+  total: number;
+}
+
+export interface ChatMessageData {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant";
+  content: string;
+  metadata: Record<string, unknown> | null;
+  sequence_number: number;
+  created_at: string;
+}
+
+export interface ChatMessageListData {
+  session_id: string;
+  items: ChatMessageData[];
+}
+
+export interface ProfileServerData {
+  id: string;
+  household_id: string;
+  created_by_account_id: string;
+  display_name: string;
+  relationship: string;
+  birth_date: string | null;
+  gender: "male" | "female" | null;
+  status: "active" | "hidden" | "deleted";
+  row_version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProfileServerListData {
+  items: ProfileServerData[];
+}
+
+export interface HealthRecordServerData {
+  id: string;
+  profile_id: string;
+  record_type: string;
+  recorded_at: string;
+  source: string;
+  payload: Record<string, unknown>;
+  note: string | null;
+  status: string;
+  row_version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HealthRecordServerListData {
+  items: HealthRecordServerData[];
+  total: number;
+}
+

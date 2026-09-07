@@ -40,6 +40,8 @@ RUN uv sync --group app --no-dev --frozen
 # 2. 런타임. uv 도 노드도 없고 venv 와 소스만 있다.
 FROM python:3.13-slim
 
+LABEL com.ieobom.service="fastapi"
+
 WORKDIR /app
 
 # venv 를 PATH 앞에 둔다. 그래야 `uvicorn` · `alembic` · `python` 을 그냥 부를 수

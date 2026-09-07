@@ -1,0 +1,15 @@
+{
+  "version": "v67",
+  "objects": 501,
+  "materials": [
+    "IEOBOM_V67_FASCIA_MATTE",
+    "IEOBOM_V67_MUSCLE_MATTE"
+  ],
+  "requirements": {
+    "metallicMax": 0.0,
+    "roughnessMin": 0.9,
+    "coatMax": 0.0
+  },
+  "violations": [],
+  "passed": true
+}

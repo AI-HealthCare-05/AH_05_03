@@ -231,3 +231,59 @@ async def test_streaming_answers_emergencies_without_calling_the_model() -> None
     names = [name for name, _ in events]
     assert names == ["delta", "result"]
     assert "119" in events[0][1]["text"]
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_service_calls_format_pain_diary_tool() -> None:
+    fake_json = """{
+        "intent": "record_pain",
+        "assistant_message": "작성해 주신 통증 내용을 맞춤법과 구조에 맞게 다듬어 통증 다이어리 초안을 작성했습니다.",
+        "exercise_draft": null,
+        "blood_pressure_draft": null,
+        "blood_glucose_draft": null,
+        "medication_draft": null,
+        "pain_draft": {
+            "body_area": "팔꿈치, 왼쪽 고관절, 왼쪽 발바닥",
+            "intensity": 5,
+            "sensation": "이물감, 지지력 약화",
+            "onset_at": "2026-09-06T12:00",
+            "note": "웨이트 트레이닝 후 팔꿈치 통증 및 왼쪽 고관절 이물감"
+        },
+        "pain_diary_tool": {
+            "tool_name": "format_pain_diary",
+            "body_area": "팔꿈치, 왼쪽 고관절, 왼쪽 발바닥",
+            "intensity": 5,
+            "sensation": "이물감, 지지력 약화",
+            "aggravating_factors": "웨이트 트레이닝 후, 보행 시",
+            "formatted_diary": "웨이트 트레이닝 후 팔꿈치에 통증이 발생함. 왼쪽 고관절 부위에 이물감과 불편감이 지속되며, 보행 시 왼쪽 발바닥을 딛는 지지력이 다소 약화된 느낌을 받음. 관절 및 족부 부담을 줄이기 위한 충분한 안정과 스트레칭 필요.",
+            "date_str": "2026-09-06"
+        },
+        "lab_result_draft": null,
+        "query_draft": null,
+        "challenge_draft": null,
+        "missing_fields": [],
+        "needs_confirmation": true,
+        "auto_save": false,
+        "suggested_quick_replies": ["통증 다이어리에 저장해줘", "다이어리 보러가기"],
+        "emergency_notice": null,
+        "safety_disclaimer": "본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요."
+    }"""
+    mock_client = MockLLMClient(fake_json)
+    service = HealthAssistantService(llm_client=mock_client)
+
+    request = HealthAssistantChatRequest(
+        messages=[
+            ChatMessage(
+                role="user",
+                content="통증일기. 웨이트한후에 팔꿈치가 아프다. 왼쪽 고관절에 이물감이 있고 왼쪽발 바닥을 딛는 힘이 약한 것 같아.",
+            )
+        ]
+    )
+    response = await service.respond(request)
+
+    assert response.intent == "record_pain"
+    assert response.pain_diary_tool is not None
+    assert response.pain_diary_tool.tool_name == "format_pain_diary"
+    assert "팔꿈치" in response.pain_diary_tool.body_area
+    assert "웨이트 트레이닝 후" in response.pain_diary_tool.formatted_diary
+    assert response.pain_draft is not None

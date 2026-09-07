@@ -360,3 +360,36 @@ export function valuesFromInputs(inputs: Record<string, number | string | boolea
       .map(([name, value]) => [name, String(value)]),
   );
 }
+
+/**
+ * 프로필의 생년월일(YYYY-MM-DD 또는 YYYY)로부터 기준일 기준 만 나이를 계산한다.
+ */
+export function calculateAgeFromBirthDate(birthDate: string, today: Date = new Date()): number | undefined {
+  if (!birthDate) return undefined;
+  const parts = birthDate.split("-").map(Number);
+  if (parts.length === 1 && Number.isFinite(parts[0])) {
+    const age = today.getFullYear() - parts[0];
+    return age >= 0 ? age : undefined;
+  }
+  if (parts.length >= 3 && !parts.some(Number.isNaN)) {
+    const [year, month, day] = parts;
+    let age = today.getFullYear() - year;
+    const currentMonth = today.getMonth() + 1;
+    const currentDay = today.getDate();
+    if (currentMonth < month || (currentMonth === month && currentDay < day)) {
+      age--;
+    }
+    return age >= 0 ? age : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * 프로필 성별을 폼 성별("M" | "F")로 변환한다.
+ */
+export function profileGenderToSex(gender: string | null | undefined): "M" | "F" | undefined {
+  if (gender === "male") return "M";
+  if (gender === "female") return "F";
+  return undefined;
+}
+

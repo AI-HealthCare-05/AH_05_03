@@ -1,6 +1,6 @@
 # ADR-005: Vite SPA 기반 로컬 우선 프론트엔드
 
-- 상태: 승인
+- 상태: 부분 대체됨 — 프론트엔드 기반은 유지하며 건강정보·추론 경계는 [ADR-011](0011-postgresql-health-data-and-server-ai.md) 참조
 - 결정일: 2026-08-19
 - 적용 대상: React 프론트엔드, 브라우저 로컬 데이터, 서버 상태, 로컬 모델 실행
 - 선행 결정: [ADR-001 웹 기반 로컬 우선 서비스 전환](0001-web-local-first-architecture.md), [ADR-002 서버 API와 브라우저 로컬 도메인 계약 분리](0002-separate-server-api-and-local-domain-contract.md)

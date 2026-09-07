@@ -1,6 +1,6 @@
 # ADR-007: 공용 브라우저에서 계정별 암호화 로컬 보관함 분리
 
-- 상태: 승인
+- 상태: 대체됨 — IndexedDB 정본·로컬 보관함 결정은 [ADR-011](0011-postgresql-health-data-and-server-ai.md) 참조
 - 결정일: 2026-08-20
 - 적용 대상: 브라우저 로컬 프로필·건강기록·원본 문서·복호화 키, 서비스 계정 전환, 초대 수락과 기기 연결
 - 관련 결정: [ADR-001](0001-web-local-first-architecture.md), [ADR-002](0002-separate-server-api-and-local-domain-contract.md), [ADR-006](0006-lifecycle-scoped-profile-reference.md)

@@ -6,7 +6,10 @@ autogenerate가 빈 마이그레이션을 만들거나 방금 만든 테이블�
 
 from app.models.challenge_settings import ChallengeMode, ChallengeSettings
 from app.models.challenges import ChallengeAward, ChallengeCheck
+from app.models.chat_sessions import ChatMessageRecord, ChatSession
+from app.models.family_histories import FamilyHistory
 from app.models.family_invitations import FamilyInvitation, InvitationStatus
+from app.models.health_records import HealthRecord
 from app.models.households import (
     Household,
     HouseholdMembership,
@@ -15,6 +18,7 @@ from app.models.households import (
     ProfileLink,
     ProfileLinkStatus,
 )
+from app.models.profiles import FamilyProfile
 from app.models.service_accounts import ServiceAccount, ServiceAccountStatus
 from app.models.subscriptions import Subscription, SubscriptionPlan, SubscriptionStatus
 
@@ -23,7 +27,12 @@ __all__ = [
     "ChallengeMode",
     "ChallengeSettings",
     "ChallengeCheck",
+    "ChatMessageRecord",
+    "ChatSession",
+    "FamilyHistory",
     "FamilyInvitation",
+    "FamilyProfile",
+    "HealthRecord",
     "Household",
     "HouseholdMembership",
     "HouseholdStatus",

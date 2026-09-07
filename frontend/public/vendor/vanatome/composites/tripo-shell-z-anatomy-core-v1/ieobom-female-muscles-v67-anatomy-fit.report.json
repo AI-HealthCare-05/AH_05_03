@@ -1,0 +1,278 @@
+{
+  "version": "v67-anatomy-fit",
+  "sourceBlend": "/Users/fabxoe/Downloads/models/low_polygon_work_6hour-female-muscles-v59-superficial-coverage.blend",
+  "matteMuscleObjects": 533,
+  "handFitObjects": 36,
+  "handFitVertices": 13596,
+  "glutealFitObjects": 4,
+  "glutealFitVertices": 4849,
+  "coverageObjects": 4,
+  "coverageVertices": 37067,
+  "coveragePolygons": 65196,
+  "topologyDensityChanges": 0,
+  "outputBlend": "/Users/fabxoe/Downloads/models/low_polygon_work_6hour-female-muscles-v67-anatomy-fit.blend",
+  "shell": "/Users/fabxoe/workbench/ieobom/frontend/public/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-static-shell-crotch-cleanup-v52.glb",
+  "skeleton": "/Users/fabxoe/workbench/ieobom/frontend/public/vendor/vanatome/composites/tripo-shell-z-anatomy-core-v1/ieobom-female-static-skeleton-exposed-bone-fit-v66.glb",
+  "muscleGeometrySha256Before": "00d8f0e0e5a0f0cbce83715ca08e6e53fab0517cdb061fca3a007d7c1a1b96e9",
+  "handFit": {
+    "objects": 36,
+    "vertices": 13596,
+    "records": [
+      {
+        "object": "FEMALE_MUSCLE_L_Abductor digiti minimi of hand.l",
+        "vertices": 336,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Abductor pollicis brevis.l",
+        "vertices": 312,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Deep head of flexor pollicis brevis.l",
+        "vertices": 371,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Dorsal interossei muscles of hand.l",
+        "vertices": 690,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Extensor indicis.l",
+        "vertices": 573,
+        "handFraction": 0.9668
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Flexor digiti minimi of hand.l",
+        "vertices": 156,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Lumbrical muscles of hand.l",
+        "vertices": 692,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Oblique head of adductor pollicis.l",
+        "vertices": 227,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Opponens digiti minimi muscle of hand.l",
+        "vertices": 210,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Opponens pollicis muscle.l",
+        "vertices": 194,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Palmar interossei muscles.l",
+        "vertices": 87,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Pronator quadratus.l",
+        "vertices": 512,
+        "handFraction": 0.7637
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Superficial head of flexor pollicis brevis.l",
+        "vertices": 136,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_L_Transverse head of adductor pollicis.l",
+        "vertices": 509,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Abductor digiti minimi of hand.r",
+        "vertices": 336,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Abductor pollicis brevis.r",
+        "vertices": 312,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Deep head of flexor pollicis brevis.r",
+        "vertices": 371,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Dorsal interossei muscles of hand.r",
+        "vertices": 690,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Extensor indicis.r",
+        "vertices": 573,
+        "handFraction": 0.9668
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Flexor digiti minimi of hand.r",
+        "vertices": 156,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Lumbrical muscles of hand.r",
+        "vertices": 692,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Oblique head of adductor pollicis.r",
+        "vertices": 227,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Opponens digiti minimi muscle of hand.r",
+        "vertices": 210,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Opponens pollicis muscle.r",
+        "vertices": 194,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Palmar interossei muscles.r",
+        "vertices": 87,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Pronator quadratus.r",
+        "vertices": 512,
+        "handFraction": 0.7637
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Superficial head of flexor pollicis brevis.r",
+        "vertices": 136,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_MUSCLE_R_Transverse head of adductor pollicis.r",
+        "vertices": 509,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_SURFACE_Dorsal fascia of hand.l",
+        "vertices": 819,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_SURFACE_Dorsal fascia of hand.r",
+        "vertices": 819,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_SURFACE_Extensor retinaculum of wrist.l",
+        "vertices": 93,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_SURFACE_Extensor retinaculum of wrist.r",
+        "vertices": 93,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_SURFACE_Flexor retinaculum of wrist.l",
+        "vertices": 132,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_SURFACE_Flexor retinaculum of wrist.r",
+        "vertices": 132,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_SURFACE_Palmar aponeurosis.l",
+        "vertices": 749,
+        "handFraction": 1.0
+      },
+      {
+        "object": "FEMALE_SURFACE_Palmar aponeurosis.r",
+        "vertices": 749,
+        "handFraction": 1.0
+      }
+    ]
+  },
+  "glutealFit": {
+    "objects": 4,
+    "vertices": 4849,
+    "maximumShiftMm": 57.996,
+    "records": [
+      {
+        "object": "FEMALE_PELVIS_Gluteus maximus muscle.l",
+        "vertices": 749,
+        "maxShiftMm": 55.775
+      },
+      {
+        "object": "FEMALE_PELVIS_Gluteus maximus muscle.r",
+        "vertices": 741,
+        "maxShiftMm": 56.242
+      },
+      {
+        "object": "FEMALE_PELVIS_Gluteus medius muscle.l",
+        "vertices": 1656,
+        "maxShiftMm": 57.996
+      },
+      {
+        "object": "FEMALE_PELVIS_Gluteus medius muscle.r",
+        "vertices": 1703,
+        "maxShiftMm": 56.26
+      }
+    ]
+  },
+  "coverage": [
+    {
+      "region": "posterior_thorax",
+      "object": "FEMALE_COVERAGE_POSTERIOR_THORAX_V67",
+      "vertices": 8507,
+      "polygons": 16155,
+      "shellInsetMm": {
+        "min": 0.1,
+        "max": 28.0
+      }
+    },
+    {
+      "region": "posterior_thorax_exposed",
+      "object": "FEMALE_COVERAGE_POSTERIOR_THORAX_EXPOSED_V67",
+      "bones": 26,
+      "vertices": 20484,
+      "polygons": 34274,
+      "boneClearanceMm": 1.0,
+      "minimumShellInsetMm": 0.5
+    },
+    {
+      "region": "posterior_pelvis_exposed",
+      "object": "FEMALE_COVERAGE_POSTERIOR_PELVIS_EXPOSED_V67",
+      "bones": 6,
+      "vertices": 4124,
+      "polygons": 6949,
+      "boneClearanceMm": 1.0,
+      "minimumShellInsetMm": 0.5
+    },
+    {
+      "region": "hands_digits",
+      "object": "FEMALE_COVERAGE_HANDS_DIGITS_V67",
+      "vertices": 3952,
+      "polygons": 7818,
+      "shellInsetMm": {
+        "min": 0.8,
+        "max": 0.8
+      }
+    }
+  ],
+  "guardrails": [
+    "Built directly from restored v59; v66 shell-derived pelvic plates were not reused.",
+    "No existing mesh was subdivided, remeshed, decimated, or otherwise density-modified.",
+    "Hand bones and shell were unchanged; hand-dominant legacy meshes with incompatible finger topology were excluded from web display.",
+    "The replacement hand fascia follows the approved shell 0.8 mm inside and continuously covers the approved hand bones.",
+    "Posterior thorax fascia is limited to measured scapular and rib gaps and remains inside the approved shell.",
+    "No separate pelvic plate is used; the posterior-superior gluteus maximus and medius surfaces blend toward 2 mm inside the approved shell."
+  ]
+}

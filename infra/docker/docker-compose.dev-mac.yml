@@ -54,7 +54,7 @@ services:
       - app
 
   migrate:
-    image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
+    image: ieobom-dev-fastapi:current
     # 런타임 이미지에는 uv 가 없다. `app/Dockerfile` 이 멀티스테이지가 되면서
     # uv 는 deps 스테이지에만 살고, venv 가 PATH 앞에 있어 `alembic` 을 그냥 부른다.
     # `uv run` 을 남겨 두면 "executable file not found" 로 죽고, 배포 스크립트가
@@ -70,11 +70,22 @@ services:
       DB_NAME: ${DB_NAME:?DB_NAME is required}
       DB_TEST_NAME: ${DB_TEST_NAME:-ai_health_test}
       REDIS_URL: redis://redis:6379/0
-      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-["http://localhost:8080"]}
+      ENABLE_DEV_OCR_BRIDGE: ${ENABLE_DEV_OCR_BRIDGE:-true}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
+      # dev 배포에는 Gemini 키만 주입된다. 앱 기본값(openai 단독)에 맡기면 쓸 수 있는
+      # 공급자가 0개가 되므로, 배포에서 실제로 제공하는 공급자를 명시한다.
+      DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["gemini-3.5-flash-lite","gemini-3.1-flash-lite"]}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-["https://ieobom.cromtind.uk","http://localhost:8080"]}
       REFRESH_COOKIE_NAME: ${REFRESH_COOKIE_NAME:-ieobom_refresh}
       REFRESH_COOKIE_SECURE: ${REFRESH_COOKIE_SECURE:-false}
       REFRESH_COOKIE_SAMESITE: ${REFRESH_COOKIE_SAMESITE:-lax}
       API_ERROR_INCLUDE_DETAILS: ${API_ERROR_INCLUDE_DETAILS:-false}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-no-reply@ieobom.local}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-이어봄}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      SMTP_USE_STARTTLS: ${SMTP_USE_STARTTLS:-false}
     networks:
       - app
     depends_on:
@@ -85,7 +96,7 @@ services:
     restart: "no"
 
   fastapi:
-    image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
+    image: ieobom-dev-fastapi:current
     build:
       context: ../..
       dockerfile: app/Dockerfile
@@ -122,8 +133,34 @@ services:
       retries: 12
       start_period: 15s
 
+  # 문서 인식 화면은 Redis 큐에 작업을 등록한다. 이 소비자가 없으면 작업이 queued인
+  # 채로 TTL까지 남으므로, OCR 브리지를 켜는 dev 배포에서는 선택 서비스가 아니다.
+  ai-worker:
+    image: ieobom-dev-ai-worker:current
+    build:
+      context: ../..
+      dockerfile: ai_worker/Dockerfile
+    command: ["python", "-m", "ai_worker.main"]
+    restart: unless-stopped
+    deploy:
+      replicas: 3
+    environment: *app_environment
+    volumes:
+      - ../../modeling/artifacts/models:/app/models:ro
+    networks:
+      - app
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "ai_worker.healthcheck"]
+      interval: 20s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   email-worker:
-    image: ieobom-dev-fastapi:${DEPLOY_VERSION:-local}
+    image: ieobom-dev-fastapi:current
     command: ["python", "-m", "app.workers.invitation_email_worker"]
     restart: unless-stopped
     environment:
@@ -143,16 +180,16 @@ services:
       mailpit:
         condition: service_started
 
-  frontend:
-    image: ieobom-dev-frontend:${DEPLOY_VERSION:-local}
+  anatomy-assets:
+    image: ieobom-dev-anatomy-assets:current
     build:
-      context: ../..
-      dockerfile: frontend/Dockerfile
+      context: ../../frontend/public/vendor/vanatome
+      dockerfile: Dockerfile
     restart: unless-stopped
     networks:
       - app
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1/healthz"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/vendor/vanatome/ATTRIBUTION.txt"]
       interval: 10s
       timeout: 3s
       retries: 12
@@ -169,7 +206,7 @@ services:
     depends_on:
       fastapi:
         condition: service_healthy
-      frontend:
+      anatomy-assets:
         condition: service_healthy
 
 volumes:

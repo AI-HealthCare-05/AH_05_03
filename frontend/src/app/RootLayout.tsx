@@ -1,8 +1,10 @@
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { SignInPage } from "../features/account/SignInPage";
+import { serverApiClient } from "../shared/api/serverApiClient";
 import { useAuth } from "./authContext";
+import { LocalDomainContext } from "./localDomainContext";
 
 // 가족 홈이 "관리"(구성원·기록·검진표), 건강 현황이 "지금 어떤가"(챌린지·수치) 다.
 // **2026-09-03 에 뒤집었다.** 예전에는 판정·챌린지·데이터 관리를 메뉴에서 뺐다 —
@@ -18,6 +20,7 @@ import { useAuth } from "./authContext";
 
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
+  { to: "/pain-diary", label: "통증 다이어리", end: false },
   { to: "/assessment", label: "위험 판정", end: false },
   { to: "/challenge", label: "챌린지", end: false },
   { to: "/insights", label: "건강 현황", end: false },
@@ -25,6 +28,12 @@ const NAVIGATION = [
   { to: "/data", label: "데이터 관리", end: false },
   { to: "/account", label: "계정", end: false },
 ] as const;
+
+function readResetToken(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.hash.replace(/^#/u, ""));
+  return Boolean(params.get("reset_token"));
+}
 
 export function RootLayout() {
   const { status, email, signOut } = useAuth();
@@ -51,6 +60,48 @@ export function RootLayout() {
       inline: "nearest",
     });
   }, [pathname]);
+  const localDomain = useContext(LocalDomainContext);
+  const profiles = useMemo(() => localDomain?.profiles ?? [], [localDomain?.profiles]);
+  const [matchedProfileName, setMatchedProfileName] = useState<string>();
+  const [hasResetToken, setHasResetToken] = useState(readResetToken);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setHasResetToken(readResetToken());
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (status !== "signed-in") {
+      setMatchedProfileName(undefined);
+      return;
+    }
+    let cancelled = false;
+    void serverApiClient
+      .listProfileLinks()
+      .then((links) => {
+        if (cancelled) return;
+        const activeLink = links.find((l) => l.status === "active");
+        if (activeLink) {
+          const profile = profiles.find((p) => p.opaqueServerRef === activeLink.local_profile_ref);
+          if (profile) {
+            setMatchedProfileName(profile.displayName);
+            return;
+          }
+        }
+        setMatchedProfileName(undefined);
+      })
+      .catch(() => {
+        if (!cancelled) setMatchedProfileName(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [status, email, profiles]);
 
   // 갱신 토큰으로 세션을 되살리는 동안 아무것도 그리지 않는다. 로그인 화면을 먼저
   // 띄우면 **이미 로그인한 사용자에게 로그인 화면이 한 번 깜빡인다.**
@@ -60,8 +111,10 @@ export function RootLayout() {
 
   // 리다이렉트가 아니라 `Outlet` 자리를 대신 채운다. 주소가 그대로 남아서 로그인하면
   // 원래 가려던 화면이 그대로 뜬다 — 돌아갈 곳을 따로 기억할 필요가 없다.
-  if (status === "signed-out") {
-    return <SignInPage />;
+  // 단, 비밀번호 재설정 링크(#reset_token=...)로 진입한 경우에는 로그인 상태와 무관하게
+  // 재설정 관문을 우선 열어 준다.
+  if (hasResetToken || status === "signed-out") {
+    return <SignInPage onResetComplete={() => setHasResetToken(false)} />;
   }
 
   return (
@@ -97,7 +150,11 @@ export function RootLayout() {
               것은 **지금 누구로 들어와 있는가** 와 나가는 문이다. */}
           <div className="header-status">
             <span title="현재 버전은 공용 브라우저의 사용자별 보관함 잠금을 지원하지 않습니다."><i aria-hidden="true" /> 기기 로컬</span>
-            {email ? <span className="header-account" title={email}>{email}</span> : null}
+            {email ? (
+              <span className="header-account" title={email}>
+                {matchedProfileName ? `${matchedProfileName} (${email})` : email}
+              </span>
+            ) : null}
             <button type="button" className="header-signout" onClick={() => void signOut()}>
               로그아웃
             </button>

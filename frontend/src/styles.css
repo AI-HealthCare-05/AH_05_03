@@ -209,6 +209,23 @@ main {
   .primary-navigation a { transition: none; }
 }
 
+.primary-navigation a.navigation-external {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted-strong);
+}
+
+.primary-navigation a.navigation-external i {
+  font-size: 0.78em;
+  font-style: normal;
+  opacity: 0.65;
+}
+
+.primary-navigation a.navigation-external:hover {
+  color: var(--blue-600);
+}
+
 .navigation-future {
   cursor: not-allowed;
   opacity: 0.48;
@@ -403,8 +420,7 @@ main {
   gap: 10px;
 }
 
-.household-list article,
-.membership-panel > div {
+.household-list article {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -412,6 +428,20 @@ main {
   border: 1px solid var(--line-soft);
   border-radius: 14px;
   padding: 14px;
+}
+
+.membership-panel > div {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.4fr) minmax(200px, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  padding: 14px 18px;
+}
+
+.membership-panel > div .row-actions {
+  justify-self: end;
 }
 
 .household-list article.is-selected {
@@ -439,6 +469,29 @@ main {
   color: #a32626;
   background: transparent;
   font-weight: 700;
+}
+
+.member-delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line-soft, #e2e8f0);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--muted, #64748b);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.member-delete-button:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
 }
 
 .membership-panel {
@@ -484,6 +537,16 @@ main {
   background: #e8f0ff;
   font-size: 0.7rem;
   font-weight: 800;
+}
+
+.master-badge {
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: #854d0e;
+  background: #fef9c3;
+  font-size: 0.7rem;
+  font-weight: 800;
+  margin-left: 4px;
 }
 
 .membership-panel time,
@@ -1480,10 +1543,6 @@ main {
   font-size: 1.15rem;
 }
 
-/* **확정 높이여야 한다.** `min-height` 만 두면 자식 캔버스의 `height: 100%` 가
- * `auto` 로 풀리고, 그때 캔버스의 레이아웃 높이는 `height` **속성**이 된다.
- * three.js 는 그 속성에 `clientHeight × devicePixelRatio` 를 쓰므로 관찰 -> 확대 ->
- * 관찰이 되먹임이 되어 화면이 세로로 끝없이 자란다(실측 551 -> 3494 -> 5235px). */
 .body-map-viewer {
   position: relative;
   height: 430px;
@@ -1494,6 +1553,7 @@ main {
   height: 100%;
   display: block;
   touch-action: none;
+  overscroll-behavior: contain;
 }
 
 .body-map-hint {
@@ -1532,13 +1592,31 @@ main {
   font-size: 0.78rem;
 }
 
+.body-map-load-notice p {
+  margin: 0;
+}
+
+.body-map-load-notice .secondary-button {
+  margin-top: 8px;
+}
+
 .vanatome-card {
   min-height: 520px;
+  align-items: start;
 }
 
 .vanatome-viewer {
-  height: 520px;
+  height: clamp(520px, 70vh, 760px);
+  min-height: 520px;
+  max-height: 760px;
+  align-self: start;
+  overflow: hidden;
   background: radial-gradient(circle at center, #f9fbff 0, #edf3ff 72%, #e8f0fd 100%);
+}
+
+.vanatome-viewer > canvas {
+  position: absolute;
+  inset: 0;
 }
 
 .vanatome-viewer.is-hologram {
@@ -1582,16 +1660,193 @@ main {
   gap: 8px;
 }
 
-.vanatome-layer-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px !important;
+.vanatome-system-layers {
+  margin: 18px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  padding: 16px 0 0;
 }
 
-/* 부위별 위험 범례. 3D 안의 색이 무슨 뜻인지 밖에서 읽을 자리가 있어야 한다 —
-   색만 칠하면 "심장이 왜 빨간가" 를 화면이 대답하지 못한다. 그래서 등급과 함께
-   **그 색을 만든 질환 이름**을 같이 적는다. */
+.vanatome-system-layers legend {
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.vanatome-system-layer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: -18px 0 8px;
+}
+
+.vanatome-system-layer-actions button {
+  border: 0;
+  padding: 2px 3px;
+  color: var(--blue-700);
+  background: transparent;
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.vanatome-system-layer-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.vanatome-system-layer-buttons button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 5px;
+  color: var(--muted);
+  background: #f8fafc;
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.vanatome-system-layer-buttons button[aria-pressed="true"] {
+  border-color: #82d6e5;
+  color: #136478;
+  background: #edfbfd;
+}
+
+.vanatome-system-layer-actions button:disabled,
+.vanatome-system-layer-buttons button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.vanatome-focus-control {
+  margin-top: 18px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 16px;
+}
+
+.vanatome-focus-control > span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.vanatome-focus-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.vanatome-focus-buttons button,
+.vanatome-pelvic-focus {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 6px;
+  color: var(--muted-strong);
+  background: white;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.vanatome-focus-buttons button[aria-pressed="true"] {
+  border-color: #85aefc;
+  color: var(--blue-700);
+  background: #edf4ff;
+}
+
+.vanatome-pelvic-focus {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.vanatome-pelvic-focus[aria-pressed="true"] {
+  border-color: #85aefc;
+  color: var(--blue-700);
+  background: #edf4ff;
+}
+
+.vanatome-focus-buttons button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.vanatome-hand-poses {
+  margin: 18px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  padding: 16px 0 0;
+}
+
+.vanatome-hand-poses legend {
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+}
+
+.vanatome-hand-poses > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.vanatome-hand-poses button {
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 6px;
+  color: var(--muted-strong);
+  background: white;
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.vanatome-hand-poses button[aria-pressed="true"] {
+  border-color: #85aefc;
+  color: var(--blue-700);
+  background: #edf4ff;
+}
+
+.vanatome-hand-poses button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.vanatome-hand-poses small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.vanatome-actions button {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 11px;
+  color: var(--blue-700);
+  background: white;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.vanatome-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.vanatome-attribution {
+  margin-top: 20px !important;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 14px;
+  font-size: 0.7rem;
+}
+
+.vanatome-attribution a {
+  color: var(--blue-700);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .vanatome-risk-legend {
   list-style: none;
   margin: 12px 0 0 !important;
@@ -1642,108 +1897,6 @@ main {
   background: #edfbfd;
   font-size: 0.66rem;
   font-weight: 700;
-}
-
-.vanatome-focus-control {
-  margin-top: 18px;
-  border-top: 1px solid var(--line-soft);
-  padding-top: 16px;
-}
-
-.vanatome-focus-control > span {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 750;
-}
-
-.vanatome-focus-buttons {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-
-.vanatome-focus-buttons button,
-.vanatome-reset-focus {
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 8px 6px;
-  color: var(--muted-strong);
-  background: white;
-  font-size: 0.72rem;
-  font-weight: 750;
-}
-
-.vanatome-focus-buttons button[aria-pressed="true"] {
-  border-color: #85aefc;
-  color: var(--blue-700);
-  background: #edf4ff;
-}
-
-.vanatome-focus-buttons button:disabled {
-  cursor: wait;
-  opacity: 0.45;
-}
-
-.vanatome-reset-focus {
-  margin-top: 7px;
-  border-color: transparent;
-  padding-inline: 0;
-  color: var(--blue-700);
-  background: transparent;
-}
-
-.vanatome-actions button {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 8px 11px;
-  color: var(--blue-700);
-  background: white;
-  font-size: 0.76rem;
-  font-weight: 750;
-}
-
-.vanatome-actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.vanatome-attribution {
-  margin-top: 20px !important;
-  border-top: 1px solid var(--line-soft);
-  padding-top: 14px;
-  font-size: 0.7rem;
-}
-
-.vanatome-attribution a {
-  color: var(--blue-700);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.vanatome-loading {
-  position: absolute;
-  z-index: 4;
-  inset: 0;
-  display: grid;
-  align-content: center;
-  justify-items: center;
-  gap: 8px;
-  color: var(--muted-strong);
-  text-align: center;
-}
-
-.vanatome-loading small {
-  color: var(--muted);
-}
-
-.is-hologram .vanatome-loading {
-  color: #d8f8ff;
-}
-
-.is-hologram .vanatome-loading small {
-  color: #8dc7d5;
 }
 
 .records-panel {
@@ -1980,6 +2133,44 @@ main {
   line-height: 1.6;
 }
 
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-input-wrapper input {
+  padding-right: 44px;
+}
+
+.password-toggle-button {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 6px;
+  color: var(--muted, #64748b);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.password-toggle-button:hover {
+  color: var(--ink, #0f172a);
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.password-toggle-button:focus-visible {
+  outline: 2px solid var(--blue-700, #1d4ed8);
+  outline-offset: 1px;
+}
+
 .form-notice {
   margin: 0;
   border-radius: 13px;
@@ -1994,6 +2185,95 @@ main {
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 500;
+}
+
+.birth-date-field {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.birth-date-field legend {
+  margin-bottom: 7px;
+  padding: 0;
+  color: var(--muted-strong);
+  font-size: 0.83rem;
+  font-weight: 750;
+}
+
+.birth-date-input {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(64px, 1.5fr) auto minmax(36px, 0.7fr) auto minmax(36px, 0.7fr) auto 32px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 10px;
+  background: white;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.birth-date-input:focus-within {
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(57, 118, 246, 0.14);
+}
+
+.product-form .birth-date-input input,
+.ui-preview-form .birth-date-input input {
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 12px 2px;
+  outline: 0;
+  background: transparent;
+  text-align: center;
+}
+
+.birth-date-input > span {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.product-form .birth-date-input .birth-date-native,
+.ui-preview-form .birth-date-input .birth-date-native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.birth-date-calendar {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  color: var(--muted-strong);
+  background: transparent;
+  cursor: pointer;
+}
+
+.birth-date-calendar:hover {
+  color: var(--blue-700);
+  background: var(--blue-50);
+}
+
+.birth-date-calendar svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .form-actions {
@@ -4856,7 +5136,7 @@ main {
  * 둘이었다. 헤더에는 지금 누구로 들어와 있는지와 나가는 문만 둔다.
  */
 .header-account {
-  max-width: 18ch;
+  max-width: 32ch;
   overflow: hidden;
   color: var(--muted) !important;
   font-weight: 500 !important;
@@ -4996,3 +5276,1080 @@ main {
   justify-content: flex-end;
 }
 .record-purge-confirm > span { font-size: 0.75rem; color: var(--danger); font-weight: 600; }
+
+/* ==========================================================================
+   건강 데이터 (Health Data Page) & OCR 검토 모달 스타일 복원
+   ========================================================================== */
+.health-data-heading {
+  align-items: flex-end;
+}
+
+.period-filter {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.period-filter button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 14px;
+  color: var(--muted-strong);
+  background: white;
+  font-size: 0.8rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.period-filter button.is-active {
+  border-color: var(--blue-600);
+  color: white;
+  background: var(--blue-600);
+  box-shadow: 0 7px 18px rgba(37, 99, 235, 0.2);
+}
+
+.health-data-layout {
+  margin-top: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: 20px;
+}
+
+.health-data-main {
+  min-width: 0;
+  display: grid;
+  gap: 20px;
+}
+
+.health-insight-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  border: 1px solid #c9dcff;
+  border-radius: 22px;
+  padding: 22px;
+  background: linear-gradient(135deg, #f7faff, #eaf2ff);
+  box-shadow: 0 10px 30px rgba(35, 61, 112, 0.05);
+}
+
+.health-insight-card > span {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  color: white;
+  background: var(--blue-600);
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+.health-insight-card strong,
+.health-insight-card small {
+  display: block;
+}
+
+.health-insight-card strong {
+  margin-top: 4px;
+  font-size: 1.15rem;
+}
+
+.health-insight-card small {
+  margin-top: 7px;
+  color: var(--muted);
+}
+
+.health-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.health-summary-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 19px;
+  padding: 19px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(35, 61, 112, 0.04);
+}
+
+.health-summary-card > span,
+.health-summary-card > strong,
+.health-summary-card > p,
+.health-summary-card > em {
+  display: block;
+}
+
+.health-summary-card > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.health-summary-card > strong {
+  margin-top: 10px;
+  font-size: 1.55rem;
+}
+
+.health-summary-card > strong small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.health-summary-card > p {
+  margin-top: 8px;
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+}
+
+.health-summary-card > em {
+  margin-top: 6px;
+  color: var(--blue-700);
+  font-size: 0.75rem;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.health-summary-card.is-empty {
+  background: #fafbfe;
+}
+
+.health-summary-card.is-empty > strong {
+  color: var(--muted-strong);
+  font-size: 1.1rem;
+}
+
+.health-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.health-chart-card:last-child {
+  grid-column: 1 / -1;
+}
+
+.health-data-panel {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 22px;
+  background: white;
+  box-shadow: 0 10px 32px rgba(35, 61, 112, 0.05);
+}
+
+.health-data-panel .panel-heading h2 {
+  font-size: 1.15rem;
+}
+
+.health-data-panel .panel-heading p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.time-series-chart {
+  margin-top: 16px;
+  min-width: 0;
+}
+
+.time-series-chart svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.time-series-chart text {
+  fill: #718099;
+  font-size: 11px;
+}
+
+.chart-grid-line {
+  stroke: #e7ebf2;
+  stroke-width: 1;
+}
+
+.chart-unit {
+  font-weight: 700;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: var(--muted-strong);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.health-chart-empty {
+  min-height: 210px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.health-chart-empty > span {
+  font-size: 2rem;
+}
+
+.health-chart-empty strong {
+  margin-top: 8px;
+  color: var(--muted-strong);
+}
+
+.health-chart-empty p {
+  margin-top: 6px;
+  font-size: 0.78rem;
+}
+
+.lab-metric-select {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.lab-metric-select select {
+  min-width: 180px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 9px 11px;
+  color: var(--ink);
+  background: white;
+}
+
+.screening-history-list {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.screening-history-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 15px;
+  padding: 14px;
+  background: #fafbfe;
+}
+
+.screening-history-list time,
+.screening-history-list strong,
+.screening-history-list p {
+  display: block;
+}
+
+.screening-history-list time {
+  color: var(--blue-700);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.screening-history-list strong {
+  margin-top: 4px;
+}
+
+.screening-history-list p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.health-files-tabs {
+  position: sticky;
+  top: 74px;
+  z-index: 5;
+  width: fit-content;
+  margin-top: 18px;
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.health-files-tabs a {
+  border-radius: 999px;
+  padding: 9px 15px;
+  color: var(--muted-strong);
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.health-files-tabs a:hover {
+  background: var(--surface-soft);
+  color: var(--primary);
+}
+
+.ocr-review-modal {
+  width: min(1040px, 100%);
+}
+
+.ocr-review-meta-grid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 0.75fr 1fr 1fr;
+  gap: 12px;
+}
+
+.ocr-review-meta-grid label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.ocr-review-meta-grid input,
+.ocr-review-item input {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: white;
+}
+
+.ocr-review-items {
+  margin-top: 18px;
+  display: grid;
+  gap: 7px;
+  max-height: 310px;
+  overflow-y: auto;
+}
+
+.ocr-review-item {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.4fr) minmax(90px, 0.8fr) minmax(80px, 0.7fr) minmax(120px, 1fr);
+  gap: 8px;
+}
+
+.ocr-review-item-heading {
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+@media (max-width: 1080px) {
+  .health-data-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .health-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .health-chart-card:last-child {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .health-data-heading {
+    align-items: flex-start;
+  }
+
+  .health-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .period-filter {
+    justify-content: flex-start;
+  }
+
+  .health-insight-card {
+    align-items: flex-start;
+  }
+
+  .screening-history-list article {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+/* ==========================================================================
+   통증 다이어리 (Pain Diary) & 우측 하단 캘린더
+   ========================================================================== */
+
+.pain-diary-page {
+  display: flex;
+  min-height: calc(100vh - 72px);
+}
+
+.pain-diary-main {
+  flex: 1;
+  min-width: 0;
+  padding: 32px 40px 60px;
+}
+
+.pain-diary-header {
+  margin-bottom: 28px;
+}
+
+.pain-diary-header h1 {
+  margin: 4px 0 8px;
+  font-size: 1.85rem;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.pain-diary-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.95fr);
+  gap: 28px;
+  align-items: start;
+}
+
+/* 좌측 일기 폼 카드 */
+.pain-diary-form-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+.pain-diary-form-card .card-header .title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pain-diary-form-card .card-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.status-tag {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.status-tag.is-new {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.status-tag.is-edit {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.date-hint {
+  margin: 6px 0 20px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.diary-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group-row {
+  display: flex;
+  gap: 16px;
+}
+
+.form-group-row .flex-1 {
+  flex: 1;
+}
+
+.form-group-row .flex-2 {
+  flex: 2;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group > span {
+  font-size: 0.84rem;
+  font-weight: 650;
+  color: var(--muted-strong);
+}
+
+.form-group input[type="text"],
+.form-group input[type="date"],
+.form-group textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.92rem;
+  color: var(--ink);
+  background: #fafbfc;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  background: white;
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  outline: none;
+}
+
+.intensity-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.86rem;
+  color: var(--muted-strong);
+}
+
+.intensity-pill {
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.slider-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #f8fafc;
+  padding: 14px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--line-soft);
+}
+
+.slider-min,
+.slider-max {
+  font-size: 0.76rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.intensity-slider {
+  flex: 1;
+  accent-color: var(--blue-600);
+  cursor: pointer;
+}
+
+.diary-note-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-refine-btn {
+  font-size: 0.8rem;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfeff 100%);
+  border: 1px solid #99f6e4;
+  color: #0d9488;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ai-refine-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ccfbf1 0%, #d1fae5 100%);
+  border-color: #5eead4;
+  transform: translateY(-1px);
+}
+
+.ai-refine-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.diary-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.save-btn {
+  flex: 1;
+  padding: 13px 20px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border-radius: 12px;
+  background: var(--blue-600);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: var(--blue-700);
+}
+
+.delete-btn {
+  padding: 13px 18px;
+  font-size: 0.88rem;
+  font-weight: 650;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  cursor: pointer;
+}
+
+.delete-btn:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+/* 우측 사이드바 */
+.pain-diary-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* 최근 요약 카드 */
+.diary-summary-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+.diary-summary-card h3 {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  text-align: left;
+  background: #fafbfc;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.summary-item:hover {
+  background: #f1f5f9;
+  border-color: var(--line);
+}
+
+.summary-item.is-selected {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.summary-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.summary-item-header strong {
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+
+.summary-date {
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.summary-item-meta {
+  font-size: 0.8rem;
+  display: flex;
+  gap: 6px;
+}
+
+.summary-intensity {
+  font-weight: 700;
+}
+
+.summary-sensation {
+  color: var(--muted);
+}
+
+/* 우측 하단 캘린더 카드 */
+.pain-calendar-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.month-title strong {
+  font-size: 1.15rem;
+  font-weight: 750;
+  color: var(--ink);
+}
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.month-nav .nav-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: white;
+  color: var(--muted-strong);
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.month-nav .nav-btn:hover {
+  background: #f8fafc;
+  color: var(--ink);
+}
+
+.month-nav .today-btn {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: white;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+
+.month-nav .today-btn:hover {
+  background: #f8fafc;
+  color: var(--ink);
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.weekday-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar-cell {
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  padding: 2px;
+}
+
+.calendar-cell.empty {
+  cursor: default;
+}
+
+.calendar-cell.day:hover {
+  background: #f1f5f9;
+}
+
+.calendar-cell.today .day-number {
+  color: var(--blue-600);
+  font-weight: 800;
+}
+
+.calendar-cell.selected {
+  background: #eff6ff !important;
+  border-color: #3b82f6 !important;
+}
+
+.calendar-cell .day-number {
+  font-size: 0.82rem;
+  color: var(--ink);
+  font-weight: 550;
+}
+
+.calendar-cell.selected .day-number {
+  color: #1d4ed8;
+  font-weight: 750;
+}
+
+.calendar-cell .record-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-top: 2px;
+}
+
+.calendar-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* 챗봇 통증 다이어리 툴콜링 카드 */
+.pain-tool-card {
+  border-left: 4px solid #06b6d4 !important;
+}
+
+.tool-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.tool-calling-badge {
+  display: inline-block;
+  background: #ecfeff;
+  color: #0e7490;
+  border: 1px solid #a5f3fc;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.tool-name {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.formatted-diary-textarea {
+  background: #f0fdf4 !important;
+  border-color: #bbf7d0 !important;
+  color: #166534 !important;
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+.tool-saved-diary {
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.view-diary-btn {
+  margin-top: 10px;
+  width: 100%;
+  font-size: 0.84rem;
+  font-weight: 650;
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: var(--blue-600);
+  border: 1px solid var(--blue-300);
+  background: white;
+  cursor: pointer;
+}
+
+.view-diary-btn:hover {
+  background: #eff6ff;
+}
+
+/* 날짜별 복수 기록 탭 */
+.day-records-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--line-soft);
+}
+
+.day-record-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f1f5f9;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.day-record-tab:hover {
+  background: #e2e8f0;
+}
+
+.day-record-tab.is-active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1d4ed8;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.day-record-tab.add-tab {
+  background: white;
+  border: 1px dashed var(--blue-400);
+  color: var(--blue-600);
+  font-weight: 650;
+}
+
+.day-record-tab.add-tab:hover {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+
+.tab-intensity-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tab-title {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-intensity-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted-strong);
+}
+
+/* 캘린더 일자별 다중 기록 카운트 뱃지 */
+.calendar-count-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: #2563eb;
+  background: #dbeafe;
+  border-radius: 999px;
+  min-width: 13px;
+  height: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+/* 프로필 없음 빈 상태 알림 */
+.empty-profile-alert {
+  background: #fefce8;
+  border: 1px solid #fde047;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 24px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.empty-profile-alert p {
+  margin: 0;
+  color: #854d0e;
+  font-size: 0.92rem;
+}
+
+.empty-profile-alert .button {
+  margin-top: 8px;
+}
+
+@media (max-width: 1024px) {
+  .pain-diary-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
