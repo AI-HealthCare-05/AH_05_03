@@ -89,8 +89,6 @@ class HealthAssistantService:
                 response.facility_search_draft = tool_result
                 if getattr(tool_result, "message", None):
                     response.assistant_message = tool_result.message
-                if getattr(tool_result, "emergency_notice", None) and not response.emergency_notice:
-                    response.emergency_notice = tool_result.emergency_notice
         else:
             response = await self.llm_client.generate_structured_response(
                 system_instruction=system_instruction,
@@ -141,7 +139,6 @@ class HealthAssistantService:
                 intent="search_facility",
                 assistant_message=summary_msg,
                 facility_search_draft=tool_result,
-                emergency_notice=getattr(tool_result, "emergency_notice", None),
             )
             yield "result", self.safety_service.validate_response(res_obj).model_dump(mode="json")
             return
@@ -156,8 +153,6 @@ class HealthAssistantService:
             parsed = HealthAssistantResponse.model_validate_json(raw)
             if tool_result and not parsed.facility_search_draft:
                 parsed.facility_search_draft = tool_result
-                if getattr(tool_result, "emergency_notice", None) and not parsed.emergency_notice:
-                    parsed.emergency_notice = tool_result.emergency_notice
         except Exception as ex:
             raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex
 

@@ -40,6 +40,10 @@ FACILITY_TOOL_DECLARATIONS = [
                     "type": "string",
                     "description": "시군구 명칭 (예: 강남구, 서초구, 성남시 분당구)",
                 },
+                "query": {
+                    "type": "string",
+                    "description": "검색할 지명 포함 질의어 (예: 강남역 응급실, 백석역 응급실)",
+                },
                 "radius": {
                     "type": "integer",
                     "description": "검색 반경 (미터, 기본 10000)",
@@ -53,6 +57,7 @@ FACILITY_TOOL_DECLARATIONS = [
         description=(
             "사용자의 현재 위치(위도/경도 좌표) 또는 특정 지역명/상권/키워드(예: '홍대 내과', '장충동 소아과', '강남역 치과')를 "
             "바탕으로 주변 병원 및 의원 목록을 초고속으로 조회합니다. "
+            "사용자가 '진료 중', '문 연', '현재 여는 곳'을 요청하면 only_open을 반드시 true로 설정하세요. "
             "위치 좌표가 있거나 구체적인 지역명/병원 키워드가 있을 때 호출하세요. "
             "위치 좌표와 지역명/병원명이 모두 전혀 없으면 도구를 임의 호출하지 말고 사용자에게 위치를 물어보세요."
         ),
@@ -80,6 +85,11 @@ FACILITY_TOOL_DECLARATIONS = [
                     "type": "string",
                     "description": "진료과목 키워드 (예: 내과, 정형외과, 이비인후과 등)",
                 },
+                "only_open": {
+                    "type": "boolean",
+                    "description": "현재 진료 중으로 확인된 곳만 조회할지 여부. 사용자가 진료 중/문 연 곳을 요청했을 때 true.",
+                    "default": False,
+                },
             },
         },
     ),
@@ -88,6 +98,7 @@ FACILITY_TOOL_DECLARATIONS = [
         description=(
             "사용자의 현재 위치(위도/경도 좌표) 또는 특정 지역명(예: '홍대 약국', '장충동 약국')을 바탕으로 "
             "주변 약국 목록 및 운영시간을 초고속으로 조회합니다. "
+            "사용자가 '영업 중', '문 연', '현재 여는 곳'을 요청하면 only_open을 반드시 true로 설정하세요. "
             "위치 좌표가 있거나 구체적인 지역명이 있을 때 호출하세요. "
             "위치 좌표와 지역명이 모두 전혀 없으면 도구를 임의 호출하지 말고 사용자에게 위치를 물어보세요."
         ),
@@ -118,6 +129,11 @@ FACILITY_TOOL_DECLARATIONS = [
                     "type": "integer",
                     "description": "검색 반경 (미터 단위, 기본 3000)",
                     "default": 3000,
+                },
+                "only_open": {
+                    "type": "boolean",
+                    "description": "현재 영업 중으로 확인된 곳만 조회할지 여부.",
+                    "default": False,
                 },
             },
         },
@@ -157,6 +173,7 @@ async def _execute_hospital(args: dict[str, Any], client: MedicalFacilityClient)
     query = args.get("query")
     stage1 = args.get("stage1")
     stage2 = args.get("stage2")
+    only_open = bool(args.get("only_open", False))
     if lat is None and lon is None and not query and not keyword and not stage1 and not stage2:
         return None
     hosp_kwargs: dict[str, Any] = {
@@ -164,6 +181,8 @@ async def _execute_hospital(args: dict[str, Any], client: MedicalFacilityClient)
         "longitude": float(lon) if lon is not None else None,
         "radius": int(radius),
     }
+    if only_open:
+        hosp_kwargs["only_open"] = True
     if keyword is not None:
         hosp_kwargs["keyword"] = str(keyword)
     if query is not None:
@@ -182,6 +201,7 @@ async def _execute_pharmacy(args: dict[str, Any], client: MedicalFacilityClient)
     query = args.get("query")
     stage1 = args.get("stage1")
     stage2 = args.get("stage2")
+    only_open = bool(args.get("only_open", False))
     if lat is None and lon is None and not query and not stage1 and not stage2:
         return None
     pharm_kwargs: dict[str, Any] = {
@@ -195,6 +215,8 @@ async def _execute_pharmacy(args: dict[str, Any], client: MedicalFacilityClient)
         pharm_kwargs["stage1"] = str(stage1)
     if stage2 is not None:
         pharm_kwargs["stage2"] = str(stage2)
+    if only_open:
+        pharm_kwargs["only_open"] = True
     return await client.search_nearby_pharmacy(**pharm_kwargs)
 
 

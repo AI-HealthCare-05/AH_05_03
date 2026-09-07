@@ -77,6 +77,14 @@ MOCK_HOSPITAL_XML = """<?xml version="1.0" encoding="UTF-8"?>
 </response>
 """
 
+
+def test_optional_text_normalizes_numeric_public_data_values() -> None:
+    from app.services.medical_facility_client import _optional_text
+
+    assert _optional_text(18005173) == "18005173"
+    assert _optional_text(" 02-555-1234 ") == "02-555-1234"
+    assert _optional_text("") is None
+
 MOCK_PHARMACY_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <response>
   <header>
@@ -164,6 +172,96 @@ async def test_search_nearby_hospital() -> None:
         assert item.phone == "02-555-1234"
         assert item.distance_m == 350
         assert any("HsptlAsembySearchService" in str(r.url) for r in requests)
+
+
+@pytest.mark.asyncio
+async def test_search_uses_kakao_place_coordinates_before_browser_location() -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if "dapi.kakao.com" in str(request.url):
+            assert request.url.params["query"] == "백석역"
+            assert request.headers["Authorization"] == "KakaoAK test_kakao_key"
+            return httpx.Response(200, json={"documents": [{"x": "126.7870", "y": "37.6430"}]})
+        return httpx.Response(200, text=MOCK_HOSPITAL_XML)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = MedicalFacilityClient(
+            hospital_api_key="test_hosp_key",
+            kakao_api_key="test_kakao_key",
+            http_client=http_client,
+        )
+        await client.search_nearby_hospital(
+            latitude=37.498,
+            longitude=127.031,
+            query="백석역 병원",
+        )
+
+    nmc_request = next(request for request in requests if "HsptlAsembySearchService" in str(request.url))
+    assert nmc_request.url.params["WGS84_LAT"] == "37.643"
+    assert nmc_request.url.params["WGS84_LON"] == "126.787"
+
+
+@pytest.mark.asyncio
+async def test_specific_place_uses_kakao_before_broader_hardcoded_landmark() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "dapi.kakao.com" in str(request.url):
+            assert request.url.params["query"] == "운정중앙역"
+            return httpx.Response(200, json={"documents": [{"x": "126.7281", "y": "37.7161"}]})
+        assert request.url.params["WGS84_LAT"] == "37.7161"
+        assert request.url.params["WGS84_LON"] == "126.7281"
+        return httpx.Response(200, text=MOCK_HOSPITAL_XML)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = MedicalFacilityClient(
+            hospital_api_key="test_hosp_key",
+            kakao_api_key="test_kakao_key",
+            http_client=http_client,
+        )
+        result = await client.search_nearby_hospital(query="운정중앙역 병원")
+
+    assert result.count == 1
+    assert result.message.startswith("운정중앙역 인근")
+
+
+@pytest.mark.asyncio
+async def test_specialty_search_uses_kakao_region_for_nmc_department_filter() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "search/keyword.json" in url:
+            return httpx.Response(200, json={"documents": [{"x": "126.7870", "y": "37.6430"}]})
+        if "coord2regioncode.json" in url:
+            return httpx.Response(
+                200,
+                json={
+                    "documents": [
+                        {
+                            "region_type": "B",
+                            "region_1depth_name": "경기",
+                            "region_2depth_name": "고양시 일산동구",
+                        }
+                    ]
+                },
+            )
+        assert "getHsptlMdcncListInfoInqire" in url
+        assert request.url.params["Q0"] == "경기도"
+        assert request.url.params["Q1"] == "일산동구"
+        assert request.url.params["QD"] == "D010"
+        return httpx.Response(200, text=MOCK_HOSPITAL_XML)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = MedicalFacilityClient(
+            hospital_api_key="test_hosp_key",
+            kakao_api_key="test_kakao_key",
+            http_client=http_client,
+        )
+        result = await client.search_nearby_hospital(query="백석역 산부인과")
+
+    assert result.count == 1
 
 
 @pytest.mark.asyncio

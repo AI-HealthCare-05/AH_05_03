@@ -574,6 +574,14 @@ def evaluate_operating_hours(
     return is_open, today_hours, break_hours
 
 
+def _optional_text(value: Any) -> str | None:
+    """공공데이터의 문자열/숫자 혼용 값을 DTO에 안전하게 전달한다."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 class MedicalFacilityClient:
     """국립중앙의료원(NMC) 공공 API 클라이언트."""
 
@@ -601,6 +609,9 @@ class MedicalFacilityClient:
             pharmacy_api_key
             if pharmacy_api_key is not None
             else (api_key if api_key is not None else config.PHARMACY_INFO_API_KEY)
+        )
+        self.kakao_api_key = self._clean_key(
+            kakao_api_key if kakao_api_key is not None else config.KAKAO_REST_API_KEY
         )
         self._http_client = http_client
 
@@ -649,6 +660,10 @@ class MedicalFacilityClient:
         if not data:
             return []
         items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
+        # NMC는 결과가 없을 때 items를 빈 객체가 아닌 빈 문자열로 내려준다.
+        # 이는 정상적인 0건 응답이므로 파싱 오류로 취급하지 않는다.
+        if not isinstance(items, (dict, list)):
+            return []
         if isinstance(items, dict):
             return [items]
         if isinstance(items, list):
@@ -694,6 +709,89 @@ class MedicalFacilityClient:
         return None, None
 
     @staticmethod
+    def _extract_place_query(query: str | None) -> str | None:
+        """시설·진료과 표현을 제외한 지명만 카카오 장소 검색에 전달한다."""
+        if not query:
+            return None
+        department_words = "|".join(sorted(map(re.escape, _NMC_DEPARTMENT_CODES), key=len, reverse=True))
+        place = re.sub(
+            rf"({department_words}|응급실|응급의료기관|병원|의원|약국|찾아줘|찾아|알려줘|알려|조회|검색|근처|주변|가까운|현재|지금|좀|해줘)",
+            "",
+            query,
+        ).strip()
+        return place or None
+
+    async def _resolve_search_coords(
+        self,
+        client: httpx.AsyncClient,
+        latitude: float | None,
+        longitude: float | None,
+        query: str | None,
+    ) -> tuple[float | None, float | None]:
+        """명시 지명 → 카카오 장소 검색 → 브라우저 GPS 순으로 기준 좌표를 정한다."""
+        place_query = self._extract_place_query(query)
+        if self.kakao_api_key and place_query:
+            try:
+                response = await client.get(
+                    "https://dapi.kakao.com/v2/local/search/keyword.json",
+                    params={"query": place_query, "size": "1"},
+                    headers={"Authorization": f"KakaoAK {self.kakao_api_key}"},
+                )
+                if response.status_code == 200:
+                    documents = response.json().get("documents", [])
+                    if documents:
+                        first = documents[0]
+                        return float(first["y"]), float(first["x"])
+                else:
+                    logger.warning("카카오 장소 검색 응답 오류: status=%s", response.status_code)
+            except (httpx.HTTPError, ValueError, KeyError, TypeError):
+                logger.warning("카카오 장소 검색 실패")
+
+        # 카카오 검색이 실패했을 때만 기존 주요 지명 사전을 보조 수단으로 쓴다.
+        # 예: "운정중앙역"에 "운정"의 넓은 중심 좌표가 먼저 매칭되는 것을 막는다.
+        query_lat, query_lon = self._resolve_target_coords(None, None, query)
+        if query_lat is not None and query_lon is not None:
+            return query_lat, query_lon
+
+        return latitude, longitude
+
+    async def _resolve_stage_from_coordinates(
+        self,
+        client: httpx.AsyncClient,
+        latitude: float | None,
+        longitude: float | None,
+    ) -> tuple[str | None, str | None]:
+        """카카오 좌표→행정구역 API 결과를 NMC 시도/시군구 형식으로 바꾼다."""
+        if not self.kakao_api_key or latitude is None or longitude is None:
+            return None, None
+        try:
+            response = await client.get(
+                "https://dapi.kakao.com/v2/local/geo/coord2regioncode.json",
+                params={"x": str(longitude), "y": str(latitude)},
+                headers={"Authorization": f"KakaoAK {self.kakao_api_key}"},
+            )
+            if response.status_code != 200:
+                logger.warning("카카오 행정구역 검색 응답 오류: status=%s", response.status_code)
+                return None, None
+            documents = response.json().get("documents", [])
+            legal_region = next(
+                (document for document in documents if document.get("region_type") == "B"),
+                None,
+            )
+            if not legal_region:
+                return None, None
+            raw_stage1 = legal_region.get("region_1depth_name")
+            stage1 = _PROVINCE_MAP.get(raw_stage1, raw_stage1)
+            # 카카오는 "고양시 일산동구"처럼 시·구를 합쳐 주지만, NMC Q1은
+            # 가장 하위 시군구 값("일산동구")만 허용한다.
+            raw_stage2 = legal_region.get("region_2depth_name") or ""
+            stage2 = raw_stage2.split()[-1] if raw_stage2 else None
+            return stage1, stage2
+        except (httpx.HTTPError, ValueError, TypeError):
+            logger.warning("카카오 행정구역 검색 실패")
+            return None, None
+
+    @staticmethod
     def _match_department(query: str | None, keyword: str | None) -> tuple[str | None, str | None]:
         text = f"{query or ''} {keyword or ''}".strip()
         for dept_name, code in _NMC_DEPARTMENT_CODES.items():
@@ -706,6 +804,11 @@ class MedicalFacilityClient:
         """'강남역 약국', '홍대 내과', '종로구' 등에서 '강남역', '홍대', '종로구'와 같은 지역 표기를 추출합니다."""
         if not query and not stage2:
             return "주변"
+        # 사용자가 입력한 지명은 축약하지 않는다. "운정중앙역"을 "운정"으로
+        # 바꾸면 서로 다른 역 검색 결과가 같은 장소처럼 보이게 된다.
+        query_label = MedicalFacilityClient._extract_place_query(query)
+        if query_label:
+            return query_label
         target = query or stage2 or ""
         # 1. 랜드마크/구 키워드 먼저 검사 (긴 단어부터 매칭)
         for lm in sorted(_LANDMARK_COORDS.keys(), key=len, reverse=True):
@@ -715,8 +818,9 @@ class MedicalFacilityClient:
             if d in target or d[:-1] in target:
                 return d
         # 2. 불필요한 단어 제거 후 남은 단어
+        department_words = "|".join(sorted(map(re.escape, _NMC_DEPARTMENT_CODES), key=len, reverse=True))
         cleaned = re.sub(
-            r"(약국|병원|의원|내과|이비인후과|소아과|정형외과|안과|피부과|치과|응급실|찾아줘|알려줘|어디|주변|근처)",
+            rf"({department_words}|약국|병원|의원|응급실|찾아줘|알려줘|어디|주변|근처)",
             "",
             target,
         ).strip()
@@ -747,9 +851,11 @@ class MedicalFacilityClient:
 
         client = self._get_client()
         items: list[FacilityItem] = []
-        target_lat, target_lon = self._resolve_target_coords(latitude, longitude, query or stage2)
 
         try:
+            target_lat, target_lon = await self._resolve_search_coords(
+                client, latitude, longitude, query or stage2
+            )
             if target_lat is not None and target_lon is not None:
                 items = await self._fetch_emergency_by_location(client, key, target_lat, target_lon)
 
@@ -843,12 +949,12 @@ class MedicalFacilityClient:
                     name=name,
                     category=it.get("dutyEmclsName") or it.get("dutyDivName") or "응급의료기관",
                     address=it.get("dutyAddr") or "",
-                    phone=it.get("dutyTel1") or em_phone,
-                    emergency_room_phone=em_phone,
+                    phone=_optional_text(it.get("dutyTel1")) or _optional_text(em_phone),
+                    emergency_room_phone=_optional_text(em_phone),
                     distance_m=dist_m,
                     latitude=lat_f,
                     longitude=lon_f,
-                    hpid=it.get("hpid"),
+                    hpid=_optional_text(it.get("hpid")),
                     is_open=True,
                     today_hours="24시간 진료",
                 )
@@ -891,12 +997,12 @@ class MedicalFacilityClient:
                     name=it.get("dutyName") or "응급의료기관",
                     category=it.get("dutyEmclsName") or it.get("dutyDivName") or "응급의료기관",
                     address=it.get("dutyAddr") or "",
-                    phone=it.get("dutyTel1") or em_phone,
-                    emergency_room_phone=em_phone,
+                    phone=_optional_text(it.get("dutyTel1")) or _optional_text(em_phone),
+                    emergency_room_phone=_optional_text(em_phone),
                     distance_m=dist_m,
                     latitude=e_lat,
                     longitude=e_lon,
-                    hpid=it.get("hpid"),
+                    hpid=_optional_text(it.get("hpid")),
                     is_open=True,
                     today_hours="24시간 진료",
                 )
@@ -967,6 +1073,7 @@ class MedicalFacilityClient:
         query: str | None = None,
         stage1: str | None = None,
         stage2: str | None = None,
+        only_open: bool = False,
     ) -> FacilitySearchResult:
         """국립중앙의료원 전국 병·의원 찾기 API 기반 병원 검색."""
         key = self._get_api_key()
@@ -983,20 +1090,20 @@ class MedicalFacilityClient:
         items: list[FacilityItem] = []
         dept_name, dept_code = self._match_department(query, keyword)
 
-        # 사용자가 지명을 직접 입력한 경우(예: "강남역 산부인과")에는 현재 GPS보다
-        # 그 지명의 좌표를 우선한다. 그래야 다른 지역에 있는 사용자가 지명을 붙여
-        # 검색해도 해당 지역 기준 거리순 결과를 볼 수 있다.
-        query_lat, query_lon = self._resolve_target_coords(None, None, query or keyword or stage2)
-        if query_lat is not None and query_lon is not None:
-            target_lat, target_lon = query_lat, query_lon
-        else:
-            target_lat, target_lon = self._resolve_target_coords(latitude, longitude)
-
         parsed_s1, parsed_s2 = self._parse_location(query or keyword)
         target_s1 = stage1 or parsed_s1
         target_s2 = stage2 or parsed_s2
 
         try:
+            target_lat, target_lon = await self._resolve_search_coords(
+                client, latitude, longitude, query or keyword or stage2
+            )
+            # 카카오로 찾은 전국 지명은 기존 사전에 없으므로, 좌표를 한 번 더
+            # 행정구역으로 변환해 NMC의 진료과(QD) 조회에 사용한다.
+            if dept_code and not target_s1:
+                target_s1, target_s2 = await self._resolve_stage_from_coordinates(
+                    client, target_lat, target_lon
+                )
             # 진료과가 있으면 반드시 과목 코드(QD)로 먼저 조회한다. 위치기반 API는
             # 진료과 파라미터를 지원하지 않아, 이를 먼저 호출하면 일반 의원이
             # "산부인과 병원"처럼 잘못 표시될 수 있다.
@@ -1010,6 +1117,7 @@ class MedicalFacilityClient:
                     qn=keyword if not dept_code else None,
                     ref_lat=target_lat,
                     ref_lon=target_lon,
+                    num_of_rows=100 if only_open else 20,
                 )
 
             # 지명 없이 진료과만 요청한 경우에는 위치기반 결과 중 명칭/분류에
@@ -1017,7 +1125,8 @@ class MedicalFacilityClient:
             # 대신 보여주지 않는다.
             if dept_code and not target_s1 and target_lat is not None and target_lon is not None:
                 items = await self._fetch_hospital_by_location(
-                    client, key, target_lat, target_lon, keyword_filter=dept_name
+                    client, key, target_lat, target_lon, keyword_filter=dept_name,
+                    num_of_rows=100 if only_open else 20,
                 )
 
             # 과목이 없는 일반 병원 검색은 기존처럼 위치기반을 먼저 사용하고,
@@ -1025,7 +1134,8 @@ class MedicalFacilityClient:
             if not dept_code:
                 if target_lat is not None and target_lon is not None:
                     items = await self._fetch_hospital_by_location(
-                        client, key, target_lat, target_lon, keyword_filter=keyword
+                        client, key, target_lat, target_lon, keyword_filter=keyword,
+                        num_of_rows=100 if only_open else 20,
                     )
 
                 if not items:
@@ -1038,13 +1148,28 @@ class MedicalFacilityClient:
                         qn=keyword,
                         ref_lat=target_lat,
                         ref_lon=target_lon,
+                        num_of_rows=100 if only_open else 20,
                     )
 
             # 현재 진료 중인 병원을 상단으로 정렬, 그 다음 거리순
             items.sort(key=lambda x: (x.is_open is not True, x.distance_m if x.distance_m is not None else 999999))
+            if only_open:
+                # 가까운 5곳만 먼저 보지 않는다. 최대 2km 범위의 후보 전체에서
+                # 진료 중인 곳을 골라야 사용자의 요청과 일치한다.
+                items = [
+                    item for item in items
+                    if item.is_open is True and item.distance_m is not None and item.distance_m <= 2_000
+                ]
             items = items[:5]
 
             if not items:
+                if only_open:
+                    return FacilitySearchResult(
+                        facility_type="hospital",
+                        total_count=0,
+                        items=[],
+                        message="반경 2km 안에 현재 진료 중으로 확인된 병원이 없습니다. 운영시간은 변동될 수 있으니 방문 전 전화로 확인해 주세요.",
+                    )
                 search_desc = f"'{query or keyword}' 관련 " if (query or keyword) else ""
                 return FacilitySearchResult(
                     facility_type="hospital",
@@ -1093,7 +1218,13 @@ class MedicalFacilityClient:
                 await client.aclose()
 
     async def _fetch_hospital_by_location(
-        self, client: httpx.AsyncClient, key: str, latitude: float, longitude: float, keyword_filter: str | None
+        self,
+        client: httpx.AsyncClient,
+        key: str,
+        latitude: float,
+        longitude: float,
+        keyword_filter: str | None,
+        num_of_rows: int = 20,
     ) -> list[FacilityItem]:
         url = "https://apis.data.go.kr/B552657/HsptlAsembySearchService/getHsptlMdcncLcinfoInqire"
         params = {
@@ -1101,7 +1232,7 @@ class MedicalFacilityClient:
             "WGS84_LON": str(longitude),
             "WGS84_LAT": str(latitude),
             "pageNo": "1",
-            "numOfRows": "20",
+            "numOfRows": str(num_of_rows),
             "_type": "json",
         }
         res = await client.get(url, params=params)
@@ -1139,11 +1270,11 @@ class MedicalFacilityClient:
                     name=name,
                     category=category,
                     address=it.get("dutyAddr") or "",
-                    phone=it.get("dutyTel1"),
+                    phone=_optional_text(it.get("dutyTel1")),
                     distance_m=dist_m,
                     latitude=h_lat,
                     longitude=h_lon,
-                    hpid=it.get("hpid"),
+                    hpid=_optional_text(it.get("hpid")),
                     is_open=is_open,
                     today_hours=today_hours,
                     break_hours=break_hours,
@@ -1161,6 +1292,7 @@ class MedicalFacilityClient:
         qn: str | None,
         ref_lat: float | None = None,
         ref_lon: float | None = None,
+        num_of_rows: int = 20,
     ) -> list[FacilityItem]:
         url = "https://apis.data.go.kr/B552657/HsptlAsembySearchService/getHsptlMdcncListInfoInqire"
         now = datetime.now(ZoneInfo("Asia/Seoul"))
@@ -1169,7 +1301,7 @@ class MedicalFacilityClient:
             "serviceKey": key,
             "Q0": stage1,
             "pageNo": "1",
-            "numOfRows": "20",
+            "numOfRows": str(num_of_rows),
             "_type": "json",
         }
         if stage2:
@@ -1208,11 +1340,11 @@ class MedicalFacilityClient:
                     name=name,
                     category=category,
                     address=it.get("dutyAddr") or "",
-                    phone=it.get("dutyTel1"),
+                    phone=_optional_text(it.get("dutyTel1")),
                     distance_m=dist_m,
                     latitude=h_lat,
                     longitude=h_lon,
-                    hpid=it.get("hpid"),
+                    hpid=_optional_text(it.get("hpid")),
                     is_open=is_open,
                     today_hours=today_hours,
                     break_hours=break_hours,
@@ -1231,6 +1363,7 @@ class MedicalFacilityClient:
         query: str | None = None,
         stage1: str | None = None,
         stage2: str | None = None,
+        only_open: bool = False,
     ) -> FacilitySearchResult:
         """국립중앙의료원 전국 약국 API 기반 약국 검색."""
         key = self._get_api_key()
@@ -1245,9 +1378,11 @@ class MedicalFacilityClient:
 
         client = self._get_client()
         items: list[FacilityItem] = []
-        target_lat, target_lon = self._resolve_target_coords(latitude, longitude, query or stage2)
 
         try:
+            target_lat, target_lon = await self._resolve_search_coords(
+                client, latitude, longitude, query or stage2
+            )
             # 1) GPS 좌표 또는 랜드마크 좌표가 있으면 위치기반 약국 조회 (0.2s, 실제 거리순 + 오늘 영업시간)
             if target_lat is not None and target_lon is not None:
                 items = await self._fetch_pharmacy_by_location(client, key, target_lat, target_lon)
@@ -1267,11 +1402,21 @@ class MedicalFacilityClient:
                     ref_lon=target_lon,
                 )
 
+            if only_open:
+                items = [item for item in items if item.is_open is True]
+
             # 현재 영업 중인 약국을 상단으로 정렬, 그 다음 거리순
             items.sort(key=lambda x: (x.is_open is not True, x.distance_m if x.distance_m is not None else 999999))
             items = items[:5]
 
             if not items:
+                if only_open:
+                    return FacilitySearchResult(
+                        facility_type="pharmacy",
+                        total_count=0,
+                        items=[],
+                        message="반경 2km 안에 현재 영업 중으로 확인된 약국이 없습니다. 운영시간은 변동될 수 있으니 방문 전 전화로 확인해 주세요.",
+                    )
                 search_desc = f"'{query}' 관련 " if query else ""
                 return FacilitySearchResult(
                     facility_type="pharmacy",
@@ -1361,11 +1506,11 @@ class MedicalFacilityClient:
                     name=name,
                     category="약국",
                     address=it.get("dutyAddr") or "",
-                    phone=it.get("dutyTel1"),
+                    phone=_optional_text(it.get("dutyTel1")),
                     distance_m=dist_m,
                     latitude=p_lat,
                     longitude=p_lon,
-                    hpid=it.get("hpid"),
+                    hpid=_optional_text(it.get("hpid")),
                     is_open=is_open,
                     today_hours=today_hours,
                     break_hours=break_hours,
@@ -1424,11 +1569,11 @@ class MedicalFacilityClient:
                     name=name,
                     category="약국",
                     address=it.get("dutyAddr") or "",
-                    phone=it.get("dutyTel1"),
+                    phone=_optional_text(it.get("dutyTel1")),
                     distance_m=dist_m,
                     latitude=p_lat,
                     longitude=p_lon,
-                    hpid=it.get("hpid"),
+                    hpid=_optional_text(it.get("hpid")),
                     is_open=is_open,
                     today_hours=today_hours,
                     break_hours=break_hours,

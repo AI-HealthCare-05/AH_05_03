@@ -584,7 +584,7 @@ export function HealthAssistantDrawer({
         } else if (!hasRegionHint) {
           let guideText =
             "주변 의료시설(응급실·병원·약국)을 찾기 위한 현재 위치를 가져오지 못했습니다.\n\n" +
-            "💡 브라우저 주소창에서 위치 권한을 허용하셨음에도 계속 이 메시지가 뜬다면, **macOS [시스템 설정 > 개인정보 보호 및 보안 > 위치 서비스]에서 'Google Chrome'이 허용**되어 있는지 확인해 주세요.\n\n" +
+            "💡 기기 설정에서 위치 서비스를 켜고, 브라우저의 위치 권한도 허용되어 있는지 확인해 주세요.\n\n" +
             "또는 찾으시는 지역명(예: '중구 약국', '강남역 병원')을 입력해 주시면 바로 찾아드립니다!";
 
           if (errorReason === "timeout") {
@@ -1471,7 +1471,7 @@ export function HealthAssistantDrawer({
                     )}
 
                     {/* 응급 주의사항 배너 */}
-                    {msg.responseDraft?.emergency_notice && (
+                    {msg.responseDraft?.emergency_notice && !msg.responseDraft?.facility_search_draft && (
                       <div className="emergency-notice-banner" role="alert">
                         <strong>응급 주의 안내</strong>
                         <p>{msg.responseDraft.emergency_notice}</p>
