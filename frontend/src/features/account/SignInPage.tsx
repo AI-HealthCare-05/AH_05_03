@@ -23,9 +23,10 @@ function readResetToken(): { token: string; email?: string } | undefined {
   return { token, email: params.get("email") ?? undefined };
 }
 
-export function SignInPage() {
+export function SignInPage({ onResetComplete }: { onResetComplete?: () => void } = {}) {
   const { signIn } = useAuth();
   const [resetInfo, setResetInfo] = useState(readResetToken);
+  const [resetEmail] = useState(() => readResetToken()?.email);
   const [mode, setMode] = useState<AuthMode>(() => (resetInfo ? "reset-password" : "signin"));
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string>();
@@ -62,6 +63,7 @@ export function SignInPage() {
         // URL hash 정리
         window.history.replaceState(null, "", window.location.pathname + window.location.search);
         setResetInfo(undefined);
+        onResetComplete?.();
         setMessage("비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해 주세요.");
         setMode("signin");
       }
@@ -115,9 +117,10 @@ export function SignInPage() {
         ) : null}
 
         <AuthCard
+          key={`${mode}-${resetInfo?.email ?? resetEmail ?? invited ?? ""}`}
           mode={mode}
           working={working}
-          invitationEmail={resetInfo?.email ?? invited}
+          invitationEmail={resetInfo?.email ?? resetEmail ?? invited}
           onSubmit={submit}
           onSwitchMode={(targetMode) => {
             setError(undefined);
