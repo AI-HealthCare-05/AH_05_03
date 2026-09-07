@@ -147,35 +147,66 @@ main {
   font-size: 0.72rem;
 }
 
-/* 항목이 셋에서 여섯으로 늘었다(2026-09-03). 좁은 화면에서 줄바꿈이 나야 하고,
-   넘칠 때는 가로로 밀 수 있어야 한다 — 잘리면 마지막 항목에 영영 못 간다. */
+/* 항목이 셋에서 일곱으로 늘었다(2026-09-03). 좁은 화면에서 줄바꿈이 나야 하고,
+   넘칠 때는 가로로 밀 수 있어야 한다 — 잘리면 마지막 항목에 영영 못 간다.
+
+   **옅은 레일로 감싼다.** 활성 알약이 흰 헤더 위에 홀로 떠 있으면 "지금 어디"가
+   배경색 하나에만 실린다. 레일이 깔리면 활성 항목만 흰색으로 떠올라 대비가 한 겹
+   더 생긴다 — 좁은 화면에서 이미 쓰던 방식을 넓은 화면으로 올린 것이다.
+
+   `inline-flex` + `justify-self: center` 로 내용만큼만 차지한다. `flex` 로 두고
+   `justify-content: center` 를 주면 레일이 1fr 칸을 가로로 다 먹어서, 항목 일곱이
+   가운데 몰린 채 양옆으로 빈 띠가 길게 남는다. */
 .primary-navigation {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
+  justify-self: center;
+  gap: 2px;
   flex-wrap: wrap;
   max-width: 100%;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--blue-50);
 }
-.primary-navigation a,
-.navigation-future {
-  padding: 10px 14px;
-  border-radius: 11px;
+
+/* **이 규칙의 선언 블록이 통째로 비어 있었다.** `.primary-navigation a,` 뒤에 여는
+   중괄호가 없어서 선택자가 아래 `.active` 규칙에 얹혔고, 결과가 이랬다 —
+   일곱 항목이 **전부** 활성 색(`--blue-100`)을 쓰고, padding·radius 는 0 이라
+   파란 사각형들이 4px 간격으로 붙어 한 덩어리로 보였다. 지금 어디에 있는지를
+   메뉴가 말해 주지 못했다. */
+.primary-navigation a {
+  padding: 9px 14px;
+  border-radius: 10px;
   color: var(--muted-strong);
-  font-size: 0.92rem;
-  font-weight: 700;
-  text-decoration: none;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  font-size: 0.9rem;
+  font-weight: 650;
+  white-space: nowrap;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease;
 }
 
 .primary-navigation a:hover {
-  color: var(--blue-700);
-  background: var(--blue-50, #f1f5fd);
+  color: var(--ink);
+  /* 레일보다 밝게. 활성 항목의 흰색과 겹치지 않도록 반투명으로 둔다 — 완전한
+     흰색이면 마우스를 얹은 항목이 현재 위치처럼 보인다. */
+  background: rgba(255, 255, 255, 0.66);
 }
 
+/* 현재 위치. 색만으로 말하지 않는다 — 흰 바탕 + 얇은 테두리 + 그림자로 레일 위에
+   떠 있게 만들어, 색을 구분하기 어려운 사람에게도 형태가 남는다.
+   `aria-current="page"` 는 `NavLink` 가 이미 붙인다. */
 .primary-navigation a.active {
   color: var(--blue-700);
-  background: var(--blue-100);
+  background: var(--surface);
+  box-shadow:
+    0 1px 2px rgba(35, 61, 112, 0.12),
+    0 0 0 1px rgba(36, 99, 235, 0.16);
+  font-weight: 750;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary-navigation a { transition: none; }
 }
 
 .primary-navigation a.navigation-external {
@@ -2877,20 +2908,27 @@ main {
   .header-status > span { display: none; }
   .header-account { display: none; }
 
+  /* **균등 분할을 그만뒀다.** 항목이 셋일 때는 `grid-auto-columns: 1fr` 로 한 줄을
+     꽉 채우는 게 맞았는데, 일곱이 된 지금 320px 화면에서는 한 칸이 40px 남짓이라
+     "건강 데이터"가 글자째 뭉개진다. 자연 너비로 두고 가로로 민다 — 넓은 화면에서
+     내린 판단("잘리는 것보다 미는 편이 낫다")과 같다. */
   .primary-navigation {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
-    gap: 6px;
-    padding: 4px;
+    justify-self: stretch;
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
     border-radius: 12px;
-    background: var(--blue-50, #f1f5fd);
+    /* 레일이 4px 패딩이라 늘 보이는 스크롤바가 뜨면 알약을 눌러 버린다. 터치와
+       트랙패드로는 그대로 밀리고, 키보드는 탭으로 옮겨 다닌다. */
+    scrollbar-width: none;
   }
 
+  .primary-navigation::-webkit-scrollbar { display: none; }
+
   .primary-navigation a {
-    justify-content: center;
+    flex: 0 0 auto;
     text-align: center;
-    padding: 9px 6px;
+    padding: 9px 12px;
     font-size: 0.86rem;
   }
 
@@ -3824,7 +3862,27 @@ main {
 
 .assess-axis-title { margin: 1.5rem 0 0.35rem; font-size: 1.05rem; display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
 .assess-axis-note { margin: 0 0 0.9rem; color: var(--muted); font-size: 0.85rem; max-width: 78ch; }
-.assess-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 0.9rem; }
+/* 카드 격자.
+
+   **`align-items: start` 를 한 번 넣었다가 되돌렸다.** 접이를 펼칠 때 같은 줄이
+   같이 늘어나는 것을 막으려던 것인데, 부작용으로 **접힌 카드끼리도 키가 제각각**이
+   됐다 — 수치가 하나인 비만 카드와 둘에 안내문까지 있는 당뇨병 카드가 나란히 서면
+   눈에 띄게 어긋난다. 카드를 훑는 화면에서 그건 비싼 대가다.
+
+   대신 `grid-auto-rows` 로 **행의 최소 높이**를 준다. 접힌 카드는 전부 같은 키가
+   되고(stretch 가 행 높이를 채운다), 펼친 카드가 있는 줄만 그만큼 늘어난다.
+   `auto` 상한이 있어 내용이 넘치면 잘리지 않는다. */
+.assess-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 0.9rem;
+  /* **접힌 카드는 전부 같은 키다.** 15.5rem 으로 뒀을 때는 행 안에서만 맞고
+     행끼리는 달랐다(실측 323·362·294·248px) — 훑어 내려가면 계단처럼 어긋난다.
+     접힌 상태의 최대치(428px ≈ 26.75rem)를 최소 높이로 잡아 전부 같게 만든다.
+     362 → 376("더 넣으면 좋아지는 값" 두 줄) → 428(앞날 한 줄이 열세 장 전부에).
+     짧은 카드에 생기는 여백은 버튼을 바닥으로 밀어(`margin-top: auto`) 흡수한다. */
+  grid-auto-rows: minmax(26.75rem, auto);
+}
 
 .assess-card { border: 1px solid var(--line); border-left-width: 5px; border-radius: 12px; padding: 0.9rem 1.05rem; background: var(--surface); display: flex; flex-direction: column; gap: 0.45rem; }
 .assess-card header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; }
@@ -6315,3 +6373,442 @@ main {
   }
 }
 
+
+/* ---------------------------------------------------------------------------
+ * 테스트 프로필 + 예측 근거 자세히 보기
+ *
+ * 예측 데모(`app/apis/demo_routers.py` · `demo_style.py`)를 판정 화면으로 옮기면서
+ * 함께 가져온 스타일이다. **데모의 색 변수(`--lv0`~`--lv3`·`--low`·`--high`)는 안
+ * 가져왔다** — 같은 등급이 화면마다 다른 색이면 사용자가 색으로 등급을 읽는 법을
+ * 배우지 못한다. 위 `.assess-badge.level-*` 와 같은 토큰을 쓴다.
+ * ------------------------------------------------------------------------- */
+
+.assess-presets { margin-bottom: 1rem; padding: 0.9rem 1rem; border: 1px solid var(--line-soft); border-radius: 14px; background: var(--blue-50); }
+.assess-presets h3 { margin: 0 0 0.3rem; font-size: 0.95rem; }
+.assess-preset-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+.assess-preset {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.assess-preset:hover { color: var(--blue-700); border-color: var(--blue-500); }
+/* 고른 것은 색만으로 말하지 않는다 — 테두리와 굵기가 함께 바뀌어 색을 구분하기
+   어려운 사람도 어느 프로필이 켜져 있는지 읽을 수 있다. */
+.assess-preset.is-active { background: var(--blue-600); border-color: var(--blue-700); color: #fff; font-weight: 750; }
+.assess-preset-note { margin: 0.55rem 0 0; font-size: 0.8rem; color: var(--muted-strong); }
+
+/* 자세히 보기 모달. 카드 열 장을 한 화면에 세우므로 판정 근거 모달보다 넓다. */
+.detail-modal { max-width: 720px; }
+.detail-meta { margin: 0 0 0.55rem; font-size: 0.82rem; color: var(--muted); }
+.detail-cite { margin: 0.4rem 0 0; font-size: 0.75rem; line-height: 1.55; color: var(--muted); }
+.detail-peer { margin: 0.3rem 0 0; font-size: 0.88rem; }
+
+.detail-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 0.5rem; margin: 0 0 1.1rem; }
+.detail-tile { padding: 0.6rem 0.4rem 0.55rem; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface); text-align: center; }
+/* 경보 구간만 테두리로 띄운다. 열 장이 전부 강조되면 아무것도 강조가 아니다. */
+.detail-tile.flag { border-color: var(--danger); }
+.detail-tile em { display: block; font-style: normal; font-size: 0.72rem; font-weight: 650; color: var(--muted-strong); }
+.detail-tile .v { margin-top: 0.25rem; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.detail-tile .v small { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+.detail-tile .assess-badge { display: inline-block; margin-top: 0.35rem; font-size: 0.68rem; }
+
+.detail-condition { padding-top: 0.85rem; margin-top: 0.85rem; border-top: 1px solid var(--line-soft); }
+.detail-condition h4 { display: flex; align-items: center; gap: 0.45rem; margin: 0 0 0.4rem; font-size: 1rem; }
+.detail-risk { display: flex; align-items: baseline; gap: 0.5rem; }
+.detail-risk strong { font-size: 1.9rem; font-weight: 750; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.detail-risk strong small { font-size: 0.95rem; font-weight: 600; color: var(--muted); }
+
+/* 의학 기준 축. 눈금은 등급이 실제로 갈리는 25·50·75% 다 — 눈금과 판정이
+   어긋나면 게이지가 거짓말을 한다. */
+.detail-gauge { position: relative; height: 9px; margin: 0.7rem 0 0.3rem; border-radius: 999px; background: var(--line-soft); }
+.detail-gauge i { position: absolute; top: 0; left: 0; height: 100%; border-radius: 999px; }
+.detail-gauge i.lv0 { background: var(--safe); }
+.detail-gauge i.lv1 { background: var(--blue-500); }
+.detail-gauge i.lv2 { background: var(--danger-soft); }
+.detail-gauge i.lv3 { background: var(--danger); }
+.detail-gauge u { position: absolute; top: 0; width: 2px; height: 100%; background: var(--surface); }
+/* 전체 평균 표시. 내 위치(`b`)보다 얇고 낮게 둬서 둘을 혼동하지 않는다. */
+.detail-gauge em { position: absolute; top: -3px; width: 2px; height: 15px; background: var(--muted); }
+.detail-gauge b { position: absolute; top: -4px; width: 4px; height: 17px; border-radius: 2px; background: var(--ink); }
+.detail-zones { display: flex; font-size: 0.68rem; color: var(--muted); }
+.detail-zones span { text-align: center; }
+
+.detail-acc { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.7rem; padding-top: 0.55rem; border-top: 1px dashed var(--line-soft); font-size: 0.82rem; }
+.detail-acc .k { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); }
+.detail-acc .n { font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.detail-acc .sep { color: var(--line); }
+.assess-badge.good { background: var(--safe-soft); color: var(--safe); }
+.assess-badge.ok { background: var(--blue-50); color: var(--blue-700); }
+.assess-badge.weak { background: var(--danger-soft); color: var(--danger); }
+.assess-badge.lv0 { background: var(--safe-soft); color: var(--safe); }
+.assess-badge.lv1 { background: var(--blue-50); color: var(--blue-700); }
+.assess-badge.lv2 { background: var(--danger-soft); color: var(--danger); }
+.assess-badge.lv3 { background: var(--danger); color: #fff; }
+.assess-badge.low { background: var(--safe-soft); color: var(--safe); }
+.assess-badge.moderate { background: var(--blue-50); color: var(--blue-700); }
+.assess-badge.high { background: var(--danger-soft); color: var(--danger); }
+
+.detail-tech { margin-top: 0.6rem; font-size: 0.82rem; }
+.detail-tech summary { cursor: pointer; color: var(--blue-700); font-weight: 650; }
+.detail-factors { margin: 0.35rem 0 0; padding-left: 1.1rem; }
+.detail-factors .num { font-variant-numeric: tabular-nums; color: var(--muted-strong); }
+/* 모델이 받고도 쓰지 않은 입력. 경고가 아니라 사실이라 붉게 칠하지 않는다. */
+.detail-ignored { margin: 0.6rem 0 0; padding: 0.5rem 0.65rem; border-radius: 10px; background: var(--line-soft); font-size: 0.78rem; line-height: 1.55; color: var(--muted-strong); }
+
+@media (max-width: 640px) {
+  .detail-tiles { grid-template-columns: repeat(auto-fit, minmax(98px, 1fr)); }
+}
+
+/* ---------------------------------------------------------------------------
+ * 카드 안 근거 블록 — 예측 데모의 "모델 내부 값" 을 카드로 옮긴 자리.
+ *
+ * 앞면은 정본 엔진의 답만 싣고, ML 확률·게이지·앵커·정확도는 이 접이 안에 둔다.
+ * 그래야 배지와 큰 숫자가 서로 다른 말을 하지 않는다 (`Evidence.tsx` 머리말).
+ * ------------------------------------------------------------------------- */
+
+.assess-card-evidence { margin-top: 0.15rem; border-top: 1px dashed var(--line-soft); padding-top: 0.5rem; }
+.assess-card-evidence > summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--blue-700);
+  /* 44px 터치 타깃. 접이 화살표만 누르게 두면 손가락으로는 못 연다. */
+  padding: 0.35rem 0;
+  list-style-position: inside;
+}
+.assess-card-evidence > summary:hover { color: var(--blue-800); }
+.assess-evidence { margin-top: 0.35rem; display: flex; flex-direction: column; gap: 0.3rem; }
+/* 카드 안이라 자세히 보기 모달보다 한 단 작게. 같은 클래스를 쓰는 값들이라
+   여기서만 줄인다 — 모달 쪽 크기는 그대로 둔다. */
+.assess-evidence .detail-risk strong { font-size: 1.45rem; }
+.assess-evidence .detail-peer { font-size: 0.82rem; }
+.assess-evidence .detail-acc { font-size: 0.76rem; }
+.assess-evidence .detail-acc .n { font-size: 0.92rem; }
+.assess-evidence .detail-factors { font-size: 0.78rem; }
+
+/* 엔진 태그가 등급 옆으로 올라왔다 — 카드를 훑는 동안 무엇이 이 등급을 정했는지
+   보여야 한다. 예전에는 "판정 근거" 버튼 안에 있어서 열어야 알 수 있었다. */
+.assess-substatus { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+
+/* 개요 타일 — 등급이 주인공이고 숫자는 참고다. */
+.detail-tile small { display: block; margin-top: 0.2rem; font-size: 0.68rem; color: var(--muted); }
+.detail-tile .v { font-size: 1.1rem; }
+.detail-tile .v.is-none { color: var(--muted); font-weight: 600; }
+.detail-condition h4 .assess-badge { font-size: 0.7rem; }
+
+/* ---------------------------------------------------------------------------
+ * 카드 정돈 — 크기가 제각각이던 것을 맞춘다
+ *
+ * 행 높이는 `.assess-cards` 의 `grid-auto-rows` 가 잡고, 여기서는 **카드 안에서
+ * 무엇이 어디에 서는지**를 고정한다. 카드마다 수치 개수와 안내문 유무가 달라서,
+ * 자연 흐름에 맡기면 "판정 근거 전체" 버튼이 카드마다 다른 높이에 뜬다.
+ * ------------------------------------------------------------------------- */
+
+/* 근거 접이와 버튼을 바닥으로 민다. 그 위 내용이 짧든 길든 버튼 줄이 맞는다. */
+.assess-card-evidence { margin-top: auto; }
+.assess-card > .assess-why-button { margin-top: auto; }
+.assess-card-evidence + .assess-why-button { margin-top: 0.35rem; }
+
+/* 수치 칸. 한 줄에 최대 셋까지 두고 넘치면 접는다 — 넷이 한 줄에 들어가면 글자가
+   너무 작아져 읽히지 않는다(지방간·대사증후군 카드가 그랬다). */
+.assess-figures { flex-wrap: wrap; gap: 0.45rem 0.9rem; }
+.assess-figure { min-width: 4.5rem; }
+
+/* 등급 막대와 부제 사이를 조금 벌린다. 붙어 있으면 막대가 부제의 밑줄처럼 읽힌다. */
+.assess-card .level-bar { margin-bottom: 0.15rem; }
+
+/* "…를 넣으면 정확해져요" 는 안내지 경고가 아니다. 카드 흐름에서 한 단 내린다. */
+.assess-need { font-size: 0.78rem; color: var(--muted-strong); }
+
+/* ---------------------------------------------------------------------------
+ * 수치가 가리키는 앞날 — 매트릭스 카드
+ *
+ * 신호 하나가 네 줄(이름·측정값·효과·출처)이라 신호 일곱이면 스물여덟 줄이었다.
+ * 판정 카드와 같은 격자에 좁게 끼어 있어서 더 읽기 어려웠다.
+ *
+ * 셋을 바꿨다 — ① 격자를 따로 넓게, ② 무게를 색이 아니라 점 세 개로,
+ * ③ 출처·인과는 접이 안으로.
+ * ------------------------------------------------------------------------- */
+
+/* 넷뿐이고 내용이 길다. 판정 카드용 최소 행 높이와 싸우지 않게 격자를 따로 둔다. */
+.assess-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
+  gap: 0.9rem;
+  /* 넷을 `align-items: start` 로 두었더니 한 줄 안에서 키가 제각각이었다
+     (실측 507·280·280·280px). 기여 신호 수가 카드마다 달라서 생기는 차이인데,
+     그걸 그대로 두면 "짧은 카드는 덜 중요하다" 로 읽힌다. 줄 단위로 맞춘다. */
+  align-items: stretch;
+}
+
+.assess-matrix { gap: 0.55rem; }
+/* 줄 높이를 맞추면 짧은 카드에 빈 자리가 생긴다. 그 여백은 **마지막 줄 위**로
+   보낸다 — 권고문이 카드마다 다른 높이에 뜨면 눈이 매번 다시 찾는다. */
+.assess-matrix .assess-recommend { margin-top: auto; }
+.assess-matrix .assess-label { color: var(--muted-strong); font-size: 0.86rem; }
+
+.assess-contributors { gap: 0.6rem; }
+.assess-contributors li {
+  gap: 0.15rem;
+  padding: 0.5rem 0.65rem;
+  border-left-width: 3px;
+  border-radius: 0 8px 8px 0;
+  background: var(--blue-50);
+}
+/* 무게가 셋인 신호만 배경을 바꿔 눈에 걸리게. 전부 칠하면 강조가 사라진다. */
+.assess-contributors li.weight-3 { background: var(--danger-soft); }
+
+.assess-contrib-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.assess-contrib-label { font-size: 0.85rem; }
+
+/* 무게 — 점 셋. 색만으로 말하지 않는다. */
+.assess-contrib-weight { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.assess-contrib-weight i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.assess-contrib-weight i.on { background: var(--muted-strong); }
+.weight-3 .assess-contrib-weight i.on { background: var(--danger); }
+.weight-2 .assess-contrib-weight i.on { background: var(--blue-600); }
+
+.assess-contrib-detail { font-size: 0.79rem; font-variant-numeric: tabular-nums; }
+.assess-contrib-effect { font-size: 0.79rem; }
+
+.assess-contrib-source { margin-top: 0.2rem; font-size: 0.72rem; color: var(--muted); }
+.assess-contrib-source > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted-strong);
+  font-weight: 600;
+  padding: 0.15rem 0;
+}
+.assess-contrib-source > span { display: block; margin-top: 0.2rem; line-height: 1.5; }
+
+/* 인과인지 동반 지표인지 — 근거의 세기를 한 단어로. */
+.assess-causal { padding: 0.05rem 0.35rem; border-radius: 4px; font-size: 0.66rem; font-weight: 700; }
+.assess-causal.is-causal { background: var(--safe-soft); color: var(--safe); }
+.assess-causal.is-marker { background: var(--line-soft); color: var(--muted-strong); }
+
+/* 화면 낭독기 전용. 점 셋은 aria-hidden 이라 대체 텍스트가 필요하다. */
+.assess-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .assess-matrix-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------------------------------------------------------------------------
+ * 만성질환 발병 예측 패널 — 상세 보강
+ * ------------------------------------------------------------------------- */
+
+/* 확진 카드. 곡선 대신 "다음 단계" 를 적는다 — 앞날이 아니라 지금이 답이다. */
+.suspect-now {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+/* 장기 근거 — 같은 등급이라도 믿을 만한 정도가 다르다. */
+.suspect-evidence {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.4rem 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.suspect-evidence-label { font-weight: 700; letter-spacing: 0.02em; color: var(--muted-strong); }
+.suspect-evidence-dots { display: inline-flex; gap: 2px; }
+.suspect-evidence-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--line); }
+.suspect-evidence-dots i.on { background: var(--blue-600); }
+
+.suspect-panel h3 .assess-muted { font-size: 0.85rem; font-weight: 600; }
+
+/* ---------------------------------------------------------------------------
+ * 카드 앞면의 두 엔진 — ML 예측 → 규칙 판정
+ *
+ * 확률이 접이 안에만 있으면 카드를 보는 동안 모델이 무엇을 말했는지 알 수 없다.
+ * 두 엔진이 같이 도는데 하나만 보이던 셈이다. 화살표로 **순서**를 보인다 —
+ * ML 이 먼저 훑고, 검사값이 있는 칸은 규칙이 그 위에서 단계까지 확정한다.
+ * ------------------------------------------------------------------------- */
+
+.assess-engines {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+  margin: 0.1rem 0 0.1rem;
+}
+.assess-engine-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  min-width: 0;
+}
+.assess-engine-step small { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.02em; opacity: 0.75; }
+.assess-engine-step b { font-size: 0.86rem; font-weight: 700; overflow-wrap: anywhere; }
+/* ML 칸은 언제나 같은 자리·같은 폭이라 카드를 훑을 때 숫자가 세로로 정렬된다. */
+.assess-engine-step.is-ml { flex: none; width: 4.6rem; background: var(--blue-50); color: var(--blue-800); }
+.assess-engine-step.is-ml b { font-variant-numeric: tabular-nums; }
+.assess-engine-step.is-ml.is-none { background: var(--line-soft); color: var(--muted); }
+.assess-engine-step.is-verdict { flex: 1; background: var(--line-soft); color: var(--ink); }
+.assess-engine-step.is-verdict.engine-e1 { background: var(--safe-soft); color: var(--safe); }
+.assess-engine-step.is-verdict.engine-e3 { background: var(--blue-100); color: var(--blue-800); }
+.assess-engine-arrow { align-self: center; color: var(--muted); font-size: 0.8rem; flex: none; }
+
+/* ---------------------------------------------------------------------------
+ * "더 넣으면 무엇이 좋아지나" — 질환마다 두 줄
+ *
+ * 판정(등급이 바뀔 수 있다)과 예측(확률만 정밀해진다)을 태그로 가른다. 왼쪽 태그
+ * 폭을 고정해서 두 줄의 본문이 같은 자리에서 시작하게 둔다 — 어긋나면 훑을 때
+ * 눈이 매번 왼쪽 끝을 다시 찾는다.
+ * ------------------------------------------------------------------------- */
+.assess-needs { display: grid; gap: 0.28rem; }
+.assess-need { display: flex; align-items: flex-start; gap: 0.4rem; }
+.assess-need-tag {
+  flex: none;
+  margin-top: 0.1rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+}
+/* 색은 하나(파랑)로 두고 **채움 정도**로 가른다. 등급을 바꿀 수 있는 쪽이 채운
+   쪽이다. 여기서 빨강을 쓰면 "값을 안 넣은 것" 이 경고로 읽히는데, 검진에서 안 한
+   검사가 있는 건 정상이다. */
+.assess-need.is-decisive .assess-need-tag { background: var(--blue-600); color: #fff; }
+.assess-need.is-refining .assess-need-tag { background: var(--blue-100); color: var(--blue-800); }
+/* 다 넣은 카드도 이 자리를 비우지 않는다 — 비우면 카드마다 높이가 달라진다. */
+.assess-need.is-done { color: var(--muted); }
+
+/* ---------------------------------------------------------------------------
+ * 만성질환 발병 예측 — 세 장의 키를 맞춘다
+ *
+ * 카드마다 붙는 블록이 다르다(궤적 두 줄 · 기준 초과 한 줄 · 확진 안내). 그대로
+ * 두면 한 줄에 선 세 장의 아래 끝이 제각각이라 "왜 이건 짧지" 를 읽는 사람이
+ * 해석하게 된다. 행 높이를 맞추고, 마지막 블록을 바닥으로 민다.
+ * ------------------------------------------------------------------------- */
+.suspect-grid { align-items: stretch; grid-auto-rows: 1fr; }
+.suspect-card { height: 100%; }
+.suspect-card > .suspect-series,
+.suspect-card > .suspect-prevalence,
+.suspect-card > .suspect-now,
+.suspect-card > .suspect-none { margin-top: auto; }
+
+/* ---------------------------------------------------------------------------
+ * 앞날 한 줄의 두 종류
+ *
+ * 같은 자리에 서지만 다른 물음이다. 발병 궤적(비가역 셋)은 "지금 없다면 새로 생길
+ * 확률", 유병 곡선(열 질환 전부)은 "그 나이에 기준을 넘고 있을 확률". 배경을
+ * 갈라 두면 카드를 훑을 때 두 숫자를 같은 것으로 읽지 않는다.
+ * ------------------------------------------------------------------------- */
+.assess-trajectory-line.is-prevalence { background: var(--line-soft); }
+.assess-trajectory-line.is-prevalence .assess-trajectory-step b { font-size: 0.98rem; color: var(--muted-strong); }
+
+/* ---------------------------------------------------------------------------
+ * 검진표 인식 진행
+ *
+ * 한 줄 문구였을 때는 7~20초 동안 화면에서 움직이는 것이 없었다. 멈춘 것과 도는
+ * 것을 구분할 방법이 사용자에게 없다. 단계·경과 초·흘러온 글 셋을 둔다 — 전부
+ * 실제 신호이고 지어낸 진행률이 아니다.
+ * ------------------------------------------------------------------------- */
+.ocr-progress {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--blue-100);
+  border-radius: 12px;
+  background: var(--blue-50);
+}
+.ocr-progress-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.ocr-progress-head strong { font-size: 0.88rem; color: var(--blue-800); }
+.ocr-progress-elapsed { font-size: 0.74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* 부정형 막대. 채워지는 퍼센트를 지어내지 않는다 — 전체 글자 수를 미리 알 수 없고,
+   임의의 목표치를 두면 90%에서 멈춰 있는 막대가 된다. */
+.ocr-progress-bar { position: relative; height: 3px; border-radius: 999px; background: var(--blue-100); overflow: hidden; }
+.ocr-progress-bar i { position: absolute; inset: 0 auto 0 0; width: 38%; border-radius: 999px; background: var(--blue-600); animation: ocr-slide 1.35s ease-in-out infinite; }
+@keyframes ocr-slide {
+  0% { left: -38%; }
+  100% { left: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ocr-progress-bar i { animation: none; left: 0; width: 100%; opacity: 0.45; }
+}
+
+.ocr-progress-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.15rem 0.5rem; }
+.ocr-progress-steps li { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--muted); }
+.ocr-step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex: none; }
+.ocr-progress-steps li.is-done { color: var(--muted-strong); }
+.ocr-progress-steps li.is-done .ocr-step-dot { background: var(--safe); }
+.ocr-progress-steps li.is-at { color: var(--blue-800); font-weight: 700; }
+.ocr-progress-steps li.is-at .ocr-step-dot { background: var(--blue-600); box-shadow: 0 0 0 3px rgba(36, 99, 235, 0.18); }
+
+.ocr-progress-detail { margin: 0; font-size: 0.76rem; color: var(--muted-strong); line-height: 1.6; }
+.ocr-progress-restart { margin: 0; font-size: 0.76rem; color: var(--danger); line-height: 1.6; }
+
+/* 흘러온 글의 꼬리. 자기 검진표의 글자가 보이는 것이 "지금 읽고 있다" 를 가장
+   확실하게 말한다. 높이를 고정해 패널이 검진표보다 길어지지 않게 둔다. */
+.ocr-progress-stream { display: grid; gap: 0.25rem; }
+.ocr-stream-count { margin: 0; font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ocr-progress-stream pre {
+  margin: 0;
+  max-height: 4.6rem;
+  overflow: hidden;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--blue-100);
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: var(--muted-strong);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---------------------------------------------------------------------------
+ * 판정 근거 — 카드 위에 겹쳐 띄운다
+ *
+ * 접이(`<details>`)로 카드 안에서 펼치던 때는 격자에서 한 장이 펼쳐지면 같은 줄
+ * 카드까지 키가 늘고 아래가 통째로 밀렸다. 근거 블록에는 게이지·표·차트가 있어서
+ * 카드 하나가 화면 두 개 길이가 된다.
+ * ------------------------------------------------------------------------- */
+.assess-evidence-open {
+  margin-top: auto;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--blue-100);
+  border-radius: 8px;
+  background: var(--blue-50);
+  color: var(--blue-700);
+  font-size: 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: left;
+}
+.assess-evidence-open:hover { border-color: var(--blue-500); color: var(--blue-800); }
+
+.verdict-modal-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.7rem; }
+.verdict-modal-head strong { font-size: 0.95rem; }

@@ -55,6 +55,10 @@ services:
 
   migrate:
     image: ieobom-dev-fastapi:current
+    # 런타임 이미지에는 uv 가 없다. `app/Dockerfile` 이 멀티스테이지가 되면서
+    # uv 는 deps 스테이지에만 살고, venv 가 PATH 앞에 있어 `alembic` 을 그냥 부른다.
+    # `uv run` 을 남겨 두면 "executable file not found" 로 죽고, 배포 스크립트가
+    # `set -Eeuo pipefail` 이라 그 줄에서 배포 전체가 멈춘다.
     command: ["alembic", "upgrade", "head"]
     environment: &app_environment
       ENV: dev
@@ -98,6 +102,12 @@ services:
       dockerfile: app/Dockerfile
     restart: unless-stopped
     environment: *app_environment
+    # 위험도 모델은 순수 JSON이라 이미지에 넣지 않고 마운트한다 (`app/Dockerfile` 은
+    # 규칙 엔진만 COPY 한다). **이 줄이 없으면 규칙 엔진만 살아 있고 ML 판정이 통째로
+    # 죽는다** — `RiskModelRegistry._resolve` 가 `/app/models` 도 저장소 폴백
+    # `/app/modeling/artifacts/models` 도 못 찾아 `available=False` 가 되고, 화면에는
+    # "위험도 모델이 적재되지 않았습니다" 만 뜬다. 실제로 그 상태로 배포돼 있었다.
+    # 경로는 이 파일 기준 상대경로다 (compose 는 compose 파일 위치를 기준으로 푼다).
     volumes:
       - ../../modeling/artifacts/models:/app/models:ro
     networks:
@@ -107,12 +117,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # **`/api/openapi.json` 이 아니라 `/api/health` 다.** 전자는 모델이 하나도 안
+    # 실려도 200 이라, 위 마운트가 빠진 것을 배포 게이트가 못 잡았다. 후자는
+    # `models` 로 적재 여부를 드러내므로 그 값까지 본다 — 볼륨이 안 붙으면 컨테이너가
+    # healthy 가 되지 않고, nginx 가 뜨지 않아 배포가 그 자리에서 실패한다.
+    # 조용히 반쪽짜리로 도는 것보다 배포가 큰 소리로 죽는 쪽이 싸다.
     healthcheck:
       test:
         - CMD
         - python
         - -c
-        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/openapi.json', timeout=3)
+        - "import json,urllib.request,sys; sys.exit(0 if json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3))['models'] else 1)"
       interval: 10s
       timeout: 5s
       retries: 12

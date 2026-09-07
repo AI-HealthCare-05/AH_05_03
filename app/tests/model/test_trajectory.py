@@ -189,23 +189,23 @@ def test_missing_sex_or_age_outside_table_gives_none() -> None:
 
 
 def test_horizons_truncate_at_age_cap() -> None:
-    """지평이 5·10년이라 **75세가 마지막 경계**다.
+    """지평이 1~5년이라 **79세가 마지막 경계**다.
 
-    표가 80세에서 끝나므로 76세는 5년 뒤가 이미 자료 밖이고, 그때는 궤적을 내지
+    표가 80세에서 끝나므로 80세는 1년 뒤가 이미 자료 밖이고, 그때는 궤적을 내지
     않는다. 없는 자료를 외삽해 숫자를 만드는 것보다 "이 나이대는 낼 수 없다" 가 낫다.
     """
     baseline = _baseline()
     at_70 = project(0.3, 70, "M", baseline)
     assert at_70 is not None
-    assert at_70["horizons_years"] == [5, 10]
+    assert at_70["horizons_years"] == [1, 2, 3, 4, 5]
     assert at_70["truncated_at_age"] is None
 
-    at_75 = project(0.3, 75, "M", baseline)
-    assert at_75 is not None
-    assert at_75["horizons_years"] == [5], "75세는 5년만 자료 안에 든다"
-    assert at_75["truncated_at_age"] == AGE_CAP
+    at_77 = project(0.3, 77, "M", baseline)
+    assert at_77 is not None
+    assert at_77["horizons_years"] == [1, 2, 3], "77세는 3년까지만 자료 안에 든다"
+    assert at_77["truncated_at_age"] == AGE_CAP
 
-    assert project(0.3, 76, "M", baseline) is None, "76세는 5년 뒤가 이미 표 밖이다"
+    assert project(0.3, 80, "M", baseline) is None, "80세는 1년 뒤가 이미 표 밖이다"
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +265,7 @@ def test_gate_order() -> None:
     assert _gate(config=None) == tj.STATUS_UNAVAILABLE
     assert _gate(config=TrajectoryConfig(None)) == tj.STATUS_UNAVAILABLE
     assert _gate(judgement_met=True, medical_level="높음") == tj.STATUS_ALREADY_MET
-    assert _gate(age=76.0, medical_level="높음") == tj.STATUS_AGE_OUT_OF_RANGE
+    assert _gate(age=80.0, medical_level="높음") == tj.STATUS_AGE_OUT_OF_RANGE
     assert _gate(age=75.0, medical_level="높음") == tj.STATUS_PROJECTED
     assert _gate(medical_level="낮음", peer_percentile=50.0) == tj.STATUS_BELOW_GATE
     assert _gate(medical_level="낮음", peer_percentile=70.0) == tj.STATUS_PROJECTED
@@ -336,7 +336,7 @@ def test_served_cards_carry_trajectory_only_where_it_applies() -> None:
         assert len(values) == len(card.trajectory.horizons_years) == len(HORIZONS)
         assert all(0.0 <= v <= 1.0 for v in values)
         assert all(b >= a for a, b in zip(values, values[1:], strict=False))
-        assert values[-1] > values[0], f"{key}: 10년 확률이 1년과 같다 — 표가 평평하다"
+        assert values[-1] > values[0], f"{key}: 5년 확률이 1년과 같다 — 표가 평평하다"
         assert card.trajectory.mortality_corrected is True
         assert card.trajectory.caveats and card.trajectory.evidence
         # 의심 카드는 동년배보다 위에 있어야 말이 된다

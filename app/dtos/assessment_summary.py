@@ -27,8 +27,10 @@ from pydantic import Field
 
 from app.dtos.base import BaseSerializerModel
 from app.dtos.predictions import (
+    MedicalRisk,
     ModelAccuracy,
     OnsetTrajectory,
+    PrevalenceTrajectory,
     RiskFactor,
     RiskPredictionRequest,
     RuleAnchor,
@@ -111,12 +113,26 @@ class VerdictReference(BaseSerializerModel):
     학회 기준으로 몇 %가 넘었는가.
     """
 
+    model_target: str | None = Field(
+        default=None,
+        description="이 확률을 낸 ML 번들의 타깃 이름. 카드 키와 다를 수 있다 (liver → liver_enzyme_high)",
+    )
     probability: float | None = None
     peer_percentile: float | None = None
     peer_group: str | None = None
     peer_median: float | None = None
     peer_ratio: float | None = Field(default=None, description="같은 집단 중간값 대비 배수")
     medical_level: str | None = None
+    medical: MedicalRisk | None = Field(
+        default=None,
+        description=(
+            "의학 기준 등급 묶음. `medical_level` 은 이 안의 `level` 하나다.\n\n"
+            "**등급 문자열만으로는 게이지를 그릴 수 없어서 전체를 싣는다.** 자세히 보기가 "
+            "'이 점수대 100명 중 몇 명' 과 전체 평균 대비 배수를 함께 보여주는데, 그 재료가 "
+            "`rate`·`basis`·`baseline`·`lift` 다. 예측 데모(`/api/demo`)가 `/predictions/risk` 를 "
+            "따로 불러 이 값을 쓰고 있었고, 데모를 판정 화면에 합치면서 여기로 옮겼다."
+        ),
+    )
     model_auroc: float | None = None
     tier: str | None = None
     accuracy: ModelAccuracy | None = Field(default=None, description="이 숫자를 얼마나 믿어도 되는가")
@@ -134,6 +150,14 @@ class VerdictReference(BaseSerializerModel):
         default=None, description="2단계 발병 궤적. 1단계가 의심한 비가역 질환(당뇨·고혈압·신기능)에만 있다"
     )
     trajectory_status: str | None = Field(default=None, description="궤적이 없으면 왜 없는지. `TrajectoryStatus` 값")
+    prevalence_trajectory: PrevalenceTrajectory | None = Field(
+        default=None,
+        description=(
+            "'그 나이가 됐을 때 기준을 넘고 있을 확률'. 발병 궤적과 **다른 물음**이라 "
+            "열 질환 전부에 있다. 확률을 표시하지 않기로 한 질환(ADR-009 §4)과 이미 "
+            "기준을 넘은 카드에서는 지운다 — 같은 확률이 다른 이름으로 나가면 안 된다"
+        ),
+    )
 
 
 class DiseaseVerdictOut(BaseSerializerModel):

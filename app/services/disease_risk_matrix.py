@@ -57,6 +57,21 @@ DISEASES: dict[str, str] = {
     "htn_risk": "고혈압",
 }
 
+
+def risk_title(name: str) -> str:
+    """이 축의 카드 제목. **화면이 그대로 그린다**(`MatrixCard` 의 `<h3>`).
+
+    "위험" 을 붙이는 이유가 있다. 이 축은 "수치 하나 → 여러 질환의 앞날" 이고, 바로
+    위 축에는 같은 장기가 **지금 상태**로 한 번 더 서 있다 — 콩팥이 "신기능 확인
+    필요"(현재)와 "만성콩팥병 위험"(앞날)으로 갈린다. 이름이 같으면 사용자가 두
+    카드를 같은 것으로 읽고, 실제로 그 질문을 받았다.
+
+    섹션 제목("수치가 가리키는 앞날")이 축을 말해 주지만 카드는 혼자 보이는
+    자리도 있다 — 기록 화면의 저장본과 홈의 요약이다.
+    """
+    return f"{name} 위험"
+
+
 # 이미 진단받은 질환은 위험을 세지 않는다. 진단자에게 "위험 높음" 은 아무 정보가 아니다.
 _ALREADY_DIAGNOSED = {
     "dm_risk": "has_diabetes",
@@ -862,7 +877,7 @@ def _readable(profile: dict[str, Any], disease: str) -> tuple[list[str], list[st
 
 def _insufficient_result(disease: str, name: str, absent: list[str]) -> dict[str, Any]:
     return {
-        "category": disease,
+        "category": risk_title(name),
         "risk_level": RiskLevel.INSUFFICIENT_DATA.value,
         "sub_status": "정보 부족",
         "display_label": f"{name} 위험을 볼 수 있는 값이 하나도 없어요.",
@@ -880,7 +895,7 @@ def _insufficient_result(disease: str, name: str, absent: list[str]) -> dict[str
 
 def _diagnosed_result(disease: str, name: str) -> dict[str, Any]:
     return {
-        "category": disease,
+        "category": risk_title(name),
         "risk_level": RiskLevel.INSUFFICIENT_DATA.value,
         "sub_status": "이미 진단됨",
         "display_label": f"{name}은(는) 이미 진단받으셨다고 하셨어요.",
@@ -942,9 +957,12 @@ def assess_disease_risks(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
             reason = "입력한 값 중에서 이 질환을 가리키는 신호가 잡히지 않았습니다."
 
         results[disease] = {
-            "category": disease,
+            "category": risk_title(name),
             "risk_level": level.value,
-            "sub_status": f"위험 신호 {len(contributors)}개 (가중 {score}점)",
+            # **"가중 N점" 을 뺐다.** 내부 점수라 사용자가 읽을 자가 없다 — 4점이
+            # 큰 값인지 작은 값인지 화면 어디에도 없었다. 숫자는 `score` 필드에
+            # 그대로 나가므로 필요한 쪽은 거기서 읽는다.
+            "sub_status": f"위험 신호 {len(contributors)}개",
             "display_label": _LABEL[level].format(name=name),
             "reason": reason,
             "input_values": {k: v for c in contributors for k, v in c["values"].items()},

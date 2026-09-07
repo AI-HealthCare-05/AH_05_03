@@ -231,7 +231,7 @@ BRFSS는 저장소가 이미 채택 보류로 결론 낸 자료다([09번](09_ch
 | OCR 회귀 채점 이미지 | 이미 구현돼 돌아간다. 가짜 수치로 검진표를 그리고 정답을 manifest에 남긴다 | `frontend/scripts/make-fixtures.ts` |
 | API 계약 테스트 프로필 | 현재 방식 그대로. 필요한 건 다양성이 아니라 경계 케이스 | `app/tests/prediction_apis/` |
 | 부하 테스트 프로필 | 나이·성별·BMI 무작위 + **결측 조합 커버리지**를 노린다 | 신규 `scripts/loadtest/` |
-| 데모 프리셋 | "가상의 예시입니다" 문구를 화면에 고정 노출 | `app/apis/demo_routers.py` |
+| 테스트 프로필 | "학회 기준에 맞춘 예시 수치" 문구를 프리셋 바에 고정 노출 | `frontend/src/features/assessment/presets.ts` |
 | 파이프라인 스모크용 소형 CSV | 200행. `source`에 `synthetic_smoke` 표시 | `modeling/data/build_unified.py` |
 | **불균형 대응 — 재표본이 아니라 임계값 이동** | `choose_threshold`의 Youden J를 목표 PPV 또는 상위 k% 예산으로 바꾼다 | `modeling/train_chronic_disease_models.py:211` |
 | 역학 모형 기반 인구 시뮬레이션 | 개인 행을 만들지 않는다. 공개 집계 유병률로 하는 산수 | `modeling/counterfactual.py` 패턴 참고 |

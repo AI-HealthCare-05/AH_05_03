@@ -1,0 +1,531 @@
+{
+  "horizon_months": 60,
+  "event": "all-cause death within 5 years of the interview",
+  "not_an_onset_model": "사건은 사망이다. '그 병에 걸릴 확률' 이 아니다.",
+  "usable_cycles": [
+    "2005_2006",
+    "2007_2008",
+    "2009_2010",
+    "2011_2012",
+    "2013_2014"
+  ],
+  "dropped_cycles": {
+    "2015_2016": "60개월을 채운 응답자 비율이 절반 미만",
+    "2017_2018": "60개월을 채운 응답자 비율이 절반 미만"
+  },
+  "holdout_cycle": "2013_2014",
+  "linked_rows": 29305,
+  "labelled_rows": 29298,
+  "censored_dropped": 7,
+  "positives": 1888,
+  "tiers": [
+    {
+      "tier": "basic",
+      "model": "xgboost",
+      "trained_rows": 23395,
+      "holdout_rows": 5903,
+      "holdout_cycle": "2013_2014",
+      "features": {
+        "numeric": [
+          "age",
+          "bmi",
+          "self_rated_health",
+          "height_cm",
+          "waist_cm",
+          "alcohol_days_per_year",
+          "moderate_min_per_week",
+          "vigorous_min_per_week",
+          "sedentary_min_per_day",
+          "sleep_hours",
+          "sbp",
+          "dbp",
+          "waist_height_ratio"
+        ],
+        "categorical": [
+          "sex",
+          "smoking_status"
+        ]
+      },
+      "five_year": {
+        "n": 5903,
+        "positives": 373,
+        "prevalence": 0.0632,
+        "auroc": 0.8759,
+        "auprc": 0.4193,
+        "auprc_lift": 6.64,
+        "brier": 0.0457,
+        "brier_skill": 0.2282,
+        "ece": 0.0068,
+        "mce": 0.0204,
+        "calibration_slope": 0.996,
+        "calibration_intercept": 0.052,
+        "reliability": [
+          {
+            "n": 591,
+            "predicted": 0.003,
+            "observed": 0.0034
+          },
+          {
+            "n": 590,
+            "predicted": 0.0045,
+            "observed": 0.0034
+          },
+          {
+            "n": 590,
+            "predicted": 0.0061,
+            "observed": 0.0051
+          },
+          {
+            "n": 590,
+            "predicted": 0.0087,
+            "observed": 0.0119
+          },
+          {
+            "n": 591,
+            "predicted": 0.0128,
+            "observed": 0.0203
+          },
+          {
+            "n": 590,
+            "predicted": 0.0197,
+            "observed": 0.0136
+          },
+          {
+            "n": 590,
+            "predicted": 0.0322,
+            "observed": 0.0373
+          },
+          {
+            "n": 590,
+            "predicted": 0.057,
+            "observed": 0.0678
+          },
+          {
+            "n": 590,
+            "predicted": 0.1157,
+            "observed": 0.1034
+          },
+          {
+            "n": 591,
+            "predicted": 0.3451,
+            "observed": 0.3655
+          }
+        ],
+        "operating_points": {
+          "top_5pct": {
+            "threshold": 0.297398,
+            "flag_rate": 0.0501,
+            "sensitivity": 0.3941,
+            "specificity": 0.9731,
+            "ppv": 0.4966,
+            "npv": 0.9597,
+            "f1": 0.4395,
+            "mcc": 0.4093,
+            "balanced_accuracy": 0.6836,
+            "accuracy": 0.9365,
+            "lift": 7.86
+          },
+          "top_10pct": {
+            "threshold": 0.172714,
+            "flag_rate": 0.1001,
+            "sensitivity": 0.5791,
+            "specificity": 0.9322,
+            "ppv": 0.3655,
+            "npv": 0.9704,
+            "f1": 0.4481,
+            "mcc": 0.4144,
+            "balanced_accuracy": 0.7556,
+            "accuracy": 0.9099,
+            "lift": 5.78
+          },
+          "top_20pct": {
+            "threshold": 0.077184,
+            "flag_rate": 0.2001,
+            "sensitivity": 0.7426,
+            "specificity": 0.8365,
+            "ppv": 0.2345,
+            "npv": 0.9797,
+            "f1": 0.3565,
+            "mcc": 0.3522,
+            "balanced_accuracy": 0.7896,
+            "accuracy": 0.8306,
+            "lift": 3.71
+          },
+          "max_mcc": {
+            "criterion": "mcc",
+            "threshold": 0.265462,
+            "flag_rate": 0.0598,
+            "sensitivity": 0.4504,
+            "specificity": 0.9665,
+            "ppv": 0.4759,
+            "npv": 0.9631,
+            "f1": 0.4628,
+            "mcc": 0.4278,
+            "balanced_accuracy": 0.7085,
+            "accuracy": 0.9339,
+            "lift": 7.53
+          },
+          "max_f1": {
+            "criterion": "f1",
+            "threshold": 0.265462,
+            "flag_rate": 0.0598,
+            "sensitivity": 0.4504,
+            "specificity": 0.9665,
+            "ppv": 0.4759,
+            "npv": 0.9631,
+            "f1": 0.4628,
+            "mcc": 0.4278,
+            "balanced_accuracy": 0.7085,
+            "accuracy": 0.9339,
+            "lift": 7.53
+          },
+          "ppv_30": {
+            "target_ppv": 0.3,
+            "threshold": 0.127349,
+            "flag_rate": 0.1337,
+            "sensitivity": 0.6408,
+            "specificity": 0.9005,
+            "ppv": 0.3029,
+            "npv": 0.9738,
+            "f1": 0.4114,
+            "mcc": 0.387,
+            "balanced_accuracy": 0.7706,
+            "accuracy": 0.8841,
+            "lift": 4.79
+          },
+          "ppv_50": {
+            "target_ppv": 0.5,
+            "threshold": 0.304237,
+            "flag_rate": 0.0483,
+            "sensitivity": 0.3834,
+            "specificity": 0.9743,
+            "ppv": 0.5018,
+            "npv": 0.9591,
+            "f1": 0.4347,
+            "mcc": 0.406,
+            "balanced_accuracy": 0.6788,
+            "accuracy": 0.937,
+            "lift": 7.94
+          }
+        },
+        "net_benefit": [
+          {
+            "threshold_probability": 0.05,
+            "net_benefit_model": 0.04014,
+            "net_benefit_treat_all": 0.01388,
+            "avoided_tests_per_1000": 498.9,
+            "beats_treat_all": true
+          },
+          {
+            "threshold_probability": 0.1,
+            "net_benefit_model": 0.02995,
+            "net_benefit_treat_all": -0.0409,
+            "avoided_tests_per_1000": 637.6,
+            "beats_treat_all": true
+          },
+          {
+            "threshold_probability": 0.2,
+            "net_benefit_model": 0.02096,
+            "net_benefit_treat_all": -0.17101,
+            "avoided_tests_per_1000": 767.9,
+            "beats_treat_all": true
+          },
+          {
+            "threshold_probability": 0.3,
+            "net_benefit_model": 0.01428,
+            "net_benefit_treat_all": -0.3383,
+            "avoided_tests_per_1000": 822.7,
+            "beats_treat_all": true
+          },
+          {
+            "threshold_probability": 0.5,
+            "net_benefit_model": 0.00491,
+            "net_benefit_treat_all": -0.87362,
+            "avoided_tests_per_1000": 878.5,
+            "beats_treat_all": true
+          }
+        ]
+      },
+      "base_rate": 0.0632,
+      "age_only_baseline": {
+        "auroc": 0.8354,
+        "auprc": 0.2996
+      },
+      "harrell_c_full_followup": 0.8649,
+      "harrell_c_rows": 5902,
+      "cause_specific": {
+        "death_diabetes": {
+          "events_in_holdout": 36,
+          "auroc": 0.837
+        },
+        "death_hypertension": {
+          "events_in_holdout": 63,
+          "auroc": 0.9018
+        }
+      }
+    },
+    {
+      "tier": "lab",
+      "model": "xgboost",
+      "trained_rows": 22283,
+      "holdout_rows": 5682,
+      "holdout_cycle": "2013_2014",
+      "features": {
+        "numeric": [
+          "age",
+          "bmi",
+          "self_rated_health",
+          "height_cm",
+          "waist_cm",
+          "alcohol_days_per_year",
+          "moderate_min_per_week",
+          "vigorous_min_per_week",
+          "sedentary_min_per_day",
+          "sleep_hours",
+          "sbp",
+          "dbp",
+          "fasting_glucose",
+          "hba1c",
+          "total_chol",
+          "hdl",
+          "ldl",
+          "triglyceride",
+          "ast",
+          "alt",
+          "ggt",
+          "uric_acid",
+          "creatinine",
+          "egfr",
+          "hemoglobin",
+          "albumin",
+          "urine_acr",
+          "tg_hdl_ratio",
+          "non_hdl",
+          "ast_alt_ratio",
+          "waist_height_ratio"
+        ],
+        "categorical": [
+          "sex",
+          "smoking_status"
+        ]
+      },
+      "five_year": {
+        "n": 5682,
+        "positives": 345,
+        "prevalence": 0.0607,
+        "auroc": 0.8875,
+        "auprc": 0.4304,
+        "auprc_lift": 7.09,
+        "brier": 0.0431,
+        "brier_skill": 0.2434,
+        "ece": 0.0056,
+        "mce": 0.0179,
+        "calibration_slope": 1.003,
+        "calibration_intercept": 0.072,
+        "reliability": [
+          {
+            "n": 569,
+            "predicted": 0.0029,
+            "observed": 0.0053
+          },
+          {
+            "n": 568,
+            "predicted": 0.0044,
+            "observed": 0.0018
+          },
+          {
+            "n": 568,
+            "predicted": 0.006,
+            "observed": 0.0035
+          },
+          {
+            "n": 568,
+            "predicted": 0.0083,
+            "observed": 0.0053
+          },
+          {
+            "n": 568,
+            "predicted": 0.0118,
+            "observed": 0.0176
+          },
+          {
+            "n": 568,
+            "predicted": 0.0173,
+            "observed": 0.0194
+          },
+          {
+            "n": 568,
+            "predicted": 0.027,
+            "observed": 0.0282
+          },
+          {
+            "n": 568,
+            "predicted": 0.0472,
+            "observed": 0.0599
+          },
+          {
+            "n": 568,
+            "predicted": 0.1027,
+            "observed": 0.0968
+          },
+          {
+            "n": 569,
+            "predicted": 0.3511,
+            "observed": 0.3691
+          }
+        ],
+        "operating_points": {
+          "top_5pct": {
+            "threshold": 0.302696,
+            "flag_rate": 0.0502,
+            "sensitivity": 0.4145,
+            "specificity": 0.9734,
+            "ppv": 0.5018,
+            "npv": 0.9626,
+            "f1": 0.454,
+            "mcc": 0.4244,
+            "balanced_accuracy": 0.6939,
+            "accuracy": 0.9395,
+            "lift": 8.26
+          },
+          "top_10pct": {
+            "threshold": 0.164814,
+            "flag_rate": 0.1001,
+            "sensitivity": 0.6087,
+            "specificity": 0.9327,
+            "ppv": 0.3691,
+            "npv": 0.9736,
+            "f1": 0.4595,
+            "mcc": 0.4307,
+            "balanced_accuracy": 0.7707,
+            "accuracy": 0.9131,
+            "lift": 6.08
+          },
+          "top_20pct": {
+            "threshold": 0.064526,
+            "flag_rate": 0.2001,
+            "sensitivity": 0.7681,
+            "specificity": 0.8366,
+            "ppv": 0.2331,
+            "npv": 0.9824,
+            "f1": 0.3576,
+            "mcc": 0.361,
+            "balanced_accuracy": 0.8024,
+            "accuracy": 0.8325,
+            "lift": 3.84
+          },
+          "max_mcc": {
+            "criterion": "mcc",
+            "threshold": 0.229065,
+            "flag_rate": 0.0723,
+            "sensitivity": 0.5304,
+            "specificity": 0.9573,
+            "ppv": 0.4453,
+            "npv": 0.9693,
+            "f1": 0.4841,
+            "mcc": 0.4496,
+            "balanced_accuracy": 0.7439,
+            "accuracy": 0.9314,
+            "lift": 7.33
+          },
+          "max_f1": {
+            "criterion": "f1",
+            "threshold": 0.229065,
+            "flag_rate": 0.0723,
+            "sensitivity": 0.5304,
+            "specificity": 0.9573,
+            "ppv": 0.4453,
+            "npv": 0.9693,
+            "f1": 0.4841,
+            "mcc": 0.4496,
+            "balanced_accuracy": 0.7439,
+            "accuracy": 0.9314,
+            "lift": 7.33
+          },
+          "ppv_30": {
+            "target_ppv": 0.3,
+            "threshold": 0.107535,
+            "flag_rate": 0.1387,
+            "sensitivity": 0.6928,
+            "specificity": 0.8971,
+            "ppv": 0.3033,
+            "npv": 0.9783,
+            "f1": 0.4219,
+            "mcc": 0.4076,
+            "balanced_accuracy": 0.7949,
+            "accuracy": 0.8847,
+            "lift": 5.0
+          },
+          "ppv_50": {
+            "target_ppv": 0.5,
+            "threshold": 0.310274,
+            "flag_rate": 0.0482,
+            "sensitivity": 0.4029,
+            "specificity": 0.9747,
+            "ppv": 0.5073,
+            "npv": 0.9619,
+            "f1": 0.4491,
+            "mcc": 0.4209,
+            "balanced_accuracy": 0.6888,
+            "accuracy": 0.94,
+            "lift": 8.35
+          }
+        },
+        "net_benefit": [
+          {
+            "threshold_probability": 0.05,
+            "net_benefit_model": 0.04027,
+            "net_benefit_treat_all": 0.01128,
+            "avoided_tests_per_1000": 550.7,
+            "beats_treat_all": true
+          },
+          {
+            "threshold_probability": 0.1,
+            "net_benefit_model": 0.03176,
+            "net_benefit_treat_all": -0.04365,
+            "avoided_tests_per_1000": 678.6,
+            "beats_treat_all": true
+          },
+          {
+            "threshold_probability": 0.2,
+            "net_benefit_model": 0.02235,
+            "net_benefit_treat_all": -0.1741,
+            "avoided_tests_per_1000": 785.8,
+            "beats_treat_all": true
+          },
+          {
+            "threshold_probability": 0.3,
+            "net_benefit_model": 0.01438,
+            "net_benefit_treat_all": -0.34183,
+            "avoided_tests_per_1000": 831.2,
+            "beats_treat_all": true
+          },
+          {
+            "threshold_probability": 0.5,
+            "net_benefit_model": 0.00317,
+            "net_benefit_treat_all": -0.87856,
+            "avoided_tests_per_1000": 881.7,
+            "beats_treat_all": true
+          }
+        ]
+      },
+      "base_rate": 0.0607,
+      "age_only_baseline": {
+        "auroc": 0.8329,
+        "auprc": 0.2856
+      },
+      "harrell_c_full_followup": 0.8722,
+      "harrell_c_rows": 5681,
+      "cause_specific": {
+        "death_diabetes": {
+          "events_in_holdout": 33,
+          "auroc": 0.8742
+        },
+        "death_hypertension": {
+          "events_in_holdout": 53,
+          "auroc": 0.9072
+        }
+      }
+    }
+  ]
+}
