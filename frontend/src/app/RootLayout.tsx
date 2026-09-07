@@ -30,11 +30,28 @@ const NAVIGATION = [
   { to: "/account", label: "계정", end: false },
 ] as const;
 
+function readResetToken(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.hash.replace(/^#/u, ""));
+  return Boolean(params.get("reset_token"));
+}
+
 export function RootLayout() {
   const { status, email, signOut } = useAuth();
   const localDomain = useContext(LocalDomainContext);
   const profiles = useMemo(() => localDomain?.profiles ?? [], [localDomain?.profiles]);
   const [matchedProfileName, setMatchedProfileName] = useState<string>();
+  const [hasResetToken, setHasResetToken] = useState(readResetToken);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setHasResetToken(readResetToken());
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (status !== "signed-in") {
@@ -72,8 +89,10 @@ export function RootLayout() {
 
   // 리다이렉트가 아니라 `Outlet` 자리를 대신 채운다. 주소가 그대로 남아서 로그인하면
   // 원래 가려던 화면이 그대로 뜬다 — 돌아갈 곳을 따로 기억할 필요가 없다.
-  if (status === "signed-out") {
-    return <SignInPage />;
+  // 단, 비밀번호 재설정 링크(#reset_token=...)로 진입한 경우에는 로그인 상태와 무관하게
+  // 재설정 관문을 우선 열어 준다.
+  if (hasResetToken || status === "signed-out") {
+    return <SignInPage onResetComplete={() => setHasResetToken(false)} />;
   }
 
   return (

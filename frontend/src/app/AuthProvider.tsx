@@ -18,6 +18,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+
+    // 비밀번호 재설정 링크(#reset_token=...)로 들어온 경우 기존 세션을 갱신하지 않고
+    // 즉시 로그아웃시켜 새 비밀번호 설정 관문을 안전하게 열 수 있도록 한다.
+    const params = new URLSearchParams(window.location.hash.replace(/^#/u, ""));
+    if (params.has("reset_token")) {
+      void serverApiClient.logout().catch(() => {});
+      setStatus("signed-out");
+      return;
+    }
+
     void serverApiClient
       .refresh()
       .then(() => serverApiClient.getAccount())
@@ -34,6 +44,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const params = new URLSearchParams(window.location.hash.replace(/^#/u, ""));
+      if (params.has("reset_token")) {
+        void serverApiClient.logout().catch(() => {});
+        setEmail(undefined);
+        setAccountId(undefined);
+        setStatus("signed-out");
+      }
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
     };
   }, []);
 

@@ -69,4 +69,13 @@ describe("RootLayout 로그인 관문", () => {
     expect(navigation).toHaveTextContent("건강 현황");
     expect(navigation).toHaveTextContent("계정");
   });
+
+  it("로그인 상태여도 비밀번호 재설정 해시(#reset_token)가 있으면 재설정 관문(SignInPage)을 우선 띄운다", () => {
+    window.history.replaceState(null, "", "/assessment#reset_token=test-tok&email=fabxoe.se%40gmail.com");
+    renderAt("signed-in", "/assessment#reset_token=test-tok&email=fabxoe.se%40gmail.com");
+
+    expect(screen.getByRole("heading", { name: "새 비밀번호 설정", level: 1 })).toBeInTheDocument();
+    expect(screen.queryByText("판정 화면 내용")).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "주 메뉴" })).not.toBeInTheDocument();
+  });
 });
