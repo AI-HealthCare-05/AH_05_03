@@ -85,6 +85,7 @@ def test_optional_text_normalizes_numeric_public_data_values() -> None:
     assert _optional_text(" 02-555-1234 ") == "02-555-1234"
     assert _optional_text("") is None
 
+
 MOCK_PHARMACY_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <response>
   <header>
