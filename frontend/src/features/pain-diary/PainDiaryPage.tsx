@@ -6,6 +6,7 @@ import type { HealthRecord } from "../../shared/local/domainContracts";
 import { FamilyProfileSidebar } from "../family/FamilyProfileSidebar";
 import { PRIMARY_HOUSEHOLD_ID } from "../health-assistant/healthAssistantLogic";
 import { sendHealthAssistantMessage } from "../health-assistant/healthAssistantClient";
+import { NotionMarkdownEditor } from "./NotionMarkdownEditor";
 
 interface PainPayload {
   type?: string;
@@ -513,11 +514,11 @@ export function PainDiaryPage() {
                     {aiRefining ? "AI 교정 중…" : "✨ AI 맞춤법 및 문장 정제"}
                   </button>
                 </div>
-                <textarea
-                  rows={6}
-                  placeholder="통증의 증상이나 불편함을 자유롭게 적어보세요.&#10;예: '웨이트한후에 팔꿈치가 아프다. 왼쪽 고관절에 이물감이 있고 왼쪽발 바닥을 딛는 힘이 약한 것 같아.'&#10;우측 상단 'AI 맞춤법 및 문장 정제'를 누르면 문장이 깔끔하게 교정됩니다."
+                <NotionMarkdownEditor
                   value={note}
-                  onChange={(e) => setNote(e.target.value)}
+                  onChange={setNote}
+                  placeholder={"통증의 증상이나 불편함을 자유롭게 적어보세요.\n'#'(제목), '-'(불릿), '[]'(체크리스트), '>'(인용구) 입력으로 서식을 지정할 수 있습니다."}
+                  disabled={submitting}
                 />
               </div>
 
