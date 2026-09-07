@@ -225,6 +225,7 @@ async def test_specific_place_uses_kakao_before_broader_hardcoded_landmark() -> 
         result = await client.search_nearby_hospital(query="운정중앙역 병원")
 
     assert result.count == 1
+    assert result.message is not None
     assert result.message.startswith("운정중앙역 인근")
 
 
@@ -480,6 +481,7 @@ async def test_pharmacy_stage_distance_sorting() -> None:
         assert result.items[0].distance_m is not None
         assert result.items[1].distance_m is not None
         assert result.items[0].distance_m < result.items[1].distance_m
+        assert result.message is not None
         assert "강남역 인근 약국" in result.message
 
 
@@ -533,7 +535,10 @@ async def test_hospital_distance_sorting() -> None:
         assert result.count == 2
         assert result.items[0].name == "하늘내과의원"
         assert result.items[1].name == "가나안내과의원"
+        assert result.items[0].distance_m is not None
+        assert result.items[1].distance_m is not None
         assert result.items[0].distance_m < result.items[1].distance_m
+        assert result.message is not None
         assert "강남역 인근 내과 병원" in result.message
 
 
@@ -583,5 +588,8 @@ async def test_emergency_distance_sorting() -> None:
         assert result.count == 2
         assert result.items[0].name == "강남응급의료센터"
         assert result.items[1].name == "강북응급의료센터"
+        assert result.items[0].distance_m is not None
+        assert result.items[1].distance_m is not None
         assert result.items[0].distance_m < result.items[1].distance_m
+        assert result.message is not None
         assert "강남역 인근 응급의료기관" in result.message
