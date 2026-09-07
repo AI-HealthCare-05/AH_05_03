@@ -567,8 +567,14 @@ export function HealthAssistantDrawer({
 
     try {
       // 주변 의료시설(응급실, 병원, 약국) 조회 의도 감지 시 Geolocation 확인
-      const isFacilityQuery = /(응급실|병원|약국|당직의료|당번약국|야간약국|야간진료|응급의료)/.test(userContent);
-      const hasRegionHint = /(서울|경기|인천|강원|충북|충남|전북|전남|경북|경남|제주|부산|대구|광주|대전|울산|세종|[가-힣]+[시군구동읍면])/.test(userContent);
+      const isFacilityQuery = /(응급실|병원|의원|약국|당직의료|당번약국|야간약국|야간진료|응급의료|내과|외과|이비인후과|소아과|치과|안과|피부과|정형외과)/.test(userContent);
+      // 질의어에서 시설명 및 질의용 불용어를 제외했을 때 특정 지역명/장소 키워드가 남아있는지 확인
+      const cleanedForRegion = userContent
+        .replace(/(응급실|병원|의원|약국|내과|외과|이비인후과|소아과|소아청소년과|치과|안과|피부과|정형외과|한의원|한방병원|보건소|의료원|당직의료|당번약국|야간약국|야간진료|응급의료)/g, "")
+        .replace(/(주변|근처|가까운|현재|지금|문연|문\s*연|당직|당번|야간|24시|휴일|일요일|주말)/g, "")
+        .replace(/(찾아줘|찾아|알려줘|알려|어디야|어디에|어디|추천|조회|검색|부탁|있어|있니|있나요|가려는데|가려고|좀|해줘|해\s*줘|이야|야|\?|\!|\.)/g, "")
+        .trim();
+      const hasRegionHint = cleanedForRegion.length >= 1;
 
       let userLocation: UserLocation | undefined = undefined;
       if (isFacilityQuery) {
