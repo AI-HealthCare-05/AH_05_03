@@ -84,6 +84,13 @@ type Confirmation =
   | { kind: "delete-member-history"; household: HouseholdData; targetMember: HouseholdMembershipListItemData }
   | { kind: "cancel-invitation"; invitation: FamilyInvitationData }
   | { kind: "unlink-profile"; link: ProfileLinkData }
+  | {
+      kind: "switch-household-on-accept";
+      currentHousehold: HouseholdData;
+      invitation: FamilyInvitationData;
+      token: string;
+      isSolo: boolean;
+    }
   | { kind: "close-account" };
 
 interface LinkRecovery {
@@ -208,13 +215,12 @@ export function AccountPage() {
     });
   }
 
-  async function acceptAndLink(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const invitationId = String(form.get("invitationId"));
-    const token = String(form.get("token"));
-    const invitation = invitations.received.find((item) => item.id === invitationId);
-    if (!invitation) return;
+  async function executeAcceptAndLink(
+    invitationId: string,
+    token: string,
+    invitation: FamilyInvitationData,
+    isTransfer = false,
+  ) {
     await run(async () => {
       await serverApiClient.acceptInvitation(invitationId, token);
       try {
@@ -228,8 +234,43 @@ export function AccountPage() {
       }
       setLinkRecovery(undefined);
       clearInvitationFragment();
-      setMessage("초대를 수락하고 서비스 계정을 연결했습니다. 건강정보를 받으려면 기기 연결이 필요합니다.");
+      setSelectedHouseholdId(undefined);
+      await loadAccountData();
+      setMessage(
+        isTransfer
+          ? "초대를 수락하고 새 가족 가정으로 이동했습니다."
+          : "초대를 수락하고 서비스 계정을 연결했습니다. 건강정보를 받으려면 기기 연결이 필요합니다.",
+      );
     });
+  }
+
+  async function acceptAndLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const invitationId = String(form.get("invitationId"));
+    const token = String(form.get("token"));
+    const invitation = invitations.received.find((item) => item.id === invitationId);
+    if (!invitation) return;
+
+    // 현재 활성 가정이 있고, 그 가정이 이번에 수락하려는 가정과 다른 경우
+    const activeHousehold = households.find((h) => h.status === "active");
+    if (activeHousehold && activeHousehold.id !== invitation.household_id) {
+      // 다른 활성 구성원이 있는지 판별
+      const hasOtherMembers = memberships.some(
+        (m) => m.household_id === activeHousehold.id && m.status === "active" && m.account_id !== account?.account.id,
+      );
+      const isSolo = !hasOtherMembers;
+      setConfirmation({
+        kind: "switch-household-on-accept",
+        currentHousehold: activeHousehold,
+        invitation,
+        token,
+        isSolo,
+      });
+      return;
+    }
+
+    await executeAcceptAndLink(invitationId, token, invitation);
   }
 
   async function declineInvitation(event: MouseEvent<HTMLButtonElement>) {
@@ -314,6 +355,15 @@ export function AccountPage() {
       } else if (confirmation.kind === "unlink-profile") {
         await serverApiClient.unlinkProfileLink(confirmation.link.id);
         setMessage("서비스 계정 연결을 해제했습니다. 이 브라우저의 로컬 프로필과 건강정보는 변경하지 않았습니다.");
+      } else if (confirmation.kind === "switch-household-on-accept") {
+        if (confirmation.isSolo) {
+          await executeAcceptAndLink(
+            confirmation.invitation.id,
+            confirmation.token,
+            confirmation.invitation,
+            true,
+          );
+        }
       } else {
         const purgeHealthData = Boolean(new FormData(event?.currentTarget).get("purge-health-data"));
         const closeRes = await serverApiClient.closeAccount(purgeHealthData);
@@ -766,7 +816,10 @@ function ConfirmationDialog({
             <button className="secondary-button" type="button" onClick={onCancel}>
               돌아가기
             </button>
-            <button className="danger-button" disabled={working}>
+            <button
+              className={confirmation.kind === "switch-household-on-accept" ? "primary-button" : "danger-button"}
+              disabled={working}
+            >
               {content.action}
             </button>
           </div>
@@ -783,6 +836,22 @@ function confirmationCopy(confirmation: Confirmation) {
   if (confirmation.kind === "delete-member-history") return { title: "구성원 이력을 삭제할까요?", description: `${confirmation.targetMember.masked_email} 님의 구성원 탈퇴 이력을 목록에서 삭제합니다.`, action: "이력 삭제" };
   if (confirmation.kind === "cancel-invitation") return { title: "초대를 취소할까요?", description: "초대 참조값을 더 이상 사용할 수 없게 하고 로컬 프로필의 대기 연결도 폐기합니다.", action: "초대 취소" };
   if (confirmation.kind === "unlink-profile") return { title: "프로필 연결을 해제할까요?", description: "서비스 계정과의 연결만 해제합니다. 로컬 프로필과 건강정보는 보존됩니다.", action: "연결 해제" };
+  if (confirmation.kind === "switch-household-on-accept") {
+    if (confirmation.isSolo) {
+      return {
+        title: "새 가족 가정으로 이동할까요?",
+        description:
+          "현재 혼자 이용 중인 기존 가정이 있습니다. 새 가족 가정에 합류하면 기존 단독 가정은 자동으로 종료되고 새 가정으로 전환됩니다. 이 기기의 로컬 건강정보는 유지됩니다.",
+        action: "새 가정으로 이동 및 수락",
+      };
+    }
+    return {
+      title: "이미 소속된 가족 가정이 있습니다",
+      description:
+        "현재 다른 가족과 함께하는 가정에 소속되어 있습니다. 새 가정을 수락하려면 기존 가정에서 먼저 탈퇴해 주세요.",
+      action: "확인",
+    };
+  }
   return { title: "서비스 계정을 종료할까요?", description: "구독과 서버 연결을 종료합니다. 마스터인 경우 다른 가족에게 마스터 권한이 자동 승계됩니다. 확인을 위해 현재 계정 이메일을 입력하세요.", action: "계정 종료" };
 }
 
