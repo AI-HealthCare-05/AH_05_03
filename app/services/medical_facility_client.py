@@ -982,20 +982,25 @@ class MedicalFacilityClient:
         client = self._get_client()
         items: list[FacilityItem] = []
         dept_name, dept_code = self._match_department(query, keyword)
-        target_lat, target_lon = self._resolve_target_coords(latitude, longitude, query or keyword or stage2)
+
+        # 사용자가 지명을 직접 입력한 경우(예: "강남역 산부인과")에는 현재 GPS보다
+        # 그 지명의 좌표를 우선한다. 그래야 다른 지역에 있는 사용자가 지명을 붙여
+        # 검색해도 해당 지역 기준 거리순 결과를 볼 수 있다.
+        query_lat, query_lon = self._resolve_target_coords(None, None, query or keyword or stage2)
+        if query_lat is not None and query_lon is not None:
+            target_lat, target_lon = query_lat, query_lon
+        else:
+            target_lat, target_lon = self._resolve_target_coords(latitude, longitude)
+
+        parsed_s1, parsed_s2 = self._parse_location(query or keyword)
+        target_s1 = stage1 or parsed_s1
+        target_s2 = stage2 or parsed_s2
 
         try:
-            # 1) GPS 좌표 또는 랜드마크 좌표가 있으면 위치기반 병원 조회 (0.2s, 거리순 + 오늘 진료시간)
-            if target_lat is not None and target_lon is not None:
-                items = await self._fetch_hospital_by_location(
-                    client, key, target_lat, target_lon, keyword_filter=dept_name or keyword
-                )
-
-            # 2) 좌표가 없거나 결과가 없으면 지명/과목 검색
-            if not items:
-                parsed_s1, parsed_s2 = self._parse_location(query or keyword)
-                target_s1 = stage1 or parsed_s1 or "서울특별시"
-                target_s2 = stage2 or parsed_s2
+            # 진료과가 있으면 반드시 과목 코드(QD)로 먼저 조회한다. 위치기반 API는
+            # 진료과 파라미터를 지원하지 않아, 이를 먼저 호출하면 일반 의원이
+            # "산부인과 병원"처럼 잘못 표시될 수 있다.
+            if dept_code and target_s1:
                 items = await self._fetch_hospital_by_stage(
                     client,
                     key,
@@ -1006,6 +1011,34 @@ class MedicalFacilityClient:
                     ref_lat=target_lat,
                     ref_lon=target_lon,
                 )
+
+            # 지명 없이 진료과만 요청한 경우에는 위치기반 결과 중 명칭/분류에
+            # 해당 진료과가 명시된 곳만 사용한다. 과목이 확인되지 않은 일반 의원을
+            # 대신 보여주지 않는다.
+            if dept_code and not target_s1 and target_lat is not None and target_lon is not None:
+                items = await self._fetch_hospital_by_location(
+                    client, key, target_lat, target_lon, keyword_filter=dept_name
+                )
+
+            # 과목이 없는 일반 병원 검색은 기존처럼 위치기반을 먼저 사용하고,
+            # 결과가 없을 때만 지명 검색으로 보완한다.
+            if not dept_code:
+                if target_lat is not None and target_lon is not None:
+                    items = await self._fetch_hospital_by_location(
+                        client, key, target_lat, target_lon, keyword_filter=keyword
+                    )
+
+                if not items:
+                    items = await self._fetch_hospital_by_stage(
+                        client,
+                        key,
+                        target_s1 or "서울특별시",
+                        target_s2,
+                        dept_code=None,
+                        qn=keyword,
+                        ref_lat=target_lat,
+                        ref_lon=target_lon,
+                    )
 
             # 현재 진료 중인 병원을 상단으로 정렬, 그 다음 거리순
             items.sort(key=lambda x: (x.is_open is not True, x.distance_m if x.distance_m is not None else 999999))
