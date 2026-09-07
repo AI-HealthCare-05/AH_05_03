@@ -15,6 +15,12 @@ import type {
 import { toClientProfile } from "../../shared/api/serverDomainRuntime";
 import { serverApiClient } from "../../shared/api/serverApiClient";
 import type { FamilyProfile } from "../../shared/local/domainContracts";
+import {
+  getPendingInvitation,
+  readAndPreserveInvitation,
+  removePendingInvitation,
+  savePendingInvitation,
+} from "./invitationStorage";
 
 const INVITATION_PROFILE_MAP_KEY = "ieobom_invitation_profile_map";
 
@@ -78,6 +84,13 @@ type Confirmation =
   | { kind: "delete-member-history"; household: HouseholdData; targetMember: HouseholdMembershipListItemData }
   | { kind: "cancel-invitation"; invitation: FamilyInvitationData }
   | { kind: "unlink-profile"; link: ProfileLinkData }
+  | {
+      kind: "switch-household-on-accept";
+      currentHousehold: HouseholdData;
+      invitation: FamilyInvitationData;
+      token: string;
+      isSolo: boolean;
+    }
   | { kind: "close-account" };
 
 interface LinkRecovery {
@@ -202,13 +215,12 @@ export function AccountPage() {
     });
   }
 
-  async function acceptAndLink(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const invitationId = String(form.get("invitationId"));
-    const token = String(form.get("token"));
-    const invitation = invitations.received.find((item) => item.id === invitationId);
-    if (!invitation) return;
+  async function executeAcceptAndLink(
+    invitationId: string,
+    token: string,
+    invitation: FamilyInvitationData,
+    isTransfer = false,
+  ) {
     await run(async () => {
       await serverApiClient.acceptInvitation(invitationId, token);
       try {
@@ -222,8 +234,43 @@ export function AccountPage() {
       }
       setLinkRecovery(undefined);
       clearInvitationFragment();
-      setMessage("초대를 수락하고 서비스 계정을 연결했습니다. 건강정보를 받으려면 기기 연결이 필요합니다.");
+      setSelectedHouseholdId(undefined);
+      await loadAccountData();
+      setMessage(
+        isTransfer
+          ? "초대를 수락하고 새 가족 가정으로 이동했습니다."
+          : "초대를 수락하고 서비스 계정을 연결했습니다. 건강정보를 받으려면 기기 연결이 필요합니다.",
+      );
     });
+  }
+
+  async function acceptAndLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const invitationId = String(form.get("invitationId"));
+    const token = String(form.get("token"));
+    const invitation = invitations.received.find((item) => item.id === invitationId);
+    if (!invitation) return;
+
+    // 현재 활성 가정이 있고, 그 가정이 이번에 수락하려는 가정과 다른 경우
+    const activeHousehold = households.find((h) => h.status === "active");
+    if (activeHousehold && activeHousehold.id !== invitation.household_id) {
+      // 다른 활성 구성원이 있는지 판별
+      const hasOtherMembers = memberships.some(
+        (m) => m.household_id === activeHousehold.id && m.status === "active" && m.account_id !== account?.account.id,
+      );
+      const isSolo = !hasOtherMembers;
+      setConfirmation({
+        kind: "switch-household-on-accept",
+        currentHousehold: activeHousehold,
+        invitation,
+        token,
+        isSolo,
+      });
+      return;
+    }
+
+    await executeAcceptAndLink(invitationId, token, invitation);
   }
 
   async function declineInvitation(event: MouseEvent<HTMLButtonElement>) {
@@ -231,13 +278,9 @@ export function AccountPage() {
     if (!formElement) return;
     const form = new FormData(formElement);
     const invitationId = String(form.get("invitationId"));
-    const token = String(form.get("token"));
-    if (!token) {
-      setError("초대를 거절하려면 이메일 초대 토큰을 입력하세요.");
-      return;
-    }
+    const token = String(form.get("token") || "").trim();
     await run(async () => {
-      await serverApiClient.declineInvitation(invitationId, token);
+      await serverApiClient.declineInvitation(invitationId, token || undefined);
       await loadAccountData();
       clearInvitationFragment();
       setMessage("초대를 거절했습니다.");
@@ -312,6 +355,15 @@ export function AccountPage() {
       } else if (confirmation.kind === "unlink-profile") {
         await serverApiClient.unlinkProfileLink(confirmation.link.id);
         setMessage("서비스 계정 연결을 해제했습니다. 이 브라우저의 로컬 프로필과 건강정보는 변경하지 않았습니다.");
+      } else if (confirmation.kind === "switch-household-on-accept") {
+        if (confirmation.isSolo) {
+          await executeAcceptAndLink(
+            confirmation.invitation.id,
+            confirmation.token,
+            confirmation.invitation,
+            true,
+          );
+        }
       } else {
         const purgeHealthData = Boolean(new FormData(event?.currentTarget).get("purge-health-data"));
         const closeRes = await serverApiClient.closeAccount(purgeHealthData);
@@ -700,7 +752,10 @@ function HouseholdCard({
 function InvitationCard({ households, profiles, invitations, working, onSend, onAccept, onDecline, onCancel, linkRecovery, onRetry }: { households: HouseholdData[]; profiles: ReturnType<typeof useLocalDomain>["profiles"]; invitations: FamilyInvitationListData; working: boolean; onSend: (event: FormEvent<HTMLFormElement>) => Promise<void>; onAccept: (event: FormEvent<HTMLFormElement>) => Promise<void>; onDecline: (event: MouseEvent<HTMLButtonElement>) => Promise<void>; onCancel: (invitation: FamilyInvitationData) => void; linkRecovery?: LinkRecovery; onRetry: () => Promise<void> }) {
   const received = invitations.received.filter((item) => item.status === "pending");
   const fragment = readInvitationFragment();
-  return <><section className="account-card account-wide"><p className="section-kicker">가족 초대</p><h2>기존 로컬 프로필에 서비스 계정 초대</h2><p className="account-help">발신자가 여기서 선택한 프로필이 연결 대상입니다. 초대에는 건강정보 대신 무작위 불투명 참조값만 저장됩니다.</p><form className="account-inline-form" onSubmit={(event) => void onSend(event)}><select name="householdId" required defaultValue=""><option value="" disabled>가정 선택</option>{households.map((item) => <option key={item.id} value={item.id}>{item.id.slice(0, 8)}</option>)}</select><select name="profileId" required defaultValue=""><option value="" disabled>연결 대상 프로필 선택</option>{profiles.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select><input name="inviteeEmail" type="email" required placeholder="초대할 이메일" /><button className="primary-button" disabled={working || households.length === 0 || profiles.length === 0}>초대</button></form><InvitationList items={invitations.sent} onCancel={onCancel} /></section><section className="account-card account-wide"><p className="section-kicker">받은 초대</p><h2>발신자가 지정한 프로필과 계정 연결</h2><p className="account-help">연결 대상은 초대에 이미 지정돼 있습니다. 수락 후 건강정보는 자동으로 내려받지 않으며 별도의 기기 연결이 필요합니다.</p>{received.length === 0 ? <p className="account-empty">처리할 초대가 없습니다.</p> : received.map((invitation) => <form className="received-invitation" key={invitation.id} onSubmit={(event) => void onAccept(event)}><input type="hidden" name="invitationId" value={invitation.id} /><span>{invitation.inviter_account_id.slice(0, 8)}…의 초대</span><input name="token" required placeholder="이메일 초대 토큰" defaultValue={fragment?.invitationId === invitation.id ? fragment.token : ""} /><div className="row-actions"><button className="secondary-button" type="button" disabled={working} onClick={(event) => void onDecline(event)}>거절</button><button className="primary-button" disabled={working}>초대 수락</button></div></form>)}{linkRecovery ? <div className="inline-confirmation"><strong>계정 연결 복구가 필요합니다.</strong><p>초대 수락은 완료됐지만 서버의 계정 연결이 중단됐습니다. 로컬 프로필은 변경하지 않았습니다.</p><button className="primary-button" type="button" disabled={working} onClick={() => void onRetry()}>계정 연결 재시도</button></div> : null}</section></>;
+  return <><section className="account-card account-wide"><p className="section-kicker">가족 초대</p><h2>기존 로컬 프로필에 서비스 계정 초대</h2><p className="account-help">발신자가 여기서 선택한 프로필이 연결 대상입니다. 초대에는 건강정보 대신 무작위 불투명 참조값만 저장됩니다.</p><form className="account-inline-form" onSubmit={(event) => void onSend(event)}><select name="householdId" required defaultValue=""><option value="" disabled>가정 선택</option>{households.map((item) => <option key={item.id} value={item.id}>{item.id.slice(0, 8)}</option>)}</select><select name="profileId" required defaultValue=""><option value="" disabled>연결 대상 프로필 선택</option>{profiles.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select><input name="inviteeEmail" type="email" required placeholder="초대할 이메일" /><button className="primary-button" disabled={working || households.length === 0 || profiles.length === 0}>초대</button></form><InvitationList items={invitations.sent} onCancel={onCancel} /></section><section className="account-card account-wide"><p className="section-kicker">받은 초대</p><h2>발신자가 지정한 프로필과 계정 연결</h2><p className="account-help">연결 대상은 초대에 이미 지정돼 있습니다. 수락 후 건강정보는 자동으로 내려받지 않으며 별도의 기기 연결이 필요합니다.</p>{received.length === 0 ? <p className="account-empty">처리할 초대가 없습니다.</p> : received.map((invitation) => {
+    const isMatched = Boolean(fragment && (fragment.invitationId === invitation.id || received.length === 1));
+    return <form className="received-invitation" key={invitation.id} onSubmit={(event) => void onAccept(event)}><input type="hidden" name="invitationId" value={invitation.id} /><span>{invitation.inviter_account_id.slice(0, 8)}…의 초대</span><input name="token" required placeholder="이메일 초대 토큰" defaultValue={isMatched ? fragment?.token : ""} /><div className="row-actions"><button className="secondary-button" type="button" disabled={working} onClick={(event) => void onDecline(event)}>거절</button><button className="primary-button" disabled={working}>초대 수락</button></div></form>;
+  })}{linkRecovery ? <div className="inline-confirmation"><strong>계정 연결 복구가 필요합니다.</strong><p>초대 수락은 완료됐지만 서버의 계정 연결이 중단됐습니다. 로컬 프로필은 변경하지 않았습니다.</p><button className="primary-button" type="button" disabled={working} onClick={() => void onRetry()}>계정 연결 재시도</button></div> : null}</section></>;
 }
 
 function InvitationList({ items, onCancel }: { items: FamilyInvitationListData["sent"]; onCancel: (invitation: FamilyInvitationData) => void }) {
@@ -761,7 +816,10 @@ function ConfirmationDialog({
             <button className="secondary-button" type="button" onClick={onCancel}>
               돌아가기
             </button>
-            <button className="danger-button" disabled={working}>
+            <button
+              className={confirmation.kind === "switch-household-on-accept" ? "primary-button" : "danger-button"}
+              disabled={working}
+            >
               {content.action}
             </button>
           </div>
@@ -778,6 +836,22 @@ function confirmationCopy(confirmation: Confirmation) {
   if (confirmation.kind === "delete-member-history") return { title: "구성원 이력을 삭제할까요?", description: `${confirmation.targetMember.masked_email} 님의 구성원 탈퇴 이력을 목록에서 삭제합니다.`, action: "이력 삭제" };
   if (confirmation.kind === "cancel-invitation") return { title: "초대를 취소할까요?", description: "초대 참조값을 더 이상 사용할 수 없게 하고 로컬 프로필의 대기 연결도 폐기합니다.", action: "초대 취소" };
   if (confirmation.kind === "unlink-profile") return { title: "프로필 연결을 해제할까요?", description: "서비스 계정과의 연결만 해제합니다. 로컬 프로필과 건강정보는 보존됩니다.", action: "연결 해제" };
+  if (confirmation.kind === "switch-household-on-accept") {
+    if (confirmation.isSolo) {
+      return {
+        title: "새 가족 가정으로 이동할까요?",
+        description:
+          "현재 혼자 이용 중인 기존 가정이 있습니다. 새 가족 가정에 합류하면 기존 단독 가정은 자동으로 종료되고 새 가정으로 전환됩니다. 이 기기의 로컬 건강정보는 유지됩니다.",
+        action: "새 가정으로 이동 및 수락",
+      };
+    }
+    return {
+      title: "이미 소속된 가족 가정이 있습니다",
+      description:
+        "현재 다른 가족과 함께하는 가정에 소속되어 있습니다. 새 가정을 수락하려면 기존 가정에서 먼저 탈퇴해 주세요.",
+      action: "확인",
+    };
+  }
   return { title: "서비스 계정을 종료할까요?", description: "구독과 서버 연결을 종료합니다. 마스터인 경우 다른 가족에게 마스터 권한이 자동 승계됩니다. 확인을 위해 현재 계정 이메일을 입력하세요.", action: "계정 종료" };
 }
 
@@ -793,18 +867,19 @@ function formatDate(value: string): string {
 }
 
 function readInvitationFragment(): { invitationId: string; token: string; email?: string } | undefined {
-  const params = new URLSearchParams(window.location.hash.replace(/^#/u, ""));
-  const invitationId = params.get("invitation");
-  const token = params.get("token");
-  const email = params.get("email") ?? undefined;
-  return invitationId && token ? { invitationId, token, email } : undefined;
+  return readAndPreserveInvitation();
 }
 
 function clearInvitationFragment() {
+  removePendingInvitation();
   window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
 }
 
 function preserveInvitationEmail(email: string) {
+  const pending = getPendingInvitation();
+  if (pending) {
+    savePendingInvitation({ ...pending, email });
+  }
   const params = new URLSearchParams(window.location.hash.replace(/^#/u, ""));
   params.set("email", email);
   window.history.replaceState(

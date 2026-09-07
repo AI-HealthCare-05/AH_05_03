@@ -7,12 +7,11 @@ import { type FormEvent, useState } from "react";
 import { useAuth } from "../../app/authContext";
 import { serverApiClient } from "../../shared/api/serverApiClient";
 import { AuthCard, type AuthMode } from "./AuthCard";
+import { getPendingInvitation, readAndPreserveInvitation } from "./invitationStorage";
 
 /** 초대 링크로 들어왔다면 그 이메일로만 수락할 수 있다. 관문에서 미리 채워 준다. */
 function invitationEmail(): string | undefined {
-  const params = new URLSearchParams(window.location.hash.replace(/^#/u, ""));
-  if (!params.get("invitation") || !params.get("token")) return undefined;
-  return params.get("email") ?? undefined;
+  return readAndPreserveInvitation()?.email;
 }
 
 /** 비밀번호 재설정 링크로 들어왔다면 토큰을 읽는다. */
@@ -60,8 +59,18 @@ export function SignInPage({ onResetComplete }: { onResetComplete?: () => void }
           throw new Error("유효한 재설정 토큰이 없습니다. 비밀번호 찾기를 다시 진행해 주세요.");
         }
         await serverApiClient.confirmPasswordReset(token, password);
-        // URL hash 정리
-        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        // URL hash 정리: 대기 중인 초대가 있다면 해당 해시를 복원하여 로그인 후에도 토큰이 전달되도록 한다
+        const pending = getPendingInvitation();
+        if (pending) {
+          const nextHash = new URLSearchParams({
+            invitation: pending.invitationId,
+            token: pending.token,
+            ...(pending.email ? { email: pending.email } : {}),
+          }).toString();
+          window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${nextHash}`);
+        } else {
+          window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        }
         setResetInfo(undefined);
         onResetComplete?.();
         setMessage("비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해 주세요.");
