@@ -86,8 +86,9 @@ describe("RootLayout 로그인 관문", () => {
 
     const links = within(screen.getByRole("navigation", { name: "주 메뉴" })).getAllByRole("link");
     expect(links.length).toBeGreaterThan(0);
-    // `/api/demo` 가 여기 있었다. `app/apis/demo_routers.py` 가 삭제되면서 404 가
-    // 됐는데 메뉴에만 남아, 누르면 오류 화면으로 떨어졌다.
+    // `/api/demo`(예측 데모)가 여기 있었다. FastAPI 가 직접 내던 화면이라 앱 밖
+    // 앵커였고, `/assessment` 로 합치면서 라우터와 함께 지웠다. 메뉴에 앱 밖 링크를
+    // 다시 두면 그 화면이 사라진 날 죽은 문이 된다 — 실제로 한 번 그랬다.
     for (const link of links) {
       expect(link.getAttribute("href")).not.toMatch(/^\/api\//u);
     }

@@ -349,8 +349,7 @@ docker compose up -d --build
 | `app/services/risk.py` | 그 JSON을 순수 파이썬으로 채점한다. 외부 의존성 없음 |
 | `app/dtos/predictions.py` | 필수 4개 + 선택 12개. 키·몸무게로 BMI를 계산한다 |
 | `app/apis/v1/prediction_routers.py` | 예측·모델정보 엔드포인트 |
-| `app/apis/demo_routers.py` | 데모 화면 (단일 HTML). nginx가 `/api/`만 프록시하므로 그 아래 둔다. 엔진 스위치로 규칙 엔진과 함께 돌린다 |
-| `app/apis/demo_style.py` | 화면 스타일. 두 엔진 결과가 같은 껍데기를 쓴다 — 화면 차이가 모델 차이로 오해되면 안 된다 |
+| ~~`app/apis/demo_routers.py`·`demo_style.py`~~ | **삭제됨.** 데모 화면(`/api/demo`)을 `/assessment` 로 합쳤다 — 테스트 프로필은 `frontend/src/features/assessment/presets.ts`, 결과 상세는 `DetailReport.tsx` 다 |
 | `modeling/refine.py` | 특징 확장 5개 구성 비교 |
 | `modeling/diagnose_serving.py` | 출처 누출·응답 민감도 진단 |
 | `modeling/diagnose_targets.py` | 타깃별·연령대별·미진단자 AUROC 진단 (§4.7·§4.8) |

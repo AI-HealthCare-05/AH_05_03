@@ -38,7 +38,9 @@ import {
 } from "../../shared/api/serverApiClient";
 import type { AssessmentSummaryData, RiskLevel } from "./contracts";
 import { LEVEL_ORDER } from "./contracts";
+import { DetailReport } from "./DetailReport";
 import { DocumentPane, type DocumentReading } from "./DocumentPane";
+import { ASSESSMENT_PRESETS, type AssessmentPreset, presetValues } from "./presets";
 import { SuspectPanel } from "./SuspectPanel";
 import { LevelBadge, MatrixCard, VerdictCard, VerdictDetail } from "./VerdictCards";
 import {
@@ -158,6 +160,11 @@ export function AssessmentPage() {
   const [readFields, setReadFields] = useState<Set<string>>(new Set());
   // 근거를 펼쳐 볼 질환. 한 번에 하나만 연다.
   const [openVerdict, setOpenVerdict] = useState<string>();
+  // 예측 근거 전체 리포트를 열었는가. 질환 하나가 아니라 열 장을 한 화면에 세운다.
+  const [openDetail, setOpenDetail] = useState(false);
+  // 어느 테스트 프로필로 채웠는가. 채운 뒤 손으로 고쳐도 표시는 남긴다 —
+  // 결과를 보고 "이게 내가 넣은 값인가 프리셋인가" 를 되짚을 자리가 필요하다.
+  const [preset, setPreset] = useState<string>();
   // 눌러 보기 전에는 아무 칸도 붉게 칠하지 않는다. 폼을 열자마자 다섯 칸이 빨가면
   // 아직 아무것도 안 했는데 뭘 틀린 것처럼 읽힌다.
   const [attempted, setAttempted] = useState(false);
@@ -362,6 +369,26 @@ export function AssessmentPage() {
       return next;
     });
     setReadFields(new Set(applied.map(([name]) => name)));
+  }, []);
+
+  /**
+   * 테스트 프로필로 폼을 채운다. **덮어쓴다** — 비어 있는 칸만 채우는 방식이면
+   * 프로필을 바꿔 눌렀을 때 앞 프로필의 값이 남아 섞인 사람이 만들어진다.
+   *
+   * **채우고 채점은 하지 않는다.** 프로필을 고른 뒤 몇 칸을 손으로 고쳐 보는 것이
+   * 이 기능의 쓸모인데, 자동으로 돌면 고치기 전 결과가 먼저 떠서 헷갈린다.
+   * 예측 데모(`app/apis/demo_routers.py` 의 `applyProfile`)가 같은 이유로 그랬다.
+   */
+  const applyPreset = useCallback((chosen: AssessmentPreset) => {
+    setValues(presetValues(chosen));
+    setPreset(chosen.key);
+    // 프리셋 값은 사람이 넣은 것도 문서에서 읽은 것도 아니다. 문서 표시를 지운다 —
+    // 안 지우면 "검진표에서 읽음" 배지가 프리셋 값에 붙는다.
+    setReadFields(new Set());
+    setResult(undefined);
+    setError(undefined);
+    setRejected({});
+    setAttempted(false);
   }, []);
 
   const submit = useCallback(
@@ -638,6 +665,39 @@ export function AssessmentPage() {
         말풍선은 문구를 못 바꾸고, 다른 칸을 건드리면 사라져 버린다.
         `required` 속성은 그대로 둔다. 검사에는 안 쓰이지만 보조기술에는 여전히 필요하다.
       */}
+          {/* **테스트 프로필. 폼 맨 위, 기본 칸 위에 선다.**
+              예측 데모(`/api/demo`)가 갖고 있던 것을 여기로 옮겼다 — 수치 34칸을 손으로
+              채우지 않고도 "당뇨인 사람" 을 한 번에 넣어 볼 수 있다는 것이 그 화면의
+              쓸모 절반이었고, 데모를 지우면서 그 절반을 데려왔다.
+
+              **필수 다섯 칸이 어느 프로필에서나 채워진다**(`presets.test.ts` 가 고정).
+              그래서 프리셋을 누르면 곧바로 판정할 수 있다. */}
+          <section className="assess-presets" aria-labelledby="assess-presets-heading">
+            <h3 id="assess-presets-heading">테스트로 돌려보기</h3>
+            <p className="assess-group-note">
+              학회 기준에 맞춘 예시 수치로 폼을 한 번에 채웁니다. 채운 뒤 몇 칸을 고쳐 보면 무엇이 판정을 움직이는지
+              보입니다. <strong>채우기만 하고 판정은 하지 않습니다.</strong>
+            </p>
+            <div className="assess-preset-buttons">
+              {ASSESSMENT_PRESETS.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={preset === item.key ? "assess-preset is-active" : "assess-preset"}
+                  aria-pressed={preset === item.key}
+                  onClick={() => applyPreset(item)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            {preset && (
+              <p className="assess-preset-note">
+                {ASSESSMENT_PRESETS.find((item) => item.key === preset)?.note}
+              </p>
+            )}
+          </section>
+
           <form className="assess-form" onSubmit={submit} noValidate>
             {FIELD_GROUPS.map((group) => (
               <fieldset key={group.key} className="assess-group">
@@ -812,6 +872,12 @@ export function AssessmentPage() {
                 {result.bmi}
               </li>
             </ul>
+            {/* **예측 근거 전체를 여는 한 곳.** 카드마다 있는 "판정 근거" 는 질환
+                하나를 설명하는데, 열 장을 나란히 놓고 게이지·정확도·안 쓴 입력까지
+                보려면 자리가 따로 있어야 한다. 예측 데모가 그 자리였다. */}
+            <button type="button" className="secondary-button" onClick={() => setOpenDetail(true)}>
+              예측 근거 자세히 보기
+            </button>
             {!result.model_available && (
               <p className="alert error-alert">
                 예측 모델이 적재되지 않아 규칙·공식으로만 판정했습니다.
@@ -928,6 +994,12 @@ export function AssessmentPage() {
             ) : null;
           })()
         : null}
+
+      {/* 같은 이유로 결과가 없으면 닫는다. `result` 를 캡처해 두면 다시 판정한 뒤에도
+          옛 리포트가 열린 채 남는다. */}
+      {openDetail && result ? (
+        <DetailReport result={result} values={values} onClose={() => setOpenDetail(false)} />
+      ) : null}
     </section>
   );
 }

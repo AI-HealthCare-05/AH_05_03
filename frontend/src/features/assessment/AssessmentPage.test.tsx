@@ -59,15 +59,38 @@ const RESPONSE: AssessmentSummaryData = {
         probability: 0.7998,
         peer_percentile: 88,
         peer_group: "50대 남성",
+        peer_median: 0.62,
+        peer_ratio: 1.29,
         medical_level: "주의",
+        medical: {
+          level: "주의" as const,
+          rate: 0.68,
+          basis: "대한고혈압학회 기준 '주의' 이상",
+          baseline: 0.5,
+          lift: 1.36,
+          anchored_on_rule_engine: true,
+        },
         model_auroc: 0.796,
+        tier: "lab",
         accuracy: {
           headline_auroc: 0.796,
           grade: "좋음",
           measured_on: "미진단자",
+          auroc: 0.813,
+          auroc_undiagnosed: 0.796,
           alert_ppv: 0.71,
           alert_sensitivity: 0.24,
           holdout_n: 4021,
+          holdout_cycle: "2021_2023",
+        },
+        rule_anchor: {
+          society: "대한고혈압학회",
+          positive_from: "CAUTION",
+          rule_positive_rate: 0.68,
+          overall_rate: 0.5,
+          lift: 1.36,
+          sample: 1420,
+          levels: {},
         },
         top_factors: [{ feature: "age", contribution: 0.42 }],
       },
@@ -719,5 +742,114 @@ describe("건강자료에서 넘어온 수치", () => {
 
     expect(screen.getByRole("spinbutton", { name: /공복혈당/ })).toHaveValue(null);
     expect(screen.getByRole("spinbutton", { name: /^HDL/ })).toHaveValue(52);
+  });
+});
+
+/**
+ * 예측 데모(`/api/demo`)를 이 화면으로 합쳤다. 지켜야 하는 것 셋.
+ *
+ * 1. 프리셋을 누르면 **필수 칸이 다 차서 곧바로 판정할 수 있다** — 데모의 쓸모 절반이
+ *    수치 34칸을 손으로 안 채우는 것이었고, 필수 칸 하나가 비면 그 쓸모가 없어진다
+ * 2. **누른 것만으로 채점하지 않는다** — 프로필을 고른 뒤 몇 칸 고쳐 보는 것이
+ *    쓰임새인데, 자동으로 돌면 고치기 전 결과가 먼저 떠서 헷갈린다
+ * 3. 결과에 **자세히 보기가 있고** 데모가 보여주던 게이지·정확도·안 쓴 입력이 나온다
+ */
+describe("테스트 프로필과 자세히 보기", () => {
+  it("프리셋을 누르면 필수 칸이 전부 차고, 채점은 하지 않는다", async () => {
+    const user = userEvent.setup();
+    const call = vi.spyOn(serverApiClient, "assessSummary");
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "당뇨" }));
+
+    expect(screen.getByRole("spinbutton", { name: /나이/ })).toHaveValue(52);
+    expect(screen.getByRole("combobox", { name: /성별/ })).toHaveValue("M");
+    expect(screen.getByRole("spinbutton", { name: /^키/ })).toHaveValue(172);
+    expect(screen.getByRole("spinbutton", { name: /체중/ })).toHaveValue(84);
+    expect(screen.getByRole("combobox", { name: /전반적 건강/ })).toHaveValue("4");
+    // 이 프로필이 노리는 값
+    expect(screen.getByRole("spinbutton", { name: /공복혈당/ })).toHaveValue(148);
+    // 필수를 다 채웠어도 서버를 부르지 않는다.
+    expect(call).not.toHaveBeenCalled();
+    expect(screen.queryByText("판정 요약")).not.toBeInTheDocument();
+  });
+
+  it("프리셋은 앞 프리셋의 값을 남기지 않는다 — 섞인 사람이 만들어지면 안 된다", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "당뇨" }));
+    expect(screen.getByRole("spinbutton", { name: /공복혈당/ })).toHaveValue(148);
+
+    await user.click(screen.getByRole("button", { name: "고혈압" }));
+    // 고혈압 프로필은 혈당을 건드리지 않는다 → 기본값으로 되돌아가야 한다.
+    expect(screen.getByRole("spinbutton", { name: /공복혈당/ })).toHaveValue(92);
+    expect(screen.getByRole("spinbutton", { name: /수축기/ })).toHaveValue(158);
+  });
+
+  it("고른 프로필이 무엇을 노리는지 화면에 적는다", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "고혈압" }));
+
+    expect(screen.getByText(/혈압은 고혈압 라벨을 정의하므로 ML 입력에서 차단/)).toBeInTheDocument();
+  });
+
+  it("결과의 자세히 보기가 게이지·정확도·안 쓴 입력을 보여준다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE);
+    // 모델 입력 목록. `htn` 이 혈압을 받지 않는다는 사실이 화면에 나와야 한다.
+    vi.spyOn(serverApiClient, "modelInfo").mockResolvedValue({
+      models: [
+        {
+          target: "htn",
+          tier: "lab",
+          required_inputs: ["age", "sex", "bmi", "self_rated_health"],
+          optional_inputs: ["waist_cm"],
+        },
+      ],
+    });
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "판정하기" }));
+    await screen.findByText("판정 요약");
+
+    await user.click(screen.getByRole("button", { name: "예측 근거 자세히 보기" }));
+
+    const dialog = await screen.findByRole("dialog");
+    // 의학 기준 비율과 그 뜻
+    expect(within(dialog).getByText(/이 점수대의/)).toBeInTheDocument();
+    // 정확도 줄 — AUROC 한 숫자만 두지 않는다
+    expect(within(dialog).getByText(/상위 10% 경보 적중/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/AUROC 는 "100명 중 몇 명을 맞힌다"가 아닙니다/)).toBeInTheDocument();
+    // 학회 기준 대조 (rule_anchor). `medical.basis` 도 같은 학회명을 쓰므로
+    // 앵커에만 있는 문구로 찾는다.
+    expect(within(dialog).getByText(/실제로 검사했을 때/)).toBeInTheDocument();
+    // 등급 코드를 그대로 띄우지 않는다.
+    expect(within(dialog).queryByText(/CAUTION/)).not.toBeInTheDocument();
+
+    // 모델이 받고도 쓰지 않은 입력. 혈압을 넣었는데 htn 모델은 안 쓴다.
+    // 질환마다 접이가 하나씩 있으므로 첫 번째(고혈압, `verdicts` 순서)를 연다.
+    await user.click(within(dialog).getAllByText("모델 내부 값")[0]);
+    expect(within(dialog).getByText(/고혈압 모델이 쓰지 않은 입력/)).toBeInTheDocument();
+  });
+
+  it("모델 정보를 못 받아도 나머지 근거는 나온다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE);
+    vi.spyOn(serverApiClient, "modelInfo").mockRejectedValue(new Error("boom"));
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "판정하기" }));
+    await screen.findByText("판정 요약");
+    await user.click(screen.getByRole("button", { name: "예측 근거 자세히 보기" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/이 점수대의/)).toBeInTheDocument();
+    // 없는 것을 없다고 말할 수 없을 뿐이다 — 그 블록만 빠진다.
+    expect(within(dialog).queryByText(/쓰지 않은 입력/)).not.toBeInTheDocument();
   });
 });

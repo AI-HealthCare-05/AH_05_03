@@ -259,6 +259,11 @@ def _ml_reference(condition: dict[str, Any] | None) -> dict[str, Any]:
         "peer_median": condition.get("peer_median"),
         "peer_ratio": condition.get("peer_ratio"),
         "medical_level": (condition.get("medical") or {}).get("level"),
+        # 등급 문자열 하나가 아니라 묶음 전체를 싣는다. `rate`·`basis`·`baseline`·`lift`
+        # 가 있어야 "이 점수대 100명 중 몇 명" 과 게이지를 그릴 수 있고, 예측 데모가
+        # 그 화면을 위해 `/predictions/risk` 를 따로 부르고 있었다. 데모를 판정 화면에
+        # 합치면서 두 번째 왕복을 없앤다 — 같은 입력을 두 번 보내면 두 답이 갈릴 수 있다.
+        "medical": condition.get("medical"),
         "model_auroc": condition.get("model_auroc"),
         "tier": condition.get("tier"),
         "accuracy": condition.get("accuracy"),

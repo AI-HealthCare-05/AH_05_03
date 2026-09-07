@@ -27,6 +27,7 @@ from pydantic import Field
 
 from app.dtos.base import BaseSerializerModel
 from app.dtos.predictions import (
+    MedicalRisk,
     ModelAccuracy,
     OnsetTrajectory,
     RiskFactor,
@@ -117,6 +118,16 @@ class VerdictReference(BaseSerializerModel):
     peer_median: float | None = None
     peer_ratio: float | None = Field(default=None, description="같은 집단 중간값 대비 배수")
     medical_level: str | None = None
+    medical: MedicalRisk | None = Field(
+        default=None,
+        description=(
+            "의학 기준 등급 묶음. `medical_level` 은 이 안의 `level` 하나다.\n\n"
+            "**등급 문자열만으로는 게이지를 그릴 수 없어서 전체를 싣는다.** 자세히 보기가 "
+            "'이 점수대 100명 중 몇 명' 과 전체 평균 대비 배수를 함께 보여주는데, 그 재료가 "
+            "`rate`·`basis`·`baseline`·`lift` 다. 예측 데모(`/api/demo`)가 `/predictions/risk` 를 "
+            "따로 불러 이 값을 쓰고 있었고, 데모를 판정 화면에 합치면서 여기로 옮겼다."
+        ),
+    )
     model_auroc: float | None = None
     tier: str | None = None
     accuracy: ModelAccuracy | None = Field(default=None, description="이 숫자를 얼마나 믿어도 되는가")

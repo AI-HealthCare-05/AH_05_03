@@ -6353,3 +6353,93 @@ main {
   }
 }
 
+
+/* ---------------------------------------------------------------------------
+ * 테스트 프로필 + 예측 근거 자세히 보기
+ *
+ * 예측 데모(`app/apis/demo_routers.py` · `demo_style.py`)를 판정 화면으로 옮기면서
+ * 함께 가져온 스타일이다. **데모의 색 변수(`--lv0`~`--lv3`·`--low`·`--high`)는 안
+ * 가져왔다** — 같은 등급이 화면마다 다른 색이면 사용자가 색으로 등급을 읽는 법을
+ * 배우지 못한다. 위 `.assess-badge.level-*` 와 같은 토큰을 쓴다.
+ * ------------------------------------------------------------------------- */
+
+.assess-presets { margin-bottom: 1rem; padding: 0.9rem 1rem; border: 1px solid var(--line-soft); border-radius: 14px; background: var(--blue-50); }
+.assess-presets h3 { margin: 0 0 0.3rem; font-size: 0.95rem; }
+.assess-preset-buttons { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+.assess-preset {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.assess-preset:hover { color: var(--blue-700); border-color: var(--blue-500); }
+/* 고른 것은 색만으로 말하지 않는다 — 테두리와 굵기가 함께 바뀌어 색을 구분하기
+   어려운 사람도 어느 프로필이 켜져 있는지 읽을 수 있다. */
+.assess-preset.is-active { background: var(--blue-600); border-color: var(--blue-700); color: #fff; font-weight: 750; }
+.assess-preset-note { margin: 0.55rem 0 0; font-size: 0.8rem; color: var(--muted-strong); }
+
+/* 자세히 보기 모달. 카드 열 장을 한 화면에 세우므로 판정 근거 모달보다 넓다. */
+.detail-modal { max-width: 720px; }
+.detail-meta { margin: 0 0 0.55rem; font-size: 0.82rem; color: var(--muted); }
+.detail-cite { margin: 0.4rem 0 0; font-size: 0.75rem; line-height: 1.55; color: var(--muted); }
+.detail-peer { margin: 0.3rem 0 0; font-size: 0.88rem; }
+
+.detail-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 0.5rem; margin: 0 0 1.1rem; }
+.detail-tile { padding: 0.6rem 0.4rem 0.55rem; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface); text-align: center; }
+/* 경보 구간만 테두리로 띄운다. 열 장이 전부 강조되면 아무것도 강조가 아니다. */
+.detail-tile.flag { border-color: var(--danger); }
+.detail-tile em { display: block; font-style: normal; font-size: 0.72rem; font-weight: 650; color: var(--muted-strong); }
+.detail-tile .v { margin-top: 0.25rem; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.detail-tile .v small { font-size: 0.8rem; font-weight: 600; color: var(--muted); }
+.detail-tile .assess-badge { display: inline-block; margin-top: 0.35rem; font-size: 0.68rem; }
+
+.detail-condition { padding-top: 0.85rem; margin-top: 0.85rem; border-top: 1px solid var(--line-soft); }
+.detail-condition h4 { display: flex; align-items: center; gap: 0.45rem; margin: 0 0 0.4rem; font-size: 1rem; }
+.detail-risk { display: flex; align-items: baseline; gap: 0.5rem; }
+.detail-risk strong { font-size: 1.9rem; font-weight: 750; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.detail-risk strong small { font-size: 0.95rem; font-weight: 600; color: var(--muted); }
+
+/* 의학 기준 축. 눈금은 등급이 실제로 갈리는 25·50·75% 다 — 눈금과 판정이
+   어긋나면 게이지가 거짓말을 한다. */
+.detail-gauge { position: relative; height: 9px; margin: 0.7rem 0 0.3rem; border-radius: 999px; background: var(--line-soft); }
+.detail-gauge i { position: absolute; top: 0; left: 0; height: 100%; border-radius: 999px; }
+.detail-gauge i.lv0 { background: var(--safe); }
+.detail-gauge i.lv1 { background: var(--blue-500); }
+.detail-gauge i.lv2 { background: var(--danger-soft); }
+.detail-gauge i.lv3 { background: var(--danger); }
+.detail-gauge u { position: absolute; top: 0; width: 2px; height: 100%; background: var(--surface); }
+/* 전체 평균 표시. 내 위치(`b`)보다 얇고 낮게 둬서 둘을 혼동하지 않는다. */
+.detail-gauge em { position: absolute; top: -3px; width: 2px; height: 15px; background: var(--muted); }
+.detail-gauge b { position: absolute; top: -4px; width: 4px; height: 17px; border-radius: 2px; background: var(--ink); }
+.detail-zones { display: flex; font-size: 0.68rem; color: var(--muted); }
+.detail-zones span { text-align: center; }
+
+.detail-acc { display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.7rem; padding-top: 0.55rem; border-top: 1px dashed var(--line-soft); font-size: 0.82rem; }
+.detail-acc .k { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); }
+.detail-acc .n { font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.detail-acc .sep { color: var(--line); }
+.assess-badge.good { background: var(--safe-soft); color: var(--safe); }
+.assess-badge.ok { background: var(--blue-50); color: var(--blue-700); }
+.assess-badge.weak { background: var(--danger-soft); color: var(--danger); }
+.assess-badge.lv0 { background: var(--safe-soft); color: var(--safe); }
+.assess-badge.lv1 { background: var(--blue-50); color: var(--blue-700); }
+.assess-badge.lv2 { background: var(--danger-soft); color: var(--danger); }
+.assess-badge.lv3 { background: var(--danger); color: #fff; }
+.assess-badge.low { background: var(--safe-soft); color: var(--safe); }
+.assess-badge.moderate { background: var(--blue-50); color: var(--blue-700); }
+.assess-badge.high { background: var(--danger-soft); color: var(--danger); }
+
+.detail-tech { margin-top: 0.6rem; font-size: 0.82rem; }
+.detail-tech summary { cursor: pointer; color: var(--blue-700); font-weight: 650; }
+.detail-factors { margin: 0.35rem 0 0; padding-left: 1.1rem; }
+.detail-factors .num { font-variant-numeric: tabular-nums; color: var(--muted-strong); }
+/* 모델이 받고도 쓰지 않은 입력. 경고가 아니라 사실이라 붉게 칠하지 않는다. */
+.detail-ignored { margin: 0.6rem 0 0; padding: 0.5rem 0.65rem; border-radius: 10px; background: var(--line-soft); font-size: 0.78rem; line-height: 1.55; color: var(--muted-strong); }
+
+@media (max-width: 640px) {
+  .detail-tiles { grid-template-columns: repeat(auto-fit, minmax(98px, 1fr)); }
+}

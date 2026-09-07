@@ -13,9 +13,19 @@ export interface ModelAccuracy {
   headline_auroc: number;
   grade: string;
   measured_on: string;
+  /**
+   * 라벨 전체 기준 AUROC. `headline_auroc` 는 미진단자 값이 있으면 그쪽이다.
+   *
+   * 서버(`app/dtos/predictions.py` 의 `ModelAccuracy`)는 처음부터 이 셋을 실어
+   * 보내고 있었는데 이 손 사본에만 없었다. 없는 필드는 화면이 못 읽으므로
+   * "서버가 안 준다" 와 구별되지 않는다 — 자세히 보기를 붙이면서 드러났다.
+   */
+  auroc: number;
+  auroc_undiagnosed: number | null;
   alert_ppv: number | null;
   alert_sensitivity: number | null;
   holdout_n: number | null;
+  holdout_cycle: string | null;
 }
 
 /**
@@ -79,15 +89,40 @@ export interface SuspectCard {
   onset_status?: string | null;
 }
 
+/** 의학 기준 등급 묶음. 게이지와 "이 점수대 100명 중 몇 명" 의 재료다. */
+export interface MedicalRisk {
+  level: "낮음" | "관심" | "주의" | "높음";
+  rate: number;
+  basis: string;
+  baseline?: number | null;
+  lift?: number | null;
+  anchored_on_rule_engine: boolean;
+}
+
+/** 이 확률대를 실제로 검사하면 학회 기준으로 몇 %가 넘는가. */
+export interface RuleAnchor {
+  society: string;
+  positive_from: string;
+  rule_positive_rate: number;
+  overall_rate?: number | null;
+  lift?: number | null;
+  sample: number;
+  levels: Record<string, number>;
+}
+
 export interface VerdictReference {
   probability?: number | null;
   peer_percentile?: number | null;
   peer_group?: string | null;
+  peer_median?: number | null;
   peer_ratio?: number | null;
   medical_level?: string | null;
+  /** `medical_level` 은 이 안의 `level` 하나다. 게이지는 `rate` 가 있어야 그린다. */
+  medical?: MedicalRisk | null;
   model_auroc?: number | null;
   tier?: string | null;
   accuracy?: ModelAccuracy | null;
+  rule_anchor?: RuleAnchor | null;
   top_factors?: { feature: string; contribution: number }[];
   trajectory?: OnsetTrajectory | null;
   trajectory_status?: TrajectoryStatus | null;
