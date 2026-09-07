@@ -45,7 +45,7 @@ export const FIELD_GROUPS: FieldGroup[] = [
   {
     key: "basic",
     title: "기본",
-    note: "이 다섯 개만 채우면 결과가 나옵니다.",
+    note: "나이·성별·키·체중·전반적 건강은 반드시 채웁니다.",
     fields: [
       { name: "age", label: "나이", kind: "number", unit: "세", min: 19, max: 100, required: true },
       {
@@ -74,17 +74,24 @@ export const FIELD_GROUPS: FieldGroup[] = [
   {
     key: "bp",
     title: "혈압",
-    note: "넣으면 고혈압을 추정이 아니라 학회 기준으로 판정합니다.",
+    // **필수다.** 예전에는 선택이었고, 비우면 고혈압을 ML 추정으로 답했다. 그런데
+    // 이 화면의 값은 대부분 검진결과지에서 옮겨 적는 것이라 혈압은 거의 항상 손에
+    // 있고, 있는 값을 안 받고 추정으로 답하면 학회 기준 대조를 스스로 포기하는 셈이다.
+    // 수축기·이완기 둘 다 받는다 — 한쪽만으로는 어느 구간인지 정해지지 않는다.
+    note: "고혈압을 추정이 아니라 학회 기준으로 판정하는 데 씁니다. 두 값이 다 필요합니다.",
     fields: [
-      { name: "sbp", label: "수축기", kind: "number", unit: "mmHg", min: 60, max: 260 },
-      { name: "dbp", label: "이완기", kind: "number", unit: "mmHg", min: 30, max: 200 },
+      { name: "sbp", label: "수축기", kind: "number", unit: "mmHg", min: 60, max: 260, required: true },
+      { name: "dbp", label: "이완기", kind: "number", unit: "mmHg", min: 30, max: 200, required: true },
     ],
   },
   {
     key: "glucose",
     title: "혈당",
+    // 공복혈당만 필수다. 당화혈색소·경구당부하는 검진결과지에 없는 경우가 흔해서
+    // 필수로 걸면 값이 없는 사람이 판정 자체를 못 받는다.
+    note: "공복혈당은 반드시 채웁니다. 당화혈색소와 경구당부하는 있으면 넣습니다.",
     fields: [
-      { name: "fasting_glucose", label: "공복혈당", kind: "number", unit: "mg/dL", min: 20, max: 800 },
+      { name: "fasting_glucose", label: "공복혈당", kind: "number", unit: "mg/dL", min: 20, max: 800, required: true },
       { name: "hba1c", label: "당화혈색소", kind: "number", unit: "%", min: 2, max: 20, step: 0.1 },
       { name: "ogtt_2h", label: "경구당부하 2시간", kind: "number", unit: "mg/dL", min: 21, max: 600 },
       { name: "is_fasting", label: "공복 측정이었나", kind: "bool" },
@@ -255,7 +262,10 @@ export const DISEASE_MEASURES: Record<string, string[]> = {
   hyperchol: ["total_chol", "ldl"],
   hypertg: ["triglyceride"],
   low_hdl: ["hdl"],
-  obesity: ["waist_cm"],
+  // **BMI 가 주, 허리둘레가 보조다.** 배지는 "1단계 비만"(BMI 기준)이라고 하는데
+  // 카드에는 허리둘레만 떠 있었다 — 판정의 근거가 화면에 없던 셈이다.
+  // `bmi` 는 폼 필드가 아니라 키·체중에서 계산되므로 `KeyFigures` 가 따로 만든다.
+  obesity: ["bmi", "waist_cm"],
   mets: ["waist_cm", "triglyceride", "hdl", "fasting_glucose"],
   ckd: ["creatinine", "urine_acr"],
   fatty_liver: ["waist_cm", "triglyceride", "ggt"],
@@ -285,12 +295,58 @@ export function rejectedFields(message: string): Record<string, string> {
   for (const name of Object.keys(FIELD_RANGES)) {
     const hit = new RegExp(`(?:^|[;\\s])${name}:\\s*([^;]+)`).exec(message);
     if (!hit) continue;
-    const { min, max, unit } = FIELD_RANGES[name];
-    const span =
-      min !== undefined && max !== undefined
-        ? `${min}~${max}${unit ? ` ${unit}` : ""} 사이여야 해요`
-        : hit[1].trim();
-    out[name] = span;
+    // 범위를 아는 칸이면 한국어로 다시 쓰고, 모르면 서버 문구를 그대로 쓴다.
+    out[name] = rangeHint(name) ?? hit[1].trim();
+  }
+  return out;
+}
+
+/** "60~260 mmHg 사이여야 해요". 범위를 모르는 칸이면 `undefined`. */
+export function rangeHint(name: string): string | undefined {
+  const range = FIELD_RANGES[name];
+  if (!range || range.min === undefined || range.max === undefined) return undefined;
+  return `${range.min}~${range.max}${range.unit ? ` ${range.unit}` : ""} 사이여야 해요`;
+}
+
+/**
+ * 채운 칸 중 **범위를 벗어난 것**을 서버에 묻지 않고 찾는다.
+ *
+ * 왜 서버를 기다리지 않나
+ * ----------------------
+ * 범위는 `FieldSpec` 의 `min`·`max` 이고 서버 DTO 와 같은 값이다. 서버에 보내 봐야
+ * 같은 답이 422 로 돌아올 뿐인데, 그 왕복 사이에 두 가지가 어긋난다.
+ *
+ * 하나, **판정 API 는 인증을 요구한다.** 세션이 풀린 상태에서 범위 밖 값을 넣으면
+ * 422 가 아니라 401 이 먼저 오고, 그러면 빨간 표시도 스크롤도 일어나지 않는다 —
+ * 사용자에게는 "잘못 넣었는데 아무 일도 안 일어난다" 로 보인다. 실제로 그 상태였다.
+ *
+ * 둘, 왕복이 실패하면 되돌려줄 것이 없다. 여기서 먼저 걸러 내면 네트워크가 끊겨
+ * 있어도 어느 칸이 왜 막혔는지는 그대로 말할 수 있다.
+ *
+ * 서버 검사를 대신하는 게 아니라 **앞에 한 겹 더 두는 것**이다. 여기를 통과한 값도
+ * 서버가 다시 본다.
+ */
+export function outOfRangeFields(values: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const group of FIELD_GROUPS) {
+    for (const field of group.fields) {
+      if (field.kind !== "number") continue;
+      const raw = values[field.name];
+      if (raw === undefined || raw === "") continue;
+      const parsed = Number(raw);
+      // 숫자로 안 읽히는 값(`type="number"` 라도 "1e" 같은 건 들어온다)도 막는다.
+      // 그대로 보내면 `toRequestBody` 가 조용히 키를 빼고, 사용자는 자기가 넣은
+      // 값이 판정에 안 쓰였다는 사실을 끝내 모른다.
+      if (!Number.isFinite(parsed)) {
+        out[field.name] = rangeHint(field.name) ?? "숫자만 넣을 수 있어요";
+        continue;
+      }
+      if (field.min !== undefined && parsed < field.min) {
+        out[field.name] = rangeHint(field.name) ?? `${field.min} 이상이어야 해요`;
+      } else if (field.max !== undefined && parsed > field.max) {
+        out[field.name] = rangeHint(field.name) ?? `${field.max} 이하여야 해요`;
+      }
+    }
   }
   return out;
 }
@@ -340,3 +396,41 @@ export function profileGenderToSex(gender: string | null | undefined): "M" | "F"
   return undefined;
 }
 
+
+/**
+ * 규칙 엔진·공개 공식이 쓰는 이름 → 폼 필드 이름.
+ *
+ * 서버의 `AssessmentSummaryRequest.RENAMED_FOR_RULES` 의 **역방향**이다. 그쪽은
+ * 폼 이름을 규칙 엔진 이름으로 바꿔 보내는데, 판정이 돌아올 때는 규칙 엔진 이름이
+ * 그대로 실려 온다(`missing_fields`·`input_values`). 화면이 그걸 그대로 그리면
+ * `ogtt_2h 를 넣으면 정확해져요` · `total_cholesterol:정상` 처럼 내부 이름이 샌다.
+ */
+const RULE_ENGINE_NAMES: Record<string, string> = {
+  systolic_bp: "sbp",
+  diastolic_bp: "dbp",
+  total_cholesterol: "total_chol",
+  hdl_c: "hdl",
+  ldl_c: "ldl",
+  triglycerides: "triglyceride",
+  smoking: "smoking_status",
+};
+
+/**
+ * 판정이 돌려준 필드 이름을 사람이 읽는 말로.
+ *
+ * 세 갈래를 다 받는다 — 폼 이름(`ogtt_2h`), 규칙 엔진 이름(`total_cholesterol`),
+ * 그리고 이미 한글인 것(`혈색소`). 못 찾으면 원문 그대로 둔다: 지어내는 것보다
+ * 낫고, 화면에 영문이 보이면 여기에 한 줄 더하면 된다.
+ */
+export function readableField(name: string): string {
+  const formName = RULE_ENGINE_NAMES[name] ?? name;
+  return FIELD_LABELS[formName] ?? FIELD_LABELS[name] ?? name;
+}
+
+/** `total_cholesterol:정상, ldl_c:최적` 처럼 이름이 섞인 문장도 바꾼다. */
+export function readableSentence(text: string): string {
+  return text.replace(/[a-z][a-z0-9_]{2,}/g, (token) => {
+    const label = readableField(token);
+    return label === token ? token : label;
+  });
+}

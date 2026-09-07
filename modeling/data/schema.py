@@ -147,6 +147,8 @@ LABELS = [
     "label_fatty_liver",  # 간 탄성초음파 CAP 기준 (측정)
     "label_liver_enzyme_high",  # ALT 상승 — CAP 이 없는 주기의 대리 라벨
     "label_anemia",
+    "label_obesity",  # BMI >= 25 (대한비만학회 2022 아시아-태평양 기준)
+    "label_hyperuricemia",  # 요산 >7.0(남) / >6.0(여) mg/dL
     "label_dm_incident",  # panel datasets only
     "label_htn_incident",  # panel datasets only
     "label_chd_10yr",  # prospective cohorts only

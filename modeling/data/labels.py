@@ -73,6 +73,16 @@ class Thresholds:
     hemoglobin_low_male: float = 13.0  # g/dL
     hemoglobin_low_female: float = 12.0
 
+    # 비만 — 대한비만학회 비만진료지침 2022. **WHO 30 이 아니라 25 다.**
+    # 아시아인은 같은 BMI 에서 체지방률과 대사질환 위험이 더 높아 기준이 따로 있다.
+    # 이 숫자를 30 으로 바꾸면 국내 유병률이 3분의 1로 줄고 카드의 뜻이 달라진다.
+    bmi_obesity: float = 25.0  # kg/m^2
+
+    # 고요산혈증 — 요산 용해도 한계(약 6.8 mg/dL)에서 온 값. 여성은 폐경 전
+    # 에스트로겐의 요산 배설 촉진 때문에 분포가 낮아 컷오프도 낮다.
+    uric_acid_high_male: float = 7.0  # mg/dL
+    uric_acid_high_female: float = 6.0
+
     reviewed_by: str | None = None  # fill in once a clinician signs off
     reviewed_on: str | None = None
 
@@ -305,6 +315,19 @@ def add_extended_labels(frame: pd.DataFrame, thresholds: Thresholds = DEFAULT) -
         .astype("boolean")
         .where(hemoglobin.notna() & hemoglobin_cut.notna() & not_pregnant)
     )
+
+    # ---------------- 비만 ----------------
+    # 라벨이 키·체중에서 곧바로 나오므로 그 셋(bmi·height_cm·weight_kg)은 이 타깃의
+    # 누출 집합이다(`targets.py`). 허리둘레는 다른 측정이라 남는다 — 그것이 이
+    # 모델에서 가장 크게 기여하는 특징이고, 화면에서 "허리둘레는 보조" 라고 말하는
+    # 것과 어긋나지 않는다. 라벨이 BMI 이고 허리둘레는 그것을 맞히는 재료다.
+    bmi = _numeric(result, "bmi")
+    result["label_obesity"] = (bmi >= thresholds.bmi_obesity).astype("boolean").where(bmi.notna())
+
+    # ---------------- 고요산혈증 ----------------
+    uric_acid = _numeric(result, "uric_acid")
+    uric_cut = _sex_threshold(result, thresholds.uric_acid_high_male, thresholds.uric_acid_high_female)
+    result["label_hyperuricemia"] = (uric_acid > uric_cut).astype("boolean").where(uric_acid.notna() & uric_cut.notna())
 
     return result
 

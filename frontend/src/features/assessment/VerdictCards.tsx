@@ -12,10 +12,14 @@
  * 다시 판정한 결과와 달라지므로, 그날 본 화면을 재현하려면 저장본이어야 한다.
  */
 
+import { useState } from "react";
+
 import { Modal } from "../../shared/ui/Modal";
 import type { DiseaseRisk, DiseaseVerdict, OnsetTrajectory, RiskLevel } from "./contracts";
 import { ENGINE_SHORT, LEVEL_LABEL } from "./contracts";
-import { DISEASE_MEASURES, FIELD_LABELS, FIELD_UNITS } from "./fields";
+import { Evidence, type ModelSpec } from "./Evidence";
+import { DISEASE_MEASURES, FIELD_LABELS, FIELD_UNITS, readableField, readableSentence } from "./fields";
+import { briefList, objectParticle, precisionGains } from "./precision";
 
 const LEVEL_CLASS: Record<RiskLevel, string> = {
   VERY_HIGH: "level-very-high",
@@ -132,34 +136,249 @@ export function TrajectoryBlock({ verdict }: { verdict: DiseaseVerdict }) {
 }
 
 /**
- * 카드 앞면의 앞날 한 칸. 궤적이 있는 카드만 — 없는 카드는 이유가 있어서 없는 것이다.
+ * 카드 앞면의 앞날 한 칸. **열세 장 전부에 있다.**
  *
  * 예전에는 **마지막 지평 하나만** 적었다(10년). 5년을 빼 두면 "당장은 어떤가" 를
  * 물어볼 자리가 화면에 없고, 두 숫자 사이의 기울기 — 지금 손대면 달라지는 폭 —
  * 도 사라진다. 지평이 둘뿐이라 둘 다 적어도 한 줄에 들어간다.
+ *
+ * ## 두 물음을 같은 자리에 놓되 이름을 다르게 쓴다
+ *
+ *   새로 생길 확률   지금 없다면 그 사이에 새로 생길 확률. 비가역 셋에만 있다.
+ *   기준 초과 확률   그 나이에 기준을 넘고 있을 확률. 열 질환 전부에 있다.
+ *
+ * 발병 궤적이 셋뿐인 것은 학습이 덜 된 게 아니라 **가역 질환에서 누적 발병 곡선이
+ * 거짓이 되기 때문**이다(이상지질혈증은 65세+ 사망연계 C 0.43 으로 방향이 뒤집힌다).
+ * 그래서 나머지 열 장에는 다른 물음으로 답한다. 이름을 섞으면 안 된다 — "새로
+ * 생길" 과 "이미 넘었는지와 무관하게 그 나이에 넘고 있을" 은 다른 숫자다.
  */
 export function TrajectoryLine({ verdict }: { verdict: DiseaseVerdict }) {
   const trajectory = verdict.reference?.trajectory;
-  if (!trajectory || trajectory.horizons_years.length === 0) return null;
+  if (trajectory && trajectory.horizons_years.length > 0) {
+    // **양 끝만 적는다.** 지평이 1~5년 다섯 개가 되면서 카드 폭에 다 못 들어간다.
+    // 다섯 해를 한 줄에 밀어 넣으면 숫자가 줄바꿈되면서 카드 높이가 제각각이 된다.
+    // 처음과 끝이 있으면 기울기는 읽히고, 해마다의 값은 위 발병 예측 패널에 있다.
+    const last = trajectory.horizons_years.length - 1;
+    const ends = last === 0 ? [0] : [0, last];
+    return (
+      <div className="assess-trajectory-line is-onset">
+        <span className="assess-trajectory-label">새로 생길 확률</span>
+        <span className="assess-trajectory-values">
+          {ends.map((i) => (
+            <span className="assess-trajectory-step" key={trajectory.horizons_years[i]}>
+              <b>{percent(trajectory.onset_probability[i])}</b>
+              <small>
+                {trajectory.horizons_years[i]}년 뒤
+                {trajectory.population_onset_probability?.[i] !== undefined && (
+                  <span className="assess-muted">
+                    {" "}
+                    · 동년배 {percent(trajectory.population_onset_probability[i])}
+                  </span>
+                )}
+              </small>
+            </span>
+          ))}
+        </span>
+      </div>
+    );
+  }
+
+  const prevalence = verdict.reference?.prevalence_trajectory;
+  if (!prevalence || prevalence.horizons_years.length === 0) return null;
+  const points = [prevalence.current_probability, ...prevalence.prevalence_probability];
+  // GBDT 는 나이를 계단으로 쓰므로 세 지평이 같은 칸에 떨어지는 일이 흔하다
+  // (실측: 고콜레스테롤혈증 19·19·19%). 같은 숫자를 세 번 적으면 눈이 "왜 셋이지"
+  // 를 해석하게 되고, 그게 정보가 없는 자리에서 일어난다. 한 번만 적고 끝을 밝힌다.
+  const flat = Math.max(...points) - Math.min(...points) < 0.01;
+  const lastYear = prevalence.horizons_years[prevalence.horizons_years.length - 1];
   return (
-    <div className="assess-trajectory-line">
-      <span className="assess-trajectory-label">새로 생길 확률</span>
+    <div className="assess-trajectory-line is-prevalence">
+      <span className="assess-trajectory-label">기준 초과 확률</span>
       <span className="assess-trajectory-values">
-        {trajectory.horizons_years.map((year, i) => (
-          <span className="assess-trajectory-step" key={year}>
-            <b>{percent(trajectory.onset_probability[i])}</b>
-            <small>
-              {year}년 뒤
-              {trajectory.population_onset_probability?.[i] !== undefined && (
-                <span className="assess-muted">
-                  {" "}
-                  · 동년배 {percent(trajectory.population_onset_probability[i])}
-                </span>
-              )}
-            </small>
+        <span className="assess-trajectory-step">
+          <b>{percent(prevalence.current_probability)}</b>
+          <small>지금</small>
+        </span>
+        {flat ? (
+          <span className="assess-trajectory-step">
+            <small>{lastYear}년 뒤까지 거의 그대로</small>
           </span>
-        ))}
+        ) : (
+          // 마지막 해만. 해마다의 값은 위 발병 예측 패널에 있다.
+          <span className="assess-trajectory-step">
+            <b>{percent(prevalence.prevalence_probability[prevalence.prevalence_probability.length - 1])}</b>
+            <small>{lastYear}년 뒤</small>
+          </span>
+        )}
       </span>
+    </div>
+  );
+}
+
+/**
+ * 접이 안의 유병 곡선 — 발병 궤적이 없는 카드가 읽는 자리.
+ *
+ * 곡선이 **내려가는** 구간이 실제로 있다. 지질은 60대 이후 유병률이 떨어지는데
+ * 낫는 게 아니라 그 나이대에서 약을 먹기 시작한 사람이 많고 고위험군이 먼저
+ * 사망하기 때문이다. 그 사실을 같이 적지 않으면 "나이 들면 좋아진다" 로 읽힌다.
+ */
+export function PrevalenceBlock({ verdict }: { verdict: DiseaseVerdict }) {
+  const prevalence = verdict.reference?.prevalence_trajectory;
+  if (!prevalence || prevalence.horizons_years.length === 0) return null;
+  if (verdict.reference?.trajectory) return null;
+  return (
+    <section className="assess-trajectory">
+      <h4>
+        기준을 넘고 있을 확률 <span className="assess-muted">· {prevalence.direction}</span>
+      </h4>
+      <table className="assess-trajectory-table">
+        <thead>
+          <tr>
+            <th scope="col">기간</th>
+            <th scope="col">지금</th>
+            {prevalence.horizons_years.map((year) => (
+              <th scope="col" key={year}>
+                {year}년
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">확률</th>
+            <td>{percent(prevalence.current_probability)}</td>
+            {prevalence.prevalence_probability.map((value, i) => (
+              <td key={prevalence.horizons_years[i]}>{percent(value)}</td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+      <p className="assess-fineprint">
+        {prevalence.conditional_on}. {prevalence.caveats[0]} {prevalence.caveats[1]}
+      </p>
+    </section>
+  );
+}
+
+/**
+ * 카드마다 다른 "더 넣으면 무엇이 좋아지나".
+ *
+ * 예전에는 `missing_fields` 한 줄뿐이었고, 그 값은 규칙 엔진이 **단계를 못 정했을
+ * 때만** 채워진다. 그래서 이미 판정이 난 열두 장에는 아무것도 안 떴다 — 더 넣을 게
+ * 없어서가 아니라, 화면이 ML 쪽을 안 물어봤기 때문이다(`precision.ts` 머리말).
+ *
+ * 두 줄을 가르는 기준은 **등급이 바뀔 수 있는가** 하나다. 위는 바뀔 수 있고 아래는
+ * 확률만 정밀해진다. 섞어 두면 사용자는 어느 쪽인지 알 수 없다.
+ */
+export function PrecisionHints({
+  verdict,
+  values,
+  models,
+}: {
+  verdict: DiseaseVerdict;
+  values: Record<string, string>;
+  models: ModelSpec[];
+}) {
+  const gain = precisionGains(verdict, values, models);
+  const decisive = briefList(gain.decisive);
+  const refining = briefList(gain.refining);
+
+  if (!decisive && !refining) {
+    // 모델 목록을 못 받았으면(기록 화면·`model-info` 실패) "전부 들어왔다" 고 말할
+    // 근거가 없다. 모르는 것을 안다고 적지 않는다.
+    if (models.length === 0) return null;
+    // 아무 줄도 없으면 카드마다 이 자리의 높이가 달라진다. "없다" 도 정보다 —
+    // 사용자가 "내가 뭘 빠뜨렸나" 를 다시 확인하러 폼으로 올라가지 않아도 된다.
+    return (
+      <p className="assess-need is-done">
+        {gain.noModel
+          ? "이 질환은 규칙 엔진이 검사값으로 직접 판정해요. 더 넣을 값은 없어요."
+          : "이 질환이 쓰는 값은 전부 들어왔어요."}
+      </p>
+    );
+  }
+
+  return (
+    <div className="assess-needs">
+      {decisive ? (
+        <p className="assess-need is-decisive">
+          <span className="assess-need-tag">판정</span>
+          <span>
+            <strong>{decisive}</strong>
+            {objectParticle(decisive)} 넣으면 정확해져요
+          </span>
+        </p>
+      ) : null}
+      {refining ? (
+        <p className="assess-need is-refining">
+          <span className="assess-need-tag">예측</span>
+          <span>
+            <strong>{refining}</strong>
+            {objectParticle(refining)} 넣으면 {gain.tierUp ? "정밀형으로 바뀌어요" : "예측이 정밀해져요"}
+          </span>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * 정본 엔진이 무엇을 보고 그 등급을 냈는가 — 모달에만 있던 블록.
+ *
+ * `VerdictDetail` 모달을 없애면서 카드 접이로 옮겼다. 모달과 카드가 **같은 것을
+ * 두 번** 보여주고 있었다 — 둘 다 `Evidence` 를 그리는데 모달은 그 위에 이 표를
+ * 더 얹은 정도였고, 사용자에게는 "눌렀더니 똑같은 게 나온다" 로 읽혔다.
+ */
+export function VerdictFacts({ verdict }: { verdict: DiseaseVerdict }) {
+  const hasAny =
+    verdict.engine_reason ||
+    verdict.reason ||
+    verdict.recommendation ||
+    verdict.criteria_reference ||
+    verdict.flags.length > 0;
+  if (!hasAny) return null;
+  return (
+    <div className="verdict-facts-block">
+      <p className="verdict-facts-title">
+        <span className={`assess-engine-tag engine-${verdict.engine.toLowerCase()}`}>
+          {ENGINE_SHORT[verdict.engine]}
+        </span>
+        이 판정의 근거
+      </p>
+      <dl className="verdict-facts">
+        {/* **왜 이 엔진이 정본인가.** 세 엔진이 같이 도는데 답은 하나만 실린다
+            (ADR-009). 그 선택의 이유가 화면에 없으면, 카드 앞면의 "ML 12% → 규칙
+            엔진 매우 높음" 이 왜 뒤쪽을 따르는지 알 길이 없다. */}
+        {verdict.engine_reason ? (
+          <>
+            <dt>어느 엔진이 왜</dt>
+            <dd>{verdict.engine_reason}</dd>
+          </>
+        ) : null}
+        {verdict.reason ? (
+          <>
+            <dt>무엇을 보고</dt>
+            <dd>{readableSentence(verdict.reason)}</dd>
+          </>
+        ) : null}
+        {verdict.recommendation ? (
+          <>
+            <dt>권하는 것</dt>
+            <dd>{verdict.recommendation}</dd>
+          </>
+        ) : null}
+        {verdict.criteria_reference ? (
+          <>
+            <dt>기준 출처</dt>
+            <dd>{verdict.criteria_reference}</dd>
+          </>
+        ) : null}
+      </dl>
+      {verdict.flags.map((flag) => (
+        <p className="assess-flag" key={flag}>
+          {flag}
+        </p>
+      ))}
     </div>
   );
 }
@@ -176,7 +395,7 @@ export function ReferenceBlock({ verdict }: { verdict: DiseaseVerdict }) {
     // 좁은 카드에서 자리를 아끼려고 접었던 이유가 사라진다.
     <section className="assess-reference">
       <h4>
-        {verdict.superseded_by ? "밀려난 ML 추정 " : "ML 추정 근거 "}
+        {verdict.superseded_by ? "밀려난 ML 예측 " : "ML 예측 근거 "}
         <strong>{percent}%</strong>
         {ref.peer_percentile !== null && ref.peer_percentile !== undefined && (
           <span className="assess-muted">
@@ -328,14 +547,18 @@ export function KeyFigures({ verdict, values }: { verdict: DiseaseVerdict; value
 export function VerdictCard({
   verdict,
   values,
-  onOpen,
+  models = [],
 }: {
   verdict: DiseaseVerdict;
   values: Record<string, string>;
-  onOpen: () => void;
+  /** `/predictions/model-info` 의 모델 목록. 없으면 "안 쓴 입력" 블록만 빠진다. */
+  models?: ModelSpec[];
 }) {
+  const [open, setOpen] = useState(false);
   const short = verdict.sub_status || LEVEL_LABEL[verdict.risk_level];
   const enough = verdict.risk_level !== "INSUFFICIENT_DATA";
+  const probability = verdict.reference?.probability;
+  const hasEvidence = probability !== null && probability !== undefined;
 
   return (
     <article className={`assess-card ${LEVEL_CLASS[verdict.risk_level]}`}>
@@ -346,99 +569,99 @@ export function VerdictCard({
 
       {enough ? <LevelBar level={verdict.risk_level} /> : null}
 
-      <p className="assess-substatus">{short}</p>
+      {/* **앞면은 정본 엔진의 답만 싣는다.** 어느 엔진이 답했는지를 등급 옆에 붙여야
+          아래 접이의 ML 확률과 혼동되지 않는다. 예전에는 이 태그가 "판정 근거" 버튼
+          안에 있어서, 카드를 훑는 동안 무엇이 이 등급을 정했는지 알 수 없었다. */}
+      {/* **두 엔진을 나란히 놓는다.** ML 이 먼저 열 질환을 훑어 확률을 내고,
+          검사값이 있는 칸은 규칙 엔진이 그 위에서 단계까지 확정한다. 예전에는
+          확률이 접이 안에만 있어서, 카드를 보는 동안 모델이 무엇을 말했는지
+          알 수 없었다 — 두 엔진이 같이 도는데 하나만 보였다. */}
+      <div className="assess-engines">
+        {probability !== null && probability !== undefined ? (
+          <span className="assess-engine-step is-ml">
+            <small>ML 예측</small>
+            <b>{percent(probability)}</b>
+          </span>
+        ) : (
+          <span className="assess-engine-step is-ml is-none">
+            <small>ML 예측</small>
+            <b>—</b>
+          </span>
+        )}
+        <span className="assess-engine-arrow" aria-hidden="true">
+          →
+        </span>
+        <span className={`assess-engine-step is-verdict engine-${verdict.engine.toLowerCase()}`}>
+          {/* ML 이 정본인 칸에서는 엔진 이름을 두 번 쓰지 않는다. 왼쪽이 이미
+              "ML 예측" 이라 `ML 예측 19% → ML 예측 기준 이내` 가 됐다(실측).
+              오른쪽 칸이 답하는 것은 "누가 정했나" 이고, 같은 엔진이면 그 자리에
+              필요한 말은 "판정" 하나다. */}
+          <small>{verdict.engine === "E2" ? "판정" : ENGINE_SHORT[verdict.engine]}</small>
+          <b>{readableSentence(short)}</b>
+        </span>
+      </div>
       <KeyFigures verdict={verdict} values={values} />
       <TrajectoryLine verdict={verdict} />
 
-      {verdict.missing_fields.length > 0 && (
-        <p className="assess-need">
-          <strong>{verdict.missing_fields.join(", ")}</strong>를 넣으면 정확해져요
-        </p>
-      )}
+      <PrecisionHints verdict={verdict} values={values} models={models} />
 
-      {/* 질환 이름을 접근성 이름에 넣는다. 카드가 열세 장이라 "판정 근거"만 있으면
-          화면 낭독기가 같은 이름의 버튼 열세 개를 읽는다. */}
-      <button type="button" className="assess-why-button" onClick={onOpen}>
-        <span className={`assess-engine-tag engine-${verdict.engine.toLowerCase()}`}>
-          {ENGINE_SHORT[verdict.engine]}
-        </span>
-        <span>
-          {verdict.name} 판정 근거
-        </span>
+      {/* **근거는 카드 위에 겹쳐 띄운다.**
+          한동안 접이(`<details>`)로 카드 안에서 펼쳤는데, 격자에서 한 장이 펼쳐지면
+          같은 줄의 다른 카드까지 키가 늘고 아래가 통째로 밀린다. 근거 블록은 게이지·
+          표·차트까지 있어서 카드 하나가 화면 두 개 길이가 됐다.
+
+          모달이지만 **내용은 접이 때와 같은 컴포넌트 넷**이다. 예전에 모달을 없앤
+          이유는 "눌러도 카드 접이와 똑같은 것이 나온다" 였고, 지금은 그 접이가
+          없으므로 중복이 아니다. */}
+      <button type="button" className="assess-evidence-open" onClick={() => setOpen(true)}>
+        {verdict.name} 판정 근거 자세히
       </button>
+      {open ? (
+        <Modal
+          title={verdict.name}
+          kicker="판정 근거"
+          className="verdict-modal"
+          onClose={() => setOpen(false)}
+        >
+          <div className="verdict-modal-head">
+            <LevelBadge level={verdict.risk_level} />
+            <strong>{readableSentence(short)}</strong>
+          </div>
+          <VerdictFacts verdict={verdict} />
+          <TrajectoryBlock verdict={verdict} />
+          <PrevalenceBlock verdict={verdict} />
+          {hasEvidence ? <Evidence verdict={verdict} values={values} models={models} /> : null}
+        </Modal>
+      ) : null}
     </article>
   );
 }
 
-/** 카드에서 접었던 것 전부. 좁은 카드가 아니라 모달이라 나열하지 않고 항목으로 가른다. */
-export function VerdictDetail({ verdict, values, onClose }: { verdict: DiseaseVerdict; values: Record<string, string>; onClose: () => void }) {
-  return (
-    <Modal title={verdict.name} kicker="판정 근거" className="verdict-modal" onClose={onClose}>
-      <div className="verdict-modal-top">
-        <LevelBadge level={verdict.risk_level} />
-        <strong>{verdict.sub_status || LEVEL_LABEL[verdict.risk_level]}</strong>
-      </div>
-
-      {verdict.risk_level !== "INSUFFICIENT_DATA" ? <LevelBar level={verdict.risk_level} /> : null}
-      <KeyFigures verdict={verdict} values={values} />
-      <TrajectoryBlock verdict={verdict} />
-
-      <p className="assess-label">{verdict.display_label}</p>
-
-      <dl className="verdict-facts">
-        {verdict.reason ? (
-          <>
-            <dt>무엇을 보고</dt>
-            <dd>{verdict.reason}</dd>
-          </>
-        ) : null}
-        <dt>어느 엔진이 왜</dt>
-        <dd>
-          <span className={`assess-engine-tag engine-${verdict.engine.toLowerCase()}`}>
-            {verdict.engine} {ENGINE_SHORT[verdict.engine]}
-          </span>{" "}
-          {verdict.engine_reason}
-        </dd>
-        {verdict.recommendation ? (
-          <>
-            <dt>권하는 것</dt>
-            <dd>{verdict.recommendation}</dd>
-          </>
-        ) : null}
-        {verdict.missing_fields.length > 0 ? (
-          <>
-            <dt>넣으면 정확해지는 값</dt>
-            <dd>{verdict.missing_fields.join(", ")}</dd>
-          </>
-        ) : null}
-        {verdict.criteria_reference ? (
-          <>
-            <dt>기준 출처</dt>
-            <dd>{verdict.criteria_reference}</dd>
-          </>
-        ) : null}
-      </dl>
-
-      {verdict.flags.map((flag) => (
-        <p className="assess-flag" key={flag}>
-          {flag}
-        </p>
-      ))}
-
-      <ReferenceBlock verdict={verdict} />
-
-      {verdict.disclaimer ? <p className="assess-fineprint">{verdict.disclaimer}</p> : null}
-    </Modal>
-  );
-}
+/**
+ * 옛 저장본의 제목을 읽을 수 있게 되돌린다.
+ *
+ * 서버가 `category` 에 **내부 키를 그대로** 넣던 판이 있었고(`cvd_risk`), 기록 화면은
+ * 그날 저장한 판정을 그대로 그린다 — 그래서 지난 기록에는 그 값이 남아 있다.
+ * 서버는 고쳤지만(`disease_risk_matrix.risk_title`) 저장본은 못 고치므로 여기서 받는다.
+ *
+ * 표를 두 벌 두는 값은 치른다. 대안은 저장본을 마이그레이션하는 것인데, 스냅샷은
+ * "그날 본 화면" 이라는 게 존재 이유라 손대지 않는 편이 맞다.
+ */
+const LEGACY_MATRIX_TITLE: Record<string, string> = {
+  dm_risk: "당뇨병 위험",
+  cvd_risk: "심혈관질환 위험",
+  ckd_risk: "만성콩팥병 위험",
+  htn_risk: "고혈압 위험",
+};
 
 export function MatrixCard({ risk }: { risk: DiseaseRisk }) {
+  const title = LEGACY_MATRIX_TITLE[risk.category] ?? risk.category;
   return (
     <article
       className={`assess-card assess-matrix ${LEVEL_CLASS[risk.risk_level]}`}
     >
       <header>
-        <h3>{risk.category}</h3>
+        <h3>{title}</h3>
         <LevelBadge level={risk.risk_level} />
       </header>
       <p className="assess-substatus">{risk.sub_status}</p>
@@ -448,21 +671,41 @@ export function MatrixCard({ risk }: { risk: DiseaseRisk }) {
         <ul className="assess-contributors">
           {risk.contributors.map((c) => (
             <li key={c.key} className={`weight-${c.weight}`}>
-              <span className="assess-contrib-label">{c.label}</span>
+              {/* 신호 이름과 **무게**를 한 줄에. 예전에는 무게가 왼쪽 테두리 색으로만
+                  있었는데, 색 하나로는 "이게 셋 중 몇인가" 를 못 읽는다. 점 세 개를
+                  같이 두면 형태로도 읽히고, 색을 구분하기 어려운 사람에게도 남는다. */}
+              <span className="assess-contrib-head">
+                <span className="assess-contrib-label">{c.label}</span>
+                <span className="assess-contrib-weight" title={`가중 ${c.weight} / 3`}>
+                  <i aria-hidden="true" className={c.weight >= 1 ? "on" : ""} />
+                  <i aria-hidden="true" className={c.weight >= 2 ? "on" : ""} />
+                  <i aria-hidden="true" className={c.weight >= 3 ? "on" : ""} />
+                  <em className="assess-sr">가중 {c.weight} / 3</em>
+                </span>
+              </span>
               <span className="assess-contrib-detail">{c.detail}</span>
               <span className="assess-contrib-effect">{c.effect}</span>
-              <span className="assess-muted">
-                {c.source}
-                {c.causal === true && " · 인과 근거 있음"}
-                {c.causal === false && " · 따져봤더니 인과는 아니었다"}
-              </span>
+              {/* 출처와 인과 여부는 **근거를 확인하러 온 사람**이 읽는 줄이다.
+                  신호마다 항상 펼쳐 두면 카드 하나가 스무 줄이 된다. */}
+              <details className="assess-contrib-source">
+                <summary>
+                  근거
+                  {c.causal === true && <b className="assess-causal is-causal">인과</b>}
+                  {c.causal === false && <b className="assess-causal is-marker">지표</b>}
+                </summary>
+                <span>
+                  {c.source}
+                  {c.causal === true && " — 유전연구·중재시험이 함께 지지한다"}
+                  {c.causal === false && " — 따져봤더니 원인이 아니라 동반 지표였다"}
+                </span>
+              </details>
             </li>
           ))}
         </ul>
       )}
       {risk.missing_fields.length > 0 && (
         <p className="assess-missing">
-          <strong>못 본 값</strong> · {risk.missing_fields.join(", ")}
+          <strong>못 본 값</strong> · {risk.missing_fields.map(readableField).join(", ")}
         </p>
       )}
       {risk.recommendation && (

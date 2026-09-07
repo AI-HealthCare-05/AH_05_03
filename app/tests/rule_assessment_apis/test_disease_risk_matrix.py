@@ -177,3 +177,54 @@ class TestSingleSignalIsHedged:
         result = assess_disease_risks({"sex": "M", "age": 30, "waist_cm": 96.0})["htn_risk"]
         assert len(result["contributors"]) == 1
         assert any("하나뿐" in flag for flag in result["flags"])
+
+
+class TestCardTitleIsReadable:
+    """`category` 는 화면 제목이다 — `MatrixCard` 가 `<h3>{risk.category}</h3>` 로 그린다.
+
+    세 결과 생성기가 전부 **키를 그대로** 넣고 있었고, 그래서 사용자가 카드 제목에서
+    `cvd_risk` 를 봤다. `name` 은 같은 함수 안에 있었고 `display_label` 은 이미 그것을
+    쓰고 있었다 — 한 필드만 새고 있던 것이다. 프런트 테스트 픽스처도 처음부터
+    `category: "심혈관질환"` 을 기대하고 있어서, 자기 픽스처를 쓰는 한 이 어긋남을
+    잡을 수 없었다.
+    """
+
+    def test_title_is_a_human_name_not_a_key(self) -> None:
+        results = assess_disease_risks(
+            {"sex": "M", "age": 52, "waist_cm": 96.0, "fasting_glucose": 148.0, "hba1c": 7.2}
+        )
+        for key, result in results.items():
+            assert key not in result["category"], f"{key}: 제목에 내부 키가 그대로 들어갔다"
+            assert "_" not in result["category"], f"{key}: 제목이 {result['category']!r} 다"
+
+    def test_title_marks_the_axis(self) -> None:
+        """이 축은 "앞날" 이고 위 축에는 같은 장기가 "지금 상태" 로 한 번 더 선다.
+
+        콩팥이 `신기능 확인 필요`(현재)와 `만성콩팥병 위험`(앞날)으로 갈리는데, 제목이
+        같으면 사용자가 두 카드를 같은 것으로 읽는다. 실제로 그 질문을 받았다.
+        """
+        results = assess_disease_risks({"sex": "M", "age": 52, "waist_cm": 96.0})
+        for result in results.values():
+            assert result["category"].endswith("위험"), result["category"]
+
+    def test_insufficient_and_diagnosed_titles_match_the_scored_one(self) -> None:
+        """세 생성기가 같은 제목을 낸다. 하나만 고치면 카드가 상태에 따라 이름을 바꾼다."""
+        scored = assess_disease_risks({"sex": "M", "age": 52, "waist_cm": 96.0})["dm_risk"]
+        blank = assess_disease_risks({"sex": "M", "age": 52})["dm_risk"]
+        diagnosed = assess_disease_risks({"sex": "M", "age": 52, "has_diabetes": True})["dm_risk"]
+
+        assert blank["risk_level"] == "INSUFFICIENT_DATA"
+        assert diagnosed["sub_status"] == "이미 진단됨"
+        assert scored["category"] == blank["category"] == diagnosed["category"]
+
+    def test_sub_status_does_not_leak_the_internal_score(self) -> None:
+        """ "가중 4점" 은 사용자가 읽을 자가 없다 — 큰 값인지 작은 값인지 화면에 없다.
+
+        숫자는 `score` 필드로 그대로 나간다. 화면에 안 띄울 뿐이다.
+        """
+        result = assess_disease_risks(
+            {"sex": "M", "age": 52, "waist_cm": 96.0, "fasting_glucose": 148.0, "hba1c": 7.2}
+        )["cvd_risk"]
+        assert "가중" not in result["sub_status"]
+        assert result["sub_status"] == f"위험 신호 {len(result['contributors'])}개"
+        assert result["score"] > 0, "점수는 필드로 남는다"
