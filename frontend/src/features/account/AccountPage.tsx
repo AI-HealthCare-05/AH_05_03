@@ -404,6 +404,7 @@ export function AccountPage() {
             householdProfiles={householdProfiles}
             invitations={invitations}
             currentAccountId={account.account.id}
+            currentAccountEmail={account.account.email}
             working={working}
             onCreate={createHousehold}
             onConfirm={setConfirmation}
@@ -479,6 +480,7 @@ function HouseholdCard({
   householdProfiles = [],
   invitations,
   currentAccountId,
+  currentAccountEmail,
   working,
   onCreate,
   onConfirm,
@@ -490,6 +492,7 @@ function HouseholdCard({
   householdProfiles?: FamilyProfile[];
   invitations?: FamilyInvitationListData;
   currentAccountId: string;
+  currentAccountEmail?: string;
   working: boolean;
   onCreate: () => Promise<void>;
   onConfirm: (confirmation: Confirmation) => void;
@@ -631,18 +634,23 @@ function HouseholdCard({
                 ? "프로필 연결됨 · 이 브라우저에서 이름 확인 불가"
                 : "로컬 프로필 미연결";
 
-            return (
-              <div key={membership.id}>
-                <div className="membership-identity">
-                  <strong>
-                    {displayName}
-                    {isCurrent ? <span className="current-member-badge">나</span> : null}
-                    {isMemberMaster ? <span className="master-badge"> · 마스터</span> : null}
-                  </strong>
-                  <small>{membership.masked_email}</small>
-                </div>
-                <div className="membership-state">
-                  <span>{membership.status === "active" ? "활동 중" : "나감"}</span>
+              const emailToDisplay =
+                isCurrent && currentAccountEmail
+                  ? currentAccountEmail
+                  : membership.masked_email;
+
+              return (
+                <div key={membership.id}>
+                  <div className="membership-identity">
+                    <strong>
+                      {displayName}
+                      {isCurrent ? <span className="current-member-badge">나</span> : null}
+                      {isMemberMaster ? <span className="master-badge"> · 마스터</span> : null}
+                    </strong>
+                    <small>{emailToDisplay}</small>
+                  </div>
+                  <div className="membership-state">
+                    <span>{membership.status === "active" ? "활동 중" : "나감"}</span>
                   <small>{connectionLabel}</small>
                 </div>
                 <div className="row-actions">

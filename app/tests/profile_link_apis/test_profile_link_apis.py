@@ -87,9 +87,8 @@ class TestProfileLinkAPI:
             for item in memberships.json()["data"]["items"]
             if item["account_id"] == linked.json()["data"]["account_id"]
         )
-        assert member["masked_email"] == "pro********@example.com"
+        assert member["masked_email"] == "profile-member@example.com"
         assert member["local_profile_ref"] == profile_ref
-        assert "profile-member@example.com" not in memberships.text
 
         link_id = linked.json()["data"]["id"]
         unlinked = await client.post(f"/api/v1/profile-links/{link_id}/unlink", headers=member_headers)

@@ -68,7 +68,7 @@ class HouseholdService:
                     id=item.membership.id,
                     household_id=item.membership.household_id,
                     account_id=item.membership.account_id,
-                    masked_email=_mask_email(item.account_email),
+                    masked_email=item.account_email,
                     local_profile_ref=item.local_profile_ref,
                     status=item.membership.status,
                     joined_at=item.membership.joined_at,

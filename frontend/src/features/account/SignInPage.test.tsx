@@ -144,5 +144,21 @@ describe("SignInPage", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("비밀번호가 성공적으로 변경되었습니다");
     expect(screen.getByRole("heading", { name: "로그인하고 시작하세요", level: 1 })).toBeInTheDocument();
   });
+
+  it("눈꺼풀 아이콘 버튼을 클릭하면 비밀번호 표시와 숨김이 토글된다", async () => {
+    const user = userEvent.setup();
+    renderSignIn();
+
+    const passwordInput = screen.getByLabelText("비밀번호");
+    expect(passwordInput).toHaveAttribute("type", "password");
+
+    const toggleButton = screen.getByRole("button", { name: "비밀번호 보기" });
+    await user.click(toggleButton);
+    expect(passwordInput).toHaveAttribute("type", "text");
+
+    const hideButton = screen.getByRole("button", { name: "비밀번호 숨기기" });
+    await user.click(hideButton);
+    expect(passwordInput).toHaveAttribute("type", "password");
+  });
 });
 

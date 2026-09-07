@@ -2,9 +2,49 @@
  * 가입, 로그인, 비밀번호 찾기, 비밀번호 재설정 카드. 한 번에 **하나만** 그린다.
  */
 
-import type { FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 
 export type AuthMode = "signin" | "signup" | "forgot-password" | "reset-password";
+
+function EyeIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+      <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+      <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+      <line x1="2" y1="2" x2="22" y2="22" />
+    </svg>
+  );
+}
 
 export function AuthCard({
   mode,
@@ -20,6 +60,8 @@ export function AuthCard({
   onSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onSwitchMode?: (targetMode: AuthMode) => void;
 }) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   if (mode === "forgot-password") {
     return (
       <section className="account-card auth-card">
@@ -62,14 +104,26 @@ export function AuthCard({
         <form className="product-form" onSubmit={(event) => void onSubmit(event)}>
           <label>
             새 비밀번호
-            <input
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              aria-describedby="auth-reset-password-hint"
-              required
-            />
+            <div className="password-input-wrapper">
+              <input
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                minLength={8}
+                aria-describedby="auth-reset-password-hint"
+                required
+              />
+              <button
+                type="button"
+                className="password-toggle-button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? "새 비밀번호 숨기기" : "새 비밀번호 보기"}
+                title={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
           </label>
           <span className="auth-hint" id="auth-reset-password-hint">
             8자 이상
@@ -77,13 +131,25 @@ export function AuthCard({
 
           <label>
             새 비밀번호 확인
-            <input
-              name="passwordConfirm"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              required
-            />
+            <div className="password-input-wrapper">
+              <input
+                name="passwordConfirm"
+                type={showConfirmPassword ? "text" : "password"}
+                autoComplete="new-password"
+                minLength={8}
+                required
+              />
+              <button
+                type="button"
+                className="password-toggle-button"
+                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                aria-label={showConfirmPassword ? "새 비밀번호 확인 숨기기" : "새 비밀번호 확인 보기"}
+                title={showConfirmPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+                tabIndex={-1}
+              >
+                {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
           </label>
 
           <div className="form-actions">
@@ -125,14 +191,26 @@ export function AuthCard({
         </label>
         <label>
           비밀번호
-          <input
-            name="password"
-            type="password"
-            autoComplete={signup ? "new-password" : "current-password"}
-            minLength={8}
-            aria-describedby={signup ? "auth-password-hint" : undefined}
-            required
-          />
+          <div className="password-input-wrapper">
+            <input
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete={signup ? "new-password" : "current-password"}
+              minLength={8}
+              aria-describedby={signup ? "auth-password-hint" : undefined}
+              required
+            />
+            <button
+              type="button"
+              className="password-toggle-button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+              title={showPassword ? "비밀번호 숨기기" : "비밀번호 보기"}
+              tabIndex={-1}
+            >
+              {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+            </button>
+          </div>
         </label>
         {signup ? (
           <span className="auth-hint" id="auth-password-hint">
