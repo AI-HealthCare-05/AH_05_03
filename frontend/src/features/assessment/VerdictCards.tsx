@@ -12,6 +12,9 @@
  * 다시 판정한 결과와 달라지므로, 그날 본 화면을 재현하려면 저장본이어야 한다.
  */
 
+import { useState } from "react";
+
+import { Modal } from "../../shared/ui/Modal";
 import type { DiseaseRisk, DiseaseVerdict, OnsetTrajectory, RiskLevel } from "./contracts";
 import { ENGINE_SHORT, LEVEL_LABEL } from "./contracts";
 import { Evidence, type ModelSpec } from "./Evidence";
@@ -152,15 +155,20 @@ export function TrajectoryBlock({ verdict }: { verdict: DiseaseVerdict }) {
 export function TrajectoryLine({ verdict }: { verdict: DiseaseVerdict }) {
   const trajectory = verdict.reference?.trajectory;
   if (trajectory && trajectory.horizons_years.length > 0) {
+    // **양 끝만 적는다.** 지평이 1~5년 다섯 개가 되면서 카드 폭에 다 못 들어간다.
+    // 다섯 해를 한 줄에 밀어 넣으면 숫자가 줄바꿈되면서 카드 높이가 제각각이 된다.
+    // 처음과 끝이 있으면 기울기는 읽히고, 해마다의 값은 위 발병 예측 패널에 있다.
+    const last = trajectory.horizons_years.length - 1;
+    const ends = last === 0 ? [0] : [0, last];
     return (
       <div className="assess-trajectory-line is-onset">
         <span className="assess-trajectory-label">새로 생길 확률</span>
         <span className="assess-trajectory-values">
-          {trajectory.horizons_years.map((year, i) => (
-            <span className="assess-trajectory-step" key={year}>
+          {ends.map((i) => (
+            <span className="assess-trajectory-step" key={trajectory.horizons_years[i]}>
               <b>{percent(trajectory.onset_probability[i])}</b>
               <small>
-                {year}년 뒤
+                {trajectory.horizons_years[i]}년 뒤
                 {trajectory.population_onset_probability?.[i] !== undefined && (
                   <span className="assess-muted">
                     {" "}
@@ -196,12 +204,11 @@ export function TrajectoryLine({ verdict }: { verdict: DiseaseVerdict }) {
             <small>{lastYear}년 뒤까지 거의 그대로</small>
           </span>
         ) : (
-          prevalence.horizons_years.map((year, i) => (
-            <span className="assess-trajectory-step" key={year}>
-              <b>{percent(prevalence.prevalence_probability[i])}</b>
-              <small>{year}년 뒤</small>
-            </span>
-          ))
+          // 마지막 해만. 해마다의 값은 위 발병 예측 패널에 있다.
+          <span className="assess-trajectory-step">
+            <b>{percent(prevalence.prevalence_probability[prevalence.prevalence_probability.length - 1])}</b>
+            <small>{lastYear}년 뒤</small>
+          </span>
         )}
       </span>
     </div>
@@ -547,6 +554,7 @@ export function VerdictCard({
   /** `/predictions/model-info` 의 모델 목록. 없으면 "안 쓴 입력" 블록만 빠진다. */
   models?: ModelSpec[];
 }) {
+  const [open, setOpen] = useState(false);
   const short = verdict.sub_status || LEVEL_LABEL[verdict.risk_level];
   const enough = verdict.risk_level !== "INSUFFICIENT_DATA";
   const probability = verdict.reference?.probability;
@@ -584,7 +592,11 @@ export function VerdictCard({
           →
         </span>
         <span className={`assess-engine-step is-verdict engine-${verdict.engine.toLowerCase()}`}>
-          <small>{ENGINE_SHORT[verdict.engine]}</small>
+          {/* ML 이 정본인 칸에서는 엔진 이름을 두 번 쓰지 않는다. 왼쪽이 이미
+              "ML 예측" 이라 `ML 예측 19% → ML 예측 기준 이내` 가 됐다(실측).
+              오른쪽 칸이 답하는 것은 "누가 정했나" 이고, 같은 엔진이면 그 자리에
+              필요한 말은 "판정" 하나다. */}
+          <small>{verdict.engine === "E2" ? "판정" : ENGINE_SHORT[verdict.engine]}</small>
           <b>{readableSentence(short)}</b>
         </span>
       </div>
@@ -593,24 +605,34 @@ export function VerdictCard({
 
       <PrecisionHints verdict={verdict} values={values} models={models} />
 
-      {/* **ML 근거를 카드 안에서 펼친다 — 예측 데모의 "모델 내부 값" 자리다.**
-          모달로만 두던 때는 같은 값을 두 화면이 각자 그리면서 서로 다른 숫자를 크게
-          띄웠다(`Evidence.tsx` 머리말의 실측). 이제 한 컴포넌트가 두 자리에 같은 것을
-          낸다.
+      {/* **근거는 카드 위에 겹쳐 띄운다.**
+          한동안 접이(`<details>`)로 카드 안에서 펼쳤는데, 격자에서 한 장이 펼쳐지면
+          같은 줄의 다른 카드까지 키가 늘고 아래가 통째로 밀린다. 근거 블록은 게이지·
+          표·차트까지 있어서 카드 하나가 화면 두 개 길이가 됐다.
 
-          격자에서 접이를 펼치면 같은 줄 카드까지 키가 늘어 아래가 밀리는 문제가
-          있었다. `.assess-cards` 를 `grid-auto-rows` 없이 `align-items: start` 로
-          두어 펼친 카드만 늘어나게 했다(`styles.css`). */}
-      {/* **모달을 없애고 여기 하나로 모았다.** 예전에는 카드 접이와 "판정 근거 전체"
-          모달이 둘 다 `Evidence` 를 그려서, 눌러도 같은 것이 나왔다. 모달에만 있던
-          판정 근거표와 궤적 표를 여기로 옮기고 버튼을 뺐다. */}
-      <details className="assess-card-evidence">
-        <summary>{verdict.name} 판정 근거 자세히</summary>
-        <VerdictFacts verdict={verdict} />
-        <TrajectoryBlock verdict={verdict} />
-        <PrevalenceBlock verdict={verdict} />
-        {hasEvidence ? <Evidence verdict={verdict} values={values} models={models} /> : null}
-      </details>
+          모달이지만 **내용은 접이 때와 같은 컴포넌트 넷**이다. 예전에 모달을 없앤
+          이유는 "눌러도 카드 접이와 똑같은 것이 나온다" 였고, 지금은 그 접이가
+          없으므로 중복이 아니다. */}
+      <button type="button" className="assess-evidence-open" onClick={() => setOpen(true)}>
+        {verdict.name} 판정 근거 자세히
+      </button>
+      {open ? (
+        <Modal
+          title={verdict.name}
+          kicker="판정 근거"
+          className="verdict-modal"
+          onClose={() => setOpen(false)}
+        >
+          <div className="verdict-modal-head">
+            <LevelBadge level={verdict.risk_level} />
+            <strong>{readableSentence(short)}</strong>
+          </div>
+          <VerdictFacts verdict={verdict} />
+          <TrajectoryBlock verdict={verdict} />
+          <PrevalenceBlock verdict={verdict} />
+          {hasEvidence ? <Evidence verdict={verdict} values={values} models={models} /> : null}
+        </Modal>
+      ) : null}
     </article>
   );
 }

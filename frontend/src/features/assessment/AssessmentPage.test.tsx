@@ -337,15 +337,15 @@ describe("AssessmentPage", () => {
     // 있으므로 앞면 블록으로 좁혀서 본다.
     const engines = card.querySelector(".assess-engines") as HTMLElement;
     expect(within(engines).getByText("규칙 엔진")).toBeInTheDocument();
-    // 사유는 접기 전에는 안 보인다 — `<details>` 는 닫혀 있어도 DOM 에 있으므로
-    // `hidden` 여부가 아니라 "펼쳐졌는가" 로 본다.
-    const evidence = card.querySelector("details.assess-card-evidence") as HTMLDetailsElement;
-    expect(evidence.open).toBe(false);
+    // 사유는 열기 전에는 화면에 없다. 근거는 카드 위에 겹쳐 띄운다 — 격자에서
+    // 카드 안으로 펼치면 같은 줄의 다른 카드까지 키가 늘고 아래가 통째로 밀린다.
+    expect(screen.queryByText(/측정값이 있어 규칙 엔진이 정본입니다/)).not.toBeInTheDocument();
 
-    await user.click(within(card).getByText(/고혈압 판정 근거 자세히/));
-    expect(evidence.open).toBe(true);
-    expect(within(card).getByText(/측정값이 있어 규칙 엔진이 정본입니다/)).toBeInTheDocument();
-    expect(within(card).getByText(/대한고혈압학회 진료지침/)).toBeInTheDocument();
+    await user.click(within(card).getByRole("button", { name: /고혈압 판정 근거 자세히/ }));
+    const modal = await screen.findByRole("dialog");
+    expect(within(modal).getByText(/측정값이 있어 규칙 엔진이 정본입니다/)).toBeInTheDocument();
+    expect(within(modal).getByText(/대한고혈압학회 진료지침/)).toBeInTheDocument();
+    await user.keyboard("{Escape}");
 
     // ML 이 답한 칸은 무엇을 넣으면 정확해지는지 적는다.
     const anemia = screen.getByRole("heading", { name: "빈혈" }).closest("article");
@@ -987,7 +987,7 @@ describe("테스트 프로필과 자세히 보기", () => {
  * ML 값은 `Evidence` 한 컴포넌트가 두 자리에 같은 것을 내게 해서 닫았다.
  */
 describe("카드와 자세히 보기가 같은 것을 보여준다", () => {
-  it("카드 안에서 ML 근거가 펼쳐진다 — 모달을 열지 않아도 된다", async () => {
+  it("카드의 근거를 열면 게이지·앵커·정확도가 한자리에 선다", async () => {
     const user = userEvent.setup();
     vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE as never);
     vi.spyOn(serverApiClient, "modelInfo").mockResolvedValue({ models: [] });
@@ -998,16 +998,13 @@ describe("카드와 자세히 보기가 같은 것을 보여준다", () => {
     await screen.findByText("판정 요약");
 
     // 규칙이 정본인 칸이라 "밀려난" 이라고 적는다.
-    const summary = screen.getByText("고혈압 판정 근거 자세히");
-    await user.click(summary);
+    await user.click(screen.getByRole("button", { name: "고혈압 판정 근거 자세히" }));
 
-    const card = summary.closest("article") as HTMLElement;
-    // 게이지·앵커·정확도가 카드 안에 있다.
-    expect(within(card).getByText(/이 점수대의/)).toBeInTheDocument();
-    expect(within(card).getByText(/실제로 검사했을 때/)).toBeInTheDocument();
-    expect(within(card).getByText(/상위 10% 경보 적중/)).toBeInTheDocument();
-    // 모달은 안 열렸다.
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // 접이 때와 **같은 컴포넌트 넷**을 그린다. 자리만 카드 위로 옮겼다.
+    const modal = await screen.findByRole("dialog");
+    expect(within(modal).getByText(/이 점수대의/)).toBeInTheDocument();
+    expect(within(modal).getByText(/실제로 검사했을 때/)).toBeInTheDocument();
+    expect(within(modal).getByText(/상위 10% 경보 적중/)).toBeInTheDocument();
   });
 
   it("카드 배지와 자세히 보기 배지가 같은 등급이다", async () => {
@@ -1058,8 +1055,10 @@ describe("카드와 자세히 보기가 같은 것을 보여준다", () => {
     expect(within(engines).getByText("규칙 엔진")).toBeInTheDocument();
     const anemia = screen.getByRole("heading", { name: "빈혈", level: 3 }).closest("article") as HTMLElement;
     const anemiaEngines = anemia.querySelector(".assess-engines") as HTMLElement;
-    // ML 이 정본인 칸은 앞 칸(확률)과 판정 칸이 모두 "ML 예측" 이다.
-    expect(within(anemiaEngines).getAllByText("ML 예측").length).toBe(2);
+    // ML 이 정본인 칸에서는 엔진 이름을 두 번 쓰지 않는다 — 왼쪽이 이미 "ML 예측"
+    // 이라 `ML 예측 8% → ML 예측 …` 이 됐다. 오른쪽은 "판정" 하나다.
+    expect(within(anemiaEngines).getAllByText("ML 예측")).toHaveLength(1);
+    expect(within(anemiaEngines).getByText("판정")).toBeInTheDocument();
     // 확률이 카드 앞면에 보인다 — 접이를 열지 않아도 모델이 무엇을 말했는지 안다.
     expect(within(anemiaEngines).getByText("8%")).toBeInTheDocument();
   });

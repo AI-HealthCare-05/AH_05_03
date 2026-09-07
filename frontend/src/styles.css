@@ -6726,3 +6726,89 @@ main {
  * ------------------------------------------------------------------------- */
 .assess-trajectory-line.is-prevalence { background: var(--line-soft); }
 .assess-trajectory-line.is-prevalence .assess-trajectory-step b { font-size: 0.98rem; color: var(--muted-strong); }
+
+/* ---------------------------------------------------------------------------
+ * 검진표 인식 진행
+ *
+ * 한 줄 문구였을 때는 7~20초 동안 화면에서 움직이는 것이 없었다. 멈춘 것과 도는
+ * 것을 구분할 방법이 사용자에게 없다. 단계·경과 초·흘러온 글 셋을 둔다 — 전부
+ * 실제 신호이고 지어낸 진행률이 아니다.
+ * ------------------------------------------------------------------------- */
+.ocr-progress {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid var(--blue-100);
+  border-radius: 12px;
+  background: var(--blue-50);
+}
+.ocr-progress-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.ocr-progress-head strong { font-size: 0.88rem; color: var(--blue-800); }
+.ocr-progress-elapsed { font-size: 0.74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* 부정형 막대. 채워지는 퍼센트를 지어내지 않는다 — 전체 글자 수를 미리 알 수 없고,
+   임의의 목표치를 두면 90%에서 멈춰 있는 막대가 된다. */
+.ocr-progress-bar { position: relative; height: 3px; border-radius: 999px; background: var(--blue-100); overflow: hidden; }
+.ocr-progress-bar i { position: absolute; inset: 0 auto 0 0; width: 38%; border-radius: 999px; background: var(--blue-600); animation: ocr-slide 1.35s ease-in-out infinite; }
+@keyframes ocr-slide {
+  0% { left: -38%; }
+  100% { left: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ocr-progress-bar i { animation: none; left: 0; width: 100%; opacity: 0.45; }
+}
+
+.ocr-progress-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.15rem 0.5rem; }
+.ocr-progress-steps li { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--muted); }
+.ocr-step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); flex: none; }
+.ocr-progress-steps li.is-done { color: var(--muted-strong); }
+.ocr-progress-steps li.is-done .ocr-step-dot { background: var(--safe); }
+.ocr-progress-steps li.is-at { color: var(--blue-800); font-weight: 700; }
+.ocr-progress-steps li.is-at .ocr-step-dot { background: var(--blue-600); box-shadow: 0 0 0 3px rgba(36, 99, 235, 0.18); }
+
+.ocr-progress-detail { margin: 0; font-size: 0.76rem; color: var(--muted-strong); line-height: 1.6; }
+.ocr-progress-restart { margin: 0; font-size: 0.76rem; color: var(--danger); line-height: 1.6; }
+
+/* 흘러온 글의 꼬리. 자기 검진표의 글자가 보이는 것이 "지금 읽고 있다" 를 가장
+   확실하게 말한다. 높이를 고정해 패널이 검진표보다 길어지지 않게 둔다. */
+.ocr-progress-stream { display: grid; gap: 0.25rem; }
+.ocr-stream-count { margin: 0; font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ocr-progress-stream pre {
+  margin: 0;
+  max-height: 4.6rem;
+  overflow: hidden;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--blue-100);
+  font-size: 0.7rem;
+  line-height: 1.55;
+  color: var(--muted-strong);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---------------------------------------------------------------------------
+ * 판정 근거 — 카드 위에 겹쳐 띄운다
+ *
+ * 접이(`<details>`)로 카드 안에서 펼치던 때는 격자에서 한 장이 펼쳐지면 같은 줄
+ * 카드까지 키가 늘고 아래가 통째로 밀렸다. 근거 블록에는 게이지·표·차트가 있어서
+ * 카드 하나가 화면 두 개 길이가 된다.
+ * ------------------------------------------------------------------------- */
+.assess-evidence-open {
+  margin-top: auto;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--blue-100);
+  border-radius: 8px;
+  background: var(--blue-50);
+  color: var(--blue-700);
+  font-size: 0.8rem;
+  font-weight: 650;
+  cursor: pointer;
+  text-align: left;
+}
+.assess-evidence-open:hover { border-color: var(--blue-500); color: var(--blue-800); }
+
+.verdict-modal-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.7rem; }
+.verdict-modal-head strong { font-size: 0.95rem; }

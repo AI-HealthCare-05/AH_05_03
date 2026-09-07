@@ -62,7 +62,8 @@ function isConfirmed(suspect: SuspectCard) {
 function OnsetRow({ years, value, peer }: { years: number; value: number; peer?: number }) {
   return (
     <li className="suspect-row">
-      <span className="suspect-when">{years}년 뒤</span>
+      {/* 0 은 "지금" 이다. `0년 뒤` 라고 적으면 읽는 사람이 한 박자 멈춘다. */}
+      <span className="suspect-when">{years === 0 ? "지금" : `${years}년 뒤`}</span>
       <b className="suspect-value">{percent(value)}</b>
       <span className="suspect-gauge" aria-hidden="true">
         <span className="suspect-gauge-fill" style={{ width: `${Math.min(value * 100, 100)}%` }} />
@@ -146,18 +147,19 @@ function SuspectItem({ suspect }: { suspect: SuspectCard }) {
       ) : null}
 
       {showPrevalence ? (
-        <p className="suspect-prevalence">
-          <span className="suspect-prevalence-label">기준 초과</span>
-          <span>
-            지금 {percent(prevalence.current_probability)}
+        // **한 줄짜리 화살표 사슬을 표로 바꿨다.** 지평이 1~5년 다섯 개가 되면서
+        // `지금 47% → 1년 46% → 2년 45% → …` 이 두 줄로 접히고, 그 줄에서 어느
+        // 숫자가 어느 해인지 눈으로 되짚어야 했다. 발병 곡선과 같은 막대로 둔다 —
+        // 두 곡선의 뜻은 다르지만 읽는 방법은 같아야 한다.
+        <section className="suspect-series">
+          <h5>기준을 넘고 있을 확률</h5>
+          <ul className="suspect-rows">
+            <OnsetRow years={0} value={prevalence.current_probability} />
             {prevalence.horizons_years.map((year, i) => (
-              <span key={year}>
-                {" → "}
-                {year}년 <b>{percent(prevalence.prevalence_probability[i])}</b>
-              </span>
+              <OnsetRow key={year} years={year} value={prevalence.prevalence_probability[i]} />
             ))}
-          </span>
-        </p>
+          </ul>
+        </section>
       ) : null}
 
       {confirmed ? (

@@ -66,6 +66,15 @@ INSUFFICIENT = RiskLevel.INSUFFICIENT_DATA.value
 #: 결정론 엔진이 "이미 그 질환" 이라고 본 등급. 궤적의 전제("지금 없다면")가 성립하지 않는다.
 _PRESENT_LEVELS = frozenset({RiskLevel.HIGH.value, RiskLevel.VERY_HIGH.value})
 
+#: 5단계의 한글 이름. 화면의 `LEVEL_LABEL`(`contracts.ts`)과 같은 표기여야 한다.
+LEVEL_NAMES: dict[str, str] = {
+    RiskLevel.VERY_HIGH.value: "매우 높음",
+    RiskLevel.HIGH.value: "높음",
+    RiskLevel.CAUTION.value: "주의",
+    RiskLevel.NORMAL.value: "정상 범위",
+    INSUFFICIENT: "정보 부족",
+}
+
 
 # ---------------------------------------------------------------------------
 # 질환 축 — 세 이름 공간을 하나로 모은다
@@ -413,7 +422,11 @@ def arbitrate(
                     engine_label=ENGINE_LABELS["E2"],
                     engine_reason="측정값이 없어 ML 이 답했습니다. 발병 예측이 아니라 재면 기준을 넘을 가능성입니다.",
                     risk_level=level,
-                    sub_status="ML 예측",
+                    # **엔진 이름을 여기 다시 쓰지 않는다.** 화면의 두 엔진 칸은
+                    # `[엔진 이름][이 칸의 답]` 꼴인데 여기에 "ML 예측" 을 넣으면
+                    # "ML 예측 47% → ML 예측 ML 예측" 이 된다(실측). 이 칸의 답은
+                    # 등급이다.
+                    sub_status=LEVEL_NAMES.get(level, level),
                     display_label="측정값 없이 추정한 값이에요. 확인하려면 검사가 필요합니다.",
                     reason=detail,
                     criteria_reference=condition.get("threshold_source", ""),

@@ -230,11 +230,11 @@ def test_reversible_curve_may_fall() -> None:
 
 
 def test_prevalence_truncates_at_age_cap() -> None:
-    curve = prevalence_curve(lambda age: 0.2, 75.0)
+    curve = prevalence_curve(lambda age: 0.2, 77.0)
     assert curve is not None
-    assert curve["horizons_years"] == [5], "75세는 5년만 자료 안에 든다"
+    assert curve["horizons_years"] == [1, 2, 3], "77세는 3년까지만 자료 안에 든다"
     assert curve["truncated_at_age"] == 80
-    assert prevalence_curve(lambda age: 0.2, 76.0) is None
+    assert prevalence_curve(lambda age: 0.2, 80.0) is None
 
 
 # ---------------------------------------------------------------------------
