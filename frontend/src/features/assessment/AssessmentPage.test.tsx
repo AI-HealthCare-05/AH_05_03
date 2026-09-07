@@ -386,6 +386,57 @@ describe("AssessmentPage", () => {
     expect(within(panel).getAllByText(/그 나이에 기준을 넘고 있을 확률/)).toHaveLength(1);
   });
 
+  it("급한 셋이 전부 이미 넘었어도 나머지 질환의 5년 뒤는 보여준다", async () => {
+    const user = userEvent.setup();
+    // 카드 세 장은 **급한 순** 셋이다. 그 셋이 전부 이미 기준을 넘은 상태이면
+    // 세 장 모두 "지금 넘었어요" 만 적고 앞날 숫자가 하나도 안 남는다 — 실측으로
+    // 그런 화면이 나왔고(지질 셋이 전부 '높음'), 제목이 "발병 예측" 인데 예측이
+    // 한 줄도 없었다. 순위를 흔들지 않고 나머지 질환의 앞날을 같이 싣는다.
+    const response = structuredClone(RESPONSE) as typeof RESPONSE;
+    (response.verdicts[0].reference as Record<string, unknown>).prevalence_trajectory = {
+      horizons_years: [1, 2, 3, 4, 5],
+      prevalence_probability: [0.58, 0.6, 0.62, 0.64, 0.66],
+      current_probability: 0.57,
+      direction: "상승",
+      conditional_on: "지금의 수치가 유지된다는 가정",
+      irreversible: false,
+      truncated_at_age: null,
+      caveats: ["지금 넘었는지와 무관합니다.", "내려가는 구간은 치료 시작 때문입니다.", "NHANES 기준입니다."],
+    };
+    // 이미 넘어서 서버가 곡선을 지운 칸 하나. 이 자리를 비우면 "그 질환은 어떻게
+    // 됐나" 를 사용자가 다시 찾아야 한다.
+    const settled = structuredClone(response.verdicts[0]);
+    settled.key = "hyperchol";
+    settled.name = "고콜레스테롤혈증";
+    settled.risk_level = "HIGH";
+    delete (settled.reference as Record<string, unknown>).trajectory;
+    delete (settled.reference as Record<string, unknown>).prevalence_trajectory;
+    response.verdicts.push(settled);
+
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(response as never);
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const outlook = await screen.findByRole("region", { name: /5년 뒤/ });
+    // 유병 곡선이 있는 칸은 마지막 해의 확률과 "지금" 을 같이 적는다.
+    const htn = within(outlook).getByText("고혈압").closest("li") as HTMLElement;
+    expect(htn).toHaveTextContent("66%");
+    expect(htn).toHaveTextContent(/기준 초과 · 지금 57%/);
+
+    // 발병 궤적이 있는 칸은 다른 이름으로 적는다 — 뜻이 다른 숫자다.
+    const anemia = within(outlook).getByText("빈혈").closest("li") as HTMLElement;
+    expect(anemia).toHaveTextContent(/새로 생길 확률/);
+
+    // 곡선이 없는 칸도 자리를 지우지 않고 왜 없는지 적는다.
+    const settledRow = within(outlook).getByText("고콜레스테롤혈증").closest("li") as HTMLElement;
+    expect(settledRow).toHaveTextContent("이미 기준을 넘었어요");
+    // 그 줄에는 숫자를 적지 않는다 — 라벨 검사값이 ML 입력에서 차단돼 모델이 낮은
+    // 값을 내므로, "높음" 배지 밑에 놓으면 어느 쪽을 믿어야 하는지 알 수 없다.
+    expect(settledRow.querySelector(".outlook-value")).toBeNull();
+  });
+
   it("측정이 '기준 이내'라고 답한 카드에는 모델 확률을 덧붙이지 않는다", async () => {
     const user = userEvent.setup();
     // 라벨을 만드는 검사값은 그 질환의 ML 입력에서 차단된다. 그래서 이 모델은

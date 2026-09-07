@@ -27,7 +27,7 @@
  * 붙어 있던 것이 이 패널에서 가장 헷갈리는 지점이었다. 측정이 답한 칸은 답으로 닫는다.
  */
 
-import type { RiskLevel, SuspectCard } from "./contracts";
+import type { DiseaseVerdict, RiskLevel, SuspectCard } from "./contracts";
 import { LevelBadge } from "./VerdictCards";
 
 const percent = (value: number) => `${(value * 100).toFixed(0)}%`;
@@ -178,10 +178,124 @@ function SuspectItem({ suspect }: { suspect: SuspectCard }) {
 }
 
 /**
+ * 열세 질환의 **5년 뒤 한 줄**. 세 장 카드 아래에 붙는다.
+ *
+ * ## 왜 필요했나
+ *
+ * 카드 세 장은 아래 질환별 결과의 **급한 순** 셋이다. 그런데 급한 셋이 전부 이미
+ * 기준을 넘은 상태이면 세 장 모두 "지금 넘었어요" 만 적고 앞날 숫자가 하나도 안
+ * 남는다 — 실측으로 그런 화면이 나왔다(고콜레스테롤혈증·이상지질혈증·고중성지방혈증
+ * 셋 다 '높음'). 패널 제목이 "발병 예측" 인데 예측이 한 줄도 없는 셈이었다.
+ *
+ * 순위를 바꿔서 풀지 않는다. 카드 등급 순이라는 것이 이 패널의 계약이고, 그걸
+ * 흔들면 위아래 두 블록이 다시 다른 이야기를 하게 된다. 대신 **나머지 질환의 앞날을
+ * 같이 싣는다.**
+ *
+ * ## 이미 넘은 질환에는 숫자를 적지 않는다
+ *
+ * 라벨을 만드는 검사값은 그 질환의 ML 입력에서 차단되므로(`modeling/targets.py`),
+ * LDL 178 로 확진된 사람에게도 고콜레스테롤 모델은 그 값을 못 보고 19% 를 낸다.
+ * "높음" 배지 밑에 그 숫자를 놓으면 둘 중 어느 쪽을 믿어야 하는지 알 수 없다.
+ * 서버가 그 칸의 곡선을 지우고(`assessment.arbitrate`), 여기서는 왜 없는지를 적는다.
+ */
+function ForwardOutlook({ verdicts }: { verdicts: DiseaseVerdict[] }) {
+  const rows = verdicts
+    .map((verdict) => {
+      const onset = verdict.reference?.trajectory;
+      const prevalence = verdict.reference?.prevalence_trajectory;
+      if (onset && onset.onset_probability.length > 0) {
+        const last = onset.onset_probability.length - 1;
+        return {
+          key: verdict.key,
+          name: verdict.name,
+          kind: "onset" as const,
+          years: onset.horizons_years[last],
+          value: onset.onset_probability[last],
+          peer: onset.population_onset_probability?.[last],
+          now: undefined,
+        };
+      }
+      if (prevalence && prevalence.prevalence_probability.length > 0) {
+        const last = prevalence.prevalence_probability.length - 1;
+        return {
+          key: verdict.key,
+          name: verdict.name,
+          kind: "prevalence" as const,
+          years: prevalence.horizons_years[last],
+          value: prevalence.prevalence_probability[last],
+          peer: undefined,
+          now: prevalence.current_probability,
+        };
+      }
+      return {
+        key: verdict.key,
+        name: verdict.name,
+        kind: "none" as const,
+        years: 0,
+        value: -1,
+        peer: undefined,
+        now: undefined,
+        level: verdict.risk_level,
+      };
+    })
+    // 큰 것부터. 숫자가 없는 칸은 아래로 내린다 — 훑을 때 위쪽만 봐도 급한 것이 잡힌다.
+    .sort((a, b) => b.value - a.value);
+
+  if (rows.every((row) => row.kind === "none")) return null;
+  const horizon = rows.find((row) => row.years > 0)?.years ?? 5;
+
+  return (
+    <section className="suspect-outlook" aria-labelledby="suspect-outlook-heading">
+      <h4 id="suspect-outlook-heading">
+        {horizon}년 뒤 <span className="assess-muted">· 질환 {rows.length}가지 전부</span>
+      </h4>
+      {/* **한 줄로 정렬하되 뜻이 둘이라는 것을 먼저 밝힌다.** 37% 와 11% 가 같은
+          자를 쓰는 숫자가 아니다 — 하나는 "새로 생길", 하나는 "그때 넘고 있을" 이다.
+          줄마다 어느 쪽인지 적지만, 목록을 위에서 아래로 훑는 사람은 그 꼬리표보다
+          순서를 먼저 읽는다. */}
+      <p className="suspect-outlook-lead assess-muted">
+        <b>새로 생길 확률</b>은 지금 없다는 전제 아래 그 사이에 생길 확률이고(비가역 세 질환),{" "}
+        <b>기준 초과</b>는 지금 넘었는지와 무관하게 그 나이에 넘고 있을 확률입니다. 서로 다른 물음이라 한 줄로
+        비교하지 마세요.
+      </p>
+      <ul className="suspect-outlook-list">
+        {rows.map((row) => (
+          <li key={row.key} className={`outlook-${row.kind}`}>
+            <span className="outlook-name">{row.name}</span>
+            {row.kind === "none" ? (
+              <span className="outlook-none">
+                {row.level === "HIGH" || row.level === "VERY_HIGH"
+                  ? "이미 기준을 넘었어요"
+                  : "앞날을 낼 근거가 없어요"}
+              </span>
+            ) : (
+              <>
+                <span className="outlook-bar" aria-hidden="true">
+                  <i style={{ width: `${Math.min(row.value * 100, 100)}%` }} />
+                  {row.peer !== undefined && (
+                    <em style={{ left: `${Math.min(row.peer * 100, 100)}%` }} />
+                  )}
+                </span>
+                <b className="outlook-value">{percent(row.value)}</b>
+                <span className="outlook-note">
+                  {row.kind === "onset"
+                    ? `새로 생길 확률${row.peer !== undefined ? ` · 동년배 ${percent(row.peer)}` : ""}`
+                    : `기준 초과 · 지금 ${percent(row.now ?? 0)}`}
+                </span>
+              </>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
  * 상위 세 장. 하나도 의심이 아니면 그 사실을 먼저 말한다 — 세 장이 떠 있는 것만으로
  * "뭔가 걸렸다" 로 읽히면 안 된다.
  */
-export function SuspectPanel({ suspects }: { suspects: SuspectCard[] }) {
+export function SuspectPanel({ suspects, verdicts = [] }: { suspects: SuspectCard[]; verdicts?: DiseaseVerdict[] }) {
   if (suspects.length === 0) return null;
   const anySuspected = suspects.some((s) => s.suspected);
   // 두 숫자의 뜻은 카드마다가 아니라 패널에 한 번만 적는다. 카드에 세 번 반복하면
@@ -210,6 +324,7 @@ export function SuspectPanel({ suspects }: { suspects: SuspectCard[] }) {
           <SuspectItem key={suspect.target} suspect={suspect} />
         ))}
       </div>
+      <ForwardOutlook verdicts={verdicts} />
       {(anyOnset || anyPrevalence) && (
         <p className="assess-fineprint suspect-note">
           {anyOnset && <><b>새로 생길 확률</b>은 지금 그 질환이 없다는 전제 아래 그 사이에 새로 생길 확률입니다. </>}

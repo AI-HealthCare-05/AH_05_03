@@ -919,7 +919,7 @@ export function AssessmentPage() {
             </div>
           </header>
 
-          <SuspectPanel suspects={result.top_suspects ?? []} />
+          <SuspectPanel suspects={result.top_suspects ?? []} verdicts={result.verdicts ?? []} />
 
           <h2 className="assess-axis-title">
             질환별 결과 <span className="assess-muted">지금 내 몸의 상태</span>

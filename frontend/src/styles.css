@@ -6812,3 +6812,43 @@ main {
 
 .verdict-modal-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.7rem; }
 .verdict-modal-head strong { font-size: 0.95rem; }
+
+/* ---------------------------------------------------------------------------
+ * 5년 뒤 — 열세 질환 전부
+ *
+ * 카드 세 장이 전부 "이미 넘음" 이면 패널에 앞날 숫자가 하나도 안 남는다. 순위를
+ * 흔들지 않고 나머지 질환의 앞날을 같이 싣는다. 막대는 0~100% 고정 축이다 —
+ * 줄마다 축이 다르면 줄 사이 비교가 거짓이 된다.
+ * ------------------------------------------------------------------------- */
+.suspect-outlook { margin-top: 0.9rem; border-top: 1px solid var(--line-soft); padding-top: 0.8rem; }
+.suspect-outlook h4 { margin: 0 0 0.55rem; font-size: 0.88rem; }
+.suspect-outlook h4 .assess-muted { font-size: 0.76rem; font-weight: 600; }
+
+.suspect-outlook-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; }
+.suspect-outlook-list li {
+  display: grid;
+  grid-template-columns: 8.5rem 1fr 3rem;
+  grid-template-areas: "name bar value" ".    note note";
+  align-items: center;
+  gap: 0.1rem 0.5rem;
+  font-size: 0.78rem;
+}
+.outlook-name { grid-area: name; font-weight: 600; color: var(--ink); }
+.outlook-value { grid-area: value; text-align: right; font-variant-numeric: tabular-nums; }
+.outlook-note { grid-area: note; font-size: 0.68rem; color: var(--muted); }
+
+.outlook-bar { grid-area: bar; position: relative; height: 7px; border-radius: 999px; background: var(--line-soft); overflow: visible; }
+.outlook-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--blue-500); }
+/* 동년배 눈금. 채움과 같은 축 위에 있어야 "몇 배" 가 산수 없이 읽힌다. */
+.outlook-bar em { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--muted-strong); border-radius: 1px; }
+
+/* 발병 궤적은 채도를 올려 유병 곡선과 가른다 — 뜻이 다른 두 숫자다. */
+.outlook-onset .outlook-bar i { background: var(--blue-700); }
+
+/* 숫자가 없는 줄. 자리를 지우지 않고 왜 없는지를 적는다. */
+.outlook-none { grid-area: bar / bar / value / value; font-size: 0.72rem; color: var(--muted); }
+
+@media (max-width: 640px) {
+  .suspect-outlook-list li { grid-template-columns: 6.5rem 1fr 2.8rem; }
+}
+.suspect-outlook-lead { margin: 0 0 0.55rem; font-size: 0.72rem; line-height: 1.6; max-width: 66ch; }
