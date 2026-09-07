@@ -468,13 +468,31 @@ export function VerdictDetail({
   );
 }
 
+/**
+ * 옛 저장본의 제목을 읽을 수 있게 되돌린다.
+ *
+ * 서버가 `category` 에 **내부 키를 그대로** 넣던 판이 있었고(`cvd_risk`), 기록 화면은
+ * 그날 저장한 판정을 그대로 그린다 — 그래서 지난 기록에는 그 값이 남아 있다.
+ * 서버는 고쳤지만(`disease_risk_matrix.risk_title`) 저장본은 못 고치므로 여기서 받는다.
+ *
+ * 표를 두 벌 두는 값은 치른다. 대안은 저장본을 마이그레이션하는 것인데, 스냅샷은
+ * "그날 본 화면" 이라는 게 존재 이유라 손대지 않는 편이 맞다.
+ */
+const LEGACY_MATRIX_TITLE: Record<string, string> = {
+  dm_risk: "당뇨병 위험",
+  cvd_risk: "심혈관질환 위험",
+  ckd_risk: "만성콩팥병 위험",
+  htn_risk: "고혈압 위험",
+};
+
 export function MatrixCard({ risk }: { risk: DiseaseRisk }) {
+  const title = LEGACY_MATRIX_TITLE[risk.category] ?? risk.category;
   return (
     <article
       className={`assess-card assess-matrix ${LEVEL_CLASS[risk.risk_level]}`}
     >
       <header>
-        <h3>{risk.category}</h3>
+        <h3>{title}</h3>
         <LevelBadge level={risk.risk_level} />
       </header>
       <p className="assess-substatus">{risk.sub_status}</p>

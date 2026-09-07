@@ -949,3 +949,25 @@ describe("카드와 자세히 보기가 같은 것을 보여준다", () => {
     expect(within(anemia).getByText("ML 추정")).toBeInTheDocument();
   });
 });
+
+describe("수치가 가리키는 앞날 카드", () => {
+  it("옛 저장본의 내부 키도 읽을 수 있는 제목으로 그린다", async () => {
+    const user = userEvent.setup();
+    // 서버가 `category` 에 키를 넣던 판의 응답. 기록 화면이 그리는 저장본이 이 모양이다.
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue({
+      ...RESPONSE,
+      disease_risks: {
+        cvd_risk: { ...RESPONSE.disease_risks.cvd_risk, category: "cvd_risk" },
+      },
+    } as never);
+    vi.spyOn(serverApiClient, "modelInfo").mockResolvedValue({ models: [] });
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "판정하기" }));
+    await screen.findByText("판정 요약");
+
+    expect(screen.getByRole("heading", { name: "심혈관질환 위험", level: 3 })).toBeInTheDocument();
+    expect(screen.queryByText("cvd_risk")).not.toBeInTheDocument();
+  });
+});

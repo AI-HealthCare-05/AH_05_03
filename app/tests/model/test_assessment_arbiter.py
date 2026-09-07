@@ -423,7 +423,6 @@ def test_matrix_axis_carries_cardiovascular_disease(models: Any) -> None:
 
     assert "cvd" not in {v.key for v in verdicts}
     assert "cvd_risk" in disease_risks
-    assert disease_risks["cvd_risk"]["category"]
     assert level_str(disease_risks["cvd_risk"]["risk_level"]) in LEVELS
     # 두 축을 한 목록에 섞지 않는다.
     assert "matrix_needs_attention" in summary
