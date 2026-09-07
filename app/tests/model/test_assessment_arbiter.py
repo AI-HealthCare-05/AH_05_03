@@ -469,6 +469,34 @@ def test_reference_carries_accuracy_and_anchor(models: Any) -> None:
     assert accuracy["measured_on"] in ("미진단자", "전체")
 
 
+def test_reference_carries_the_whole_medical_band(models: Any) -> None:
+    """등급 문자열 하나가 아니라 묶음 전체를 싣는다.
+
+    `medical_level` 만 내보내던 때가 있었다. 그것으로는 **게이지를 그릴 수 없고**
+    "이 점수대 100명 중 몇 명" 도 못 쓴다 — 재료가 `rate`·`basis`·`baseline`·`lift`
+    다. 예측 데모(`/api/demo`)는 그 값을 위해 `/predictions/risk` 를 따로 불렀는데,
+    같은 입력을 두 번 보내면 두 답이 갈릴 수 있다. 데모를 판정 화면에 합치면서
+    왕복을 하나로 두고 이 필드를 늘렸다.
+
+    AGENTS.md 6번("DTO 필드를 더하면 그 값이 결과를 바꿔야 한다")의 반대 방향도
+    같이 본다 — `medical_level` 이 이 묶음의 `level` 과 **같은 값**이어야 한다.
+    다르면 화면의 배지와 게이지가 서로 다른 말을 한다.
+    """
+    verdicts = _assess(BASE, models)
+    scored = [v for v in verdicts.values() if v.reference.get("probability") is not None]
+    assert scored, "검사값이 없어도 ML 카드는 나온다"
+
+    for verdict in scored:
+        medical = verdict.reference["medical"]
+        assert medical is not None, f"{verdict.key}: 등급 묶음이 없으면 자세히 보기가 게이지를 못 그린다"
+        assert 0.0 <= medical["rate"] <= 1.0
+        assert medical["basis"], f"{verdict.key}: 비율이 무슨 기준인지 없으면 숫자를 읽을 수 없다"
+        assert isinstance(medical["anchored_on_rule_engine"], bool)
+        assert medical["level"] == verdict.reference["medical_level"], (
+            f"{verdict.key}: 배지({verdict.reference['medical_level']})와 게이지({medical['level']})가 다르다"
+        )
+
+
 def test_top_factors_survive_but_are_marked(models: Any) -> None:
     """기여도를 지우지 않는다. 다만 개선 조언으로 쓰면 안 된다는 사실이 계약에 있다."""
     from app.dtos.assessment_summary import VerdictReference
