@@ -48,7 +48,7 @@ export async function setupE2eServerMocks(
 ): Promise<MockServerState> {
   const state: MockServerState = {
     households: initialState?.households ?? [
-      { id: "e2e-household-1", name: "우리집", role: "owner", created_at: "2026-01-01T00:00:00Z" },
+      { id: "e2e-household-1", name: "우리집", role: "owner", status: "active", created_at: "2026-01-01T00:00:00Z" },
     ],
     profiles: initialState?.profiles ?? [],
     healthRecords: initialState?.healthRecords ?? [],
@@ -171,6 +171,7 @@ export async function setupE2eServerMocks(
           id: `hh-${Date.now()}`,
           name: "우리집",
           role: "owner",
+          status: "active",
           created_at: new Date().toISOString(),
         };
         state.households.push(newHousehold);

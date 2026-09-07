@@ -82,7 +82,7 @@ export function LocalDomainProvider({
         if (authStatus === "signed-in") {
           try {
             const households = await serverApiClient.listHouseholds();
-            const activeHousehold = households?.find((h) => h.status === "active");
+            const activeHousehold = households?.find((h) => h.status === "active") ?? households?.[0];
             if (activeHousehold) {
               activeHouseholdId = activeHousehold.id;
             } else {
