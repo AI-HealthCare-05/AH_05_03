@@ -3862,11 +3862,26 @@ main {
 
 .assess-axis-title { margin: 1.5rem 0 0.35rem; font-size: 1.05rem; display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
 .assess-axis-note { margin: 0 0 0.9rem; color: var(--muted); font-size: 0.85rem; max-width: 78ch; }
-/* **`align-items: start` 가 없으면 카드를 펼칠 수 없다.** 격자 기본값(stretch)에서는
-   한 장이 늘어나면 같은 줄 전체가 그 키를 따라가고, 아래 줄이 통째로 밀린다 —
-   읽으려던 자리가 눈앞에서 움직인다. 그래서 근거를 모달로만 뺐던 것이고, 이 한 줄이
-   그 제약을 풀어 예측 데모처럼 카드 안에서 펼치게 한다. */
-.assess-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 0.9rem; align-items: start; }
+/* 카드 격자.
+
+   **`align-items: start` 를 한 번 넣었다가 되돌렸다.** 접이를 펼칠 때 같은 줄이
+   같이 늘어나는 것을 막으려던 것인데, 부작용으로 **접힌 카드끼리도 키가 제각각**이
+   됐다 — 수치가 하나인 비만 카드와 둘에 안내문까지 있는 당뇨병 카드가 나란히 서면
+   눈에 띄게 어긋난다. 카드를 훑는 화면에서 그건 비싼 대가다.
+
+   대신 `grid-auto-rows` 로 **행의 최소 높이**를 준다. 접힌 카드는 전부 같은 키가
+   되고(stretch 가 행 높이를 채운다), 펼친 카드가 있는 줄만 그만큼 늘어난다.
+   `auto` 상한이 있어 내용이 넘치면 잘리지 않는다. */
+.assess-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 0.9rem;
+  /* **접힌 카드는 전부 같은 키다.** 15.5rem 으로 뒀을 때는 행 안에서만 맞고
+     행끼리는 달랐다(실측 323·362·294·248px) — 훑어 내려가면 계단처럼 어긋난다.
+     접힌 상태의 최대치(362px ≈ 22.6rem)를 최소 높이로 잡아 전부 같게 만든다.
+     짧은 카드에 생기는 여백은 버튼을 바닥으로 밀어(`margin-top: auto`) 흡수한다. */
+  grid-auto-rows: minmax(22.6rem, auto);
+}
 
 .assess-card { border: 1px solid var(--line); border-left-width: 5px; border-radius: 12px; padding: 0.9rem 1.05rem; background: var(--surface); display: flex; flex-direction: column; gap: 0.45rem; }
 .assess-card header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; }
@@ -6484,3 +6499,108 @@ main {
 .detail-tile .v { font-size: 1.1rem; }
 .detail-tile .v.is-none { color: var(--muted); font-weight: 600; }
 .detail-condition h4 .assess-badge { font-size: 0.7rem; }
+
+/* ---------------------------------------------------------------------------
+ * 카드 정돈 — 크기가 제각각이던 것을 맞춘다
+ *
+ * 행 높이는 `.assess-cards` 의 `grid-auto-rows` 가 잡고, 여기서는 **카드 안에서
+ * 무엇이 어디에 서는지**를 고정한다. 카드마다 수치 개수와 안내문 유무가 달라서,
+ * 자연 흐름에 맡기면 "판정 근거 전체" 버튼이 카드마다 다른 높이에 뜬다.
+ * ------------------------------------------------------------------------- */
+
+/* 근거 접이와 버튼을 바닥으로 민다. 그 위 내용이 짧든 길든 버튼 줄이 맞는다. */
+.assess-card-evidence { margin-top: auto; }
+.assess-card > .assess-why-button { margin-top: auto; }
+.assess-card-evidence + .assess-why-button { margin-top: 0.35rem; }
+
+/* 수치 칸. 한 줄에 최대 셋까지 두고 넘치면 접는다 — 넷이 한 줄에 들어가면 글자가
+   너무 작아져 읽히지 않는다(지방간·대사증후군 카드가 그랬다). */
+.assess-figures { flex-wrap: wrap; gap: 0.45rem 0.9rem; }
+.assess-figure { min-width: 4.5rem; }
+
+/* 등급 막대와 부제 사이를 조금 벌린다. 붙어 있으면 막대가 부제의 밑줄처럼 읽힌다. */
+.assess-card .level-bar { margin-bottom: 0.15rem; }
+
+/* "…를 넣으면 정확해져요" 는 안내지 경고가 아니다. 카드 흐름에서 한 단 내린다. */
+.assess-need { font-size: 0.78rem; color: var(--muted-strong); }
+
+/* ---------------------------------------------------------------------------
+ * 수치가 가리키는 앞날 — 매트릭스 카드
+ *
+ * 신호 하나가 네 줄(이름·측정값·효과·출처)이라 신호 일곱이면 스물여덟 줄이었다.
+ * 판정 카드와 같은 격자에 좁게 끼어 있어서 더 읽기 어려웠다.
+ *
+ * 셋을 바꿨다 — ① 격자를 따로 넓게, ② 무게를 색이 아니라 점 세 개로,
+ * ③ 출처·인과는 접이 안으로.
+ * ------------------------------------------------------------------------- */
+
+/* 넷뿐이고 내용이 길다. 판정 카드용 최소 행 높이와 싸우지 않게 격자를 따로 둔다. */
+.assess-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(24rem, 1fr));
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.assess-matrix { gap: 0.55rem; }
+.assess-matrix .assess-label { color: var(--muted-strong); font-size: 0.86rem; }
+
+.assess-contributors { gap: 0.6rem; }
+.assess-contributors li {
+  gap: 0.15rem;
+  padding: 0.5rem 0.65rem;
+  border-left-width: 3px;
+  border-radius: 0 8px 8px 0;
+  background: var(--blue-50);
+}
+/* 무게가 셋인 신호만 배경을 바꿔 눈에 걸리게. 전부 칠하면 강조가 사라진다. */
+.assess-contributors li.weight-3 { background: var(--danger-soft); }
+
+.assess-contrib-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.assess-contrib-label { font-size: 0.85rem; }
+
+/* 무게 — 점 셋. 색만으로 말하지 않는다. */
+.assess-contrib-weight { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.assess-contrib-weight i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.assess-contrib-weight i.on { background: var(--muted-strong); }
+.weight-3 .assess-contrib-weight i.on { background: var(--danger); }
+.weight-2 .assess-contrib-weight i.on { background: var(--blue-600); }
+
+.assess-contrib-detail { font-size: 0.79rem; font-variant-numeric: tabular-nums; }
+.assess-contrib-effect { font-size: 0.79rem; }
+
+.assess-contrib-source { margin-top: 0.2rem; font-size: 0.72rem; color: var(--muted); }
+.assess-contrib-source > summary {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted-strong);
+  font-weight: 600;
+  padding: 0.15rem 0;
+}
+.assess-contrib-source > span { display: block; margin-top: 0.2rem; line-height: 1.5; }
+
+/* 인과인지 동반 지표인지 — 근거의 세기를 한 단어로. */
+.assess-causal { padding: 0.05rem 0.35rem; border-radius: 4px; font-size: 0.66rem; font-weight: 700; }
+.assess-causal.is-causal { background: var(--safe-soft); color: var(--safe); }
+.assess-causal.is-marker { background: var(--line-soft); color: var(--muted-strong); }
+
+/* 화면 낭독기 전용. 점 셋은 aria-hidden 이라 대체 텍스트가 필요하다. */
+.assess-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .assess-matrix-grid { grid-template-columns: 1fr; }
+}

@@ -502,14 +502,34 @@ export function MatrixCard({ risk }: { risk: DiseaseRisk }) {
         <ul className="assess-contributors">
           {risk.contributors.map((c) => (
             <li key={c.key} className={`weight-${c.weight}`}>
-              <span className="assess-contrib-label">{c.label}</span>
+              {/* 신호 이름과 **무게**를 한 줄에. 예전에는 무게가 왼쪽 테두리 색으로만
+                  있었는데, 색 하나로는 "이게 셋 중 몇인가" 를 못 읽는다. 점 세 개를
+                  같이 두면 형태로도 읽히고, 색을 구분하기 어려운 사람에게도 남는다. */}
+              <span className="assess-contrib-head">
+                <span className="assess-contrib-label">{c.label}</span>
+                <span className="assess-contrib-weight" title={`가중 ${c.weight} / 3`}>
+                  <i aria-hidden="true" className={c.weight >= 1 ? "on" : ""} />
+                  <i aria-hidden="true" className={c.weight >= 2 ? "on" : ""} />
+                  <i aria-hidden="true" className={c.weight >= 3 ? "on" : ""} />
+                  <em className="assess-sr">가중 {c.weight} / 3</em>
+                </span>
+              </span>
               <span className="assess-contrib-detail">{c.detail}</span>
               <span className="assess-contrib-effect">{c.effect}</span>
-              <span className="assess-muted">
-                {c.source}
-                {c.causal === true && " · 인과 근거 있음"}
-                {c.causal === false && " · 따져봤더니 인과는 아니었다"}
-              </span>
+              {/* 출처와 인과 여부는 **근거를 확인하러 온 사람**이 읽는 줄이다.
+                  신호마다 항상 펼쳐 두면 카드 하나가 스무 줄이 된다. */}
+              <details className="assess-contrib-source">
+                <summary>
+                  근거
+                  {c.causal === true && <b className="assess-causal is-causal">인과</b>}
+                  {c.causal === false && <b className="assess-causal is-marker">지표</b>}
+                </summary>
+                <span>
+                  {c.source}
+                  {c.causal === true && " — 유전연구·중재시험이 함께 지지한다"}
+                  {c.causal === false && " — 따져봤더니 원인이 아니라 동반 지표였다"}
+                </span>
+              </details>
             </li>
           ))}
         </ul>

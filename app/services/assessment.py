@@ -604,6 +604,18 @@ def assess(payload: Any, models: Any) -> tuple[list[DiseaseVerdict], dict[str, A
     if available and request is not None:
         from app.services.prediction import rank_and_attach
 
+        # **ML 번들이 없는 질환도 후보에 넣는다.** 비만·간기능·요산은 규칙 엔진
+        # 전용 카드지만 등급은 있다 — 비만이 `HIGH` 인데 순위에 못 오면 패널이 카드
+        # 2위를 빼놓게 된다. 실측(당뇨 프리셋)에서 그 상태였다.
+        #
+        # `rank_suspects` 는 조건 사전을 받으므로 최소 모양으로 만들어 준다. 확률도
+        # 의학 등급도 없고, `signal_strength` 가 판정(`verdicts`)만 보고 무게를 준다.
+        scored_targets = {card.target for card in cards}
+        extra = [
+            {"target": spec.key, "name": spec.name}
+            for spec in SPECS
+            if spec.ml_target is None or spec.ml_target not in scored_targets
+        ]
         suspects = rank_and_attach(
             cards,
             request,
@@ -614,6 +626,7 @@ def assess(payload: Any, models: Any) -> tuple[list[DiseaseVerdict], dict[str, A
                 v.key: {"engine": v.engine, "risk_level": v.risk_level, "measured": v.measured} for v in verdicts
             },
             known=known_targets(verdicts),
+            extra=extra,
         )
 
     # **질환 이름의 정본은 `SPECS` 하나다.** 카드는 이 표를 쓰고 의심 패널은 ML
@@ -629,14 +642,11 @@ def assess(payload: Any, models: Any) -> tuple[list[DiseaseVerdict], dict[str, A
     # 5단계와 의학 4단계가 섞여 들어온다 — 같은 고혈압이 카드에서 "정상", 패널에서
     # "정상 범위" 로 나오던 원인이다. 카드가 쓰는 등급을 `risk_level` 로 따로 실어
     # 화면이 같은 배지를 그리게 한다.
-    name_by_target = {spec.ml_target: spec.name for spec in SPECS if spec.ml_target}
-    level_by_target = {
-        spec.ml_target: verdict.risk_level
-        for spec in SPECS
-        if spec.ml_target
-        for verdict in verdicts
-        if verdict.key == spec.key
-    }
+    # `SPECS` 의 `key` 와 `ml_target` 은 ML 번들이 있는 질환에서 같은 값이고, 없는
+    # 셋(비만·간기능·요산)은 `key` 만 있다. 후보 목록이 그 셋까지 포함하므로 `key` 로
+    # 맞춘다 — `ml_target` 으로 잡으면 그 셋의 이름·등급이 안 덮인다.
+    name_by_target = {spec.key: spec.name for spec in SPECS}
+    level_by_target = {verdict.key: verdict.risk_level for verdict in verdicts}
     suspects = [
         card.model_copy(
             update={

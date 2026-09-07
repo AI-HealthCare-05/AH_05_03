@@ -91,7 +91,35 @@ TOP_N = 3
 #: 정상 확인된 질환이 1순위" 28%(34건)가 사라지는 쪽이 곡선 14%p 보다 크다.
 #: `EVIDENCE` 가 지질 하위유형을 0.4 로 눌러서 곡선 없는 고유병률 축이 위로 오는 것을
 #: 무게로 막는다 — 후보를 질환 목록으로 자르지 않아도 되는 이유다.
-RANK_SOURCE = "arbitrated"
+#:
+#: ``"verdict"`` — **2026-09-07 채택. 판정 카드의 등급이 순위의 정본이다.**
+#:
+#: `arbitrated` 로도 카드와 패널이 갈렸다. 실측(당뇨 프리셋 · 공복혈당 148 · HbA1c
+#: 7.2)에서 카드 1·2위가 패널에 아예 없었다.
+#:
+#:     카드   VERY_HIGH 당뇨병 · HIGH 비만 · CAUTION 대사증후군 · CAUTION 지방간
+#:     패널   1 대사증후군 · 2 지방간 · 3 이상지질혈증(자리채움)
+#:
+#: 두 가지가 걸러냈다. **확진 제외**(`KNOWN_LEVELS`)가 당뇨병을, **ML 번들 유무**가
+#: 비만을 뺐다. 각각 이유가 있었지만 제목이 "먼저 볼 세 가지" 라 사용자는 "가장 급한
+#: 셋" 으로 읽는다 — 약속과 내용이 달랐다.
+#:
+#: `verdict` 는 카드 등급으로 세우고 같은 등급 안에서만 `arbitrated` 점수로 가른다.
+#: 근거가중·동년배배수는 순위를 뒤집지 못하고 동점을 푸는 데만 쓰인다. 후보는 판정
+#: 13칸 전부이고 확진도 뺀다 — "이미 아는 것" 이라도 가장 급하면 가장 급한 것이다.
+RANK_SOURCE = "verdict"
+
+#: 카드 등급의 급한 순. `RANK_SOURCE = "verdict"` 가 1차 정렬에 쓴다.
+LEVEL_RANK: dict[str, int] = {
+    "VERY_HIGH": 0,
+    "HIGH": 1,
+    "CAUTION": 2,
+    "NORMAL": 3,
+    "INSUFFICIENT_DATA": 4,
+}
+
+#: 카드 등급 중 "먼저 볼" 에 해당하는 것. 나머지는 자리채움이다.
+ATTENTION_LEVELS = frozenset({"VERY_HIGH", "HIGH", "CAUTION"})
 
 #: 확률 순위의 **후보 집합**. `RANK_SOURCE = "ml_probability"` 일 때만 읽는다.
 #:
@@ -274,6 +302,86 @@ def reason_text(detail: dict[str, Any], suspected: bool) -> str:
     return " · ".join(parts) + "."
 
 
+#: 정렬 전략 하나. `(점수, 조건, 근거)` 목록을 순위 순으로 돌려준다.
+Scored = list[tuple[float, dict[str, Any], dict[str, Any]]]
+
+
+def _by_verdict(
+    conditions: list[dict[str, Any]], age: float, verdicts: dict[str, dict[str, Any]], known: set[str]
+) -> Scored:
+    """**카드 등급이 1차 정렬이다.**
+
+    근거가중·동년배배수는 순위를 뒤집지 못하고 같은 등급 안에서 동점을 푸는 데만
+    쓰인다 — 그래야 패널이 카드와 같은 말을 한다. `known` 도 보지 않는다: 확진이라도
+    가장 급하면 가장 급한 것이다.
+    """
+    scored: Scored = []
+    for condition in conditions:
+        verdict = verdicts.get(condition.get("target", "")) or {}
+        score, detail = score_one(condition, age, verdict)
+        detail["risk_level"] = str(verdict.get("risk_level", "")) or "INSUFFICIENT_DATA"
+        scored.append((score, condition, detail))
+    scored.sort(
+        key=lambda row: (
+            LEVEL_RANK.get(row[2]["risk_level"], len(LEVEL_RANK)),
+            -row[0],
+            row[2]["settled"],
+            -(row[1].get("probability") or 0.0),
+        )
+    )
+    return scored
+
+
+def _by_probability(
+    conditions: list[dict[str, Any]], age: float, verdicts: dict[str, dict[str, Any]], known: set[str]
+) -> Scored:
+    """**규칙 엔진을 순위에서 뺀다.** `verdicts` 도 `known` 도 보지 않는다.
+
+    확진 질환을 거르던 것까지 같이 빠지므로 이미 아는 질환이 다시 상위에 오를 수
+    있다. 그게 이 방식의 정의다 — 확률만 본다.
+    """
+    scored: Scored = []
+    for condition in conditions:
+        if RANK_POOL == "trajectory" and condition.get("target") not in TRAJECTORY_TARGETS:
+            continue
+        probability = condition.get("probability")
+        _, detail = score_one(condition, age, verdicts.get(condition.get("target", "")))
+        # 화면이 읽는 값들은 그대로 두되, 무엇으로 뽑혔는지는 바꿔 적는다.
+        detail["basis"] = "확률"
+        detail["probability"] = probability
+        scored.append((float(probability) if probability is not None else 0.0, condition, detail))
+    # 확률 내림차순. 동점이면 카드 순서(안정 정렬).
+    scored.sort(key=lambda row: -row[0])
+    return scored
+
+
+def _by_arbitration(
+    conditions: list[dict[str, Any]], age: float, verdicts: dict[str, dict[str, Any]], known: set[str]
+) -> Scored:
+    """신호강도 × 근거가중 × 동년배배수. 확진은 후보에서 뺀다."""
+    scored: Scored = []
+    for condition in conditions:
+        target = condition.get("target", "")
+        if target in known:
+            continue
+        score, detail = score_one(condition, age, verdicts.get(target))
+        scored.append((score, condition, detail))
+    # 점수 내림차순. 동점이면 ① 측정이 이미 "기준 이내" 라고 답한 카드를 뒤로,
+    # ② 확률이 높은 쪽, ③ 카드 순서(안정 정렬)를 따른다. ①이 ②보다 앞서는 이유는
+    # `settled` 설명에 적어 두었다 — 확률은 라벨 검사값을 못 보기 때문이다.
+    scored.sort(key=lambda row: (-row[0], row[2]["settled"], -(row[1].get("probability") or 0.0)))
+    return scored
+
+
+#: `RANK_SOURCE` -> 정렬 전략. 셋을 한 함수에 두면 분기가 깊어져 어느 경로가 무엇을
+#: 보장하는지 읽기 어렵다(실제로 복잡도 검사에 걸렸다).
+_SORTERS: dict[str, Any] = {
+    "verdict": _by_verdict,
+    "ml_probability": _by_probability,
+    "arbitrated": _by_arbitration,
+}
+
+
 def rank_suspects(
     conditions: list[dict[str, Any]],
     age: float,
@@ -293,40 +401,15 @@ def rank_suspects(
     """
     known = known or set()
     verdicts = verdicts or {}
-    scored = []
-
-    if RANK_SOURCE == "ml_probability":
-        # **규칙 엔진을 순위에서 뺀다.** `verdicts` 도 `known` 도 보지 않는다 —
-        # 확진 질환을 거르던 것까지 같이 빠지므로, 이미 아는 질환이 다시 상위에
-        # 오를 수 있다. 그게 이 방식의 정의다(확률만 본다).
-        for condition in conditions:
-            if RANK_POOL == "trajectory" and condition.get("target") not in TRAJECTORY_TARGETS:
-                continue
-            probability = condition.get("probability")
-            score = float(probability) if probability is not None else 0.0
-            _, detail = score_one(condition, age, verdicts.get(condition.get("target", "")))
-            # 화면이 읽는 값들은 그대로 두되, 무엇으로 뽑혔는지는 바꿔 적는다.
-            detail["basis"] = "확률"
-            detail["probability"] = probability
-            scored.append((score, condition, detail))
-        # 확률 내림차순. 동점이면 카드 순서(안정 정렬).
-        scored.sort(key=lambda row: -row[0])
-    else:
-        for condition in conditions:
-            target = condition.get("target", "")
-            if target in known:
-                continue
-            score, detail = score_one(condition, age, verdicts.get(target))
-            scored.append((score, condition, detail))
-
-        # 점수 내림차순. 동점이면 ① 측정이 이미 "기준 이내" 라고 답한 카드를 뒤로,
-        # ② 확률이 높은 쪽, ③ 카드 순서(안정 정렬)를 따른다. ①이 ②보다 앞서는 이유는
-        # `settled` 설명에 적어 두었다 — 확률은 라벨 검사값을 못 보기 때문이다.
-        scored.sort(key=lambda row: (-row[0], row[2]["settled"], -(row[1].get("probability") or 0.0)))
+    scored = _SORTERS[RANK_SOURCE](conditions, age, verdicts, known)
 
     out = []
     for rank, (score, condition, detail) in enumerate(scored[:top_n], start=1):
-        if RANK_SOURCE == "ml_probability":
+        if RANK_SOURCE == "verdict":
+            # 카드가 "먼저 볼" 이라고 한 등급이면 의심이다. 등급이 정본이므로 점수로
+            # 다시 판단하지 않는다 — 그러면 배지와 표시가 또 갈린다.
+            suspected = detail["risk_level"] in ATTENTION_LEVELS
+        elif RANK_SOURCE == "ml_probability":
             # 확률은 0 이 되지 않으므로 `score > 0` 로는 전부 "의심" 이 된다.
             # 모델 자신의 등급이 '낮음' 이 아닌 것만 의심으로 표시한다.
             suspected = detail["level"] != "낮음"

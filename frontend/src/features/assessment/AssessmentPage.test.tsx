@@ -564,7 +564,16 @@ describe("AssessmentPage", () => {
     // 심혈관질환은 열세 칸에 없고 이 축에만 있다.
     expect(screen.getByRole("heading", { name: "심혈관질환" })).toBeInTheDocument();
     expect(screen.getByText("혈압 140/90 이상")).toBeInTheDocument();
-    expect(screen.getByText(/대한고혈압학회 진료지침 · 인과 근거 있음/)).toBeInTheDocument();
+
+    // **출처와 인과 여부는 접이 안이다.** 신호마다 네 줄을 항상 펼쳐 두면 카드
+    // 하나가 스무 줄이 된다 — 근거를 확인하러 온 사람만 연다.
+    const signal = screen.getByText("혈압 140/90 이상").closest("li") as HTMLElement;
+    expect(within(signal).getByText("인과")).toBeInTheDocument();
+    await user.click(within(signal).getByText("근거"));
+    expect(within(signal).getByText(/대한고혈압학회 진료지침/)).toBeInTheDocument();
+
+    // 무게는 색이 아니라 형태로도 읽힌다 — 낭독기에는 숫자로 나간다.
+    expect(within(signal).getByText("가중 3 / 3")).toBeInTheDocument();
   });
 
   it("교육 수준은 묻지 않는다", () => {

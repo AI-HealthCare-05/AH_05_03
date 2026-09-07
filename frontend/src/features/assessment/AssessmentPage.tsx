@@ -969,7 +969,10 @@ export function AssessmentPage() {
             위가 "지금 어떤가"라면 여기는 "이 값이 앞으로 무엇을 부르는가"입니다. 같은 질환이 양쪽에 나올 수
             있어요 — 예를 들어 γ-GTP 는 간 수치이면서 당뇨 발생도 예고합니다.
           </p>
-          <div className="assess-cards">
+          {/* **판정 카드와 다른 격자를 쓴다.** 이쪽은 넷뿐인데 신호 목록이 붙어
+              카드가 훨씬 길다. 같은 격자에 두면 판정 카드용 최소 행 높이(15.5rem)와
+              싸우고, 좁은 칸에 네 줄짜리 신호가 접혀 글 벽이 된다. */}
+          <div className="assess-matrix-grid">
             {matrix.map((risk) => (
               <MatrixCard key={risk.category} risk={risk} />
             ))}

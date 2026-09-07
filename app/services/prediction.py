@@ -164,6 +164,7 @@ def rank_and_attach(
     *,
     verdicts: dict[str, dict[str, Any]] | None = None,
     known: set[str] | None = None,
+    extra: list[dict[str, Any]] | None = None,
 ) -> list[SuspectCard]:
     """**1단계 → 2단계.** 의심 상위 세 개를 고르고 그 셋에만 곡선을 붙인다.
 
@@ -178,7 +179,15 @@ def rank_and_attach(
     `verdicts` 가 있으면 **규칙 엔진의 측정 기반 판정이 ML 추정보다 먼저** 쓰인다.
     `known` 은 이미 확진된 질환이라 후보에서 빠진다.
     """
-    suspects = rank_suspects([c.model_dump() for c in conditions], float(payload.age), verdicts=verdicts, known=known)
+    # **ML 카드가 없는 질환도 후보다.** 비만·간기능·요산은 번들이 없지만
+    # (`SPECS` 의 `ml_target=None`) 등급은 있다 — 비만이 `HIGH` 인데 순위에 못 오면
+    # 패널이 카드 2위를 빼놓게 된다. 실측으로 그 상태였다.
+    #
+    # 비만에 모델이 없는 것은 결손이 아니다. `BMI = 체중/키²` 이고 키·체중이 필수
+    # 입력이라 판정이 언제나 확정이다 — 예측할 미측정 상태가 없다. 고혈압은 다르다:
+    # 혈압을 안 잰 사람이 있어서 "재면 넘을 가능성" 이 답할 값어치가 있다.
+    candidates = [c.model_dump() for c in conditions] + list(extra or [])
+    suspects = rank_suspects(candidates, float(payload.age), verdicts=verdicts, known=known)
     by_target = {c.target: c for c in conditions}
     for suspect in suspects:
         card = by_target.get(suspect["target"])

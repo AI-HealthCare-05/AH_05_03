@@ -328,10 +328,23 @@ def test_default_rank_source_is_the_recorded_product_decision() -> None:
     | 확진(HIGH+) 유입 | 21% | 47% | **0%** |
     | 측정 정상인데 1순위 | 28% | 7% | **0%** |
 
+    **같은 날 한 번 더 바꿨다 — `verdict`.** `arbitrated` 로도 카드와 패널이 갈렸다.
+    당뇨 프리셋(공복혈당 148 · HbA1c 7.2)에서 카드 1·2위가 패널에 아예 없었다 —
+    확진 제외가 당뇨병을, ML 번들 유무가 비만을 뺐기 때문이다. 제목이 "먼저 볼 세
+    가지" 라 사용자는 "가장 급한 셋" 으로 읽는데 내용이 달랐다.
+
+    `verdict` 는 카드 등급으로 세우고 같은 등급 안에서만 `arbitrated` 점수로 가른다.
+    프로필 120개에서 **패널 등급이 카드 상위 3등급과 어긋난 경우 0건**, 뽑힌 셋
+    42가지, 자리채움 0%.
+
+    **대가는 곡선이다.** 5·10년 발병 곡선이 54% → 4% 로 떨어진다. 확진에는 "지금
+    없다면 앞으로" 가 성립하지 않는데(궤적의 전제), 등급 순으로 세우면 맨 위가
+    확진이라 그렇다. "가장 급한 셋" 과 "시계열이 붙는 셋" 은 서로 다른 목록이다.
+
     아래 `test_trajectory_pool_keeps_only_curve_capable_targets` 는 지우지 않는다 —
     `trajectory` 풀의 성질 자체는 그대로이고, 되돌릴 때 그 계약이 필요하다.
     """
-    assert DEPLOYED_RANK_SOURCE == "arbitrated"
+    assert DEPLOYED_RANK_SOURCE == "verdict"
     assert DEPLOYED_RANK_POOL == "all"
 
 
