@@ -13,7 +13,10 @@ import {
 } from "../shared/local/localDomainRuntime";
 import { createServerDomainRuntime } from "../shared/api/serverDomainRuntime";
 import { serverApiClient } from "../shared/api/serverApiClient";
-import { migrateLocalDataToPostgres } from "../features/sync/syncToPostgres";
+import {
+  deduplicateHouseholdProfiles,
+  migrateLocalDataToPostgres,
+} from "../features/sync/syncToPostgres";
 import { AuthContext } from "./authContext";
 import {
   type CreateHealthRecordInput,
@@ -184,7 +187,12 @@ export function LocalDomainProvider({
               }
             }
 
+            // 동일 가구 내 display_name 중복 프로필 감지 및 자동 정리 (기록 보유 프로필 우선 보존, 빈 중복 프로필 softDelete)
+            currentProfiles = await deduplicateHouseholdProfiles(activeRuntime, currentProfiles);
+            if (disposed) return;
+
             setProfiles(currentProfiles);
+            if (hiddenResult.ok) setHiddenProfiles(hiddenResult.value);
             setError(undefined);
           } else {
             // 가정이 유효하지 않거나 멤버십이 없는 경우 새 가정을 생성하거나 로컬 fallback
@@ -253,7 +261,8 @@ export function LocalDomainProvider({
     ]);
     if (!result.ok) throw new Error(result.error.message);
     if (!hiddenResult.ok) throw new Error(hiddenResult.error.message);
-    setProfiles(result.value);
+    const cleaned = await deduplicateHouseholdProfiles(runtime, result.value);
+    setProfiles(cleaned);
     setHiddenProfiles(hiddenResult.value);
   }, [householdId, runtime]);
 
