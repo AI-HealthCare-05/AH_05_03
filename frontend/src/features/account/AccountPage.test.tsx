@@ -45,6 +45,7 @@ const receivedInvitation = {
 
 afterEach(() => {
   cleanup();
+  window.localStorage?.clear();
   window.history.replaceState(null, "", "/");
   vi.restoreAllMocks();
 });
@@ -300,6 +301,26 @@ describe("AccountPage", () => {
 
     expect(await screen.findByText("초대를 거절했습니다.")).toBeInTheDocument();
     expect(window.location.hash).toBe("");
+  });
+
+  it("URL 해시가 비어 있어도 스토리지에 초대 정보가 있으면 받은 초대의 토큰이 자동으로 채워진다", async () => {
+    const token = "T".repeat(43);
+    const { savePendingInvitation } = await import("./invitationStorage");
+    savePendingInvitation({
+      invitationId: "invitation-id",
+      token,
+      email: "member@example.com",
+    });
+
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    mockAccountReads();
+    vi.mocked(serverApiClient.listInvitations).mockResolvedValue({ sent: [], received: [receivedInvitation] });
+    window.history.replaceState(null, "", "/account");
+
+    renderAccountPage();
+
+    const tokenInput = await screen.findByPlaceholderText("이메일 초대 토큰");
+    expect(tokenInput).toHaveValue(token);
   });
 
   it("다른 계정으로 초대 링크를 열면 초대 계정으로 전환시킨다", async () => {

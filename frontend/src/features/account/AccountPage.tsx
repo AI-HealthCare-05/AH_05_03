@@ -15,6 +15,12 @@ import type {
 import { toClientProfile } from "../../shared/api/serverDomainRuntime";
 import { serverApiClient } from "../../shared/api/serverApiClient";
 import type { FamilyProfile } from "../../shared/local/domainContracts";
+import {
+  getPendingInvitation,
+  readAndPreserveInvitation,
+  removePendingInvitation,
+  savePendingInvitation,
+} from "./invitationStorage";
 
 const INVITATION_PROFILE_MAP_KEY = "ieobom_invitation_profile_map";
 
@@ -700,7 +706,10 @@ function HouseholdCard({
 function InvitationCard({ households, profiles, invitations, working, onSend, onAccept, onDecline, onCancel, linkRecovery, onRetry }: { households: HouseholdData[]; profiles: ReturnType<typeof useLocalDomain>["profiles"]; invitations: FamilyInvitationListData; working: boolean; onSend: (event: FormEvent<HTMLFormElement>) => Promise<void>; onAccept: (event: FormEvent<HTMLFormElement>) => Promise<void>; onDecline: (event: MouseEvent<HTMLButtonElement>) => Promise<void>; onCancel: (invitation: FamilyInvitationData) => void; linkRecovery?: LinkRecovery; onRetry: () => Promise<void> }) {
   const received = invitations.received.filter((item) => item.status === "pending");
   const fragment = readInvitationFragment();
-  return <><section className="account-card account-wide"><p className="section-kicker">가족 초대</p><h2>기존 로컬 프로필에 서비스 계정 초대</h2><p className="account-help">발신자가 여기서 선택한 프로필이 연결 대상입니다. 초대에는 건강정보 대신 무작위 불투명 참조값만 저장됩니다.</p><form className="account-inline-form" onSubmit={(event) => void onSend(event)}><select name="householdId" required defaultValue=""><option value="" disabled>가정 선택</option>{households.map((item) => <option key={item.id} value={item.id}>{item.id.slice(0, 8)}</option>)}</select><select name="profileId" required defaultValue=""><option value="" disabled>연결 대상 프로필 선택</option>{profiles.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select><input name="inviteeEmail" type="email" required placeholder="초대할 이메일" /><button className="primary-button" disabled={working || households.length === 0 || profiles.length === 0}>초대</button></form><InvitationList items={invitations.sent} onCancel={onCancel} /></section><section className="account-card account-wide"><p className="section-kicker">받은 초대</p><h2>발신자가 지정한 프로필과 계정 연결</h2><p className="account-help">연결 대상은 초대에 이미 지정돼 있습니다. 수락 후 건강정보는 자동으로 내려받지 않으며 별도의 기기 연결이 필요합니다.</p>{received.length === 0 ? <p className="account-empty">처리할 초대가 없습니다.</p> : received.map((invitation) => <form className="received-invitation" key={invitation.id} onSubmit={(event) => void onAccept(event)}><input type="hidden" name="invitationId" value={invitation.id} /><span>{invitation.inviter_account_id.slice(0, 8)}…의 초대</span><input name="token" required placeholder="이메일 초대 토큰" defaultValue={fragment?.invitationId === invitation.id ? fragment.token : ""} /><div className="row-actions"><button className="secondary-button" type="button" disabled={working} onClick={(event) => void onDecline(event)}>거절</button><button className="primary-button" disabled={working}>초대 수락</button></div></form>)}{linkRecovery ? <div className="inline-confirmation"><strong>계정 연결 복구가 필요합니다.</strong><p>초대 수락은 완료됐지만 서버의 계정 연결이 중단됐습니다. 로컬 프로필은 변경하지 않았습니다.</p><button className="primary-button" type="button" disabled={working} onClick={() => void onRetry()}>계정 연결 재시도</button></div> : null}</section></>;
+  return <><section className="account-card account-wide"><p className="section-kicker">가족 초대</p><h2>기존 로컬 프로필에 서비스 계정 초대</h2><p className="account-help">발신자가 여기서 선택한 프로필이 연결 대상입니다. 초대에는 건강정보 대신 무작위 불투명 참조값만 저장됩니다.</p><form className="account-inline-form" onSubmit={(event) => void onSend(event)}><select name="householdId" required defaultValue=""><option value="" disabled>가정 선택</option>{households.map((item) => <option key={item.id} value={item.id}>{item.id.slice(0, 8)}</option>)}</select><select name="profileId" required defaultValue=""><option value="" disabled>연결 대상 프로필 선택</option>{profiles.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select><input name="inviteeEmail" type="email" required placeholder="초대할 이메일" /><button className="primary-button" disabled={working || households.length === 0 || profiles.length === 0}>초대</button></form><InvitationList items={invitations.sent} onCancel={onCancel} /></section><section className="account-card account-wide"><p className="section-kicker">받은 초대</p><h2>발신자가 지정한 프로필과 계정 연결</h2><p className="account-help">연결 대상은 초대에 이미 지정돼 있습니다. 수락 후 건강정보는 자동으로 내려받지 않으며 별도의 기기 연결이 필요합니다.</p>{received.length === 0 ? <p className="account-empty">처리할 초대가 없습니다.</p> : received.map((invitation) => {
+    const isMatched = Boolean(fragment && (fragment.invitationId === invitation.id || received.length === 1));
+    return <form className="received-invitation" key={invitation.id} onSubmit={(event) => void onAccept(event)}><input type="hidden" name="invitationId" value={invitation.id} /><span>{invitation.inviter_account_id.slice(0, 8)}…의 초대</span><input name="token" required placeholder="이메일 초대 토큰" defaultValue={isMatched ? fragment?.token : ""} /><div className="row-actions"><button className="secondary-button" type="button" disabled={working} onClick={(event) => void onDecline(event)}>거절</button><button className="primary-button" disabled={working}>초대 수락</button></div></form>;
+  })}{linkRecovery ? <div className="inline-confirmation"><strong>계정 연결 복구가 필요합니다.</strong><p>초대 수락은 완료됐지만 서버의 계정 연결이 중단됐습니다. 로컬 프로필은 변경하지 않았습니다.</p><button className="primary-button" type="button" disabled={working} onClick={() => void onRetry()}>계정 연결 재시도</button></div> : null}</section></>;
 }
 
 function InvitationList({ items, onCancel }: { items: FamilyInvitationListData["sent"]; onCancel: (invitation: FamilyInvitationData) => void }) {
@@ -793,18 +802,19 @@ function formatDate(value: string): string {
 }
 
 function readInvitationFragment(): { invitationId: string; token: string; email?: string } | undefined {
-  const params = new URLSearchParams(window.location.hash.replace(/^#/u, ""));
-  const invitationId = params.get("invitation");
-  const token = params.get("token");
-  const email = params.get("email") ?? undefined;
-  return invitationId && token ? { invitationId, token, email } : undefined;
+  return readAndPreserveInvitation();
 }
 
 function clearInvitationFragment() {
+  removePendingInvitation();
   window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
 }
 
 function preserveInvitationEmail(email: string) {
+  const pending = getPendingInvitation();
+  if (pending) {
+    savePendingInvitation({ ...pending, email });
+  }
   const params = new URLSearchParams(window.location.hash.replace(/^#/u, ""));
   params.set("email", email);
   window.history.replaceState(
