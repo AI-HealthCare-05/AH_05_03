@@ -94,7 +94,7 @@ describe("AccountPage", () => {
 
     expect(await screen.findByText("내 계정", { selector: ".membership-identity strong" })).toBeInTheDocument();
     expect(screen.getByText("나")).toBeInTheDocument();
-    expect(screen.getByText("mem***@example.com")).toBeInTheDocument();
+    expect(screen.getByText("member@example.com", { selector: ".membership-identity small" })).toBeInTheDocument();
     expect(screen.getByText("로컬 프로필 미연결")).toBeInTheDocument();
     expect(screen.queryByText(/account-id/u)).not.toBeInTheDocument();
   });
