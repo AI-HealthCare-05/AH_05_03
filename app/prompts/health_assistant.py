@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.dtos.health_assistant import ProfileContext, UserLocation
@@ -10,6 +10,7 @@ def build_system_instruction(
 ) -> str:
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     today_str = now.strftime("%Y-%m-%d")
+    yesterday_str = (now.date() - timedelta(days=1)).strftime("%Y-%m-%d")
     current_time_str = now.strftime("%H:%M")
     current_year = now.year
     last_year = current_year - 1
@@ -71,7 +72,18 @@ def build_system_instruction(
 - `record_blood_pressure`: 수축기(systolic), 이완기(diastolic), 맥박(pulse), 측정 일시(measured_at: YYYY-MM-DDTHH:MM 형식, 언급된 시각 반영) 추출. 수축기는 보통 이완기보다 큽니다.
 - `record_blood_glucose`: 혈당 수치(value, mg/dL), 측정 시점(timing: fasting/before_meal/after_meal/bedtime/random), 측정 일시(measured_at: YYYY-MM-DDTHH:MM 형식) 추출.
 - `record_medication`: 약품명(medication_name), 복용량(dosage), 복용시각(taken_at: YYYY-MM-DDTHH:MM 형식 또는 시간대) 추출.
-- `record_pain`: 통증 부위(body_area), 통증 강도(intensity: 0~10), 양상(sensation), 발생/기록 시각(onset_at: YYYY-MM-DDTHH:MM 형식) 추출. 단, 신체 부위가 좌우 대칭인 곳(예: 무릎, 어깨, 팔, 다리, 눈, 귀 등)인데 사용자가 어느 쪽인지 명시하지 않았다면, 즉시 저장하지 말고 `missing_fields`에 `["body_area"]`를 넣은 뒤 "오른쪽 무릎인가요, 왼쪽 무릎인가요?" 처럼 구체적인 위치를 친절하게 되물으세요.
+- `record_pain`: 통증 부위(body_area), 통증 강도(intensity: 0~10), 양상(sensation), 발생/기록 시각(onset_at: YYYY-MM-DDTHH:MM 형식) 추출.
+  * [도구 호출: format_pain_diary] 사용자가 "통증일기...", "통증 일기 써줘", "오늘 운동하고 어디가 아파" 처럼 통증에 대한 기록을 작성하거나 증상을 이야기하는 경우, 반드시 `pain_diary_tool` 도구 호출 객체를 생성하세요:
+    - tool_name: "format_pain_diary"
+    - body_area: 언급된 모든 통증 부위 (예: "팔꿈치, 왼쪽 고관절, 왼쪽 발바닥")
+    - intensity: 통증 강도 (0~10 추정 정수, 언급 없으면 5)
+    - sensation: 통증 양상 (예: "이물감, 찌르는 듯함, 지지력 약화 등")
+    - aggravating_factors: 유발 및 악화 상황 (예: "웨이트 트레이닝 후, 보행 시")
+    - formatted_diary: 사용자의 거친 구어체, 오탈자, 띄어쓰기를 정확한 한국어 맞춤법으로 교정하고, 증상의 인과관계와 현재 상태를 구조적이고 품질 높은 문장으로 정제한 다이어리 본문 문장.
+      (예: "웨이트 트레이닝 후 팔꿈치에 통증이 발생함. 왼쪽 고관절 부위에 이물감과 불편감이 지속되며, 보행 시 왼쪽 발바닥을 딛는 지지력이 다소 약화된 느낌을 받음. 관절 및 인대 부담을 줄이기 위한 충분한 안정과 스트레칭 필요.")
+    - date_str: 통증 발생 일자 (YYYY-MM-DD 형식. 사용자가 "오늘", "아침에", "방금", "기상 후", "자고 일어났을 때" 등 오늘 일어난 일로 말하거나 특정 일자 언급이 없으면 반드시 {today_str}로 설정하세요. 사용자가 명시적으로 "어제"라고 한 경우에만 {yesterday_str}로 설정하세요)
+  * `pain_draft`도 동일한 부위와 강도로 함께 채워 호환성을 유지하세요.
+  * "팔꿈치가 아프다. 왼쪽 고관절에 이물감이 있고 왼쪽발 바닥을 딛는 힘이 약한 것 같아" 처럼 여러 부위와 명확한 맥락이 있는 통증 일기 발화는 되묻기로 지연시키지 말고 즉시 정제된 통증 다이어리 툴을 호출하여 초안을 제공하세요.
 - `record_lab_result`: 건강검진 또는 검사 서류(혈액검사, 건강검진표 등)의 OCR 내용에서 서류에 기재된 **실제 검사일자/수검일자**(예: 2022.05.30, 2025.08.28 등)를 반드시 찾아 `recorded_at` (YYYY-MM-DD 형식)으로 추출하세요. (오늘 업로드한 날짜가 아니라 서류에 적힌 실제 검진일자여야 합니다). 검진명(screening_name), 검사기관(institution), 핵심요약(summary), 주요 검사항목 및 수치(items_summary)를 추출하세요.
 - `query_records`: 조회하려는 기록 종류(record_type)와 기간(time_range), 검색 키워드(keyword) 추출.
   * 수치 변화/그래프 요청 처리: 사용자가 "수치 변화", "그래프", "추이", "트렌드", "혈압 변화", "간수치 변화", "혈당 그래프" 등을 요청하면 `record_type: "trend"`, `time_range: "all"`, `keyword: "trend"`로 추출하고, "등록된 건강검진 및 측정 기록의 시계열 수치 변화 그래프를 조회해 드립니다. 아래 차트에서 혈압, 혈당, 간기능, 콜레스테롤 등의 변화 추이를 확인해 보세요."라고 안내하세요.

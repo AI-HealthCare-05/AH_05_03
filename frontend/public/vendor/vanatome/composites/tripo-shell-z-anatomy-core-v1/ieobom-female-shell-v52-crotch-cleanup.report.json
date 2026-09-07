@@ -1,0 +1,38 @@
+{
+  "sourceBlend": "/Users/fabxoe/Downloads/models/low_polygon_work_6hour-female-shell-v51-uniform-quad-flow.blend",
+  "outputBlend": "/Users/fabxoe/Downloads/models/low_polygon_work_6hour-female-shell-v52-crotch-cleanup.blend",
+  "version": "v52-crotch-bridge-cleanup",
+  "criteria": {
+    "centerX": 0.9629160761833191,
+    "zMeters": [
+      0.7,
+      0.77
+    ],
+    "minimumLongSpanMeters": 0.008,
+    "mustCrossCenterX": true
+  },
+  "removed": {
+    "faces": 19,
+    "maximumSpanMeters": 0.0282562127521707,
+    "bounds": {
+      "minimum": [
+        0.9585000276565552,
+        -0.03389892727136612,
+        0.7202513217926025
+      ],
+      "maximum": [
+        0.9725043773651123,
+        -0.014651309698820114,
+        0.7610320448875427
+      ]
+    }
+  },
+  "after": {
+    "vertices": 79497,
+    "faces": 79477,
+    "faceSizes": {
+      "4": 79477
+    }
+  },
+  "nonShellObjectsChanged": []
+}

@@ -275,4 +275,43 @@ describe("로컬 수직 기능", () => {
     expect(restoredRecords.ok && restoredRecords.value).toHaveLength(1);
     repository.close();
   });
+
+  it("프로필 생성 및 수정 시 성별(gender)을 저장하고 복호화한다", async () => {
+    const repository = new IndexedDbEncryptedRecordRepository(
+      "ieobom-gender-test-" + crypto.randomUUID(),
+      indexedDB,
+    );
+    const cipher = await AesGcmJsonCipher.create();
+    const profiles = new LocalProfileService(repository, cipher);
+    const householdId = crypto.randomUUID();
+
+    const created = await profiles.create({
+      householdId,
+      displayName: "여성 구성원",
+      relationship: "엄마",
+      birthDate: "1965-05-10",
+      gender: "female",
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) throw new Error(created.error.message);
+    expect(created.value.gender).toBe("female");
+
+    const loaded = await profiles.get(created.value.id);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.error.message);
+    expect(loaded.value.gender).toBe("female");
+
+    const updated = await profiles.update(created.value.id, {
+      displayName: "수정된 구성원",
+      relationship: "엄마",
+      birthDate: "1965-05-10",
+      gender: "male",
+      expectedVersion: loaded.value.version,
+    });
+    expect(updated.ok).toBe(true);
+    if (!updated.ok) throw new Error(updated.error.message);
+    expect(updated.value.gender).toBe("male");
+
+    repository.close();
+  });
 });

@@ -2,6 +2,7 @@ import { lazy, Suspense, type FormEvent, useCallback, useEffect, useMemo, useSta
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
+import { BirthDateInput } from "../../shared/ui/BirthDateInput";
 import { Modal } from "../../shared/ui/Modal";
 // 모달은 눌러야 뜬다. 정적으로 두면 판정 카드 일체가 홈의 첫 청크에 실린다.
 const RecordDetail = lazy(() => import("./RecordDetail").then((m) => ({ default: m.RecordDetail })));
@@ -14,6 +15,7 @@ import { RecordSummary } from "./RecordSummary";
 import type {
   DashboardSummary,
   FamilyProfile,
+  Gender,
   HealthRecord,
   HealthRecordType,
 } from "../../shared/local/domainContracts";
@@ -208,6 +210,7 @@ export function HomePage() {
         displayName: String(form.get("displayName") ?? ""),
         relationship: String(form.get("relationship") ?? ""),
         birthDate: optionalDate(form.get("birthDate")),
+        gender: optionalGender(form.get("gender")),
       });
       setSelectedProfileId(profile.id);
       void navigate(`/members/${profile.id}`);
@@ -255,6 +258,7 @@ export function HomePage() {
         displayName: String(form.get("displayName") ?? ""),
         relationship: String(form.get("relationship") ?? ""),
         birthDate: optionalDate(form.get("birthDate")),
+        gender: optionalGender(form.get("gender")),
         expectedVersion: selectedProfile.version,
       });
       setProfileEditDialogOpen(false);
@@ -372,30 +376,7 @@ export function HomePage() {
         <div>
           <p className="page-kicker">우리 가족 건강 홈</p>
           <h1>가족의 건강 흐름을 한곳에서 이어보세요</h1>
-          <p>기록은 서버가 아니라 현재 브라우저에 암호화되어 저장됩니다.</p>
         </div>
-        <div className="heading-actions">
-          <span className="local-status-badge">
-            {localStorageReady ? "이 브라우저에 저장 중" : "로컬 저장소 확인 필요"}
-          </span>
-          <button
-            className="primary-button"
-            type="button"
-            disabled={!localStorageReady}
-            onClick={() => setProfileDialogOpen(true)}
-          >
-            구성원 추가
-          </button>
-        </div>
-      </section>
-
-      <section className="privacy-strip" aria-label="데이터 보관 안내">
-        <span className="privacy-strip-mark" aria-hidden="true">로컬</span>
-        <div>
-          <strong>민감한 건강정보는 이 기기 안에서 처리합니다.</strong>
-          <p>현재 버전은 같은 브라우저 프로필의 사용자별 보관함 잠금을 아직 지원하지 않습니다. 공용 PC에서는 각자 다른 OS·브라우저 프로필을 사용하세요.</p>
-        </div>
-        <NavLink to="/data">백업 관리</NavLink>
       </section>
 
       {error ? <div className="alert error-alert" role="alert">{error}</div> : null}
@@ -449,7 +430,7 @@ export function HomePage() {
                 </span>
                 <span className="member-card-copy">
                   <strong>{profile.displayName}</strong>
-                  <small>{profile.relationship}{profile.birthDate ? ` · ${profile.birthDate.slice(0, 4)}년생` : ""}</small>
+                  <small>{formatProfileDescription(profile)}</small>
                 </span>
                 <MemberVerdict summary={verdicts[profile.id]} />
               </button>
@@ -504,6 +485,7 @@ export function HomePage() {
             <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
               <VanatomeBodyMap
                 profileName={selectedProfile.displayName}
+                gender={selectedProfile.gender}
                 risks={bodyRisks}
                 risksAt={activeBodyRecord ? formatDateTime(activeBodyRecord.recordedAt) : undefined}
               />
@@ -618,9 +600,14 @@ export function HomePage() {
               </select>
             </label>
             <label>
-              생년월일 <span className="optional-label">선택</span>
-              <input name="birthDate" type="date" />
+              성별
+              <select name="gender" defaultValue="">
+                <option value="" disabled>남성 또는 여성</option>
+                <option value="male">남성</option>
+                <option value="female">여성</option>
+              </select>
             </label>
+            <BirthDateInput />
             <div className="form-actions">
               <button className="secondary-button" type="button" onClick={() => setProfileDialogOpen(false)}>취소</button>
               <button className="primary-button" type="submit" disabled={saving}>{saving ? "저장 중…" : "프로필 저장"}</button>
@@ -821,9 +808,14 @@ export function HomePage() {
               </select>
             </label>
             <label>
-              생년월일 <span className="optional-label">선택</span>
-              <input name="birthDate" type="date" defaultValue={selectedProfile.birthDate ?? ""} />
+              성별
+              <select name="gender" defaultValue={selectedProfile.gender ?? ""}>
+                <option value="" disabled>남성 또는 여성</option>
+                <option value="male">남성</option>
+                <option value="female">여성</option>
+              </select>
             </label>
+            <BirthDateInput defaultValue={selectedProfile.birthDate ?? ""} />
             <div className="form-actions">
               <button className="secondary-button" type="button" onClick={() => setProfileEditDialogOpen(false)}>취소</button>
               <button className="primary-button" type="submit" disabled={saving}>{saving ? "저장 중…" : "변경사항 저장"}</button>
@@ -890,7 +882,7 @@ export function HomePage() {
                 <article key={profile.id} className="hidden-profile-row">
                   <div>
                     <strong>{profile.displayName}</strong>
-                    <small>{profile.relationship}{profile.birthDate ? ` · ${profile.birthDate.slice(0, 4)}년생` : ""}</small>
+                    <small>{formatProfileDescription(profile)}</small>
                   </div>
                   <button
                     className="secondary-button"
@@ -940,6 +932,7 @@ export function HomePage() {
                 onClose={() => setAssistantOpen(false)}
                 onRecordSaved={() => refreshDashboard(selectedProfile.id)}
                 onNavigateToRecords={() => setDeletedRecordsDialogOpen(false)}
+                onNavigateToDiary={(dateKey) => navigate(`/pain-diary?date=${dateKey}`)}
               />
             </Suspense>
           ) : null}
@@ -1014,6 +1007,17 @@ function MetricCard({ label, value, helper, tone }: { label: string; value: stri
 function optionalDate(value: FormDataEntryValue | null): `${number}-${number}-${number}` | undefined {
   const date = String(value ?? "");
   return date ? (date as `${number}-${number}-${number}`) : undefined;
+}
+
+function optionalGender(value: FormDataEntryValue | null): Gender | null {
+  const str = String(value ?? "");
+  return str === "male" || str === "female" ? str : null;
+}
+
+function formatProfileDescription(profile: FamilyProfile): string {
+  const genderLabel = profile.gender === "male" ? "남성" : profile.gender === "female" ? "여성" : "";
+  const birthYear = profile.birthDate ? `${profile.birthDate.slice(0, 4)}년생` : "";
+  return [profile.relationship, genderLabel, birthYear].filter(Boolean).join(" · ");
 }
 
 function messageFrom(caught: unknown, fallback: string): string {

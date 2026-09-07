@@ -1,0 +1,53 @@
+{
+  "version": "v65-exposed-bone-fit",
+  "sourceBlend": "/Users/fabxoe/Downloads/models/low_polygon_work_6hour-female-muscles-v66-matte-gap-hand-bone-fit.blend",
+  "outputBlend": "/Users/fabxoe/Downloads/models/low_polygon_work_6hour-female-muscles-v66-matte-gap-hand-bone-fit.blend",
+  "safeDepthMm": 1.0,
+  "maximumShellSearchMm": 10.0,
+  "authoring": [
+    {
+      "object": "appendicular-skeleton-clavicle-right__Clavicler",
+      "vertices": 2,
+      "maxOutsideBeforeMm": 0.29
+    },
+    {
+      "object": "skeleton-coccyx__Coccyx",
+      "vertices": 27,
+      "maxOutsideBeforeMm": 5.855
+    },
+    {
+      "object": "skeleton-hip-bone-left__Hip_bonel",
+      "vertices": 1,
+      "maxOutsideBeforeMm": 0.241
+    },
+    {
+      "object": "skeleton-hip-bone-right__Hip_boner",
+      "vertices": 13,
+      "maxOutsideBeforeMm": 4.036
+    }
+  ],
+  "exportedSkeleton": [
+    {
+      "object": "appendicular-skeleton-clavicle-right__Clavicler.001",
+      "vertices": 2,
+      "maxOutsideBeforeMm": 0.291
+    },
+    {
+      "object": "skeleton-coccyx__Coccyx.001",
+      "vertices": 27,
+      "maxOutsideBeforeMm": 5.856
+    }
+  ],
+  "skeletonExport": {
+    "file": "ieobom-female-static-skeleton-exposed-bone-fit-v66.glb",
+    "bytes": 1534320,
+    "sha256": "725266a9768196543138732b28bca3eca5aaceb81a2c400ebbd7162d68b10be2",
+    "objects": 231,
+    "system": "skeletal"
+  },
+  "notes": [
+    "Only target bone vertices both outside the shell and within 10 mm of it were moved.",
+    "Every corrected vertex was placed 1 mm inside the approved shell.",
+    "All other skeleton vertices, joints, shell topology, and muscle attachments were preserved."
+  ]
+}

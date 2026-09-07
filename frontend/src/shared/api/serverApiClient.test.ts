@@ -114,4 +114,63 @@ describe("ServerApiClient", () => {
 
     await expect(client.closeHousehold("household-id")).resolves.toBeUndefined();
   });
+
+  it("프로필 및 건강 기록 CRUD 요청을 Bearer 인증과 함께 올바른 경로로 전달한다", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(success({ access_token: "access", token_type: "bearer", expires_in: 900 }))
+      .mockResolvedValueOnce(
+        success({
+          id: "profile-1",
+          household_id: "household-1",
+          created_by_account_id: "account-1",
+          display_name: "가족1",
+          relationship: "self",
+          gender: "male",
+          birth_date: "1990-01-01",
+          status: "active",
+          row_version: 1,
+          created_at: "2026-09-06T00:00:00Z",
+          updated_at: "2026-09-06T00:00:00Z",
+        }),
+      )
+      .mockResolvedValueOnce(
+        success({
+          id: "record-1",
+          profile_id: "profile-1",
+          record_type: "blood_pressure",
+          recorded_at: "2026-09-06T00:00:00Z",
+          source: "manual",
+          payload: { systolic: 120, diastolic: 80 },
+          note: null,
+          status: "active",
+          row_version: 1,
+          created_at: "2026-09-06T00:00:00Z",
+          updated_at: "2026-09-06T00:00:00Z",
+        }),
+      );
+
+    const client = new ServerApiClient(fetcher);
+    await client.login("member@example.com", "Password123!");
+
+    const profile = await client.createProfile({
+      household_id: "household-1",
+      display_name: "가족1",
+      relationship: "self",
+      gender: "male",
+      birth_date: "1990-01-01",
+    });
+    expect(profile.id).toBe("profile-1");
+    expect(fetcher.mock.calls[1]?.[0]).toBe("/api/v1/profiles");
+
+    const record = await client.createHealthRecord({
+      profile_id: "profile-1",
+      record_type: "blood_pressure",
+      recorded_at: "2026-09-06T00:00:00Z",
+      payload: { systolic: 120, diastolic: 80 },
+    });
+    expect(record.id).toBe("record-1");
+    expect(fetcher.mock.calls[2]?.[0]).toBe("/api/v1/health-records");
+  });
 });
+

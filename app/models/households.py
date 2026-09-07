@@ -45,6 +45,9 @@ class Household(TimestampMixin, Base):
     created_by_account_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("service_accounts.id", ondelete="RESTRICT"), nullable=False
     )
+    master_account_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("service_accounts.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     status: Mapped[HouseholdStatus] = mapped_column(
         _enum(HouseholdStatus, "household_status"),
         default=HouseholdStatus.ACTIVE,

@@ -49,6 +49,7 @@
 | [docs/adr/0006-lifecycle-scoped-profile-reference.md](docs/adr/0006-lifecycle-scoped-profile-reference.md) | 연결 생명주기 단위의 일회용 프로필 참조값 결정 | 전체 |
 | [docs/adr/0007-account-scoped-encrypted-local-vault.md](docs/adr/0007-account-scoped-encrypted-local-vault.md) | 공용 브라우저의 계정별 암호화 로컬 보관함 격리 결정 | 전체 |
 | [docs/adr/0008-temporary-cloud-ocr-baseline.md](docs/adr/0008-temporary-cloud-ocr-baseline.md) | 합성·비식별 문서의 임시 Naver OCR 기준선 허용 결정 | 전체 |
+| [docs/adr/0009-postgresql-health-data-and-server-ai.md](docs/adr/0009-postgresql-health-data-and-server-ai.md) | PostgreSQL 건강정보 정본과 서버 ML·AI 도구 호출 전환 결정 | 전체 |
 | [docs/adr/README.md](docs/adr/README.md) | ADR 추가·대체·대안 기록 원칙 | 전체 |
 | [docs/legacy/desktop-app/2026-08-18-pre-web-prd.md](docs/legacy/desktop-app/2026-08-18-pre-web-prd.md) | 웹 버전 완성 후 재검토할 데스크톱·Wi-Fi 동기화 구버전 백업 | 전체 |
 

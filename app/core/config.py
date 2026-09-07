@@ -57,10 +57,10 @@ class Config(BaseSettings):
     # 이 값을 본다(`app/core/redis/client.py`). 0 으로 두는 것과 예전 동작이 같다.
     # Redis 명령 자체는 밀리초 단위라 3 초를 기다릴 일은 진짜 장애뿐이다.
     REDIS_POOL_WAIT_TIMEOUT: float = 3.0
-    # 짧게 잡아 장애 시 매달리지 않고 빠르게 503으로 떨어지게 한다.
-    # **이건 명령 왕복 시간이지 풀 대기 시간이 아니다.** 둘을 헷갈려 이 값을 올리면
-    # Redis 가 죽었을 때 요청이 그만큼 매달린다.
-    REDIS_SOCKET_TIMEOUT: float = 0.5
+    # 명령 왕복 상한. OCR 큐는 최대 30MB 원본을 base64 로 실으므로 0.5초로는 정상적인
+    # 로컬 Docker 전송도 `Timeout writing to socket` 으로 끊겼다. 연결 자체의 장애는
+    # 아래 connect timeout(0.5초)이 빠르게 잡고, 이미 연결된 큰 명령에는 5초를 준다.
+    REDIS_SOCKET_TIMEOUT: float = 5.0
     REDIS_SOCKET_CONNECT_TIMEOUT: float = 0.5
 
     JWT_ALGORITHM: str = "HS256"

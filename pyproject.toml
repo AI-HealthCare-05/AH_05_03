@@ -132,7 +132,7 @@ line-length = 120
 target-version = "py310"
 # 가져온 코드는 우리 린트 규칙으로 고치지 않는다. 한 글자라도 바꾸면 "팀원의 엔진과
 # 비교"가 아니라 "내가 고친 엔진과 비교"가 된다. chronic_disease_engine/PROVENANCE.md 참조.
-extend-exclude = ["chronic_disease_engine"]
+extend-exclude = ["chronic_disease_engine", ".codex_tmp_*.py"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "C90", "B", "UP", "N"]
@@ -142,6 +142,11 @@ ignore = ["UP046", "E501"]
 "__init__.py" = ["F401"]
 # `*` 글롭은 `/`를 넘지 않아 versions/ 아래 생성 파일이 그대로 린트된다.
 "app/core/db/migrations/**/*.py" = ["ALL"]
+# Blender는 실행 환경이 `bpy`를 먼저 요구하고 등록 클래스 이름도 Blender의
+# `PREFIX_OT_name`/`PREFIX_PT_name` 규약을 따른다. 일반 Python 앱 규칙과 충돌하는
+# 항목만 제한적으로 제외하고 나머지 오류 검사는 그대로 유지한다.
+"frontend/scripts/*.py" = ["I001", "N801", "C901"]
+"scripts/blender/*.py" = ["I001", "N801", "C901", "UP035"]
 
 [tool.ruff.format]
 quote-style = "double"

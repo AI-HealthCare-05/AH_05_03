@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import Depends
+from sqlalchemy import delete
 
 from app.core.db.session import SessionDep
 from app.dependencies.services import get_token_store
@@ -9,6 +10,7 @@ from app.dtos.accounts import AccountCloseData, AccountSummaryData
 from app.dtos.auth import AccountInfo
 from app.dtos.subscriptions import SubscriptionBrief
 from app.exceptions import SubscriptionNotFoundError
+from app.models.profiles import FamilyProfile
 from app.models.service_accounts import ServiceAccount, ServiceAccountStatus
 from app.models.subscriptions import SubscriptionStatus
 from app.repositories.household_repository import HouseholdRepository
@@ -46,13 +48,14 @@ class AccountService:
             subscription=SubscriptionBrief.model_validate(subscription),
         )
 
-    async def close(self, account: ServiceAccount) -> AccountCloseData:
-        """DELETE /account — 유예기간 후 파기. 로컬 데이터는 서버가 모른다.
+    async def close(self, account: ServiceAccount, purge_health_data: bool = False) -> AccountCloseData:
+        """DELETE /account — 유예기간 후 파기. purge_health_data=True 시 서버 DB 데이터 영구 폐기.
 
         멱등하다: get_current_account(상태 무관)로 들어오므로 이미 closed인
         계정에 다시 호출해도 같은 응답을 내며 아무것도 바꾸지 않는다.
         """
         closed_at = datetime.now(tz=timezone.utc)
+        purged = False
 
         if account.status is not ServiceAccountStatus.CLOSED:
             await self.account_repo.set_status(account, ServiceAccountStatus.CLOSED, closed_at=closed_at)
@@ -61,13 +64,13 @@ class AccountService:
             if subscription and subscription.status is SubscriptionStatus.ACTIVE:
                 await self.subscription_repo.set_status(subscription, SubscriptionStatus.CANCELLED)
 
-            # **가구에서도 나간다.** 예전에는 계정만 닫고 멤버십을 그대로 뒀는데,
-            # 그러면 닫힌 계정이 계속 '활성 구성원' 으로 잡혀 남은 사람이 가구를
-            # 정리할 수 없었다. 탈퇴한 사람이 남의 가구 구성원 목록에 계속 보이는
-            # 문제도 같은 뿌리다.
-            #
-            # 나간 뒤 아무도 안 남은 가구는 닫는다. 안 그러면 접근할 수 없는데
-            # `status=active` 인 가구만 쌓인다.
+            # 탈퇴 시 건강정보 폐기 요청이 있으면 서버 DB 내 프로필 및 건강기록 영구 삭제
+            if purge_health_data:
+                await self.session.execute(
+                    delete(FamilyProfile).where(FamilyProfile.created_by_account_id == account.id)
+                )
+                purged = True
+
             touched = await self.household_repo.release_all_memberships(account.id)
             await self.household_repo.close_if_empty(touched)
 
@@ -87,4 +90,5 @@ class AccountService:
             closed_at=closed_at,
             subscription_status=subscription_status,
             local_data_deleted=False,
+            health_data_purged=purged,
         )

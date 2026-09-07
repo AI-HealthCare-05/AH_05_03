@@ -28,7 +28,7 @@ class HouseholdRepository:
         self.session = session
 
     async def create_for_account(self, account_id: uuid.UUID) -> Household:
-        household = Household(created_by_account_id=account_id)
+        household = Household(created_by_account_id=account_id, master_account_id=account_id)
         self.session.add(household)
         await self.session.flush()
         self.session.add(HouseholdMembership(household_id=household.id, account_id=account_id))
@@ -40,6 +40,33 @@ class HouseholdRepository:
 
     async def get_for_update(self, household_id: uuid.UUID) -> Household | None:
         return await self.session.scalar(select(Household).where(Household.id == household_id).with_for_update())
+
+    async def has_any_active_household(self, account_id: uuid.UUID) -> bool:
+        result = await self.session.scalar(
+            select(HouseholdMembership.id)
+            .join(Household, Household.id == HouseholdMembership.household_id)
+            .where(
+                HouseholdMembership.account_id == account_id,
+                HouseholdMembership.status == MembershipStatus.ACTIVE,
+                Household.status == HouseholdStatus.ACTIVE,
+            )
+            .limit(1)
+        )
+        return result is not None
+
+    async def get_oldest_active_member(
+        self, household_id: uuid.UUID, exclude_account_id: uuid.UUID
+    ) -> HouseholdMembership | None:
+        return await self.session.scalar(
+            select(HouseholdMembership)
+            .where(
+                HouseholdMembership.household_id == household_id,
+                HouseholdMembership.account_id != exclude_account_id,
+                HouseholdMembership.status == MembershipStatus.ACTIVE,
+            )
+            .order_by(HouseholdMembership.joined_at.asc(), HouseholdMembership.id.asc())
+            .limit(1)
+        )
 
     async def list_for_account(self, account_id: uuid.UUID) -> list[Household]:
         result = await self.session.scalars(
@@ -100,6 +127,14 @@ class HouseholdRepository:
             .with_for_update()
         )
 
+    async def get_membership_by_id_for_update(self, membership_id: uuid.UUID) -> HouseholdMembership | None:
+        return await self.session.scalar(
+            select(HouseholdMembership).where(HouseholdMembership.id == membership_id).with_for_update()
+        )
+
+    async def delete_membership(self, membership: HouseholdMembership) -> None:
+        await self.session.delete(membership)
+
     async def count_other_active_members(self, household_id: uuid.UUID, account_id: uuid.UUID) -> int:
         return int(
             await self.session.scalar(
@@ -155,6 +190,17 @@ class HouseholdRepository:
             membership.row_version += 1
             await self.unlink_active_profile(membership.household_id, account_id)
             touched.append(membership.household_id)
+
+            # 탈퇴하는 계정이 마스터인 경우, 남아 있는 활성 구성원에게 자동 승계
+            household = await self.get_for_update(membership.household_id)
+            if household is not None and household.master_account_id == account_id:
+                next_master = await self.get_oldest_active_member(
+                    membership.household_id, exclude_account_id=account_id
+                )
+                if next_master is not None:
+                    household.master_account_id = next_master.account_id
+                    household.row_version += 1
+
         return touched
 
     async def close_if_empty(self, household_ids: list[uuid.UUID]) -> list[uuid.UUID]:

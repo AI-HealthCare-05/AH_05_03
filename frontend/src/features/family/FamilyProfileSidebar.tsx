@@ -50,7 +50,7 @@ export function FamilyProfileSidebar({
               </span>
               <span className="family-switcher-copy">
                 <strong>{profile.displayName}</strong>
-                <small>{profile.relationship}{profile.birthDate ? ` · ${profile.birthDate.slice(0, 4)}년생` : ""}</small>
+                <small>{formatProfileSubLabel(profile)}</small>
               </span>
               {isSelected ? <span className="family-switcher-current">현재</span> : null}
             </button>
@@ -80,4 +80,10 @@ export function FamilyProfileSidebar({
       ) : null}
     </aside>
   );
+}
+
+function formatProfileSubLabel(profile: FamilyProfile): string {
+  const genderLabel = profile.gender === "male" ? "남성" : profile.gender === "female" ? "여성" : "";
+  const birthYear = profile.birthDate ? `${profile.birthDate.slice(0, 4)}년생` : "";
+  return [profile.relationship, genderLabel, birthYear].filter(Boolean).join(" · ");
 }

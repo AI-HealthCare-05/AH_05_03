@@ -34,6 +34,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     displayName: "홍길동",
     relationship: "본인",
     birthDate: "1990-01-01",
+    gender: "male",
     opaqueServerRef: null,
     serverRefState: "none",
     status: "active",
@@ -372,6 +373,70 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
             bodyArea: "오른쪽 무릎",
             intensity: 6,
             sensation: "욱신거림",
+          }),
+        }),
+      );
+      expect(mockOnRecordSaved).toHaveBeenCalled();
+    });
+  });
+
+  it("통증일기 대화 시 format_pain_diary 툴콜링 카드가 표시되고 다이어리에 저장할 수 있다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "record_pain",
+      assistant_message: "통증 일기를 맞춤법에 맞추고 구조화하여 정리했습니다.",
+      pain_diary_tool: {
+        tool_name: "format_pain_diary",
+        date_str: "2026-09-06",
+        body_area: "팔꿈치, 왼쪽 고관절",
+        intensity: 6,
+        sensation: "이물감, 지지력 저하",
+        aggravating_factors: "웨이트 트레이닝 후",
+        formatted_diary:
+          "웨이트 트레이닝을 마친 후 팔꿈치에 통증이 발생함. 아울러 왼쪽 고관절에 이물감이 느껴지며, 보행 시 왼쪽 발바닥으로 바닥을 지지하는 근력이 다소 저하된 양상을 보임.",
+      },
+      missing_fields: [],
+      needs_confirmation: true,
+      suggested_quick_replies: [],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={mockProfile}
+        runtime={mockRuntime}
+        isOpen={true}
+        onClose={mockOnClose}
+        onRecordSaved={mockOnRecordSaved}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+    fireEvent.change(input, {
+      target: {
+        value:
+          "통증일기. 웨이트한후에 팔꿈치가 아프다. 왼쪽 고관절에 이물감이 있고 왼쪽발 바닥을 딛는 힘이 약한 것 같아.",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/\[Tool Calling\] format_pain_diary/)).toBeInTheDocument();
+      expect(screen.getByDisplayValue(/웨이트 트레이닝을 마친 후 팔꿈치에 통증이 발생함/)).toBeInTheDocument();
+      expect(screen.getByDisplayValue("팔꿈치, 왼쪽 고관절")).toBeInTheDocument();
+    });
+
+    // 저장 버튼 클릭
+    fireEvent.click(screen.getByRole("button", { name: /통증 다이어리에 저장하기/ }));
+
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordType: "pain",
+          payload: expect.objectContaining({
+            type: "pain",
+            bodyArea: "팔꿈치, 왼쪽 고관절",
+            intensity: 6,
+            sensation: "이물감, 지지력 저하",
+            note: expect.stringContaining("웨이트 트레이닝을 마친 후 팔꿈치에 통증이 발생함"),
           }),
         }),
       );
@@ -1696,7 +1761,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       expect(sentMessages.at(-1)?.content).toBe("새 질문");
     });
 
-    it("새 대화 버튼 클릭 시 세션이 비워지고 초기 환영 메시지로 리셋된다", async () => {
+    it("열 때 대화 목록을 먼저 보여주고 새 대화 버튼을 제공한다", async () => {
       saveChatSession(mockProfile.id, [
         { id: "msg-1", role: "user", content: "이전 질문입니다" },
         { id: "msg-2", role: "assistant", content: "이전 답변입니다" },
@@ -1712,19 +1777,9 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       );
 
       expect(screen.getByText("이전 질문입니다")).toBeInTheDocument();
-      const clearBtn = screen.getByRole("button", { name: "새 대화 시작" });
-      expect(clearBtn).toBeInTheDocument();
-
-      fireEvent.click(clearBtn);
-
-      await waitFor(() => {
-        expect(screen.queryByText("이전 질문입니다")).not.toBeInTheDocument();
-        expect(screen.getByText(/홍길동님의 건강 비서 '봄이'입니다/)).toBeInTheDocument();
-      });
-
-      // sessionStorage에서도 제거되었는지 확인
-      const saved = loadChatSession(mockProfile.id);
-      expect(saved).toBeNull();
+      expect(screen.getByRole("region", { name: "대화 목록" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "새 대화" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "대화 목록" })).toBeInTheDocument();
     });
   });
 });

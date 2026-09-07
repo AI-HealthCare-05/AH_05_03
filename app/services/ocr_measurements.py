@@ -534,14 +534,23 @@ def _measure(
 
 #: 혈압을 한 칸에 `120/80` 으로 찍는 검진표가 있다. 이건 행 하나가 값 둘이라
 #: 일반 경로로는 못 읽으므로 앞에서 갈라 준다.
-_BP_LABELS = ("혈압", "bloodpressure", "bp")
+_BP_LABELS = ("혈압", "고혈압", "bloodpressure", "bp")
 _BP_PAIR = re.compile(r"^\s*(\d{2,3})\s*/\s*(\d{2,3})\s*$")
+
+#: 키와 체중을 한 칸에 `172.2 / 76.2` 로 찍는 검진표가 있다 (예: `키 (cm) 및 몸무게 (kg)`).
+#: 행 하나에 두 항목과 두 값이 들어있는 경우를 갈라 준다.
+_HEIGHT_WORDS = ("키", "신장", "height")
+_WEIGHT_WORDS = ("체중", "몸무게", "weight")
+_HEIGHT_WEIGHT_PAIR = re.compile(
+    r"^\s*(\d{2,3}(?:[.,]\d+)?)\s*(?:cm|kg|\([a-zA-Z가-힣/]+\))?\s*[/,]\s*(\d{2,3}(?:[.,]\d+)?)\s*(?:cm|kg|\([a-zA-Z가-힣/]+\))?\s*$",
+    re.IGNORECASE,
+)
 
 
 def _split_blood_pressure(row: list[str]) -> list[list[str]] | None:
     label, raw_value, raw_unit, raw_reference = _row_parts(row)
     key = _normalize(label)
-    if not any(key == name or key.startswith(name) for name in _BP_LABELS):
+    if not any(name in key for name in _BP_LABELS):
         return None
     paired = _BP_PAIR.match(unicodedata.normalize("NFKC", raw_value))
     if paired is None:
@@ -552,15 +561,55 @@ def _split_blood_pressure(row: list[str]) -> list[list[str]] | None:
     ]
 
 
+def _split_height_weight(row: list[str]) -> list[list[str]] | None:
+    label, raw_value, _raw_unit, raw_reference = _row_parts(row)
+    key = _normalize(label)
+    has_height = any(w in key for w in _HEIGHT_WORDS)
+    has_weight = any(w in key for w in _WEIGHT_WORDS)
+    if not (has_height and has_weight):
+        return None
+    paired = _HEIGHT_WEIGHT_PAIR.match(unicodedata.normalize("NFKC", raw_value))
+    if paired is None:
+        return None
+    val1_str = paired.group(1).replace(",", ".")
+    val2_str = paired.group(2).replace(",", ".")
+    try:
+        v1 = float(val1_str)
+        v2 = float(val2_str)
+    except ValueError:
+        return None
+
+    # 라벨 순서 또는 수치 크기(키 100~250cm vs 체중 20~150kg)로 순서 결정
+    height_first = True
+    height_pos = min((key.find(w) for w in _HEIGHT_WORDS if w in key), default=-1)
+    weight_pos = min((key.find(w) for w in _WEIGHT_WORDS if w in key), default=-1)
+    if height_pos >= 0 and weight_pos >= 0 and weight_pos < height_pos:
+        height_first = False
+
+    if v1 < 100.0 < v2:
+        height_first = False
+    elif v2 < 100.0 < v1:
+        height_first = True
+
+    h_val = val1_str if height_first else val2_str
+    w_val = val2_str if height_first else val1_str
+
+    return [
+        ["신장", h_val, "cm", raw_reference],
+        ["체중", w_val, "kg", raw_reference],
+    ]
+
+
 def _iter_rows(tables: list[dict[str, Any]] | None) -> list[list[str]]:
-    """표들을 행 목록으로 편다. 혈압 한 칸(`120/80`)은 여기서 두 행으로 갈린다."""
+    """표들을 행 목록으로 편다. 혈압(`120/80`)·신장체중(`172.2/76.2`)은 여기서 두 행으로 갈린다."""
     rows: list[list[str]] = []
     for table in tables or []:
         for row in table.get("rows") or []:
             if not isinstance(row, list) or not row:
                 continue
             cells = [str(cell) for cell in row]
-            rows.extend(_split_blood_pressure(cells) or [cells])
+            split = _split_blood_pressure(cells) or _split_height_weight(cells)
+            rows.extend(split or [cells])
     return rows
 
 

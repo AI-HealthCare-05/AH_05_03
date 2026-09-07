@@ -1,0 +1,20 @@
+Ieobom final Tripo female presentation shell
+
+The retained Tripo asset is the project owner's single-front-image female
+presentation model, locally prepared as the exterior shell for the final
+Triangle 2M + Z-Anatomy comparison.
+
+Retained runtime derivatives:
+
+- The v15 exterior shell with the approved head, hand, foot, relaxed-arm, and
+  reduced-foot-shell presentation adjustments.
+- The matching adaptive surface-flow guide.
+- The matching cleaned regional-boundary guide.
+
+The generated shell and guides are visual presentation assets. They are not
+medically validated, diagnostic, or patient-specific anatomy. The project must
+confirm the applicable Tripo plan and asset-usage terms before redistribution
+outside the development prototype.
+
+Holographic color, transparency, wireframe, and glow are applied at runtime by
+the Ieobom Three.js viewer and are not baked into the source GLB.

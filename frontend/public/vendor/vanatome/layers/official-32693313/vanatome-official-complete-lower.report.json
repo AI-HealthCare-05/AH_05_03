@@ -1,0 +1,25 @@
+{
+  "source": "Z-Anatomy official Models-of-human-anatomy@32693313",
+  "policy": "renderable pelvis and bilateral lower-limb structures including feet; excludes initial-core duplicates, taxonomy helpers, and external regions",
+  "coreStructureNames": 277,
+  "coreDuplicatesExcluded": 66,
+  "objects": 625,
+  "sourceTypes": {
+    "CURVE": 199,
+    "MESH": 426
+  },
+  "systems": {
+    "cardiovascular": 116,
+    "joints": 174,
+    "lymphatic": 10,
+    "muscular": 231,
+    "nervous": 78,
+    "reproductive": 14,
+    "urinary": 2
+  },
+  "vertices": 806228,
+  "triangles": 1068459,
+  "bytes": 5110048,
+  "sha256": "0371519768fa76596f1e6afc18aa164f2f4f1cb947233100767e2b8a544caa75",
+  "output": "vanatome-official-complete-lower.glb"
+}

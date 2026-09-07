@@ -23,10 +23,14 @@ export interface AuthContextValue {
   status: AuthStatus;
   /** 로그인한 계정의 이메일. 헤더가 누구로 들어와 있는지 보여 준다. */
   email?: string;
+  /** 로그인한 계정의 UUID */
+  accountId?: string;
   signIn(email: string, password: string, options?: { signUpFirst?: boolean }): Promise<void>;
   signOut(): Promise<void>;
   /** 계정 화면이 스스로 로그아웃·계정 종료를 했을 때 관문에 알린다. */
   markSignedOut(): void;
+  /** 계정 화면 등에서 최신 계정 정보를 동기화할 때 사용한다. */
+  updateAccount?(email: string, accountId?: string): void;
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);

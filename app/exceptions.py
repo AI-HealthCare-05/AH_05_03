@@ -72,6 +72,12 @@ class OcrProviderFailedError(AppError):
     error_code = ErrorCode.OCR_PROVIDER_FAILED
 
 
+class OcrQueueUnavailableError(AppError):
+    """Redis 큐가 순간적으로 응답하지 않는다. 공급자 실패와 구분되는 503."""
+
+    error_code = ErrorCode.SERVICE_UNAVAILABLE
+
+
 # --- llm 대화 -------------------------------------------------------------
 class LlmUnavailableError(AppError):
     """우리 쪽 사정. 키가 없거나 기능이 꺼져 있다. 503."""
@@ -248,3 +254,16 @@ class ChallengeNotFoundError(AppError):
 # --- chat sessions -------------------------------------------------------
 class ChatSessionNotFoundError(AppError):
     error_code = ErrorCode.CHAT_SESSION_NOT_FOUND
+
+
+# --- profiles & health records -------------------------------------------
+class ProfileNotFoundError(AppError):
+    error_code = ErrorCode.PROFILE_NOT_FOUND
+
+
+class HealthRecordNotFoundError(AppError):
+    error_code = ErrorCode.HEALTH_RECORD_NOT_FOUND
+
+
+class ProfileAccessDeniedError(AppError):
+    error_code = ErrorCode.PROFILE_ACCESS_DENIED

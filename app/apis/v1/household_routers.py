@@ -11,6 +11,7 @@ from app.dtos.households import (
     HouseholdListData,
     HouseholdMembershipData,
     HouseholdMembershipListData,
+    TransferMasterRequest,
 )
 from app.models.service_accounts import ServiceAccount
 from app.services.households import HouseholdService
@@ -85,6 +86,26 @@ async def list_household_memberships(
 
 
 @household_router.post(
+    "/{household_id}/transfer-master",
+    response_model=ApiResponse[HouseholdData],
+    responses=error_responses(
+        *_AUTH_ERRORS,
+        ErrorCode.HOUSEHOLD_NOT_FOUND,
+        ErrorCode.HOUSEHOLD_STATE_CONFLICT,
+    ),
+    summary="가정 마스터 권한 위임",
+)
+async def transfer_household_master(
+    household_id: uuid.UUID,
+    payload: TransferMasterRequest,
+    account: Annotated[ServiceAccount, Depends(require_active_account)],
+    service: Annotated[HouseholdService, Depends(HouseholdService)],
+) -> ApiResponse[HouseholdData]:
+    data = await service.transfer_master(household_id, account, payload.target_account_id)
+    return ApiResponse(data=data, message="가정 마스터 권한을 위임했습니다.")
+
+
+@household_router.post(
     "/{household_id}/leave",
     response_model=ApiResponse[HouseholdMembershipData],
     responses=error_responses(
@@ -121,3 +142,24 @@ async def close_household(
     service: Annotated[HouseholdService, Depends(HouseholdService)],
 ) -> None:
     await service.close(household_id, account)
+
+
+@household_router.delete(
+    "/{household_id}/memberships/{membership_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=error_responses(
+        *_AUTH_ERRORS,
+        ErrorCode.HOUSEHOLD_NOT_FOUND,
+        ErrorCode.HOUSEHOLD_MEMBERSHIP_REQUIRED,
+        ErrorCode.MEMBERSHIP_STATE_CONFLICT,
+        ErrorCode.HOUSEHOLD_STATE_CONFLICT,
+    ),
+    summary="가정 구성원 이력 삭제",
+)
+async def delete_household_membership(
+    household_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    account: Annotated[ServiceAccount, Depends(require_active_account)],
+    service: Annotated[HouseholdService, Depends(HouseholdService)],
+) -> None:
+    await service.delete_member_history(household_id, membership_id, account)

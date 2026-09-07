@@ -17,12 +17,15 @@ export type LocalResult<T> =
   | { ok: true; value: T }
   | { ok: false; error: { code: LocalErrorCode; message: string; retryable: boolean } };
 
+export type Gender = "male" | "female";
+
 export interface FamilyProfile {
   id: string;
   householdId: string;
   displayName: string;
   relationship: string;
   birthDate: ISODate | null;
+  gender?: Gender | null;
   opaqueServerRef: string | null;
   serverRefState: "none" | "pending" | "active" | "retired";
   status: "active" | "hidden" | "merged";

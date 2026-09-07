@@ -37,3 +37,6 @@ export const UiPreviewPage = lazy(() =>
 export const AccountPage = lazy(() =>
   import("../features/account/AccountPage").then((m) => ({ default: m.AccountPage })),
 );
+export const PainDiaryPage = lazy(() =>
+  import("../features/pain-diary/PainDiaryPage").then((m) => ({ default: m.PainDiaryPage })),
+);

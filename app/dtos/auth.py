@@ -40,3 +40,12 @@ class AccountInfo(BaseSerializerModel):
     email: str
     status: ServiceAccountStatus
     created_at: datetime
+
+
+class PasswordResetRequest(BaseRequestModel):
+    email: Annotated[EmailStr, Field(max_length=254)]
+
+
+class PasswordResetConfirmRequest(BaseRequestModel):
+    token: Annotated[str, Field(min_length=16, max_length=128)]
+    new_password: Annotated[str, Field(min_length=8, max_length=72), AfterValidator(validate_password)]

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from "react";
+import { useState, useRef, useEffect, useMemo, type FormEvent, type ChangeEvent } from "react";
 import type { FamilyProfile, HealthRecord, HealthRecordType } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 // PR 은 전용 `DevServerOcrAdapter` 를 썼는데, project 에는 같은 응답을 큐·스트리밍으로
@@ -11,12 +11,14 @@ import {
   createChatSession,
   listChatSessions,
   listChatMessages,
+  type ChatSessionData,
   type HealthAssistantResponse,
   type ExerciseDraft,
   type BloodPressureDraft,
   type BloodGlucoseDraft,
   type MedicationDraft,
   type PainDraft,
+  type PainDiaryToolCall,
   type LabResultDraft,
   type ChallengeDraft,
   type FacilitySearchResult,
@@ -46,7 +48,6 @@ import {
   reviewItemsToText,
   loadChatSession,
   saveChatSession,
-  clearChatSession,
   createWelcomeMessage,
   mergeServerMessagesWithLocalUi,
 } from "./healthAssistantLogic";
@@ -132,6 +133,7 @@ interface HealthAssistantDrawerProps {
   onRecordSaved?: () => Promise<void> | void;
   onChallengeSaved?: () => Promise<void> | void;
   onNavigateToRecords?: () => void;
+  onNavigateToDiary?: (dateKey: string) => void;
 }
 
 export function HealthAssistantDrawer({
@@ -141,6 +143,7 @@ export function HealthAssistantDrawer({
   onClose,
   onRecordSaved,
   onNavigateToRecords,
+  onNavigateToDiary,
 }: HealthAssistantDrawerProps) {
   // 초기 메시지는 이전 세션이 있으면 복원하고, 없으면 환영 메시지로 시작한다.
   const [messages, setMessages] = useState<ExtendedChatMessage[]>(() => {
@@ -150,10 +153,13 @@ export function HealthAssistantDrawer({
   });
   const messagesRef = useRef(messages);
   const activeSessionIdRef = useRef<string | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const sessionSyncPromiseRef = useRef<Promise<string | null> | null>(null);
   const skipNextCacheWriteRef = useRef(false);
   const activeProfileIdRef = useRef<string | null>(profile?.id ?? null);
   const [input, setInput] = useState("");
+  const [chatSessions, setChatSessions] = useState<ChatSessionData[]>([]);
+  const [showSessionList, setShowSessionList] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -266,7 +272,9 @@ export function HealthAssistantDrawer({
     activeProfileIdRef.current = currentProfileId;
     // 새 프로필의 세션을 찾는 동안 이전 프로필의 세션 id를 재사용하지 않는다.
     activeSessionIdRef.current = null;
+    setActiveSessionId(null);
     skipNextCacheWriteRef.current = true;
+    setShowSessionList(true);
 
     const saved = loadChatSession(currentProfileId);
     setMessages(saved && saved.length > 0 ? saved : [createWelcomeMessage(profileDisplayName)]);
@@ -279,10 +287,12 @@ export function HealthAssistantDrawer({
       try {
         const sessions = await listChatSessions(currentProfileId);
         if (!isSubscribed || activeProfileIdRef.current !== currentProfileId) return null;
+        setChatSessions(sessions);
 
         if (sessions.length > 0) {
           const latest = sessions[0];
           activeSessionIdRef.current = latest.id;
+          setActiveSessionId(latest.id);
           const dbMessages = await listChatMessages(latest.id);
           if (!isSubscribed || activeProfileIdRef.current !== currentProfileId) return null;
 
@@ -299,12 +309,8 @@ export function HealthAssistantDrawer({
           }
           return latest.id;
         } else {
-          const newSession = await createChatSession(currentProfileId);
-          if (!isSubscribed || activeProfileIdRef.current !== currentProfileId) return null;
-          activeSessionIdRef.current = newSession.id;
           setMessages([createWelcomeMessage(profileDisplayName)]);
-          clearChatSession(currentProfileId);
-          return newSession.id;
+          return null;
         }
       } catch (err) {
         console.warn("대화 세션 서버 동기화 실패 (오프라인 캐시 유지):", err);
@@ -333,10 +339,9 @@ export function HealthAssistantDrawer({
     saveChatSession(profile.id, messages);
   }, [profile, messages]);
 
-  // 대화 비우기 및 새 대화 시작 (PostgreSQL 서버에 새 세션 생성)
-  async function handleClearChat() {
+  // 새 대화는 기존 대화를 지우지 않고 별도 세션으로 만든다.
+  async function handleCreateChat() {
     if (!profile) return;
-    clearChatSession(profile.id);
     setMessages([createWelcomeMessage(profile.displayName)]);
     setSelectedImage(null);
     setImagePreview(null);
@@ -344,8 +349,28 @@ export function HealthAssistantDrawer({
     try {
       const newSession = await createChatSession(profile.id);
       activeSessionIdRef.current = newSession.id;
+      setActiveSessionId(newSession.id);
+      setChatSessions((previous) => [newSession, ...previous]);
+      setShowSessionList(false);
     } catch (err) {
       console.warn("새 대화 세션 생성 실패:", err);
+    }
+  }
+
+  async function handleSelectChat(session: ChatSessionData) {
+    if (!profile) return;
+    setError(undefined);
+    try {
+      const dbMessages = await listChatMessages(session.id);
+      if (activeProfileIdRef.current !== profile.id) return;
+      const mapped = mergeServerMessagesWithLocalUi(dbMessages, loadChatSession(profile.id) ?? []);
+      activeSessionIdRef.current = session.id;
+      setActiveSessionId(session.id);
+      setMessages(mapped.length > 0 ? mapped : [createWelcomeMessage(profile.displayName)]);
+      setShowSessionList(false);
+    } catch (err) {
+      console.warn("대화 내용을 불러오지 못했습니다:", err);
+      setError("대화 내용을 불러오지 못했습니다. 다시 선택해 주세요.");
     }
   }
 
@@ -617,6 +642,7 @@ export function HealthAssistantDrawer({
           const newSession = await createChatSession(profile.id);
           sessionId = newSession.id;
           activeSessionIdRef.current = sessionId;
+          setActiveSessionId(sessionId);
         } catch (sessionError) {
           // 세션 저장 장애가 기존 챗봇 자체를 막아서는 안 된다. 대화는 계속하고
           // sessionStorage 캐시로 복구하며 다음 요청에서 다시 서버 세션을 시도한다.
@@ -800,6 +826,8 @@ export function HealthAssistantDrawer({
           assistantMsgId,
         );
       }
+      // 첫 사용자 질문이 세션 제목으로 저장되므로 목록도 최신 상태로 갱신한다.
+      void listChatSessions(profile.id).then((sessions) => setChatSessions(sessions)).catch(() => undefined);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "응답을 받지 못했습니다. 다시 시도해 주세요.");
     } finally {
@@ -1200,6 +1228,49 @@ export function HealthAssistantDrawer({
     }
   }
 
+  // 툴콜링(format_pain_diary) 결과 통증 다이어리 로컬 저장
+  async function savePainDiaryFromTool(
+    tool: PainDiaryToolCall,
+    msgId: string,
+  ): Promise<boolean> {
+    if (!runtime || !profile || !tool.body_area) return false;
+    setLoading(true);
+    try {
+      const recordDate = tool.date_str
+        ? new Date(`${tool.date_str}T12:00:00`).toISOString()
+        : new Date().toISOString();
+
+      const result = await runtime.healthRecords.create({
+        householdId: PRIMARY_HOUSEHOLD_ID,
+        profileId: profile.id,
+        recordType: "pain",
+        recordedAt: recordDate,
+        source: "local_ai",
+        payload: {
+          type: "pain",
+          bodyArea: tool.body_area,
+          intensity: typeof tool.intensity === "number" ? tool.intensity : 5,
+          sensation: tool.sensation || undefined,
+          aggravatingFactors: tool.aggravating_factors || undefined,
+          note: tool.formatted_diary,
+        },
+      });
+
+      if (!result.ok) throw new Error(result.error.message);
+
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msgId ? { ...m, saved: true } : m)),
+      );
+      if (onRecordSaved) await onRecordSaved();
+      return true;
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "통증 다이어리 저장에 실패했습니다.");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // 검진/검사 서류 결과 로컬 저장 (원본 이미지 문서 보관 연계)
   async function saveLabResult(draft: LabResultDraft, msgId: string, imageFile?: File) {
     if (!runtime || !profile) return;
@@ -1301,22 +1372,54 @@ export function HealthAssistantDrawer({
             </div>
           </div>
           <div className="assistant-header-actions">
-            {messages.length > 1 && (
-              <button
-                className="assistant-clear-btn"
-                type="button"
-                onClick={handleClearChat}
-                title="대화 내용을 비우고 새 대화를 시작합니다"
-                aria-label="새 대화 시작"
-              >
-                새 대화
-              </button>
-            )}
+            <button
+              className="assistant-clear-btn"
+              type="button"
+              onClick={() => setShowSessionList(true)}
+              aria-label="대화 목록"
+            >
+              대화 목록
+            </button>
             <button className="assistant-close-btn" type="button" onClick={onClose} aria-label="닫기">
               ×
             </button>
           </div>
         </header>
+
+        {showSessionList && (
+          <section className="chat-session-list" aria-label="대화 목록">
+            <div className="chat-session-list-heading">
+              <div>
+                <strong>대화 목록</strong>
+                <p>봄이와 나눈 대화를 다시 열 수 있어요.</p>
+              </div>
+              <button type="button" className="new-chat-button" onClick={() => void handleCreateChat()}>
+                <span aria-hidden="true">+</span> 새 대화
+              </button>
+            </div>
+            {chatSessions.length === 0 ? (
+              <div className="chat-session-empty">
+                <strong>아직 나눈 대화가 없어요.</strong>
+                <p>새 대화에서 건강 기록이나 궁금한 점을 물어보세요.</p>
+              </div>
+            ) : (
+              <ul>
+                {chatSessions.map((session) => (
+                  <li key={session.id}>
+                    <button
+                      type="button"
+                      className={activeSessionId === session.id ? "active" : ""}
+                      onClick={() => void handleSelectChat(session)}
+                    >
+                      <strong>{session.title || "새 건강 상담"}</strong>
+                      <time dateTime={session.updated_at}>{new Date(session.updated_at).toLocaleDateString("ko-KR")}</time>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
 
         {/* 메시지 리스트 */}
         <div ref={messagesContainerRef} className="assistant-messages-container">
@@ -1419,6 +1522,23 @@ export function HealthAssistantDrawer({
                     draft={msg.responseDraft.pain_draft}
                     saved={Boolean(msg.saved)}
                     onSave={(updated) => savePain(updated, msg.id)}
+                  />
+                )}
+
+                {/* 통증 다이어리 툴콜링(format_pain_diary) 카드 */}
+                {msg.responseDraft?.pain_diary_tool && msg.role === "assistant" && (
+                  <PainDiaryToolCard
+                    toolCall={msg.responseDraft.pain_diary_tool}
+                    saved={Boolean(msg.saved)}
+                    onSave={(updated) => savePainDiaryFromTool(updated, msg.id)}
+                    onNavigateToDiary={(dateKey) => {
+                      onClose();
+                      if (onNavigateToDiary) {
+                        onNavigateToDiary(dateKey);
+                      } else {
+                        window.location.href = `/pain-diary?date=${dateKey}`;
+                      }
+                    }}
                   />
                 )}
 
@@ -2905,6 +3025,146 @@ function FacilitySearchResultCard({ draft }: { draft: FacilitySearchResult }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function PainDiaryToolCard({
+  toolCall,
+  saved,
+  onSave,
+  onNavigateToDiary,
+}: {
+  toolCall: PainDiaryToolCall;
+  saved: boolean;
+  onSave: (updated: PainDiaryToolCall) => void;
+  onNavigateToDiary: (dateKey: string) => void;
+}) {
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }, []);
+  const [diaryDate, setDiaryDate] = useState(toolCall.date_str || todayStr);
+  const [bodyArea, setBodyArea] = useState(toolCall.body_area || "");
+  const [intensity, setIntensity] = useState(toolCall.intensity ?? 5);
+  const [sensation, setSensation] = useState(toolCall.sensation || "");
+  const [aggravatingFactors, setAggravatingFactors] = useState(toolCall.aggravating_factors || "");
+  const [formattedDiary, setFormattedDiary] = useState(toolCall.formatted_diary || "");
+
+  if (saved) {
+    return (
+      <div className="draft-confirm-card is-saved pain-tool-card">
+        <span className="saved-badge">✨ 통증 다이어리에 안전하게 저장되었습니다.</span>
+        <p>
+          <strong>{bodyArea}</strong> ({diaryDate}): 강도 {intensity}/10 {sensation ? `(${sensation})` : ""}
+        </p>
+        <p className="tool-saved-diary">{formattedDiary}</p>
+        <button
+          type="button"
+          className="button button-outline view-diary-btn"
+          onClick={() => onNavigateToDiary(diaryDate)}
+        >
+          📅 통증 다이어리 캘린더에서 확인하기
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="draft-confirm-card pain-tool-card">
+      <div className="card-header">
+        <div className="tool-badge-row">
+          <span className="tool-calling-badge">🛠️ [Tool Calling] format_pain_diary</span>
+          <span className="tool-name">AI 맞춤법 교정 &amp; 구조화</span>
+        </div>
+        <small>맞춤법을 교정하고 정리한 일기입니다. 확인 후 저장해 주세요.</small>
+      </div>
+
+      <div className="card-inputs">
+        <label>
+          정제된 통증 다이어리 본문
+          <textarea
+            className="formatted-diary-textarea"
+            rows={4}
+            value={formattedDiary}
+            onChange={(e) => setFormattedDiary(e.target.value)}
+            placeholder="맞춤법이 교정된 통증 일기 본문"
+          />
+        </label>
+
+        <div className="input-row">
+          <label>
+            기록 날짜
+            <input
+              type="date"
+              value={diaryDate}
+              onChange={(e) => setDiaryDate(e.target.value)}
+            />
+          </label>
+          <label>
+            통증 부위
+            <input
+              value={bodyArea}
+              onChange={(e) => setBodyArea(e.target.value)}
+              placeholder="팔꿈치, 왼쪽 고관절 등"
+            />
+          </label>
+          <label>
+            통증 강도 ({intensity}/10)
+            <div className="pain-intensity-slider-wrap">
+              <input
+                type="range"
+                min="0"
+                max="10"
+                value={intensity}
+                onChange={(e) => setIntensity(Number(e.target.value))}
+              />
+              <span className="pain-intensity-val">{intensity}</span>
+            </div>
+          </label>
+        </div>
+
+        <div className="input-row">
+          <label>
+            통증 양상
+            <input
+              value={sensation}
+              onChange={(e) => setSensation(e.target.value)}
+              placeholder="욱신거림, 이물감 등"
+            />
+          </label>
+          <label>
+            악화 요인
+            <input
+              value={aggravatingFactors}
+              onChange={(e) => setAggravatingFactors(e.target.value)}
+              placeholder="웨이트 트레이닝 후 등"
+            />
+          </label>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="confirm-save-btn"
+        disabled={!bodyArea.trim() || !formattedDiary.trim()}
+        onClick={() =>
+          onSave({
+            tool_name: "format_pain_diary",
+            date_str: diaryDate,
+            body_area: bodyArea.trim(),
+            intensity,
+            sensation: sensation.trim() || undefined,
+            aggravating_factors: aggravatingFactors.trim() || undefined,
+            formatted_diary: formattedDiary.trim(),
+          })
+        }
+      >
+        📝 통증 다이어리에 저장하기
+      </button>
     </div>
   );
 }
