@@ -397,7 +397,7 @@ export function PainDiaryPage() {
           <section className="pain-diary-form-card" aria-label="통증 다이어리 작성 및 수정">
             <div className="card-header">
               <div className="title-row">
-                <h2>{selectedDate === todayKey ? "오늘의 통증 다이어리" : `${selectedDate} 통증 기록`}</h2>
+                <h2>{selectedDate} 통증 기록</h2>
                 <span className={`status-tag ${currentRecord ? "is-edit" : "is-new"}`}>
                   {currentRecord ? "선택한 기록 수정 중" : "새 기록 작성 중"}
                 </span>
@@ -442,28 +442,16 @@ export function PainDiaryPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="diary-form">
-              <div className="form-group-row">
-                <label className="form-group flex-1">
-                  <span>기록 날짜</span>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => handleSelectDate(e.target.value)}
-                    required
-                  />
-                </label>
-
-                <label className="form-group flex-2">
-                  <span>통증 부위 *</span>
-                  <input
-                    type="text"
-                    placeholder="예: 오른쪽 무릎, 허리 아래쪽, 목 뒷덜미"
-                    value={bodyArea}
-                    onChange={(e) => setBodyArea(e.target.value)}
-                    required
-                  />
-                </label>
-              </div>
+              <label className="form-group">
+                <span>통증 부위 *</span>
+                <input
+                  type="text"
+                  placeholder="예: 오른쪽 무릎, 허리 아래쪽, 목 뒷덜미"
+                  value={bodyArea}
+                  onChange={(e) => setBodyArea(e.target.value)}
+                  required
+                />
+              </label>
 
               <div className="form-group">
                 <div className="intensity-header">
@@ -539,7 +527,13 @@ export function PainDiaryPage() {
                   className="button button-primary save-btn"
                   disabled={submitting}
                 >
-                  {submitting ? "저장 중…" : currentRecord ? "기록 수정 완료" : "오늘의 다이어리 저장"}
+                  {submitting
+                    ? "저장 중…"
+                    : currentRecord
+                      ? "기록 수정 완료"
+                      : selectedDate === todayKey
+                        ? "오늘의 다이어리 저장"
+                        : `${selectedDate} 다이어리 저장`}
                 </button>
 
                 {currentRecord && (
