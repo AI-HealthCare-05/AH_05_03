@@ -59,13 +59,15 @@ MOCK_HOSPITAL_XML = """<?xml version="1.0" encoding="UTF-8"?>
   <body>
     <items>
       <item>
-        <yadmNm>바른내과의원</yadmNm>
-        <clCdNm>의원</clCdNm>
-        <addr>서울특별시 강남구 테헤란로 123</addr>
-        <telno>02-555-1234</telno>
-        <distance>350.2</distance>
-        <XPos>127.031</XPos>
-        <YPos>37.498</YPos>
+        <dutyName>바른내과의원</dutyName>
+        <dutyDivName>의원</dutyDivName>
+        <dutyAddr>서울특별시 강남구 테헤란로 123</dutyAddr>
+        <dutyTel1>02-555-1234</dutyTel1>
+        <distance>0.35</distance>
+        <wgs84Lon>127.031</wgs84Lon>
+        <wgs84Lat>37.498</wgs84Lat>
+        <startTime>0900</startTime>
+        <endTime>1800</endTime>
       </item>
     </items>
     <numOfRows>10</numOfRows>
@@ -90,8 +92,8 @@ MOCK_PHARMACY_XML = """<?xml version="1.0" encoding="UTF-8"?>
         <distance>0.25</distance>
         <wgs84Lat>37.5790</wgs84Lat>
         <wgs84Lon>126.9980</wgs84Lon>
-        <dutyTime1s>0900</dutyTime1s>
-        <dutyTime1c>1900</dutyTime1c>
+        <startTime>0900</startTime>
+        <endTime>1900</endTime>
       </item>
     </items>
     <numOfRows>10</numOfRows>
@@ -138,7 +140,10 @@ async def test_search_nearby_emergency_room_by_coords() -> None:
 
 @pytest.mark.asyncio
 async def test_search_nearby_hospital() -> None:
+    requests: list[httpx.Request] = []
+
     def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
         return httpx.Response(200, text=MOCK_HOSPITAL_XML)
 
     transport = httpx.MockTransport(handler)
@@ -158,6 +163,29 @@ async def test_search_nearby_hospital() -> None:
         assert item.category == "의원"
         assert item.phone == "02-555-1234"
         assert item.distance_m == 350
+        assert any("HsptlAsembySearchService" in str(r.url) for r in requests)
+
+
+@pytest.mark.asyncio
+async def test_hospital_unregistered_key_returns_specific_guidance() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            403,
+            text="SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = MedicalFacilityClient(
+            emergency_api_key="test_em_key",
+            hospital_api_key="test_hosp_key",
+            pharmacy_api_key="test_pharm_key",
+            http_client=http_client,
+        )
+        result = await client.search_nearby_hospital(latitude=37.498, longitude=127.031)
+
+    assert result.count == 0
+    assert result.message is not None
 
 
 @pytest.mark.asyncio
@@ -238,3 +266,223 @@ async def test_network_timeout_returns_friendly_error() -> None:
         assert result.count == 0
         assert result.message is not None
         assert "초과" in result.message or "지연" in result.message
+
+
+@pytest.mark.asyncio
+async def test_medical_facility_client_resolves_landmark_query() -> None:
+    captured_urls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured_urls.append(str(request.url))
+        return httpx.Response(200, text=MOCK_HOSPITAL_XML)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = MedicalFacilityClient(
+            emergency_api_key="test_em_key",
+            hospital_api_key="test_hosp_key",
+            pharmacy_api_key="test_pharm_key",
+            http_client=http_client,
+        )
+        result = await client.search_nearby_hospital(query="홍대 내과")
+        assert result.count == 1
+        assert len(captured_urls) > 0
+        # 랜드마크 좌표 매핑을 통해 초고속 위치기반 API(WGS84) 또는 행정구역(Q0)으로 조회됨
+        assert any("WGS84_LAT" in url or "Q0" in url for url in captured_urls)
+
+
+def test_resolve_landmark_coordinates() -> None:
+    lat, lon = MedicalFacilityClient._resolve_target_coords(None, None, "강남역 약국")
+    assert lat == pytest.approx(37.4979, abs=0.001)
+    assert lon == pytest.approx(127.0276, abs=0.001)
+
+    # GPS 좌표가 우선
+    lat2, lon2 = MedicalFacilityClient._resolve_target_coords(37.123, 126.456, "강남역 약국")
+    assert lat2 == 37.123
+    assert lon2 == 126.456
+
+    # 25개 자치구도 좌표 매핑 지원
+    lat_gn, lon_gn = MedicalFacilityClient._resolve_target_coords(None, None, "강남구")
+    assert lat_gn == pytest.approx(37.5172, abs=0.001)
+    assert lon_gn == pytest.approx(127.0473, abs=0.001)
+
+    # 전국 광역시·도 및 주요 도시 좌표 매핑 지원
+    lat_bs, lon_bs = MedicalFacilityClient._resolve_target_coords(None, None, "부산 약국")
+    assert lat_bs == pytest.approx(35.1796, abs=0.001)
+    assert lon_bs == pytest.approx(129.0756, abs=0.001)
+
+    lat_dg, lon_dg = MedicalFacilityClient._resolve_target_coords(None, None, "대구 병원")
+    assert lat_dg == pytest.approx(35.8714, abs=0.001)
+    assert lon_dg == pytest.approx(128.6014, abs=0.001)
+
+    lat_jj, lon_jj = MedicalFacilityClient._resolve_target_coords(None, None, "제주도 약국")
+    assert lat_jj == pytest.approx(33.4890, abs=0.001)
+    assert lon_jj == pytest.approx(126.4983, abs=0.001)
+
+
+def test_parse_location_nationwide() -> None:
+    assert MedicalFacilityClient._parse_location("부산 약국") == ("부산광역시", None)
+    assert MedicalFacilityClient._parse_location("대구 병원") == ("대구광역시", None)
+    assert MedicalFacilityClient._parse_location("제주도 약국") == ("제주특별자치도", None)
+    assert MedicalFacilityClient._parse_location("수원 내과") == ("경기도", "수원시")
+    assert MedicalFacilityClient._parse_location("해운대 약국") == ("부산광역시", "해운대구")
+    assert MedicalFacilityClient._parse_location("대전 유성 이비인후과") == ("대전광역시", "유성구")
+
+
+@pytest.mark.asyncio
+async def test_pharmacy_stage_distance_sorting() -> None:
+    """공공데이터가 가나다순으로 반환하더라도 거리순으로 정렬되는지 검증."""
+    mock_stage_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header><resultCode>00</resultCode><resultMsg>NORMAL SERVICE.</resultMsg></header>
+  <body>
+    <items>
+      <item>
+        <dutyName>가나다약국</dutyName>
+        <dutyAddr>서울 강남구 역삼동 1</dutyAddr>
+        <dutyTel1>02-111-1111</dutyTel1>
+        <wgs84Lat>37.5100</wgs84Lat>
+        <wgs84Lon>127.0400</wgs84Lon>
+        <dutyTime1s>0900</dutyTime1s>
+        <dutyTime1c>2100</dutyTime1c>
+      </item>
+      <item>
+        <dutyName>나라약국</dutyName>
+        <dutyAddr>서울 강남구 역삼동 2</dutyAddr>
+        <dutyTel1>02-222-2222</dutyTel1>
+        <wgs84Lat>37.4980</wgs84Lat>
+        <wgs84Lon>127.0280</wgs84Lon>
+        <dutyTime1s>0900</dutyTime1s>
+        <dutyTime1c>2100</dutyTime1c>
+      </item>
+    </items>
+    <numOfRows>20</numOfRows>
+    <pageNo>1</pageNo>
+    <totalCount>2</totalCount>
+  </body>
+</response>
+"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=mock_stage_xml)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = MedicalFacilityClient(
+            pharmacy_api_key="test_pharm_key",
+            http_client=http_client,
+        )
+        # 강남역 기준 검색 -> 나라약국(37.4980, 127.0280)이 강남역(37.4979, 127.0276)에서 훨씬 가까움
+        result = await client.search_nearby_pharmacy(query="강남역 약국")
+        assert result.count == 2
+        # 가나다약국이 API에서는 먼저 왔지만, 거리순 정렬되어 나라약국이 1번째여야 함
+        assert result.items[0].name == "나라약국"
+        assert result.items[1].name == "가나다약국"
+        assert result.items[0].distance_m is not None
+        assert result.items[1].distance_m is not None
+        assert result.items[0].distance_m < result.items[1].distance_m
+        assert "강남역 인근 약국" in result.message
+
+
+@pytest.mark.asyncio
+async def test_hospital_distance_sorting() -> None:
+    """병원 검색 결과가 공공데이터 가나다순이 아닌 거리순으로 정렬되는지 검증."""
+    mock_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header><resultCode>00</resultCode><resultMsg>NORMAL SERVICE.</resultMsg></header>
+  <body>
+    <items>
+      <item>
+        <dutyName>가나안내과의원</dutyName>
+        <dutyDivName>의원</dutyDivName>
+        <dutyAddr>서울 강남구 역삼동 1</dutyAddr>
+        <dutyTel1>02-111-1111</dutyTel1>
+        <wgs84Lat>37.5150</wgs84Lat>
+        <wgs84Lon>127.0450</wgs84Lon>
+        <dutyTime1s>0900</dutyTime1s>
+        <dutyTime1c>1800</dutyTime1c>
+      </item>
+      <item>
+        <dutyName>하늘내과의원</dutyName>
+        <dutyDivName>의원</dutyDivName>
+        <dutyAddr>서울 강남구 역삼동 2</dutyAddr>
+        <dutyTel1>02-222-2222</dutyTel1>
+        <wgs84Lat>37.4981</wgs84Lat>
+        <wgs84Lon>127.0278</wgs84Lon>
+        <dutyTime1s>0900</dutyTime1s>
+        <dutyTime1c>1800</dutyTime1c>
+      </item>
+    </items>
+    <numOfRows>20</numOfRows>
+    <pageNo>1</pageNo>
+    <totalCount>2</totalCount>
+  </body>
+</response>
+"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=mock_xml)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = MedicalFacilityClient(
+            hospital_api_key="test_hosp_key",
+            http_client=http_client,
+        )
+        # 강남역 기준 검색 -> 하늘내과의원이 훨씬 가까움
+        result = await client.search_nearby_hospital(query="강남역 내과")
+        assert result.count == 2
+        assert result.items[0].name == "하늘내과의원"
+        assert result.items[1].name == "가나안내과의원"
+        assert result.items[0].distance_m < result.items[1].distance_m
+        assert "강남역 인근 내과 병원" in result.message
+
+
+@pytest.mark.asyncio
+async def test_emergency_distance_sorting() -> None:
+    """응급실 검색 결과가 가나다순이 아닌 거리순으로 정렬되는지 검증."""
+    mock_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header><resultCode>00</resultCode><resultMsg>NORMAL SERVICE.</resultMsg></header>
+  <body>
+    <items>
+      <item>
+        <dutyName>강북응급의료센터</dutyName>
+        <dutyEmclsName>지역응급의료센터</dutyEmclsName>
+        <dutyAddr>서울 강북구 1</dutyAddr>
+        <dutyTel1>02-111-1111</dutyTel1>
+        <wgs84Lat>37.6390</wgs84Lat>
+        <wgs84Lon>127.0250</wgs84Lon>
+      </item>
+      <item>
+        <dutyName>강남응급의료센터</dutyName>
+        <dutyEmclsName>지역응급의료센터</dutyEmclsName>
+        <dutyAddr>서울 강남구 2</dutyAddr>
+        <dutyTel1>02-222-2222</dutyTel1>
+        <wgs84Lat>37.4985</wgs84Lat>
+        <wgs84Lon>127.0285</wgs84Lon>
+      </item>
+    </items>
+    <numOfRows>20</numOfRows>
+    <pageNo>1</pageNo>
+    <totalCount>2</totalCount>
+  </body>
+</response>
+"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text=mock_xml)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = MedicalFacilityClient(
+            emergency_api_key="test_em_key",
+            http_client=http_client,
+        )
+        # 강남역 기준 검색 -> 강남응급의료센터가 더 가까움
+        result = await client.search_nearby_emergency_room(query="강남역 응급실")
+        assert result.count == 2
+        assert result.items[0].name == "강남응급의료센터"
+        assert result.items[1].name == "강북응급의료센터"
+        assert result.items[0].distance_m < result.items[1].distance_m
+        assert "강남역 인근 응급의료기관" in result.message

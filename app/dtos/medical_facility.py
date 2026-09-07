@@ -18,6 +18,10 @@ class FacilityItem(BaseModel):
     operating_hours: str | None = Field(default=None, description="운영시간 요약")
     homepage: str | None = Field(default=None, description="홈페이지 URL")
     hpid: str | None = Field(default=None, description="기관 고유 식별 코드 (HPID)")
+    place_url: str | None = Field(default=None, description="카카오맵 장소 상세 URL")
+    is_open: bool | None = Field(default=None, description="현재 시각 진료/영업 중 여부")
+    today_hours: str | None = Field(default=None, description="오늘 진료/영업 시간 (예: 08:30 ~ 18:30)")
+    break_hours: str | None = Field(default=None, description="휴게/점심 시간 (예: 13:00 ~ 14:00)")
 
 
 class FacilitySearchResult(BaseModel):

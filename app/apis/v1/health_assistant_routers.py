@@ -108,6 +108,7 @@ async def stream_chat_with_assistant(
     """`text/event-stream`. 두 이벤트를 보낸다.
 
     - `delta` — `assistant_message` 의 **새로 온 부분만**.
+    - `facility` — 주변 의료시설 조회 결과. 본문 생성이 끝나기 전에 즉시 보낸다.
     - `result` — 완성된 구조화 응답 한 벌. 기록 초안·빠른답장·응급 안내가 여기 있다.
 
     왜 둘로 가르나. 초안은 JSON 이 끝나야 유효해지고 안전 검증도 완성본에만 걸 수

@@ -1591,7 +1591,32 @@
   transform: translateY(-1px);
 }
 
-/* 주변 의료시설(응급실, 병원, 약국) 카드 스타일 */
+/* 주변 의료시설(응급실, 병원, 약국) 일체형 말풍선 스타일 */
+.facility-unified-bubble {
+  padding: 14px 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.facility-unified-title {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.5;
+}
+
+.facility-unified-bubble .facility-search-card {
+  margin-top: 0;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
 .facility-search-card {
   margin-top: 10px;
   background: #ffffff;
@@ -1730,8 +1755,56 @@
   font-size: 12px;
   color: #64748b;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.facility-status-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: -0.2px;
+}
+
+.facility-status-badge.is-open {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.facility-status-badge.is-closed {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
+.facility-break-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #b45309;
+  background: #fffbeb;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #fef3c7;
+}
+
+.bed-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #dc2626;
+  background: #fef2f2;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #fecaca;
 }
 
 .facility-item-actions {

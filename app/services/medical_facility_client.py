@@ -1,16 +1,20 @@
-"""공공데이터포털(data.go.kr) 기반 의료시설(응급실, 병원, 약국) 조회 클라이언트.
+"""공공데이터포털(data.go.kr) 국립중앙의료원(NMC) 기반 의료시설(응급실, 병원, 약국) 조회 클라이언트.
 
-라우터가 아닌 서비스/클라이언트 계층으로 분리되어 있으며,
-비동기 httpx 클라이언트를 사용하고 오류 발생 시 사용자 친화적인 메시지를 반환합니다.
+비동기 httpx 클라이언트를 사용하며 실시간 진료/영업시간(시작/종료/휴게시간) 및 현재 진료 중 여부를 판정합니다.
 API 키나 원본 응답 전체를 로그에 남기지 않습니다.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import math
+import re
 import urllib.parse
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -19,28 +23,585 @@ from app.dtos.medical_facility import FacilityItem, FacilitySearchResult
 
 logger = logging.getLogger(__name__)
 
-_TIMEOUT_SECONDS = 15.0
+_TIMEOUT_SECONDS = 10.0
 _EMERGENCY_NOTICE = (
     "응급 상황 시 지체 없이 119에 도움을 요청하시거나, "
     "출발 전 해당 응급실에 직접 전화하여 진료 및 수용 가능 여부를 반드시 확인하시기 바랍니다."
 )
 
+_NMC_DEPARTMENT_CODES = {
+    "내과": "D001",
+    "소아과": "D002",
+    "소아청소년과": "D002",
+    "신경과": "D003",
+    "정신과": "D004",
+    "정신건강의학과": "D004",
+    "외과": "D005",
+    "정형외과": "D006",
+    "신경외과": "D007",
+    "심장혈관흉부외과": "D008",
+    "성형외과": "D009",
+    "산부인과": "D010",
+    "안과": "D011",
+    "이비인후과": "D012",
+    "피부과": "D013",
+    "비뇨의학과": "D014",
+    "비뇨기과": "D014",
+    "영상의학과": "D016",
+    "마취통증의학과": "D020",
+    "통증의학과": "D020",
+    "재활의학과": "D021",
+    "가정의학과": "D022",
+    "응급의학과": "D023",
+    "치과": "D026",
+    "한방": "D034",
+    "한의원": "D034",
+}
+
+_SEOUL_DISTRICTS = [
+    "강남구",
+    "강동구",
+    "강북구",
+    "강서구",
+    "관악구",
+    "광진구",
+    "구로구",
+    "금천구",
+    "노원구",
+    "도봉구",
+    "동대문구",
+    "동작구",
+    "마포구",
+    "서대문구",
+    "서초구",
+    "성동구",
+    "성북구",
+    "송파구",
+    "양천구",
+    "영등포구",
+    "용산구",
+    "은평구",
+    "종로구",
+    "중구",
+    "중랑구",
+]
+
+_PROVINCE_MAP: dict[str, str] = {
+    "서울": "서울특별시",
+    "서울특별시": "서울특별시",
+    "부산": "부산광역시",
+    "부산광역시": "부산광역시",
+    "대구": "대구광역시",
+    "대구광역시": "대구광역시",
+    "인천": "인천광역시",
+    "인천광역시": "인천광역시",
+    "광주": "광주광역시",
+    "광주광역시": "광주광역시",
+    "대전": "대전광역시",
+    "대전광역시": "대전광역시",
+    "울산": "울산광역시",
+    "울산광역시": "울산광역시",
+    "세종": "세종특별자치시",
+    "세종시": "세종특별자치시",
+    "세종특별자치시": "세종특별자치시",
+    "경기": "경기도",
+    "경기도": "경기도",
+    "강원": "강원특별자치도",
+    "강원도": "강원특별자치도",
+    "강원특별자치도": "강원특별자치도",
+    "충북": "충청북도",
+    "충청북도": "충청북도",
+    "충남": "충청남도",
+    "충청남도": "충청남도",
+    "전북": "전북특별자치도",
+    "전라북도": "전북특별자치도",
+    "전북특별자치도": "전북특별자치도",
+    "전남": "전라남도",
+    "전라남도": "전라남도",
+    "경북": "경상북도",
+    "경상북도": "경상북도",
+    "경남": "경상남도",
+    "경상남도": "경상남도",
+    "제주": "제주특별자치도",
+    "제주도": "제주특별자치도",
+    "제주특별자치도": "제주특별자치도",
+}
+
+_LANDMARK_TO_STAGE: dict[str, tuple[str, str | None]] = {
+    # 서울 주요 상권/역
+    "홍대": ("서울특별시", "마포구"),
+    "홍대입구": ("서울특별시", "마포구"),
+    "서교동": ("서울특별시", "마포구"),
+    "합정": ("서울특별시", "마포구"),
+    "망원": ("서울특별시", "마포구"),
+    "공덕": ("서울특별시", "마포구"),
+    "상암": ("서울특별시", "마포구"),
+    "강남": ("서울특별시", "강남구"),
+    "강남역": ("서울특별시", "강남구"),
+    "역삼": ("서울특별시", "강남구"),
+    "선릉": ("서울특별시", "강남구"),
+    "삼성": ("서울특별시", "강남구"),
+    "대치": ("서울특별시", "강남구"),
+    "신사": ("서울특별시", "강남구"),
+    "논현": ("서울특별시", "강남구"),
+    "압구정": ("서울특별시", "강남구"),
+    "종로": ("서울특별시", "종로구"),
+    "광화문": ("서울특별시", "종로구"),
+    "혜화": ("서울특별시", "종로구"),
+    "대학로": ("서울특별시", "종로구"),
+    "안국": ("서울특별시", "종로구"),
+    "명동": ("서울특별시", "중구"),
+    "을지로": ("서울특별시", "중구"),
+    "충무로": ("서울특별시", "중구"),
+    "동대문": ("서울특별시", "중구"),
+    "장충동": ("서울특별시", "중구"),
+    "회현": ("서울특별시", "중구"),
+    "여의도": ("서울특별시", "영등포구"),
+    "영등포": ("서울특별시", "영등포구"),
+    "당산": ("서울특별시", "영등포구"),
+    "문래": ("서울특별시", "영등포구"),
+    "신촌": ("서울특별시", "서대문구"),
+    "이대": ("서울특별시", "서대문구"),
+    "연희동": ("서울특별시", "서대문구"),
+    "홍제동": ("서울특별시", "서대문구"),
+    # 경기 주요 시/상권
+    "수원": ("경기도", "수원시"),
+    "수원역": ("경기도", "수원시"),
+    "성남": ("경기도", "성남시"),
+    "판교": ("경기도", "성남시 분당구"),
+    "분당": ("경기도", "성남시 분당구"),
+    "서현": ("경기도", "성남시 분당구"),
+    "야탑": ("경기도", "성남시 분당구"),
+    "정자": ("경기도", "성남시 분당구"),
+    "고양": ("경기도", "고양시"),
+    "일산": ("경기도", "고양시 일산동구"),
+    "용인": ("경기도", "용인시"),
+    "수지": ("경기도", "용인시 수지구"),
+    "부천": ("경기도", "부천시"),
+    "안산": ("경기도", "안산시"),
+    "안양": ("경기도", "안양시"),
+    "평촌": ("경기도", "안양시 동안구"),
+    "범계": ("경기도", "안양시 동안구"),
+    "화성": ("경기도", "화성시"),
+    "동탄": ("경기도", "화성시"),
+    "평택": ("경기도", "평택시"),
+    "의정부": ("경기도", "의정부시"),
+    "파주": ("경기도", "파주시"),
+    "운정": ("경기도", "파주시"),
+    "김포": ("경기도", "김포시"),
+    "광명": ("경기도", "광명시"),
+    "하남": ("경기도", "하남시"),
+    "미사": ("경기도", "하남시"),
+    # 부산 주요 구/상권
+    "해운대": ("부산광역시", "해운대구"),
+    "서면": ("부산광역시", "부산진구"),
+    "광안리": ("부산광역시", "수영구"),
+    "남포동": ("부산광역시", "중구"),
+    "동래": ("부산광역시", "동래구"),
+    # 대구 주요 상권
+    "동성로": ("대구광역시", "중구"),
+    "수성구": ("대구광역시", "수성구"),
+    "동대구역": ("대구광역시", "동구"),
+    # 인천 주요 구/상권
+    "부평": ("인천광역시", "부평구"),
+    "송도": ("인천광역시", "연수구"),
+    "구월동": ("인천광역시", "남동구"),
+    "청라": ("인천광역시", "서구"),
+    # 광주 주요 상권
+    "충장로": ("광주광역시", "동구"),
+    "상무지구": ("광주광역시", "서구"),
+    # 대전 주요 상권
+    "둔산동": ("대전광역시", "서구"),
+    "유성": ("대전광역시", "유성구"),
+    # 울산 주요 상권
+    "삼산동": ("울산광역시", "남구"),
+    # 강원 주요 시
+    "춘천": ("강원특별자치도", "춘천시"),
+    "원주": ("강원특별자치도", "원주시"),
+    "강릉": ("강원특별자치도", "강릉시"),
+    "속초": ("강원특별자치도", "속초시"),
+    # 충청 주요 시
+    "천안": ("충청남도", "천안시"),
+    "불당동": ("충청남도", "천안시 서북구"),
+    "아산": ("충청남도", "아산시"),
+    "청주": ("충청북도", "청주시"),
+    "충주": ("충청북도", "충주시"),
+    # 전라 주요 시
+    "전주": ("전북특별자치도", "전주시"),
+    "익산": ("전북특별자치도", "익산시"),
+    "군산": ("전북특별자치도", "군산시"),
+    "여수": ("전라남도", "여수시"),
+    "순천": ("전라남도", "순천시"),
+    "목포": ("전라남도", "목포시"),
+    # 경상 주요 시
+    "포항": ("경상북도", "포항시"),
+    "구미": ("경상북도", "구미시"),
+    "경주": ("경상북도", "경주시"),
+    "창원": ("경상남도", "창원시"),
+    "마산": ("경상남도", "창원시 마산회원구"),
+    "진해": ("경상남도", "창원시 진해구"),
+    "김해": ("경상남도", "김해시"),
+    "진주": ("경상남도", "진주시"),
+    "양산": ("경상남도", "양산시"),
+    # 제주
+    "제주시": ("제주특별자치도", "제주시"),
+    "서귀포": ("제주특별자치도", "서귀포시"),
+    "서귀포시": ("제주특별자치도", "서귀포시"),
+}
+
+_LANDMARK_COORDS: dict[str, tuple[float, float]] = {
+    # 강남 / 서초
+    "강남역": (37.4979, 127.0276),
+    "강남": (37.4979, 127.0276),
+    "역삼역": (37.5006, 127.0365),
+    "역삼": (37.5006, 127.0365),
+    "선릉역": (37.5045, 127.0490),
+    "선릉": (37.5045, 127.0490),
+    "삼성역": (37.5088, 127.0631),
+    "삼성": (37.5088, 127.0631),
+    "코엑스": (37.5118, 127.0592),
+    "신논현역": (37.5045, 127.0254),
+    "신논현": (37.5045, 127.0254),
+    "논현역": (37.5111, 127.0215),
+    "논현": (37.5111, 127.0215),
+    "신사역": (37.5163, 127.0202),
+    "신사": (37.5163, 127.0202),
+    "가로수길": (37.5195, 127.0229),
+    "압구정역": (37.5270, 127.0285),
+    "압구정": (37.5270, 127.0285),
+    "압구정로데오": (37.5268, 127.0405),
+    "양재역": (37.4842, 127.0346),
+    "양재": (37.4842, 127.0346),
+    "고속터미널": (37.5049, 127.0049),
+    "반포": (37.5082, 127.0118),
+    "교대역": (37.4934, 127.0142),
+    "교대": (37.4934, 127.0142),
+    "서초": (37.4919, 127.0078),
+    "사당역": (37.4765, 126.9816),
+    "사당": (37.4765, 126.9816),
+    # 마포 / 서대문 / 신촌 / 홍대
+    "홍대입구역": (37.5575, 126.9254),
+    "홍대입구": (37.5575, 126.9254),
+    "홍대": (37.5575, 126.9254),
+    "합정역": (37.5495, 126.9137),
+    "합정": (37.5495, 126.9137),
+    "망원역": (37.5560, 126.9101),
+    "망원": (37.5560, 126.9101),
+    "상수": (37.5478, 126.9229),
+    "연남동": (37.5620, 126.9250),
+    "연희동": (37.5702, 126.9304),
+    "신촌역": (37.5552, 126.9369),
+    "신촌": (37.5552, 126.9369),
+    "이대역": (37.5568, 126.9463),
+    "이대": (37.5568, 126.9463),
+    "공덕역": (37.5444, 126.9515),
+    "공덕": (37.5444, 126.9515),
+    "상암": (37.5794, 126.8890),
+    "DMC": (37.5772, 126.9015),
+    # 종로 / 중구 / 도심
+    "광화문역": (37.5716, 126.9765),
+    "광화문": (37.5716, 126.9765),
+    "시청역": (37.5657, 126.9772),
+    "시청": (37.5657, 126.9772),
+    "서울역": (37.5559, 126.9723),
+    "종각역": (37.5702, 126.9830),
+    "종각": (37.5702, 126.9830),
+    "종로3가": (37.5716, 126.9918),
+    "종로": (37.5702, 126.9830),
+    "명동역": (37.5609, 126.9863),
+    "명동": (37.5609, 126.9863),
+    "을지로입구": (37.5660, 126.9822),
+    "을지로3가": (37.5663, 126.9922),
+    "을지로": (37.5663, 126.9922),
+    "충무로역": (37.5612, 126.9942),
+    "충무로": (37.5612, 126.9942),
+    "동대문역": (37.5714, 127.0097),
+    "동대문": (37.5714, 127.0097),
+    "DDP": (37.5668, 127.0095),
+    "혜화역": (37.5823, 127.0019),
+    "혜화": (37.5823, 127.0019),
+    "대학로": (37.5823, 127.0019),
+    "안국역": (37.5765, 126.9854),
+    "안국": (37.5765, 126.9854),
+    "장충동": (37.5598, 127.0094),
+    "회현": (37.5585, 126.9784),
+    # 영등포 / 여의도
+    "여의도역": (37.5216, 126.9242),
+    "여의도": (37.5216, 126.9242),
+    "영등포역": (37.5158, 126.9076),
+    "영등포": (37.5158, 126.9076),
+    "당산역": (37.5348, 126.9027),
+    "당산": (37.5348, 126.9027),
+    "문래역": (37.5179, 126.8948),
+    "문래": (37.5179, 126.8948),
+    # 송파 / 강동 / 광진 / 성동
+    "잠실역": (37.5133, 127.1001),
+    "잠실": (37.5133, 127.1001),
+    "건대입구": (37.5404, 127.0692),
+    "건대": (37.5404, 127.0692),
+    "성수역": (37.5446, 127.0559),
+    "성수": (37.5446, 127.0559),
+    "뚝섬역": (37.5472, 127.0474),
+    "왕십리역": (37.5615, 127.0378),
+    "왕십리": (37.5615, 127.0378),
+    "천호역": (37.5386, 127.1234),
+    "천호": (37.5386, 127.1234),
+    # 기타 서울
+    "노원역": (37.6562, 127.0632),
+    "노원": (37.6562, 127.0632),
+    "수유역": (37.6380, 127.0257),
+    "수유": (37.6380, 127.0257),
+    "미아사거리": (37.6133, 127.0301),
+    "신림역": (37.4842, 126.9297),
+    "신림": (37.4842, 126.9297),
+    "서울대입구": (37.4812, 126.9527),
+    "구로디지털단지": (37.4852, 126.9015),
+    "가산디지털단지": (37.4811, 126.8827),
+    "목동": (37.5262, 126.8643),
+    # 경기 / 인천 / 기타
+    "판교역": (37.3948, 127.1119),
+    "판교": (37.3948, 127.1119),
+    "분당": (37.3827, 127.1189),
+    "서현역": (37.3851, 127.1243),
+    "서현": (37.3851, 127.1243),
+    "야탑역": (37.4114, 127.1287),
+    "야탑": (37.4114, 127.1287),
+    "정자역": (37.3670, 127.1084),
+    "정자": (37.3670, 127.1084),
+    "수원역": (37.2657, 127.0000),
+    "일산": (37.6584, 126.7700),
+    "부평역": (37.4895, 126.7241),
+    "부평": (37.4895, 126.7241),
+    "송도": (37.3927, 126.6391),
+    "해운대": (35.1631, 129.1636),
+    "서면": (35.1578, 129.0591),
+    # 서울 25개 자치구 중심 좌표 (행정구 단위 검색 시에도 위치기반 거리순 정렬 보장)
+    "강남구": (37.5172, 127.0473),
+    "강동구": (37.5301, 127.1238),
+    "강북구": (37.6396, 127.0255),
+    "강서구": (37.5509, 126.8495),
+    "관악구": (37.4784, 126.9516),
+    "광진구": (37.5385, 127.0824),
+    "구로구": (37.4954, 126.8874),
+    "금천구": (37.4568, 126.8954),
+    "노원구": (37.6542, 127.0568),
+    "도봉구": (37.6688, 127.0471),
+    "동대문구": (37.5744, 127.0400),
+    "동작구": (37.5124, 126.9393),
+    "마포구": (37.5663, 126.9016),
+    "서대문구": (37.5791, 126.9368),
+    "서초구": (37.4837, 127.0324),
+    "성동구": (37.5633, 127.0371),
+    "성북구": (37.5891, 127.0182),
+    "송파구": (37.5145, 127.1058),
+    "양천구": (37.5169, 126.8665),
+    "영등포구": (37.5264, 126.8962),
+    "용산구": (37.5326, 126.9900),
+    "은평구": (37.6027, 126.9291),
+    "종로구": (37.5730, 126.9794),
+    "중구": (37.5641, 126.9979),
+    "중랑구": (37.6065, 127.0927),
+    "서울": (37.5665, 126.9780),
+    "서울특별시": (37.5665, 126.9780),
+    "부산": (35.1796, 129.0756),
+    "부산광역시": (35.1796, 129.0756),
+    "대구": (35.8714, 128.6014),
+    "대구광역시": (35.8714, 128.6014),
+    "인천": (37.4563, 126.7052),
+    "인천광역시": (37.4563, 126.7052),
+    "광주": (35.1601, 126.8515),
+    "광주광역시": (35.1601, 126.8515),
+    "대전": (36.3504, 127.3845),
+    "대전광역시": (36.3504, 127.3845),
+    "울산": (35.5384, 129.3114),
+    "울산광역시": (35.5384, 129.3114),
+    "세종": (36.4800, 127.2890),
+    "세종시": (36.4800, 127.2890),
+    "세종특별자치시": (36.4800, 127.2890),
+    "경기": (37.2750, 127.0094),
+    "경기도": (37.2750, 127.0094),
+    "강원": (37.8853, 127.7298),
+    "강원도": (37.8853, 127.7298),
+    "강원특별자치도": (37.8853, 127.7298),
+    "충북": (36.6358, 127.4914),
+    "충청북도": (36.6358, 127.4914),
+    "충남": (36.6588, 126.6728),
+    "충청남도": (36.6588, 126.6728),
+    "전북": (35.8206, 127.1087),
+    "전라북도": (35.8206, 127.1087),
+    "전북특별자치도": (35.8206, 127.1087),
+    "전남": (34.8160, 126.4630),
+    "전라남도": (34.8160, 126.4630),
+    "경북": (36.5760, 128.5056),
+    "경상북도": (36.5760, 128.5056),
+    "경남": (35.2383, 128.6924),
+    "경상남도": (35.2383, 128.6924),
+    "제주": (33.4890, 126.4983),
+    "제주도": (33.4890, 126.4983),
+    "제주특별자치도": (33.4890, 126.4983),
+    # 전국 주요 거점 도시 및 상권
+    "광안리": (35.1532, 129.1189),
+    "남포동": (35.0979, 129.0348),
+    "부산역": (35.1152, 129.0422),
+    "동래": (35.2052, 129.0838),
+    "동성로": (35.8687, 128.5968),
+    "동대구역": (35.8778, 128.6285),
+    "반월당": (35.8655, 128.5934),
+    "수성구": (35.8583, 128.6306),
+    "구월동": (37.4449, 126.7056),
+    "청라": (37.5385, 126.6553),
+    "충장로": (35.1481, 126.9189),
+    "상무지구": (35.1532, 126.8514),
+    "수완지구": (35.1915, 126.8220),
+    "광주송정역": (35.1376, 126.7915),
+    "둔산동": (36.3551, 127.3782),
+    "유성": (36.3537, 127.3415),
+    "은행동": (36.3276, 127.4273),
+    "대전역": (36.3315, 127.4332),
+    "삼산동": (35.5396, 129.3361),
+    "성남동": (35.5539, 129.3204),
+    "수원": (37.2636, 127.0286),
+    "성남": (37.4200, 127.1265),
+    "고양": (37.6584, 126.8320),
+    "용인": (37.2411, 127.1776),
+    "수지": (37.3222, 127.0975),
+    "부천": (37.5034, 126.7660),
+    "안산": (37.3219, 126.8309),
+    "안양": (37.3943, 126.9568),
+    "범계": (37.3900, 126.9507),
+    "평촌": (37.3943, 126.9639),
+    "평택": (36.9921, 127.1129),
+    "화성": (37.1995, 126.8315),
+    "동탄": (37.2006, 127.0747),
+    "남양주": (37.6360, 127.2165),
+    "의정부": (37.7381, 127.0337),
+    "파주": (37.7600, 126.7800),
+    "운정": (37.7126, 126.7612),
+    "김포": (37.6152, 126.7157),
+    "광명": (37.4786, 126.8647),
+    "하남": (37.5393, 127.2148),
+    "미사": (37.5615, 127.1929),
+    "춘천": (37.8813, 127.7298),
+    "원주": (37.3422, 127.9202),
+    "강릉": (37.7519, 128.8761),
+    "속초": (38.2070, 128.5918),
+    "천안": (36.8151, 127.1139),
+    "불당동": (36.8122, 127.1085),
+    "아산": (36.7898, 127.0018),
+    "청주": (36.6424, 127.4890),
+    "충주": (36.9910, 127.9260),
+    "전주": (35.8242, 127.1480),
+    "익산": (35.9483, 126.9576),
+    "군산": (35.9676, 126.7366),
+    "여수": (34.7604, 127.6622),
+    "순천": (34.9507, 127.4872),
+    "목포": (34.8118, 126.3922),
+    "포항": (36.0190, 129.3435),
+    "구미": (36.1195, 128.3446),
+    "경주": (35.8562, 129.2247),
+    "창원": (35.2281, 128.6811),
+    "마산": (35.2185, 128.5830),
+    "진해": (35.1495, 128.6636),
+    "김해": (35.2285, 128.8894),
+    "진주": (35.1802, 128.1076),
+    "양산": (35.3350, 129.0373),
+    "제주시": (33.4996, 126.5312),
+    "서귀포": (33.2541, 126.5601),
+    "서귀포시": (33.2541, 126.5601),
+}
+
+
+def calculate_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> int:
+    """두 위경도 좌표 간의 거리(미터 단위)를 계산합니다 (Haversine formula)."""
+    r = 6371000  # 지구 반경 (m)
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = math.sin(delta_phi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return int(r * c)
+
+
+def evaluate_operating_hours(
+    start_val: Any,
+    end_val: Any,
+    etc_str: str | None = None,
+    now: datetime | None = None,
+) -> tuple[bool | None, str | None, str | None]:
+    """오픈/마감 시각 및 휴게시간으로부터 실시간 진료/영업 여부를 계산합니다."""
+    if not now:
+        now = datetime.now(ZoneInfo("Asia/Seoul"))
+    if not start_val or not end_val:
+        return None, None, None
+
+    try:
+        s_int = int(str(start_val).zfill(4))
+        e_int = int(str(end_val).zfill(4))
+    except (ValueError, TypeError):
+        return None, None, None
+
+    cur_int = now.hour * 100 + now.minute
+
+    s_str = f"{s_int // 100:02d}:{s_int % 100:02d}"
+    e_str = f"{e_int // 100:02d}:{e_int % 100:02d}"
+    today_hours = f"{s_str} ~ {e_str}"
+
+    break_hours: str | None = None
+    break_s: int | None = None
+    break_e: int | None = None
+
+    if etc_str:
+        m = re.search(r"(\d{1,2}:\d{2})\s*[-~]\s*(\d{1,2}:\d{2})", etc_str)
+        if m:
+            b1, b2 = m.group(1), m.group(2)
+            break_hours = f"{b1} ~ {b2}"
+            try:
+                break_s = int(b1.replace(":", ""))
+                break_e = int(b2.replace(":", ""))
+            except ValueError:
+                pass
+
+    if e_int < s_int:  # 자정 넘어 새벽까지 운영
+        is_open = cur_int >= s_int or cur_int < e_int
+    else:
+        is_open = s_int <= cur_int <= e_int
+
+    if is_open and break_s and break_e:
+        if break_s <= cur_int < break_e:
+            is_open = False  # 점심/휴게시간 중
+
+    return is_open, today_hours, break_hours
+
 
 class MedicalFacilityClient:
-    """국립중앙의료원 및 건강보험심사평가원 공공 API 클라이언트."""
+    """국립중앙의료원(NMC) 공공 API 클라이언트."""
 
     def __init__(
         self,
+        api_key: str | None = None,
         emergency_api_key: str | None = None,
         hospital_api_key: str | None = None,
         pharmacy_api_key: str | None = None,
+        kakao_api_key: str | None = None,
+        kakao_client: Any = None,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self.emergency_api_key = (
-            emergency_api_key if emergency_api_key is not None else config.EMERGENCY_MEDICAL_API_KEY
+            emergency_api_key
+            if emergency_api_key is not None
+            else (api_key if api_key is not None else config.EMERGENCY_MEDICAL_API_KEY)
         )
-        self.hospital_api_key = hospital_api_key if hospital_api_key is not None else config.HOSPITAL_INFO_API_KEY
-        self.pharmacy_api_key = pharmacy_api_key if pharmacy_api_key is not None else config.PHARMACY_INFO_API_KEY
+        self.hospital_api_key = (
+            hospital_api_key
+            if hospital_api_key is not None
+            else (api_key if api_key is not None else config.HOSPITAL_INFO_API_KEY)
+        )
+        self.pharmacy_api_key = (
+            pharmacy_api_key
+            if pharmacy_api_key is not None
+            else (api_key if api_key is not None else config.PHARMACY_INFO_API_KEY)
+        )
         self._http_client = http_client
 
     def _get_client(self) -> httpx.AsyncClient:
@@ -48,150 +609,132 @@ class MedicalFacilityClient:
             return self._http_client
         return httpx.AsyncClient(timeout=_TIMEOUT_SECONDS)
 
+    def _get_api_key(self, facility_type: str = "emergency") -> str | None:
+        if facility_type == "hospital":
+            raw = self.hospital_api_key or self.emergency_api_key
+        elif facility_type == "pharmacy":
+            raw = self.pharmacy_api_key or self.emergency_api_key
+        else:
+            raw = self.emergency_api_key
+        return self._clean_key(raw)
+
     @staticmethod
     def _clean_key(key: str | None) -> str | None:
         if not key:
             return None
-        # data.go.kr 키는 종종 URL 인코딩된 상태로 .env에 저장되므로 unquote 처리
         return urllib.parse.unquote(key.strip())
 
     @staticmethod
     def _parse_xml_or_json(text: str) -> dict[str, Any] | None:
-        """응답 텍스트를 JSON 또는 XML로 유연하게 파싱."""
-        import json
-
         text_stripped = text.strip()
         if text_stripped.startswith("{") or text_stripped.startswith("["):
             try:
                 return json.loads(text_stripped)
             except Exception:
                 pass
-        # XML fallback
         if text_stripped.startswith("<"):
             try:
                 root = ET.fromstring(text_stripped)
-
-                # 간단한 dict 변환
-                def elem_to_dict(elem: ET.Element) -> Any:
-                    children = list(elem)
-                    if not children:
-                        return elem.text
-                    result: dict[str, Any] = {}
-                    for child in children:
-                        child_val = elem_to_dict(child)
-                        if child.tag in result:
-                            if not isinstance(result[child.tag], list):
-                                result[child.tag] = [result[child.tag]]
-                            result[child.tag].append(child_val)
-                        else:
-                            result[child.tag] = child_val
-                    return result
-
-                return {root.tag: elem_to_dict(root)}
-            except Exception as ex:
-                logger.warning(f"XML 파싱 실패: {type(ex).__name__}")
-                return None
+                items = []
+                for item_elem in root.findall(".//item"):
+                    item_dict = {child.tag: child.text for child in item_elem if child.tag}
+                    items.append(item_dict)
+                return {"response": {"body": {"items": {"item": items}}}}
+            except Exception:
+                pass
         return None
 
-    async def _fetch_emergency_by_location(
-        self,
-        client: httpx.AsyncClient,
-        key: str,
-        latitude: float,
-        longitude: float,
-    ) -> list[FacilityItem]:
-        url = "https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytLcinfoInqire"
-        params = {
-            "serviceKey": key,
-            "WGS84_LON": str(longitude),
-            "WGS84_LAT": str(latitude),
-            "pageNo": "1",
-            "numOfRows": "10",
-            "_type": "json",
-        }
-        res = await client.get(url, params=params)
-        if res.status_code != 200:
-            logger.warning(f"응급의료 위치 API 응답 코드: {res.status_code}")
+    @staticmethod
+    def _extract_items(data: dict[str, Any] | None) -> list[dict[str, Any]]:
+        if not data:
             return []
+        items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
+        if isinstance(items, dict):
+            return [items]
+        if isinstance(items, list):
+            return items
+        if "item" in data:
+            it = data["item"]
+            return [it] if isinstance(it, dict) else it
+        return []
 
-        data = self._parse_xml_or_json(res.text)
-        raw_items = self._extract_items(data)
-        items: list[FacilityItem] = []
-        for it in raw_items:
-            name = it.get("dutyName") or it.get("dutyEmclsName") or "응급의료기관"
-            dist_val = it.get("distance")
-            dist_m = int(float(dist_val) * 1000) if dist_val is not None else None
-            lat_val = it.get("latitude")
-            lon_val = it.get("longitude")
-            em_phone = it.get("dutyTel3")
-            items.append(
-                FacilityItem(
-                    name=name,
-                    category=it.get("dutyEmclsName") or it.get("dutyDivName") or "응급의료기관",
-                    address=it.get("dutyAddr") or "",
-                    phone=it.get("dutyTel1") or em_phone,
-                    emergency_room_phone=em_phone,
-                    distance_m=dist_m,
-                    latitude=float(lat_val) if lat_val else None,
-                    longitude=float(lon_val) if lon_val else None,
-                    hpid=it.get("hpid"),
-                )
-            )
-        return items
+    @staticmethod
+    def _parse_location(query: str | None) -> tuple[str | None, str | None]:
+        if not query:
+            return None, None
+        # 1. 랜드마크/시군구 사전 매핑 (긴 키워드 우선)
+        for k, v in sorted(_LANDMARK_TO_STAGE.items(), key=lambda x: len(x[0]), reverse=True):
+            if k in query:
+                return v
+        # 2. 서울 25개 자치구
+        for d in _SEOUL_DISTRICTS:
+            if d in query or d[:-1] in query:
+                return "서울특별시", d
+        # 3. 17개 광역시·도 단독 매칭 (긴 이름 우선: '부산광역시' > '부산')
+        for p_key, p_val in sorted(_PROVINCE_MAP.items(), key=lambda x: len(x[0]), reverse=True):
+            if p_key in query:
+                return p_val, None
+        return None, None
 
-    async def _fetch_emergency_by_stage(
-        self,
-        client: httpx.AsyncClient,
-        key: str,
-        stage1: str | None,
-        stage2: str | None,
-    ) -> list[FacilityItem]:
-        url = "https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytListInfoInqire"
-        params = {
-            "serviceKey": key,
-            "Q0": stage1 or "",
-            "Q1": stage2 or "",
-            "pageNo": "1",
-            "numOfRows": "10",
-            "_type": "json",
-        }
-        res = await client.get(url, params=params)
-        if res.status_code != 200:
-            return []
+    @staticmethod
+    def _resolve_target_coords(
+        lat: float | None,
+        lon: float | None,
+        query: str | None = None,
+    ) -> tuple[float | None, float | None]:
+        """GPS 좌표가 있으면 그대로 반환하고, 없으면 질의어 내 주요 역/상권/랜드마크를 좌표로 매핑합니다."""
+        if lat is not None and lon is not None:
+            return lat, lon
+        if not query:
+            return None, None
+        # 긴 키워드부터 우선 매칭 (예: '홍대입구역' > '홍대입구' > '홍대')
+        for landmark in sorted(_LANDMARK_COORDS.keys(), key=len, reverse=True):
+            if landmark in query:
+                return _LANDMARK_COORDS[landmark]
+        return None, None
 
-        data = self._parse_xml_or_json(res.text)
-        raw_items = self._extract_items(data)
-        items: list[FacilityItem] = []
-        for it in raw_items:
-            em_phone = it.get("dutyTel3")
-            items.append(
-                FacilityItem(
-                    name=it.get("dutyName") or "응급의료기관",
-                    category=it.get("dutyEmclsName") or it.get("dutyDivName") or "응급의료기관",
-                    address=it.get("dutyAddr") or "",
-                    phone=it.get("dutyTel1") or em_phone,
-                    emergency_room_phone=em_phone,
-                    distance_m=None,
-                    latitude=float(it["wgs84Lat"]) if it.get("wgs84Lat") else None,
-                    longitude=float(it["wgs84Lon"]) if it.get("wgs84Lon") else None,
-                    hpid=it.get("hpid"),
-                )
-            )
-        return items
+    @staticmethod
+    def _match_department(query: str | None, keyword: str | None) -> tuple[str | None, str | None]:
+        text = f"{query or ''} {keyword or ''}".strip()
+        for dept_name, code in _NMC_DEPARTMENT_CODES.items():
+            if dept_name in text:
+                return dept_name, code
+        return None, None
 
+    @staticmethod
+    def _extract_location_label(query: str | None, stage2: str | None) -> str:
+        """'강남역 약국', '홍대 내과', '종로구' 등에서 '강남역', '홍대', '종로구'와 같은 지역 표기를 추출합니다."""
+        if not query and not stage2:
+            return "주변"
+        target = query or stage2 or ""
+        # 1. 랜드마크/구 키워드 먼저 검사 (긴 단어부터 매칭)
+        for lm in sorted(_LANDMARK_COORDS.keys(), key=len, reverse=True):
+            if lm in target:
+                return lm
+        for d in _SEOUL_DISTRICTS:
+            if d in target or d[:-1] in target:
+                return d
+        # 2. 불필요한 단어 제거 후 남은 단어
+        cleaned = re.sub(
+            r"(약국|병원|의원|내과|이비인후과|소아과|정형외과|안과|피부과|치과|응급실|찾아줘|알려줘|어디|주변|근처)",
+            "",
+            target,
+        ).strip()
+        return cleaned if cleaned else "주변"
+
+    # ==========================================
+    # 1. 응급실 검색 (ErmctInfoInqireService)
+    # ==========================================
     async def search_nearby_emergency_room(
         self,
         latitude: float | None = None,
         longitude: float | None = None,
-        radius: int = 10000,
         stage1: str | None = None,
         stage2: str | None = None,
+        radius: int = 10000,
+        query: str | None = None,
     ) -> FacilitySearchResult:
-        """주변 응급실(응급의료기관) 및 실시간 가용병상 정보 조회.
-
-        사용자 위치(위도/경도) 또는 시도/시군구 정보를 받아 조회합니다.
-        """
-        key = self._clean_key(self.emergency_api_key)
+        key = self._get_api_key()
         if not key:
             return FacilitySearchResult(
                 facility_type="emergency_room",
@@ -204,13 +747,19 @@ class MedicalFacilityClient:
 
         client = self._get_client()
         items: list[FacilityItem] = []
+        target_lat, target_lon = self._resolve_target_coords(latitude, longitude, query or stage2)
 
         try:
-            if latitude is not None and longitude is not None:
-                items = await self._fetch_emergency_by_location(client, key, latitude, longitude)
+            if target_lat is not None and target_lon is not None:
+                items = await self._fetch_emergency_by_location(client, key, target_lat, target_lon)
 
-            if not items and (stage1 or stage2):
-                items = await self._fetch_emergency_by_stage(client, key, stage1, stage2)
+            if not items and (stage1 or stage2 or query):
+                parsed_s1, parsed_s2 = self._parse_location(query)
+                s1 = stage1 or parsed_s1
+                s2 = stage2 or parsed_s2
+                items = await self._fetch_emergency_by_stage(
+                    client, key, s1, s2, ref_lat=target_lat, ref_lon=target_lon
+                )
 
             if items:
                 items.sort(key=lambda x: x.distance_m if x.distance_m is not None else 999999)
@@ -226,12 +775,14 @@ class MedicalFacilityClient:
                     message="주변에 조회된 응급의료기관이 없습니다. 응급 상황 시 즉시 119에 도움을 요청하세요.",
                 )
 
+            loc_label = self._extract_location_label(query, stage2)
+            prefix = f"{loc_label} 인근 " if loc_label != "주변" else "주변 "
             return FacilitySearchResult(
                 facility_type="emergency_room",
                 total_count=len(items),
                 items=items,
                 emergency_notice=_EMERGENCY_NOTICE,
-                message=f"주변 응급의료기관 {len(items)}곳을 조회했습니다.",
+                message=f"{prefix}응급의료기관 {len(items)}곳을 조회했습니다.",
             )
 
         except httpx.TimeoutException:
@@ -258,34 +809,109 @@ class MedicalFacilityClient:
             if self._http_client is None:
                 await client.aclose()
 
-    @staticmethod
-    def _deduce_stages(
-        items: list[FacilityItem],
+    async def _fetch_emergency_by_location(
+        self, client: httpx.AsyncClient, key: str, latitude: float, longitude: float
+    ) -> list[FacilityItem]:
+        url = "https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytLcinfoInqire"
+        params = {
+            "serviceKey": key,
+            "WGS84_LON": str(longitude),
+            "WGS84_LAT": str(latitude),
+            "pageNo": "1",
+            "numOfRows": "10",
+            "_type": "json",
+        }
+        res = await client.get(url, params=params)
+        if res.status_code != 200:
+            return []
+        data = self._parse_xml_or_json(res.text)
+        raw_items = self._extract_items(data)
+        items: list[FacilityItem] = []
+        for it in raw_items:
+            name = it.get("dutyName") or "응급의료기관"
+            dist_val = it.get("distance")
+            dist_m = int(float(dist_val) * 1000) if dist_val is not None else None
+            lat_val = it.get("latitude") or it.get("wgs84Lat")
+            lon_val = it.get("longitude") or it.get("wgs84Lon")
+            lat_f = float(lat_val) if lat_val else None
+            lon_f = float(lon_val) if lon_val else None
+            if dist_m is None and lat_f is not None and lon_f is not None:
+                dist_m = calculate_distance_m(latitude, longitude, lat_f, lon_f)
+            em_phone = it.get("dutyTel3")
+            items.append(
+                FacilityItem(
+                    name=name,
+                    category=it.get("dutyEmclsName") or it.get("dutyDivName") or "응급의료기관",
+                    address=it.get("dutyAddr") or "",
+                    phone=it.get("dutyTel1") or em_phone,
+                    emergency_room_phone=em_phone,
+                    distance_m=dist_m,
+                    latitude=lat_f,
+                    longitude=lon_f,
+                    hpid=it.get("hpid"),
+                    is_open=True,
+                    today_hours="24시간 진료",
+                )
+            )
+        return items
+
+    async def _fetch_emergency_by_stage(
+        self,
+        client: httpx.AsyncClient,
+        key: str,
         stage1: str | None,
         stage2: str | None,
-    ) -> tuple[str | None, str | None]:
-        if stage1:
-            return stage1, stage2
-        if items and items[0].address:
-            parts = items[0].address.split()
-            if len(parts) >= 2:
-                return parts[0], parts[1]
-        return None, None
+        ref_lat: float | None = None,
+        ref_lon: float | None = None,
+    ) -> list[FacilityItem]:
+        url = "https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytListInfoInqire"
+        params = {
+            "serviceKey": key,
+            "Q0": stage1 or "",
+            "Q1": stage2 or "",
+            "pageNo": "1",
+            "numOfRows": "10",
+            "_type": "json",
+        }
+        res = await client.get(url, params=params)
+        if res.status_code != 200:
+            return []
+        data = self._parse_xml_or_json(res.text)
+        raw_items = self._extract_items(data)
+        items: list[FacilityItem] = []
+        for it in raw_items:
+            em_phone = it.get("dutyTel3")
+            e_lat = float(it["wgs84Lat"]) if it.get("wgs84Lat") else None
+            e_lon = float(it["wgs84Lon"]) if it.get("wgs84Lon") else None
+            dist_m = None
+            if ref_lat is not None and ref_lon is not None and e_lat is not None and e_lon is not None:
+                dist_m = calculate_distance_m(ref_lat, ref_lon, e_lat, e_lon)
+            items.append(
+                FacilityItem(
+                    name=it.get("dutyName") or "응급의료기관",
+                    category=it.get("dutyEmclsName") or it.get("dutyDivName") or "응급의료기관",
+                    address=it.get("dutyAddr") or "",
+                    phone=it.get("dutyTel1") or em_phone,
+                    emergency_room_phone=em_phone,
+                    distance_m=dist_m,
+                    latitude=e_lat,
+                    longitude=e_lon,
+                    hpid=it.get("hpid"),
+                    is_open=True,
+                    today_hours="24시간 진료",
+                )
+            )
+        return items
 
     @staticmethod
-    def _build_bed_map(bed_items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-        bed_map: dict[str, dict[str, Any]] = {}
-        for b in bed_items:
-            hpid = b.get("hpid")
-            if hpid:
-                bed_map[hpid] = {
-                    "available_beds": b.get("hvec"),  # 일반 응급실 가용병상
-                    "surgery_available": b.get("hvoc"),  # 수술실 가용여부
-                    "icu_available": b.get("hvcc"),  # 중환자실
-                    "pediatric_beds": b.get("hv28"),  # 소아
-                    "negative_pressure_beds": b.get("hv29"),  # 음압
-                }
-        return bed_map
+    def _format_bed_desc(beds: str) -> str | None:
+        if not beds:
+            return None
+        try:
+            b_num = int(beds)
+            return f"응급실 {b_num}석 가용" if b_num > 0 else "응급실 만석/대기"
+        except ValueError:
+            return f"응급실 {beds}석"
 
     async def _enrich_realtime_beds(
         self,
@@ -295,9 +921,12 @@ class MedicalFacilityClient:
         stage1: str | None,
         stage2: str | None,
     ) -> None:
-        """실시간 가용병상 정보 조회하여 items에 결합."""
         try:
-            s1, s2 = self._deduce_stages(items, stage1, stage2)
+            s1, s2 = stage1, stage2
+            if not s1 and items and items[0].address:
+                parts = items[0].address.split()
+                if len(parts) >= 2:
+                    s1, s2 = parts[0], parts[1]
             if not s1:
                 return
 
@@ -315,113 +944,97 @@ class MedicalFacilityClient:
                 return
 
             data = self._parse_xml_or_json(res.text)
-            bed_map = self._build_bed_map(self._extract_items(data))
+            bed_items = self._extract_items(data)
+            bed_map: dict[str, str] = {b["hpid"]: str(b.get("hvec", "")) for b in bed_items if b.get("hpid")}
 
             for item in items:
-                hpid = item.hpid
-                if hpid and hpid in bed_map:
-                    beds = bed_map[hpid].get("available_beds")
-                    if beds is not None:
-                        item.available_beds = f"응급실: {beds}석 가용"
-
+                if item.hpid and item.hpid in bed_map:
+                    desc = self._format_bed_desc(bed_map[item.hpid])
+                    if desc:
+                        item.available_beds = desc
         except Exception as ex:
-            logger.debug(f"실시간 가용병상 조회 무시: {ex}")
+            logger.debug(f"병상 정보 연계 생략: {ex}")
 
+    # ==========================================
+    # 2. 병원 검색 (HsptlAsembySearchService)
+    # ==========================================
     async def search_nearby_hospital(
         self,
-        latitude: float,
-        longitude: float,
+        latitude: float | None = None,
+        longitude: float | None = None,
         radius: int = 3000,
         keyword: str | None = None,
+        query: str | None = None,
+        stage1: str | None = None,
+        stage2: str | None = None,
     ) -> FacilitySearchResult:
-        """건강보험심사평가원 병원정보서비스를 통한 주변 병원 조회.
-
-        xPos=경도, yPos=위도, radius=미터 기준 적용.
-        """
-        key = self._clean_key(self.hospital_api_key)
+        """국립중앙의료원 전국 병·의원 찾기 API 기반 병원 검색."""
+        key = self._get_api_key()
         if not key:
             return FacilitySearchResult(
                 facility_type="hospital",
                 total_count=0,
                 items=[],
-                error="병원정보 API 키가 설정되지 않았습니다.",
+                error="병원 API 키가 설정되지 않았습니다.",
                 message="병원 조회를 위한 공공데이터 API 키가 설정되지 않았습니다.",
             )
 
         client = self._get_client()
+        items: list[FacilityItem] = []
+        dept_name, dept_code = self._match_department(query, keyword)
+        target_lat, target_lon = self._resolve_target_coords(latitude, longitude, query or keyword or stage2)
+
         try:
-            # v2 getHospBasisList (v2에서 getHospBasisList1 기능 통합 운영)
-            url = "https://apis.data.go.kr/B551182/hospInfoServicev2/getHospBasisList"
-            params: dict[str, Any] = {
-                "serviceKey": key,
-                "xPos": str(longitude),
-                "yPos": str(latitude),
-                "radius": str(radius),
-                "pageNo": "1",
-                "numOfRows": "10",
-                "_type": "json",
-            }
-            if keyword:
-                params["yadmNm"] = keyword.strip()
-
-            res = await client.get(url, params=params)
-            # v2 실패 시 v1 fallback
-            if res.status_code != 200:
-                url_v1 = "https://apis.data.go.kr/B551182/hospInfoService1/getHospBasisList1"
-                res = await client.get(url_v1, params=params)
-
-            if res.status_code != 200:
-                return FacilitySearchResult(
-                    facility_type="hospital",
-                    total_count=0,
-                    items=[],
-                    error=f"공공데이터 응답 코드 {res.status_code}",
-                    message="병원 정보 서비스 연동 중 오류가 발생했습니다.",
+            # 1) GPS 좌표 또는 랜드마크 좌표가 있으면 위치기반 병원 조회 (0.2s, 거리순 + 오늘 진료시간)
+            if target_lat is not None and target_lon is not None:
+                items = await self._fetch_hospital_by_location(
+                    client, key, target_lat, target_lon, keyword_filter=dept_name or keyword
                 )
 
-            data = self._parse_xml_or_json(res.text)
-            raw_items = self._extract_items(data)
-            items: list[FacilityItem] = []
-            for it in raw_items:
-                name = it.get("yadmNm") or "병원"
-                cl_cd_nm = it.get("clCdNm")
-                addr = it.get("addr") or ""
-                phone = it.get("telno")
-                hosp_url = it.get("hospUrl")
-                dist_val = it.get("distance")
-                dist_m = int(float(dist_val)) if dist_val is not None else None
-                x_pos = it.get("XPos")
-                y_pos = it.get("YPos")
-
-                item = FacilityItem(
-                    name=name,
-                    category=cl_cd_nm,
-                    address=addr,
-                    phone=phone,
-                    distance_m=dist_m,
-                    latitude=float(y_pos) if y_pos else None,
-                    longitude=float(x_pos) if x_pos else None,
-                    homepage=hosp_url,
-                    hpid=it.get("ykiho"),
+            # 2) 좌표가 없거나 결과가 없으면 지명/과목 검색
+            if not items:
+                parsed_s1, parsed_s2 = self._parse_location(query or keyword)
+                target_s1 = stage1 or parsed_s1 or "서울특별시"
+                target_s2 = stage2 or parsed_s2
+                items = await self._fetch_hospital_by_stage(
+                    client,
+                    key,
+                    target_s1,
+                    target_s2,
+                    dept_code=dept_code,
+                    qn=keyword if not dept_code else None,
+                    ref_lat=target_lat,
+                    ref_lon=target_lon,
                 )
-                items.append(item)
-            items.sort(key=lambda x: x.distance_m if x.distance_m is not None else 999999)
+
+            # 현재 진료 중인 병원을 상단으로 정렬, 그 다음 거리순
+            items.sort(key=lambda x: (x.is_open is not True, x.distance_m if x.distance_m is not None else 999999))
             items = items[:5]
 
             if not items:
-                search_desc = f"'{keyword}' 관련 " if keyword else ""
+                search_desc = f"'{query or keyword}' 관련 " if (query or keyword) else ""
                 return FacilitySearchResult(
                     facility_type="hospital",
                     total_count=0,
                     items=[],
-                    message=f"반경 {radius}m 내에 {search_desc}병원이 조회되지 않았습니다.",
+                    message=f"주변에 조회된 {search_desc}병원이 없습니다.",
                 )
+
+            loc_label = self._extract_location_label(query or keyword, stage2)
+            prefix = f"{loc_label} 인근 " if loc_label != "주변" else "주변 "
+            dept_label = f"{dept_name} " if dept_name else ""
+            open_count = sum(1 for it in items if it.is_open is True)
+            msg = (
+                f"{prefix}{dept_label}병원 {len(items)}곳을 조회했습니다. (현재 진료 중 {open_count}곳)"
+                if open_count > 0
+                else f"{prefix}{dept_label}병원 {len(items)}곳을 조회했습니다."
+            )
 
             return FacilitySearchResult(
                 facility_type="hospital",
                 total_count=len(items),
                 items=items,
-                message=f"주변 병원 {len(items)}곳을 조회했습니다.",
+                message=msg,
             )
 
         except httpx.TimeoutException:
@@ -446,82 +1059,208 @@ class MedicalFacilityClient:
             if self._http_client is None:
                 await client.aclose()
 
+    async def _fetch_hospital_by_location(
+        self, client: httpx.AsyncClient, key: str, latitude: float, longitude: float, keyword_filter: str | None
+    ) -> list[FacilityItem]:
+        url = "https://apis.data.go.kr/B552657/HsptlAsembySearchService/getHsptlMdcncLcinfoInqire"
+        params = {
+            "serviceKey": key,
+            "WGS84_LON": str(longitude),
+            "WGS84_LAT": str(latitude),
+            "pageNo": "1",
+            "numOfRows": "20",
+            "_type": "json",
+        }
+        res = await client.get(url, params=params)
+        if res.status_code != 200:
+            return []
+        data = self._parse_xml_or_json(res.text)
+        raw_items = self._extract_items(data)
+        items: list[FacilityItem] = []
+        now = datetime.now(ZoneInfo("Asia/Seoul"))
+
+        for it in raw_items:
+            name = it.get("dutyName") or "병원"
+            category = it.get("dutyDivName") or "의원"
+            if keyword_filter and keyword_filter not in name and keyword_filter not in category:
+                continue
+
+            dist_val = it.get("distance")
+            dist_m = int(float(dist_val) * 1000) if dist_val is not None else None
+            h_lat = (
+                float(it["latitude"]) if it.get("latitude") else (float(it["wgs84Lat"]) if it.get("wgs84Lat") else None)
+            )
+            h_lon = (
+                float(it["longitude"])
+                if it.get("longitude")
+                else (float(it["wgs84Lon"]) if it.get("wgs84Lon") else None)
+            )
+            if dist_m is None and h_lat is not None and h_lon is not None:
+                dist_m = calculate_distance_m(latitude, longitude, h_lat, h_lon)
+            is_open, today_hours, break_hours = evaluate_operating_hours(
+                it.get("startTime"), it.get("endTime"), etc_str=it.get("dutyEtc"), now=now
+            )
+
+            items.append(
+                FacilityItem(
+                    name=name,
+                    category=category,
+                    address=it.get("dutyAddr") or "",
+                    phone=it.get("dutyTel1"),
+                    distance_m=dist_m,
+                    latitude=h_lat,
+                    longitude=h_lon,
+                    hpid=it.get("hpid"),
+                    is_open=is_open,
+                    today_hours=today_hours,
+                    break_hours=break_hours,
+                )
+            )
+        return items
+
+    async def _fetch_hospital_by_stage(
+        self,
+        client: httpx.AsyncClient,
+        key: str,
+        stage1: str,
+        stage2: str | None,
+        dept_code: str | None,
+        qn: str | None,
+        ref_lat: float | None = None,
+        ref_lon: float | None = None,
+    ) -> list[FacilityItem]:
+        url = "https://apis.data.go.kr/B552657/HsptlAsembySearchService/getHsptlMdcncListInfoInqire"
+        now = datetime.now(ZoneInfo("Asia/Seoul"))
+        weekday_idx = now.weekday() + 1  # 1=월 ~ 7=일
+        params: dict[str, Any] = {
+            "serviceKey": key,
+            "Q0": stage1,
+            "pageNo": "1",
+            "numOfRows": "20",
+            "_type": "json",
+        }
+        if stage2:
+            params["Q1"] = stage2
+        if dept_code:
+            params["QD"] = dept_code
+        if qn:
+            params["QN"] = qn
+
+        res = await client.get(url, params=params)
+        if res.status_code != 200:
+            return []
+        data = self._parse_xml_or_json(res.text)
+        raw_items = self._extract_items(data)
+        items: list[FacilityItem] = []
+
+        for it in raw_items:
+            name = it.get("dutyName") or "병원"
+            category = it.get("dutyDivNam") or it.get("dutyDivName") or "의원"
+            start_k = f"dutyTime{weekday_idx}s"
+            close_k = f"dutyTime{weekday_idx}c"
+            s_val = it.get(start_k)
+            e_val = it.get(close_k)
+
+            is_open, today_hours, break_hours = evaluate_operating_hours(
+                s_val, e_val, etc_str=it.get("dutyEtc"), now=now
+            )
+            h_lat = float(it["wgs84Lat"]) if it.get("wgs84Lat") else None
+            h_lon = float(it["wgs84Lon"]) if it.get("wgs84Lon") else None
+            dist_m = None
+            if ref_lat is not None and ref_lon is not None and h_lat is not None and h_lon is not None:
+                dist_m = calculate_distance_m(ref_lat, ref_lon, h_lat, h_lon)
+
+            items.append(
+                FacilityItem(
+                    name=name,
+                    category=category,
+                    address=it.get("dutyAddr") or "",
+                    phone=it.get("dutyTel1"),
+                    distance_m=dist_m,
+                    latitude=h_lat,
+                    longitude=h_lon,
+                    hpid=it.get("hpid"),
+                    is_open=is_open,
+                    today_hours=today_hours,
+                    break_hours=break_hours,
+                )
+            )
+        return items
+
+    # ==========================================
+    # 3. 약국 검색 (ErmctInsttInfoInqireService)
+    # ==========================================
     async def search_nearby_pharmacy(
         self,
-        latitude: float,
-        longitude: float,
+        latitude: float | None = None,
+        longitude: float | None = None,
         radius: int = 3000,
+        query: str | None = None,
+        stage1: str | None = None,
+        stage2: str | None = None,
     ) -> FacilitySearchResult:
-        """국립중앙의료원 전국 약국 정보 API를 통한 주변 약국 조회.
-
-        위치 기반(경도, 위도) 조회를 수행합니다.
-        """
-        key = self._clean_key(self.pharmacy_api_key)
+        """국립중앙의료원 전국 약국 API 기반 약국 검색."""
+        key = self._get_api_key()
         if not key:
             return FacilitySearchResult(
                 facility_type="pharmacy",
                 total_count=0,
                 items=[],
-                error="약국정보 API 키가 설정되지 않았습니다.",
+                error="약국 API 키가 설정되지 않았습니다.",
                 message="약국 조회를 위한 공공데이터 API 키가 설정되지 않았습니다.",
             )
 
         client = self._get_client()
+        items: list[FacilityItem] = []
+        target_lat, target_lon = self._resolve_target_coords(latitude, longitude, query or stage2)
+
         try:
-            url = "https://apis.data.go.kr/B552657/ErmctInsttInfoInqireService/getParmacyLcinfoInqire"
-            params = {
-                "serviceKey": key,
-                "WGS84_LON": str(longitude),
-                "WGS84_LAT": str(latitude),
-                "pageNo": "1",
-                "numOfRows": "10",
-                "_type": "json",
-            }
+            # 1) GPS 좌표 또는 랜드마크 좌표가 있으면 위치기반 약국 조회 (0.2s, 실제 거리순 + 오늘 영업시간)
+            if target_lat is not None and target_lon is not None:
+                items = await self._fetch_pharmacy_by_location(client, key, target_lat, target_lon)
 
-            res = await client.get(url, params=params)
-
-            # 포털 게이트웨이 인증 대기(403 등) 또는 서비스 오류 처리
-            if res.status_code == 403 or "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" in res.text:
-                logger.info("약국 API 키 인증/동기화 대기 상태 (403/미등록)")
-                return FacilitySearchResult(
-                    facility_type="pharmacy",
-                    total_count=0,
-                    items=[],
-                    error="약국 API 서비스 인증 준비 중",
-                    message=(
-                        "공공데이터 약국 정보 서비스의 인증이 동기화 진행 중입니다. "
-                        "잠시 후 다시 시도해 주시거나 가까운 병원 및 114 안내를 이용해 주세요."
-                    ),
+            # 2) 좌표가 없거나 결과가 없으면 지명 검색
+            if not items:
+                parsed_s1, parsed_s2 = self._parse_location(query)
+                target_s1 = stage1 or parsed_s1 or "서울특별시"
+                target_s2 = stage2 or parsed_s2
+                items = await self._fetch_pharmacy_by_stage(
+                    client,
+                    key,
+                    target_s1,
+                    target_s2,
+                    query,
+                    ref_lat=target_lat,
+                    ref_lon=target_lon,
                 )
 
-            if res.status_code != 200:
-                return FacilitySearchResult(
-                    facility_type="pharmacy",
-                    total_count=0,
-                    items=[],
-                    error=f"공공데이터 응답 코드 {res.status_code}",
-                    message="약국 정보 서비스 연동 중 오류가 발생했습니다.",
-                )
-
-            data = self._parse_xml_or_json(res.text)
-            raw_items = self._extract_items(data)
-            items: list[FacilityItem] = [self._parse_pharmacy_item(it) for it in raw_items]
-            items.sort(key=lambda x: x.distance_m if x.distance_m is not None else 999999)
+            # 현재 영업 중인 약국을 상단으로 정렬, 그 다음 거리순
+            items.sort(key=lambda x: (x.is_open is not True, x.distance_m if x.distance_m is not None else 999999))
             items = items[:5]
 
             if not items:
+                search_desc = f"'{query}' 관련 " if query else ""
                 return FacilitySearchResult(
                     facility_type="pharmacy",
                     total_count=0,
                     items=[],
-                    message="반경 내에 운영 중인 약국이 조회되지 않았습니다.",
+                    message=f"주변에 조회된 {search_desc}약국이 없습니다.",
                 )
+
+            loc_label = self._extract_location_label(query, stage2)
+            prefix = f"{loc_label} 인근 " if loc_label != "주변" else "주변 "
+            open_count = sum(1 for it in items if it.is_open is True)
+            msg = (
+                f"{prefix}약국 {len(items)}곳을 조회했습니다. (현재 영업 중 {open_count}곳)"
+                if open_count > 0
+                else f"{prefix}약국 {len(items)}곳을 조회했습니다."
+            )
 
             return FacilitySearchResult(
                 facility_type="pharmacy",
                 total_count=len(items),
                 items=items,
-                message=f"주변 약국 {len(items)}곳을 조회했습니다.",
+                message=msg,
             )
 
         except httpx.TimeoutException:
@@ -546,57 +1285,120 @@ class MedicalFacilityClient:
             if self._http_client is None:
                 await client.aclose()
 
-    @staticmethod
-    def _parse_pharmacy_item(it: dict[str, Any]) -> FacilityItem:
-        name = it.get("dutyName") or "약국"
-        addr = it.get("dutyAddr") or ""
-        phone = it.get("dutyTel1")
-        dist_val = it.get("distance")
-        dist_m = int(float(dist_val) * 1000) if dist_val is not None else None
-        lat_val = it.get("wgs84Lat")
-        lon_val = it.get("wgs84Lon")
-
-        operating_hours: dict[str, str] = {}
-        days = ["월", "화", "수", "목", "금", "토", "일", "공휴일"]
-        for idx, day_name in enumerate(days, start=1):
-            start_k = f"dutyTime{idx}s"
-            close_k = f"dutyTime{idx}c"
-            if it.get(start_k) and it.get(close_k):
-                s = str(it[start_k]).zfill(4)
-                c = str(it[close_k]).zfill(4)
-                operating_hours[day_name] = f"{s[:2]}:{s[2:]} ~ {c[:2]}:{c[2:]}"
-
-        hours_str = ", ".join(f"{k}: {v}" for k, v in operating_hours.items()) if operating_hours else None
-        return FacilityItem(
-            name=name,
-            category="약국",
-            address=addr,
-            phone=phone,
-            distance_m=dist_m,
-            latitude=float(lat_val) if lat_val else None,
-            longitude=float(lon_val) if lon_val else None,
-            operating_hours=hours_str,
-            hpid=it.get("hpid"),
-        )
-
-    @staticmethod
-    def _extract_items(data: dict[str, Any] | None) -> list[dict[str, Any]]:
-        """data.go.kr의 다양한 response/body/items/item 구조에서 리스트 추출."""
-        if not data:
+    async def _fetch_pharmacy_by_location(
+        self, client: httpx.AsyncClient, key: str, latitude: float, longitude: float
+    ) -> list[FacilityItem]:
+        url = "https://apis.data.go.kr/B552657/ErmctInsttInfoInqireService/getParmacyLcinfoInqire"
+        params = {
+            "serviceKey": key,
+            "WGS84_LON": str(longitude),
+            "WGS84_LAT": str(latitude),
+            "pageNo": "1",
+            "numOfRows": "20",
+            "_type": "json",
+        }
+        res = await client.get(url, params=params)
+        if res.status_code != 200:
             return []
+        data = self._parse_xml_or_json(res.text)
+        raw_items = self._extract_items(data)
+        items: list[FacilityItem] = []
+        now = datetime.now(ZoneInfo("Asia/Seoul"))
 
-        # 1. 표준 json 형태: {"response": {"body": {"items": {"item": [...]}}}}
-        resp = data.get("response") or data.get("OpenAPI_ServiceResponse") or data
-        if isinstance(resp, dict):
-            body = resp.get("body") or resp
-            if isinstance(body, dict):
-                items_container = body.get("items")
-                if isinstance(items_container, dict):
-                    item = items_container.get("item")
-                    if isinstance(item, list):
-                        return item
-                    if isinstance(item, dict):
-                        return [item]
-                elif isinstance(items_container, list):
-                    return items_container
-        return []
+        for it in raw_items:
+            name = it.get("dutyName") or "약국"
+            dist_val = it.get("distance")
+            dist_m = int(float(dist_val) * 1000) if dist_val is not None else None
+            p_lat = (
+                float(it["latitude"]) if it.get("latitude") else (float(it["wgs84Lat"]) if it.get("wgs84Lat") else None)
+            )
+            p_lon = (
+                float(it["longitude"])
+                if it.get("longitude")
+                else (float(it["wgs84Lon"]) if it.get("wgs84Lon") else None)
+            )
+            if dist_m is None and p_lat is not None and p_lon is not None:
+                dist_m = calculate_distance_m(latitude, longitude, p_lat, p_lon)
+            is_open, today_hours, break_hours = evaluate_operating_hours(
+                it.get("startTime"), it.get("endTime"), etc_str=it.get("dutyEtc"), now=now
+            )
+
+            items.append(
+                FacilityItem(
+                    name=name,
+                    category="약국",
+                    address=it.get("dutyAddr") or "",
+                    phone=it.get("dutyTel1"),
+                    distance_m=dist_m,
+                    latitude=p_lat,
+                    longitude=p_lon,
+                    hpid=it.get("hpid"),
+                    is_open=is_open,
+                    today_hours=today_hours,
+                    break_hours=break_hours,
+                )
+            )
+        return items
+
+    async def _fetch_pharmacy_by_stage(
+        self,
+        client: httpx.AsyncClient,
+        key: str,
+        stage1: str,
+        stage2: str | None,
+        query: str | None,
+        ref_lat: float | None = None,
+        ref_lon: float | None = None,
+    ) -> list[FacilityItem]:
+        url = "https://apis.data.go.kr/B552657/ErmctInsttInfoInqireService/getParmacyListInfoInqire"
+        now = datetime.now(ZoneInfo("Asia/Seoul"))
+        weekday_idx = now.weekday() + 1
+        params: dict[str, Any] = {
+            "serviceKey": key,
+            "Q0": stage1,
+            "pageNo": "1",
+            "numOfRows": "20",
+            "_type": "json",
+        }
+        if stage2:
+            params["Q1"] = stage2
+
+        res = await client.get(url, params=params)
+        if res.status_code != 200:
+            return []
+        data = self._parse_xml_or_json(res.text)
+        raw_items = self._extract_items(data)
+        items: list[FacilityItem] = []
+
+        for it in raw_items:
+            name = it.get("dutyName") or "약국"
+            start_k = f"dutyTime{weekday_idx}s"
+            close_k = f"dutyTime{weekday_idx}c"
+            s_val = it.get(start_k)
+            e_val = it.get(close_k)
+
+            is_open, today_hours, break_hours = evaluate_operating_hours(
+                s_val, e_val, etc_str=it.get("dutyEtc"), now=now
+            )
+            p_lat = float(it["wgs84Lat"]) if it.get("wgs84Lat") else None
+            p_lon = float(it["wgs84Lon"]) if it.get("wgs84Lon") else None
+            dist_m = None
+            if ref_lat is not None and ref_lon is not None and p_lat is not None and p_lon is not None:
+                dist_m = calculate_distance_m(ref_lat, ref_lon, p_lat, p_lon)
+
+            items.append(
+                FacilityItem(
+                    name=name,
+                    category="약국",
+                    address=it.get("dutyAddr") or "",
+                    phone=it.get("dutyTel1"),
+                    distance_m=dist_m,
+                    latitude=p_lat,
+                    longitude=p_lon,
+                    hpid=it.get("hpid"),
+                    is_open=is_open,
+                    today_hours=today_hours,
+                    break_hours=break_hours,
+                )
+            )
+        return items

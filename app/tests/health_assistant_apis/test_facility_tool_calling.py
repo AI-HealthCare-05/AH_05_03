@@ -214,3 +214,35 @@ async def test_health_assistant_service_with_facility_tool_flow() -> None:
     assert resp.emergency_notice is not None
     assert "119" in resp.emergency_notice
     mock_facility_client.search_nearby_emergency_room.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_streaming_emits_facility_before_final_response() -> None:
+    """시설 카드는 Gemini 안내문이 완성되기 전에 바로 화면으로 보낸다."""
+    facility_result = FacilitySearchResult(
+        facility_type="pharmacy",
+        total_count=1,
+        items=[FacilityItem(name="봄약국", address="서울 중구 세종대로 1")],
+    )
+    expected_resp = HealthAssistantResponse(
+        intent="search_facility",
+        assistant_message="가까운 봄약국을 안내해 드릴게요.",
+        suggested_quick_replies=[],
+    )
+    mock_facility_client = AsyncMock()
+    mock_facility_client.search_nearby_emergency_room.return_value = facility_result
+    service = HealthAssistantService(
+        llm_client=MockToolEnabledLLMClient(expected_resp),
+        facility_client=mock_facility_client,
+    )
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="근처 약국 찾아줘")],
+        user_location=UserLocation(latitude=37.5, longitude=127.0),
+    )
+
+    events = [event async for event in service.stream(request)]
+    names = [name for name, _ in events]
+    facility_index = names.index("facility")
+    assert facility_index < names.index("delta")
+    assert facility_index < names.index("result")
+    assert events[facility_index][1]["items"][0]["name"] == "봄약국"

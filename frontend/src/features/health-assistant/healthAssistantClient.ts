@@ -113,6 +113,11 @@ export interface FacilityItem {
   available_beds?: string | null;
   operating_hours?: string | null;
   homepage?: string | null;
+  hpid?: string | null;
+  place_url?: string | null;
+  is_open?: boolean | null;
+  today_hours?: string | null;
+  break_hours?: string | null;
   additional_info?: Record<string, unknown>;
 }
 
@@ -205,6 +210,7 @@ export async function streamHealthAssistantMessage(
   signal?: AbortSignal,
   sessionId?: string,
   userLocation?: UserLocation,
+  onFacility?: (result: FacilitySearchResult) => void,
 ): Promise<HealthAssistantResponse> {
   let final: HealthAssistantResponse | undefined;
   let failure: string | undefined;
@@ -217,6 +223,7 @@ export async function streamHealthAssistantMessage(
     },
     (event, data) => {
       if (event === "delta" && typeof data.text === "string") onDelta(data.text);
+      else if (event === "facility") onFacility?.(data as unknown as FacilitySearchResult);
       else if (event === "result") final = data as unknown as HealthAssistantResponse;
       else if (event === "error" && typeof data.message === "string") failure = data.message;
     },
@@ -240,4 +247,3 @@ export async function sendHealthAssistantMessage(
     user_location: userLocation,
   });
 }
-

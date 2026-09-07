@@ -173,6 +173,8 @@ class Config(BaseSettings):
     EMERGENCY_MEDICAL_API_KEY: str | None = None
     HOSPITAL_INFO_API_KEY: str | None = None
     PHARMACY_INFO_API_KEY: str | None = None
+    # 카카오 로컬 REST API 키 (병원/약국 초고속 검색용).
+    KAKAO_REST_API_KEY: str | None = None
     # OpenAI 예비 경로. **비어 있으면 그냥 꺼진 상태다** — 아래 `DEV_OCR_MODELS` 에
     # `openai:` 항목이 있어도 키가 없으면 그 항목을 건너뛴다. 즉 켜려면 둘 다 필요하다.
     #

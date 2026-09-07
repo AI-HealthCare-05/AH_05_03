@@ -87,6 +87,8 @@ class HealthAssistantService:
             response, tool_result = res_tuple
             if tool_result and not response.facility_search_draft:
                 response.facility_search_draft = tool_result
+                if getattr(tool_result, "message", None):
+                    response.assistant_message = tool_result.message
                 if getattr(tool_result, "emergency_notice", None) and not response.emergency_notice:
                     response.emergency_notice = tool_result.emergency_notice
         else:
@@ -129,6 +131,20 @@ class HealthAssistantService:
                 messages=request.messages,
                 response_schema=HealthAssistantResponse,
             )
+
+        if tool_result is not None:
+            payload = tool_result.model_dump(mode="json") if hasattr(tool_result, "model_dump") else tool_result
+            yield "facility", payload
+            summary_msg = getattr(tool_result, "message", None) or "주변 의료시설을 조회했습니다."
+            yield "delta", {"text": summary_msg}
+            res_obj = HealthAssistantResponse(
+                intent="search_facility",
+                assistant_message=summary_msg,
+                facility_search_draft=tool_result,
+                emergency_notice=getattr(tool_result, "emergency_notice", None),
+            )
+            yield "result", self.safety_service.validate_response(res_obj).model_dump(mode="json")
+            return
 
         async for piece in stream_gen:
             raw += piece

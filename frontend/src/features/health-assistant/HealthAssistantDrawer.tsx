@@ -631,6 +631,42 @@ export function HealthAssistantDrawer({
       // 않는 것처럼 보인다. 기록 초안·빠른답장은 완성본이 온 뒤에 한 번에 붙는다.
       const streamingId = messageId("assistant");
       let streamed = "";
+      let streamedFacility: FacilitySearchResult | undefined;
+      const streamingFacilityResponse = (facility: FacilitySearchResult): HealthAssistantResponse => ({
+        intent: "search_facility",
+        assistant_message: streamed,
+        facility_search_draft: facility,
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: [],
+      });
+      const applyDelta = (delta: string) => {
+        streamed += delta;
+        setMessages((prev) => prev.map((message) => (
+          message.id === streamingId
+            ? {
+                ...message,
+                content: streamed,
+                ...(streamedFacility ? { responseDraft: streamingFacilityResponse(streamedFacility) } : {}),
+              }
+            : message
+        )));
+      };
+      const applyFacilityResult = (facility: FacilitySearchResult) => {
+        streamedFacility = facility;
+        const msgText = facility.message || "주변 의료시설을 조회했습니다.";
+        streamed = msgText;
+        // 시설 데이터가 도착하면 본문 토큰 완료를 기다리지 않고 일체형 카드로 즉시 렌더링한다.
+        setMessages((prev) => prev.map((message) => (
+          message.id === streamingId
+            ? {
+                ...message,
+                content: msgText,
+                responseDraft: streamingFacilityResponse(facility),
+              }
+            : message
+        )));
+      };
       setMessages((prev) => [...prev, { id: streamingId, role: "assistant", content: "" }]);
       let sessionId = activeSessionIdRef.current;
       if (!sessionId && sessionSyncPromiseRef.current) {
@@ -650,52 +686,25 @@ export function HealthAssistantDrawer({
         }
       }
 
-      const res = userLocation
-        ? await streamHealthAssistantMessage(
-            promptMessages,
-            (delta) => {
-              streamed += delta;
-              setMessages((prev) => prev.map((m) => (m.id === streamingId ? { ...m, content: streamed } : m)));
-            },
-            {
-              profile_name: profile.displayName,
-              relationship: profile.relationship,
-              birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
-              recent_records_summary: recentSummary,
-            },
-            undefined,
-            sessionId ?? undefined,
-            userLocation,
-          )
-        : sessionId
-          ? await streamHealthAssistantMessage(
-              promptMessages,
-              (delta) => {
-                streamed += delta;
-                setMessages((prev) => prev.map((m) => (m.id === streamingId ? { ...m, content: streamed } : m)));
-              },
-              {
-                profile_name: profile.displayName,
-                relationship: profile.relationship,
-                birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
-                recent_records_summary: recentSummary,
-              },
-              undefined,
-              sessionId,
-            )
-          : await streamHealthAssistantMessage(
-              promptMessages,
-              (delta) => {
-                streamed += delta;
-                setMessages((prev) => prev.map((m) => (m.id === streamingId ? { ...m, content: streamed } : m)));
-              },
-              {
-                profile_name: profile.displayName,
-                relationship: profile.relationship,
-                birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
-                recent_records_summary: recentSummary,
-              },
-            );
+      const res = await streamHealthAssistantMessage(
+        promptMessages,
+        applyDelta,
+        {
+          profile_name: profile.displayName,
+          relationship: profile.relationship,
+          birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
+          recent_records_summary: recentSummary,
+        },
+        undefined,
+        sessionId ?? undefined,
+        userLocation ?? undefined,
+        applyFacilityResult,
+      );
+
+
+      if (streamedFacility && !res.facility_search_draft) {
+        res.facility_search_draft = streamedFacility;
+      }
 
 
       // OCR에서 추출된 날짜가 있고 AI가 날짜를 채우지 않았거나 오늘로 채운 경우 보정
@@ -1436,32 +1445,47 @@ export function HealthAssistantDrawer({
                   </div>
                 )}
 
-                <div className="msg-bubble">
-                  {msg.content ? (
-                    msg.content.split("\n\n").map((para, i) => (
-                      <p key={i}>{para}</p>
-                    ))
-                  ) : (
-                    <div className="loading-dots">
-                      <span>.</span><span>.</span><span>.</span>
-                    </div>
-                  )}
-
-                  {/* 응급 주의사항 배너 */}
-                  {msg.responseDraft?.emergency_notice && (
-                    <div className="emergency-notice-banner" role="alert">
-                      <strong>응급 주의 안내</strong>
-                      <p>{msg.responseDraft.emergency_notice}</p>
-                    </div>
-                  )}
-
-                  {/* 비진단 안전 안내문 */}
-                  {msg.responseDraft?.safety_disclaimer && (
-                    <p className="safety-disclaimer-text">
-                      ※ {msg.responseDraft.safety_disclaimer}
+                {msg.responseDraft?.facility_search_draft && msg.role === "assistant" ? (
+                  <div className="msg-bubble facility-unified-bubble">
+                    <p className="facility-unified-title">
+                      {msg.content || msg.responseDraft.facility_search_draft.message}
                     </p>
-                  )}
-                </div>
+                    <FacilitySearchResultCard draft={msg.responseDraft.facility_search_draft} />
+                    {msg.responseDraft.emergency_notice && (
+                      <div className="emergency-notice-banner" role="alert">
+                        <strong>응급 주의 안내</strong>
+                        <p>{msg.responseDraft.emergency_notice}</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="msg-bubble">
+                    {msg.content ? (
+                      msg.content.split("\n\n").map((para, i) => (
+                        <p key={i}>{para}</p>
+                      ))
+                    ) : (
+                      <div className="loading-dots">
+                        <span>.</span><span>.</span><span>.</span>
+                      </div>
+                    )}
+
+                    {/* 응급 주의사항 배너 */}
+                    {msg.responseDraft?.emergency_notice && (
+                      <div className="emergency-notice-banner" role="alert">
+                        <strong>응급 주의 안내</strong>
+                        <p>{msg.responseDraft.emergency_notice}</p>
+                      </div>
+                    )}
+
+                    {/* 비진단 안전 안내문 */}
+                    {msg.responseDraft?.safety_disclaimer && (
+                      <p className="safety-disclaimer-text">
+                        ※ {msg.responseDraft.safety_disclaimer}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* 대화 내 인라인 원본 서류 이미지 미리보기 목록 (단일/다중 모두 지원) */}
                 {msg.attachedDocuments && msg.attachedDocuments.length > 0 && runtime && (
@@ -1565,10 +1589,7 @@ export function HealthAssistantDrawer({
                   />
                 )}
 
-                {/* 주변 의료시설(응급실, 병원, 약국) 조회 결과 카드 */}
-                {msg.responseDraft?.facility_search_draft && msg.role === "assistant" && (
-                  <FacilitySearchResultCard draft={msg.responseDraft.facility_search_draft} />
-                )}
+
 
                 {/* 시계열 검진/측정 수치 변화 추이 차트 카드 */}
                 {msg.showTrendChart && msg.trendMetrics && msg.trendMetrics.length > 0 && (
@@ -2951,9 +2972,7 @@ function FacilitySearchResultCard({ draft }: { draft: FacilitySearchResult }) {
       </div>
 
       {draft.emergency_notice && (
-        <div className="facility-emergency-notice">
-          <strong>🚨 긴급 안내:</strong> {draft.emergency_notice}
-        </div>
+        <div className="facility-emergency-notice">{draft.emergency_notice}</div>
       )}
 
       {displayItems.length === 0 ? (
@@ -2971,6 +2990,15 @@ function FacilitySearchResultCard({ draft }: { draft: FacilitySearchResult }) {
                   : `${item.distance_m}m`
                 : null;
 
+            // 네이버 지도 PC 검색 연동 (좌측 상세 정보 패널 + 우측 지도 핀 동시 노출)
+            const addrParts = item.address.split(" ");
+            const district = addrParts.length >= 2 ? `${addrParts[0]} ${addrParts[1]}` : "";
+            const naverSearchQuery = district ? `${district} ${item.name}` : item.name;
+            const naverMapUrl = `https://map.naver.com/p/search/${encodeURIComponent(naverSearchQuery)}`;
+
+            const isOpenText = draft.facility_type === "pharmacy" ? "영업 중" : "진료 중";
+            const isClosedText = draft.facility_type === "pharmacy" ? "영업 마감" : "진료 마감";
+
             return (
               <div key={idx} className="facility-item">
                 <div className="facility-item-header">
@@ -2983,41 +3011,52 @@ function FacilitySearchResultCard({ draft }: { draft: FacilitySearchResult }) {
 
                 <div className="facility-item-address">{item.address}</div>
 
+                {/* 실시간 운영 상태 및 진료 시간 */}
+                <div className="facility-item-hours">
+                  {item.is_open === true && (
+                    <span className="facility-status-badge is-open">
+                      {isOpenText}
+                      {item.today_hours ? ` (${item.today_hours})` : ""}
+                    </span>
+                  )}
+                  {item.is_open === false && (
+                    <span className="facility-status-badge is-closed">
+                      {isClosedText}
+                      {item.today_hours ? ` (${item.today_hours})` : ""}
+                    </span>
+                  )}
+                  {item.is_open == null && item.today_hours && (
+                    <span className="facility-status-badge is-closed">
+                      운영시간: {item.today_hours}
+                    </span>
+                  )}
+                  {item.break_hours && (
+                    <span className="facility-break-badge">
+                      휴게시간 {item.break_hours}
+                    </span>
+                  )}
+                </div>
+
+                {/* 실시간 병상 정보 */}
                 {item.available_beds && (
                   <div className="facility-item-beds">
-                    <span className="bed-icon">🛏️</span> {item.available_beds}
-                  </div>
-                )}
-
-                {item.operating_hours && (
-                  <div className="facility-item-hours">
-                    <span>🕒</span> {item.operating_hours}
+                    <span className="bed-badge">{item.available_beds}</span>
                   </div>
                 )}
 
                 <div className="facility-item-actions">
                   {tel && (
                     <a href={`tel:${tel}`} className="facility-action-btn tel-btn">
-                      📞 {tel}
-                    </a>
-                  )}
-                  {item.homepage && (
-                    <a
-                      href={item.homepage}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="facility-action-btn link-btn"
-                    >
-                      🌐 홈페이지
+                      전화 {tel}
                     </a>
                   )}
                   <a
-                    href={`https://map.kakao.com/link/search/${encodeURIComponent(item.name)}`}
+                    href={naverMapUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="facility-action-btn map-btn"
                   >
-                    🗺️ 지도보기
+                    지도보기
                   </a>
                 </div>
               </div>
