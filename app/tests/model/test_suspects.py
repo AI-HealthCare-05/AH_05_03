@@ -314,9 +314,25 @@ def trajectory_pool(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_default_rank_source_is_the_recorded_product_decision() -> None:
-    """지금 배포되는 기본값. 바꾸려면 이 줄을 같이 고쳐야 한다(2026-09-04 결정)."""
-    assert DEPLOYED_RANK_SOURCE == "ml_probability"
-    assert DEPLOYED_RANK_POOL == "trajectory"
+    """지금 배포되는 기본값. 바꾸려면 이 줄을 같이 고쳐야 한다.
+
+    **2026-09-07 에 `arbitrated` + `all` 로 되돌렸다.** 9/4 에 `ml_probability` 로
+    바꾼 근거는 "확률만으로 열 질환을 세우면 곡선이 하나도 안 붙는다"(0/3)였는데,
+    그건 `ml_probability + all` 의 문제였고 `arbitrated` 에는 해당하지 않았다.
+    같은 프로필 120개로 세 방식을 재니 이렇게 갈렸다.
+
+    | | `ml_prob`+`trajectory` | `ml_prob`+`all` | `arbitrated`+`all` |
+    |---|---:|---:|---:|
+    | 뽑힌 집합의 종류 | 1가지 | 15가지 | **20가지** |
+    | 5·10년 곡선 붙은 카드 | 68% | 13% | 54% |
+    | 확진(HIGH+) 유입 | 21% | 47% | **0%** |
+    | 측정 정상인데 1순위 | 28% | 7% | **0%** |
+
+    아래 `test_trajectory_pool_keeps_only_curve_capable_targets` 는 지우지 않는다 —
+    `trajectory` 풀의 성질 자체는 그대로이고, 되돌릴 때 그 계약이 필요하다.
+    """
+    assert DEPLOYED_RANK_SOURCE == "arbitrated"
+    assert DEPLOYED_RANK_POOL == "all"
 
 
 def test_trajectory_pool_keeps_only_curve_capable_targets(trajectory_pool: None) -> None:

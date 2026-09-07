@@ -78,7 +78,18 @@ export interface SuspectCard {
   score: number;
   suspected: boolean;
   probability?: number | null;
+  /**
+   * 순위 점수를 만든 재료. **배지로 쓰지 않는다** — 규칙 5단계와 의학 4단계
+   * (낮음·관심·주의·높음)가 섞여 들어온다. 근거 문구에만 쓴다.
+   */
   level: string;
+  /**
+   * 판정 카드와 같은 5단계 등급. 화면이 배지로 쓰는 값이다.
+   *
+   * 옛 응답(기록 화면이 그리는 스냅샷)에는 없을 수 있어 옵셔널이다 — 없으면
+   * `level` 로 떨어진다.
+   */
+  risk_level?: RiskLevel | "";
   /** "측정" 이면 규칙 엔진이 검사값으로 준 판정, "추정" 이면 ML 확률 */
   basis: string;
   peer_ratio?: number | null;

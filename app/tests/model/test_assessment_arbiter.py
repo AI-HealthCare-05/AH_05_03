@@ -29,6 +29,7 @@ from app.services.assessment import (
     INSUFFICIENT,
     SPECS,
     arbitrate,
+    assess,
     grade_from_judgement,
     grade_from_medical,
     grade_from_percentile,
@@ -36,6 +37,7 @@ from app.services.assessment import (
     summarize,
 )
 from app.services.prediction import DISPLAY_ORDER
+from app.services.suspects import KNOWN_LEVELS
 from chronic_disease_engine.schemas import RiskLevel
 
 LEVELS = {level.value for level in RiskLevel}
@@ -525,3 +527,77 @@ def test_partial_metabolic_count_can_still_confirm() -> None:
     partial = evaluate_metabolic_syndrome({"sex": "F", "waist_cm": 90, "triglycerides": 200})
     assert partial["risk_level"] == INSUFFICIENT
     assert partial["input_values"]["met_count"] == 2
+
+
+def test_suspect_panel_shares_the_card_badge_and_name(models: Any) -> None:
+    """의심 패널과 판정 카드가 **같은 등급·같은 이름**을 쓴다.
+
+    실측(52세 남 · 118/74 · 이상지질 프리셋)에서 고혈압 하나가 카드에서 "정상",
+    패널에서 "정상 범위" 로 나왔다. `SuspectCard.level` 은 순위 점수를 만든 재료라
+    규칙 5단계와 의학 4단계(낮음·관심·주의·높음)가 섞여 들어오기 때문이다.
+
+    이름도 같은 종류로 갈라져 있었다 — `ckd` 가 카드에서 "만성콩팥병", 패널에서
+    번들 이름인 "신기능 확인 필요". 사용자가 두 이름을 다른 질환으로 읽었다.
+
+    둘 다 `assess()` 가 표시 직전에 `SPECS` 로 덮어서 닫는다.
+    """
+    request = AssessmentSummaryRequest.model_validate(
+        {
+            "age": 52,
+            "sex": "M",
+            "height_cm": 172,
+            "weight_kg": 70,
+            "waist_cm": 84,
+            "self_rated_health": 3,
+            "sbp": 118,
+            "dbp": 74,
+            "fasting_glucose": 92,
+            "hba1c": 5.3,
+            "total_chol": 268,
+            "ldl": 178,
+            "hdl": 34,
+            "triglyceride": 260,
+            "creatinine": 0.9,
+            "hemoglobin": 15.0,
+        }
+    )
+    verdicts, _, _, _, suspects = assess(request, models)
+    assert suspects, "검사값이 있으면 의심 후보가 나온다"
+
+    by_key = {verdict.key: verdict for verdict in verdicts}
+    for card in suspects:
+        verdict = by_key[card.target]
+        assert card.risk_level == verdict.risk_level, (
+            f"{card.target}: 패널 배지({card.risk_level})와 카드 배지({verdict.risk_level})가 다르다"
+        )
+        assert card.name == verdict.name, f"{card.target}: 패널 이름({card.name})과 카드 이름({verdict.name})이 다르다"
+
+
+def test_confirmed_disease_does_not_come_back_as_a_suspect(models: Any) -> None:
+    """이미 기준을 넘은 질환은 "의심" 자리에 올리지 않는다.
+
+    사용자가 이미 아는 것을 다시 띄우면 화면의 가장 좋은 자리를 버린다. `arbitrated`
+    경로의 `KNOWN_LEVELS` 필터가 그 일을 하는데, 2026-09-04~09-07 사이에는
+    `RANK_SOURCE = "ml_probability"` 라 그 필터가 같이 꺼져 있었다 —
+    실측 120 프로필에서 확진이 패널에 21%(74/360) 들어왔다.
+    """
+    # 지질 넉 장이 기준을 크게 넘는다 → 이상지질·고LDL·고중성지방·낮은HDL 확진.
+    request = AssessmentSummaryRequest.model_validate(
+        {
+            "age": 58,
+            "sex": "M",
+            "height_cm": 170,
+            "weight_kg": 78,
+            "self_rated_health": 3,
+            "total_chol": 290,
+            "ldl": 200,
+            "hdl": 30,
+            "triglyceride": 340,
+        }
+    )
+    verdicts, _, _, _, suspects = assess(request, models)
+    confirmed = {v.key for v in verdicts if v.measured and level_str(v.risk_level) in KNOWN_LEVELS}
+    assert confirmed, "이 입력이면 확진이 나온다"
+
+    picked = {card.target for card in suspects}
+    assert not (picked & confirmed), f"확진이 의심 자리에 올라왔다: {sorted(picked & confirmed)}"

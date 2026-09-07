@@ -27,13 +27,17 @@
  * 붙어 있던 것이 이 패널에서 가장 헷갈리는 지점이었다. 측정이 답한 칸은 답으로 닫는다.
  */
 
-import type { SuspectCard } from "./contracts";
+import type { RiskLevel, SuspectCard } from "./contracts";
+import { LevelBadge } from "./VerdictCards";
 
 const percent = (value: number) => `${(value * 100).toFixed(0)}%`;
 
 /** 측정이 "기준 이내" 라고 이미 답했나. 그러면 모델 확률을 덧붙이지 않는다. */
 function isSettled(suspect: SuspectCard) {
-  return suspect.basis === "측정" && suspect.level === "정상 범위";
+  // `risk_level` 이 정본이고 `level` 은 옛 응답(스냅샷)을 위한 폴백이다 — 기록
+  // 화면은 그날 저장한 판정을 그대로 그리므로 필드가 없는 판이 남아 있다.
+  const normal = suspect.risk_level ? suspect.risk_level === "NORMAL" : suspect.level === "정상 범위";
+  return suspect.basis === "측정" && normal;
 }
 
 /**
@@ -77,7 +81,15 @@ function SuspectItem({ suspect }: { suspect: SuspectCard }) {
         </h4>
         <span className="suspect-tags">
           <span className={`suspect-basis ${measured ? "is-measured" : "is-estimated"}`}>{suspect.basis}</span>
-          <span className="suspect-level">{suspect.level}</span>
+          {/* **판정 카드와 같은 배지다.** 예전에는 `suspect.level` 을 그대로 썼는데
+              그 값은 순위 점수를 만든 재료라 규칙 5단계와 의학 4단계가 섞여 있었다 —
+              같은 고혈압이 카드에서 "정상", 여기서 "정상 범위" 로 나왔다.
+              서버가 `risk_level` 을 따로 실어 준다(`app/services/assessment.py`). */}
+          {suspect.risk_level ? (
+            <LevelBadge level={suspect.risk_level as RiskLevel} />
+          ) : (
+            <span className="suspect-level">{suspect.level}</span>
+          )}
         </span>
       </header>
       <p className="suspect-reason">{suspect.reason}</p>

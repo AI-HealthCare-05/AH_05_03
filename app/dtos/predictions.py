@@ -282,6 +282,15 @@ class SuspectCard(BaseSerializerModel):
     suspected: bool = Field(description="False 면 자리를 채우려고 올라온 것이지 의심이 아니다")
     probability: float | None = None
     level: str
+    risk_level: str = Field(
+        default="",
+        description=(
+            "**판정 카드와 같은 5단계 등급.** 화면이 배지로 쓰는 값이다.\n\n"
+            "`level` 은 순위 점수를 만든 재료라 규칙 5단계와 의학 4단계(낮음·관심·주의·높음)가 "
+            "섞여 들어온다 — 같은 고혈압이 카드에서 '정상', 패널에서 '정상 범위' 로 나오던 "
+            "원인이 그것이다. 그래서 카드가 쓰는 등급을 따로 싣고 `level` 은 근거 문구에만 쓴다."
+        ),
+    )
     basis: str = Field(
         default="추정", description="측정 | 추정 — 규칙 엔진이 검사값으로 준 판정인가, ML 이 추정한 것인가"
     )

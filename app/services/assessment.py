@@ -624,8 +624,28 @@ def assess(payload: Any, models: Any) -> tuple[list[DiseaseVerdict], dict[str, A
     #
     # 번들 쪽을 고치려면 20개를 재export 해야 하고, 이름은 화면 표기라 학습 산출물이
     # 정할 일이 아니다. 그래서 표시 직전에 이 표로 덮는다.
+    #
+    # **등급도 같이 덮는다.** `SuspectCard.level` 은 순위 점수를 만든 재료라 규칙
+    # 5단계와 의학 4단계가 섞여 들어온다 — 같은 고혈압이 카드에서 "정상", 패널에서
+    # "정상 범위" 로 나오던 원인이다. 카드가 쓰는 등급을 `risk_level` 로 따로 실어
+    # 화면이 같은 배지를 그리게 한다.
     name_by_target = {spec.ml_target: spec.name for spec in SPECS if spec.ml_target}
-    suspects = [card.model_copy(update={"name": name_by_target.get(card.target, card.name)}) for card in suspects]
+    level_by_target = {
+        spec.ml_target: verdict.risk_level
+        for spec in SPECS
+        if spec.ml_target
+        for verdict in verdicts
+        if verdict.key == spec.key
+    }
+    suspects = [
+        card.model_copy(
+            update={
+                "name": name_by_target.get(card.target, card.name),
+                "risk_level": level_by_target.get(card.target, ""),
+            }
+        )
+        for card in suspects
+    ]
 
     disease_risks = collect_disease_risks(profile)
     return verdicts, disease_risks, summarize(verdicts, disease_risks), available, suspects
