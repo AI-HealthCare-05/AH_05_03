@@ -1064,7 +1064,7 @@ class MedicalFacilityClient:
     # ==========================================
     # 2. 병원 검색 (HsptlAsembySearchService)
     # ==========================================
-    async def search_nearby_hospital(
+    async def search_nearby_hospital(  # noqa: C901
         self,
         latitude: float | None = None,
         longitude: float | None = None,
@@ -1076,7 +1076,7 @@ class MedicalFacilityClient:
         only_open: bool = False,
     ) -> FacilitySearchResult:
         """국립중앙의료원 전국 병·의원 찾기 API 기반 병원 검색."""
-        key = self._get_api_key()
+        key = self._get_api_key("hospital")
         if not key:
             return FacilitySearchResult(
                 facility_type="hospital",
@@ -1366,7 +1366,7 @@ class MedicalFacilityClient:
         only_open: bool = False,
     ) -> FacilitySearchResult:
         """국립중앙의료원 전국 약국 API 기반 약국 검색."""
-        key = self._get_api_key()
+        key = self._get_api_key("pharmacy")
         if not key:
             return FacilitySearchResult(
                 facility_type="pharmacy",

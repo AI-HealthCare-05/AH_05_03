@@ -36,7 +36,7 @@ class GeminiLLMClient(LLMClientProtocol):
     ) -> None:
         self.api_key = api_key or config.GEMINI_API_KEY
         if not self.api_key:
-            raise LlmUnavailableError("GEMINI_API_KEY 가 설정되지 않았습니다.")
+            raise LlmUnavailableError("Gemini API 키가 설정되지 않았습니다.")
         self.model_name = model_name or config.GEMINI_CHAT_MODEL
         self.timeout = timeout
         self.temperature = temperature
