@@ -129,3 +129,44 @@ class TestHouseholdPolicyAPI:
         assert hh_res.status_code == status.HTTP_200_OK
         assert hh_res.json()["data"]["status"] == "active"
         assert hh_res.json()["data"]["master_account_id"] == member_id
+
+    async def test_delete_left_member_history(self, client: AsyncClient, fake_redis: FakeRedis) -> None:
+        owner_headers, _ = await _signup_and_login(client, "del-hist-owner@example.com")
+        member_headers, _ = await _signup_and_login(client, "del-hist-member@example.com")
+        household_id = await _create_household(client, owner_headers)
+
+        await _invite_and_accept(
+            client, fake_redis, owner_headers, member_headers, household_id, "del-hist-member@example.com"
+        )
+
+        # 멤버 목록 조회
+        members_res = await client.get(f"/api/v1/households/{household_id}/memberships", headers=owner_headers)
+        assert members_res.status_code == status.HTTP_200_OK
+        member_items = members_res.json()["data"]["items"]
+        assert len(member_items) == 2
+        left_target = next(item for item in member_items if item["masked_email"] == "del-hist-member@example.com")
+
+        # 1. 활성 상태인 멤버는 삭제 불가 (409)
+        fail_del = await client.delete(
+            f"/api/v1/households/{household_id}/memberships/{left_target['id']}",
+            headers=owner_headers,
+        )
+        assert fail_del.status_code == status.HTTP_409_CONFLICT
+
+        # 2. 멤버가 가정 탈퇴(leave)
+        leave_res = await client.post(f"/api/v1/households/{household_id}/leave", headers=member_headers)
+        assert leave_res.status_code == status.HTTP_200_OK
+
+        # 3. 이제 나감(left) 상태의 이력을 마스터가 삭제 성공 (204)
+        del_res = await client.delete(
+            f"/api/v1/households/{household_id}/memberships/{left_target['id']}",
+            headers=owner_headers,
+        )
+        assert del_res.status_code == status.HTTP_204_NO_CONTENT
+
+        # 4. 멤버십 목록 조회 시 완전히 제거됨
+        after_members_res = await client.get(f"/api/v1/households/{household_id}/memberships", headers=owner_headers)
+        assert after_members_res.status_code == status.HTTP_200_OK
+        remaining_items = after_members_res.json()["data"]["items"]
+        assert len(remaining_items) == 1
+        assert remaining_items[0]["masked_email"] == "del-hist-owner@example.com"

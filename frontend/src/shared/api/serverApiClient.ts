@@ -516,6 +516,13 @@ export class ServerApiClient {
     });
   }
 
+  public deleteHouseholdMembership(householdId: string, membershipId: string): Promise<void> {
+    return this.request(`/households/${encodeURIComponent(householdId)}/memberships/${encodeURIComponent(membershipId)}`, {
+      method: "DELETE",
+      authenticated: true,
+    });
+  }
+
   public createInvitation(input: {
     householdId: string;
     inviteeEmail: string;

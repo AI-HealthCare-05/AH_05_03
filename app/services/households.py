@@ -150,6 +150,32 @@ class HouseholdService:
         household.row_version += 1
         await self.session.commit()
 
+    async def delete_member_history(
+        self, household_id: uuid.UUID, membership_id: uuid.UUID, account: ServiceAccount
+    ) -> None:
+        household = await self.household_repo.get(household_id)
+        if household is None or household.status is not HouseholdStatus.ACTIVE:
+            raise HouseholdNotFoundError()
+        if not await self.household_repo.has_active_membership(household_id, account.id):
+            raise HouseholdMembershipRequiredError()
+
+        membership = await self.household_repo.get_membership_by_id_for_update(membership_id)
+        if membership is None or membership.household_id != household_id:
+            raise HouseholdMembershipRequiredError("해당 구성원 이력을 찾을 수 없습니다.")
+
+        if membership.status is not MembershipStatus.LEFT:
+            raise MembershipStateConflictError(
+                "활동 중인 구성원은 삭제할 수 없습니다. 탈퇴한 이력만 삭제할 수 있습니다."
+            )
+
+        is_master = household.master_account_id == account.id
+        is_owner = membership.account_id == account.id
+        if not (is_master or is_owner):
+            raise HouseholdStateConflictError("가정 마스터 또는 본인만 이력을 삭제할 수 있습니다.")
+
+        await self.household_repo.delete_membership(membership)
+        await self.session.commit()
+
 
 def _mask_email(email: str) -> str:
     local, separator, domain = email.rpartition("@")

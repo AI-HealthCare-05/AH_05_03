@@ -440,6 +440,29 @@ main {
   font-weight: 700;
 }
 
+.member-delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line-soft, #e2e8f0);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--muted, #64748b);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.member-delete-button:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
 .membership-panel {
   margin-top: 18px;
   border-top: 1px solid var(--line-soft);
