@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exceptions import HouseholdStateConflictError
 from app.models.households import (
     Household,
     HouseholdMembership,
@@ -246,3 +247,38 @@ class HouseholdRepository:
             membership.row_version += 1
         await self.session.flush()
         return membership
+
+    async def prepare_for_household_transfer(self, account_id: uuid.UUID, target_household_id: uuid.UUID) -> None:
+        """새 가정 초대를 수락하기 전, 기존 가정 소속 상태를 검사하고 단독 가정이면 자동 종료한다.
+
+        - 기존 소속 가정이 타겟 가정과 같으면 통과.
+        - 기존 소속 가정에 다른 활성 구성원이 있으면 HouseholdStateConflictError 발생 (무단 탈퇴/폭파 방지).
+        - 기존 소속 가정에 나 혼자뿐인 단독 가정이면, 기존 가정을 CLOSED로 전환하고 멤버십을 LEFT로 내린다.
+        """
+        active_households = await self.list_for_account(account_id)
+        now = datetime.now(tz=timezone.utc)
+        for household in active_households:
+            if household.id == target_household_id:
+                continue
+
+            other_count = await self.count_other_active_members(household.id, account_id)
+            if other_count > 0:
+                raise HouseholdStateConflictError(
+                    "이미 다른 가족 구성원이 있는 가정에 소속되어 있어 초대를 수락할 수 없습니다. "
+                    "기존 가정에서 먼저 탈퇴하거나 관리자에게 문의하세요."
+                )
+
+            # 단독 가정인 경우 자동 종료 처리
+            locked_household = await self.get_for_update(household.id)
+            if locked_household is not None and locked_household.status is HouseholdStatus.ACTIVE:
+                locked_household.status = HouseholdStatus.CLOSED
+                locked_household.closed_at = now
+                locked_household.row_version += 1
+
+            membership = await self.get_membership_for_update(household.id, account_id)
+            if membership is not None and membership.status is MembershipStatus.ACTIVE:
+                membership.status = MembershipStatus.LEFT
+                membership.left_at = now
+                membership.row_version += 1
+
+            await self.unlink_active_profile(household.id, account_id)

@@ -141,13 +141,14 @@ class FamilyInvitationService:
         restore_ttl = self._remaining_ttl(invitation)
         await self.invitation_store.consume(invitation.id, request.token)
         try:
+            await self.household_repo.prepare_for_household_transfer(account.id, invitation.household_id)
             await self.household_repo.ensure_active_membership(invitation.household_id, account.id)
             invitation.status = InvitationStatus.ACCEPTED
             invitation.accepted_by_account_id = account.id
             invitation.accepted_at = datetime.now(tz=timezone.utc)
             invitation.row_version += 1
             await self.session.commit()
-        except SQLAlchemyError:
+        except Exception:
             await self.session.rollback()
             await self._best_effort_restore(invitation_id, request.token, restore_ttl)
             raise

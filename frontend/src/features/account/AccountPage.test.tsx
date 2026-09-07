@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AuthContext } from "../../app/authContext";
 import { LocalDomainProvider } from "../../app/LocalDomainProvider";
+import type { HouseholdData } from "../../shared/api/contracts";
 import { serverApiClient } from "../../shared/api/serverApiClient";
 import { AccountPage } from "./AccountPage";
 
@@ -283,6 +284,116 @@ describe("AccountPage", () => {
     expect(createLink).toHaveBeenCalledWith(receivedInvitation.id, receivedInvitation.target_profile_ref);
   });
 
+  it("기존 단독 가정이 있는 상태에서 다른 가족의 초대를 수락하면 확인 모달이 뜨고, 승인 시 새 가족 가정으로 이동한다", async () => {
+    const user = userEvent.setup();
+    const token = "T".repeat(43);
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    const accept = vi.spyOn(serverApiClient, "acceptInvitation").mockResolvedValue({
+      ...receivedInvitation,
+      status: "accepted",
+      accepted_by_account_id: "account-id",
+      accepted_at: "2026-08-20T01:00:00Z",
+    });
+    vi.spyOn(serverApiClient, "createProfileLink").mockResolvedValue({
+      id: "link-id",
+      household_id: receivedInvitation.household_id,
+      account_id: "account-id",
+      invitation_id: receivedInvitation.id,
+      local_profile_ref: receivedInvitation.target_profile_ref,
+      status: "active",
+      linked_at: "2026-08-20T01:00:00Z",
+      unlinked_at: null,
+      row_version: 1,
+    });
+    mockAccountReads();
+    const soloHousehold: HouseholdData = {
+      id: "household-solo",
+      master_account_id: "account-id",
+      status: "active",
+      created_at: "2026-08-20T00:00:00Z",
+      row_version: 1,
+    };
+    vi.mocked(serverApiClient.listHouseholds).mockResolvedValue([soloHousehold]);
+    vi.spyOn(serverApiClient, "listHouseholdMemberships").mockResolvedValue([
+      {
+        id: "membership-solo",
+        household_id: "household-solo",
+        account_id: "account-id",
+        masked_email: "member@example.com",
+        local_profile_ref: null,
+        status: "active",
+        joined_at: "2026-08-20T00:00:00Z",
+        left_at: null,
+        row_version: 1,
+      },
+    ]);
+    vi.mocked(serverApiClient.listInvitations).mockResolvedValue({ sent: [], received: [receivedInvitation] });
+    window.history.replaceState(null, "", `/account#invitation=invitation-id&token=${token}`);
+
+    renderAccountPage();
+    await user.click(await screen.findByRole("button", { name: "초대 수락" }));
+
+    // 확인 모달 표시 확인
+    const dialog = await screen.findByRole("alertdialog", { name: "새 가족 가정으로 이동할까요?" });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText(/현재 혼자 이용 중인 기존 가정이 있습니다/)).toBeInTheDocument();
+
+    // 새 가정으로 이동 및 수락 클릭
+    await user.click(within(dialog).getByRole("button", { name: "새 가정으로 이동 및 수락" }));
+
+    expect(accept).toHaveBeenCalledWith(receivedInvitation.id, token);
+    expect(await screen.findByText("초대를 수락하고 새 가족 가정으로 이동했습니다.")).toBeInTheDocument();
+  });
+
+  it("이미 다른 가족 구성원이 있는 가정에 속해 있으면 초대 수락 시 경고 모달이 뜬다", async () => {
+    const user = userEvent.setup();
+    const token = "T".repeat(43);
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    mockAccountReads();
+    const familyHousehold: HouseholdData = {
+      id: "household-family",
+      master_account_id: "account-id",
+      status: "active",
+      created_at: "2026-08-20T00:00:00Z",
+      row_version: 1,
+    };
+    vi.mocked(serverApiClient.listHouseholds).mockResolvedValue([familyHousehold]);
+    vi.spyOn(serverApiClient, "listHouseholdMemberships").mockResolvedValue([
+      {
+        id: "membership-self",
+        household_id: "household-family",
+        account_id: "account-id",
+        masked_email: "member@example.com",
+        local_profile_ref: null,
+        status: "active",
+        joined_at: "2026-08-20T00:00:00Z",
+        left_at: null,
+        row_version: 1,
+      },
+      {
+        id: "membership-other",
+        household_id: "household-family",
+        account_id: "other-account-id",
+        masked_email: "other@example.com",
+        local_profile_ref: null,
+        status: "active",
+        joined_at: "2026-08-20T00:00:00Z",
+        left_at: null,
+        row_version: 1,
+      },
+    ]);
+    vi.mocked(serverApiClient.listInvitations).mockResolvedValue({ sent: [], received: [receivedInvitation] });
+    window.history.replaceState(null, "", `/account#invitation=invitation-id&token=${token}`);
+
+    renderAccountPage();
+    await user.click(await screen.findByRole("button", { name: "초대 수락" }));
+
+    // 경고 모달 표시 확인
+    const dialog = await screen.findByRole("alertdialog", { name: "이미 소속된 가족 가정이 있습니다" });
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByText(/현재 다른 가족과 함께하는 가정에 소속되어 있습니다/)).toBeInTheDocument();
+  });
+
   it("초대 처리 뒤 주소의 원문 토큰 fragment를 제거한다", async () => {
     const user = userEvent.setup();
     const token = "T".repeat(43);
@@ -433,6 +544,7 @@ function mockAccountReads() {
   vi.spyOn(serverApiClient, "getAccount").mockResolvedValue(account);
   vi.spyOn(serverApiClient, "getSubscription").mockResolvedValue(subscription);
   vi.spyOn(serverApiClient, "listHouseholds").mockResolvedValue([]);
+  vi.spyOn(serverApiClient, "listHouseholdMemberships").mockResolvedValue([]);
   vi.spyOn(serverApiClient, "listInvitations").mockResolvedValue({ sent: [], received: [] });
   vi.spyOn(serverApiClient, "listProfileLinks").mockResolvedValue([]);
 }
