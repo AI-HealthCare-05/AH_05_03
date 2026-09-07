@@ -1,6 +1,7 @@
 import {
   type PropsWithChildren,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useState,
@@ -13,6 +14,7 @@ import {
 import { createServerDomainRuntime } from "../shared/api/serverDomainRuntime";
 import { serverApiClient } from "../shared/api/serverApiClient";
 import { migrateLocalDataToPostgres } from "../features/sync/syncToPostgres";
+import { AuthContext } from "./authContext";
 import {
   type CreateHealthRecordInput,
   type CreateProfileInput,
@@ -35,12 +37,25 @@ export function LocalDomainProvider({
   const [error, setError] = useState<string>();
   const [householdId, setHouseholdId] = useState<string>(PRIMARY_HOUSEHOLD_ID);
 
+  const auth = useContext(AuthContext);
+  const authStatus = auth?.status;
+  const authAccountId = auth?.accountId;
+
   useEffect(() => {
     let disposed = false;
     let activeRuntime: LocalDomainRuntime | undefined;
 
     async function init() {
+      // 인증 상태를 확인 중일 때는 세션이 복원될 때까지 대기
+      if (authStatus === "checking") {
+        setLoading(true);
+        return;
+      }
+
       try {
+        setLoading(true);
+        setError(undefined);
+
         // 단위 테스트에서 격리된 indexedDB 이름을 명시한 경우 로컬 런타임 사용
         if (databaseName && databaseName !== "ieobom-local") {
           activeRuntime = await createLocalDomainRuntime(databaseName);
@@ -62,20 +77,22 @@ export function LocalDomainProvider({
           return;
         }
 
-        // 실제 앱 모드: 서버(PostgreSQL) 우선. 서버 연결 가능 시 서버 런타임, 불가능 시 로컬 런타임 fallback
+        // 실제 앱 모드: 로그인 상태(signed-in)일 때만 서버(PostgreSQL) 우선
         let activeHouseholdId: string | undefined;
-        try {
-          const households = await serverApiClient.listHouseholds();
-          const activeHousehold = households?.find((h) => h.status === "active") ?? households?.[0];
-          if (activeHousehold) {
-            activeHouseholdId = activeHousehold.id;
-          } else {
-            const created = await serverApiClient.createHousehold();
-            activeHouseholdId = created.id;
+        if (authStatus === "signed-in") {
+          try {
+            const households = await serverApiClient.listHouseholds();
+            const activeHousehold = households?.find((h) => h.status === "active");
+            if (activeHousehold) {
+              activeHouseholdId = activeHousehold.id;
+            } else {
+              const created = await serverApiClient.createHousehold();
+              activeHouseholdId = created.id;
+            }
+          } catch {
+            // 비로그인 상태이거나 서버 연결 불가/E2E 모드
+            activeHouseholdId = undefined;
           }
-        } catch {
-          // 비로그인 상태이거나 서버 연결 불가/E2E 모드
-          activeHouseholdId = undefined;
         }
         if (disposed) return;
 
@@ -108,9 +125,32 @@ export function LocalDomainProvider({
             activeRuntime.profiles.listHidden(activeHouseholdId),
           ]);
           if (disposed) return;
-          if (result.ok) setProfiles(result.value);
+          if (result.ok) {
+            setProfiles(result.value);
+            setError(undefined);
+          } else {
+            // 가정이 유효하지 않거나 멤버십이 없는 경우 새 가정을 생성하거나 로컬 fallback
+            try {
+              const created = await serverApiClient.createHousehold();
+              if (disposed) return;
+              setHouseholdId(created.id);
+              activeRuntime = createServerDomainRuntime(created.id, serverApiClient);
+              setRuntime(activeRuntime);
+              setProfiles([]);
+              setError(undefined);
+            } catch {
+              setHouseholdId(PRIMARY_HOUSEHOLD_ID);
+              activeRuntime = await createLocalDomainRuntime("ieobom-local");
+              if (disposed) {
+                activeRuntime.close();
+                return;
+              }
+              setRuntime(activeRuntime);
+              setProfiles([]);
+              setError(undefined);
+            }
+          }
           if (hiddenResult.ok) setHiddenProfiles(hiddenResult.value);
-          setError(undefined);
         } else {
           // 서버 연결 없음 / 비로그인 / E2E 테스트 모드: 로컬 런타임 fallback
           setHouseholdId(PRIMARY_HOUSEHOLD_ID);
@@ -145,7 +185,7 @@ export function LocalDomainProvider({
       disposed = true;
       activeRuntime?.close();
     };
-  }, [databaseName]);
+  }, [databaseName, authStatus, authAccountId]);
 
   const refreshProfiles = useCallback(async () => {
     if (!runtime) return;
