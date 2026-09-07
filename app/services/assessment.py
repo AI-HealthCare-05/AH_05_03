@@ -87,12 +87,16 @@ class DiseaseSpec:
     ml_target: str | None
     # 결정론 엔진이 침묵할 때 ML 확률이 그 자리를 대신할 수 있는가.
     # ADR-009 §4 가 대사증후군·신기능·지방간을 "검사값 없으면 표시하지 않음" 으로
-    # 적었다. 번들은 있지만 확률로 답하지 않는다 — 그 셋이 False 다.
+    # 적었다. 번들은 있지만 확률로 답하지 않는다. 비만이 2026-09-07 에 넷째로
+    # 붙었다 — 이유는 다르다(§4 가 아니라 라벨이 필수 입력에서 곧바로 나오기 때문).
     ml_fallback: bool = True
 
 
-# 화면 카드 순서. `app/services/prediction.py` 의 `DISPLAY_ORDER` 를 따르되
-# ML 번들이 없는 규칙 전용 카드(비만·간기능·요산)를 제자리에 끼웠다.
+# 화면 카드 순서. `app/services/prediction.py` 의 `DISPLAY_ORDER` 와 같은 순서다.
+#
+# 2026-09-07 까지 비만·간기능·요산 셋은 ML 번들이 없어서 `ml_target=None` 이었다.
+# 규칙 엔진이 검사값으로 답하는 카드라 등급은 났지만 "앞으로 어떻게 되는가" 를 말할
+# 자리가 없었고, 검사를 안 낸 사람에게는 아무 말도 못 했다. 셋 다 번들을 붙였다.
 SPECS: tuple[DiseaseSpec, ...] = (
     DiseaseSpec("dm", "당뇨병", "diabetes", "E1", "dm"),
     DiseaseSpec("htn", "고혈압", "hypertension", "E1", "htn"),
@@ -100,7 +104,16 @@ SPECS: tuple[DiseaseSpec, ...] = (
     DiseaseSpec("hyperchol", "고콜레스테롤혈증", None, "E1", "hyperchol"),
     DiseaseSpec("hypertg", "고중성지방혈증", None, "E1", "hypertg"),
     DiseaseSpec("low_hdl", "낮은 HDL 콜레스테롤", None, "E1", "low_hdl"),
-    DiseaseSpec("obesity", "비만", "obesity", "E1", None),
+    # **BMI 가 라벨이라 ML 은 BMI 를 못 본다**(`modeling/targets.py`). 키·체중이
+    # 필수 입력이라 규칙 엔진의 판정은 언제나 확정이고, ML 이 답하는 것은 다른
+    # 물음이다 — 나이만 옮긴 유병 곡선, 곧 "이 허리둘레·생활습관으로 10년 뒤 비만
+    # 기준을 넘고 있을 확률".
+    #
+    # 그래서 `ml_fallback=False` 다. 이 확률은 참고로만 실리고 등급이 되지 않는다.
+    # 판별력은 높지만(홀드아웃 AUROC 0.958) 그 대부분은 허리둘레가 BMI 를 거의
+    # 결정하기 때문이고, 허리둘레를 안 낸 사람에게는 미국 기저율(72.6%) 근처의
+    # 값이 나온다 — BMI 22 인 사람 옆에 "73%" 가 등급으로 서면 안 된다.
+    DiseaseSpec("obesity", "비만", "obesity", "E1", "obesity", ml_fallback=False),
     DiseaseSpec("mets", "대사증후군", "metabolic_syndrome", "E3", "mets", ml_fallback=False),
     # **"만성콩팥병" 이라 부르지 않는다.** 번들의 `limits` 가 이유를 적어 뒀다 —
     # KDIGO 는 3개월 지속을 요구하는데 단면 1회 측정으로는 그걸 채울 수 없어서
@@ -109,9 +122,11 @@ SPECS: tuple[DiseaseSpec, ...] = (
     # 사용자가 두 이름을 다른 질환으로 읽었다(실제로 그 질문을 받았다).
     DiseaseSpec("ckd", "신기능 확인 필요", "kidney", "E3", "ckd", ml_fallback=False),
     DiseaseSpec("fatty_liver", "지방간", "fatty_liver", "E3", "fatty_liver", ml_fallback=False),
-    DiseaseSpec("liver", "간기능", "liver", "E1", None),
+    # 라벨은 ALT 상승(Prati 2002 상한)이고 규칙 엔진은 AST·ALT·γ-GTP 셋을 본다.
+    # 같은 질환의 두 기준이라 상한이 1 IU/L 다르다(남 33 vs 34) — 둘 다 출처를 적는다.
+    DiseaseSpec("liver", "간기능", "liver", "E1", "liver_enzyme_high"),
     DiseaseSpec("anemia", "빈혈", "anemia", "E1", "anemia"),
-    DiseaseSpec("uric_acid", "요산", "uric_acid", "E1", None),
+    DiseaseSpec("uric_acid", "요산", "uric_acid", "E1", "hyperuricemia"),
 )
 
 SPEC_BY_KEY = {spec.key: spec for spec in SPECS}
@@ -258,6 +273,12 @@ def _ml_reference(condition: dict[str, Any] | None) -> dict[str, Any]:
     if not condition:
         return {}
     return {
+        # **번들 타깃 이름.** 카드 키(`SPECS.key`)와 다를 수 있다 — `liver` 카드는
+        # `liver_enzyme_high` 번들이, `uric_acid` 카드는 `hyperuricemia` 번들이
+        # 답한다. 화면이 "이 모델이 쓰지 않은 입력" 과 "더 넣으면 정밀해지는 값" 을
+        # 낼 때 `/predictions/model-info` 에서 해당 번들을 찾아야 하는데, 카드 키로
+        # 찾으면 그 둘이 조용히 빈다.
+        "model_target": condition.get("target"),
         "probability": condition.get("probability"),
         "peer_percentile": condition.get("peer_percentile"),
         "peer_group": condition.get("peer_group"),
@@ -617,15 +638,23 @@ def assess(payload: Any, models: Any) -> tuple[list[DiseaseVerdict], dict[str, A
     if available and request is not None:
         from app.services.prediction import rank_and_attach
 
-        # **ML 번들이 없는 질환도 후보에 넣는다.** 비만·간기능·요산은 규칙 엔진
-        # 전용 카드지만 등급은 있다 — 비만이 `HIGH` 인데 순위에 못 오면 패널이 카드
-        # 2위를 빼놓게 된다. 실측(당뇨 프리셋)에서 그 상태였다.
+        # **순위 매기기는 ML 번들 이름 공간에서 돈다.** 카드는 `SPECS.key` 로
+        # 부르는데(`liver`·`uric_acid`) 번들 타깃은 다른 이름이다
+        # (`liver_enzyme_high`·`hyperuricemia`). 한쪽으로 통일하지 않으면 판정
+        # 조회가 조용히 빗나가서 확진된 카드가 "추정" 으로 떨어진다 — 2026-09-03 에
+        # 같은 꼴의 버그를 25 건 겪었다. 들어갈 때 번들 이름으로 바꾸고 나올 때
+        # 되돌린다.
+        to_target = {spec.key: (spec.ml_target or spec.key) for spec in SPECS}
+        to_key = {target: key for key, target in to_target.items()}
+
+        # **ML 번들이 없는 질환도 후보에 넣는다.** 등급은 있는데 순위에 못 오면
+        # 패널이 카드 2위를 빼놓게 된다. 실측(당뇨 프리셋)에서 그 상태였다.
         #
         # `rank_suspects` 는 조건 사전을 받으므로 최소 모양으로 만들어 준다. 확률도
         # 의학 등급도 없고, `signal_strength` 가 판정(`verdicts`)만 보고 무게를 준다.
         scored_targets = {card.target for card in cards}
         extra = [
-            {"target": spec.key, "name": spec.name}
+            {"target": to_target[spec.key], "name": spec.name}
             for spec in SPECS
             if spec.ml_target is None or spec.ml_target not in scored_targets
         ]
@@ -636,11 +665,17 @@ def assess(payload: Any, models: Any) -> tuple[list[DiseaseVerdict], dict[str, A
             tier,
             features,
             verdicts={
-                v.key: {"engine": v.engine, "risk_level": v.risk_level, "measured": v.measured} for v in verdicts
+                to_target.get(v.key, v.key): {
+                    "engine": v.engine,
+                    "risk_level": v.risk_level,
+                    "measured": v.measured,
+                }
+                for v in verdicts
             },
             known=known_targets(verdicts),
             extra=extra,
         )
+        suspects = [card.model_copy(update={"target": to_key.get(card.target, card.target)}) for card in suspects]
 
     # **질환 이름의 정본은 `SPECS` 하나다.** 카드는 이 표를 쓰고 의심 패널은 ML
     # 번들의 `name` 을 쓰고 있어서, 같은 질환이 두 이름으로 나갔다 — `ckd` 가
@@ -655,9 +690,7 @@ def assess(payload: Any, models: Any) -> tuple[list[DiseaseVerdict], dict[str, A
     # 5단계와 의학 4단계가 섞여 들어온다 — 같은 고혈압이 카드에서 "정상", 패널에서
     # "정상 범위" 로 나오던 원인이다. 카드가 쓰는 등급을 `risk_level` 로 따로 실어
     # 화면이 같은 배지를 그리게 한다.
-    # `SPECS` 의 `key` 와 `ml_target` 은 ML 번들이 있는 질환에서 같은 값이고, 없는
-    # 셋(비만·간기능·요산)은 `key` 만 있다. 후보 목록이 그 셋까지 포함하므로 `key` 로
-    # 맞춘다 — `ml_target` 으로 잡으면 그 셋의 이름·등급이 안 덮인다.
+    # 위에서 `to_key` 로 되돌려 놨으므로 여기는 `SPECS.key` 공간이다.
     name_by_target = {spec.key: spec.name for spec in SPECS}
     level_by_target = {verdict.key: verdict.risk_level for verdict in verdicts}
     suspects = [

@@ -122,6 +122,14 @@ export interface RuleAnchor {
 }
 
 export interface VerdictReference {
+  /**
+   * 이 확률을 낸 ML 번들의 타깃 이름. **카드 키와 다를 수 있다.**
+   *
+   * `liver` 카드는 `liver_enzyme_high` 번들이, `uric_acid` 카드는 `hyperuricemia`
+   * 번들이 답한다. `/predictions/model-info` 에서 번들을 찾을 때 카드 키로 찾으면
+   * "이 모델이 쓰지 않은 입력" 과 "더 넣으면 정밀해지는 값" 이 조용히 빈다.
+   */
+  model_target?: string | null;
   probability?: number | null;
   peer_percentile?: number | null;
   peer_group?: string | null;

@@ -619,13 +619,14 @@ def test_the_panel_follows_the_card_ranking(models: Any) -> None:
 
 
 def test_diseases_without_an_ml_bundle_still_rank(models: Any) -> None:
-    """비만·간기능·요산은 ML 번들이 없지만 등급은 있다 — 순위에서 빠지면 안 된다.
+    """비만은 규칙 엔진이 정본이고 ML 확률은 등급이 되지 않는다 — 그래도 순위에 온다.
 
-    비만에 모델이 없는 것은 결손이 아니다. `BMI = 체중/키²` 이고 키·체중이 필수
-    입력이라 판정이 언제나 확정이다 — 예측할 미측정 상태가 없다. 고혈압은 다르다:
-    혈압을 안 잰 사람이 있어서 "재면 넘을 가능성" 이 답할 값어치가 있다.
+    2026-09-07 에 비만에도 번들이 붙었다(`modeling/targets.py`). 그래도 `ml_fallback`
+    은 False 다: `BMI = 체중/키²` 이고 키·체중이 필수 입력이라 규칙 엔진의 판정이
+    언제나 확정이고, ML 이 답하는 것은 다른 물음(나이 이동 유병 곡선)이다. 확률이
+    등급으로 올라오면 BMI 22 인 사람 옆에 미국 기저율 근처의 값이 서게 된다.
 
-    그래도 비만이 `HIGH` 인데 패널에 못 오면 카드 2위를 빼놓게 된다.
+    비만이 `HIGH` 인데 패널에 못 오면 카드 2위를 빼놓게 된다.
     """
     request = AssessmentSummaryRequest.model_validate(
         {
@@ -642,6 +643,21 @@ def test_diseases_without_an_ml_bundle_still_rank(models: Any) -> None:
     verdicts, _, _, _, suspects = assess(request, models)
     obesity = next(v for v in verdicts if v.key == "obesity")
     assert level_str(obesity.risk_level) == "HIGH", "이 입력이면 비만은 HIGH 다"
-    assert obesity.reference.get("probability") is None, "비만에는 ML 번들이 없다"
+    # 판정은 규칙 엔진이 냈고 ML 확률은 참고로 밀려 있다.
+    assert obesity.engine == "E1"
+    assert obesity.superseded_by == "E1"
+    assert obesity.reference.get("probability") is not None, "번들이 붙었으므로 참고 확률은 있다"
+    # 카드 키와 번들 타깃이 다를 수 있으므로 화면이 찾을 이름을 같이 싣는다.
+    assert obesity.reference.get("model_target") == "obesity"
 
-    assert "obesity" in {card.target for card in suspects}, "ML 번들이 없어도 등급이 높으면 순위에 온다"
+    assert "obesity" in {card.target for card in suspects}, "등급이 높으면 순위에 온다"
+
+    # 카드 키와 번들 타깃이 다른 둘. 순위 패널이 `SPECS.key` 공간으로 돌아와야 한다 —
+    # 번들 이름 그대로 나오면 이름·등급 덮어쓰기가 통째로 빗나간다.
+    keys = {v.key for v in verdicts}
+    assert {"liver", "uric_acid"} <= keys
+    liver = next(v for v in verdicts if v.key == "liver")
+    assert liver.reference.get("model_target") == "liver_enzyme_high"
+    uric = next(v for v in verdicts if v.key == "uric_acid")
+    assert uric.reference.get("model_target") == "hyperuricemia"
+    assert not ({"liver_enzyme_high", "hyperuricemia"} & {card.target for card in suspects})

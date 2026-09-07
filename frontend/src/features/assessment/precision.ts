@@ -73,7 +73,8 @@ export function precisionGains(
   const decisiveNames = verdict.missing_fields.flatMap((name) => unfilled(name, values));
   const decisive = [...new Set(decisiveNames)];
 
-  const lab = models.find((model) => model.target === verdict.key && model.tier === "lab");
+  const target = verdict.reference?.model_target ?? verdict.key;
+  const lab = models.find((model) => model.target === target && model.tier === "lab");
   const wanted = lab ? [...lab.required_inputs, ...lab.optional_inputs] : [];
   const refining = [...new Set(wanted.filter((name) => !ALWAYS_PRESENT.has(name)).flatMap((name) => unfilled(name, values)))]
     .filter((name) => !decisive.includes(name))

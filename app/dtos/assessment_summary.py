@@ -113,6 +113,10 @@ class VerdictReference(BaseSerializerModel):
     학회 기준으로 몇 %가 넘었는가.
     """
 
+    model_target: str | None = Field(
+        default=None,
+        description="이 확률을 낸 ML 번들의 타깃 이름. 카드 키와 다를 수 있다 (liver → liver_enzyme_high)",
+    )
     probability: float | None = None
     peer_percentile: float | None = None
     peer_group: str | None = None

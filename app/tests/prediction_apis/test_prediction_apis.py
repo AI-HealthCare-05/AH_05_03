@@ -123,7 +123,13 @@ async def test_model_info_hides_coefficients(authorized_client: AsyncClient) -> 
     data = response.json()["data"]
     assert len(data["models"]) == len(ALL_BUNDLES)
     for entry in data["models"]:
-        assert entry["required_inputs"] == ["age", "sex", "bmi", "self_rated_health"]
+        # 비만만 `bmi` 가 빠진다 — BMI 가 그 라벨을 만들어서 특징이 될 수 없다.
+        expected = (
+            ["age", "sex", "self_rated_health"]
+            if entry["target"] == "obesity"
+            else ["age", "sex", "bmi", "self_rated_health"]
+        )
+        assert entry["required_inputs"] == expected
         assert entry["limits"]
         assert entry["tier"] in {"basic", "lab"}
         # 어느 학회 기준으로 만든 라벨인지가 번들마다 따라와야 한다. 화면이
@@ -176,6 +182,12 @@ async def test_label_defining_measurements_are_not_model_inputs(authorized_clien
         "ckd": {"creatinine", "egfr", "urine_acr"},
         "fatty_liver": set(),
         "anemia": {"hemoglobin"},
+        # 라벨이 BMI 라 BMI·키·체중이 통째로 막힌다. 허리둘레는 다른 측정이라 남는다 —
+        # 그것이 이 모델에서 가장 크게 기여하고(홀드아웃 AUROC 0.958), 그래서 확률이
+        # 등급이 되지 않는다(`assessment.SPECS` 의 `ml_fallback=False`).
+        "obesity": {"bmi", "height_cm", "weight_kg"},
+        "hyperuricemia": {"uric_acid"},
+        "liver_enzyme_high": {"ast", "alt", "ggt"},
     }
 
     for model_id, (target, inputs) in specs.items():

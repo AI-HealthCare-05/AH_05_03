@@ -233,7 +233,9 @@ export function Evidence({
   const ref = verdict.reference;
   if (!ref || ref.probability === null || ref.probability === undefined) return null;
   const medical = ref.medical;
-  const ignored = ignoredInputs(verdict.key, ref.tier, values, models);
+  // 카드 키가 아니라 **번들 타깃**으로 찾는다. `liver` 카드는 `liver_enzyme_high`
+  // 번들이 답하므로 카드 키로 찾으면 이 블록이 조용히 빈다.
+  const ignored = ignoredInputs(ref.model_target ?? verdict.key, ref.tier, values, models);
   const percentile = ref.peer_percentile;
   const superseded = Boolean(verdict.superseded_by);
 
