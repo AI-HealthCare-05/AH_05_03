@@ -547,7 +547,7 @@ export class ServerApiClient {
     return this.transitionInvitation(invitationId, "accept", token);
   }
 
-  public declineInvitation(invitationId: string, token: string): Promise<FamilyInvitationData> {
+  public declineInvitation(invitationId: string, token?: string): Promise<FamilyInvitationData> {
     return this.transitionInvitation(invitationId, "decline", token);
   }
 
@@ -587,12 +587,12 @@ export class ServerApiClient {
   private transitionInvitation(
     invitationId: string,
     action: "accept" | "decline",
-    token: string,
+    token?: string,
   ): Promise<FamilyInvitationData> {
     return this.request(`/family-invitations/${encodeURIComponent(invitationId)}/${action}`, {
       method: "POST",
       authenticated: true,
-      body: JSON.stringify({ token }),
+      body: token ? JSON.stringify({ token }) : undefined,
     });
   }
 

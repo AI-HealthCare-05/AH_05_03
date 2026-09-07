@@ -303,6 +303,25 @@ describe("AccountPage", () => {
     expect(window.location.hash).toBe("");
   });
 
+  it("토큰 입력란이 비어 있어도 거절 버튼을 누르면 토큰 없이 바로 초대를 거절한다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    const declineSpy = vi.spyOn(serverApiClient, "declineInvitation").mockResolvedValue({
+      ...receivedInvitation,
+      status: "declined",
+      declined_at: "2026-08-20T01:00:00Z",
+    });
+    mockAccountReads();
+    vi.mocked(serverApiClient.listInvitations).mockResolvedValue({ sent: [], received: [receivedInvitation] });
+    window.history.replaceState(null, "", "/account");
+
+    renderAccountPage();
+    await user.click(await screen.findByRole("button", { name: "거절" }));
+
+    expect(declineSpy).toHaveBeenCalledWith("invitation-id", undefined);
+    expect(await screen.findByText("초대를 거절했습니다.")).toBeInTheDocument();
+  });
+
   it("URL 해시가 비어 있어도 스토리지에 초대 정보가 있으면 받은 초대의 토큰이 자동으로 채워진다", async () => {
     const token = "T".repeat(43);
     const { savePendingInvitation } = await import("./invitationStorage");

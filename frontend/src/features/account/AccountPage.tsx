@@ -237,13 +237,9 @@ export function AccountPage() {
     if (!formElement) return;
     const form = new FormData(formElement);
     const invitationId = String(form.get("invitationId"));
-    const token = String(form.get("token"));
-    if (!token) {
-      setError("초대를 거절하려면 이메일 초대 토큰을 입력하세요.");
-      return;
-    }
+    const token = String(form.get("token") || "").trim();
     await run(async () => {
-      await serverApiClient.declineInvitation(invitationId, token);
+      await serverApiClient.declineInvitation(invitationId, token || undefined);
       await loadAccountData();
       clearInvitationFragment();
       setMessage("초대를 거절했습니다.");
