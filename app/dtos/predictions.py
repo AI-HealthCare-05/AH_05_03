@@ -337,6 +337,10 @@ class ConditionRisk(BaseSerializerModel):
     # "고장" 이 아니라 "안 내는 것" 임을 화면이 설명할 수 있어야 한다.
     trajectory: OnsetTrajectory | None = None
     trajectory_status: TrajectoryStatus = "unavailable"
+    # **열 장 전부에 붙는다.** 발병 궤적은 비가역 세 질환에만 있어서(가역 질환에서
+    # 누적 발병 곡선은 뜻이 없다) 나머지 일곱 장에는 앞날을 말할 자리가 없었다.
+    # 이쪽은 "그 나이가 됐을 때 기준을 넘고 있을 확률" 이라 열 장 전부에 답이 있다.
+    prevalence_trajectory: PrevalenceTrajectory | None = None
 
 
 class RiskPredictionData(BaseSerializerModel):

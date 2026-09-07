@@ -133,35 +133,123 @@ export function TrajectoryBlock({ verdict }: { verdict: DiseaseVerdict }) {
 }
 
 /**
- * 카드 앞면의 앞날 한 칸. 궤적이 있는 카드만 — 없는 카드는 이유가 있어서 없는 것이다.
+ * 카드 앞면의 앞날 한 칸. **열세 장 전부에 있다.**
  *
  * 예전에는 **마지막 지평 하나만** 적었다(10년). 5년을 빼 두면 "당장은 어떤가" 를
  * 물어볼 자리가 화면에 없고, 두 숫자 사이의 기울기 — 지금 손대면 달라지는 폭 —
  * 도 사라진다. 지평이 둘뿐이라 둘 다 적어도 한 줄에 들어간다.
+ *
+ * ## 두 물음을 같은 자리에 놓되 이름을 다르게 쓴다
+ *
+ *   새로 생길 확률   지금 없다면 그 사이에 새로 생길 확률. 비가역 셋에만 있다.
+ *   기준 초과 확률   그 나이에 기준을 넘고 있을 확률. 열 질환 전부에 있다.
+ *
+ * 발병 궤적이 셋뿐인 것은 학습이 덜 된 게 아니라 **가역 질환에서 누적 발병 곡선이
+ * 거짓이 되기 때문**이다(이상지질혈증은 65세+ 사망연계 C 0.43 으로 방향이 뒤집힌다).
+ * 그래서 나머지 열 장에는 다른 물음으로 답한다. 이름을 섞으면 안 된다 — "새로
+ * 생길" 과 "이미 넘었는지와 무관하게 그 나이에 넘고 있을" 은 다른 숫자다.
  */
 export function TrajectoryLine({ verdict }: { verdict: DiseaseVerdict }) {
   const trajectory = verdict.reference?.trajectory;
-  if (!trajectory || trajectory.horizons_years.length === 0) return null;
+  if (trajectory && trajectory.horizons_years.length > 0) {
+    return (
+      <div className="assess-trajectory-line is-onset">
+        <span className="assess-trajectory-label">새로 생길 확률</span>
+        <span className="assess-trajectory-values">
+          {trajectory.horizons_years.map((year, i) => (
+            <span className="assess-trajectory-step" key={year}>
+              <b>{percent(trajectory.onset_probability[i])}</b>
+              <small>
+                {year}년 뒤
+                {trajectory.population_onset_probability?.[i] !== undefined && (
+                  <span className="assess-muted">
+                    {" "}
+                    · 동년배 {percent(trajectory.population_onset_probability[i])}
+                  </span>
+                )}
+              </small>
+            </span>
+          ))}
+        </span>
+      </div>
+    );
+  }
+
+  const prevalence = verdict.reference?.prevalence_trajectory;
+  if (!prevalence || prevalence.horizons_years.length === 0) return null;
+  const points = [prevalence.current_probability, ...prevalence.prevalence_probability];
+  // GBDT 는 나이를 계단으로 쓰므로 세 지평이 같은 칸에 떨어지는 일이 흔하다
+  // (실측: 고콜레스테롤혈증 19·19·19%). 같은 숫자를 세 번 적으면 눈이 "왜 셋이지"
+  // 를 해석하게 되고, 그게 정보가 없는 자리에서 일어난다. 한 번만 적고 끝을 밝힌다.
+  const flat = Math.max(...points) - Math.min(...points) < 0.01;
+  const lastYear = prevalence.horizons_years[prevalence.horizons_years.length - 1];
   return (
-    <div className="assess-trajectory-line">
-      <span className="assess-trajectory-label">새로 생길 확률</span>
+    <div className="assess-trajectory-line is-prevalence">
+      <span className="assess-trajectory-label">기준 초과 확률</span>
       <span className="assess-trajectory-values">
-        {trajectory.horizons_years.map((year, i) => (
-          <span className="assess-trajectory-step" key={year}>
-            <b>{percent(trajectory.onset_probability[i])}</b>
-            <small>
-              {year}년 뒤
-              {trajectory.population_onset_probability?.[i] !== undefined && (
-                <span className="assess-muted">
-                  {" "}
-                  · 동년배 {percent(trajectory.population_onset_probability[i])}
-                </span>
-              )}
-            </small>
+        <span className="assess-trajectory-step">
+          <b>{percent(prevalence.current_probability)}</b>
+          <small>지금</small>
+        </span>
+        {flat ? (
+          <span className="assess-trajectory-step">
+            <small>{lastYear}년 뒤까지 거의 그대로</small>
           </span>
-        ))}
+        ) : (
+          prevalence.horizons_years.map((year, i) => (
+            <span className="assess-trajectory-step" key={year}>
+              <b>{percent(prevalence.prevalence_probability[i])}</b>
+              <small>{year}년 뒤</small>
+            </span>
+          ))
+        )}
       </span>
     </div>
+  );
+}
+
+/**
+ * 접이 안의 유병 곡선 — 발병 궤적이 없는 카드가 읽는 자리.
+ *
+ * 곡선이 **내려가는** 구간이 실제로 있다. 지질은 60대 이후 유병률이 떨어지는데
+ * 낫는 게 아니라 그 나이대에서 약을 먹기 시작한 사람이 많고 고위험군이 먼저
+ * 사망하기 때문이다. 그 사실을 같이 적지 않으면 "나이 들면 좋아진다" 로 읽힌다.
+ */
+export function PrevalenceBlock({ verdict }: { verdict: DiseaseVerdict }) {
+  const prevalence = verdict.reference?.prevalence_trajectory;
+  if (!prevalence || prevalence.horizons_years.length === 0) return null;
+  if (verdict.reference?.trajectory) return null;
+  return (
+    <section className="assess-trajectory">
+      <h4>
+        기준을 넘고 있을 확률 <span className="assess-muted">· {prevalence.direction}</span>
+      </h4>
+      <table className="assess-trajectory-table">
+        <thead>
+          <tr>
+            <th scope="col">기간</th>
+            <th scope="col">지금</th>
+            {prevalence.horizons_years.map((year) => (
+              <th scope="col" key={year}>
+                {year}년
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">확률</th>
+            <td>{percent(prevalence.current_probability)}</td>
+            {prevalence.prevalence_probability.map((value, i) => (
+              <td key={prevalence.horizons_years[i]}>{percent(value)}</td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+      <p className="assess-fineprint">
+        {prevalence.conditional_on}. {prevalence.caveats[0]} {prevalence.caveats[1]}
+      </p>
+    </section>
   );
 }
 
@@ -520,6 +608,7 @@ export function VerdictCard({
         <summary>{verdict.name} 판정 근거 자세히</summary>
         <VerdictFacts verdict={verdict} />
         <TrajectoryBlock verdict={verdict} />
+        <PrevalenceBlock verdict={verdict} />
         {hasEvidence ? <Evidence verdict={verdict} values={values} models={models} /> : null}
       </details>
     </article>

@@ -461,6 +461,64 @@ describe("AssessmentPage", () => {
     expect(within(block).getByText(/현재 이 질환이 없다는 가정/)).toBeInTheDocument();
   });
 
+  it("발병 궤적이 없는 질환에는 '기준 초과 확률' 을 대신 적는다", async () => {
+    const user = userEvent.setup();
+    // 고혈압에는 발병 궤적이 없고(규칙 엔진이 HIGH 로 판정) 유병 곡선만 있다.
+    // 가역·비단조 질환에 누적 발병 곡선을 붙이면 거짓이 되므로 열 질환 중 셋에만
+    // 있는데, 그렇다고 나머지 열 장에 앞날이 없어도 되는 것은 아니다.
+    const response = structuredClone(RESPONSE) as typeof RESPONSE;
+    (response.verdicts[0].reference as Record<string, unknown>).prevalence_trajectory = {
+      horizons_years: [5, 10],
+      prevalence_probability: [0.62, 0.7],
+      current_probability: 0.57,
+      direction: "상승",
+      conditional_on: "지금의 수치가 유지된다는 가정",
+      irreversible: false,
+      truncated_at_age: null,
+      caveats: ["지금 넘었는지와 무관합니다.", "내려가는 구간은 치료 시작 때문입니다.", "NHANES 기준입니다."],
+    };
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(response as never);
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const htn = (await screen.findByRole("heading", { name: "고혈압" })).closest("article") as HTMLElement;
+    const line = htn.querySelector(".assess-trajectory-line") as HTMLElement;
+    // 이름을 섞으면 안 된다 — "새로 생길" 과 "그 나이에 넘고 있을" 은 다른 숫자다.
+    expect(within(line).getByText("기준 초과 확률")).toBeInTheDocument();
+    expect(within(line).queryByText("새로 생길 확률")).not.toBeInTheDocument();
+    expect(line).toHaveTextContent("57%");
+    expect(line).toHaveTextContent("70%");
+  });
+
+  it("세 지평이 같은 칸에 떨어지면 숫자를 세 번 적지 않는다", async () => {
+    const user = userEvent.setup();
+    // GBDT 는 나이를 계단으로 쓴다. 19·19·19% 를 그대로 적으면 정보가 없는 자리에서
+    // 눈이 "왜 셋이지" 를 해석하게 된다.
+    const response = structuredClone(RESPONSE) as typeof RESPONSE;
+    (response.verdicts[0].reference as Record<string, unknown>).prevalence_trajectory = {
+      horizons_years: [5, 10],
+      prevalence_probability: [0.19, 0.19],
+      current_probability: 0.19,
+      direction: "유지",
+      conditional_on: "지금의 수치가 유지된다는 가정",
+      irreversible: false,
+      truncated_at_age: null,
+      caveats: ["지금 넘었는지와 무관합니다.", "내려가는 구간은 치료 시작 때문입니다.", "NHANES 기준입니다."],
+    };
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(response as never);
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const htn = (await screen.findByRole("heading", { name: "고혈압" })).closest("article") as HTMLElement;
+    const line = htn.querySelector(".assess-trajectory-line") as HTMLElement;
+    expect(within(line).getAllByText("19%")).toHaveLength(1);
+    expect(within(line).getByText(/10년 뒤까지 거의 그대로/)).toBeInTheDocument();
+  });
+
   it("자세히 보기 모달을 닫으면 열었던 버튼으로 포커스가 돌아온다", async () => {
     const user = userEvent.setup();
     vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE as never);

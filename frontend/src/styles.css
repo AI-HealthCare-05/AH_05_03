@@ -3878,10 +3878,10 @@ main {
   gap: 0.9rem;
   /* **접힌 카드는 전부 같은 키다.** 15.5rem 으로 뒀을 때는 행 안에서만 맞고
      행끼리는 달랐다(실측 323·362·294·248px) — 훑어 내려가면 계단처럼 어긋난다.
-     접힌 상태의 최대치(376px ≈ 23.5rem)를 최소 높이로 잡아 전부 같게 만든다.
-     "더 넣으면 좋아지는 값" 두 줄이 붙으면서 362 → 376 으로 올렸다.
+     접힌 상태의 최대치(428px ≈ 26.75rem)를 최소 높이로 잡아 전부 같게 만든다.
+     362 → 376("더 넣으면 좋아지는 값" 두 줄) → 428(앞날 한 줄이 열세 장 전부에).
      짧은 카드에 생기는 여백은 버튼을 바닥으로 밀어(`margin-top: auto`) 흡수한다. */
-  grid-auto-rows: minmax(23.5rem, auto);
+  grid-auto-rows: minmax(26.75rem, auto);
 }
 
 .assess-card { border: 1px solid var(--line); border-left-width: 5px; border-radius: 12px; padding: 0.9rem 1.05rem; background: var(--surface); display: flex; flex-direction: column; gap: 0.45rem; }
@@ -6716,3 +6716,13 @@ main {
 .suspect-card > .suspect-prevalence,
 .suspect-card > .suspect-now,
 .suspect-card > .suspect-none { margin-top: auto; }
+
+/* ---------------------------------------------------------------------------
+ * 앞날 한 줄의 두 종류
+ *
+ * 같은 자리에 서지만 다른 물음이다. 발병 궤적(비가역 셋)은 "지금 없다면 새로 생길
+ * 확률", 유병 곡선(열 질환 전부)은 "그 나이에 기준을 넘고 있을 확률". 배경을
+ * 갈라 두면 카드를 훑을 때 두 숫자를 같은 것으로 읽지 않는다.
+ * ------------------------------------------------------------------------- */
+.assess-trajectory-line.is-prevalence { background: var(--line-soft); }
+.assess-trajectory-line.is-prevalence .assess-trajectory-step b { font-size: 0.98rem; color: var(--muted-strong); }

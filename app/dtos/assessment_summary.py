@@ -30,6 +30,7 @@ from app.dtos.predictions import (
     MedicalRisk,
     ModelAccuracy,
     OnsetTrajectory,
+    PrevalenceTrajectory,
     RiskFactor,
     RiskPredictionRequest,
     RuleAnchor,
@@ -145,6 +146,14 @@ class VerdictReference(BaseSerializerModel):
         default=None, description="2단계 발병 궤적. 1단계가 의심한 비가역 질환(당뇨·고혈압·신기능)에만 있다"
     )
     trajectory_status: str | None = Field(default=None, description="궤적이 없으면 왜 없는지. `TrajectoryStatus` 값")
+    prevalence_trajectory: PrevalenceTrajectory | None = Field(
+        default=None,
+        description=(
+            "'그 나이가 됐을 때 기준을 넘고 있을 확률'. 발병 궤적과 **다른 물음**이라 "
+            "열 질환 전부에 있다. 확률을 표시하지 않기로 한 질환(ADR-009 §4)과 이미 "
+            "기준을 넘은 카드에서는 지운다 — 같은 확률이 다른 이름으로 나가면 안 된다"
+        ),
+    )
 
 
 class DiseaseVerdictOut(BaseSerializerModel):

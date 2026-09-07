@@ -125,6 +125,19 @@ def score_conditions(
             judgement=judgement,
             config=models.trajectory,
         )
+
+        # 나이만 옮겨 다시 채점한 유병 확률. **열 장 전부**에 낸다 — 발병 궤적이
+        # 없는 일곱 장(가역이거나 유병률이 비단조라 누적 발병 곡선이 거짓이 되는
+        # 질환들, `trajectory.EXCLUDED_TARGETS`)에도 앞날을 말할 자리를 주려는 것이다.
+        #
+        # 예전에는 `rank_and_attach` 가 상위 세 장에만 붙였다. 그 관문이 아끼던 것이
+        # 바로 이 곡선이고(실측 15.4ms → 33.0ms), 이제 화면이 열세 장 전부에서
+        # 읽으므로 아낄 것이 없다. 대신 여기서 한 번만 계산해 순위 쪽이 다시 세지
+        # 않게 넘긴다 — 두 곳에서 계산하면 같은 카드에 다른 곡선이 날 수 있다.
+        def score_at(value: float, scorer: Any = model) -> float:
+            return float(scorer.probability({**features, "age": float(value)}))
+
+        prevalence = prevalence_curve(score_at, float(payload.age), irreversible=target in TRAJECTORY_TARGETS)
         factors = [RiskFactor(feature=name, contribution=round(value, 4)) for name, value in ranked[:TOP_FACTOR_COUNT]]
         conditions.append(
             ConditionRisk(
@@ -149,6 +162,7 @@ def score_conditions(
                 top_factors=factors,
                 trajectory=OnsetTrajectory(**trajectory) if trajectory else None,
                 trajectory_status=trajectory_status,  # type: ignore[arg-type]
+                prevalence_trajectory=PrevalenceTrajectory(**prevalence) if prevalence else None,
             )
         )
 
@@ -168,13 +182,12 @@ def rank_and_attach(
 ) -> list[SuspectCard]:
     """**1단계 → 2단계.** 의심 상위 세 개를 고르고 그 셋에만 곡선을 붙인다.
 
-    열 장 전부에 붙이면 채점이 늘어나는데 화면이 읽는 것은 상위 세 장이다. 이것이
-    비용이 다른 두 단계 사이에 라우팅을 두는 자리다.
-
-    실측(2026-09-03, 컨테이너 안 중앙값 40 회): 1 단계만 9.9ms → 상위 3 장에 유병
-    곡선까지 15.4ms → 열 장 전부 33.0ms. 관문이 예측 단계의 53% 를 덜어낸다.
-    아끼는 대상은 **유병 곡선**이다 — 발병 궤적은 `trajectory.gate` 의 첫 질문에서
-    일곱 타깃이 즉시 빠지므로 1 단계 루프 안에서 이미 싸다.
+    **유병 곡선은 이제 여기서 세지 않는다.** `score_conditions` 가 열 장 전부에
+    미리 계산해 두고 이쪽은 그것을 옮겨 담기만 한다. 예전에는 이 관문이 곡선을
+    상위 세 장으로 줄여 예측 단계의 53% 를 덜어냈지만(실측 2026-09-03, 컨테이너 안
+    중앙값 40 회: 1 단계만 9.9ms → 상위 3 장 15.4ms → 열 장 전부 33.0ms), 화면이
+    열세 장 전부에서 그 곡선을 읽게 되면서 아낄 것이 없어졌다. 같은 곡선을 두 곳에서
+    계산하면 같은 카드에 다른 값이 날 수 있으므로 계산은 한 곳에 남긴다.
 
     `verdicts` 가 있으면 **규칙 엔진의 측정 기반 판정이 ML 추정보다 먼저** 쓰인다.
     `known` 은 이미 확진된 질환이라 후보에서 빠진다.
@@ -191,15 +204,8 @@ def rank_and_attach(
     by_target = {c.target: c for c in conditions}
     for suspect in suspects:
         card = by_target.get(suspect["target"])
-        model = models.get(suspect["target"], tier) if card else None
-        if model is not None:
-
-            def score_at(value: float, scorer: Any = model) -> float:
-                return float(scorer.probability({**features, "age": float(value)}))
-
-            curve = prevalence_curve(score_at, float(payload.age), irreversible=suspect["target"] in TRAJECTORY_TARGETS)
-            if curve:
-                suspect["prevalence_trajectory"] = curve
+        if card is not None and card.prevalence_trajectory is not None:
+            suspect["prevalence_trajectory"] = card.prevalence_trajectory.model_dump()
         if card is not None and card.trajectory is not None:
             suspect["onset_trajectory"] = card.trajectory.model_dump()
     return [

@@ -137,6 +137,15 @@ export interface VerdictReference {
   top_factors?: { feature: string; contribution: number }[];
   trajectory?: OnsetTrajectory | null;
   trajectory_status?: TrajectoryStatus | null;
+  /**
+   * "그 나이가 됐을 때 기준을 넘고 있을 확률" — **열 질환 전부**에 있다.
+   *
+   * 발병 궤적은 비가역 셋(당뇨·고혈압·신기능)에만 붙는다. 나머지 일곱은 가역이거나
+   * 유병률이 비단조라 누적 발병 곡선이 거짓이 된다(`app/services/trajectory.py` 의
+   * `EXCLUDED_TARGETS`: 이상지질혈증은 65세+ 사망연계 C 0.43 으로 방향이 뒤집힌다).
+   * 그래서 앞날을 말할 자리가 일곱 장에 아예 없었다. 이쪽은 다른 물음이라 답이 있다.
+   */
+  prevalence_trajectory?: PrevalenceTrajectory | null;
 }
 
 export interface DiseaseVerdict {

@@ -278,6 +278,9 @@ def _ml_reference(condition: dict[str, Any] | None) -> dict[str, Any]:
         # 참고 블록에 같이 싣는다. 이미 있다고 판정된 카드는 `arbitrate` 가 지운다.
         "trajectory": condition.get("trajectory"),
         "trajectory_status": condition.get("trajectory_status"),
+        # 발병 궤적이 없는 일곱 질환(가역·비단조)에도 앞날을 말할 자리를 준다.
+        # 뜻이 다르므로 화면이 다른 이름으로 그린다 — "새로 생길" 과 "기준 초과".
+        "prevalence_trajectory": condition.get("prevalence_trajectory"),
     }
 
 
@@ -324,6 +327,12 @@ def arbitrate(
                 if verdict.risk_level in _PRESENT_LEVELS and verdict.reference.get("trajectory") is not None:
                     verdict.reference["trajectory"] = None
                     verdict.reference["trajectory_status"] = STATUS_ALREADY_PRESENT
+                # 유병 곡선도 같이 지운다. 라벨을 만드는 검사값은 그 질환의 ML 입력에서
+                # 차단되므로(`modeling/targets.py`), 공복혈당 148 로 확진된 사람에게도
+                # 당뇨 모델은 그 값을 못 보고 16% 를 낸다 — "매우 높음" 배지 밑에
+                # "기준 초과 지금 16%" 가 붙던 것이 이 화면에서 가장 헷갈리는 곳이었다.
+                if verdict.risk_level in _PRESENT_LEVELS:
+                    verdict.reference["prevalence_trajectory"] = None
             verdicts.append(verdict)
             continue
 
@@ -408,6 +417,10 @@ def arbitrate(
         if blocked_by_policy and reference.get("trajectory") is not None:
             reference["trajectory"] = None
             reference["trajectory_status"] = STATUS_WITHHELD
+        # 유병 곡선도 같은 이유로 막는다. 확률을 안 보이기로 한 질환에서 곡선만
+        # 내보내면 같은 확률이 다른 이름으로 나가는 것이다.
+        if blocked_by_policy:
+            reference["prevalence_trajectory"] = None
         verdicts.append(
             DiseaseVerdict(
                 key=spec.key,
