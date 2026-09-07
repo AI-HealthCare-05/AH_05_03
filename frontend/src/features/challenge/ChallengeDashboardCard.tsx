@@ -30,12 +30,13 @@ export function ChallengeDashboardCard() {
             {data.watered_today ? "오늘 물을 주었습니다" : "오늘 아직 물을 안 줬어요"}
           </h2>
         </div>
-        <NavLink className="primary-button" to="/challenge">
-          챌린지 열기
-        </NavLink>
       </div>
 
-      <div className="challenge-card-body">
+      <NavLink
+        to="/challenge"
+        className="challenge-card-body"
+        aria-label="생활습관 챌린지 열기"
+      >
         <Tree
           stage={garden.tree.key}
           animals={animals.map((animal) => animal.id)}
@@ -60,7 +61,7 @@ export function ChallengeDashboardCard() {
               : "이번 주에 하나라도 재면 주가 마감됩니다."}
           </p>
         </div>
-      </div>
+      </NavLink>
     </section>
   );
 }
