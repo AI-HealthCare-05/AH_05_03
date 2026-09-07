@@ -610,9 +610,7 @@ class MedicalFacilityClient:
             if pharmacy_api_key is not None
             else (api_key if api_key is not None else config.PHARMACY_INFO_API_KEY)
         )
-        self.kakao_api_key = self._clean_key(
-            kakao_api_key if kakao_api_key is not None else config.KAKAO_REST_API_KEY
-        )
+        self.kakao_api_key = self._clean_key(kakao_api_key if kakao_api_key is not None else config.KAKAO_REST_API_KEY)
         self._http_client = http_client
 
     def _get_client(self) -> httpx.AsyncClient:
@@ -853,9 +851,7 @@ class MedicalFacilityClient:
         items: list[FacilityItem] = []
 
         try:
-            target_lat, target_lon = await self._resolve_search_coords(
-                client, latitude, longitude, query or stage2
-            )
+            target_lat, target_lon = await self._resolve_search_coords(client, latitude, longitude, query or stage2)
             if target_lat is not None and target_lon is not None:
                 items = await self._fetch_emergency_by_location(client, key, target_lat, target_lon)
 
@@ -1101,9 +1097,7 @@ class MedicalFacilityClient:
             # 카카오로 찾은 전국 지명은 기존 사전에 없으므로, 좌표를 한 번 더
             # 행정구역으로 변환해 NMC의 진료과(QD) 조회에 사용한다.
             if dept_code and not target_s1:
-                target_s1, target_s2 = await self._resolve_stage_from_coordinates(
-                    client, target_lat, target_lon
-                )
+                target_s1, target_s2 = await self._resolve_stage_from_coordinates(client, target_lat, target_lon)
             # 진료과가 있으면 반드시 과목 코드(QD)로 먼저 조회한다. 위치기반 API는
             # 진료과 파라미터를 지원하지 않아, 이를 먼저 호출하면 일반 의원이
             # "산부인과 병원"처럼 잘못 표시될 수 있다.
@@ -1125,7 +1119,11 @@ class MedicalFacilityClient:
             # 대신 보여주지 않는다.
             if dept_code and not target_s1 and target_lat is not None and target_lon is not None:
                 items = await self._fetch_hospital_by_location(
-                    client, key, target_lat, target_lon, keyword_filter=dept_name,
+                    client,
+                    key,
+                    target_lat,
+                    target_lon,
+                    keyword_filter=dept_name,
                     num_of_rows=100 if only_open else 20,
                 )
 
@@ -1134,7 +1132,11 @@ class MedicalFacilityClient:
             if not dept_code:
                 if target_lat is not None and target_lon is not None:
                     items = await self._fetch_hospital_by_location(
-                        client, key, target_lat, target_lon, keyword_filter=keyword,
+                        client,
+                        key,
+                        target_lat,
+                        target_lon,
+                        keyword_filter=keyword,
                         num_of_rows=100 if only_open else 20,
                     )
 
@@ -1157,7 +1159,8 @@ class MedicalFacilityClient:
                 # 가까운 5곳만 먼저 보지 않는다. 최대 2km 범위의 후보 전체에서
                 # 진료 중인 곳을 골라야 사용자의 요청과 일치한다.
                 items = [
-                    item for item in items
+                    item
+                    for item in items
                     if item.is_open is True and item.distance_m is not None and item.distance_m <= 2_000
                 ]
             items = items[:5]
@@ -1380,9 +1383,7 @@ class MedicalFacilityClient:
         items: list[FacilityItem] = []
 
         try:
-            target_lat, target_lon = await self._resolve_search_coords(
-                client, latitude, longitude, query or stage2
-            )
+            target_lat, target_lon = await self._resolve_search_coords(client, latitude, longitude, query or stage2)
             # 1) GPS 좌표 또는 랜드마크 좌표가 있으면 위치기반 약국 조회 (0.2s, 실제 거리순 + 오늘 영업시간)
             if target_lat is not None and target_lon is not None:
                 items = await self._fetch_pharmacy_by_location(client, key, target_lat, target_lon)
