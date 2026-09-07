@@ -15,6 +15,7 @@
 import { Modal } from "../../shared/ui/Modal";
 import type { DiseaseRisk, DiseaseVerdict, OnsetTrajectory, RiskLevel } from "./contracts";
 import { ENGINE_SHORT, LEVEL_LABEL } from "./contracts";
+import { Evidence, type ModelSpec } from "./Evidence";
 import { DISEASE_MEASURES, FIELD_LABELS, FIELD_UNITS } from "./fields";
 
 const LEVEL_CLASS: Record<RiskLevel, string> = {
@@ -328,14 +329,19 @@ export function KeyFigures({ verdict, values }: { verdict: DiseaseVerdict; value
 export function VerdictCard({
   verdict,
   values,
+  models = [],
   onOpen,
 }: {
   verdict: DiseaseVerdict;
   values: Record<string, string>;
+  /** `/predictions/model-info` 의 모델 목록. 없으면 "안 쓴 입력" 블록만 빠진다. */
+  models?: ModelSpec[];
   onOpen: () => void;
 }) {
   const short = verdict.sub_status || LEVEL_LABEL[verdict.risk_level];
   const enough = verdict.risk_level !== "INSUFFICIENT_DATA";
+  const hasEvidence =
+    verdict.reference?.probability !== null && verdict.reference?.probability !== undefined;
 
   return (
     <article className={`assess-card ${LEVEL_CLASS[verdict.risk_level]}`}>
@@ -346,7 +352,15 @@ export function VerdictCard({
 
       {enough ? <LevelBar level={verdict.risk_level} /> : null}
 
-      <p className="assess-substatus">{short}</p>
+      {/* **앞면은 정본 엔진의 답만 싣는다.** 어느 엔진이 답했는지를 등급 옆에 붙여야
+          아래 접이의 ML 확률과 혼동되지 않는다. 예전에는 이 태그가 "판정 근거" 버튼
+          안에 있어서, 카드를 훑는 동안 무엇이 이 등급을 정했는지 알 수 없었다. */}
+      <p className="assess-substatus">
+        <span className={`assess-engine-tag engine-${verdict.engine.toLowerCase()}`}>
+          {ENGINE_SHORT[verdict.engine]}
+        </span>
+        {short}
+      </p>
       <KeyFigures verdict={verdict} values={values} />
       <TrajectoryLine verdict={verdict} />
 
@@ -356,22 +370,42 @@ export function VerdictCard({
         </p>
       )}
 
+      {/* **ML 근거를 카드 안에서 펼친다 — 예측 데모의 "모델 내부 값" 자리다.**
+          모달로만 두던 때는 같은 값을 두 화면이 각자 그리면서 서로 다른 숫자를 크게
+          띄웠다(`Evidence.tsx` 머리말의 실측). 이제 한 컴포넌트가 두 자리에 같은 것을
+          낸다.
+
+          격자에서 접이를 펼치면 같은 줄 카드까지 키가 늘어 아래가 밀리는 문제가
+          있었다. `.assess-cards` 를 `grid-auto-rows` 없이 `align-items: start` 로
+          두어 펼친 카드만 늘어나게 했다(`styles.css`). */}
+      {hasEvidence ? (
+        <details className="assess-card-evidence">
+          <summary>{verdict.superseded_by ? "밀려난 ML 추정과 모델 정확도" : "모델 내부 값"}</summary>
+          <Evidence verdict={verdict} values={values} models={models} />
+        </details>
+      ) : null}
+
       {/* 질환 이름을 접근성 이름에 넣는다. 카드가 열세 장이라 "판정 근거"만 있으면
           화면 낭독기가 같은 이름의 버튼 열세 개를 읽는다. */}
       <button type="button" className="assess-why-button" onClick={onOpen}>
-        <span className={`assess-engine-tag engine-${verdict.engine.toLowerCase()}`}>
-          {ENGINE_SHORT[verdict.engine]}
-        </span>
-        <span>
-          {verdict.name} 판정 근거
-        </span>
+        <span>{verdict.name} 판정 근거 전체</span>
       </button>
     </article>
   );
 }
 
 /** 카드에서 접었던 것 전부. 좁은 카드가 아니라 모달이라 나열하지 않고 항목으로 가른다. */
-export function VerdictDetail({ verdict, values, onClose }: { verdict: DiseaseVerdict; values: Record<string, string>; onClose: () => void }) {
+export function VerdictDetail({
+  verdict,
+  values,
+  models = [],
+  onClose,
+}: {
+  verdict: DiseaseVerdict;
+  values: Record<string, string>;
+  models?: ModelSpec[];
+  onClose: () => void;
+}) {
   return (
     <Modal title={verdict.name} kicker="판정 근거" className="verdict-modal" onClose={onClose}>
       <div className="verdict-modal-top">
@@ -425,7 +459,9 @@ export function VerdictDetail({ verdict, values, onClose }: { verdict: DiseaseVe
         </p>
       ))}
 
-      <ReferenceBlock verdict={verdict} />
+      {/* **카드와 같은 컴포넌트다.** `ReferenceBlock` 이 여기 있었고 카드에는 아무것도
+          없어서, 같은 ML 값을 두 화면이 각자 다르게 그렸다. 이제 한 곳이 낸다. */}
+      <Evidence verdict={verdict} values={values} models={models} />
 
       {verdict.disclaimer ? <p className="assess-fineprint">{verdict.disclaimer}</p> : null}
     </Modal>

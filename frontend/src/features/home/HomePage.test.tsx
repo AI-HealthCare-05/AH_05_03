@@ -264,7 +264,12 @@ describe("HomePage", () => {
     const detail = screen.getAllByRole("dialog").at(-1) as HTMLElement;
     expect(within(detail).getByText(/측정값이 있어 규칙 엔진이 정본입니다/)).toBeInTheDocument();
     expect(within(detail).getByText(/밀려난 ML 추정/)).toBeInTheDocument();
-    expect(within(detail).getByText("80.0%")).toBeInTheDocument();
+    // 큰 숫자는 소수부를 `<small>` 로 쪼개 그린다(`Evidence.tsx`). 내용으로 찾는다.
+    expect(
+      within(detail).getByText(
+        (_, element) => element?.tagName === "STRONG" && element.textContent === "80.0%",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("판정 기록이 없는 구성원 카드도 자리를 비우지 않는다", async () => {

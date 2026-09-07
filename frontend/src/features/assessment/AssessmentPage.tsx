@@ -40,6 +40,7 @@ import type { AssessmentSummaryData, RiskLevel } from "./contracts";
 import { LEVEL_ORDER } from "./contracts";
 import { DetailReport } from "./DetailReport";
 import { DocumentPane, type DocumentReading } from "./DocumentPane";
+import type { ModelSpec } from "./Evidence";
 import { ASSESSMENT_PRESETS, type AssessmentPreset, presetValues } from "./presets";
 import { SuspectPanel } from "./SuspectPanel";
 import { LevelBadge, MatrixCard, VerdictCard, VerdictDetail } from "./VerdictCards";
@@ -162,6 +163,13 @@ export function AssessmentPage() {
   const [openVerdict, setOpenVerdict] = useState<string>();
   // 예측 근거 전체 리포트를 열었는가. 질환 하나가 아니라 열 장을 한 화면에 세운다.
   const [openDetail, setOpenDetail] = useState(false);
+  /**
+   * 적재된 모델의 입력 목록. 카드의 "모델이 쓰지 않은 입력" 을 계산하는 데 쓴다.
+   *
+   * **판정과 함께 부르지 않고 화면이 뜰 때 한 번 받는다.** 사용자 입력과 무관한
+   * 배포 메타데이터라 판정마다 다시 물을 이유가 없고, 실패하면 그 블록만 빠진다.
+   */
+  const [models, setModels] = useState<ModelSpec[]>([]);
   // 어느 테스트 프로필로 채웠는가. 채운 뒤 손으로 고쳐도 표시는 남긴다 —
   // 결과를 보고 "이게 내가 넣은 값인가 프리셋인가" 를 되짚을 자리가 필요하다.
   const [preset, setPreset] = useState<string>();
@@ -198,6 +206,22 @@ export function AssessmentPage() {
     (location.state as { profileId?: string } | null)?.profileId ??
     profiles[0]?.id;
   const activeProfile = profiles.find((item) => item.id === activeProfileId);
+
+  useEffect(() => {
+    let cancelled = false;
+    void serverApiClient
+      .modelInfo<{ models: ModelSpec[] }>()
+      .then((data) => {
+        if (!cancelled) setModels(data.models ?? []);
+      })
+      .catch(() => {
+        // 없는 것을 없다고 말할 수 없을 뿐이다. 나머지 근거는 그대로 나간다.
+        if (!cancelled) setModels([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // 구성원의 기본 정보(성별, 생년월일 기반 나이)가 있고 폼의 해당 칸이 비어 있으면 채워 준다.
   useEffect(() => {
@@ -932,6 +956,7 @@ export function AssessmentPage() {
                 key={verdict.key}
                 verdict={verdict}
                 values={values}
+                models={models}
                 onOpen={() => setOpenVerdict(verdict.key)}
               />
             ))}
@@ -990,7 +1015,12 @@ export function AssessmentPage() {
         ? (() => {
             const found = verdicts.find((v) => v.key === openVerdict);
             return found ? (
-              <VerdictDetail verdict={found} values={values} onClose={() => setOpenVerdict(undefined)} />
+              <VerdictDetail
+                verdict={found}
+                values={values}
+                models={models}
+                onClose={() => setOpenVerdict(undefined)}
+              />
             ) : null;
           })()
         : null}
@@ -998,7 +1028,7 @@ export function AssessmentPage() {
       {/* 같은 이유로 결과가 없으면 닫는다. `result` 를 캡처해 두면 다시 판정한 뒤에도
           옛 리포트가 열린 채 남는다. */}
       {openDetail && result ? (
-        <DetailReport result={result} values={values} onClose={() => setOpenDetail(false)} />
+        <DetailReport result={result} values={values} models={models} onClose={() => setOpenDetail(false)} />
       ) : null}
     </section>
   );

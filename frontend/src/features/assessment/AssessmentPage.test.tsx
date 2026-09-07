@@ -222,6 +222,17 @@ function authValue(): AuthContextValue {
   };
 }
 
+/**
+ * `Evidence` 의 큰 숫자는 소수부를 `<small>` 로 쪼개 그린다(예측 데모의 `bigNumber`
+ * 를 옮긴 것 — 자릿수가 흔들려도 시선이 정수부에 머문다). 그래서 `getByText("80.0%")`
+ * 로는 안 잡힌다. 사용자가 읽는 것은 한 덩어리이므로 내용으로 찾는다.
+ */
+function bigNumberIn(scope: HTMLElement, text: string) {
+  return within(scope).getByText(
+    (_, element) => element?.tagName === "STRONG" && element.textContent === text,
+  );
+}
+
 function renderPage(state?: unknown) {
   return render(
     <MemoryRouter initialEntries={[{ pathname: "/assessment", state }]}>
@@ -492,17 +503,19 @@ describe("AssessmentPage", () => {
     await user.click(await screen.findByRole("button", { name: /고혈압 판정 근거/ }));
     let modal = screen.getByRole("dialog");
     expect(within(modal).getByText(/밀려난 ML 추정/)).toBeInTheDocument();
-    expect(within(modal).getByText("80.0%")).toBeInTheDocument();
+    expect(bigNumberIn(modal, "80.0%")).toBeInTheDocument();
     // AUROC 를 "정확도"로 읽지 않게 하는 문구가 확률 있는 칸마다 붙는다.
     expect(within(modal).getByText(/100명 중 몇 명을 맞힌다/)).toBeInTheDocument();
     // 경보 적중률이 AUROC 옆에 같이 나온다 — 사용자가 실제로 겪는 값이다.
     expect(within(modal).getByText(/71%/)).toBeInTheDocument();
     await user.keyboard("{Escape}");
 
-    // ML 이 정본인 칸은 "밀려난" 이 아니라 "근거" 로 적는다.
+    // ML 이 정본인 칸은 "밀려난" 이라고 적지 않는다. 그 한 단어가 "이 숫자를 읽어도
+    // 되는가" 를 가르므로, 두 경우의 문구가 섞이면 안 된다.
     await user.click(screen.getByRole("button", { name: /빈혈 판정 근거/ }));
     modal = screen.getByRole("dialog");
-    expect(within(modal).getByText(/ML 추정 근거/)).toBeInTheDocument();
+    expect(within(modal).getByText(/ML 시드 앙상블/)).toBeInTheDocument();
+    expect(within(modal).queryByText(/밀려난 ML 추정/)).not.toBeInTheDocument();
   });
 
   it("구성원이 없으면 기록 대신 등록을 안내한다", async () => {
@@ -831,9 +844,11 @@ describe("테스트 프로필과 자세히 보기", () => {
     expect(within(dialog).queryByText(/CAUTION/)).not.toBeInTheDocument();
 
     // 모델이 받고도 쓰지 않은 입력. 혈압을 넣었는데 htn 모델은 안 쓴다.
-    // 질환마다 접이가 하나씩 있으므로 첫 번째(고혈압, `verdicts` 순서)를 연다.
-    await user.click(within(dialog).getAllByText("모델 내부 값")[0]);
+    // **개요 화면에서는 접지 않는다** — 여기까지 들어온 사람은 근거를 보러 온 것이고,
+    // 접이는 카드 쪽에 있다(`VerdictCard` 의 `assess-card-evidence`).
     expect(within(dialog).getByText(/고혈압 모델이 쓰지 않은 입력/)).toBeInTheDocument();
+    // 타일 배지는 카드와 같은 5단계다. 의학 4단계('주의')를 배지로 쓰면 측정과 부딪힌다.
+    expect(within(dialog).getAllByText("높음").length).toBeGreaterThan(0);
   });
 
   it("모델 정보를 못 받아도 나머지 근거는 나온다", async () => {
@@ -851,5 +866,86 @@ describe("테스트 프로필과 자세히 보기", () => {
     expect(within(dialog).getByText(/이 점수대의/)).toBeInTheDocument();
     // 없는 것을 없다고 말할 수 없을 뿐이다 — 그 블록만 빠진다.
     expect(within(dialog).queryByText(/쓰지 않은 입력/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * 세 자리가 같은 것을 보여준다 — 예측 데모를 카드로 옮기면서 세운 계약.
+ *
+ * 옮기기 전 실측(52세 남 · 118/74 · 이상지질 프리셋)에서 고혈압 하나가 이렇게
+ * 나왔다: 판정 카드 **정상** · 자세히 보기 **주의** · 먼저 볼 세 가지 **정상 범위**.
+ * 숫자도 27.1% / 50.2% / 11.4% 로 셋이었다. 배지를 `risk_level` 하나로 못 박고
+ * ML 값은 `Evidence` 한 컴포넌트가 두 자리에 같은 것을 내게 해서 닫았다.
+ */
+describe("카드와 자세히 보기가 같은 것을 보여준다", () => {
+  it("카드 안에서 ML 근거가 펼쳐진다 — 모달을 열지 않아도 된다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE as never);
+    vi.spyOn(serverApiClient, "modelInfo").mockResolvedValue({ models: [] });
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "판정하기" }));
+    await screen.findByText("판정 요약");
+
+    // 규칙이 정본인 칸이라 "밀려난" 이라고 적는다.
+    const summary = screen.getByText("밀려난 ML 추정과 모델 정확도");
+    await user.click(summary);
+
+    const card = summary.closest("article") as HTMLElement;
+    // 게이지·앵커·정확도가 카드 안에 있다.
+    expect(within(card).getByText(/이 점수대의/)).toBeInTheDocument();
+    expect(within(card).getByText(/실제로 검사했을 때/)).toBeInTheDocument();
+    expect(within(card).getByText(/상위 10% 경보 적중/)).toBeInTheDocument();
+    // 모달은 안 열렸다.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("카드 배지와 자세히 보기 배지가 같은 등급이다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE as never);
+    vi.spyOn(serverApiClient, "modelInfo").mockResolvedValue({ models: [] });
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "판정하기" }));
+    await screen.findByText("판정 요약");
+
+    // 카드: 고혈압은 규칙 엔진이 HIGH 를 줬다.
+    // `header` 안의 배지만 본다 — `LevelBar` 가 네 구간을 항상 그려서 "높음" 이
+    // 구간 이름으로도 나온다.
+    const heading3 = screen.getByRole("heading", { name: "고혈압", level: 3 });
+    expect(within(heading3.parentElement as HTMLElement).getByText("높음")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "예측 근거 자세히 보기" }));
+    const dialog = await screen.findByRole("dialog");
+
+    // 자세히 보기: 같은 5단계 배지. 의학 4단계('주의')를 배지로 쓰지 않는다 —
+    // 그 값은 집단 통계라 실측 118/74 인 사람과 부딪힌다.
+    // 제목 안의 배지만 본다. `LevelBar` 가 네 칸을 항상 그려서 "높음" 이라는 글자가
+    // 구간 이름으로도 한 번 더 나온다.
+    const heading = within(dialog).getByRole("heading", { name: /고혈압/, level: 4 });
+    expect(within(heading).getByText("높음")).toBeInTheDocument();
+    // 의학 4단계가 배지로 새지 않았는지. `assess-badge` 클래스를 단 '주의' 가 없어야 한다.
+    const section = heading.closest("section") as HTMLElement;
+    expect(
+      [...section.querySelectorAll(".assess-badge")].map((el) => el.textContent),
+    ).not.toContain("주의");
+  });
+
+  it("엔진 태그가 카드 앞면에 있다 — 무엇이 이 등급을 정했는지 열지 않고 안다", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE as never);
+    vi.spyOn(serverApiClient, "modelInfo").mockResolvedValue({ models: [] });
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: "판정하기" }));
+    await screen.findByText("판정 요약");
+
+    const card = screen.getByRole("heading", { name: "고혈압", level: 3 }).closest("article") as HTMLElement;
+    expect(within(card).getByText("규칙 엔진")).toBeInTheDocument();
+    const anemia = screen.getByRole("heading", { name: "빈혈", level: 3 }).closest("article") as HTMLElement;
+    expect(within(anemia).getByText("ML 추정")).toBeInTheDocument();
   });
 });

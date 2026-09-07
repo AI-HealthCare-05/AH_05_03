@@ -3862,7 +3862,11 @@ main {
 
 .assess-axis-title { margin: 1.5rem 0 0.35rem; font-size: 1.05rem; display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
 .assess-axis-note { margin: 0 0 0.9rem; color: var(--muted); font-size: 0.85rem; max-width: 78ch; }
-.assess-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 0.9rem; }
+/* **`align-items: start` 가 없으면 카드를 펼칠 수 없다.** 격자 기본값(stretch)에서는
+   한 장이 늘어나면 같은 줄 전체가 그 키를 따라가고, 아래 줄이 통째로 밀린다 —
+   읽으려던 자리가 눈앞에서 움직인다. 그래서 근거를 모달로만 뺐던 것이고, 이 한 줄이
+   그 제약을 풀어 예측 데모처럼 카드 안에서 펼치게 한다. */
+.assess-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 0.9rem; align-items: start; }
 
 .assess-card { border: 1px solid var(--line); border-left-width: 5px; border-radius: 12px; padding: 0.9rem 1.05rem; background: var(--surface); display: flex; flex-direction: column; gap: 0.45rem; }
 .assess-card header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; }
@@ -6443,3 +6447,40 @@ main {
 @media (max-width: 640px) {
   .detail-tiles { grid-template-columns: repeat(auto-fit, minmax(98px, 1fr)); }
 }
+
+/* ---------------------------------------------------------------------------
+ * 카드 안 근거 블록 — 예측 데모의 "모델 내부 값" 을 카드로 옮긴 자리.
+ *
+ * 앞면은 정본 엔진의 답만 싣고, ML 확률·게이지·앵커·정확도는 이 접이 안에 둔다.
+ * 그래야 배지와 큰 숫자가 서로 다른 말을 하지 않는다 (`Evidence.tsx` 머리말).
+ * ------------------------------------------------------------------------- */
+
+.assess-card-evidence { margin-top: 0.15rem; border-top: 1px dashed var(--line-soft); padding-top: 0.5rem; }
+.assess-card-evidence > summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--blue-700);
+  /* 44px 터치 타깃. 접이 화살표만 누르게 두면 손가락으로는 못 연다. */
+  padding: 0.35rem 0;
+  list-style-position: inside;
+}
+.assess-card-evidence > summary:hover { color: var(--blue-800); }
+.assess-evidence { margin-top: 0.35rem; display: flex; flex-direction: column; gap: 0.3rem; }
+/* 카드 안이라 자세히 보기 모달보다 한 단 작게. 같은 클래스를 쓰는 값들이라
+   여기서만 줄인다 — 모달 쪽 크기는 그대로 둔다. */
+.assess-evidence .detail-risk strong { font-size: 1.45rem; }
+.assess-evidence .detail-peer { font-size: 0.82rem; }
+.assess-evidence .detail-acc { font-size: 0.76rem; }
+.assess-evidence .detail-acc .n { font-size: 0.92rem; }
+.assess-evidence .detail-factors { font-size: 0.78rem; }
+
+/* 엔진 태그가 등급 옆으로 올라왔다 — 카드를 훑는 동안 무엇이 이 등급을 정했는지
+   보여야 한다. 예전에는 "판정 근거" 버튼 안에 있어서 열어야 알 수 있었다. */
+.assess-substatus { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+
+/* 개요 타일 — 등급이 주인공이고 숫자는 참고다. */
+.detail-tile small { display: block; margin-top: 0.2rem; font-size: 0.68rem; color: var(--muted); }
+.detail-tile .v { font-size: 1.1rem; }
+.detail-tile .v.is-none { color: var(--muted); font-weight: 600; }
+.detail-condition h4 .assess-badge { font-size: 0.7rem; }

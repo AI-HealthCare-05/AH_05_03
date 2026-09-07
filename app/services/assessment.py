@@ -102,7 +102,12 @@ SPECS: tuple[DiseaseSpec, ...] = (
     DiseaseSpec("low_hdl", "낮은 HDL 콜레스테롤", None, "E1", "low_hdl"),
     DiseaseSpec("obesity", "비만", "obesity", "E1", None),
     DiseaseSpec("mets", "대사증후군", "metabolic_syndrome", "E3", "mets", ml_fallback=False),
-    DiseaseSpec("ckd", "만성콩팥병", "kidney", "E3", "ckd", ml_fallback=False),
+    # **"만성콩팥병" 이라 부르지 않는다.** 번들의 `limits` 가 이유를 적어 뒀다 —
+    # KDIGO 는 3개월 지속을 요구하는데 단면 1회 측정으로는 그걸 채울 수 없어서
+    # "화면에서 'CKD'라 부르지 않는다" 가 계약이다. 이 표가 그것을 어기고 있었고,
+    # 카드는 "만성콩팥병", 의심 패널은 번들 이름인 "신기능 확인 필요" 로 나와서
+    # 사용자가 두 이름을 다른 질환으로 읽었다(실제로 그 질문을 받았다).
+    DiseaseSpec("ckd", "신기능 확인 필요", "kidney", "E3", "ckd", ml_fallback=False),
     DiseaseSpec("fatty_liver", "지방간", "fatty_liver", "E3", "fatty_liver", ml_fallback=False),
     DiseaseSpec("liver", "간기능", "liver", "E1", None),
     DiseaseSpec("anemia", "빈혈", "anemia", "E1", "anemia"),
@@ -610,6 +615,17 @@ def assess(payload: Any, models: Any) -> tuple[list[DiseaseVerdict], dict[str, A
             },
             known=known_targets(verdicts),
         )
+
+    # **질환 이름의 정본은 `SPECS` 하나다.** 카드는 이 표를 쓰고 의심 패널은 ML
+    # 번들의 `name` 을 쓰고 있어서, 같은 질환이 두 이름으로 나갔다 — `ckd` 가
+    # "만성콩팥병"/"신기능 확인 필요", `dm` 이 "당뇨병"/"당뇨", `hyperchol` 이
+    # "고콜레스테롤혈증"/"고LDL콜레스테롤혈증". 사용자가 두 이름을 다른 질환으로
+    # 읽는 것을 실제로 확인했다.
+    #
+    # 번들 쪽을 고치려면 20개를 재export 해야 하고, 이름은 화면 표기라 학습 산출물이
+    # 정할 일이 아니다. 그래서 표시 직전에 이 표로 덮는다.
+    name_by_target = {spec.ml_target: spec.name for spec in SPECS if spec.ml_target}
+    suspects = [card.model_copy(update={"name": name_by_target.get(card.target, card.name)}) for card in suspects]
 
     disease_risks = collect_disease_risks(profile)
     return verdicts, disease_risks, summarize(verdicts, disease_risks), available, suspects
