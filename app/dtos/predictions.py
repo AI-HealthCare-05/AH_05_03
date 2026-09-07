@@ -292,7 +292,7 @@ class SuspectCard(BaseSerializerModel):
         ),
     )
     basis: str = Field(
-        default="추정", description="측정 | 추정 — 규칙 엔진이 검사값으로 준 판정인가, ML 이 추정한 것인가"
+        default="예측", description="측정 | 예측 — 규칙 엔진이 검사값으로 준 판정인가, ML 이 예측한 것인가"
     )
     peer_ratio: float | None = None
     evidence_weight: float = Field(description="사망연계 검증에서 유도한 이 카드의 신뢰도 0.4~1.0")

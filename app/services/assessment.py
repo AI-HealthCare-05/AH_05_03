@@ -383,7 +383,7 @@ def arbitrate(
                     engine_label=ENGINE_LABELS["E2"],
                     engine_reason="측정값이 없어 ML 이 답했습니다. 발병 예측이 아니라 재면 기준을 넘을 가능성입니다.",
                     risk_level=level,
-                    sub_status="선별 추정",
+                    sub_status="ML 예측",
                     display_label="측정값 없이 추정한 값이에요. 확인하려면 검사가 필요합니다.",
                     reason=detail,
                     criteria_reference=condition.get("threshold_source", ""),

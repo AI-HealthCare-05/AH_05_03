@@ -144,14 +144,14 @@ def test_measured_caution_outranks_estimated_high() -> None:
     merged = sp.rank_suspects(cards, age=50, verdicts={"htn": verdict("E1", "CAUTION", measured=True)}, top_n=2)
     assert merged[0]["target"] == "htn", "규칙 엔진이 측정으로 준 주의가 위로 와야 한다"
     assert merged[0]["basis"] == "측정"
-    assert merged[1]["basis"] == "추정"
+    assert merged[1]["basis"] == "예측"
 
 
 def test_ml_probability_verdict_does_not_count_as_measured() -> None:
     """`E2` **확률** 은 측정 가중을 받지 않는다. 안 그러면 같은 확률을 두 번 센다."""
     cards = [card("dm", "관심", 1.0)]
     ranked = sp.rank_suspects(cards, age=50, verdicts={"dm": verdict("E2", "CAUTION", measured=False)}, top_n=1)
-    assert ranked[0]["basis"] == "추정"
+    assert ranked[0]["basis"] == "예측"
     assert ranked[0]["level"] == "관심"
 
 

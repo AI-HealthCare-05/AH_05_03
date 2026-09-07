@@ -90,7 +90,7 @@ export interface SuspectCard {
    * `level` 로 떨어진다.
    */
   risk_level?: RiskLevel | "";
-  /** "측정" 이면 규칙 엔진이 검사값으로 준 판정, "추정" 이면 ML 확률 */
+  /** "측정" 이면 규칙 엔진이 검사값으로 준 판정, "예측" 이면 ML 확률 */
   basis: string;
   peer_ratio?: number | null;
   evidence_weight: number;
@@ -218,7 +218,7 @@ export const LEVEL_ORDER: RiskLevel[] = ["VERY_HIGH", "HIGH", "CAUTION", "NORMAL
 
 export const ENGINE_SHORT: Record<EngineCode, string> = {
   E1: "규칙 엔진",
-  E2: "ML 추정",
+  E2: "ML 예측",
   E3: "공개 공식",
 };
 

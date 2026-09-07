@@ -358,7 +358,7 @@ describe("AssessmentPage", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
-    const panel = (await screen.findByRole("region", { name: /먼저 볼 세 가지/ })) as HTMLElement;
+    const panel = (await screen.findByRole("region", { name: /만성질환 발병 예측/ })) as HTMLElement;
 
     // 1순위는 검사값으로 판정한 것이라 "측정" 이라고 적힌다.
     const first = within(panel).getByRole("heading", { name: /1순위 고혈압/ }).closest("article") as HTMLElement;
@@ -378,7 +378,7 @@ describe("AssessmentPage", () => {
     // 3순위는 의심이 아니라 자리를 채운 것이고, 예측이 없으면 그 사실을 적는다.
     const third = within(panel).getByRole("heading", { name: /3순위 만성콩팥병/ }).closest("article") as HTMLElement;
     expect(within(third).getByText(/의심 신호는 없/)).toBeInTheDocument();
-    expect(within(third).getByText(/자료 범위 밖/)).toBeInTheDocument();
+    expect(within(third).getByText(/앞으로의 발병 확률을 낼 근거가 아직 없어요/)).toBeInTheDocument();
 
     // 두 숫자의 뜻은 카드마다가 아니라 패널에 한 번만 적는다.
     expect(within(panel).getAllByText(/그 나이에 기준을 넘고 있을 확률/)).toHaveLength(1);
@@ -417,7 +417,7 @@ describe("AssessmentPage", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
-    const panel = (await screen.findByRole("region", { name: /의심되는 항목은 없어요/ })) as HTMLElement;
+    const panel = (await screen.findByRole("region", { name: /만성질환 발병 예측/ })) as HTMLElement;
     const card = within(panel).getByRole("heading", { name: /이상지질혈증/ }).closest("article") as HTMLElement;
     expect(within(card).getByText("정상 범위")).toBeInTheDocument();
     expect(within(card).queryByText("74%")).not.toBeInTheDocument();
@@ -502,7 +502,7 @@ describe("AssessmentPage", () => {
     // 규칙이 정본이라 밀려난 칸.
     await user.click(await screen.findByRole("button", { name: /고혈압 판정 근거/ }));
     let modal = screen.getByRole("dialog");
-    expect(within(modal).getByText(/밀려난 ML 추정/)).toBeInTheDocument();
+    expect(within(modal).getByText(/밀린 ML 예측/)).toBeInTheDocument();
     expect(bigNumberIn(modal, "80.0%")).toBeInTheDocument();
     // AUROC 를 "정확도"로 읽지 않게 하는 문구가 확률 있는 칸마다 붙는다.
     expect(within(modal).getByText(/100명 중 몇 명을 맞힌다/)).toBeInTheDocument();
@@ -515,7 +515,7 @@ describe("AssessmentPage", () => {
     await user.click(screen.getByRole("button", { name: /빈혈 판정 근거/ }));
     modal = screen.getByRole("dialog");
     expect(within(modal).getByText(/ML 시드 앙상블/)).toBeInTheDocument();
-    expect(within(modal).queryByText(/밀려난 ML 추정/)).not.toBeInTheDocument();
+    expect(within(modal).queryByText(/밀린 ML 예측/)).not.toBeInTheDocument();
   });
 
   it("구성원이 없으면 기록 대신 등록을 안내한다", async () => {
@@ -898,7 +898,7 @@ describe("카드와 자세히 보기가 같은 것을 보여준다", () => {
     await screen.findByText("판정 요약");
 
     // 규칙이 정본인 칸이라 "밀려난" 이라고 적는다.
-    const summary = screen.getByText("밀려난 ML 추정과 모델 정확도");
+    const summary = screen.getAllByText("이 예측의 근거와 정확도")[0];
     await user.click(summary);
 
     const card = summary.closest("article") as HTMLElement;
@@ -955,7 +955,10 @@ describe("카드와 자세히 보기가 같은 것을 보여준다", () => {
     const card = screen.getByRole("heading", { name: "고혈압", level: 3 }).closest("article") as HTMLElement;
     expect(within(card).getByText("규칙 엔진")).toBeInTheDocument();
     const anemia = screen.getByRole("heading", { name: "빈혈", level: 3 }).closest("article") as HTMLElement;
-    expect(within(anemia).getByText("ML 추정")).toBeInTheDocument();
+    // ML 이 정본인 칸은 앞 칸(확률)과 판정 칸이 모두 "ML 예측" 이다.
+    expect(within(anemia).getAllByText("ML 예측").length).toBe(2);
+    // 확률이 카드 앞면에 보인다 — 접이를 열지 않아도 모델이 무엇을 말했는지 안다.
+    expect(within(anemia).getByText("8%")).toBeInTheDocument();
   });
 });
 

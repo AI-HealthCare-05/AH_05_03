@@ -155,10 +155,16 @@ LEVEL_WEIGHT: dict[str, float] = {"높음": 2.0, "주의": 1.5, "관심": 1.0, "
 
 #: 규칙 엔진(E1)·공개 공식(E3)이 **측정값으로** 준 판정의 신호 강도.
 #:
-#: `HIGH`·`VERY_HIGH` 는 여기 없다. 그건 탐지가 아니라 확진이고, 사용자가 이미
-#: 아는 것을 "의심됩니다" 로 다시 올리면 화면의 가장 좋은 자리를 버리게 된다.
-#: 그 질환은 `KNOWN_LEVELS` 로 후보에서 빠지고 카드에는 등급 그대로 남는다.
-MEASURED_WEIGHT: dict[str, float] = {"CAUTION": 3.0, "NORMAL": 0.0}
+#: **`HIGH`·`VERY_HIGH` 를 2026-09-07 에 넣었다.** 그 전에는 확진이 `KNOWN_LEVELS` 로
+#: 후보에서 빠졌기 때문에 이 표에 있을 필요가 없었다. `RANK_SOURCE = "verdict"` 로
+#: 바꾸면서 확진도 후보가 됐는데 표를 같이 안 고쳤고, 그 결과 `signal_strength` 가
+#: 확진을 **측정으로 인식하지 못하고 ML 추정으로 떨어뜨렸다.** 화면에 이렇게 나갔다.
+#:
+#:     1순위 당뇨병 [추정] [매우 높음]
+#:       "검사값 없이 추정한 등급이 '주의'"     ← 공복혈당 148 을 넣은 사용자에게
+#:
+#: 값은 확진 순서를 지키도록 `CAUTION` 위에 둔다.
+MEASURED_WEIGHT: dict[str, float] = {"VERY_HIGH": 5.0, "HIGH": 4.0, "CAUTION": 3.0, "NORMAL": 0.0}
 
 #: 측정 여부는 **엔진 코드로 알 수 없다.** 판정이 스스로 말해야 한다.
 #:
@@ -244,7 +250,7 @@ def signal_strength(condition: dict[str, Any], verdict: dict[str, Any] | None) -
         if level in MEASURED_WEIGHT:
             return MEASURED_WEIGHT[level], level, "측정"
     level = ((condition.get("medical") or {}).get("level")) or "낮음"
-    return LEVEL_WEIGHT.get(level, 0.0), level, "추정"
+    return LEVEL_WEIGHT.get(level, 0.0), level, "예측"
 
 
 def score_one(
@@ -283,7 +289,12 @@ def reason_text(detail: dict[str, Any], suspected: bool) -> str:
         return "의심 신호는 없지만 함께 볼 만한 항목이에요."
     level = LEVEL_LABEL.get(detail["level"], detail["level"])
     if detail["basis"] == "측정":
-        parts = [f"입력한 검사값으로 '{level}' 판정"]
+        # 확진과 전단계를 가른다. "'매우 높음' 판정" 은 맞는 말이지만 사용자가
+        # 다음에 할 일이 다르다 — 확진은 진료, 전단계는 재측정이다.
+        if detail.get("risk_level") in KNOWN_LEVELS:
+            parts = [f"입력한 검사값이 이미 기준을 넘었어요 ('{level}')"]
+        else:
+            parts = [f"입력한 검사값으로 '{level}' 판정"]
     elif detail["basis"] == "확률":
         # `RANK_SOURCE = "ml_probability"`. 확률만으로 뽑았으므로 그렇게 말한다 —
         # "검사값 없이 추정" 이라고 하면 검사값을 넣은 사용자에게 거짓말이 된다.

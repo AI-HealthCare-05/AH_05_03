@@ -16,7 +16,7 @@ import { Modal } from "../../shared/ui/Modal";
 import type { DiseaseRisk, DiseaseVerdict, OnsetTrajectory, RiskLevel } from "./contracts";
 import { ENGINE_SHORT, LEVEL_LABEL } from "./contracts";
 import { Evidence, type ModelSpec } from "./Evidence";
-import { DISEASE_MEASURES, FIELD_LABELS, FIELD_UNITS } from "./fields";
+import { DISEASE_MEASURES, FIELD_LABELS, FIELD_UNITS, readableField, readableSentence } from "./fields";
 
 const LEVEL_CLASS: Record<RiskLevel, string> = {
   VERY_HIGH: "level-very-high",
@@ -177,7 +177,7 @@ export function ReferenceBlock({ verdict }: { verdict: DiseaseVerdict }) {
     // 좁은 카드에서 자리를 아끼려고 접었던 이유가 사라진다.
     <section className="assess-reference">
       <h4>
-        {verdict.superseded_by ? "밀려난 ML 추정 " : "ML 추정 근거 "}
+        {verdict.superseded_by ? "밀려난 ML 예측 " : "ML 예측 근거 "}
         <strong>{percent}%</strong>
         {ref.peer_percentile !== null && ref.peer_percentile !== undefined && (
           <span className="assess-muted">
@@ -340,8 +340,8 @@ export function VerdictCard({
 }) {
   const short = verdict.sub_status || LEVEL_LABEL[verdict.risk_level];
   const enough = verdict.risk_level !== "INSUFFICIENT_DATA";
-  const hasEvidence =
-    verdict.reference?.probability !== null && verdict.reference?.probability !== undefined;
+  const probability = verdict.reference?.probability;
+  const hasEvidence = probability !== null && probability !== undefined;
 
   return (
     <article className={`assess-card ${LEVEL_CLASS[verdict.risk_level]}`}>
@@ -355,18 +355,36 @@ export function VerdictCard({
       {/* **앞면은 정본 엔진의 답만 싣는다.** 어느 엔진이 답했는지를 등급 옆에 붙여야
           아래 접이의 ML 확률과 혼동되지 않는다. 예전에는 이 태그가 "판정 근거" 버튼
           안에 있어서, 카드를 훑는 동안 무엇이 이 등급을 정했는지 알 수 없었다. */}
-      <p className="assess-substatus">
-        <span className={`assess-engine-tag engine-${verdict.engine.toLowerCase()}`}>
-          {ENGINE_SHORT[verdict.engine]}
+      {/* **두 엔진을 나란히 놓는다.** ML 이 먼저 열 질환을 훑어 확률을 내고,
+          검사값이 있는 칸은 규칙 엔진이 그 위에서 단계까지 확정한다. 예전에는
+          확률이 접이 안에만 있어서, 카드를 보는 동안 모델이 무엇을 말했는지
+          알 수 없었다 — 두 엔진이 같이 도는데 하나만 보였다. */}
+      <div className="assess-engines">
+        {probability !== null && probability !== undefined ? (
+          <span className="assess-engine-step is-ml">
+            <small>ML 예측</small>
+            <b>{percent(probability)}</b>
+          </span>
+        ) : (
+          <span className="assess-engine-step is-ml is-none">
+            <small>ML 예측</small>
+            <b>—</b>
+          </span>
+        )}
+        <span className="assess-engine-arrow" aria-hidden="true">
+          →
         </span>
-        {short}
-      </p>
+        <span className={`assess-engine-step is-verdict engine-${verdict.engine.toLowerCase()}`}>
+          <small>{ENGINE_SHORT[verdict.engine]}</small>
+          <b>{readableSentence(short)}</b>
+        </span>
+      </div>
       <KeyFigures verdict={verdict} values={values} />
       <TrajectoryLine verdict={verdict} />
 
       {verdict.missing_fields.length > 0 && (
         <p className="assess-need">
-          <strong>{verdict.missing_fields.join(", ")}</strong>를 넣으면 정확해져요
+          <strong>{verdict.missing_fields.map(readableField).join(", ")}</strong>를 넣으면 정확해져요
         </p>
       )}
 
@@ -380,7 +398,7 @@ export function VerdictCard({
           두어 펼친 카드만 늘어나게 했다(`styles.css`). */}
       {hasEvidence ? (
         <details className="assess-card-evidence">
-          <summary>{verdict.superseded_by ? "밀려난 ML 추정과 모델 정확도" : "모델 내부 값"}</summary>
+          <summary>{verdict.superseded_by ? "이 예측의 근거와 정확도" : "이 예측의 근거와 정확도"}</summary>
           <Evidence verdict={verdict} values={values} models={models} />
         </details>
       ) : null}
@@ -423,7 +441,7 @@ export function VerdictDetail({
         {verdict.reason ? (
           <>
             <dt>무엇을 보고</dt>
-            <dd>{verdict.reason}</dd>
+            <dd>{readableSentence(verdict.reason)}</dd>
           </>
         ) : null}
         <dt>어느 엔진이 왜</dt>
@@ -442,7 +460,7 @@ export function VerdictDetail({
         {verdict.missing_fields.length > 0 ? (
           <>
             <dt>넣으면 정확해지는 값</dt>
-            <dd>{verdict.missing_fields.join(", ")}</dd>
+            <dd>{verdict.missing_fields.map(readableField).join(", ")}</dd>
           </>
         ) : null}
         {verdict.criteria_reference ? (
@@ -536,7 +554,7 @@ export function MatrixCard({ risk }: { risk: DiseaseRisk }) {
       )}
       {risk.missing_fields.length > 0 && (
         <p className="assess-missing">
-          <strong>못 본 값</strong> · {risk.missing_fields.join(", ")}
+          <strong>못 본 값</strong> · {risk.missing_fields.map(readableField).join(", ")}
         </p>
       )}
       {risk.recommendation && (

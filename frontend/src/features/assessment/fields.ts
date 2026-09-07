@@ -262,7 +262,10 @@ export const DISEASE_MEASURES: Record<string, string[]> = {
   hyperchol: ["total_chol", "ldl"],
   hypertg: ["triglyceride"],
   low_hdl: ["hdl"],
-  obesity: ["waist_cm"],
+  // **BMI 가 주, 허리둘레가 보조다.** 배지는 "1단계 비만"(BMI 기준)이라고 하는데
+  // 카드에는 허리둘레만 떠 있었다 — 판정의 근거가 화면에 없던 셈이다.
+  // `bmi` 는 폼 필드가 아니라 키·체중에서 계산되므로 `KeyFigures` 가 따로 만든다.
+  obesity: ["bmi", "waist_cm"],
   mets: ["waist_cm", "triglyceride", "hdl", "fasting_glucose"],
   ckd: ["creatinine", "urine_acr"],
   fatty_liver: ["waist_cm", "triglyceride", "ggt"],
@@ -393,3 +396,41 @@ export function profileGenderToSex(gender: string | null | undefined): "M" | "F"
   return undefined;
 }
 
+
+/**
+ * 규칙 엔진·공개 공식이 쓰는 이름 → 폼 필드 이름.
+ *
+ * 서버의 `AssessmentSummaryRequest.RENAMED_FOR_RULES` 의 **역방향**이다. 그쪽은
+ * 폼 이름을 규칙 엔진 이름으로 바꿔 보내는데, 판정이 돌아올 때는 규칙 엔진 이름이
+ * 그대로 실려 온다(`missing_fields`·`input_values`). 화면이 그걸 그대로 그리면
+ * `ogtt_2h 를 넣으면 정확해져요` · `total_cholesterol:정상` 처럼 내부 이름이 샌다.
+ */
+const RULE_ENGINE_NAMES: Record<string, string> = {
+  systolic_bp: "sbp",
+  diastolic_bp: "dbp",
+  total_cholesterol: "total_chol",
+  hdl_c: "hdl",
+  ldl_c: "ldl",
+  triglycerides: "triglyceride",
+  smoking: "smoking_status",
+};
+
+/**
+ * 판정이 돌려준 필드 이름을 사람이 읽는 말로.
+ *
+ * 세 갈래를 다 받는다 — 폼 이름(`ogtt_2h`), 규칙 엔진 이름(`total_cholesterol`),
+ * 그리고 이미 한글인 것(`혈색소`). 못 찾으면 원문 그대로 둔다: 지어내는 것보다
+ * 낫고, 화면에 영문이 보이면 여기에 한 줄 더하면 된다.
+ */
+export function readableField(name: string): string {
+  const formName = RULE_ENGINE_NAMES[name] ?? name;
+  return FIELD_LABELS[formName] ?? FIELD_LABELS[name] ?? name;
+}
+
+/** `total_cholesterol:정상, ldl_c:최적` 처럼 이름이 섞인 문장도 바꾼다. */
+export function readableSentence(text: string): string {
+  return text.replace(/[a-z][a-z0-9_]{2,}/g, (token) => {
+    const label = readableField(token);
+    return label === token ? token : label;
+  });
+}
