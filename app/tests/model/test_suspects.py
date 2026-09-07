@@ -26,6 +26,22 @@ from app.services import suspects as sp
 from app.services.risk import REPO_MODEL_DIR, RiskModelRegistry
 from app.services.trajectory import TRAJECTORY_TARGETS, prevalence_curve
 
+#: 모듈을 읽는 시점의 실제 기본값. 아래 autouse fixture 가 덮기 전에 잡아 둔다.
+DEPLOYED_RANK_SOURCE = sp.RANK_SOURCE
+DEPLOYED_RANK_POOL = sp.RANK_POOL
+
+
+@pytest.fixture(autouse=True)
+def arbitrated_ranking(monkeypatch: pytest.MonkeyPatch) -> None:
+    """이 파일의 계약 대부분은 **중재 기반 순위**를 전제한다.
+
+    `sp.RANK_SOURCE` 는 제품 결정이라 뒤집힐 수 있는데, 아래 계약들은 그 방식을
+    골랐을 때 무엇이 보장되는지를 적어 둔 것이다. 전역 기본값이 바뀌었다고 계약이
+    사라지면 되돌릴 때 무엇을 잃었는지 알 수 없으므로 여기서 고정한다.
+    확률 순위 쪽 계약은 §7 에서 따로 건다.
+    """
+    monkeypatch.setattr(sp, "RANK_SOURCE", "arbitrated")
+
 
 def card(target: str, level: str, ratio: float | None = 1.0, probability: float = 0.3) -> dict[str, Any]:
     return {
@@ -128,14 +144,14 @@ def test_measured_caution_outranks_estimated_high() -> None:
     merged = sp.rank_suspects(cards, age=50, verdicts={"htn": verdict("E1", "CAUTION", measured=True)}, top_n=2)
     assert merged[0]["target"] == "htn", "규칙 엔진이 측정으로 준 주의가 위로 와야 한다"
     assert merged[0]["basis"] == "측정"
-    assert merged[1]["basis"] == "추정"
+    assert merged[1]["basis"] == "예측"
 
 
 def test_ml_probability_verdict_does_not_count_as_measured() -> None:
     """`E2` **확률** 은 측정 가중을 받지 않는다. 안 그러면 같은 확률을 두 번 센다."""
     cards = [card("dm", "관심", 1.0)]
     ranked = sp.rank_suspects(cards, age=50, verdicts={"dm": verdict("E2", "CAUTION", measured=False)}, top_n=1)
-    assert ranked[0]["basis"] == "추정"
+    assert ranked[0]["basis"] == "예측"
     assert ranked[0]["level"] == "관심"
 
 
@@ -214,11 +230,11 @@ def test_reversible_curve_may_fall() -> None:
 
 
 def test_prevalence_truncates_at_age_cap() -> None:
-    curve = prevalence_curve(lambda age: 0.2, 75.0)
+    curve = prevalence_curve(lambda age: 0.2, 77.0)
     assert curve is not None
-    assert curve["horizons_years"] == [5], "75세는 5년만 자료 안에 든다"
+    assert curve["horizons_years"] == [1, 2, 3], "77세는 3년까지만 자료 안에 든다"
     assert curve["truncated_at_age"] == 80
-    assert prevalence_curve(lambda age: 0.2, 76.0) is None
+    assert prevalence_curve(lambda age: 0.2, 80.0) is None
 
 
 # ---------------------------------------------------------------------------
@@ -273,3 +289,125 @@ def test_known_disease_drops_out_of_suspects() -> None:
     without = build_prediction(RiskPredictionRequest(**SUSPECT), registry, known={first})
     assert first not in {s.target for s in without.top_suspects}
     assert len(without.top_suspects) == 3
+
+
+# ---------------------------------------------------------------------------
+# 7. 확률 순위 (`RANK_SOURCE = "ml_probability"`)
+#
+#    규칙 엔진을 순위에서 뺀 경로. 위 §1~§6 이 지키던 것 중 **무엇이 꺼지는지**를
+#    같이 고정한다 — 되돌릴 때 무엇을 되찾는지가 여기 적혀 있어야 한다.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def probability_ranking(monkeypatch: pytest.MonkeyPatch) -> None:
+    """확률 순위 + **후보 제한 없음**. 순위 규칙 자체를 보는 시험들이 쓴다."""
+    monkeypatch.setattr(sp, "RANK_SOURCE", "ml_probability")
+    monkeypatch.setattr(sp, "RANK_POOL", "all")
+
+
+@pytest.fixture
+def trajectory_pool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """지금 배포되는 조합. 확률 순위 + 비가역 3종 안에서만."""
+    monkeypatch.setattr(sp, "RANK_SOURCE", "ml_probability")
+    monkeypatch.setattr(sp, "RANK_POOL", "trajectory")
+
+
+def test_default_rank_source_is_the_recorded_product_decision() -> None:
+    """지금 배포되는 기본값. 바꾸려면 이 줄을 같이 고쳐야 한다.
+
+    **2026-09-07 에 `arbitrated` + `all` 로 되돌렸다.** 9/4 에 `ml_probability` 로
+    바꾼 근거는 "확률만으로 열 질환을 세우면 곡선이 하나도 안 붙는다"(0/3)였는데,
+    그건 `ml_probability + all` 의 문제였고 `arbitrated` 에는 해당하지 않았다.
+    같은 프로필 120개로 세 방식을 재니 이렇게 갈렸다.
+
+    | | `ml_prob`+`trajectory` | `ml_prob`+`all` | `arbitrated`+`all` |
+    |---|---:|---:|---:|
+    | 뽑힌 집합의 종류 | 1가지 | 15가지 | **20가지** |
+    | 5·10년 곡선 붙은 카드 | 68% | 13% | 54% |
+    | 확진(HIGH+) 유입 | 21% | 47% | **0%** |
+    | 측정 정상인데 1순위 | 28% | 7% | **0%** |
+
+    **같은 날 한 번 더 바꿨다 — `verdict`.** `arbitrated` 로도 카드와 패널이 갈렸다.
+    당뇨 프리셋(공복혈당 148 · HbA1c 7.2)에서 카드 1·2위가 패널에 아예 없었다 —
+    확진 제외가 당뇨병을, ML 번들 유무가 비만을 뺐기 때문이다. 제목이 "먼저 볼 세
+    가지" 라 사용자는 "가장 급한 셋" 으로 읽는데 내용이 달랐다.
+
+    `verdict` 는 카드 등급으로 세우고 같은 등급 안에서만 `arbitrated` 점수로 가른다.
+    프로필 120개에서 **패널 등급이 카드 상위 3등급과 어긋난 경우 0건**, 뽑힌 셋
+    42가지, 자리채움 0%.
+
+    **대가는 곡선이다.** 5·10년 발병 곡선이 54% → 4% 로 떨어진다. 확진에는 "지금
+    없다면 앞으로" 가 성립하지 않는데(궤적의 전제), 등급 순으로 세우면 맨 위가
+    확진이라 그렇다. "가장 급한 셋" 과 "시계열이 붙는 셋" 은 서로 다른 목록이다.
+
+    아래 `test_trajectory_pool_keeps_only_curve_capable_targets` 는 지우지 않는다 —
+    `trajectory` 풀의 성질 자체는 그대로이고, 되돌릴 때 그 계약이 필요하다.
+    """
+    assert DEPLOYED_RANK_SOURCE == "verdict"
+    assert DEPLOYED_RANK_POOL == "all"
+
+
+def test_trajectory_pool_keeps_only_curve_capable_targets(trajectory_pool: None) -> None:
+    """**뽑힌 셋이 전부 5년 곡선을 가질 수 있어야 한다.**
+
+    확률만으로 열 질환을 세우면 유병률이 높은 이상지질·지방간·대사증후군이 올라오는데
+    셋 다 발병 궤적이 없는 질환이라 2단계가 통째로 빈다(2026-09-04 실측 3/3).
+    """
+    cards = [
+        card("dlp", "주의", probability=0.64),
+        card("fatty_liver", "주의", probability=0.58),
+        card("mets", "주의", probability=0.45),
+        card("htn", "주의", probability=0.41),
+        card("dm", "관심", probability=0.12),
+        card("ckd", "낮음", probability=0.06),
+    ]
+    ranked = sp.rank_suspects(cards, age=52)
+    assert [r["target"] for r in ranked] == ["htn", "dm", "ckd"]
+
+
+def test_trajectory_pool_matches_the_trajectory_module(trajectory_pool: None) -> None:
+    """후보 집합의 정본은 `trajectory.TRAJECTORY_TARGETS` 하나다. 여기 복사본을 두지 않는다."""
+    cards = [card(t, "주의", probability=0.5) for t in ("dm", "htn", "ckd", "dlp", "anemia")]
+    ranked = sp.rank_suspects(cards, age=52)
+    assert {r["target"] for r in ranked} == set(TRAJECTORY_TARGETS)
+
+
+def test_probability_ranking_orders_by_probability(probability_ranking: None) -> None:
+    """확률 내림차순. 등급·근거가중·동년배배수를 보지 않는다."""
+    cards = [
+        card("ckd", "높음", ratio=3.0, probability=0.11),
+        card("low_hdl", "낮음", ratio=1.0, probability=0.62),
+        card("dm", "관심", ratio=1.0, probability=0.41),
+    ]
+    ranked = sp.rank_suspects(cards, age=52)
+    assert [r["target"] for r in ranked] == ["low_hdl", "dm", "ckd"]
+    assert ranked[0]["score"] == pytest.approx(0.62)
+
+
+def test_probability_ranking_ignores_rule_engine_verdicts(probability_ranking: None) -> None:
+    """측정으로 '주의' 를 받아도 순위가 올라가지 않는다 — 중재 경로와 갈리는 지점."""
+    cards = [card("dm", "낮음", probability=0.20), card("low_hdl", "낮음", probability=0.55)]
+    verdicts = {"dm": {"risk_level": "CAUTION", sp.MEASURED_FLAG: True}}
+    ranked = sp.rank_suspects(cards, age=52, verdicts=verdicts)
+    assert [r["target"] for r in ranked[:2]] == ["low_hdl", "dm"]
+
+
+def test_probability_ranking_keeps_known_diseases(probability_ranking: None) -> None:
+    """확진 질환도 후보에 남는다. 확률만 본다는 정의의 직접적인 결과다."""
+    cards = [card("htn", "높음", probability=0.81), card("dm", "관심", probability=0.30)]
+    ranked = sp.rank_suspects(cards, age=52, known={"htn"})
+    assert ranked[0]["target"] == "htn"
+
+
+def test_probability_ranking_reason_names_the_model(probability_ranking: None) -> None:
+    """왜 뽑혔는지를 '검사값 없이 추정' 이라고 말하면 안 된다 — 검사값이 있을 수 있다."""
+    ranked = sp.rank_suspects([card("dm", "주의", probability=0.44)], age=52)
+    assert ranked[0]["basis"] == "확률"
+    assert "예측 모델이 매긴 확률" in ranked[0]["reason"]
+
+
+def test_probability_ranking_marks_low_grade_cards_as_not_suspected(probability_ranking: None) -> None:
+    """확률은 0 이 되지 않으므로 등급으로 의심 여부를 가른다."""
+    ranked = sp.rank_suspects([card("dm", "낮음", probability=0.44)], age=52)
+    assert ranked[0]["suspected"] is False

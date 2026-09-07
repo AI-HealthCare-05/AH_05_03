@@ -444,8 +444,13 @@ TARGETS: dict[str, Target] = {
         definition="ALT >34 IU/L(남) / >25 IU/L(여)",
         threshold_source="Prati 2002 정상 상한. 지방간 진단 기준이 아니다",
         blocked=("ast", "alt", "ggt", "dx_liver"),
-        serve=False,
-        note="CAP 이 없는 6개 주기를 덮는 대리 라벨. 지방간 모델의 표본 한계를 재는 용도.",
+        note=(
+            "CAP 이 없는 6개 주기를 덮는 대리 라벨이라 원래 조사용(serve=False)이었다. "
+            "2026-09-07 에 서빙으로 올렸다 — 화면의 '간기능' 카드가 규칙 엔진(간효소 실측)만 "
+            "쓰고 있어서 간효소를 안 낸 사람에게는 아무 말도 못 하고 있었다. 이 모델이 그 자리를 "
+            "메운다. 규칙 엔진의 ALT 상한(남 33)과 라벨의 Prati 2002 상한(남 34)이 1 IU/L "
+            "다르다 — 같은 질환의 두 기준이고 둘 다 출처를 화면에 적는다."
+        ),
         criteria=(Criterion("alt", "ALT(SGPT)", "IU/L", ">", None, {"M": 34.0, "F": 25.0}),),
     ),
     # ---------------------------------------------------------------- 빈혈
@@ -458,6 +463,36 @@ TARGETS: dict[str, Target] = {
         blocked=("hemoglobin",),
         note="임신 기준(11 g/dL)이 달라 임신부는 라벨에서 뺐다.",
         criteria=(Criterion("hemoglobin", "혈색소", "g/dL", "<", None, {"M": 13.0, "F": 12.0}),),
+    ),
+    # ---------------------------------------------------------------- 비만
+    "obesity": Target(
+        key="obesity",
+        name="비만",
+        label="label_obesity",
+        definition="체질량지수 ≥25 kg/m² (대한비만학회 2022 아시아-태평양 기준)",
+        threshold_source="대한비만학회 비만진료지침 2022",
+        # **BMI 가 라벨이므로 BMI 와 그 재료가 통째로 막힌다.** 키·체중이 필수
+        # 입력이라 판정은 언제나 확정이고, 그래서 이 모델은 "지금 비만인가" 를
+        # 맞히려는 게 아니다. 나이만 옮겨 다시 채점한 유병 곡선 —
+        # "지금 이 생활습관·대사 지표로 10년 뒤 비만 기준을 넘고 있을 확률" — 이
+        # 이 카드에서 사용자가 모르는 유일한 값이다.
+        #
+        # 허리둘레는 다른 측정이라 남는다. 화면에서 "BMI 가 주, 허리둘레가 보조" 인
+        # 것과 어긋나지 않는다 — 라벨이 BMI 이고 허리둘레는 그것을 맞히는 재료다.
+        blocked=("bmi", "height_cm", "weight_kg"),
+        note="키·체중이 필수 입력이라 현재 판정은 늘 확정이다. 이 모델의 값어치는 나이 이동 곡선에 있다.",
+        criteria=(Criterion("bmi", "체질량지수", "kg/m²", ">=", 25.0),),
+    ),
+    # ------------------------------------------------------------ 고요산혈증
+    "hyperuricemia": Target(
+        key="hyperuricemia",
+        name="고요산혈증",
+        label="label_hyperuricemia",
+        definition="혈청 요산 >7.0 mg/dL(남) / >6.0 mg/dL(여)",
+        threshold_source="요산 용해도 한계(약 6.8 mg/dL) 기반 통용 정의. 통풍 발생률 구간은 Campion 1987",
+        blocked=("uric_acid",),
+        note="빈혈과 같은 꼴의 선별 모델이다 — 요산을 안 낸 사람에게 '재보세요' 를 말한다.",
+        criteria=(Criterion("uric_acid", "요산", "mg/dL", ">", None, {"M": 7.0, "F": 6.0}),),
     ),
 }
 

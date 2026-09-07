@@ -6,7 +6,6 @@
 """
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 
@@ -124,7 +123,13 @@ async def test_model_info_hides_coefficients(authorized_client: AsyncClient) -> 
     data = response.json()["data"]
     assert len(data["models"]) == len(ALL_BUNDLES)
     for entry in data["models"]:
-        assert entry["required_inputs"] == ["age", "sex", "bmi", "self_rated_health"]
+        # 비만만 `bmi` 가 빠진다 — BMI 가 그 라벨을 만들어서 특징이 될 수 없다.
+        expected = (
+            ["age", "sex", "self_rated_health"]
+            if entry["target"] == "obesity"
+            else ["age", "sex", "bmi", "self_rated_health"]
+        )
+        assert entry["required_inputs"] == expected
         assert entry["limits"]
         assert entry["tier"] in {"basic", "lab"}
         # 어느 학회 기준으로 만든 라벨인지가 번들마다 따라와야 한다. 화면이
@@ -177,6 +182,12 @@ async def test_label_defining_measurements_are_not_model_inputs(authorized_clien
         "ckd": {"creatinine", "egfr", "urine_acr"},
         "fatty_liver": set(),
         "anemia": {"hemoglobin"},
+        # 라벨이 BMI 라 BMI·키·체중이 통째로 막힌다. 허리둘레는 다른 측정이라 남는다 —
+        # 그것이 이 모델에서 가장 크게 기여하고(홀드아웃 AUROC 0.958), 그래서 확률이
+        # 등급이 되지 않는다(`assessment.SPECS` 의 `ml_fallback=False`).
+        "obesity": {"bmi", "height_cm", "weight_kg"},
+        "hyperuricemia": {"uric_acid"},
+        "liver_enzyme_high": {"ast", "alt", "ggt"},
     }
 
     for model_id, (target, inputs) in specs.items():
@@ -196,56 +207,6 @@ async def test_label_defining_measurements_are_not_model_inputs(authorized_clien
     assert not (blood_pressure & specs["dm"][1]), (
         "dm 번들이 혈압을 다시 쓰기 시작했다. 누출은 아니지만 문서의 설명과 어긋나므로 확인이 필요하다"
     )
-
-
-async def test_demo_page_served(authorized_client: AsyncClient) -> None:
-    response = await authorized_client.get("/api/demo")
-    assert response.status_code == status.HTTP_200_OK
-    assert "만성질환 위험도" in response.text
-    assert "/api/v1/predictions/risk" in response.text
-
-
-async def test_demo_never_hides_inputs(client: AsyncClient) -> None:
-    """입력창은 언제나 전부 보인다.
-
-    숨기면 사용자가 무엇이 빠졌는지 알 수 없다. 엔진을 고르던 시절에는 고른 쪽이
-    안 쓰는 항목을 흐리게 눌러 두는 것으로 그 규칙을 지켰는데, 화면이 늘 두 엔진을
-    같이 돌리게 되면서 흐릴 이유도 없어졌다. 규칙은 그대로고 더 세졌다 —
-    **아무것도 숨기지 않고 아무것도 흐리지 않는다.**
-    """
-    response = await client.get("/api/demo")
-    page = response.text
-
-    ids = re.findall(r'<(?:input|select) id="([a-z0-9_]+)"', page)
-    # 로그인 칸은 세지 않는다. 예측·판정 라우터에 인증이 붙으면서(ADR-009 §10)
-    # 데모에도 로그인 폼이 생겼는데, 그건 건강 입력창이 아니라 이 검사의 대상이
-    # 아니다. 세는 대상을 좁혀 두면 인증 UI 가 바뀌어도 이 카나리아가 안 흔들린다.
-    health_ids = [name for name in ids if not name.startswith("demo_")]
-    assert len(health_ids) == 32, f"건강 입력 개수가 바뀌었다: {len(health_ids)} ({sorted(health_ids)})"
-    assert "fasting_glucose" in health_ids and "self_rated_health" in health_ids
-
-    # 숨기는 코드가 다시 들어오면 잡는다.
-    assert ".hidden = !wants" not in page
-    assert 'classList.toggle("off"' not in page
-    # 엔진을 고르게 하면 화면이 다시 반쪽이 된다. 그 입구가 없어야 한다.
-    assert "engine-pick" not in page
-    # 모델이 무시한 항목은 숨기는 대신 결과에 적는다.
-    assert "mlIgnored" in page and "rulesIgnored" in page
-
-
-async def test_demo_starts_empty(client: AsyncClient) -> None:
-    """처음 열면 모든 칸이 비어 있다.
-
-    기본값이 박혀 있으면 "내가 넣은 값" 과 "화면이 넣어 둔 값" 이 섞인다. 데모를
-    보여 주는 자리에서 그 구분이 안 되면 결과를 설명할 수 없다.
-    """
-    page = (await client.get("/api/demo")).text
-    form = page[page.index('<form id="form"') : page.index("</form>")]
-
-    assert re.search(r'<input [^>]*value="', form) is None, "input 에 기본값이 박혀 있다"
-    selects = re.findall(r"<select ", form)
-    blank_defaults = re.findall(r'<option value=""[^>]*selected', form)
-    assert len(blank_defaults) == len(selects), "선택 항목의 기본값이 비어 있지 않다"
 
 
 @pytest.mark.parametrize("bundle_name", ALL_BUNDLES or ["dm"])

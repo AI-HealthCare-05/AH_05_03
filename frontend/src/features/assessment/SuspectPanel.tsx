@@ -27,13 +27,29 @@
  * 붙어 있던 것이 이 패널에서 가장 헷갈리는 지점이었다. 측정이 답한 칸은 답으로 닫는다.
  */
 
-import type { SuspectCard } from "./contracts";
+import type { RiskLevel, SuspectCard } from "./contracts";
+import { LevelBadge } from "./VerdictCards";
 
 const percent = (value: number) => `${(value * 100).toFixed(0)}%`;
 
 /** 측정이 "기준 이내" 라고 이미 답했나. 그러면 모델 확률을 덧붙이지 않는다. */
 function isSettled(suspect: SuspectCard) {
-  return suspect.basis === "측정" && suspect.level === "정상 범위";
+  // `risk_level` 이 정본이고 `level` 은 옛 응답(스냅샷)을 위한 폴백이다 — 기록
+  // 화면은 그날 저장한 판정을 그대로 그리므로 필드가 없는 판이 남아 있다.
+  const normal = suspect.risk_level ? suspect.risk_level === "NORMAL" : suspect.level === "정상 범위";
+  return suspect.basis === "측정" && normal;
+}
+
+/**
+ * 측정이 **이미 기준을 넘었다**고 답했나.
+ *
+ * 그러면 앞날 숫자를 붙이지 않는다. 라벨을 만드는 검사값은 그 질환의 ML 입력에서
+ * 차단되므로(`modeling/targets.py`), 공복혈당 148 을 넣어 확진된 사람에게도 당뇨
+ * 모델은 그 값을 못 보고 16% 를 낸다 — 같은 카드에 "매우 높음" 배지와 "기준 초과
+ * 지금 16%" 가 나란히 서 있었다. 확진에는 "앞으로" 가 아니라 "지금" 이 답이다.
+ */
+function isConfirmed(suspect: SuspectCard) {
+  return suspect.basis === "측정" && (suspect.risk_level === "HIGH" || suspect.risk_level === "VERY_HIGH");
 }
 
 /**
@@ -46,7 +62,8 @@ function isSettled(suspect: SuspectCard) {
 function OnsetRow({ years, value, peer }: { years: number; value: number; peer?: number }) {
   return (
     <li className="suspect-row">
-      <span className="suspect-when">{years}년 뒤</span>
+      {/* 0 은 "지금" 이다. `0년 뒤` 라고 적으면 읽는 사람이 한 박자 멈춘다. */}
+      <span className="suspect-when">{years === 0 ? "지금" : `${years}년 뒤`}</span>
       <b className="suspect-value">{percent(value)}</b>
       <span className="suspect-gauge" aria-hidden="true">
         <span className="suspect-gauge-fill" style={{ width: `${Math.min(value * 100, 100)}%` }} />
@@ -63,9 +80,11 @@ function SuspectItem({ suspect }: { suspect: SuspectCard }) {
   const onset = suspect.onset_trajectory;
   const prevalence = suspect.prevalence_trajectory;
   const settled = isSettled(suspect);
+  const confirmed = isConfirmed(suspect);
   const measured = suspect.basis === "측정";
   // 측정이 답한 칸에는 모델 확률을 덧붙이지 않는다. 위 머리말 참조.
-  const showPrevalence = prevalence && !settled;
+  // 확진도 같다 — 그쪽은 모델이 라벨 검사값을 못 봐서 오히려 낮은 값을 낸다.
+  const showPrevalence = prevalence && !settled && !confirmed;
 
   return (
     <article className={`suspect-card ${suspect.suspected ? "is-suspected" : "is-filler"}`}>
@@ -77,10 +96,39 @@ function SuspectItem({ suspect }: { suspect: SuspectCard }) {
         </h4>
         <span className="suspect-tags">
           <span className={`suspect-basis ${measured ? "is-measured" : "is-estimated"}`}>{suspect.basis}</span>
-          <span className="suspect-level">{suspect.level}</span>
+          {/* **판정 카드와 같은 배지다.** 예전에는 `suspect.level` 을 그대로 썼는데
+              그 값은 순위 점수를 만든 재료라 규칙 5단계와 의학 4단계가 섞여 있었다 —
+              같은 고혈압이 카드에서 "정상", 여기서 "정상 범위" 로 나왔다.
+              서버가 `risk_level` 을 따로 실어 준다(`app/services/assessment.py`). */}
+          {suspect.risk_level ? (
+            <LevelBadge level={suspect.risk_level as RiskLevel} />
+          ) : (
+            <span className="suspect-level">{suspect.level}</span>
+          )}
         </span>
       </header>
       <p className="suspect-reason">{suspect.reason}</p>
+
+      {/* **이 숫자를 얼마나 믿어도 되는가.** 같은 "주의" 라도 신기능은 사망연계
+          C 0.84 이고 낮은 HDL 은 0.51 이다 — 그 사실이 화면에 없으면 둘이 같아
+          보인다. 순위 점수의 `evidence_weight` 를 그대로 보인다. */}
+      <p className="suspect-evidence">
+        <span className="suspect-evidence-label">장기 근거</span>
+        <span className="suspect-evidence-dots" aria-hidden="true">
+          <i className={suspect.evidence_weight >= 0.5 ? "on" : ""} />
+          <i className={suspect.evidence_weight >= 0.7 ? "on" : ""} />
+          <i className={suspect.evidence_weight >= 1.0 ? "on" : ""} />
+        </span>
+        <span>
+          {suspect.evidence_weight >= 1.0
+            ? "사망연계에서 확인됨"
+            : suspect.evidence_weight >= 0.7
+              ? "어느 정도 확인됨"
+              : suspect.evidence_weight >= 0.5
+                ? "아직 못 쟀음"
+                : "장기 결과와 연결이 약함"}
+        </span>
+      </p>
 
       {onset ? (
         <section className="suspect-series">
@@ -99,23 +147,30 @@ function SuspectItem({ suspect }: { suspect: SuspectCard }) {
       ) : null}
 
       {showPrevalence ? (
-        <p className="suspect-prevalence">
-          <span className="suspect-prevalence-label">기준 초과</span>
-          <span>
-            지금 {percent(prevalence.current_probability)}
+        // **한 줄짜리 화살표 사슬을 표로 바꿨다.** 지평이 1~5년 다섯 개가 되면서
+        // `지금 47% → 1년 46% → 2년 45% → …` 이 두 줄로 접히고, 그 줄에서 어느
+        // 숫자가 어느 해인지 눈으로 되짚어야 했다. 발병 곡선과 같은 막대로 둔다 —
+        // 두 곡선의 뜻은 다르지만 읽는 방법은 같아야 한다.
+        <section className="suspect-series">
+          <h5>기준을 넘고 있을 확률</h5>
+          <ul className="suspect-rows">
+            <OnsetRow years={0} value={prevalence.current_probability} />
             {prevalence.horizons_years.map((year, i) => (
-              <span key={year}>
-                {" → "}
-                {year}년 <b>{percent(prevalence.prevalence_probability[i])}</b>
-              </span>
+              <OnsetRow key={year} years={year} value={prevalence.prevalence_probability[i]} />
             ))}
-          </span>
-        </p>
+          </ul>
+        </section>
       ) : null}
 
-      {!onset && !showPrevalence ? (
+      {confirmed ? (
+        <p className="suspect-now">
+          <b>지금</b> 기준을 넘은 상태예요. 앞날 예측이 아니라 <b>재측정과 진료 상담</b>이 다음 단계입니다.
+        </p>
+      ) : !onset && !showPrevalence ? (
         <p className="suspect-none assess-muted">
-          {settled ? "검사값이 기준 안에 있어 앞으로의 숫자는 내지 않았어요." : "앞으로의 예측은 자료 범위 밖이라 내지 않았어요."}
+          {settled
+            ? "검사값이 기준 안에 있어 앞으로의 숫자는 내지 않았어요."
+            : "이 질환은 앞으로의 발병 확률을 낼 근거가 아직 없어요."}
         </p>
       ) : null}
     </article>
@@ -137,12 +192,18 @@ export function SuspectPanel({ suspects }: { suspects: SuspectCard[] }) {
   return (
     <section className="suspect-panel" aria-labelledby="suspect-heading">
       <h3 id="suspect-heading">
-        {anySuspected ? "먼저 볼 세 가지" : "지금 특별히 의심되는 항목은 없어요"}
+        만성질환 발병 예측
+        <span className="assess-muted"> 급한 순 세 가지</span>
       </h3>
       <p className="assess-muted suspect-lead">
-        {anySuspected
-          ? "검사값이 있으면 그 판정을, 없으면 추정 등급을 씁니다. 동년배 대비 위치와 장기 결과와의 연결까지 함께 따져 골랐어요."
-          : "아래 세 항목은 의심돼서가 아니라 함께 보시라고 올렸어요."}
+        {anySuspected ? (
+          <>
+            아래 <b>질환별 결과</b>에서 급한 순으로 세 가지를 뽑아, 그 질환이 <b>앞으로 어떻게 되는지</b>를 붙였어요.
+            등급은 아래 카드와 같은 값이고, 같은 등급이면 장기 추적에서 근거가 확인된 질환을 먼저 둡니다.
+          </>
+        ) : (
+          "지금 특별히 급한 항목은 없어요. 아래 세 항목은 함께 보시라고 올렸습니다."
+        )}
       </p>
       <div className="suspect-grid">
         {suspects.map((suspect) => (

@@ -29,6 +29,7 @@ from app.services.assessment import (
     INSUFFICIENT,
     SPECS,
     arbitrate,
+    assess,
     grade_from_judgement,
     grade_from_medical,
     grade_from_percentile,
@@ -421,7 +422,6 @@ def test_matrix_axis_carries_cardiovascular_disease(models: Any) -> None:
 
     assert "cvd" not in {v.key for v in verdicts}
     assert "cvd_risk" in disease_risks
-    assert disease_risks["cvd_risk"]["category"]
     assert level_str(disease_risks["cvd_risk"]["risk_level"]) in LEVELS
     # 두 축을 한 목록에 섞지 않는다.
     assert "matrix_needs_attention" in summary
@@ -469,6 +469,34 @@ def test_reference_carries_accuracy_and_anchor(models: Any) -> None:
     assert accuracy["measured_on"] in ("미진단자", "전체")
 
 
+def test_reference_carries_the_whole_medical_band(models: Any) -> None:
+    """등급 문자열 하나가 아니라 묶음 전체를 싣는다.
+
+    `medical_level` 만 내보내던 때가 있었다. 그것으로는 **게이지를 그릴 수 없고**
+    "이 점수대 100명 중 몇 명" 도 못 쓴다 — 재료가 `rate`·`basis`·`baseline`·`lift`
+    다. 예측 데모(`/api/demo`)는 그 값을 위해 `/predictions/risk` 를 따로 불렀는데,
+    같은 입력을 두 번 보내면 두 답이 갈릴 수 있다. 데모를 판정 화면에 합치면서
+    왕복을 하나로 두고 이 필드를 늘렸다.
+
+    AGENTS.md 6번("DTO 필드를 더하면 그 값이 결과를 바꿔야 한다")의 반대 방향도
+    같이 본다 — `medical_level` 이 이 묶음의 `level` 과 **같은 값**이어야 한다.
+    다르면 화면의 배지와 게이지가 서로 다른 말을 한다.
+    """
+    verdicts = _assess(BASE, models)
+    scored = [v for v in verdicts.values() if v.reference.get("probability") is not None]
+    assert scored, "검사값이 없어도 ML 카드는 나온다"
+
+    for verdict in scored:
+        medical = verdict.reference["medical"]
+        assert medical is not None, f"{verdict.key}: 등급 묶음이 없으면 자세히 보기가 게이지를 못 그린다"
+        assert 0.0 <= medical["rate"] <= 1.0
+        assert medical["basis"], f"{verdict.key}: 비율이 무슨 기준인지 없으면 숫자를 읽을 수 없다"
+        assert isinstance(medical["anchored_on_rule_engine"], bool)
+        assert medical["level"] == verdict.reference["medical_level"], (
+            f"{verdict.key}: 배지({verdict.reference['medical_level']})와 게이지({medical['level']})가 다르다"
+        )
+
+
 def test_top_factors_survive_but_are_marked(models: Any) -> None:
     """기여도를 지우지 않는다. 다만 개선 조언으로 쓰면 안 된다는 사실이 계약에 있다."""
     from app.dtos.assessment_summary import VerdictReference
@@ -497,3 +525,139 @@ def test_partial_metabolic_count_can_still_confirm() -> None:
     partial = evaluate_metabolic_syndrome({"sex": "F", "waist_cm": 90, "triglycerides": 200})
     assert partial["risk_level"] == INSUFFICIENT
     assert partial["input_values"]["met_count"] == 2
+
+
+def test_suspect_panel_shares_the_card_badge_and_name(models: Any) -> None:
+    """의심 패널과 판정 카드가 **같은 등급·같은 이름**을 쓴다.
+
+    실측(52세 남 · 118/74 · 이상지질 프리셋)에서 고혈압 하나가 카드에서 "정상",
+    패널에서 "정상 범위" 로 나왔다. `SuspectCard.level` 은 순위 점수를 만든 재료라
+    규칙 5단계와 의학 4단계(낮음·관심·주의·높음)가 섞여 들어오기 때문이다.
+
+    이름도 같은 종류로 갈라져 있었다 — `ckd` 가 카드에서 "만성콩팥병", 패널에서
+    번들 이름인 "신기능 확인 필요". 사용자가 두 이름을 다른 질환으로 읽었다.
+
+    둘 다 `assess()` 가 표시 직전에 `SPECS` 로 덮어서 닫는다.
+    """
+    request = AssessmentSummaryRequest.model_validate(
+        {
+            "age": 52,
+            "sex": "M",
+            "height_cm": 172,
+            "weight_kg": 70,
+            "waist_cm": 84,
+            "self_rated_health": 3,
+            "sbp": 118,
+            "dbp": 74,
+            "fasting_glucose": 92,
+            "hba1c": 5.3,
+            "total_chol": 268,
+            "ldl": 178,
+            "hdl": 34,
+            "triglyceride": 260,
+            "creatinine": 0.9,
+            "hemoglobin": 15.0,
+        }
+    )
+    verdicts, _, _, _, suspects = assess(request, models)
+    assert suspects, "검사값이 있으면 의심 후보가 나온다"
+
+    by_key = {verdict.key: verdict for verdict in verdicts}
+    for card in suspects:
+        verdict = by_key[card.target]
+        assert card.risk_level == verdict.risk_level, (
+            f"{card.target}: 패널 배지({card.risk_level})와 카드 배지({verdict.risk_level})가 다르다"
+        )
+        assert card.name == verdict.name, f"{card.target}: 패널 이름({card.name})과 카드 이름({verdict.name})이 다르다"
+
+
+def test_the_panel_follows_the_card_ranking(models: Any) -> None:
+    """**패널은 카드 등급 순이다.** 별도 점수로 다른 목록을 만들지 않는다.
+
+    2026-09-07 이전에는 두 벌의 규칙이 있었다 — 카드는 정본 엔진의 판정, 패널은
+    `등급가중 × 근거가중 × 동년배배수` 에 확진 제외와 ML 번들 유무 필터까지 얹은
+    별도 점수. 그래서 당뇨 프리셋(공복혈당 148 · HbA1c 7.2)에서 이렇게 나왔다.
+
+        카드   VERY_HIGH 당뇨병 · HIGH 비만 · CAUTION 대사증후군 · CAUTION 지방간
+        패널   1 대사증후군 · 2 지방간 · 3 이상지질혈증(자리채움)
+
+    확진 제외가 당뇨병을, ML 번들 유무가 비만을 뺐다. 제목이 "먼저 볼 세 가지" 라
+    사용자는 "가장 급한 셋" 으로 읽는데 내용이 달랐다.
+
+    이제 카드 등급이 1차 정렬이고 근거가중은 같은 등급 안에서 동점만 푼다.
+    **확진도 들어온다** — 이미 아는 것이라도 가장 급하면 가장 급한 것이다.
+    """
+    request = AssessmentSummaryRequest.model_validate(
+        {
+            "age": 52,
+            "sex": "M",
+            "height_cm": 172,
+            "weight_kg": 84,
+            "waist_cm": 96,
+            "self_rated_health": 4,
+            "sbp": 118,
+            "dbp": 74,
+            "fasting_glucose": 148,
+            "hba1c": 7.2,
+            "total_chol": 180,
+            "ldl": 105,
+            "hdl": 55,
+            "triglyceride": 110,
+        }
+    )
+    verdicts, _, _, _, suspects = assess(request, models)
+    assert suspects
+
+    order = ["VERY_HIGH", "HIGH", "CAUTION", "NORMAL", "INSUFFICIENT_DATA"]
+    card_top = sorted(order.index(level_str(v.risk_level)) for v in verdicts)[: len(suspects)]
+    panel = [order.index(card.risk_level) for card in suspects]
+    assert panel == card_top, f"패널 등급 {panel} 이 카드 상위 {card_top} 과 다르다"
+
+    # 확진이 1순위로 온다. 예전에는 `KNOWN_LEVELS` 가 이걸 뺐다.
+    assert suspects[0].risk_level == "VERY_HIGH"
+    assert suspects[0].name == "당뇨병"
+
+
+def test_diseases_without_an_ml_bundle_still_rank(models: Any) -> None:
+    """비만은 규칙 엔진이 정본이고 ML 확률은 등급이 되지 않는다 — 그래도 순위에 온다.
+
+    2026-09-07 에 비만에도 번들이 붙었다(`modeling/targets.py`). 그래도 `ml_fallback`
+    은 False 다: `BMI = 체중/키²` 이고 키·체중이 필수 입력이라 규칙 엔진의 판정이
+    언제나 확정이고, ML 이 답하는 것은 다른 물음(나이 이동 유병 곡선)이다. 확률이
+    등급으로 올라오면 BMI 22 인 사람 옆에 미국 기저율 근처의 값이 서게 된다.
+
+    비만이 `HIGH` 인데 패널에 못 오면 카드 2위를 빼놓게 된다.
+    """
+    request = AssessmentSummaryRequest.model_validate(
+        {
+            "age": 52,
+            "sex": "M",
+            "height_cm": 172,
+            "weight_kg": 84,
+            "waist_cm": 96,
+            "self_rated_health": 4,
+            "fasting_glucose": 148,
+            "hba1c": 7.2,
+        }
+    )
+    verdicts, _, _, _, suspects = assess(request, models)
+    obesity = next(v for v in verdicts if v.key == "obesity")
+    assert level_str(obesity.risk_level) == "HIGH", "이 입력이면 비만은 HIGH 다"
+    # 판정은 규칙 엔진이 냈고 ML 확률은 참고로 밀려 있다.
+    assert obesity.engine == "E1"
+    assert obesity.superseded_by == "E1"
+    assert obesity.reference.get("probability") is not None, "번들이 붙었으므로 참고 확률은 있다"
+    # 카드 키와 번들 타깃이 다를 수 있으므로 화면이 찾을 이름을 같이 싣는다.
+    assert obesity.reference.get("model_target") == "obesity"
+
+    assert "obesity" in {card.target for card in suspects}, "등급이 높으면 순위에 온다"
+
+    # 카드 키와 번들 타깃이 다른 둘. 순위 패널이 `SPECS.key` 공간으로 돌아와야 한다 —
+    # 번들 이름 그대로 나오면 이름·등급 덮어쓰기가 통째로 빗나간다.
+    keys = {v.key for v in verdicts}
+    assert {"liver", "uric_acid"} <= keys
+    liver = next(v for v in verdicts if v.key == "liver")
+    assert liver.reference.get("model_target") == "liver_enzyme_high"
+    uric = next(v for v in verdicts if v.key == "uric_acid")
+    assert uric.reference.get("model_target") == "hyperuricemia"
+    assert not ({"liver_enzyme_high", "hyperuricemia"} & {card.target for card in suspects})

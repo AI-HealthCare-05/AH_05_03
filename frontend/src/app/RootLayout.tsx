@@ -1,5 +1,5 @@
-import { Suspense, useContext, useEffect, useMemo, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { SignInPage } from "../features/account/SignInPage";
 import { serverApiClient } from "../shared/api/serverApiClient";
@@ -13,11 +13,12 @@ import { LocalDomainContext } from "./localDomainContext";
 // 실제로 써 보니 반대였다. 그 화면들에 들어가려면 **어느 카드의 어느 버튼을 눌러야
 // 하는지 알고 있어야** 했고, 처음 온 사람은 홈에서 더 나아가지 못했다. 문이 둘인
 // 것보다 문을 못 찾는 쪽이 비싸다. 현재 위치는 `NavLink` 의 active 표시가 말한다.
-// 예측 데모는 FastAPI 가 직접 내는 화면이라 SPA 라우트가 아니다. `NavLink` 로 걸면
-// react-router 가 클라이언트 라우팅을 시도해 404 로 떨어진다 — 일반 앵커여야 한다.
-const DEMO_PAGES = [
-  { href: "/api/demo", label: "예측 데모", hint: "ML 모델과 규칙 엔진을 한 화면에서 비교합니다" },
-] as const;
+// **"예측 데모" 가 여기 있었다.** FastAPI 가 직접 내던 단일 HTML(`/api/demo`)이라
+// SPA 라우트가 아니었고 일반 앵커로 걸어 뒀다. 그 화면을 `/assessment` 로 합치면서
+// 라우터와 함께 지웠다 — 폼을 한 번에 채우는 테스트 프로필과, 게이지·정확도·모델이
+// 안 쓴 입력을 보여주는 "예측 근거 자세히 보기" 가 그쪽으로 옮겨 갔다.
+// 화면이 둘이면 판단도 둘이 되고, 그 판단이 서버에 없다는 것이 ADR-009 가 메우려던
+// 구멍이었다. 메뉴는 앱 안 라우트만 담는다 — `RootLayout.test.tsx` 가 지킨다.
 
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
@@ -38,6 +39,29 @@ function readResetToken(): boolean {
 
 export function RootLayout() {
   const { status, email, signOut } = useAuth();
+  const navigationRef = useRef<HTMLElement>(null);
+  const { pathname } = useLocation();
+
+  // 좁은 화면에서 메뉴는 가로로 미는 레일이다(`styles.css` 760px 블록). 링크를
+  // 눌러 들어왔다면 누른 항목이 이미 보이지만, **새로고침하거나 주소로 바로
+  // 들어오면 레일이 왼쪽 끝에서 시작한다** — 일곱 번째 "계정" 에 서 있어도 화면에는
+  // 첫 항목만 보이고, 현재 위치 표시가 화면 밖에 있다. 표시를 고쳐 놓고 안 보이면
+  // 고친 의미가 없어서 여기서 끌어온다.
+  //
+  // 넓은 화면에서는 레일이 넘치지 않아(`flex-wrap: wrap`) 아무 일도 일어나지 않는다.
+  // 훅이라 이른 반환보다 위에 있어야 한다 — 로그인 전에는 `nav` 자체가 없고,
+  // 그때는 찾는 것이 없어 그대로 빠져나간다.
+  useEffect(() => {
+    const active = navigationRef.current?.querySelector<HTMLElement>("a.active");
+    if (!active) return;
+    active.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      // 세로는 건드리지 않는다. 헤더가 sticky 라 이미 보이는데 `start` 를 주면
+      // 본문이 함께 밀린다.
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [pathname]);
   const localDomain = useContext(LocalDomainContext);
   const profiles = useMemo(() => localDomain?.profiles ?? [], [localDomain?.profiles]);
   const [matchedProfileName, setMatchedProfileName] = useState<string>();
@@ -110,17 +134,16 @@ export function RootLayout() {
           {/* 예전에는 좁은 화면에서 햄버거 버튼 뒤로 접혀 있었다. 항목이 셋뿐이라
               접을 이유가 없고, 한 번 더 눌러야 보이는 메뉴는 그만큼 덜 눌린다.
               언제나 탭으로 펼쳐 두고 좁은 화면에서는 헤더 아래 줄로 내린다. */}
-          <nav id="primary-navigation" className="primary-navigation" aria-label="주 메뉴">
+          <nav
+            id="primary-navigation"
+            className="primary-navigation"
+            aria-label="주 메뉴"
+            ref={navigationRef}
+          >
             {NAVIGATION.map((item) => (
               <NavLink key={`${item.to}-${item.label}`} to={item.to} end={item.end}>
                 {item.label}
               </NavLink>
-            ))}
-            {DEMO_PAGES.map((item) => (
-              <a key={item.href} className="navigation-external" href={item.href} title={item.hint}>
-                {item.label}
-                <i aria-hidden="true">↗</i>
-              </a>
             ))}
           </nav>
 

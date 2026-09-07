@@ -13,9 +13,19 @@ export interface ModelAccuracy {
   headline_auroc: number;
   grade: string;
   measured_on: string;
+  /**
+   * 라벨 전체 기준 AUROC. `headline_auroc` 는 미진단자 값이 있으면 그쪽이다.
+   *
+   * 서버(`app/dtos/predictions.py` 의 `ModelAccuracy`)는 처음부터 이 셋을 실어
+   * 보내고 있었는데 이 손 사본에만 없었다. 없는 필드는 화면이 못 읽으므로
+   * "서버가 안 준다" 와 구별되지 않는다 — 자세히 보기를 붙이면서 드러났다.
+   */
+  auroc: number;
+  auroc_undiagnosed: number | null;
   alert_ppv: number | null;
   alert_sensitivity: number | null;
   holdout_n: number | null;
+  holdout_cycle: string | null;
 }
 
 /**
@@ -68,8 +78,19 @@ export interface SuspectCard {
   score: number;
   suspected: boolean;
   probability?: number | null;
+  /**
+   * 순위 점수를 만든 재료. **배지로 쓰지 않는다** — 규칙 5단계와 의학 4단계
+   * (낮음·관심·주의·높음)가 섞여 들어온다. 근거 문구에만 쓴다.
+   */
   level: string;
-  /** "측정" 이면 규칙 엔진이 검사값으로 준 판정, "추정" 이면 ML 확률 */
+  /**
+   * 판정 카드와 같은 5단계 등급. 화면이 배지로 쓰는 값이다.
+   *
+   * 옛 응답(기록 화면이 그리는 스냅샷)에는 없을 수 있어 옵셔널이다 — 없으면
+   * `level` 로 떨어진다.
+   */
+  risk_level?: RiskLevel | "";
+  /** "측정" 이면 규칙 엔진이 검사값으로 준 판정, "예측" 이면 ML 확률 */
   basis: string;
   peer_ratio?: number | null;
   evidence_weight: number;
@@ -79,18 +100,60 @@ export interface SuspectCard {
   onset_status?: string | null;
 }
 
+/** 의학 기준 등급 묶음. 게이지와 "이 점수대 100명 중 몇 명" 의 재료다. */
+export interface MedicalRisk {
+  level: "낮음" | "관심" | "주의" | "높음";
+  rate: number;
+  basis: string;
+  baseline?: number | null;
+  lift?: number | null;
+  anchored_on_rule_engine: boolean;
+}
+
+/** 이 확률대를 실제로 검사하면 학회 기준으로 몇 %가 넘는가. */
+export interface RuleAnchor {
+  society: string;
+  positive_from: string;
+  rule_positive_rate: number;
+  overall_rate?: number | null;
+  lift?: number | null;
+  sample: number;
+  levels: Record<string, number>;
+}
+
 export interface VerdictReference {
+  /**
+   * 이 확률을 낸 ML 번들의 타깃 이름. **카드 키와 다를 수 있다.**
+   *
+   * `liver` 카드는 `liver_enzyme_high` 번들이, `uric_acid` 카드는 `hyperuricemia`
+   * 번들이 답한다. `/predictions/model-info` 에서 번들을 찾을 때 카드 키로 찾으면
+   * "이 모델이 쓰지 않은 입력" 과 "더 넣으면 정밀해지는 값" 이 조용히 빈다.
+   */
+  model_target?: string | null;
   probability?: number | null;
   peer_percentile?: number | null;
   peer_group?: string | null;
+  peer_median?: number | null;
   peer_ratio?: number | null;
   medical_level?: string | null;
+  /** `medical_level` 은 이 안의 `level` 하나다. 게이지는 `rate` 가 있어야 그린다. */
+  medical?: MedicalRisk | null;
   model_auroc?: number | null;
   tier?: string | null;
   accuracy?: ModelAccuracy | null;
+  rule_anchor?: RuleAnchor | null;
   top_factors?: { feature: string; contribution: number }[];
   trajectory?: OnsetTrajectory | null;
   trajectory_status?: TrajectoryStatus | null;
+  /**
+   * "그 나이가 됐을 때 기준을 넘고 있을 확률" — **열 질환 전부**에 있다.
+   *
+   * 발병 궤적은 비가역 셋(당뇨·고혈압·신기능)에만 붙는다. 나머지 일곱은 가역이거나
+   * 유병률이 비단조라 누적 발병 곡선이 거짓이 된다(`app/services/trajectory.py` 의
+   * `EXCLUDED_TARGETS`: 이상지질혈증은 65세+ 사망연계 C 0.43 으로 방향이 뒤집힌다).
+   * 그래서 앞날을 말할 자리가 일곱 장에 아예 없었다. 이쪽은 다른 물음이라 답이 있다.
+   */
+  prevalence_trajectory?: PrevalenceTrajectory | null;
 }
 
 export interface DiseaseVerdict {
@@ -172,7 +235,7 @@ export const LEVEL_ORDER: RiskLevel[] = ["VERY_HIGH", "HIGH", "CAUTION", "NORMAL
 
 export const ENGINE_SHORT: Record<EngineCode, string> = {
   E1: "규칙 엔진",
-  E2: "ML 추정",
+  E2: "ML 예측",
   E3: "공개 공식",
 };
 

@@ -7,7 +7,7 @@
  *    어느 줄인지 짚지 못한다
  */
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -65,6 +65,46 @@ function pickFile() {
 }
 
 describe("DocumentPane", () => {
+  it("읽는 동안 단계와 흘러온 글을 보여 준다 — 멈춘 것과 도는 것을 구분할 수 있어야 한다", async () => {
+    // 예전에는 한 줄이었다("표를 읽고 있어요…"). 7~20초 동안 화면에서 움직이는
+    // 것이 없어서, 사용자가 그 시간에 파일을 다시 고르는 일이 생겼다.
+    let emit: ((progress: { text: string }) => void) | undefined;
+    let finish: ((result: unknown) => void) | undefined;
+    vi.spyOn(GeminiOcrAdapter.prototype, "recognize").mockImplementation(
+      (_file, _name, options) =>
+        new Promise((resolve) => {
+          emit = options?.onProgress;
+          finish = resolve as (result: unknown) => void;
+        }),
+    );
+    const user = userEvent.setup();
+    renderPane(stubRuntime());
+
+    await user.upload(screen.getByLabelText(/검진표 이미지나 PDF/), pickFile());
+
+    const panel = await screen.findByRole("region", { name: "검진표 인식 진행" });
+    // 워커가 아직 안 집었으면 "서버 대기" 다. 단계 이름을 지어내지 않는다.
+    const at = () => panel.querySelector('[aria-current="step"]')?.textContent?.trim();
+    await waitFor(() => expect(at()).toBe("서버 대기"));
+    expect(within(panel).getByText(/초 경과/)).toBeInTheDocument();
+
+    // 글자가 들어오면 읽기 단계로 넘어가고 **그 글자 자체**를 띄운다 — 자기
+    // 검진표의 글자가 보이는 것이 "지금 읽고 있다" 를 가장 확실하게 말한다.
+    emit?.({ text: "공복혈당 112 mg/dL\n총콜레스테롤 210 mg/dL" });
+    await waitFor(() => expect(within(panel).getByText(/총콜레스테롤 210/)).toBeInTheDocument());
+    expect(at()).toBe("표 읽는 중");
+    expect(panel.querySelector(".ocr-stream-count")?.textContent).toMatch(/지금까지 \d+자/);
+
+    // `reset` 은 글자 수를 0 으로 되돌린다. 감추면 사용자는 그걸 버그로 읽는다.
+    emit?.({ text: "" });
+    await waitFor(() => expect(within(panel).getByText(/다른 모델로 다시 시작/)).toBeInTheDocument());
+
+    finish?.(RECOGNIZED);
+    // 끝나면 진행 패널은 사라지고 결과가 선다.
+    await waitFor(() => expect(screen.queryByRole("region", { name: "검진표 인식 진행" })).not.toBeInTheDocument());
+    expect(screen.getByText(/수치 2개를 읽어/)).toBeInTheDocument();
+  });
+
   it("고른 검진표를 암호화 보관함에 먼저 저장한다", async () => {
     const save = vi.fn().mockResolvedValue({ ok: true, value: { id: "doc-1" } });
     vi.spyOn(GeminiOcrAdapter.prototype, "recognize").mockResolvedValue(RECOGNIZED as never);

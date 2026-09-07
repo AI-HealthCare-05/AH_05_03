@@ -20,6 +20,7 @@ import { GeminiOcrAdapter, type OcrMeasurementRow } from "../../shared/api/gemin
 import type { LocalDocument } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 import { buildPreview, type DocumentPreview } from "./documentPreview";
+import { OcrProgressPanel, type OcrStage } from "./OcrProgressPanel";
 
 const ZOOM_STEPS = [1, 1.5, 2, 3] as const;
 
@@ -46,7 +47,13 @@ export function DocumentPane({
   const [document, setDocument] = useState<LocalDocument>();
   const [preview, setPreview] = useState<DocumentPreview>();
   const [reading, setReading] = useState<DocumentReading>();
-  const [progress, setProgress] = useState<string>();
+  /**
+   * 인식 진행. 한 줄 문구가 아니라 **단계 + 흘러온 글**이다.
+   *
+   * 예전에는 `setProgress("표를 읽고 있어요…")` 한 줄이었고, 7~20초 동안 화면에서
+   * 움직이는 것이 없어서 멈춘 것과 도는 것을 구분할 수 없었다.
+   */
+  const [job, setJob] = useState<{ stage: OcrStage; text: string; restarted: boolean; startedAt: number }>();
   const [error, setError] = useState<string>();
   const [zoom, setZoom] = useState<number>(1);
 
@@ -91,17 +98,21 @@ export function DocumentPane({
       swapPreview(undefined);
       setDocument(undefined);
 
+      const startedAt = Date.now();
+      const step = (stage: OcrStage) =>
+        setJob((prev) => ({ stage, text: prev?.text ?? "", restarted: prev?.restarted ?? false, startedAt }));
+
       try {
         // **미리보기를 먼저 띄운다.** 인식은 7~20초라, 그동안 화면이 비어 있으면
         // 사용자는 파일이 올라갔는지조차 알 수 없다.
-        setProgress("검진표를 여는 중이에요…");
+        setJob({ stage: "opening", text: "", restarted: false, startedAt });
         const built = await buildPreview(file, file.type);
         // 그 사이 다른 파일을 골랐으면 방금 만든 것을 놓고 조용히 빠진다.
         if (!current()) return built.release();
         swapPreview(built);
 
         if (runtime?.documents) {
-          setProgress("이 브라우저에 암호화해 저장하는 중이에요…");
+          step("storing");
           const saved = await runtime.documents.save({
             householdId,
             profileId,
@@ -113,13 +124,25 @@ export function DocumentPane({
           setDocument(saved.value);
         }
 
-        setProgress("검진표를 읽고 있어요… 7~20초쯤 걸려요");
+        step("queued");
         const result = await new GeminiOcrAdapter().recognize(file, file.name, {
           onProgress: ({ text }) => {
-            if (text && current()) setProgress("표를 읽고 있어요…");
+            if (!current()) return;
+            // 글자가 하나라도 왔으면 워커가 잡았다는 뜻이다 — 대기에서 읽기로.
+            //
+            // `text` 가 있다가 빈 문자열이 되면 서버가 `reset` 을 보낸 것이다
+            // (앞 모델이 죽어 다른 모델로 다시 시작). 그 사실을 감추면 사용자는
+            // 글자 수가 뒤로 가는 것을 버그로 읽는다.
+            setJob((prev) => ({
+              stage: text ? "reading" : (prev?.stage ?? "queued"),
+              text,
+              restarted: (prev?.restarted ?? false) || Boolean(prev && prev.text.length > 0 && text.length === 0),
+              startedAt,
+            }));
           },
         });
         if (!current()) return;
+        step("matching");
         const next: DocumentReading = {
           values: result.measurements?.values ?? {},
           review: result.measurements?.review ?? [],
@@ -130,7 +153,7 @@ export function DocumentPane({
         // 밀려난 선택의 실패로 지금 화면을 어지럽히지 않는다.
         if (current()) setError(caught instanceof Error ? caught.message : "검진표를 읽지 못했어요.");
       } finally {
-        if (current()) setProgress(undefined);
+        if (current()) setJob(undefined);
       }
     },
     [runtime, householdId, profileId, onRead, swapPreview],
@@ -171,10 +194,8 @@ export function DocumentPane({
         원본은 이 브라우저에 암호화해 두고, 읽는 동안에만 서버를 거칩니다. 서버 데이터베이스에는 남지 않아요.
       </p>
 
-      {progress ? (
-        <p className="checkup-progress" role="status">
-          {progress}
-        </p>
+      {job ? (
+        <OcrProgressPanel stage={job.stage} text={job.text} restarted={job.restarted} startedAt={job.startedAt} />
       ) : null}
       {error ? (
         <p className="alert error-alert" role="alert">

@@ -144,6 +144,21 @@ export class ServerApiClient {
   }
 
   /**
+   * 적재된 위험도 모델 정보. **건강 수치를 보내지 않는다** — 배포 메타데이터다.
+   *
+   * 자세히 보기가 "이 모델이 받고도 쓰지 않은 입력" 을 계산하는 데 쓴다. 질환마다
+   * `required_inputs`·`optional_inputs` 가 다르고(고혈압 모델은 혈압을 못 본다),
+   * 그 목록을 화면에 베껴 두면 재학습해서 입력이 바뀔 때 조용히 어긋난다.
+   *
+   * 서버는 이 경로에 인증을 걸지 않는다(`prediction_routers.model_info`). 그래도
+   * `authenticated` 로 부르는 이유는 나머지 호출과 토큰 갱신 경로를 하나로 두려는
+   * 것이고, 401 이 나면 그건 갱신이 필요한 상태라 다른 호출도 같이 실패한다.
+   */
+  public modelInfo<T>(): Promise<T> {
+    return this.request<T>("/predictions/model-info", { authenticated: true });
+  }
+
+  /**
    * 건강 비서 대화. **인증이 붙는다.**
    *
    * PR #27 의 클라이언트는 맨 `fetch` 로 불렀는데 project 의 이 경로는 401 을 낸다 —

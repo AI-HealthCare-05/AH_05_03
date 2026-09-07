@@ -282,8 +282,17 @@ class SuspectCard(BaseSerializerModel):
     suspected: bool = Field(description="False 면 자리를 채우려고 올라온 것이지 의심이 아니다")
     probability: float | None = None
     level: str
+    risk_level: str = Field(
+        default="",
+        description=(
+            "**판정 카드와 같은 5단계 등급.** 화면이 배지로 쓰는 값이다.\n\n"
+            "`level` 은 순위 점수를 만든 재료라 규칙 5단계와 의학 4단계(낮음·관심·주의·높음)가 "
+            "섞여 들어온다 — 같은 고혈압이 카드에서 '정상', 패널에서 '정상 범위' 로 나오던 "
+            "원인이 그것이다. 그래서 카드가 쓰는 등급을 따로 싣고 `level` 은 근거 문구에만 쓴다."
+        ),
+    )
     basis: str = Field(
-        default="추정", description="측정 | 추정 — 규칙 엔진이 검사값으로 준 판정인가, ML 이 추정한 것인가"
+        default="예측", description="측정 | 예측 — 규칙 엔진이 검사값으로 준 판정인가, ML 이 예측한 것인가"
     )
     peer_ratio: float | None = None
     evidence_weight: float = Field(description="사망연계 검증에서 유도한 이 카드의 신뢰도 0.4~1.0")
@@ -328,6 +337,10 @@ class ConditionRisk(BaseSerializerModel):
     # "고장" 이 아니라 "안 내는 것" 임을 화면이 설명할 수 있어야 한다.
     trajectory: OnsetTrajectory | None = None
     trajectory_status: TrajectoryStatus = "unavailable"
+    # **열 장 전부에 붙는다.** 발병 궤적은 비가역 세 질환에만 있어서(가역 질환에서
+    # 누적 발병 곡선은 뜻이 없다) 나머지 일곱 장에는 앞날을 말할 자리가 없었다.
+    # 이쪽은 "그 나이가 됐을 때 기준을 넘고 있을 확률" 이라 열 장 전부에 답이 있다.
+    prevalence_trajectory: PrevalenceTrajectory | None = None
 
 
 class RiskPredictionData(BaseSerializerModel):
