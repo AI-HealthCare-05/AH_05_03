@@ -100,6 +100,24 @@ describe("PainDiaryPage", () => {
     expect(screen.getByDisplayValue(/웨이트 트레이닝을 마친 후 팔꿈치에 통증이 발생함/)).toBeInTheDocument();
     expect(screen.getByDisplayValue("팔꿈치, 왼쪽 고관절")).toBeInTheDocument();
   });
+
+  it("노션 스타일 마크다운 서식 툴바가 렌더링된다", async () => {
+    render(
+      <MemoryRouter initialEntries={["/pain-diary?date=2026-09-06"]}>
+        <LocalDomainProvider databaseName={`ieobom-pain-diary-${crypto.randomUUID()}`}>
+          <SeededPainDiaryPage />
+        </LocalDomainProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("toolbar", { name: "텍스트 서식 도구" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "대제목" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "중제목" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "소제목" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "굵게" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "체크리스트" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "인용구" })).toBeInTheDocument();
+  });
 });
 
 function SeededPainDiaryPage() {

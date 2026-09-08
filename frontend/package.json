@@ -19,12 +19,18 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.4",
+    "@tiptap/extension-placeholder": "^3.31.3",
+    "@tiptap/extension-task-item": "^3.31.3",
+    "@tiptap/extension-task-list": "^3.31.3",
+    "@tiptap/react": "^3.31.3",
+    "@tiptap/starter-kit": "^3.31.3",
     "pdfjs-dist": "^6.2.108",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2",
     "tesseract.js": "^6.0.1",
     "three": "0.185.1",
+    "tiptap-markdown": "^0.9.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
