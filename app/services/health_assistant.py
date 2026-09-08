@@ -177,13 +177,55 @@ class HealthAssistantService:
     def _needs_medication_info(request: HealthAssistantChatRequest) -> bool:
         """의약품 정보·병용금기 조회가 실제로 필요한 질문인지 판별한다.
 
-        병원·약국 찾기 질문은 제외한다 (시설 검색과 의약품 정보는 별개).
+        - 단순 복약 기록 발화("저녁 8시에 타이레놀 1알 복용했어", "혈압약 먹음")는 기록 의도이므로 검색 도구를 부르지 않는다.
+        - 효능, 부작용, 복용법, 병용금기 등을 묻는 질문형 발화에만 검색 도구를 활성화한다.
         """
         if not request.messages:
             return False
         last_msg = request.messages[-1].content
-        # 의약품 키워드가 있어야 한다
-        return any(k in last_msg for k in _MEDICATION_KEYWORDS)
+        # 1) 의약품 키워드가 반드시 있어야 함
+        if not any(k in last_msg for k in _MEDICATION_KEYWORDS):
+            return False
+
+        # 2) 병용 가능 여부 질문("같이 먹어도 돼?", "함께 복용해도 되나요?")은 최우선 검색
+        is_interaction_question = any(
+            k in last_msg
+            for k in ("같이", "함께", "병용", "동시에", "먹어도 돼", "먹어도 되", "복용해도 돼", "복용해도 되")
+        )
+        if is_interaction_question:
+            return True
+
+        # 3) 단순 복약 기록 완료형 발화는 검색에서 제외 ("복용했어", "먹었어", "먹음", "1알 복용" 등)
+        is_past_record = any(
+            suffix in last_msg for suffix in ("복용했", "먹었", "먹음", "복용함", "투약함", "챙겨먹", "먹은", "복용한")
+        )
+        if is_past_record:
+            return False
+
+        # 4) 정보/질문 의도 키워드가 포함되어 있어야 함
+        has_question_intent = any(
+            k in last_msg
+            for k in (
+                "뭐야",
+                "무슨 약",
+                "어떤 약",
+                "어떻게",
+                "용법",
+                "용량",
+                "효능",
+                "효과",
+                "부작용",
+                "주의사항",
+                "주의점",
+                "성분",
+                "금기",
+                "상호작용",
+                "알려줘",
+                "궁금",
+                "설명",
+            )
+        ) or last_msg.strip().endswith("?")
+        return has_question_intent
 
     @staticmethod
     def _needs_facility_tools(request: HealthAssistantChatRequest) -> bool:

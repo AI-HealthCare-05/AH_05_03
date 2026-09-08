@@ -97,8 +97,37 @@ class TestBuildSummaryMessage:
             ],
         )
         msg = _build_summary_message("아스피린", [drug])
-        assert "DUR 금기사항" in msg
+        assert "DUR 주의·금기" in msg
         assert "와파린" in msg
+
+
+class TestNeedsMedicationInfoRouting:
+    def test_medication_recording_statement_returns_false(self) -> None:
+        from app.dtos.health_assistant import ChatMessage, HealthAssistantChatRequest
+        from app.services.health_assistant import HealthAssistantService
+
+        req = HealthAssistantChatRequest(
+            messages=[ChatMessage(role="user", content="저녁 8시에 타이레놀 1알 복용했어")]
+        )
+        assert HealthAssistantService._needs_medication_info(req) is False
+
+    def test_medication_question_returns_true(self) -> None:
+        from app.dtos.health_assistant import ChatMessage, HealthAssistantChatRequest
+        from app.services.health_assistant import HealthAssistantService
+
+        req = HealthAssistantChatRequest(
+            messages=[ChatMessage(role="user", content="타이레놀이 어떤 약이야?")]
+        )
+        assert HealthAssistantService._needs_medication_info(req) is True
+
+    def test_interaction_question_returns_true(self) -> None:
+        from app.dtos.health_assistant import ChatMessage, HealthAssistantChatRequest
+        from app.services.health_assistant import HealthAssistantService
+
+        req = HealthAssistantChatRequest(
+            messages=[ChatMessage(role="user", content="타이레놀이랑 판콜 같이 먹어도 돼?")]
+        )
+        assert HealthAssistantService._needs_medication_info(req) is True
 
 
 # ---------------------------------------------------------------------------

@@ -84,31 +84,33 @@ def _parse_dur_items(raw_list: list[dict[str, Any]]) -> list[DurItem]:
 
 
 def _build_summary_message(drug_name: str, items: list[DrugInfo]) -> str:
-    """LLM이 컨텍스트로 활용할 구조화 요약을 생성."""
+    """사용자에게 전달할 간결하고 정갈한 핵심 요약 메시지를 생성 (이모티콘 미사용)."""
     if not items:
-        return f"'{drug_name}'에 대한 식약처 등록 의약품 정보를 찾지 못했습니다."
+        return f"'{drug_name}'에 대한 식약처 등록 의약품 정보를 찾지 못했습니다. 정확한 약품명을 확인해 주세요."
 
     drug = items[0]
     parts: list[str] = [f"[식약처 의약품 정보: {drug.item_name}]"]
-    _append_field(parts, "제조사", drug.entp_name)
-    _append_field(parts, "분류", drug.class_name)
-    _append_field(parts, "효능·효과", drug.efcy_qesitm, max_len=300)
-    _append_field(parts, "용법·용량", drug.use_method_qesitm)
-    _append_field(parts, "경고", drug.atpn_warn_qesitm)
-    _append_field(parts, "주의사항", drug.atpn_qesitm)
-    _append_field(parts, "부작용", drug.se_qesitm)
-    _append_field(parts, "상호작용", drug.intrc_qesitm)
+    if drug.entp_name:
+        parts.append(f"제조사: {drug.entp_name}")
+
+    if drug.efcy_qesitm:
+        first_sentence = drug.efcy_qesitm.split(".")[0].strip()
+        parts.append(f"효능·효과: {first_sentence}." if first_sentence else f"효능·효과: {drug.efcy_qesitm[:80]}")
+
+    if drug.use_method_qesitm:
+        first_use = drug.use_method_qesitm.split(".")[0].strip()
+        parts.append(f"용법·용량: {first_use}." if first_use else f"용법·용량: {drug.use_method_qesitm[:80]}")
+
     if drug.dur_items:
-        dur_lines = [
-            f"  - [{d.prohibition_type}] {d.ingredient_name or ''}: {d.reason or ''}" for d in drug.dur_items[:5]
-        ]
-        parts.append("DUR 금기사항:\n" + "\n".join(dur_lines))
+        dur_summary = ", ".join(f"[{d.prohibition_type}] {d.ingredient_name or ''}" for d in drug.dur_items[:3])
+        parts.append(f"DUR 주의·금기: {dur_summary}")
+    elif drug.atpn_warn_qesitm or drug.atpn_qesitm:
+        warn = (drug.atpn_warn_qesitm or drug.atpn_qesitm or "").strip()
+        first_warn = warn.split(".")[0].strip()
+        parts.append(f"주의사항: {first_warn}." if first_warn else f"주의사항: {warn[:80]}")
+
+    parts.append("자세한 복약 지도는 의사 또는 약사와 상의하시기 바랍니다.")
     return "\n".join(parts)
-
-
-def _append_field(parts: list[str], label: str, value: str | None, max_len: int = 200) -> None:
-    if value:
-        parts.append(f"{label}: {value[:max_len]}")
 
 
 class MedicationClient:
