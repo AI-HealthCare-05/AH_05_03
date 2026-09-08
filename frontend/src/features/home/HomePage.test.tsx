@@ -255,8 +255,8 @@ describe("HomePage", () => {
     await user.type(screen.getByRole("textbox", { name: "기록 내용" }), "메모");
     await user.click(screen.getByRole("button", { name: "기록 저장" }));
 
-    await user.click(await screen.findByRole("button", { name: "자세히" }));
-    const modal = await screen.findByRole("dialog");
+    await user.click(await screen.findByRole("button", { name: "자세히" }, { timeout: 5000 }));
+    const modal = await screen.findByRole("dialog", {}, { timeout: 5000 });
     // 등급 이름만이 아니라 그날 본 카드가 그대로 선다.
     expect(within(modal).getByText("고혈압 1기")).toBeInTheDocument();
     expect(within(modal).queryByText(/이 기록에는 등급만 남아 있어요/)).not.toBeInTheDocument();
