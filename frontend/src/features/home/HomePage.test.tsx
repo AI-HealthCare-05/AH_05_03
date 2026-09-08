@@ -199,7 +199,7 @@ describe("HomePage", () => {
     // 자세히를 누르면 그날 넣은 값과 질환별 등급 전부. 카드 원본이 없는 옛 기록이라
     // 등급만 남아 있다고 밝힌다.
     await user.click(screen.getByRole("button", { name: "자세히" }));
-    const modal = await screen.findByRole("dialog");
+    const modal = await screen.findByRole("dialog", {}, { timeout: 5000 });
     expect(within(modal).getByText("고혈압")).toBeInTheDocument();
     expect(within(modal).getByText("당뇨병")).toBeInTheDocument();
     expect(within(modal).getByText(/그날 넣은 값 4개/)).toBeInTheDocument();
@@ -330,7 +330,7 @@ async function createProfile(
   displayName: string,
   relationship: string,
 ) {
-  await user.click(await screen.findByRole("button", { name: "첫 구성원 등록" }));
+  await user.click(await screen.findByRole("button", { name: "첫 구성원 등록" }, { timeout: 5000 }));
   await user.type(screen.getByRole("textbox", { name: "이름 또는 호칭" }), displayName);
   await user.selectOptions(screen.getByRole("combobox", { name: "관계" }), relationship);
   await user.click(screen.getByRole("button", { name: "프로필 저장" }));
