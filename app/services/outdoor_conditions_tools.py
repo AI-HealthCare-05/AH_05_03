@@ -7,7 +7,7 @@ from typing import Any
 from google.genai import types
 
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
-from app.services.outdoor_conditions_client import OutdoorConditionsClient
+from app.services.outdoor_conditions_client import OutdoorConditionsClientProtocol
 
 OUTDOOR_CONDITIONS_TOOL_DECLARATION = types.FunctionDeclaration(
     name="get_outdoor_health_conditions",
@@ -34,7 +34,7 @@ def get_outdoor_conditions_tools() -> list[types.Tool]:
 async def execute_outdoor_conditions_tool(
     name: str,
     args: dict[str, Any],
-    client: OutdoorConditionsClient,
+    client: OutdoorConditionsClientProtocol,
 ) -> OutdoorConditionsResult | None:
     if name != "get_outdoor_health_conditions":
         return None
@@ -43,4 +43,3 @@ async def execute_outdoor_conditions_tool(
     if latitude is None or longitude is None:
         return None
     return await client.get_outdoor_conditions(float(latitude), float(longitude))
-

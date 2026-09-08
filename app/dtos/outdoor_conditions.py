@@ -30,4 +30,3 @@ class OutdoorConditionsResult(BaseModel):
     weather: WeatherConditions | None = None
     air_quality: AirQualityConditions | None = None
     errors: list[str] = Field(default_factory=list)
-

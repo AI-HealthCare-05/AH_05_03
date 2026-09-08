@@ -12,13 +12,19 @@ import math
 import time
 import urllib.parse
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
 import httpx
 
 from app.core import config
 from app.dtos.outdoor_conditions import AirQualityConditions, OutdoorConditionsResult, WeatherConditions
+
+
+class OutdoorConditionsClientProtocol(Protocol):
+    async def get_outdoor_conditions(
+        self, latitude: float, longitude: float
+    ) -> OutdoorConditionsResult: ...
 
 _TIMEOUT_SECONDS = 5.0
 _CACHE_SECONDS = 600.0

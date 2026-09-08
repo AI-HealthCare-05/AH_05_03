@@ -80,6 +80,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     sessionStorage.clear();
   });
 

@@ -128,7 +128,7 @@ async function getBrowserLocation(): Promise<{
 function needsOutdoorConditions(text: string): boolean {
   const normalized = text.replace(/\s+/g, "");
   if (/날씨|미세먼지|초미세먼지|대기질/.test(normalized)) return true;
-  if (/했어|완료|기록(?:해|할|하기)?/.test(normalized)) return false;
+  if (/했어|완료|기록(?:해|할|하기)?|달렸어|뛰었어|걸었어|탔어/.test(normalized)) return false;
   return /산책|조깅|러닝|유산소|야외|밖에서|외출/.test(normalized)
     || /오늘.*운동.*(?:추천|할)/.test(normalized);
 }
@@ -658,18 +658,7 @@ export function HealthAssistantDrawer({
       // 야외 질문일 때만 브라우저 위치 권한을 요청한다. 좌표는 이 API 요청에만 쓰고
       // 채팅/프로필의 로컬 저장소에는 남기지 않는다.
       const locationAttempt = await outdoorLocationPromise;
-      const currentLocation = locationAttempt.location;
-      if (needsOutdoorConditions(textToSend) && !currentLocation) {
-        setMessages([
-          ...nextMessages,
-          {
-            id: messageId("assistant"),
-            role: "assistant",
-            content: locationAttempt.error ?? "현재 위치를 확인하지 못해 실시간 야외 환경을 조회할 수 없습니다.",
-          },
-        ]);
-        return;
-      }
+      const currentLocation = locationAttempt?.location;
 
       // AI 전송용 메시지 배열 구성 (OCR 텍스트가 있으면 함께 포함)
       const promptMessages = nextMessages.slice(-12).map((m, idx, recentMessages) => {

@@ -77,4 +77,3 @@ async def test_outdoor_tool_requires_coordinates() -> None:
     client = OutdoorConditionsClient(kma_api_key="test-key", airkorea_api_key="test-key")
     result = await execute_outdoor_conditions_tool("get_outdoor_health_conditions", {}, client)
     assert result is None
-

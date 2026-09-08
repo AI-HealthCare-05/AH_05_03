@@ -18,7 +18,7 @@ from app.services.medical_facility_tools import (
     get_facility_tools,
 )
 from app.services.ocr_partial import PartialJsonTextReader
-from app.services.outdoor_conditions_client import OutdoorConditionsClient
+from app.services.outdoor_conditions_client import OutdoorConditionsClient, OutdoorConditionsClientProtocol
 from app.services.outdoor_conditions_tools import execute_outdoor_conditions_tool
 
 _OUTDOOR_ENVIRONMENT_KEYWORDS = ("날씨", "미세먼지", "초미세먼지", "대기질")
@@ -26,7 +26,11 @@ _OUTDOOR_ACTIVITY_KEYWORDS = (
     "산책",
     "조깅",
     "러닝",
+    "달리기",
     "유산소",
+    "자전거",
+    "라이딩",
+    "걷기",
     "운동추천",
     "운동할",
     "야외",
@@ -49,7 +53,7 @@ class HealthAssistantService:
         safety_service: HealthAssistantSafetyService | None = None,
         facility_client: MedicalFacilityClient | None = None,
         record_repo: HealthRecordRepository | None = None,
-        outdoor_conditions_client: OutdoorConditionsClient | None = None,
+        outdoor_conditions_client: OutdoorConditionsClientProtocol | None = None,
     ):
         self._llm_client = llm_client
         self.safety_service = safety_service or HealthAssistantSafetyService()
@@ -69,9 +73,14 @@ class HealthAssistantService:
         message = request.messages[-1].content.replace(" ", "")
         if any(keyword in message for keyword in _OUTDOOR_ENVIRONMENT_KEYWORDS):
             return True
-        if any(keyword in message for keyword in ("했어", "완료", "기록해", "기록할", "기록하기")):
+        if any(
+            keyword in message
+            for keyword in ("했어", "완료", "기록해", "기록할", "기록하기", "달렸어", "뛰었어", "걸었어", "탔어")
+        ):
             return False
-        return any(keyword in message for keyword in _OUTDOOR_ACTIVITY_KEYWORDS)
+        return any(keyword in message for keyword in _OUTDOOR_ACTIVITY_KEYWORDS) or (
+            "운동" in message and any(k in message for k in ("추천", "할까", "할건", "할거", "예정", "계획", "뭐"))
+        )
 
     async def _load_outdoor_conditions(self, request: HealthAssistantChatRequest):
         loc = request.location
@@ -89,11 +98,18 @@ class HealthAssistantService:
     @staticmethod
     def _format_outdoor_conditions_context(result: Any | None, location_available: bool) -> str | None:
         if result is None:
-            return "현재 위치가 제공되지 않아 실시간 날씨·대기질을 조회하지 못했습니다." if not location_available else None
+            return (
+                "현재 위치가 제공되지 않아 실시간 날씨·대기질을 조회하지 못했습니다."
+                if not location_available
+                else None
+            )
 
         lines: list[str] = []
+        is_raining = False
+        bad_air = False
         if result.weather:
             weather = result.weather
+            is_raining = bool(weather.precipitation_type and weather.precipitation_type != "강수 없음")
             lines.append(
                 "날씨: "
                 f"기온 {weather.temperature_c if weather.temperature_c is not None else '확인 불가'}℃, "
@@ -103,12 +119,28 @@ class HealthAssistantService:
             )
         if result.air_quality:
             air = result.air_quality
+            bad_air = bool(
+                (air.pm10_grade in ("나쁨", "매우 나쁨", "매우나쁨"))
+                or (air.pm25_grade in ("나쁨", "매우 나쁨", "매우나쁨"))
+            )
             lines.append(
                 "대기질: "
                 f"{air.region_name} {air.station_name or '측정소'}, "
                 f"PM10 {air.pm10 if air.pm10 is not None else '확인 불가'}㎍/㎥({air.pm10_grade or '등급 확인 불가'}), "
                 f"PM2.5 {air.pm25 if air.pm25 is not None else '확인 불가'}㎍/㎥({air.pm25_grade or '등급 확인 불가'})"
             )
+        if is_raining or bad_air:
+            reasons = []
+            if is_raining:
+                reasons.append("비/강수")
+            if bad_air:
+                reasons.append("미세먼지 나쁨")
+            lines.append(
+                f"환경 종합 평가: 야외 활동 비권장 ({', '.join(reasons)} - 야외 유산소 대신 실내 운동 추천 필요)"
+            )
+        elif result.weather and result.air_quality:
+            lines.append("환경 종합 평가: 야외 활동 적합 (쾌적한 환경 - 가벼운 산책이나 야외 러닝 적극 추천 가능)")
+
         if result.errors:
             lines.append("일부 조회 실패: " + "; ".join(result.errors))
         return "\n".join(lines) or "실시간 야외 환경 정보를 불러오지 못했습니다."

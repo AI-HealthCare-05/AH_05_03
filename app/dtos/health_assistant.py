@@ -28,17 +28,6 @@ class ProfileContext(BaseModel):
     recent_records_summary: str | None = Field(default=None, max_length=2000)
 
 
-class CurrentLocation(BaseModel):
-    """브라우저가 사용자 동의 후 이번 요청에만 실어 보내는 현재 좌표.
-
-    위치를 계정이나 채팅 세션에 별도로 저장하지 않는다. 야외 환경 API를 호출하는
-    데만 쓰고, 응답이 끝나면 요청 메모리에서 사라진다.
-    """
-
-    latitude: float = Field(ge=33.0, le=39.5)
-    longitude: float = Field(ge=124.0, le=132.5)
-
-
 class ExerciseDraft(BaseModel):
     exercise_name: str = Field(
         description="운동 종목명 (예: 랫풀다운, 벤치프레스, 스쿼트, 달리기, 러닝, 자전거, 걷기 등)"
@@ -158,6 +147,7 @@ class UserLocation(BaseModel):
     address: str | None = Field(
         default=None, max_length=200, description="현재 주소 또는 동/구 명칭 (예: 서울특별시 강남구 역삼동)"
     )
+
 
 CurrentLocation = UserLocation
 
