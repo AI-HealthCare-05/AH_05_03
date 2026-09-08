@@ -318,7 +318,7 @@ function ForwardOutlook({ verdicts, ranked }: { verdicts: DiseaseVerdict[]; rank
         <div className="outlook-block">
           <p className="outlook-block-title">
             새로 생길 확률{" "}
-            <span className="assess-muted">지금 없다는 전제 아래 그 사이에 생길 확률 · 위 세 가지 먼저, 그다음 확률 큰 순</span>
+            <span className="assess-muted">지금은 없다고 보고 낸 값 · 위 세 가지 먼저, 나머지는 확률 높은 순</span>
           </p>
           <ul className="suspect-outlook-list">
             {onsets.map((row) => (
@@ -351,7 +351,7 @@ function ForwardOutlook({ verdicts, ranked }: { verdicts: DiseaseVerdict[]; rank
         <div className="outlook-block">
           <p className="outlook-block-title">
             기준을 넘고 있을 확률{" "}
-            <span className="assess-muted">지금 넘었는지와 무관한 값 · 위 세 가지 먼저, 그다음 확률 큰 순</span>
+            <span className="assess-muted">지금 넘었든 아니든 그때 재면 넘어 있을 가능성 · 위 세 가지 먼저, 나머지는 확률 높은 순</span>
           </p>
           <ul className="suspect-outlook-list">
             {prevalences.map((row) => {
