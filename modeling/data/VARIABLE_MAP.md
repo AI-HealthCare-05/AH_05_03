@@ -42,7 +42,7 @@
 |---|---|---|---:|---|
 | 키 | `height_cm` | `BMXHT` | 88.9% | 없음 |
 | 체중 | `weight_kg` | `BMXWT` | 88.9% | 없음 |
-| BMI | `bmi` | `BMXBMI` | 88.7% | `BMI` |
+| BMI | `bmi` | `BMXWT / (BMXHT/100)²` 계산 (2026-09-07~, `BMXBMI` 아님) | 91.7% | `BMI` |
 | 허리둘레 | `waist_cm` | `BMXWAIST` | 84.8% | 없음 |
 | 수축기 혈압 | `sbp` | `BPXSY1~4` 또는 `BPXOSY1~3` 평균 | 86.7% | `sysBP` |
 | 이완기 혈압 | `dbp` | 동일 (0은 "청취 불가"라 결측 처리) | 86.7% | `diaBP` |
