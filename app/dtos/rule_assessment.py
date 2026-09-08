@@ -59,6 +59,7 @@ class RuleAssessmentRequest(BaseRequestModel):
     ggt: float | None = Field(default=None, gt=0, le=3000, description="감마지티피 IU/L")
     uric_acid: float | None = Field(default=None, gt=0.1, le=30, description="요산 mg/dL")
     hemoglobin: float | None = Field(default=None, gt=3, le=25, description="혈색소 g/dL")
+    crp: float | None = Field(default=None, gt=0, le=500, description="고감도 CRP mg/L")
 
     smoking: bool | None = None
     has_diabetes: bool | None = None

@@ -28,7 +28,7 @@ FULL: dict[str, Any] = {
     "ldl_c": 140.0,
     "hdl_c": 44.0,
     "triglycerides": 180.0,
-    # lab_staging 이 판정하는 네 영역의 입력. 벤더 엔진은 이 값을 무시한다.
+    # lab_staging 이 판정하는 여섯 영역의 입력. 벤더 엔진은 이 값을 무시한다.
     "creatinine": 1.10,
     "urine_acr": 12.0,
     "ast": 28.0,
@@ -36,13 +36,14 @@ FULL: dict[str, Any] = {
     "ggt": 58.0,
     "uric_acid": 6.8,
     "hemoglobin": 15.1,
+    "crp": 1.8,
     "smoking": False,
 }
 
-# 벤더 엔진이 판정하는 넷과, `app/services/lab_staging.py` 가 붙인 넷.
+# 벤더 엔진이 판정하는 넷과, `app/services/lab_staging.py` 가 붙인 여섯.
 # 응답은 둘을 구분하지 않는다 — 사용자에게 "누가 짠 코드인가"는 아무 뜻이 없다.
 VENDOR_DOMAINS = {"hypertension", "obesity", "dyslipidemia", "diabetes"}
-STAGING_DOMAINS = {"kidney", "liver", "fatty_liver", "uric_acid", "anemia"}
+STAGING_DOMAINS = {"kidney", "liver", "fatty_liver", "uric_acid", "anemia", "inflammation"}
 DOMAINS = VENDOR_DOMAINS | STAGING_DOMAINS
 
 
@@ -74,9 +75,8 @@ async def test_missing_labs_are_refused_not_guessed(authorized_client: AsyncClie
     assert response.status_code == status.HTTP_200_OK
 
     data = response.json()["data"]
-    # 비만은 키·체중·허리둘레만으로 판정된다. 나머지 셋은 검사값이 필요하다.
+    # 비만만 키·체중·허리둘레로 판정된다. 나머지 아홉은 전부 검사값이 필요하다.
     assert data["domains"]["obesity"]["risk_level"] != "INSUFFICIENT_DATA"
-    # 비만만 키·체중·허리둘레로 판정된다. 나머지 일곱은 전부 검사값이 필요하다.
     assert set(data["insufficient"]) == DOMAINS - {"obesity"}
     for name in data["insufficient"]:
         assert data["domains"][name]["missing_fields"]
