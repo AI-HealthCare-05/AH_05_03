@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
@@ -135,16 +135,19 @@ export function PainDiaryPage() {
 
   // 현재 편집 중인 기록 ID ("__NEW__"이면 새 기록 추가 모드, null이면 기본 자동선택)
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const lastLoadedKeyRef = useRef<string>("");
 
   // 선택된 날짜 또는 기록 ID 변경 시 폼 상태 동기화
   useEffect(() => {
     if (selectedRecordId === "__NEW__") {
       setCurrentRecord(null);
       setBodyArea("");
+      setAnatomyEvent(undefined);
       setIntensity(5);
       setSensation("");
       setAggravatingFactors("");
       setNote("");
+      lastLoadedKeyRef.current = `${selectedDate}:__NEW__`;
       return;
     }
 
@@ -152,31 +155,40 @@ export function PainDiaryPage() {
       ? dayRecords.find((r) => r.id === selectedRecordId)
       : null;
     const targetRecord = matched ?? dayRecords[0] ?? null;
+    const targetId = targetRecord?.id ?? null;
+    const loadKey = `${selectedDate}:${targetId}`;
 
     if (targetRecord) {
-      const payload = (targetRecord.payload ?? {}) as PainPayload;
-      setCurrentRecord(targetRecord);
-      setSelectedRecordId(targetRecord.id);
-      setBodyArea(payload.bodyArea || "");
-      setAnatomyEvent(payload.anatomyEvent);
-      setIntensity(typeof payload.intensity === "number" ? payload.intensity : 5);
-      setSensation(payload.sensation || "");
-      setAggravatingFactors(payload.aggravatingFactors || "");
-      setNote(payload.note || "");
+      if (lastLoadedKeyRef.current !== loadKey) {
+        lastLoadedKeyRef.current = loadKey;
+        const payload = (targetRecord.payload ?? {}) as PainPayload;
+        setCurrentRecord(targetRecord);
+        setSelectedRecordId(targetRecord.id);
+        setBodyArea(payload.bodyArea || "");
+        setAnatomyEvent(payload.anatomyEvent);
+        setIntensity(typeof payload.intensity === "number" ? payload.intensity : 5);
+        setSensation(payload.sensation || "");
+        setAggravatingFactors(payload.aggravatingFactors || "");
+        setNote(payload.note || "");
+      }
     } else {
-      setCurrentRecord(null);
-      setSelectedRecordId(null);
-      setBodyArea("");
-      setAnatomyEvent(undefined);
-      setIntensity(5);
-      setSensation("");
-      setAggravatingFactors("");
-      setNote("");
+      if (lastLoadedKeyRef.current !== loadKey) {
+        lastLoadedKeyRef.current = loadKey;
+        setCurrentRecord(null);
+        setSelectedRecordId(null);
+        setBodyArea("");
+        setAnatomyEvent(undefined);
+        setIntensity(5);
+        setSensation("");
+        setAggravatingFactors("");
+        setNote("");
+      }
     }
   }, [selectedDate, dayRecords, selectedRecordId]);
 
   // 특정 기록 선택
   const handleSelectRecord = (rec: HealthRecord) => {
+    lastLoadedKeyRef.current = "";
     setSelectedRecordId(rec.id);
     setFeedbackMessage(undefined);
     setError(undefined);
@@ -184,6 +196,7 @@ export function PainDiaryPage() {
 
   // 해당 일자에 새 기록 작성 시작
   const handleStartNewRecord = () => {
+    lastLoadedKeyRef.current = "";
     setSelectedRecordId("__NEW__");
     setAnatomyEvent(undefined);
     setFeedbackMessage(undefined);
@@ -308,6 +321,7 @@ export function PainDiaryPage() {
         setFeedbackMessage("통증 다이어리 기록이 안전하게 저장되었습니다.");
         setSelectedRecordId(createRes.value.id);
       }
+      lastLoadedKeyRef.current = "";
       await loadRecords();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "통증 다이어리 저장에 실패했습니다.");
@@ -327,6 +341,7 @@ export function PainDiaryPage() {
       if (!delRes.ok) throw new Error(delRes.error.message);
       setFeedbackMessage("통증 기록이 삭제되었습니다.");
       setSelectedRecordId(null);
+      lastLoadedKeyRef.current = "";
       await loadRecords();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "기록 삭제에 실패했습니다.");
