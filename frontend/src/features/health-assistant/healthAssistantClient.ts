@@ -15,6 +15,11 @@ export interface ProfileContext {
   recent_records_summary?: string;
 }
 
+export interface CurrentLocation {
+  latitude: number;
+  longitude: number;
+}
+
 export interface ExerciseDraft {
   exercise_name: string;
   weight_kg?: number | null;
@@ -138,6 +143,31 @@ export interface UserLocation {
   accuracy?: number | null;
 }
 
+export interface WeatherConditions {
+  temperature_c?: number | null;
+  humidity_percent?: number | null;
+  precipitation_type: string;
+  precipitation_mm?: number | null;
+  wind_speed_mps?: number | null;
+}
+
+export interface AirQualityConditions {
+  region_name: string;
+  station_name?: string | null;
+  pm10?: number | null;
+  pm25?: number | null;
+  pm10_grade?: string | null;
+  pm25_grade?: string | null;
+}
+
+export interface OutdoorConditionsResult {
+  latitude: number;
+  longitude: number;
+  weather?: WeatherConditions | null;
+  air_quality?: AirQualityConditions | null;
+  errors: string[];
+}
+
 export interface HealthAssistantResponse {
   intent:
     | "record_exercise"
@@ -165,6 +195,7 @@ export interface HealthAssistantResponse {
   challenge_draft?: ChallengeDraft | null;
   query_draft?: QueryDraft | null;
   facility_search_draft?: FacilitySearchResult | null;
+  outdoor_conditions?: OutdoorConditionsResult | null;
   missing_fields: string[];
   needs_confirmation: boolean;
   auto_save?: boolean;
@@ -220,6 +251,7 @@ export async function streamHealthAssistantMessage(
       profile_context: profileContext,
       session_id: sessionId,
       user_location: userLocation,
+      current_location: userLocation,
     },
     (event, data) => {
       if (event === "delta" && typeof data.text === "string") onDelta(data.text);
