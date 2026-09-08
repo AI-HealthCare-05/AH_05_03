@@ -72,6 +72,10 @@ class PainDraft(BaseModel):
     sensation: str | None = Field(default=None, description="통증 양상 (예: 욱신거림, 찌르는 듯함 등)")
     onset_at: str | None = Field(default=None, description="통증 시작 시점")
     note: str | None = Field(default=None, description="추가 메모")
+    anatomy_concept_id: str | None = Field(
+        default=None, description="표준 해부학 구조 식별자 (예: muscle_biceps_brachii_r)"
+    )
+    anatomy_label: str | None = Field(default=None, description="표준 해부학 한글/영문 명칭 (예: 우측 상완이두근)")
 
 
 class PainDiaryToolCall(BaseModel):
@@ -90,6 +94,10 @@ class PainDiaryToolCall(BaseModel):
         description="사용자의 거친 구어체/오탈자를 맞춤법과 띄어쓰기에 맞추고 구조화된 높은 품질의 통증 일기 본문으로 정제한 문장"
     )
     date_str: str | None = Field(default=None, description="기록 일자 (YYYY-MM-DD, 기본값 오늘)")
+    anatomy_concept_id: str | None = Field(
+        default=None, description="표준 해부학 구조 식별자 (예: muscle_biceps_brachii_r)"
+    )
+    anatomy_label: str | None = Field(default=None, description="표준 해부학 한글/영문 명칭 (예: 우측 상완이두근)")
 
 
 class LabResultDraft(BaseModel):

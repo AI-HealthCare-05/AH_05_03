@@ -29,6 +29,7 @@ import {
   INTERNALS_READABILITY_STYLE,
   createRegionalBoundaryMaterial,
   createSelectedMaterials,
+  createPaintStrokeMaterials,
   materialsOf,
   shouldReturnToFullBody,
 } from "./holographicAnatomyStyle";
@@ -107,6 +108,10 @@ export function VanatomeBodyMap({
     : DEFAULT_ANATOMY_ATLAS;
   const [manifest, setManifest] = useState<AnatomyAtlasManifest>();
   const [selectedStructure, setSelectedStructure] = useState<SelectedStructure>();
+  const [interactionMode, setInteractionMode] = useState<"inspect" | "paint">("inspect");
+  const setInteractionModeRef = useRef<(mode: "inspect" | "paint") => void>(() => undefined);
+  const undoPaintRef = useRef<() => void>(() => undefined);
+  const clearPaintRef = useRef<() => void>(() => undefined);
   const [activeFocus, setActiveFocus] = useState<BodyFocus>("full");
   const [pelvicOrganFocus, setPelvicOrganFocus] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
@@ -171,6 +176,9 @@ export function VanatomeBodyMap({
           pelvicOrganFocusRef,
           setHiddenSystemsRef,
           playHandPoseRef,
+          setInteractionModeRef,
+          undoPaintRef,
+          clearPaintRef,
         });
         cleanupScene = nextCleanupScene;
         if (disposed) cleanupScene();
@@ -189,6 +197,9 @@ export function VanatomeBodyMap({
       pelvicOrganFocusRef.current = () => undefined;
       setHiddenSystemsRef.current = () => undefined;
       playHandPoseRef.current = () => undefined;
+      setInteractionModeRef.current = () => undefined;
+      undoPaintRef.current = () => undefined;
+      clearPaintRef.current = () => undefined;
     };
   }, [atlasId, isTestEnvironment, sceneAttempt]);
 
@@ -356,10 +367,69 @@ export function VanatomeBodyMap({
               : "모델 드래그는 회전, 검은 배경 드래그는 상하 카메라 이동, 클릭은 구조 선택입니다."}
           </small>
         </div>
-        <div className="vanatome-actions">
-          <button type="button" disabled={!selectedStructure} onClick={() => clearSelectionRef.current()}>
-            선택 해제
+        <div className="vanatome-mode-actions" style={{ display: "flex", gap: "6px", margin: "12px 0 8px" }}>
+          <button
+            type="button"
+            className="secondary-button"
+            style={{
+              flex: 1,
+              padding: "6px 8px",
+              fontSize: "0.82rem",
+              background: interactionMode === "inspect" ? "rgba(37, 99, 235, 0.12)" : undefined,
+              borderColor: interactionMode === "inspect" ? "#2563eb" : undefined,
+              color: interactionMode === "inspect" ? "#1d4ed8" : undefined,
+              fontWeight: interactionMode === "inspect" ? "600" : undefined,
+            }}
+            onClick={() => {
+              setInteractionMode("inspect");
+              setInteractionModeRef.current("inspect");
+            }}
+          >
+            🔍 부위 탐색/선택
           </button>
+          <button
+            type="button"
+            className="secondary-button"
+            style={{
+              flex: 1,
+              padding: "6px 8px",
+              fontSize: "0.82rem",
+              background: interactionMode === "paint" ? "rgba(244, 63, 94, 0.12)" : undefined,
+              borderColor: interactionMode === "paint" ? "#f43f5e" : undefined,
+              color: interactionMode === "paint" ? "#be123c" : undefined,
+              fontWeight: interactionMode === "paint" ? "600" : undefined,
+            }}
+            onClick={() => {
+              setInteractionMode("paint");
+              setInteractionModeRef.current("paint");
+            }}
+          >
+            🖌️ 통증 범위 칠하기
+          </button>
+        </div>
+        <div className="vanatome-actions" style={{ display: "flex", gap: "6px" }}>
+          {interactionMode === "paint" ? (
+            <>
+              <button
+                type="button"
+                style={{ flex: 1, padding: "5px 8px", fontSize: "0.8rem" }}
+                onClick={() => undoPaintRef.current()}
+              >
+                ↩️ 되돌리기(Undo)
+              </button>
+              <button
+                type="button"
+                style={{ flex: 1, padding: "5px 8px", fontSize: "0.8rem" }}
+                onClick={() => clearPaintRef.current()}
+              >
+                🗑️ 칠한 부위 지우기
+              </button>
+            </>
+          ) : (
+            <button type="button" disabled={!selectedStructure} onClick={() => clearSelectionRef.current()}>
+              선택 해제
+            </button>
+          )}
         </div>
         {manifest ? (
           <p className="vanatome-attribution">
@@ -372,7 +442,11 @@ export function VanatomeBodyMap({
       </div>
       <div className="body-map-viewer vanatome-viewer is-hologram">
         <canvas ref={canvasRef} aria-label="회전 가능한 해부학 인체 모니터" />
-        <span className="body-map-hint">모델 드래그 회전 · 배경 드래그 상하 이동 · 클릭 선택</span>
+        <span className="body-map-hint">
+          {interactionMode === "paint"
+            ? "모델 위 드래그로 통증 부위 칠하기 · 배경 드래그는 카메라 회전"
+            : "모델 드래그 회전 · 배경 드래그 상하 이동 · 클릭 선택"}
+        </span>
       </div>
     </section>
   );
@@ -395,6 +469,9 @@ type CreateAnatomySceneOptions = {
   pelvicOrganFocusRef: React.MutableRefObject<(active: boolean) => void>;
   setHiddenSystemsRef: React.MutableRefObject<(systems: ReadonlySet<string>) => void>;
   playHandPoseRef: React.MutableRefObject<(pose: HandPose) => void>;
+  setInteractionModeRef: React.MutableRefObject<(mode: "inspect" | "paint") => void>;
+  undoPaintRef: React.MutableRefObject<() => void>;
+  clearPaintRef: React.MutableRefObject<() => void>;
 };
 
 async function createAnatomyScene(options: CreateAnatomySceneOptions) {
@@ -404,6 +481,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     clearSelectionRef, focusCameraRef,
     pelvicOrganFocusRef, setHiddenSystemsRef,
     playHandPoseRef,
+    setInteractionModeRef, undoPaintRef, clearPaintRef,
   } = options;
   let renderer: THREE.WebGLRenderer;
   try {
@@ -533,8 +611,148 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     selectedMesh = undefined;
     renderScene();
   };
+
+  // 3D 연속 칠하기(Paint Brush) 상태 관리
+  let interactionMode: "inspect" | "paint" = "inspect";
+  type PaintSample = {
+    point: THREE.Vector3;
+    normal?: THREE.Vector3;
+    mesh: THREE.Mesh;
+  };
+  type PaintStroke = {
+    samples: PaintSample[];
+    touchedMeshes: THREE.Mesh[];
+  };
+  const paintHistory: PaintStroke[] = [];
+  let currentStroke: PaintStroke | null = null;
+  let isPainting = false;
+  let lastSampleTime = 0;
+
+  const recordPaintSample = (hit: THREE.Intersection) => {
+    if (!(hit.object instanceof THREE.Mesh) || !currentStroke) return;
+    const mesh = hit.object;
+    currentStroke.samples.push({
+      point: hit.point.clone(),
+      normal: hit.normal?.clone(),
+      mesh,
+    });
+    if (!currentStroke.touchedMeshes.includes(mesh)) {
+      currentStroke.touchedMeshes.push(mesh);
+      mesh.material = createPaintStrokeMaterials(mesh.material);
+    }
+    renderScene();
+  };
+
+  const summarizePaintStrokes = () => {
+    const allSamples = paintHistory.flatMap((s) => s.samples);
+    if (allSamples.length === 0) return;
+
+    const centroid = new THREE.Vector3();
+    for (const s of allSamples) centroid.add(s.point);
+    centroid.divideScalar(allSamples.length);
+
+    let maxDist = 0;
+    for (const s of allSamples) {
+      const d = centroid.distanceTo(s.point);
+      if (d > maxDist) maxDist = d;
+    }
+    const radius = Number(maxDist.toFixed(4));
+
+    const uniqueMeshes = Array.from(new Set(allSamples.map((s) => s.mesh)));
+    const primaryMesh = uniqueMeshes[0];
+    const primaryName = String(primaryMesh.userData.structureLabel ?? readableStructureName(primaryMesh.name));
+    const primaryId = String(primaryMesh.userData.anatomyId ?? primaryMesh.name);
+    const primaryKey = String(primaryMesh.userData.sourceKey ?? `vanatome:${manifest.id}:${manifest.version}:${primaryMesh.name}`);
+    const primarySystem = systemLabel(String(primaryMesh.userData.structureSystem ?? ""));
+    const rawSystem = String(primaryMesh.userData.structureSystem ?? "regional-anatomy");
+
+    const extraCount = uniqueMeshes.length - 1;
+    const summaryLabel = extraCount > 0
+      ? `${primaryName} 외 ${extraCount}개 부위 (3D 브러시)`
+      : `${primaryName} (3D 브러시)`;
+
+    let anatomyEvent: AnatomyEvent | undefined;
+    try {
+      anatomyEvent = createAnatomyEvent({
+        atlas: {
+          id: manifest.id,
+          version: manifest.version,
+          referenceSex: manifest.referenceSex,
+        },
+        concept: {
+          canonicalConceptId: primaryId,
+          sourceKey: primaryKey,
+          sourceMeshId: primaryMesh.name,
+          label: summaryLabel,
+          system: rawSystem,
+          mappingStatus: primaryId ? "canonical" : "source_fallback",
+        },
+        geometry: {
+          coordinateSpace: "world",
+          point: [Number(centroid.x.toFixed(4)), Number(centroid.y.toFixed(4)), Number(centroid.z.toFixed(4))],
+          distance: radius,
+        },
+        inputSource: "brush",
+        state: "confirmed",
+        coverage: {
+          radius,
+          sampleCount: allSamples.length,
+          hitRatio: Number(Math.min(1.0, allSamples.length / 20).toFixed(2)),
+        },
+      });
+    } catch {
+      // safe fallback
+    }
+
+    onSelectedStructure({
+      name: summaryLabel,
+      system: primarySystem,
+      anatomyEvent,
+    });
+  };
+
+  const clearPaint = () => {
+    for (const stroke of paintHistory) {
+      for (const mesh of stroke.touchedMeshes) {
+        const orig = originalMaterials.get(mesh);
+        if (orig) mesh.material = orig;
+      }
+    }
+    paintHistory.length = 0;
+    currentStroke = null;
+    if (selectedMesh) clearSelectedMaterial();
+    onSelectedStructure(undefined);
+    renderScene();
+  };
+
+  const undoPaint = () => {
+    const last = paintHistory.pop();
+    if (!last) return;
+    const remaining = new Set(paintHistory.flatMap((s) => s.touchedMeshes));
+    for (const mesh of last.touchedMeshes) {
+      if (!remaining.has(mesh)) {
+        const orig = originalMaterials.get(mesh);
+        if (orig) mesh.material = orig;
+      }
+    }
+    if (paintHistory.length > 0) {
+      summarizePaintStrokes();
+    } else {
+      onSelectedStructure(undefined);
+    }
+    renderScene();
+  };
+
+  setInteractionModeRef.current = (mode) => {
+    interactionMode = mode;
+    canvas.style.cursor = mode === "paint" ? "crosshair" : "";
+  };
+  undoPaintRef.current = undoPaint;
+  clearPaintRef.current = clearPaint;
+
   clearSelectionRef.current = () => {
     clearSelectedMaterial();
+    clearPaint();
     onSelectedStructure(undefined);
   };
 
@@ -631,7 +849,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   const pointer = new THREE.Vector2();
   let pointerGesture: {
     pointerId: number;
-    mode: "rotate" | "vertical-pan";
+    mode: "rotate" | "vertical-pan" | "paint";
     startX: number;
     startY: number;
     lastY: number;
@@ -653,6 +871,30 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   };
   const handlePointerDown = (event: PointerEvent) => {
     if (!event.isPrimary || event.button !== 0) return;
+
+    if (interactionMode === "paint") {
+      setPointerFromEvent(event);
+      raycaster.setFromCamera(pointer, camera);
+      const hit = raycaster.intersectObjects(selectableMeshes, false)[0];
+      if (hit?.object instanceof THREE.Mesh) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        canvas.setPointerCapture(event.pointerId);
+        isPainting = true;
+        controls.enabled = false;
+        currentStroke = { samples: [], touchedMeshes: [] };
+        recordPaintSample(hit);
+        pointerGesture = {
+          pointerId: event.pointerId,
+          mode: "paint" as const,
+          startX: event.clientX,
+          startY: event.clientY,
+          lastY: event.clientY,
+        };
+        return;
+      }
+    }
+
     const mode = pointerHitsVisibleModel(event) ? "rotate" : "vertical-pan";
     pointerGesture = {
       pointerId: event.pointerId,
@@ -675,8 +917,25 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     }
   };
   const handlePointerMove = (event: PointerEvent) => {
-    if (pointerGesture?.pointerId !== event.pointerId
-      || pointerGesture.mode !== "vertical-pan") return;
+    if (!pointerGesture || pointerGesture.pointerId !== event.pointerId) return;
+
+    if (isPainting && currentStroke && pointerGesture.mode === "paint") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const now = performance.now();
+      if (now - lastSampleTime > 25) {
+        lastSampleTime = now;
+        setPointerFromEvent(event);
+        raycaster.setFromCamera(pointer, camera);
+        const hit = raycaster.intersectObjects(selectableMeshes, false)[0];
+        if (hit?.object instanceof THREE.Mesh) {
+          recordPaintSample(hit);
+        }
+      }
+      return;
+    }
+
+    if (pointerGesture.mode !== "vertical-pan") return;
     event.preventDefault();
     event.stopImmediatePropagation();
 
@@ -703,11 +962,27 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     const gesture = pointerGesture;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     pointerGesture = undefined;
+
+    if (isPainting) {
+      isPainting = false;
+      controls.enabled = true;
+      if (canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+      }
+      if (currentStroke && currentStroke.samples.length > 0) {
+        paintHistory.push(currentStroke);
+        currentStroke = null;
+        summarizePaintStrokes();
+      }
+      renderScene();
+      return;
+    }
+
     if (gesture.mode === "vertical-pan") {
       event.preventDefault();
       event.stopImmediatePropagation();
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-      canvas.style.cursor = "";
+      canvas.style.cursor = interactionMode === "paint" ? "crosshair" : "";
       return;
     }
     if (Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > 6) {

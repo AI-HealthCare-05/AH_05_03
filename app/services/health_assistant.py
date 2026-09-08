@@ -49,6 +49,24 @@ class HealthAssistantService:
                 summaries = []
                 for r in records:
                     date_str = r.recorded_at.strftime("%Y-%m-%d")
+                    if r.record_type == "pain" and isinstance(r.payload, dict):
+                        anatomy = r.payload.get("anatomyEvent")
+                        if isinstance(anatomy, dict):
+                            concept = anatomy.get("concept", {})
+                            body = anatomy.get("body", {})
+                            coverage = anatomy.get("coverage", {})
+                            label = concept.get("label") or concept.get("id") or "지정 부위"
+                            side = body.get("side")
+                            region = body.get("region")
+                            side_kr = {"left": "왼쪽", "right": "오른쪽", "bilateral": "양쪽"}.get(side, side or "")
+                            side_desc = f"{side_kr} {region}".strip() if side_kr or region else ""
+                            area_part = f"{label}({side_desc})" if side_desc else label
+                            rad = coverage.get("radius")
+                            cov_part = f", 확산범위 {rad}mm" if rad is not None else ""
+                            note_part = r.payload.get("note") or r.payload.get("sensation") or ""
+                            desc = f": {note_part}" if note_part else ""
+                            summaries.append(f"[{date_str}] 통증[3D해부학: {area_part}{cov_part}]{desc}")
+                            continue
                     summaries.append(f"[{date_str}] {r.record_type}: {r.payload}")
                 context.recent_records_summary = "; ".join(summaries)[:2000]
         except Exception:

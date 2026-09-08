@@ -287,3 +287,92 @@ async def test_health_assistant_service_calls_format_pain_diary_tool() -> None:
     assert "팔꿈치" in response.pain_diary_tool.body_area
     assert "웨이트 트레이닝 후" in response.pain_diary_tool.formatted_diary
     assert response.pain_draft is not None
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_service_enriches_anatomy_context_and_draft() -> None:
+    from datetime import datetime
+    from unittest.mock import AsyncMock
+
+    class DummyRecord:
+        def __init__(self) -> None:
+            self.recorded_at = datetime(2026, 9, 8, 10, 0)
+            self.record_type = "pain"
+            self.payload = {
+                "sensation": "스쿼트 후 묵직함",
+                "anatomyEvent": {
+                    "version": "1.0.0",
+                    "concept": {"id": "muscle_rectus_femoris_r", "label": "우측 대퇴직근"},
+                    "body": {"side": "right", "region": "thigh"},
+                    "layer": {"depth": "superficial", "systems": ["muscular"]},
+                    "coverage": {"radius": 15.0, "centroid": [0.1, 0.2, 0.3]},
+                    "source": "click",
+                },
+            }
+
+    mock_repo = AsyncMock()
+    mock_repo.list_by_profile.return_value = [DummyRecord()]
+
+    fake_json = """{
+        "intent": "record_pain",
+        "assistant_message": "우측 대퇴직근 부위의 통증과 불편감을 기록했습니다.",
+        "exercise_draft": null,
+        "blood_pressure_draft": null,
+        "blood_glucose_draft": null,
+        "medication_draft": null,
+        "pain_draft": {
+            "body_area": "오른쪽 허벅지 앞쪽",
+            "intensity": 6,
+            "sensation": "묵직함",
+            "onset_at": "2026-09-08T10:00",
+            "note": "우측 대퇴직근 스쿼트 후 통증",
+            "anatomy_concept_id": "muscle_rectus_femoris_r",
+            "anatomy_label": "우측 대퇴직근"
+        },
+        "pain_diary_tool": {
+            "tool_name": "format_pain_diary",
+            "body_area": "오른쪽 허벅지 앞쪽",
+            "intensity": 6,
+            "sensation": "묵직함",
+            "aggravating_factors": "스쿼트 후",
+            "formatted_diary": "스쿼트 운동 후 우측 대퇴직근 부위에 묵직한 통증이 발생함.",
+            "date_str": "2026-09-08",
+            "anatomy_concept_id": "muscle_rectus_femoris_r",
+            "anatomy_label": "우측 대퇴직근"
+        },
+        "lab_result_draft": null,
+        "query_draft": null,
+        "challenge_draft": null,
+        "missing_fields": [],
+        "needs_confirmation": true,
+        "auto_save": false,
+        "suggested_quick_replies": ["통증 다이어리에 저장해줘"],
+        "emergency_notice": null,
+        "safety_disclaimer": "본 서비스는 의료 진단이나 처방을 대신하지 않습니다."
+    }"""
+
+    import uuid
+
+    mock_client = MockLLMClient(fake_json)
+    service = HealthAssistantService(llm_client=mock_client, record_repo=mock_repo)
+
+    context = ProfileContext(profile_id=uuid.uuid4(), profile_name="테스터")
+    enriched = await service._enrich_context(context)
+
+    assert enriched is not None
+    assert enriched.recent_records_summary is not None
+    assert "3D해부학: 우측 대퇴직근(오른쪽 thigh)" in enriched.recent_records_summary
+    assert "확산범위 15.0mm" in enriched.recent_records_summary
+
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="오른쪽 허벅지가 묵직하게 아파")],
+        profile_context=context,
+    )
+    response = await service.respond(request)
+
+    assert response.intent == "record_pain"
+    assert response.pain_draft is not None
+    assert response.pain_draft.anatomy_concept_id == "muscle_rectus_femoris_r"
+    assert response.pain_draft.anatomy_label == "우측 대퇴직근"
+    assert response.pain_diary_tool is not None
+    assert response.pain_diary_tool.anatomy_concept_id == "muscle_rectus_femoris_r"

@@ -8,6 +8,7 @@ import {
   createFocusPresets,
   createHolographicMaterials,
   createMatteScalpMaterials,
+  createPaintStrokeMaterials,
   createRegionalBoundaryMaterial,
   createSelectedMaterials,
   createStructuredFlowShellFillMaterials,
@@ -201,5 +202,14 @@ describe("focused anatomy camera zoom-out return", () => {
 
   it("이미 전체 보기라면 같은 거리에서도 다시 전환하지 않는다", () => {
     expect(shouldReturnToFullBody("full", 6.8, 6.8)).toBe(false);
+  });
+
+  it("통증 부위 칠하기 재질은 붉은색 계열 하이라이트와 발광을 적용한다", () => {
+    const source = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+    const paintMat = createPaintStrokeMaterials(source) as THREE.MeshStandardMaterial;
+
+    expect(paintMat.color.getHexString()).toBe("f43f5e");
+    expect(paintMat.emissive.getHexString()).toBe("be123c");
+    expect(paintMat.emissiveIntensity).toBeCloseTo(0.85);
   });
 });
