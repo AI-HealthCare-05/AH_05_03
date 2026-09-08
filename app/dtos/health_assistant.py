@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.dtos.medical_facility import FacilitySearchResult
+from app.dtos.outdoor_conditions import OutdoorConditionsResult
 
 
 class ChatMessage(BaseModel):
@@ -156,6 +157,9 @@ class UserLocation(BaseModel):
     )
 
 
+CurrentLocation = UserLocation
+
+
 HealthIntent = Literal[
     "record_exercise",
     "record_blood_pressure",
@@ -178,9 +182,16 @@ class HealthAssistantChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=12, description="대화 이력 리스트")
     profile_context: ProfileContext | None = Field(default=None, description="현재 선택된 가족 구성원의 컨텍스트 정보")
     user_location: UserLocation | None = Field(
-        default=None, description="사용자의 현재 위치 (주변 병원·약국·응급실 조회용)"
+        default=None, description="사용자의 현재 위치 (주변 병원·약국·응급실 및 날씨·대기질 조회용)"
+    )
+    current_location: UserLocation | None = Field(
+        default=None, description="사용자 동의로 받은 이번 요청의 현재 좌표 (user_location과 호환)"
     )
     session_id: uuid.UUID | None = Field(default=None, description="대화 세션 ID (DB 영구 보존용)")
+
+    @property
+    def location(self) -> UserLocation | None:
+        return self.user_location or self.current_location
 
 
 class HealthAssistantResponse(BaseModel):
@@ -198,6 +209,10 @@ class HealthAssistantResponse(BaseModel):
     lab_result_draft: LabResultDraft | None = Field(default=None, description="검사/검진 서류 결과 초안")
     query_draft: QueryDraft | None = Field(default=None, description="기록 조회 조건 초안")
     challenge_draft: ChallengeDraft | None = Field(default=None, description="챌린지 생성·조정·완료 초안")
+    outdoor_conditions: OutdoorConditionsResult | None = Field(
+        default=None,
+        description="야외 활동 질문에서 조회한 실시간 날씨·대기질 결과",
+    )
     facility_search_draft: FacilitySearchResult | None = Field(
         default=None, description="주변 의료시설(응급실, 병원, 약국) 조회 결과"
     )
