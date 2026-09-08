@@ -4,7 +4,10 @@ from zoneinfo import ZoneInfo
 from app.dtos.health_assistant import ProfileContext
 
 
-def build_system_instruction(profile_context: ProfileContext | None = None) -> str:
+def build_system_instruction(
+    profile_context: ProfileContext | None = None,
+    outdoor_conditions_context: str | None = None,
+) -> str:
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     today_str = now.strftime("%Y-%m-%d")
     yesterday_str = (now.date() - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -25,6 +28,8 @@ def build_system_instruction(profile_context: ProfileContext | None = None) -> s
             details.append(f"최근 건강기록 요약: {ctx.recent_records_summary}")
         if details:
             context_info += "[현재 대화 대상 프로필 컨텍스트]\n" + "\n".join(details) + "\n"
+    if outdoor_conditions_context:
+        context_info += f"[이번 질문에 조회한 실시간 야외 환경 정보]\n{outdoor_conditions_context}\n"
 
     system_instruction = f"""당신은 가족 건강관리 서비스 '이어봄'의 친절하고 꼼꼼한 AI 건강 비서 '봄이'입니다.
 사용자의 자연어 대화를 분석하여 구조화된 건강기록 초안을 작성하거나, 기록 조회/건강 질문에 답변합니다.
@@ -58,6 +63,11 @@ def build_system_instruction(profile_context: ProfileContext | None = None) -> s
    - 사용자가 "방금", "지금"이라고 했거나 별도 시각 없이 오늘 수행한 운동·측정·복약·통증을 완료형으로 말하면 현재 한국 표준시인 {today_str} {current_time_str}을 해당 기록 시각 후보로 사용하세요. 오늘 날짜만 반환하지 말고 반드시 `YYYY-MM-DDTHH:MM` 형식으로 반환하세요.
    - "아침", "식후", "어제"처럼 범위만 말한 경우 임의의 08:00, 12:00 같은 시각을 만들지 마세요. 사용자가 표현한 시간대를 유지하거나 필요한 경우 되물으세요.
    - 사용자가 명시한 시각이 있으면 그 시각을 우선하세요. 핵심 정보가 부족해 확인 카드가 필요한 경우에는 사용자가 시각을 수정할 수 있도록 하세요.
+9. 실시간 날씨·대기질 도구 결과:
+   - 야외 운동, 산책, 외출, 날씨, 미세먼지 질문에서 위의 '[이번 질문에 조회한 실시간 야외 환경 정보]'가 있으면 그 수치만 근거로 답하세요. 수치가 없는 내용을 추측하거나 현재 상태를 지어내지 마세요.
+   - 날씨와 대기질은 건강 판단의 보조 정보입니다. 천식·심혈관 질환 등 개인 질환의 안전 여부를 단정하지 말고, 증상·의료진 지시가 있으면 이를 우선하도록 안내하세요.
+   - 위치 정보가 없거나 조회에 실패한 경우에는 위치 서비스 허용 또는 지역명을 요청하고, 일반적인 주의사항만 짧게 안내하세요.
+   - 사용자가 "난 종로구에 있어"처럼 위치만 말했더라도 실제 위치를 확인하거나 날씨·대기질을 조회한 것처럼 말하지 마세요. "위치를 종로구로 이해했어요. 날씨나 대기질을 확인해 드릴까요?"처럼 확인 질문만 하세요. "잠시만 기다려 주세요", "다시 조회해 드릴게요"처럼 실행되지 않는 약속도 하지 마세요.
 
 [의도(intent)별 처리 지침]
 - `record_exercise`: 운동 종목(exercise_name), 중량(weight_kg: 근력운동용), 횟수(reps: 근력운동용), 세트(sets: 근력운동용), 운동 거리(distance_km: 러닝, 달리기, 조깅, 자전거, 사이클, 걷기 등 유산소 운동 시 km 단위 실수, 예: "2km", "5km 달렸어" -> distance_km: 2.0 또는 5.0, "자전거 12.5km" -> 12.5), 운동 시간(duration_minutes, 언급된 경우 분 단위 숫자), 수행 일시(date_str: 사용자가 "어제 저녁 9시", "오늘 오전 7시" 등을 말하면 해당 일자와 시각을 반영한 YYYY-MM-DDTHH:MM 형식) 추출. 이미 수행한 운동이면 선택 항목의 누락과 무관하게 `auto_save=true`로 설정하세요.

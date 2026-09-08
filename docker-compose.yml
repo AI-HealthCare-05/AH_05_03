@@ -103,6 +103,8 @@ services:
       DB_TEST_NAME: ${DB_TEST_NAME:-ai_health_test}
       REDIS_URL: redis://redis:6379/0
       GEMINI_API_KEY: ${GEMINI_API_KEY:?GEMINI_API_KEY is required}
+      KMA_API_KEY: ${KMA_API_KEY:-}
+      AIRKOREA_API_KEY: ${AIRKOREA_API_KEY:-}
       # 인증 요청은 CORS 미들웨어뿐 아니라 CSRF 방어용 Origin 검사도 통과해야 한다.
       # 배포에서는 이 값을 환경별 JSON 배열로 덮어쓰고, 아래 기본값은 정식 공개
       # 도메인과 로컬 개발 주소만 허용한다. 수명이 짧은 Quick Tunnel URL은 넣지 않는다.

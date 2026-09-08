@@ -3,6 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.dtos.outdoor_conditions import OutdoorConditionsResult
+
 
 class ChatMessage(BaseModel):
     # `system` 을 받지 않는다. `gemini.py` 가 user 가 아닌 role 을 전부 `model` 로
@@ -23,6 +25,17 @@ class ProfileContext(BaseModel):
     relationship: str | None = Field(default=None, max_length=50)
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
     recent_records_summary: str | None = Field(default=None, max_length=2000)
+
+
+class CurrentLocation(BaseModel):
+    """브라우저가 사용자 동의 후 이번 요청에만 실어 보내는 현재 좌표.
+
+    위치를 계정이나 채팅 세션에 별도로 저장하지 않는다. 야외 환경 API를 호출하는
+    데만 쓰고, 응답이 끝나면 요청 메모리에서 사라진다.
+    """
+
+    latitude: float = Field(ge=33.0, le=39.5)
+    longitude: float = Field(ge=124.0, le=132.5)
 
 
 class ExerciseDraft(BaseModel):
@@ -156,6 +169,7 @@ HealthIntent = Literal[
 class HealthAssistantChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=12, description="대화 이력 리스트")
     profile_context: ProfileContext | None = Field(default=None, description="현재 선택된 가족 구성원의 컨텍스트 정보")
+    current_location: CurrentLocation | None = Field(default=None, description="사용자 동의로 받은 이번 요청의 현재 좌표")
     session_id: uuid.UUID | None = Field(default=None, description="대화 세션 ID (DB 영구 보존용)")
 
 
@@ -174,6 +188,10 @@ class HealthAssistantResponse(BaseModel):
     lab_result_draft: LabResultDraft | None = Field(default=None, description="검사/검진 서류 결과 초안")
     query_draft: QueryDraft | None = Field(default=None, description="기록 조회 조건 초안")
     challenge_draft: ChallengeDraft | None = Field(default=None, description="챌린지 생성·조정·완료 초안")
+    outdoor_conditions: OutdoorConditionsResult | None = Field(
+        default=None,
+        description="야외 활동 질문에서 조회한 실시간 날씨·대기질 결과",
+    )
     missing_fields: list[str] = Field(
         default_factory=list, description="초안 완성을 위해 사용자에게 추가 확인이 필요한 필드 목록"
     )

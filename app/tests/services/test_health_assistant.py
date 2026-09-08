@@ -2,10 +2,12 @@ import pytest
 
 from app.dtos.health_assistant import (
     ChatMessage,
+    CurrentLocation,
     HealthAssistantChatRequest,
     HealthAssistantResponse,
     ProfileContext,
 )
+from app.dtos.outdoor_conditions import AirQualityConditions, OutdoorConditionsResult, WeatherConditions
 from app.services.health_assistant import HealthAssistantService
 
 
@@ -25,6 +27,76 @@ class MockLLMClient:
     async def stream_structured_response(self, *args, **kwargs):
         for character in self.fake_json:
             yield character
+
+
+class CapturingLLMClient:
+    def __init__(self) -> None:
+        self.system_instruction = ""
+
+    async def generate_structured_response(self, *, system_instruction, **kwargs):
+        self.system_instruction = system_instruction
+        return HealthAssistantResponse(intent="health_advice", assistant_message="확인했습니다.")
+
+
+class OutdoorConditionsStub:
+    async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
+        assert (latitude, longitude) == (37.5665, 126.978)
+        return OutdoorConditionsResult(
+            latitude=latitude,
+            longitude=longitude,
+            weather=WeatherConditions(
+                temperature_c=23.4,
+                humidity_percent=55,
+                precipitation_type="강수 없음",
+                wind_speed_mps=1.2,
+            ),
+            air_quality=AirQualityConditions(
+                region_name="서울",
+                station_name="중구",
+                pm10=24,
+                pm25=11,
+                pm10_grade="좋음",
+                pm25_grade="보통",
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_loads_outdoor_tool_result_for_outdoor_question() -> None:
+    llm_client = CapturingLLMClient()
+    service = HealthAssistantService(
+        llm_client=llm_client,
+        outdoor_conditions_client=OutdoorConditionsStub(),
+    )
+
+    response = await service.respond(
+        HealthAssistantChatRequest(
+            messages=[ChatMessage(role="user", content="오늘 산책해도 돼?")],
+            current_location=CurrentLocation(latitude=37.5665, longitude=126.978),
+        )
+    )
+
+    assert response.outdoor_conditions is not None
+    assert response.outdoor_conditions.weather is not None
+    assert response.outdoor_conditions.weather.temperature_c == 23.4
+    assert "기온 23.4℃" in llm_client.system_instruction
+    assert "PM2.5 11㎍/㎥(보통)" in llm_client.system_instruction
+
+
+def test_health_assistant_routes_aerobic_recommendation_to_outdoor_tool() -> None:
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="오늘 유산소 할 건데 추천 좀")]
+    )
+
+    assert HealthAssistantService._needs_outdoor_conditions(request) is True
+
+
+def test_health_assistant_does_not_route_completed_run_record_to_outdoor_tool() -> None:
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="오늘 러닝 30분 했어")]
+    )
+
+    assert HealthAssistantService._needs_outdoor_conditions(request) is False
 
 
 @pytest.mark.asyncio

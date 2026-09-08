@@ -13,6 +13,21 @@ from app.prompts.health_assistant import build_system_instruction
 from app.repositories.health_record_repository import HealthRecordRepository
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.ocr_partial import PartialJsonTextReader
+from app.services.outdoor_conditions_client import OutdoorConditionsClient
+from app.services.outdoor_conditions_tools import execute_outdoor_conditions_tool
+
+_OUTDOOR_ENVIRONMENT_KEYWORDS = ("날씨", "미세먼지", "초미세먼지", "대기질")
+_OUTDOOR_ACTIVITY_KEYWORDS = (
+    "산책",
+    "조깅",
+    "러닝",
+    "유산소",
+    "운동추천",
+    "운동할",
+    "야외",
+    "밖에서",
+    "외출",
+)
 
 
 class HealthAssistantService:
@@ -27,10 +42,67 @@ class HealthAssistantService:
         llm_client: LLMClientProtocol | None = None,
         safety_service: HealthAssistantSafetyService | None = None,
         record_repo: HealthRecordRepository | None = None,
+        outdoor_conditions_client: OutdoorConditionsClient | None = None,
     ):
         self._llm_client = llm_client
         self.safety_service = safety_service or HealthAssistantSafetyService()
         self.record_repo = record_repo
+        self.outdoor_conditions_client = outdoor_conditions_client or OutdoorConditionsClient()
+
+    @staticmethod
+    def _needs_outdoor_conditions(request: HealthAssistantChatRequest) -> bool:
+        """실시간 API가 필요한 질문만 판별한다.
+
+        모든 대화에 외부 API를 호출하면 느려지고 할당량을 낭비한다. 이 라우팅은
+        도구의 호출 조건만 정하며, 최종 건강 안내 문장은 모델의 안전 지침을 거친다.
+        """
+        if not request.messages:
+            return False
+        message = request.messages[-1].content.replace(" ", "")
+        if any(keyword in message for keyword in _OUTDOOR_ENVIRONMENT_KEYWORDS):
+            return True
+        if any(keyword in message for keyword in ("했어", "완료", "기록해", "기록할", "기록하기")):
+            return False
+        return any(keyword in message for keyword in _OUTDOOR_ACTIVITY_KEYWORDS)
+
+    async def _load_outdoor_conditions(self, request: HealthAssistantChatRequest):
+        if not self._needs_outdoor_conditions(request) or request.current_location is None:
+            return None
+        return await execute_outdoor_conditions_tool(
+            "get_outdoor_health_conditions",
+            {
+                "latitude": request.current_location.latitude,
+                "longitude": request.current_location.longitude,
+            },
+            self.outdoor_conditions_client,
+        )
+
+    @staticmethod
+    def _format_outdoor_conditions_context(result: Any | None, location_available: bool) -> str | None:
+        if result is None:
+            return "현재 위치가 제공되지 않아 실시간 날씨·대기질을 조회하지 못했습니다." if not location_available else None
+
+        lines: list[str] = []
+        if result.weather:
+            weather = result.weather
+            lines.append(
+                "날씨: "
+                f"기온 {weather.temperature_c if weather.temperature_c is not None else '확인 불가'}℃, "
+                f"습도 {weather.humidity_percent if weather.humidity_percent is not None else '확인 불가'}%, "
+                f"강수 {weather.precipitation_type}, "
+                f"풍속 {weather.wind_speed_mps if weather.wind_speed_mps is not None else '확인 불가'}m/s"
+            )
+        if result.air_quality:
+            air = result.air_quality
+            lines.append(
+                "대기질: "
+                f"{air.region_name} {air.station_name or '측정소'}, "
+                f"PM10 {air.pm10 if air.pm10 is not None else '확인 불가'}㎍/㎥({air.pm10_grade or '등급 확인 불가'}), "
+                f"PM2.5 {air.pm25 if air.pm25 is not None else '확인 불가'}㎍/㎥({air.pm25_grade or '등급 확인 불가'})"
+            )
+        if result.errors:
+            lines.append("일부 조회 실패: " + "; ".join(result.errors))
+        return "\n".join(lines) or "실시간 야외 환경 정보를 불러오지 못했습니다."
 
     async def _enrich_context(self, context: ProfileContext | None) -> ProfileContext | None:
         if context is None or context.recent_records_summary or not context.profile_id or not self.record_repo:
@@ -64,7 +136,13 @@ class HealthAssistantService:
             return safety_check
 
         profile_context = await self._enrich_context(request.profile_context)
-        system_instruction = build_system_instruction(profile_context)
+        outdoor_conditions = await self._load_outdoor_conditions(request)
+        system_instruction = build_system_instruction(
+            profile_context,
+            self._format_outdoor_conditions_context(outdoor_conditions, request.current_location is not None)
+            if self._needs_outdoor_conditions(request)
+            else None,
+        )
 
         response = await self.llm_client.generate_structured_response(
             system_instruction=system_instruction,
@@ -73,6 +151,7 @@ class HealthAssistantService:
         )
 
         # 안전 검증 및 후처리
+        response.outdoor_conditions = outdoor_conditions
         validated_response = self.safety_service.validate_response(response)
 
         return validated_response
@@ -97,7 +176,13 @@ class HealthAssistantService:
             return
 
         profile_context = await self._enrich_context(request.profile_context)
-        system_instruction = build_system_instruction(profile_context)
+        outdoor_conditions = await self._load_outdoor_conditions(request)
+        system_instruction = build_system_instruction(
+            profile_context,
+            self._format_outdoor_conditions_context(outdoor_conditions, request.current_location is not None)
+            if self._needs_outdoor_conditions(request)
+            else None,
+        )
         reader = PartialJsonTextReader("assistant_message")
         raw = ""
         async for piece in self.llm_client.stream_structured_response(
@@ -114,4 +199,5 @@ class HealthAssistantService:
             parsed = HealthAssistantResponse.model_validate_json(raw)
         except Exception as ex:
             raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex
+        parsed.outdoor_conditions = outdoor_conditions
         yield "result", self.safety_service.validate_response(parsed).model_dump(mode="json")

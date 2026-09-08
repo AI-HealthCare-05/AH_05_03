@@ -15,6 +15,11 @@ export interface ProfileContext {
   recent_records_summary?: string;
 }
 
+export interface CurrentLocation {
+  latitude: number;
+  longitude: number;
+}
+
 export interface ExerciseDraft {
   exercise_name: string;
   weight_kg?: number | null;
@@ -170,6 +175,7 @@ export async function streamHealthAssistantMessage(
   profileContext?: ProfileContext,
   signal?: AbortSignal,
   sessionId?: string,
+  currentLocation?: CurrentLocation,
 ): Promise<HealthAssistantResponse> {
   let final: HealthAssistantResponse | undefined;
   let failure: string | undefined;
@@ -178,6 +184,7 @@ export async function streamHealthAssistantMessage(
       messages,
       profile_context: profileContext,
       session_id: sessionId,
+      current_location: currentLocation,
     },
     (event, data) => {
       if (event === "delta" && typeof data.text === "string") onDelta(data.text);
@@ -202,4 +209,3 @@ export async function sendHealthAssistantMessage(
     session_id: sessionId,
   });
 }
-

@@ -62,6 +62,36 @@ function messageId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function needsOutdoorConditions(text: string): boolean {
+  const normalized = text.replace(/\s+/g, "");
+  if (/날씨|미세먼지|초미세먼지|대기질/.test(normalized)) return true;
+  if (/했어|완료|기록(?:해|할|하기)?/.test(normalized)) return false;
+  return /산책|조깅|러닝|유산소|야외|밖에서|외출/.test(normalized)
+    || /오늘.*운동.*(?:추천|할)/.test(normalized);
+}
+
+interface OutdoorLocationAttempt {
+  location?: { latitude: number; longitude: number };
+  error?: string;
+}
+
+async function getCurrentLocationForOutdoorQuestion(): Promise<OutdoorLocationAttempt> {
+  if (!navigator.geolocation) {
+    return { error: "이 브라우저에서는 현재 위치 기능을 사용할 수 없습니다." };
+  }
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({
+        location: { latitude: position.coords.latitude, longitude: position.coords.longitude },
+      }),
+      () => resolve({
+        error: "실시간 날씨와 대기질을 확인하려면 기기와 브라우저 설정에서 위치 서비스 권한을 허용해 주세요.",
+      }),
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 5 * 60 * 1000 },
+    );
+  });
+}
+
 interface HealthAssistantDrawerProps {
   profile?: FamilyProfile;
   runtime?: LocalDomainRuntime;
@@ -461,6 +491,13 @@ export function HealthAssistantDrawer({
 
     if ((!textToSend && !currentImage) || loading || !profile) return;
 
+    // 위치 권한 요청은 전송 버튼을 누른 **직후** 시작한다. 건강기록 조회·OCR처럼
+    // 다른 비동기 작업을 먼저 기다리면 일부 브라우저가 사용자 동작과의 연결을
+    // 잃어 권한 팝업을 띄우지 않을 수 있다.
+    const outdoorLocationPromise = needsOutdoorConditions(textToSend)
+      ? getCurrentLocationForOutdoorQuestion()
+      : Promise.resolve({} as OutdoorLocationAttempt);
+
     clearSelectedImage();
 
     let userContent = textToSend;
@@ -511,6 +548,21 @@ export function HealthAssistantDrawer({
         .join("\n");
       const contextRecordTypes = selectContextRecordTypes(recentConversationText);
       const recentSummary = await fetchRecentRecordsSummary(contextRecordTypes);
+      // 야외 질문일 때만 브라우저 위치 권한을 요청한다. 좌표는 이 API 요청에만 쓰고
+      // 채팅/프로필의 로컬 저장소에는 남기지 않는다.
+      const locationAttempt = await outdoorLocationPromise;
+      const currentLocation = locationAttempt.location;
+      if (needsOutdoorConditions(textToSend) && !currentLocation) {
+        setMessages([
+          ...nextMessages,
+          {
+            id: messageId("assistant"),
+            role: "assistant",
+            content: locationAttempt.error ?? "현재 위치를 확인하지 못해 실시간 야외 환경을 조회할 수 없습니다.",
+          },
+        ]);
+        return;
+      }
 
       // AI 전송용 메시지 배열 구성 (OCR 텍스트가 있으면 함께 포함)
       const promptMessages = nextMessages.slice(-12).map((m, idx, recentMessages) => {
@@ -564,6 +616,7 @@ export function HealthAssistantDrawer({
             },
             undefined,
             sessionId,
+            currentLocation,
           )
         : await streamHealthAssistantMessage(
             promptMessages,
@@ -577,6 +630,9 @@ export function HealthAssistantDrawer({
               birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
               recent_records_summary: recentSummary,
             },
+            undefined,
+            undefined,
+            currentLocation,
           );
 
 
