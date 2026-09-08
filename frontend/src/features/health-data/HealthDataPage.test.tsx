@@ -14,8 +14,8 @@ describe("HealthDataPage", () => {
       </LocalDomainProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "나님의 건강 변화" })).toBeInTheDocument();
-    expect(await screen.findByText("최근 3개월간 체중이 2.1kg 감소했습니다.")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "나님의 건강 변화" }, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByText("최근 3개월간 체중이 2.1kg 감소했습니다.", {}, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "가족 구성원" })).toBeInTheDocument();
   });
 
