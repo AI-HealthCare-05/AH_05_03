@@ -26,6 +26,14 @@ class HealthRecord(TimestampMixin, Base):
     source: Mapped[str] = mapped_column(String(30), default="manual", server_default="manual", nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # **원본 서류와 기록을 잇는 고리.** 검진표를 올려 판정하면 원본은 기기 보관함에,
+    # 판정은 이 표에 남는다. 이 칸이 없으면 둘을 이을 방법이 없어 "이 숫자는 어느
+    # 서류에서 왔나" 에 답할 수 없다 — 건강 데이터의 검진 이력이 늘 비어 있던 이유다.
+    #
+    # 외래키를 걸지 않는다. 문서 실물은 서버가 아니라 **브라우저 OPFS** 에 있어서
+    # 참조 무결성을 서버가 보장할 수 없다. 기기를 옮기면 id 는 남고 실물은 없는데,
+    # 그건 깨진 상태가 아니라 "그 기기에서만 열 수 있다" 는 사실 그대로다.
+    source_document_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active", server_default="active", nullable=False)
     row_version: Mapped[int] = mapped_column(BigInteger, default=1, server_default="1", nullable=False)
 

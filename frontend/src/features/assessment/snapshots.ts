@@ -1,12 +1,13 @@
 /**
  * 판정 시점 스냅샷 — 추적 대시보드의 재료.
  *
- * 왜 서버가 아니라 로컬인가
- * -------------------------
- * 서버는 판정을 저장하지 않는다(NFR-01, ADR-002). 그래서 "같은 사람의 다른 시점"을
- * 이으려면 남길 자리가 암호화 로컬 보관함뿐이다. 이미 있는 `HealthRecord` 배선을
- * 그대로 쓰고 `recordType` 만 `"assessment"` 로 더했다 — 새 저장소를 만들면 백업·
- * 복구·접근범위·프로필 병합을 전부 다시 구현해야 한다.
+ * 어디에 남는가
+ * -------------
+ * **로컬 보관함에 쓰고, 동기화가 PostgreSQL 로 옮긴다**(ADR-011, 2026-09-04 승인).
+ * 그 ADR 이 ADR-001·002 의 "건강정보 서버 미전송" 을 대체했으므로 이 머리말에 있던
+ * "서버는 판정을 저장하지 않는다" 는 더 이상 사실이 아니다 — 실측으로 `health_records`
+ * 에 assessment 12행이 들어가 있었다. 이미 있는 `HealthRecord` 배선을 그대로 쓰고
+ * `recordType` 만 `"assessment"` 로 더했다.
  *
  * 왜 등급까지 남기는가
  * --------------------
@@ -17,6 +18,7 @@
 
 import { PRIMARY_HOUSEHOLD_ID } from "../../app/localDomainContext";
 import type {
+  AssessmentRun,
   AssessmentSnapshotPayload,
   HealthRecord,
   StoredRisk,
@@ -104,6 +106,44 @@ function storeRisk(risk: DiseaseRisk): StoredRisk {
   };
 }
 
+/**
+ * 바로 앞 기록과 **같은 값·같은 등급**인가.
+ *
+ * 판정하기를 누를 때마다 자동으로 한 점이 쌓인다. 그래서 "지난 판정으로 채우기" 로
+ * 값을 되불러와 다시 판정하면 **한 글자도 안 바뀐 점**이 계속 늘어난다. 실측으로
+ * 같은 날 8,603 바이트짜리 행이 두 번 나란히 저장돼 있었다.
+ *
+ * 추적 그래프에서 변화 없는 점은 정보가 아니라 잡음이다 — 가로축만 늘리고 실제로
+ * 움직인 구간을 좁힌다. 입력과 등급이 둘 다 같으면 새 점을 만들지 않는다.
+ *
+ * **시각은 안 고친다.** 그날 본 화면을 남기는 것이 스냅샷의 존재 이유라, 나중에
+ * 같은 값을 다시 눌렀다고 예전 기록의 시각을 바꾸면 그 기록이 가리키던 시점이
+ * 사라진다.
+ */
+function sameInputs(
+  previous: AssessmentSnapshotPayload["inputs"] | undefined,
+  next: AssessmentSnapshotPayload["inputs"],
+): boolean {
+  // 키 순서가 달라도 같은 입력이다. `toRequestBody` 가 필드 순서를 보장하지 않는다.
+  const normalise = (value: Record<string, unknown> | undefined) =>
+    JSON.stringify(Object.fromEntries(Object.entries(value ?? {}).sort(([a], [b]) => a.localeCompare(b))));
+  return normalise(previous) === normalise(next);
+}
+
+export interface SaveOutcome {
+  snapshot: Snapshot;
+  /** 무엇을 했는가. 화면이 사용자에게 그대로 말한다. */
+  kind: "created" | "rechecked" | "changed";
+  /** `changed` 일 때 몇 차인지. 1차는 기록이 만들어질 때다. */
+  run: number;
+}
+
+/** 저장된 회차 목록. 옛 기록에는 `runs` 가 없으므로 본문에서 1차를 만들어 준다. */
+export function runsOf(payload: AssessmentSnapshotPayload): AssessmentRun[] {
+  if (payload.runs?.length) return payload.runs;
+  return [{ at: "", levels: payload.levels ?? {}, highestLevel: payload.highestLevel ?? "" }];
+}
+
 export async function saveSnapshot(
   runtime: LocalDomainRuntime,
   profileId: string,
@@ -111,7 +151,9 @@ export async function saveSnapshot(
   result: AssessmentSummaryData,
   recordedAt: string = new Date().toISOString(),
   source: "manual" | "ocr" = "manual",
-): Promise<Snapshot> {
+  /** 이 판정을 채운 검진표. 있으면 기록에 매달아 나중에 원본을 열 수 있게 한다. */
+  sourceDocumentId?: string,
+): Promise<SaveOutcome> {
   const payload: AssessmentSnapshotPayload = {
     inputs: toRequestBody(values) as AssessmentSnapshotPayload["inputs"],
     levels: Object.fromEntries(result.verdicts.map((v) => [v.key, v.risk_level])),
@@ -126,6 +168,53 @@ export async function saveSnapshot(
     matrix: Object.values(result.disease_risks ?? {}).map(storeRisk),
   };
 
+  // **입력이 같으면 새 기록을 만들지 않는다.** 기록 하나가 곧 입력값 한 벌이다.
+  const existing = await listSnapshots(runtime, profileId);
+  const latest = existing.at(-1);
+  if (latest && sameInputs(latest.payload.inputs, payload.inputs)) {
+    const runs = runsOf(latest.payload);
+    const unchanged = JSON.stringify(runs.at(-1)?.levels ?? {}) === JSON.stringify(payload.levels ?? {});
+    // 등급까지 같으면 회차를 늘리지 않는다. 같은 값을 같은 모델로 또 돌린 것뿐이라
+    // 남길 것이 "언제 다시 확인했나" 하나다.
+    const nextRuns = unchanged
+      ? runs
+      : [...runs, { at: recordedAt, levels: payload.levels, highestLevel: payload.highestLevel }];
+    const merged: AssessmentSnapshotPayload = {
+      ...latest.payload,
+      checkedAt: recordedAt,
+      runs: nextRuns,
+      // 등급이 바뀌었으면 카드 원본도 최신으로 바꾼다 — 기록을 열었을 때 마지막으로
+      // 본 화면이 나와야 한다. 안 바뀌었으면 손대지 않는다.
+      ...(unchanged
+        ? {}
+        : {
+            levels: payload.levels,
+            engines: payload.engines,
+            highestLevel: payload.highestLevel,
+            evaluated: payload.evaluated,
+            total: payload.total,
+            verdicts: payload.verdicts,
+            matrix: payload.matrix,
+          }),
+    };
+    const updated = await runtime.healthRecords.update<AssessmentSnapshotPayload>(latest.id, {
+      recordType: "assessment",
+      // **시각은 안 옮긴다.** 그날 본 화면을 남기는 것이 스냅샷의 존재 이유라,
+      // 다시 확인했다고 예전 기록의 시점을 바꾸면 그 점이 가리키던 날이 사라진다.
+      recordedAt: latest.recordedAt,
+      payload: merged,
+      expectedVersion: latest.version,
+    });
+    if (!updated.ok) throw new Error(updated.error.message);
+    return {
+      snapshot: updated.value,
+      kind: unchanged ? "rechecked" : "changed",
+      run: nextRuns.length,
+    };
+  }
+
+  payload.runs = [{ at: recordedAt, levels: payload.levels, highestLevel: payload.highestLevel }];
+  payload.checkedAt = recordedAt;
   const created = await runtime.healthRecords.create<AssessmentSnapshotPayload>({
     householdId: PRIMARY_HOUSEHOLD_ID,
     profileId,
@@ -135,11 +224,14 @@ export async function saveSnapshot(
     // 재료이자, 인식 품질을 되짚을 유일한 흔적이다.
     source,
     payload,
+    // **원본과 판정을 잇는 유일한 고리다.** 이게 없으면 검진표는 보관함에, 판정은
+    // 기록에 따로 남아서 "이 숫자는 어느 서류에서 왔나" 에 답할 수 없다.
+    sourceDocumentId,
   });
   if (!created.ok) {
     throw new Error(created.error.message);
   }
-  return created.value;
+  return { snapshot: created.value, kind: "created", run: 1 };
 }
 
 /** 오래된 것부터. 차트가 왼쪽에서 오른쪽으로 흐른다. */

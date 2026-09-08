@@ -49,6 +49,11 @@ class AssessmentSummaryRequest(RiskPredictionRequest):
     has_diabetes: bool | None = Field(default=None, description="당뇨 진단을 받은 적이 있는가")
     has_hypertension: bool | None = Field(default=None, description="고혈압 진단을 받은 적이 있는가")
     has_ascvd_history: bool | None = Field(default=None, description="동맥경화성 심혈관질환 병력")
+    # **ML 특징이 아니라 라벨 재료다.** 만성염증 모델이 이 값을 맞히므로 특징으로
+    # 쓰면 라벨 누출이고(`modeling/targets.py` 가 차단한다), 다른 타깃의
+    # `LAB_FEATURES` 에도 넣지 않았다 — 학습 주기 둘이 통째로 없고 국가건강검진
+    # 혈액 패널 밖이라 서빙에서 대부분 결측이다. 그래서 규칙 전용 입력으로 둔다.
+    crp: float | None = Field(default=None, gt=0, le=500, description="고감도 CRP mg/L")
 
     # ML 쪽 이름 -> 규칙 엔진 쪽 이름. 값이 아니라 이름만 바꾼다.
     RENAMED_FOR_RULES: ClassVar[dict[str, str]] = {

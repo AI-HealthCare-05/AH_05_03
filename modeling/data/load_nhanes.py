@@ -288,7 +288,45 @@ def build_cycle(cycle: str) -> pd.DataFrame:
                     frame[target] = source[option].reindex(index)
                     break
 
-    take("BMX", {"BMXHT": "height_cm", "BMXWT": "weight_kg", "BMXBMI": "bmi", "BMXWAIST": "waist_cm"})
+    take("BMX", {"BMXHT": "height_cm", "BMXWT": "weight_kg", "BMXWAIST": "waist_cm"})
+    # **BMI 는 NHANES 의 BMXBMI 를 받지 않고 여기서 계산한다.**
+    #
+    # 서빙은 사용자가 넣은 키·체중으로 `weight / (height/100)**2` 를 계산한다
+    # (`app/dtos/predictions.py` 의 `RiskPredictionRequest.bmi`). BMXBMI 를 그대로
+    # 받으면 학습과 서빙이 **다른 식**이 된다 — NCHS 는 반올림 전 원측정값으로
+    # 계산하고 우리는 이미 0.1 cm / 0.1 kg 으로 반올림된 BMXHT·BMXWT 로 계산하기
+    # 때문이다.
+    #
+    # 실측(pooled 48,895행, 둘 다 있는 44,815행): |차이| 최대 0.0500 · 평균 0.0156 ·
+    # 0.05 초과 4.21%. 소수 둘째 자리 반올림 폭에 정확히 갇혀서 0.5 를 넘는 행은
+    # 하나도 없었다. 크기는 작지만 **비만 라벨(`bmi >= 25`)이 갈리는 행이 68개
+    # (0.15%)** 였고, 그 라벨을 화면의 규칙 엔진은 계산한 BMI 로 판정한다.
+    # 같은 판단을 두 곳이 다른 식으로 하고 있던 셈이라 학습 쪽을 서빙에 맞춘다.
+    #
+    # `round(_, 2)` 까지 같아야 한다. 서빙이 소수 둘째 자리에서 끊으므로 여기서
+    # 안 끊으면 GBDT 분할 경계에서 다시 갈릴 수 있다.
+    height_m = pd.to_numeric(frame["height_cm"], errors="coerce") / 100.0
+    weight = pd.to_numeric(frame["weight_kg"], errors="coerce")
+    frame["bmi"] = (weight / height_m.pow(2)).round(2)
+
+    # CRP 는 **파일도 단위도 두 벌**이라 take 한 번으로 안 된다.
+    #
+    #   2005-2010  CRP_D/E/F    LBXCRP    mg/dL   구형 비탁법
+    #   2015-2023  HSCRP_I/J/L  LBXHSCRP  mg/L    고감도
+    #   2011-2014  없음
+    #
+    # mg/dL 에 10 을 곱하면 두 시대의 분포가 겹친다(실측: 중앙값 1.9~2.2 대
+    # 1.81~1.97, `<1` 비율 29.8% 대 30.4%). 다만 구형은 저농도 해상도가 낮아
+    # 1 mg/L 이하 고유값이 10 개뿐이다(고감도는 88 개). **그래서 연속 특징으로
+    # 쓰지 않고 3 mg/L 절단점 라벨로만 쓴다** — 절단점 기준 양성률은 주기별로
+    # 28.5~32.7% 로 흔들리지 않는다.
+    take("CRP", {"LBXCRP": "_crp_mg_dl"})
+    take("HSCRP", {"LBXHSCRP": "_crp_mg_l"})
+    old_crp = pd.to_numeric(frame["_crp_mg_dl"], errors="coerce") * 10.0
+    new_crp = pd.to_numeric(frame["_crp_mg_l"], errors="coerce")
+    # 한 사람에게 둘 다 있는 주기는 없다. 그래도 고감도 쪽을 먼저 둔다.
+    frame["crp"] = new_crp.fillna(old_crp)
+    frame.drop(columns=["_crp_mg_dl", "_crp_mg_l"], inplace=True)
     take("GLU", {"LBXGLU": "fasting_glucose"})
     take("GHB", {"LBXGH": "hba1c"})
     take("TCHOL", {"LBXTC": "total_chol"})

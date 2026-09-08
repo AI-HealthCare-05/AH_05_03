@@ -366,6 +366,7 @@ export class ServerApiClient {
     source?: string;
     payload: Record<string, unknown>;
     note?: string | null;
+    source_document_id?: string | null;
   }): Promise<HealthRecordServerData> {
     return this.request<HealthRecordServerData>("/health-records", {
       method: "POST",
