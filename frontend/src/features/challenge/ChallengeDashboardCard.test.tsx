@@ -84,7 +84,7 @@ describe("ChallengeDashboardCard", () => {
 
     expect(await screen.findByText("하나만 더 하면 오늘 물을 줍니다.")).toBeInTheDocument();
     expect(screen.getByText(/나무 · 166점 · 흙 뿌리내림 · 4주 연속/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "챌린지 열기" })).toHaveAttribute("href", "/challenge");
+    expect(screen.getByRole("link", { name: "생활습관 챌린지 열기" })).toHaveAttribute("href", "/challenge");
   });
 
   it("로그인 전에는 아무것도 그리지 않는다", async () => {

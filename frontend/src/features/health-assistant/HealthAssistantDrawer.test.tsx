@@ -80,6 +80,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.restoreAllMocks();
     sessionStorage.clear();
   });
 
@@ -502,6 +503,10 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
           profile_name: "홍길동",
           recent_records_summary: expect.stringContaining("타이레놀"),
         }),
+        undefined,
+        undefined,
+        undefined,
+        expect.any(Function),
       );
     });
 
@@ -740,6 +745,10 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
         expect.any(Array),
         expect.any(Function),
         expect.objectContaining({ recent_records_summary: undefined }),
+        undefined,
+        undefined,
+        undefined,
+        expect.any(Function),
       );
     });
     expect(mockQueryRecords).not.toHaveBeenCalled();

@@ -743,6 +743,7 @@ export function mergeServerMessagesWithLocalUi(
 
     return {
       ...serverMessage,
+      responseDraft: cached.responseDraft,
       saved: cached.saved,
       attachedDocuments: cached.attachedDocuments,
       queriedRecords: cached.queriedRecords,

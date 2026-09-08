@@ -177,6 +177,12 @@ export class ServerProfileService {
     }
   }
 
+  public async deleteEmpty(profileId: string): Promise<LocalResult<void>> {
+    const res = await this.softDelete(profileId);
+    if (!res.ok) return failure(res.error.code, res.error.message);
+    return success(undefined);
+  }
+
   public async setServerReference(profileId: string): Promise<LocalResult<FamilyProfile>> {
     return this.get(profileId);
   }
