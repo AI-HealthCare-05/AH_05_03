@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactElement, type Reac
 
 import { useLocalDomain } from "../../app/localDomainContext";
 import type { HealthRecord } from "../../shared/local/domainContracts";
+import { CHECKUP_FIELDS, FIELD_LABELS, FIELD_UNITS } from "../assessment/fields";
 import { FamilyProfileSidebar } from "../family/FamilyProfileSidebar";
 
 type PeriodKey = "1m" | "3m" | "6m" | "1y" | "all";
@@ -52,15 +53,47 @@ export function HealthDataPage() {
 
   const periodLabel = PERIODS.find((item) => item.key === period)?.label ?? "선택 기간";
   const filteredRecords = useMemo(() => filterByPeriod(records, period), [period, records]);
-  const weightPoints = useMemo(() => extractSingleSeries(filteredRecords, "body_measurement", ["weightKg", "weight"]), [filteredRecords]);
-  const systolicPoints = useMemo(() => extractSingleSeries(filteredRecords, "blood_pressure", ["systolicMmHg", "systolic"]), [filteredRecords]);
-  const diastolicPoints = useMemo(() => extractSingleSeries(filteredRecords, "blood_pressure", ["diastolicMmHg", "diastolic"]), [filteredRecords]);
-  const glucosePoints = useMemo(() => extractSingleSeries(filteredRecords, "blood_glucose", ["valueMgDl", "value", "glucose"]), [filteredRecords]);
+  const weightPoints = useMemo(
+    () => extractSingleSeries(filteredRecords, "body_measurement", ["weightKg", "weight"], ["weight_kg"]),
+    [filteredRecords],
+  );
+  const systolicPoints = useMemo(
+    () => extractSingleSeries(filteredRecords, "blood_pressure", ["systolicMmHg", "systolic"], ["sbp"]),
+    [filteredRecords],
+  );
+  const diastolicPoints = useMemo(
+    () => extractSingleSeries(filteredRecords, "blood_pressure", ["diastolicMmHg", "diastolic"], ["dbp"]),
+    [filteredRecords],
+  );
+  const glucosePoints = useMemo(
+    () =>
+      extractSingleSeries(
+        filteredRecords,
+        "blood_glucose",
+        ["valueMgDl", "value", "glucose"],
+        ["fasting_glucose"],
+      ),
+    [filteredRecords],
+  );
   const labMetrics = useMemo(() => collectLabMetrics(filteredRecords), [filteredRecords]);
   const labMetricNames = useMemo(() => [...labMetrics.keys()].sort((a, b) => a.localeCompare(b, "ko")), [labMetrics]);
   const activeLabMetric = labMetricNames.includes(selectedLabMetric) ? selectedLabMetric : (labMetricNames[0] ?? "");
+  /**
+   * 검진 이력 — 검진표에서 읽어 남긴 기록.
+   *
+   * `health_screening` 만 찾던 때는 이 칸이 늘 비어 있었다. 사용자가 실제로 올리는
+   * 검진표는 **판정 화면**에서 들어오고 그건 `assessment` 기록으로 남는다. 그중
+   * 원본 서류가 매달린 것(`sourceDocumentId`)이 곧 "저장된 검진 결과" 다.
+   */
   const screenings = useMemo(
-    () => filteredRecords.filter((record) => record.recordType === "health_screening").sort(sortNewest),
+    () =>
+      filteredRecords
+        .filter(
+          (record) =>
+            record.recordType === "health_screening" ||
+            (record.recordType === "assessment" && Boolean(record.sourceDocumentId)),
+        )
+        .sort(sortNewest),
     [filteredRecords],
   );
 
@@ -143,13 +176,20 @@ export function HealthDataPage() {
 
           <section className="health-data-panel screening-history-panel">
             <div className="panel-heading"><div><p className="section-kicker">건강검진 이력</p><h2>저장된 검진 결과</h2><p>검진 요약을 확인하고 연결된 원본 서류를 열 수 있습니다.</p></div>{recordsLoading ? <span className="subtle-status">불러오는 중…</span> : null}</div>
-            {screenings.length === 0 ? <div className="compact-empty"><strong>아직 저장된 건강검진 결과가 없습니다.</strong><p>건강 파일에서 검진 서류를 추가해 주세요.</p></div> : (
+            {screenings.length === 0 ? <div className="compact-empty"><strong>아직 저장된 건강검진 결과가 없습니다.</strong><p>위험 판정 화면에서 검진표를 올리면 여기에 쌓입니다.</p></div> : (
               <div className="screening-history-list">
                 {screenings.map((record) => {
                   const payload = record.payload as Record<string, unknown>;
+                  const inputs = assessmentInputs(record);
+                  // 판정 기록이면 그날 읽어 온 칸 수와 최고 등급으로 요약한다 —
+                  // 검진 서류 기록에는 없는 정보이고, 이쪽에는 그게 전부다.
+                  const title = inputs ? "검진표로 판정" : (textValue(payload.screeningName) ?? "건강검진");
+                  const summary = inputs
+                    ? `수치 ${Object.keys(inputs).length}칸을 읽어 판정했습니다.`
+                    : (textValue(payload.institution) ?? textValue(payload.summary) ?? "검진 결과가 저장되어 있습니다.");
                   return (
                     <article key={record.id}>
-                      <div><time dateTime={record.recordedAt}>{formatDate(record.recordedAt)}</time><strong>{textValue(payload.screeningName) ?? "건강검진"}</strong><p>{textValue(payload.institution) ?? textValue(payload.summary) ?? "검진 결과가 저장되어 있습니다."}</p></div>
+                      <div><time dateTime={record.recordedAt}>{formatDate(record.recordedAt)}</time><strong>{title}</strong><p>{summary}</p></div>
                       <button type="button" className="secondary-button" disabled={!record.sourceDocumentId || !runtime?.documents} onClick={() => void openOriginal(record)}>원본 서류 보기</button>
                     </article>
                   );
@@ -239,6 +279,9 @@ function TimeSeriesChart({ series, unit }: { series: ChartSeries[]; unit: string
   );
 }
 
+/** 위 세 차트가 이미 그리는 값. 검진 수치 목록에서 두 번 세지 않는다. */
+const CHART_KEYS = new Set(["weight_kg", "sbp", "dbp", "fasting_glucose"]);
+
 function filterByPeriod(records: HealthRecord[], period: PeriodKey): HealthRecord[] {
   const days = PERIODS.find((item) => item.key === period)?.days;
   if (!days) return [...records].sort(sortOldest);
@@ -246,13 +289,46 @@ function filterByPeriod(records: HealthRecord[], period: PeriodKey): HealthRecor
   return records.filter((record) => new Date(record.recordedAt).getTime() >= from).sort(sortOldest);
 }
 
-function extractSingleSeries(records: HealthRecord[], recordType: HealthRecord["recordType"], keys: string[]): ChartPoint[] {
-  return records.flatMap((record) => {
-    if (record.recordType !== recordType) return [];
-    const payload = record.payload as Record<string, unknown>;
-    const value = firstNumber(payload, keys);
-    return value === undefined ? [] : [{ date: record.recordedAt, value }];
-  }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+/**
+ * 판정 기록(`assessment`)의 입력값도 같은 계열로 읽는다.
+ *
+ * 이 화면이 계속 비어 있던 이유다. 사용자가 실제로 남기는 수치는 대부분 **판정
+ * 화면에서 검진결과지를 옮겨 적은 것**이고, 그건 `assessment` 기록의
+ * `payload.inputs` 에 서른 몇 칸이 통째로 들어간다. 그런데 이 화면은
+ * `body_measurement`·`blood_pressure`·`blood_glucose` 만 찾고 있어서, 기록이 열두
+ * 건 있는데도 "아직 기록이 없습니다" 만 떴다.
+ *
+ * 키 이름은 서버 DTO 그대로다(`toRequestBody`). 판정 화면과 같은 이름을 쓰므로
+ * 여기서 따로 사전을 만들지 않는다.
+ */
+function assessmentInputs(record: HealthRecord): Record<string, unknown> | undefined {
+  if (record.recordType !== "assessment") return undefined;
+  const payload = record.payload as Record<string, unknown>;
+  const inputs = payload.inputs;
+  return inputs && typeof inputs === "object" ? (inputs as Record<string, unknown>) : undefined;
+}
+
+function extractSingleSeries(
+  records: HealthRecord[],
+  recordType: HealthRecord["recordType"],
+  keys: string[],
+  /** 판정 기록에서 같은 값을 가리키는 이름. 없으면 판정 기록은 안 본다. */
+  assessmentKeys: string[] = [],
+): ChartPoint[] {
+  return records
+    .flatMap((record) => {
+      const inputs = assessmentInputs(record);
+      if (inputs) {
+        if (assessmentKeys.length === 0) return [];
+        const value = firstNumber(inputs, assessmentKeys);
+        return value === undefined ? [] : [{ date: record.recordedAt, value }];
+      }
+      if (record.recordType !== recordType) return [];
+      const payload = record.payload as Record<string, unknown>;
+      const value = firstNumber(payload, keys);
+      return value === undefined ? [] : [{ date: record.recordedAt, value }];
+    })
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
 function collectLabMetrics(records: HealthRecord[]): Map<string, { unit: string; points: ChartPoint[] }> {
@@ -267,6 +343,21 @@ function collectLabMetrics(records: HealthRecord[]): Map<string, { unit: string;
   };
   for (const record of records) {
     const payload = record.payload as Record<string, unknown>;
+    // 판정 기록에 들어온 검사값 전부. 이름·단위는 판정 폼의 표를 그대로 쓴다 —
+    // 여기서 따로 지으면 같은 값이 화면마다 다른 이름으로 나간다.
+    const inputs = assessmentInputs(record);
+    if (inputs) {
+      for (const [name, value] of Object.entries(inputs)) {
+        if (CHART_KEYS.has(name)) continue; // 위 세 차트가 이미 그린다
+        // 검진결과지에 인쇄되는 값만. 나이·키·주관 평가·생활습관은 검사가 아니다
+        // (`fields.CHECKUP_FIELDS` 머리말 — 나이가 26→52→61 로 그려지고 있었다).
+        if (!CHECKUP_FIELDS.has(name)) continue;
+        const label = FIELD_LABELS[name];
+        if (!label) continue;
+        add(label, value, FIELD_UNITS[name] ?? "", record.recordedAt);
+      }
+      continue;
+    }
     if (record.recordType === "lab_result") add(textValue(payload.testName) ?? "", payload.value, payload.unit, record.recordedAt);
     if (record.recordType === "health_screening" && Array.isArray(payload.items)) {
       for (const item of payload.items) {

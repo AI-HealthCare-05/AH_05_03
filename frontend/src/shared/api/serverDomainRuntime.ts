@@ -46,7 +46,9 @@ export function toClientHealthRecord<T extends object = Record<string, unknown>>
     recordedAt: server.recorded_at,
     source: (server.source as HealthRecord["source"]) || "manual",
     payload: (server.payload || {}) as T,
-    sourceDocumentId: null,
+    // **서버가 돌려준 값을 그대로 쓴다.** 여기서 `null` 로 굳히고 있었다 — 그래서
+    // 판정이 원본 서류를 들고 있어도 화면은 늘 "연결된 서류 없음" 으로 읽었다.
+    sourceDocumentId: server.source_document_id ?? null,
     deletedAt: server.status === "deleted" ? server.updated_at : null,
     createdAt: server.created_at,
     updatedAt: server.updated_at,
@@ -214,6 +216,8 @@ export class ServerHealthRecordService {
         recorded_at: input.recordedAt,
         source: input.source || "manual",
         payload: input.payload as Record<string, unknown>,
+        // 원본 서류 고리. 안 보내면 서버에 남지 않고, 다음에 읽을 때 사라진다.
+        source_document_id: input.sourceDocumentId,
       });
       return success(toClientHealthRecord<T>(created, input.householdId || this.householdId));
     } catch (err) {

@@ -656,6 +656,27 @@ const LEGACY_MATRIX_TITLE: Record<string, string> = {
 
 export function MatrixCard({ risk }: { risk: DiseaseRisk }) {
   const title = LEGACY_MATRIX_TITLE[risk.category] ?? risk.category;
+  // **신호가 하나도 안 걸린 칸은 짧게 둔다.** 여섯 신호가 겹친 카드와 같은 높이를
+  // 차지하면 "정상인데 왜 이렇게 크게 보여주나" 가 된다 — 실제로 그 질문을 받았다.
+  // 대신 지우지는 않는다. 다 보고 깨끗한 것은 그 자체로 답이고, 그걸 말하려면
+  // **몇 가지를 봤는지**를 같이 적어야 한다.
+  const clear = risk.contributors.length === 0 && risk.risk_level === "NORMAL";
+  if (clear) {
+    return (
+      <article className={`assess-card assess-matrix is-clear ${LEVEL_CLASS[risk.risk_level]}`}>
+        <header>
+          <h3>{title}</h3>
+          <LevelBadge level={risk.risk_level} />
+        </header>
+        <p className="assess-matrix-clear">{risk.reason || risk.display_label}</p>
+        {risk.missing_fields.length > 0 && (
+          <p className="assess-missing">
+            <strong>못 본 값</strong> · {risk.missing_fields.map(readableField).join(", ")}
+          </p>
+        )}
+      </article>
+    );
+  }
   return (
     <article
       className={`assess-card assess-matrix ${LEVEL_CLASS[risk.risk_level]}`}

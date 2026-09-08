@@ -45,7 +45,13 @@ export function buildAssessmentPrefill(
   return combined;
 }
 
-export function DataManagementPage() {
+/**
+ * `embedded` 면 계정 화면 안에 한 단 낮춰 들어간다.
+ *
+ * 데이터 관리는 계정에 딸린 일(백업·복구·삭제)이라 메뉴를 따로 둘 만큼의 무게가
+ * 아니었다. 계정 화면 하나로 모으고 `/data` 는 그리로 보낸다 — 주소는 살려 둔다.
+ */
+export function DataManagementPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { runtime, profiles, refreshProfiles } = useLocalDomain();
   const capabilities = useMemo(() => detectLocalCapabilities(), []);
   const [passphrase, setPassphrase] = useState("");
@@ -267,15 +273,28 @@ export function DataManagementPage() {
   }
 
   return (
-    <div className="product-page data-page">
-      <section className="dashboard-heading">
-        <div>
-          <p className="page-kicker">데이터 관리</p>
-          <h1>건강정보를 직접 보관하고 옮기세요</h1>
-          <p>이어봄 서버가 아닌 사용자 파일을 통해 백업하고 복구합니다.</p>
-        </div>
-        <span className="local-status-badge">등록 프로필 {profiles.length}명</span>
-      </section>
+    <div className={embedded ? "data-page is-embedded" : "product-page data-page"}>
+      {/* 계정 화면 안에 끼워 넣을 때는 제목을 한 단 낮춘다 — 한 페이지에 `h1` 이
+          둘이면 낭독기가 화면이 둘이라고 읽는다. */}
+      {embedded ? (
+        <section className="dashboard-heading">
+          <div>
+            <p className="section-kicker">데이터 관리</p>
+            <h2>건강정보를 직접 보관하고 옮기세요</h2>
+            <p>이어봄 서버가 아닌 사용자 파일을 통해 백업하고 복구합니다.</p>
+          </div>
+          <span className="local-status-badge">등록 프로필 {profiles.length}명</span>
+        </section>
+      ) : (
+        <section className="dashboard-heading">
+          <div>
+            <p className="page-kicker">데이터 관리</p>
+            <h1>건강정보를 직접 보관하고 옮기세요</h1>
+            <p>이어봄 서버가 아닌 사용자 파일을 통해 백업하고 복구합니다.</p>
+          </div>
+          <span className="local-status-badge">등록 프로필 {profiles.length}명</span>
+        </section>
+      )}
 
       <section className="data-boundary-card">
         <div>
