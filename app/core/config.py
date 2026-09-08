@@ -168,6 +168,13 @@ class Config(BaseSettings):
     ENABLE_DEV_OCR_BRIDGE: bool = False
     DEV_OCR_MAX_FILE_BYTES: int = 20 * 1024 * 1024
     GEMINI_API_KEY: str | None = None
+    # 건강 비서가 호출하는 공공 의료정보 API 키. 브라우저에는 절대 전달하지 않고
+    # FastAPI 서버만 외부 API를 호출한다.
+    EMERGENCY_MEDICAL_API_KEY: str | None = None
+    HOSPITAL_INFO_API_KEY: str | None = None
+    PHARMACY_INFO_API_KEY: str | None = None
+    # 카카오 로컬 REST API 키 (병원/약국 초고속 검색용).
+    KAKAO_REST_API_KEY: str | None = None
     # OpenAI 예비 경로. **비어 있으면 그냥 꺼진 상태다** — 아래 `DEV_OCR_MODELS` 에
     # `openai:` 항목이 있어도 키가 없으면 그 항목을 건너뛴다. 즉 켜려면 둘 다 필요하다.
     #
