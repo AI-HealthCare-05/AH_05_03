@@ -196,6 +196,15 @@ export interface DiseaseRisk {
   missing_fields: string[];
   contributors: RiskContributor[];
   score: number;
+  /**
+   * 이 질환에 걸린 신호 목록의 크기와, 그중 실제로 확인한 수.
+   *
+   * **`contributors` 가 0 일 때 이 둘이 있어야 "다 보고 깨끗하다" 와 "못 봤다" 가
+   * 구분된다.** "위험 신호 0개" 만 적으면 안 낸 검사를 통과했다고 말하는 셈이다.
+   * 옛 스냅샷에는 없으므로 옵셔널이다.
+   */
+  signals_total?: number;
+  signals_checked?: number;
 }
 
 export interface AssessmentSummary {

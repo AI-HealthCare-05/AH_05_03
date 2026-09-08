@@ -125,6 +125,15 @@ class DiseaseRiskAssessment(BaseSerializerModel):
     flags: list[str] = []
     missing_fields: list[str] = []
     contributors: list[RiskContributor] = Field(default=[], description="위험을 올린 신호. 센 것부터")
+    signals_total: int = Field(default=0, description="이 질환에 걸린 신호 목록의 크기")
+    signals_checked: int = Field(
+        default=0,
+        description=(
+            "그중 실제로 볼 값이 있어 확인한 수. **`contributors` 가 0 일 때 이 둘이 있어야 "
+            "'다 보고 깨끗하다' 와 '못 봤다' 가 구분된다** — 0 만 적으면 안 낸 검사를 통과했다고 "
+            "말하는 셈이다"
+        ),
+    )
     score: int = Field(description="같은 재료를 두 번 세지 않고 합산한 가중 점수")
     disclaimer: str
 

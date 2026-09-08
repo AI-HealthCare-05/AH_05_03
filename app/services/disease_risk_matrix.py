@@ -931,6 +931,7 @@ def assess_disease_risks(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
         score, contributors = _score_disease(disease, signals)
         level = _band(score)
+        checked = len(present)
         flags: list[str] = []
         if absent:
             # 부분 판정이라는 사실을 등급과 같이 보여 준다. 신호 셋 중 하나만 보고
@@ -953,8 +954,15 @@ def assess_disease_risks(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
         if contributors:
             reason = " · ".join(f"{c['detail']}" for c in contributors)
+        elif absent:
+            # **"0개" 만으로는 두 가지가 구분되지 않는다.** 다 보고 하나도 안 걸린
+            # 것과, 볼 값이 없어서 못 본 것은 사용자에게 완전히 다른 소식이다.
+            # 몇 가지를 봤는지 말해야 0 이 정보가 된다.
+            reason = (
+                f"이 질환을 가리키는 신호 {checked + len(absent)}가지 중 {checked}가지를 확인했고, 걸린 것이 없습니다."
+            )
         else:
-            reason = "입력한 값 중에서 이 질환을 가리키는 신호가 잡히지 않았습니다."
+            reason = f"이 질환을 가리키는 신호 {checked}가지를 전부 확인했고, 걸린 것이 없습니다."
 
         results[disease] = {
             "category": risk_title(name),
@@ -962,7 +970,11 @@ def assess_disease_risks(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
             # **"가중 N점" 을 뺐다.** 내부 점수라 사용자가 읽을 자가 없다 — 4점이
             # 큰 값인지 작은 값인지 화면 어디에도 없었다. 숫자는 `score` 필드에
             # 그대로 나가므로 필요한 쪽은 거기서 읽는다.
-            "sub_status": f"위험 신호 {len(contributors)}개",
+            # 신호가 하나도 안 걸린 칸에서는 **몇 가지를 봤는지**가 답이다.
+            # "위험 신호 0개" 는 안 본 것과 구별되지 않는다.
+            "sub_status": (
+                f"위험 신호 {len(contributors)}개" if contributors else f"신호 {checked}가지 확인 · 해당 없음"
+            ),
             "display_label": _LABEL[level].format(name=name),
             "reason": reason,
             "input_values": {k: v for c in contributors for k, v in c["values"].items()},
@@ -982,6 +994,9 @@ def assess_disease_risks(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 }
                 for c in contributors
             ],
+            # 화면이 "0" 을 해석할 수 있게 분모를 같이 싣는다.
+            "signals_total": checked + len(absent),
+            "signals_checked": checked,
             "score": score,
             "disclaimer": COMMON_DISCLAIMER,
         }
