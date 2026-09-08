@@ -46,9 +46,7 @@ class CapturingLLMClient:
         response_schema: type[T],
     ) -> T:
         self.system_instruction = system_instruction
-        return response_schema.model_validate(
-            {"intent": "health_advice", "assistant_message": "확인했습니다."}
-        )
+        return response_schema.model_validate({"intent": "health_advice", "assistant_message": "확인했습니다."})
 
     async def stream_structured_response(
         self,
@@ -220,6 +218,37 @@ async def test_health_assistant_evaluates_good_weather_as_outdoor_suitable() -> 
         "환경 종합 평가: 야외 활동 적합 (쾌적한 환경 - 가벼운 산책이나 야외 러닝 적극 추천 가능)"
         in llm_client.system_instruction
     )
+
+
+def test_health_assistant_needs_facility_tools_classification() -> None:
+    # 1. Weather questions do not need facility tools
+    req_weather = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 서울 날씨 어때")])
+    assert HealthAssistantService._needs_facility_tools(req_weather) is False
+
+    # 2. Diet/exercise advice does not need facility tools
+    req_diet = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="임산부 추천 식단 알려줘")])
+    assert HealthAssistantService._needs_facility_tools(req_diet) is False
+
+    # 3. Merely stating location does not need facility tools
+    req_loc = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="난 서울살아")])
+    assert HealthAssistantService._needs_facility_tools(req_loc) is False
+
+    # 4. Actual pharmacy search needs facility tools
+    req_pharmacy = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="종로구 약국 찾아줘")])
+    assert HealthAssistantService._needs_facility_tools(req_pharmacy) is True
+
+    # 5. Hospital/clinic search needs facility tools
+    req_hospital = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="서울 내과 어디 있어?")])
+    assert HealthAssistantService._needs_facility_tools(req_hospital) is True
+
+
+def test_health_assistant_resolves_sido_location_from_text() -> None:
+    req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 서울 날씨 어때")])
+    loc = HealthAssistantService._resolve_request_location(req)
+    assert loc is not None
+    assert loc.latitude == 37.5665
+    assert loc.longitude == 126.978
+    assert loc.address == "서울특별시"
 
 
 @pytest.mark.asyncio

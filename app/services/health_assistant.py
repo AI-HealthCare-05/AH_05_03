@@ -5,6 +5,7 @@ from app.dtos.health_assistant import (
     HealthAssistantChatRequest,
     HealthAssistantResponse,
     ProfileContext,
+    UserLocation,
 )
 from app.exceptions import LlmProviderFailedError
 from app.integrations.llm.chain import shared_chat_client
@@ -18,7 +19,11 @@ from app.services.medical_facility_tools import (
     get_facility_tools,
 )
 from app.services.ocr_partial import PartialJsonTextReader
-from app.services.outdoor_conditions_client import OutdoorConditionsClient, OutdoorConditionsClientProtocol
+from app.services.outdoor_conditions_client import (
+    OutdoorConditionsClient,
+    OutdoorConditionsClientProtocol,
+    resolve_sido_coordinates,
+)
 from app.services.outdoor_conditions_tools import execute_outdoor_conditions_tool
 
 _OUTDOOR_ENVIRONMENT_KEYWORDS = ("날씨", "미세먼지", "초미세먼지", "대기질")
@@ -36,6 +41,51 @@ _OUTDOOR_ACTIVITY_KEYWORDS = (
     "야외",
     "밖에서",
     "외출",
+)
+_FACILITY_KEYWORDS = (
+    "응급실",
+    "병원",
+    "의원",
+    "약국",
+    "당직의료",
+    "당번약국",
+    "야간약국",
+    "야간진료",
+    "응급의료",
+    "내과",
+    "외과",
+    "이비인후과",
+    "소아과",
+    "소아청소년과",
+    "신경과",
+    "정신과",
+    "정신건강의학과",
+    "정형외과",
+    "신경외과",
+    "성형외과",
+    "산부인과",
+    "안과",
+    "피부과",
+    "비뇨의학과",
+    "비뇨기과",
+    "영상의학과",
+    "마취통증의학과",
+    "통증의학과",
+    "재활의학과",
+    "가정의학과",
+    "응급의학과",
+    "치과",
+    "한방",
+    "한의원",
+    "진료소",
+    "보건소",
+    "의료원",
+    "진료",
+    "처방",
+    "문 연 곳",
+    "문연 곳",
+    "어디 가야",
+    "어디로 가",
 )
 
 
@@ -62,6 +112,50 @@ class HealthAssistantService:
         self.outdoor_conditions_client = outdoor_conditions_client or OutdoorConditionsClient()
 
     @staticmethod
+    def _needs_facility_tools(request: HealthAssistantChatRequest) -> bool:
+        """의료시설 조회 도구가 실제로 필요한 질문인지 판별한다."""
+        if not request.messages:
+            return False
+        last_msg = request.messages[-1].content
+        # 날씨나 대기질을 묻는 질문은 의료시설 조회가 아님
+        if any(w in last_msg for w in ("날씨", "미세먼지", "초미세먼지", "대기질")):
+            return False
+        # 단순히 거주지나 위치만 말한 경우("난 서울살아", "종로구에 있어")도 시설 조회가 아님
+        if any(last_msg.strip().endswith(suffix) for suffix in ("살아", "살아요", "있어", "있어요")) and not any(
+            k in last_msg for k in ("병원", "약국", "응급실", "의원")
+        ):
+            return False
+        # 의료시설 관련 키워드 확인
+        if any(k in last_msg for k in _FACILITY_KEYWORDS):
+            return True
+        # 이전 어시스턴트 메시지가 시설 위치를 되묻던 상황인지 확인
+        if len(request.messages) >= 2:
+            prev_msg = request.messages[-2]
+            if prev_msg.role == "assistant" and any(
+                k in prev_msg.content for k in ("가까운 병원이나 약국", "의료시설", "찾으시는 지역명")
+            ):
+                return True
+        return False
+
+    @staticmethod
+    def _resolve_request_location(request: HealthAssistantChatRequest) -> UserLocation | None:
+        """요청에 위치가 없더라도 최근 대화에서 시도 명칭이 있으면 대표 좌표로 보정한다."""
+        loc = request.location
+        if loc is not None:
+            return loc
+        if request.messages:
+            for m in reversed(request.messages[-3:]):
+                resolved = resolve_sido_coordinates(m.content)
+                if resolved:
+                    sido, lat, lon = resolved
+                    return UserLocation(
+                        latitude=lat,
+                        longitude=lon,
+                        address=f"{sido}특별시" if sido == "서울" else sido,
+                    )
+        return None
+
+    @staticmethod
     def _needs_outdoor_conditions(request: HealthAssistantChatRequest) -> bool:
         """실시간 API가 필요한 질문만 판별한다.
 
@@ -78,12 +172,21 @@ class HealthAssistantService:
             for keyword in ("했어", "완료", "기록해", "기록할", "기록하기", "달렸어", "뛰었어", "걸었어", "탔어")
         ):
             return False
-        return any(keyword in message for keyword in _OUTDOOR_ACTIVITY_KEYWORDS) or (
+        if any(keyword in message for keyword in _OUTDOOR_ACTIVITY_KEYWORDS) or (
             "운동" in message and any(k in message for k in ("추천", "할까", "할건", "할거", "예정", "계획", "뭐"))
-        )
+        ):
+            return True
+        # 이전 턴에서 위치 미확인으로 날씨 조회를 못했을 때 사용자가 거주지/지역명을 답변한 경우
+        if len(request.messages) >= 2:
+            prev_msg = request.messages[-2]
+            if prev_msg.role == "assistant" and any(
+                k in prev_msg.content for k in ("실시간 날씨", "날씨와 대기질", "외출 전 기온", "날씨를 확인")
+            ):
+                if resolve_sido_coordinates(message) is not None or "살아" in message:
+                    return True
+        return False
 
-    async def _load_outdoor_conditions(self, request: HealthAssistantChatRequest):
-        loc = request.location
+    async def _load_outdoor_conditions(self, request: HealthAssistantChatRequest, loc: UserLocation | None):
         if not self._needs_outdoor_conditions(request) or loc is None:
             return None
         return await execute_outdoor_conditions_tool(
@@ -175,8 +278,8 @@ class HealthAssistantService:
             return safety_check
 
         profile_context = await self._enrich_context(request.profile_context)
-        outdoor_conditions = await self._load_outdoor_conditions(request)
-        loc = request.location
+        loc = self._resolve_request_location(request)
+        outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
             profile_context,
             user_location=loc,
@@ -185,11 +288,11 @@ class HealthAssistantService:
             else None,
         )
 
-        tools = get_facility_tools()
+        tools = get_facility_tools() if self._needs_facility_tools(request) else None
         response: HealthAssistantResponse
         client_any = cast(Any, self.llm_client)
 
-        if hasattr(client_any, "generate_structured_response_with_tools"):
+        if tools and hasattr(client_any, "generate_structured_response_with_tools"):
             res_tuple = await client_any.generate_structured_response_with_tools(
                 system_instruction=system_instruction,
                 messages=request.messages,
@@ -222,8 +325,8 @@ class HealthAssistantService:
             return
 
         profile_context = await self._enrich_context(request.profile_context)
-        outdoor_conditions = await self._load_outdoor_conditions(request)
-        loc = request.location
+        loc = self._resolve_request_location(request)
+        outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
             profile_context,
             user_location=loc,
@@ -235,10 +338,10 @@ class HealthAssistantService:
         raw = ""
         tool_result = None
 
-        tools = get_facility_tools()
+        tools = get_facility_tools() if self._needs_facility_tools(request) else None
         client_any = cast(Any, self.llm_client)
 
-        if hasattr(client_any, "stream_structured_response_with_tools"):
+        if tools and hasattr(client_any, "stream_structured_response_with_tools"):
             stream_gen, tool_result = await client_any.stream_structured_response_with_tools(
                 system_instruction=system_instruction,
                 messages=request.messages,

@@ -22,9 +22,8 @@ from app.dtos.outdoor_conditions import AirQualityConditions, OutdoorConditionsR
 
 
 class OutdoorConditionsClientProtocol(Protocol):
-    async def get_outdoor_conditions(
-        self, latitude: float, longitude: float
-    ) -> OutdoorConditionsResult: ...
+    async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult: ...
+
 
 _TIMEOUT_SECONDS = 5.0
 _CACHE_SECONDS = 600.0
@@ -73,6 +72,14 @@ _SIDO_CENTERS = {
     "경남": (35.4606, 128.2132),
     "제주": (33.4890, 126.4983),
 }
+
+
+def resolve_sido_coordinates(text: str) -> tuple[str, float, float] | None:
+    """텍스트에서 시도 명칭을 감지하여 대표 좌표(위도, 경도)를 반환한다."""
+    for sido, (lat, lon) in _SIDO_CENTERS.items():
+        if sido in text:
+            return sido, lat, lon
+    return None
 
 
 class OutdoorConditionsClient:
