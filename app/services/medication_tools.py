@@ -48,4 +48,3 @@ async def execute_medication_tool(
     if not drug_name:
         return None
     return await client.search_medication(str(drug_name))
-

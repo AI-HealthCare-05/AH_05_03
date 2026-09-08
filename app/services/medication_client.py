@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
+import urllib.parse
 from typing import Any, Protocol
 
 import httpx
@@ -61,17 +62,22 @@ def _parse_easydr_item(raw: dict[str, Any]) -> DrugInfo:
 
 
 def _parse_dur_items(raw_list: list[dict[str, Any]]) -> list[DurItem]:
-    """DUR API 응답에서 금기 항목 목록 파싱."""
+    """DUR API 응답에서 금기/주의 항목 목록 파싱."""
     items: list[DurItem] = []
     for raw in raw_list:
-        prohibition_type = raw.get("prohibitContent") or raw.get("typeNm") or "금기"
-        ingredient = raw.get("ingdIngdNm") or raw.get("mixture")
-        reason = raw.get("prhibtContent") or raw.get("remark")
+        type_name = None
+        for key in raw:
+            if key.strip() == "TYPE_NAME":
+                type_name = raw[key]
+                break
+        prohibition_type = (type_name or "").strip() or raw.get("prohibitContent") or raw.get("typeNm") or "주의"
+        ingredient = raw.get("MATERIAL_NAME") or raw.get("ingdIngdNm") or raw.get("mixture")
+        reason = raw.get("CANCEL_NAME") or raw.get("prhibtContent") or raw.get("remark")
         items.append(
             DurItem(
                 prohibition_type=str(prohibition_type),
-                ingredient_name=str(ingredient) if ingredient else None,
-                reason=str(reason) if reason else None,
+                ingredient_name=str(ingredient).split(",")[0].strip() if ingredient else None,
+                reason=str(reason) if reason and reason != "정상" else None,
             )
         )
     return items
@@ -93,7 +99,9 @@ def _build_summary_message(drug_name: str, items: list[DrugInfo]) -> str:
     _append_field(parts, "부작용", drug.se_qesitm)
     _append_field(parts, "상호작용", drug.intrc_qesitm)
     if drug.dur_items:
-        dur_lines = [f"  - [{d.prohibition_type}] {d.ingredient_name or ''}: {d.reason or ''}" for d in drug.dur_items[:5]]
+        dur_lines = [
+            f"  - [{d.prohibition_type}] {d.ingredient_name or ''}: {d.reason or ''}" for d in drug.dur_items[:5]
+        ]
         parts.append("DUR 금기사항:\n" + "\n".join(dur_lines))
     return "\n".join(parts)
 
@@ -125,15 +133,15 @@ class MedicationClient:
 
         async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
             # 1) e약은요 API — 기본 약품 정보
+            # 공공데이터포털 serviceKey는 이미 URL 인코딩된 형태로 발급되므로
+            # httpx params=에 넣으면 이중 인코딩이 발생해 403이 난다.
+            # serviceKey만 URL에 직접 붙이고 나머지 파라미터는 urllib.parse로 처리한다.
             try:
-                params = {
-                    "serviceKey": api_key,
-                    "itemName": drug_name,
-                    "type": "json",
-                    "numOfRows": "3",
-                    "pageNo": "1",
-                }
-                resp = await client.get(_EASYDR_URL, params=params)
+                extra_params = urllib.parse.urlencode(
+                    {"itemName": drug_name, "type": "json", "numOfRows": "3", "pageNo": "1"}
+                )
+                url_easydr = f"{_EASYDR_URL}?serviceKey={api_key}&{extra_params}"
+                resp = await client.get(url_easydr)
                 resp.raise_for_status()
                 data = resp.json()
                 body = data.get("body") or {}
@@ -147,14 +155,11 @@ class MedicationClient:
 
             # 2) DUR API — 병용금기·연령금기·임부금기
             try:
-                params_dur = {
-                    "serviceKey": api_key,
-                    "itemName": drug_name,
-                    "type": "json",
-                    "numOfRows": "10",
-                    "pageNo": "1",
-                }
-                resp_dur = await client.get(_DUR_URL, params=params_dur)
+                extra_params_dur = urllib.parse.urlencode(
+                    {"itemName": drug_name, "type": "json", "numOfRows": "10", "pageNo": "1"}
+                )
+                url_dur = f"{_DUR_URL}?serviceKey={api_key}&{extra_params_dur}"
+                resp_dur = await client.get(url_dur)
                 resp_dur.raise_for_status()
                 dur_data = resp_dur.json()
                 dur_body = dur_data.get("body") or {}

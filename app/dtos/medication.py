@@ -36,4 +36,3 @@ class MedicationSearchResult(BaseModel):
     items: list[DrugInfo] = Field(default_factory=list, description="검색된 의약품 목록")
     message: str = Field(default="", description="사용자에게 전달할 요약 안내 메시지")
     errors: list[str] = Field(default_factory=list, description="조회 중 발생한 오류 목록")
-

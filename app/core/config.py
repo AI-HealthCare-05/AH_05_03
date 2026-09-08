@@ -168,6 +168,10 @@ class Config(BaseSettings):
     ENABLE_DEV_OCR_BRIDGE: bool = False
     DEV_OCR_MAX_FILE_BYTES: int = 20 * 1024 * 1024
     GEMINI_API_KEY: str | None = None
+    # 봄이의 야외 활동 질문용 공공데이터 API 키. 실제 값은 같은 키여도 역할은
+    # 분리해 둬야 서비스별 활용 승인·오류 원인을 구분할 수 있다.
+    KMA_API_KEY: str | None = None
+    AIRKOREA_API_KEY: str | None = None
     # 건강 비서가 호출하는 공공 의료정보 API 키. 브라우저에는 절대 전달하지 않고
     # FastAPI 서버만 외부 API를 호출한다.
     EMERGENCY_MEDICAL_API_KEY: str | None = None

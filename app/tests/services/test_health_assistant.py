@@ -1,12 +1,20 @@
+from collections.abc import AsyncIterator
+from typing import TypeVar
+
 import pytest
+from pydantic import BaseModel
 
 from app.dtos.health_assistant import (
     ChatMessage,
+    CurrentLocation,
     HealthAssistantChatRequest,
     HealthAssistantResponse,
     ProfileContext,
 )
+from app.dtos.outdoor_conditions import AirQualityConditions, OutdoorConditionsResult, WeatherConditions
 from app.services.health_assistant import HealthAssistantService
+
+T = TypeVar("T", bound=BaseModel)
 
 
 class MockLLMClient:
@@ -25,6 +33,327 @@ class MockLLMClient:
     async def stream_structured_response(self, *args, **kwargs):
         for character in self.fake_json:
             yield character
+
+
+class CapturingLLMClient:
+    def __init__(self) -> None:
+        self.system_instruction = ""
+
+    async def generate_structured_response(
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        response_schema: type[T],
+    ) -> T:
+        self.system_instruction = system_instruction
+        return response_schema.model_validate({"intent": "health_advice", "assistant_message": "확인했습니다."})
+
+    async def stream_structured_response(
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        response_schema: type[T],
+    ) -> AsyncIterator[str]:
+        yield '{"intent": "health_advice", "assistant_message": "확인했습니다."}'
+
+
+class OutdoorConditionsStub:
+    async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
+        assert (latitude, longitude) == (37.5665, 126.978)
+        return OutdoorConditionsResult(
+            latitude=latitude,
+            longitude=longitude,
+            weather=WeatherConditions(
+                temperature_c=23.4,
+                humidity_percent=55,
+                precipitation_type="강수 없음",
+                wind_speed_mps=1.2,
+            ),
+            air_quality=AirQualityConditions(
+                region_name="서울",
+                station_name="중구",
+                pm10=24,
+                pm25=11,
+                pm10_grade="좋음",
+                pm25_grade="보통",
+            ),
+        )
+
+    async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
+        return None
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_loads_outdoor_tool_result_for_outdoor_question() -> None:
+    llm_client = CapturingLLMClient()
+    service = HealthAssistantService(
+        llm_client=llm_client,
+        outdoor_conditions_client=OutdoorConditionsStub(),
+    )
+
+    response = await service.respond(
+        HealthAssistantChatRequest(
+            messages=[ChatMessage(role="user", content="오늘 산책해도 돼?")],
+            current_location=CurrentLocation(latitude=37.5665, longitude=126.978),
+        )
+    )
+
+    assert response.outdoor_conditions is not None
+    assert response.outdoor_conditions.weather is not None
+    assert response.outdoor_conditions.weather.temperature_c == 23.4
+    assert "기온 23.4℃" in llm_client.system_instruction
+    assert "PM2.5 11㎍/㎥(보통)" in llm_client.system_instruction
+
+
+def test_health_assistant_routes_aerobic_recommendation_to_outdoor_tool() -> None:
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 유산소 할 건데 추천 좀")])
+
+    assert HealthAssistantService._needs_outdoor_conditions(request) is True
+
+
+def test_health_assistant_routes_exercise_plans_to_outdoor_tool() -> None:
+    for text in ["오늘 러닝할거야", "오늘 달리기 할까?", "자전거 타러 갈까?", "오늘 산책갈래", "오늘 야외 운동 어때?"]:
+        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
+        assert HealthAssistantService._needs_outdoor_conditions(req) is True, f"Failed for: {text}"
+
+
+def test_health_assistant_does_not_route_completed_run_record_to_outdoor_tool() -> None:
+    for text in [
+        "오늘 러닝 30분 했어",
+        "오늘 5km 달렸어",
+        "오늘 10km 뛰었어",
+        "오늘 1만보 걸었어",
+        "자전거 1시간 탔어",
+    ]:
+        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
+        assert HealthAssistantService._needs_outdoor_conditions(req) is False, f"Failed for: {text}"
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_evaluates_rain_as_outdoor_not_recommended() -> None:
+    class RainyStub:
+        async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
+            return OutdoorConditionsResult(
+                latitude=latitude,
+                longitude=longitude,
+                weather=WeatherConditions(
+                    temperature_c=18.0,
+                    precipitation_type="비",
+                ),
+                air_quality=AirQualityConditions(
+                    region_name="서울",
+                    pm10_grade="좋음",
+                    pm25_grade="좋음",
+                ),
+            )
+
+        async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
+            return None
+
+    llm_client = CapturingLLMClient()
+    service = HealthAssistantService(llm_client=llm_client, outdoor_conditions_client=RainyStub())
+    await service.respond(
+        HealthAssistantChatRequest(
+            messages=[ChatMessage(role="user", content="오늘 러닝할거야")],
+            current_location=CurrentLocation(latitude=37.5665, longitude=126.978),
+        )
+    )
+    assert "환경 종합 평가: 야외 활동 비권장" in llm_client.system_instruction
+    assert "비/강수" in llm_client.system_instruction
+    assert "실내 운동 추천 필요" in llm_client.system_instruction
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_evaluates_bad_air_as_outdoor_not_recommended() -> None:
+    class BadAirStub:
+        async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
+            return OutdoorConditionsResult(
+                latitude=latitude,
+                longitude=longitude,
+                weather=WeatherConditions(
+                    temperature_c=22.0,
+                    precipitation_type="강수 없음",
+                ),
+                air_quality=AirQualityConditions(
+                    region_name="서울",
+                    pm10_grade="나쁨",
+                    pm25_grade="보통",
+                ),
+            )
+
+        async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
+            return None
+
+    llm_client = CapturingLLMClient()
+    service = HealthAssistantService(llm_client=llm_client, outdoor_conditions_client=BadAirStub())
+    await service.respond(
+        HealthAssistantChatRequest(
+            messages=[ChatMessage(role="user", content="오늘 산책 어때?")],
+            current_location=CurrentLocation(latitude=37.5665, longitude=126.978),
+        )
+    )
+    assert "환경 종합 평가: 야외 활동 비권장" in llm_client.system_instruction
+    assert "미세먼지 나쁨" in llm_client.system_instruction
+    assert "실내 운동 추천 필요" in llm_client.system_instruction
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_evaluates_good_weather_as_outdoor_suitable() -> None:
+    class NiceWeatherStub:
+        async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
+            return OutdoorConditionsResult(
+                latitude=latitude,
+                longitude=longitude,
+                weather=WeatherConditions(
+                    temperature_c=21.0,
+                    precipitation_type="강수 없음",
+                ),
+                air_quality=AirQualityConditions(
+                    region_name="서울",
+                    pm10_grade="좋음",
+                    pm25_grade="좋음",
+                ),
+            )
+
+        async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
+            return None
+
+    llm_client = CapturingLLMClient()
+    service = HealthAssistantService(llm_client=llm_client, outdoor_conditions_client=NiceWeatherStub())
+    await service.respond(
+        HealthAssistantChatRequest(
+            messages=[ChatMessage(role="user", content="오늘 러닝할거야")],
+            current_location=CurrentLocation(latitude=37.5665, longitude=126.978),
+        )
+    )
+    assert (
+        "환경 종합 평가: 야외 활동 적합 (쾌적한 환경 - 가벼운 산책이나 야외 러닝 적극 추천 가능)"
+        in llm_client.system_instruction
+    )
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_evaluates_extreme_heat_as_outdoor_not_recommended() -> None:
+    class HotWeatherStub:
+        async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
+            return OutdoorConditionsResult(
+                latitude=latitude,
+                longitude=longitude,
+                weather=WeatherConditions(
+                    temperature_c=35.0,
+                    humidity_percent=70,
+                    precipitation_type="강수 없음",
+                    wind_speed_mps=1.0,
+                ),
+                air_quality=AirQualityConditions(
+                    region_name="서울",
+                    pm10_grade="좋음",
+                    pm25_grade="좋음",
+                ),
+            )
+
+        async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
+            return None
+
+    llm_client = CapturingLLMClient()
+    service = HealthAssistantService(llm_client=llm_client, outdoor_conditions_client=HotWeatherStub())
+    await service.respond(
+        HealthAssistantChatRequest(
+            messages=[ChatMessage(role="user", content="오늘 러닝할거야")],
+            current_location=CurrentLocation(latitude=37.5665, longitude=126.978),
+        )
+    )
+
+    assert "환경 종합 평가: 야외 활동 비권장" in llm_client.system_instruction
+    assert "폭염 수준 고온" in llm_client.system_instruction
+
+
+def test_health_assistant_needs_facility_tools_classification() -> None:
+    # 1. Weather questions do not need facility tools
+    req_weather = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 서울 날씨 어때")])
+    assert HealthAssistantService._needs_facility_tools(req_weather) is False
+
+    # 2. Diet/exercise advice does not need facility tools
+    req_diet = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="임산부 추천 식단 알려줘")])
+    assert HealthAssistantService._needs_facility_tools(req_diet) is False
+
+    # 3. Merely stating location does not need facility tools
+    req_loc = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="난 서울살아")])
+    assert HealthAssistantService._needs_facility_tools(req_loc) is False
+
+    # 4. Actual pharmacy search needs facility tools
+    req_pharmacy = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="종로구 약국 찾아줘")])
+    assert HealthAssistantService._needs_facility_tools(req_pharmacy) is True
+
+    # 5. Hospital/clinic search needs facility tools
+    req_hospital = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="서울 내과 어디 있어?")])
+    assert HealthAssistantService._needs_facility_tools(req_hospital) is True
+
+    # 6. Past treatment, medication advice, and record requests must not enable facility tools
+    for text in [
+        "내과에서 혈압약 처방받았어",
+        "오늘 혈압약 처방받았는데 술 마셔도 돼?",
+        "진료받고 왔어 기록해줘",
+        "병원 갔다 왔어",
+    ]:
+        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
+        assert HealthAssistantService._needs_facility_tools(req) is False, f"Failed for: {text}"
+
+    # 7. Terse location + facility searches remain supported
+    for text in ["강남응급실", "서울 내과", "문산역 약국"]:
+        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
+        assert HealthAssistantService._needs_facility_tools(req) is True, f"Failed for: {text}"
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_resolves_sido_location_from_text() -> None:
+    req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 서울 날씨 어때")])
+    loc = await HealthAssistantService()._resolve_request_location(req)
+    assert loc is not None
+    assert loc.latitude == 37.5665
+    assert loc.longitude == 126.978
+    assert loc.address == "서울특별시"
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_resolves_specific_place_for_outdoor_question() -> None:
+    class LocationResolvingStub:
+        async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
+            return OutdoorConditionsResult(latitude=latitude, longitude=longitude)
+
+        async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
+            assert text == "오늘 양재숲에서 러닝할 거야"
+            return 37.47, 127.035, "양재시민의숲"
+
+    req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 양재숲에서 러닝할 거야")])
+    service = HealthAssistantService(outdoor_conditions_client=LocationResolvingStub())
+
+    loc = await service._resolve_request_location(req)
+
+    assert loc is not None
+    assert (loc.latitude, loc.longitude) == (37.47, 127.035)
+    assert loc.address == "양재시민의숲"
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_does_not_reuse_location_from_assistant_message() -> None:
+    class NoLocationStub:
+        async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
+            return OutdoorConditionsResult(latitude=latitude, longitude=longitude)
+
+        async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
+            return None
+
+    req = HealthAssistantChatRequest(
+        messages=[
+            ChatMessage(role="assistant", content="예를 들어 서울이라고 알려주세요."),
+            ChatMessage(role="user", content="오늘 러닝할 거야"),
+        ]
+    )
+
+    loc = await HealthAssistantService(outdoor_conditions_client=NoLocationStub())._resolve_request_location(req)
+
+    assert loc is None
 
 
 @pytest.mark.asyncio
