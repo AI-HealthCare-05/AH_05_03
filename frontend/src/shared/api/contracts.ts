@@ -181,6 +181,8 @@ export interface HealthRecordServerData {
   source: string;
   payload: Record<string, unknown>;
   note: string | null;
+  /** 이 기록을 채운 원본 서류의 id. 실물은 올린 기기의 보관함에만 있다. */
+  source_document_id?: string | null;
   status: string;
   row_version: number;
   created_at: string;

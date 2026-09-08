@@ -73,6 +73,8 @@ class HealthRecordService:
             source=req.source,
             payload=req.payload,
             note=req.note,
+            # 원본 서류와의 고리. 없으면 검진 이력에서 그 서류를 열 수 없다.
+            source_document_id=req.source_document_id,
             status="active",
         )
         created = await self.record_repo.create(record)
@@ -126,6 +128,8 @@ class HealthRecordService:
             record.payload = req.payload
         if req.note is not None:
             record.note = req.note
+        if req.source_document_id is not None:
+            record.source_document_id = req.source_document_id
         if req.status is not None:
             record.status = req.status
 
@@ -156,6 +160,7 @@ class HealthRecordService:
                 source=r.source,
                 payload=r.payload,
                 note=r.note,
+                source_document_id=r.source_document_id,
                 status=r.status,
                 row_version=r.row_version,
             )

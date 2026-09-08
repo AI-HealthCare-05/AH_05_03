@@ -14,7 +14,7 @@
  * 보여 준다.** 검사명 오독은 숫자만 보면 멀쩡해서, 원문을 붙여야 사용자가 잡아낸다.
  */
 
-import { type ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
+import React, { type ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { GeminiOcrAdapter, type OcrMeasurementRow } from "../../shared/api/geminiOcrAdapter";
 import type { LocalDocument } from "../../shared/local/domainContracts";
@@ -37,12 +37,19 @@ export function DocumentPane({
   profileId,
   profileName,
   onRead,
+  onDocument,
 }: {
   runtime?: LocalDomainRuntime;
   householdId: string;
   profileId: string;
   profileName: string;
   onRead: (reading: DocumentReading) => void;
+  /**
+   * 보관함에 저장된 검진표. **판정 기록이 이 id 를 들고 있어야** 나중에 "이 판정은
+   * 어느 검진표에서 왔나" 를 되짚을 수 있다. 안 넘기면 원본과 판정이 각자 남고,
+   * 건강 데이터의 검진 이력에서 서류를 열 방법이 사라진다.
+   */
+  onDocument?: (document: LocalDocument | undefined) => void;
 }) {
   const [document, setDocument] = useState<LocalDocument>();
   const [preview, setPreview] = useState<DocumentPreview>();
@@ -81,11 +88,7 @@ export function DocumentPane({
   }, []);
 
   const take = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.currentTarget.files?.[0];
-      // 같은 파일을 다시 고를 수 있어야 한다. 값을 비우지 않으면 두 번째 선택에서
-      // `change` 가 아예 안 뜬다.
-      event.currentTarget.value = "";
+    async (file: File | undefined) => {
       if (!file) return;
 
       const run = runRef.current + 1;
@@ -97,6 +100,7 @@ export function DocumentPane({
       setZoom(1);
       swapPreview(undefined);
       setDocument(undefined);
+      onDocument?.(undefined);
 
       const startedAt = Date.now();
       const step = (stage: OcrStage) =>
@@ -122,6 +126,7 @@ export function DocumentPane({
           if (!current()) return;
           if (!saved.ok) throw new Error(saved.error.message);
           setDocument(saved.value);
+          onDocument?.(saved.value);
         }
 
         step("queued");
@@ -156,7 +161,30 @@ export function DocumentPane({
         if (current()) setJob(undefined);
       }
     },
-    [runtime, householdId, profileId, onRead, swapPreview],
+    [runtime, householdId, profileId, onRead, onDocument, swapPreview],
+  );
+
+  const pick = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.currentTarget.files?.[0];
+      // 같은 파일을 다시 고를 수 있어야 한다. 값을 비우지 않으면 두 번째 선택에서
+      // `change` 가 아예 안 뜬다.
+      event.currentTarget.value = "";
+      void take(file);
+    },
+    [take],
+  );
+
+  // **끌어다 놓기.** 검진표는 대개 이미 폴더에 열려 있어서, 파일 창을 한 번 더
+  // 여는 것보다 끌어오는 쪽이 짧다. 같은 `take` 를 타므로 처리 경로는 하나다.
+  const [dragging, setDragging] = useState(false);
+  const drop = useCallback(
+    (event: React.DragEvent<HTMLLabelElement>) => {
+      event.preventDefault();
+      setDragging(false);
+      void take(event.dataTransfer.files?.[0]);
+    },
+    [take],
   );
 
   const filled = reading ? Object.keys(reading.values).length : 0;
@@ -185,9 +213,23 @@ export function DocumentPane({
         ) : null}
       </div>
 
-      <label className="checkup-picker">
-        <input type="file" accept="image/*,.pdf,application/pdf" onChange={(event) => void take(event)} />
-        <span>{document ? "다른 검진표 고르기" : "검진표 이미지나 PDF 고르기"}</span>
+      <label
+        className={dragging ? "checkup-picker is-dragging" : "checkup-picker"}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={drop}
+      >
+        <input type="file" accept="image/*,.pdf,application/pdf" onChange={pick} />
+        <span>
+          {dragging
+            ? "여기에 놓으면 읽어 옵니다"
+            : document
+              ? "다른 검진표 고르기 · 끌어다 놓아도 됩니다"
+              : "검진표 이미지나 PDF 고르기 · 끌어다 놓아도 됩니다"}
+        </span>
       </label>
 
       <p className="checkup-privacy">
