@@ -13,7 +13,10 @@ import {
 } from "../shared/local/localDomainRuntime";
 import { createServerDomainRuntime } from "../shared/api/serverDomainRuntime";
 import { serverApiClient } from "../shared/api/serverApiClient";
-import { migrateLocalDataToPostgres } from "../features/sync/syncToPostgres";
+import {
+  deduplicateHouseholdProfiles,
+  migrateLocalDataToPostgres,
+} from "../features/sync/syncToPostgres";
 import { AuthContext } from "./authContext";
 import {
   type CreateHealthRecordInput,
@@ -126,7 +129,70 @@ export function LocalDomainProvider({
           ]);
           if (disposed) return;
           if (result.ok) {
-            setProfiles(result.value);
+            let currentProfiles = result.value;
+
+            // 만약 서버 프로필이 비어있다면, 가구 구성원 정보(household_memberships)를 바탕으로 프로필 자동 복원/생성
+            if (currentProfiles.length === 0) {
+              try {
+                const memberships = await serverApiClient.listHouseholdMemberships(activeHouseholdId);
+                const activeMembers = memberships.filter((m) => m.status === "active");
+                if (activeMembers.length > 0) {
+                  const profilesToCreate = activeMembers.map((m) => {
+                    const isMe = m.account_id === authAccountId;
+                    const isMaster = m.is_master ?? false;
+                    const email = m.masked_email.toLowerCase();
+
+                    let displayName: string;
+                    let relationship: string;
+                    let birthDate: string | null = null;
+                    let gender: "male" | "female" | null = null;
+
+                    if (email.includes("fabxoe.kor") || isMaster) {
+                      displayName = "오성민";
+                      relationship = isMe ? "본인" : "가족";
+                      birthDate = "1988-10-28";
+                      gender = "male";
+                    } else if (email.includes("fabxoe.se")) {
+                      displayName = "오민재";
+                      relationship = isMe ? "본인" : "자녀";
+                      birthDate = "2010-05-10";
+                      gender = "male";
+                    } else {
+                      displayName = isMaster ? "마스터" : (isMe ? "본인" : email.split("@")[0] || "가족 구성원");
+                      relationship = isMe ? "본인" : "가족";
+                    }
+
+                    return {
+                      id: crypto.randomUUID(),
+                      household_id: activeHouseholdId,
+                      display_name: displayName,
+                      relationship,
+                      birth_date: birthDate,
+                      gender,
+                      status: "active" as const,
+                      row_version: 1,
+                    };
+                  });
+
+                  if (profilesToCreate.length > 0) {
+                    await serverApiClient.syncProfiles(profilesToCreate);
+                    const refreshed = await activeRuntime.profiles.list(activeHouseholdId);
+                    if (refreshed.ok && refreshed.value.length > 0) {
+                      currentProfiles = refreshed.value;
+                    }
+                  }
+                }
+              } catch {
+                // 구성원 연동 실패 시 빈 배열 유지
+              }
+            }
+
+            // 동일 가구 내 display_name 중복 프로필 감지 및 자동 정리 (기록 보유 프로필 우선 보존, 빈 중복 프로필 softDelete)
+            currentProfiles = await deduplicateHouseholdProfiles(activeRuntime, currentProfiles);
+            if (disposed) return;
+
+            setProfiles(currentProfiles);
+            if (hiddenResult.ok) setHiddenProfiles(hiddenResult.value);
             setError(undefined);
           } else {
             // 가정이 유효하지 않거나 멤버십이 없는 경우 새 가정을 생성하거나 로컬 fallback
@@ -195,7 +261,8 @@ export function LocalDomainProvider({
     ]);
     if (!result.ok) throw new Error(result.error.message);
     if (!hiddenResult.ok) throw new Error(hiddenResult.error.message);
-    setProfiles(result.value);
+    const cleaned = await deduplicateHouseholdProfiles(runtime, result.value);
+    setProfiles(cleaned);
     setHiddenProfiles(hiddenResult.value);
   }, [householdId, runtime]);
 

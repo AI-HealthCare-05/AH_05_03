@@ -4336,10 +4336,29 @@ main {
 
 /* 대시보드에 얹는 챌린지 요약 카드 */
 .challenge-card-body {
-  display: flex;
+  margin-top: 14px;
+  margin-left: -8px;
+  display: inline-flex;
   align-items: center;
-  gap: 20px;
-  flex-wrap: wrap;
+  gap: 18px;
+  text-decoration: none;
+  color: var(--ink);
+  cursor: pointer;
+  padding: 8px 16px 8px 8px;
+  border-radius: 16px;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.challenge-card-body:hover,
+.challenge-card-body:focus-visible {
+  background-color: rgba(36, 99, 235, 0.05);
+  outline: none;
+}
+
+.challenge-card-body:active {
+  transform: scale(0.99);
 }
 
 .challenge-card-facts {
@@ -5952,6 +5971,211 @@ main {
 
 .delete-btn:hover:not(:disabled) {
   background: #fee2e2;
+}
+
+/* ---------------------------------------------------------------------------
+ * 노션 스타일 마크다운 위지윅 에디터 (NotionMarkdownEditor)
+ * ------------------------------------------------------------------------- */
+.notion-editor-wrapper {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fafbfc;
+  overflow: hidden;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.notion-editor-wrapper:focus-within {
+  background: white;
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.notion-editor-wrapper.is-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.notion-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 10px;
+  background: #f8f9fa;
+  border-bottom: 1px solid var(--line-soft);
+  flex-wrap: wrap;
+  user-select: none;
+}
+
+.notion-editor-toolbar .toolbar-btn {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  line-height: 1;
+}
+
+.notion-editor-toolbar .toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--ink);
+}
+
+.notion-editor-toolbar .toolbar-btn.is-active {
+  background: white;
+  color: var(--blue-600);
+  border-color: var(--line-soft);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  font-weight: 750;
+}
+
+.notion-editor-toolbar .toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--line);
+  margin: 0 4px;
+}
+
+.notion-editor-content {
+  flex: 1;
+}
+
+.notion-editor-content .tiptap {
+  min-height: 300px;
+  padding: 16px 18px;
+  font-size: 0.94rem;
+  line-height: 1.68;
+  color: var(--ink);
+  outline: none;
+  font-family: inherit;
+}
+
+.notion-editor-content .tiptap > *:first-child {
+  margin-top: 0;
+}
+
+.notion-editor-content .tiptap > *:last-child {
+  margin-bottom: 0;
+}
+
+.notion-editor-content .tiptap p {
+  margin: 0 0 0.5rem;
+}
+
+.notion-editor-content .tiptap h1 {
+  font-size: 1.45rem;
+  font-weight: 750;
+  margin: 1.2rem 0 0.5rem;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+.notion-editor-content .tiptap h2 {
+  font-size: 1.22rem;
+  font-weight: 700;
+  margin: 1rem 0 0.4rem;
+  color: var(--ink);
+  letter-spacing: -0.015em;
+}
+
+.notion-editor-content .tiptap h3 {
+  font-size: 1.08rem;
+  font-weight: 650;
+  margin: 0.8rem 0 0.35rem;
+  color: var(--ink);
+}
+
+.notion-editor-content .tiptap ul,
+.notion-editor-content .tiptap ol {
+  padding-left: 1.4rem;
+  margin: 0.4rem 0 0.6rem;
+}
+
+.notion-editor-content .tiptap li {
+  margin-bottom: 0.25rem;
+}
+
+.notion-editor-content .tiptap ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+  margin: 0.4rem 0 0.6rem;
+}
+
+.notion-editor-content .tiptap li[data-type="taskItem"] {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 0.3rem;
+}
+
+.notion-editor-content .tiptap li[data-type="taskItem"] > label {
+  margin-top: 3px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.notion-editor-content .tiptap li[data-type="taskItem"] > label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--blue-600);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.notion-editor-content .tiptap li[data-type="taskItem"][data-checked="true"] > div {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.notion-editor-content .tiptap blockquote {
+  margin: 0.6rem 0;
+  padding: 8px 14px;
+  border-left: 3px solid var(--blue-500);
+  background: #f0f7ff;
+  border-radius: 0 8px 8px 0;
+  color: var(--muted-strong);
+}
+
+.notion-editor-content .tiptap code {
+  background: #f1f3f5;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-family: monospace;
+  font-size: 0.86rem;
+  color: #e11d48;
+}
+
+.notion-editor-content .tiptap hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 1.1rem 0;
+}
+
+.notion-editor-content .tiptap p.is-editor-empty:first-child::before {
+  color: var(--muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  font-size: 0.9rem;
+}
+
+.notion-editor-skeleton {
+  min-height: 300px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fafbfc;
+  padding: 16px;
 }
 
 /* 우측 사이드바 */

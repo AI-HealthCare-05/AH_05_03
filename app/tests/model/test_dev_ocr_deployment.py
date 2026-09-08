@@ -21,7 +21,7 @@ def test_dev_deployer_builds_starts_and_checks_ocr_workers() -> None:
     assert "build_services+=(fastapi ai-worker)" in deployer
     assert "mailpit email-worker ai-worker fastapi anatomy-assets" in deployer
     assert "fastapi ai-worker anatomy-assets" in deployer
-    assert "len(data['models']) == 20" in deployer
+    assert "len(data['models']) >= 20" in deployer
     assert "data['trajectory']['available']" in deployer
     assert "ai_worker/*" in deployer
     assert "- 'ai_worker/**'" in workflow

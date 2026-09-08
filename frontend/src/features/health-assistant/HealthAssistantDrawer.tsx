@@ -21,6 +21,8 @@ import {
   type PainDiaryToolCall,
   type LabResultDraft,
   type ChallengeDraft,
+  type FacilitySearchResult,
+  type UserLocation,
 } from "./healthAssistantClient";
 import { selectContextRecordTypes } from "./healthAssistantContext";
 import {
@@ -60,6 +62,97 @@ import "./healthAssistantDrawer.css";
  */
 function messageId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+async function getBrowserLocation(): Promise<{
+  location: UserLocation | null;
+  permissionDenied: boolean;
+  errorReason?: string;
+}> {
+  if (typeof window === "undefined" || !navigator.geolocation) {
+    return { location: null, permissionDenied: false, errorReason: "unsupported" };
+  }
+
+  // 1. 세션 캐시 확인 (동일 세션 내 이미 획득한 위치 재사용)
+  try {
+    const cached = sessionStorage.getItem("ieobom_user_location");
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed?.latitude && parsed?.longitude) {
+        return { location: parsed, permissionDenied: false };
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc: UserLocation = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+        };
+        try {
+          sessionStorage.setItem("ieobom_user_location", JSON.stringify(loc));
+        } catch {
+          // ignore
+        }
+        resolve({
+          location: loc,
+          permissionDenied: false,
+        });
+      },
+      (err) => {
+        console.warn("[Geolocation] 위치 조회 실패:", err.code, err.message);
+        let errorReason = "unknown";
+        if (err.code === err.PERMISSION_DENIED) {
+          errorReason = "permission_denied";
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          errorReason = "position_unavailable";
+        } else if (err.code === err.TIMEOUT) {
+          errorReason = "timeout";
+        }
+        resolve({
+          location: null,
+          permissionDenied: err.code === err.PERMISSION_DENIED,
+          errorReason,
+        });
+      },
+      // macOS 데스크톱 및 Wi-Fi 환경 고려: 10초 타임아웃, highAccuracy 활성화
+      { timeout: 10000, maximumAge: 300000, enableHighAccuracy: true },
+    );
+  });
+}
+
+function needsOutdoorConditions(text: string): boolean {
+  const normalized = text.replace(/\s+/g, "");
+  if (/날씨|미세먼지|초미세먼지|대기질/.test(normalized)) return true;
+  if (/했어|완료|기록(?:해|할|하기)?|달렸어|뛰었어|걸었어|탔어/.test(normalized)) return false;
+  return /산책|조깅|러닝|유산소|야외|밖에서|외출/.test(normalized)
+    || /오늘.*운동.*(?:추천|할)/.test(normalized);
+}
+
+interface OutdoorLocationAttempt {
+  location?: { latitude: number; longitude: number };
+  error?: string;
+}
+
+async function getCurrentLocationForOutdoorQuestion(): Promise<OutdoorLocationAttempt> {
+  if (!navigator.geolocation) {
+    return { error: "이 브라우저에서는 현재 위치 기능을 사용할 수 없습니다." };
+  }
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({
+        location: { latitude: position.coords.latitude, longitude: position.coords.longitude },
+      }),
+      () => resolve({
+        error: "실시간 날씨와 대기질을 확인하려면 기기와 브라우저 설정에서 위치 서비스 권한을 허용해 주세요.",
+      }),
+      { enableHighAccuracy: false, timeout: 6000, maximumAge: 5 * 60 * 1000 },
+    );
+  });
 }
 
 interface HealthAssistantDrawerProps {
@@ -461,6 +554,13 @@ export function HealthAssistantDrawer({
 
     if ((!textToSend && !currentImage) || loading || !profile) return;
 
+    // 위치 권한 요청은 전송 버튼을 누른 **직후** 시작한다. 건강기록 조회·OCR처럼
+    // 다른 비동기 작업을 먼저 기다리면 일부 브라우저가 사용자 동작과의 연결을
+    // 잃어 권한 팝업을 띄우지 않을 수 있다.
+    const outdoorLocationPromise = needsOutdoorConditions(textToSend)
+      ? getCurrentLocationForOutdoorQuestion()
+      : Promise.resolve({} as OutdoorLocationAttempt);
+
     clearSelectedImage();
 
     let userContent = textToSend;
@@ -503,6 +603,50 @@ export function HealthAssistantDrawer({
     setError(undefined);
 
     try {
+      // 주변 의료시설(응급실, 병원, 약국) 조회 의도 감지 시 Geolocation 확인
+      const isFacilityQuery = /(응급실|병원|의원|약국|당직의료|당번약국|야간약국|야간진료|응급의료|내과|외과|이비인후과|소아과|소아청소년과|신경과|정신과|정신건강의학과|정형외과|신경외과|성형외과|산부인과|안과|피부과|비뇨의학과|비뇨기과|영상의학과|마취통증의학과|통증의학과|재활의학과|가정의학과|응급의학과|치과|한방|한의원)/.test(userContent);
+      // 질의어에서 시설명 및 질의용 불용어를 제외했을 때 특정 지역명/장소 키워드가 남아있는지 확인
+      const cleanedForRegion = userContent
+        .replace(/(응급실|병원|의원|약국|내과|외과|이비인후과|소아과|소아청소년과|신경과|정신과|정신건강의학과|정형외과|신경외과|성형외과|산부인과|안과|피부과|비뇨의학과|비뇨기과|영상의학과|마취통증의학과|통증의학과|재활의학과|가정의학과|응급의학과|치과|한방|한의원|한방병원|보건소|의료원|당직의료|당번약국|야간약국|야간진료|응급의료)/g, "")
+        .replace(/(주변|근처|가까운|현재|지금|문연|문\s*연|당직|당번|야간|24시|휴일|일요일|주말)/g, "")
+        .replace(/(찾아줘|찾아|알려줘|알려|어디야|어디에|어디|추천|조회|검색|부탁|있어|있니|있나요|가려는데|가려고|좀|해줘|해\s*줘|이야|야|\?|!|\.)/g, "")
+        .trim();
+      const hasRegionHint = cleanedForRegion.length >= 1;
+
+      let userLocation: UserLocation | undefined = undefined;
+      if (isFacilityQuery) {
+        const { location, errorReason } = await getBrowserLocation();
+        if (location) {
+          userLocation = location;
+        } else if (!hasRegionHint) {
+          let guideText =
+            "주변 의료시설(응급실·병원·약국)을 찾기 위한 현재 위치를 가져오지 못했습니다.\n\n" +
+            "💡 기기 설정에서 위치 서비스를 켜고, 브라우저의 위치 권한도 허용되어 있는지 확인해 주세요.\n\n" +
+            "또는 찾으시는 지역명(예: '중구 약국', '강남역 병원')을 입력해 주시면 바로 찾아드립니다!";
+
+          if (errorReason === "timeout") {
+            guideText =
+              "위치 확인 시간이 초과되었습니다. 잠시 후 다시 시도해 주시거나, 찾으시는 지역명(예: '중구 약국', '종로구 응급실')을 입력해 주세요.";
+          }
+
+          const assistantDeniedMsg: ExtendedChatMessage = {
+            id: messageId("assistant"),
+            role: "assistant",
+            content: guideText,
+            responseDraft: {
+              intent: "search_facility",
+              assistant_message: guideText,
+              missing_fields: ["user_location"],
+              needs_confirmation: false,
+              suggested_quick_replies: ["서울 중구 약국 찾아줘", "강남구 약국 찾아줘", "종로구 응급실"],
+            },
+          };
+          setMessages((prev) => [...prev, assistantDeniedMsg]);
+          setLoading(false);
+          return;
+        }
+      }
+
       // 일반 대화/기록 입력에는 과거 건강정보를 보내지 않는다.
       // 개인 기록이 실제로 필요한 건강 질문에 한해 관련 종류만 선별한다.
       const recentConversationText = nextMessages
@@ -511,6 +655,10 @@ export function HealthAssistantDrawer({
         .join("\n");
       const contextRecordTypes = selectContextRecordTypes(recentConversationText);
       const recentSummary = await fetchRecentRecordsSummary(contextRecordTypes);
+      // 야외 질문일 때만 브라우저 위치 권한을 요청한다. 좌표는 이 API 요청에만 쓰고
+      // 채팅/프로필의 로컬 저장소에는 남기지 않는다.
+      const locationAttempt = await outdoorLocationPromise;
+      const currentLocation = locationAttempt?.location;
 
       // AI 전송용 메시지 배열 구성 (OCR 텍스트가 있으면 함께 포함)
       const promptMessages = nextMessages.slice(-12).map((m, idx, recentMessages) => {
@@ -530,6 +678,42 @@ export function HealthAssistantDrawer({
       // 않는 것처럼 보인다. 기록 초안·빠른답장은 완성본이 온 뒤에 한 번에 붙는다.
       const streamingId = messageId("assistant");
       let streamed = "";
+      let streamedFacility: FacilitySearchResult | undefined;
+      const streamingFacilityResponse = (facility: FacilitySearchResult): HealthAssistantResponse => ({
+        intent: "search_facility",
+        assistant_message: streamed,
+        facility_search_draft: facility,
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: [],
+      });
+      const applyDelta = (delta: string) => {
+        streamed += delta;
+        setMessages((prev) => prev.map((message) => (
+          message.id === streamingId
+            ? {
+                ...message,
+                content: streamed,
+                ...(streamedFacility ? { responseDraft: streamingFacilityResponse(streamedFacility) } : {}),
+              }
+            : message
+        )));
+      };
+      const applyFacilityResult = (facility: FacilitySearchResult) => {
+        streamedFacility = facility;
+        const msgText = facility.message || "주변 의료시설을 조회했습니다.";
+        streamed = msgText;
+        // 시설 데이터가 도착하면 본문 토큰 완료를 기다리지 않고 일체형 카드로 즉시 렌더링한다.
+        setMessages((prev) => prev.map((message) => (
+          message.id === streamingId
+            ? {
+                ...message,
+                content: msgText,
+                responseDraft: streamingFacilityResponse(facility),
+              }
+            : message
+        )));
+      };
       setMessages((prev) => [...prev, { id: streamingId, role: "assistant", content: "" }]);
       let sessionId = activeSessionIdRef.current;
       if (!sessionId && sessionSyncPromiseRef.current) {
@@ -549,35 +733,25 @@ export function HealthAssistantDrawer({
         }
       }
 
-      const res = sessionId
-        ? await streamHealthAssistantMessage(
-            promptMessages,
-            (delta) => {
-              streamed += delta;
-              setMessages((prev) => prev.map((m) => (m.id === streamingId ? { ...m, content: streamed } : m)));
-            },
-            {
-              profile_name: profile.displayName,
-              relationship: profile.relationship,
-              birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
-              recent_records_summary: recentSummary,
-            },
-            undefined,
-            sessionId,
-          )
-        : await streamHealthAssistantMessage(
-            promptMessages,
-            (delta) => {
-              streamed += delta;
-              setMessages((prev) => prev.map((m) => (m.id === streamingId ? { ...m, content: streamed } : m)));
-            },
-            {
-              profile_name: profile.displayName,
-              relationship: profile.relationship,
-              birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
-              recent_records_summary: recentSummary,
-            },
-          );
+      const finalLocation = userLocation ?? currentLocation ?? undefined;
+      const res = await streamHealthAssistantMessage(
+        promptMessages,
+        applyDelta,
+        {
+          profile_name: profile.displayName,
+          relationship: profile.relationship,
+          birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
+          recent_records_summary: recentSummary,
+        },
+        undefined,
+        sessionId ?? undefined,
+        finalLocation,
+        applyFacilityResult,
+      );
+
+      if (streamedFacility && !res.facility_search_draft) {
+        res.facility_search_draft = streamedFacility;
+      }
 
 
       // OCR에서 추출된 날짜가 있고 AI가 날짜를 채우지 않았거나 오늘로 채운 경우 보정
@@ -1318,32 +1492,41 @@ export function HealthAssistantDrawer({
                   </div>
                 )}
 
-                <div className="msg-bubble">
-                  {msg.content ? (
-                    msg.content.split("\n\n").map((para, i) => (
-                      <p key={i}>{para}</p>
-                    ))
-                  ) : (
-                    <div className="loading-dots">
-                      <span>.</span><span>.</span><span>.</span>
-                    </div>
-                  )}
-
-                  {/* 응급 주의사항 배너 */}
-                  {msg.responseDraft?.emergency_notice && (
-                    <div className="emergency-notice-banner" role="alert">
-                      <strong>응급 주의 안내</strong>
-                      <p>{msg.responseDraft.emergency_notice}</p>
-                    </div>
-                  )}
-
-                  {/* 비진단 안전 안내문 */}
-                  {msg.responseDraft?.safety_disclaimer && (
-                    <p className="safety-disclaimer-text">
-                      ※ {msg.responseDraft.safety_disclaimer}
+                {msg.responseDraft?.facility_search_draft && msg.role === "assistant" ? (
+                  <div className="msg-bubble facility-unified-bubble">
+                    <p className="facility-unified-title">
+                      {msg.content || msg.responseDraft.facility_search_draft.message}
                     </p>
-                  )}
-                </div>
+                    <FacilitySearchResultCard draft={msg.responseDraft.facility_search_draft} />
+                  </div>
+                ) : (
+                  <div className="msg-bubble">
+                    {msg.content ? (
+                      msg.content.split("\n\n").map((para, i) => (
+                        <p key={i}>{para}</p>
+                      ))
+                    ) : (
+                      <div className="loading-dots">
+                        <span>.</span><span>.</span><span>.</span>
+                      </div>
+                    )}
+
+                    {/* 응급 주의사항 배너 */}
+                    {msg.responseDraft?.emergency_notice && !msg.responseDraft?.facility_search_draft && (
+                      <div className="emergency-notice-banner" role="alert">
+                        <strong>응급 주의 안내</strong>
+                        <p>{msg.responseDraft.emergency_notice}</p>
+                      </div>
+                    )}
+
+                    {/* 비진단 안전 안내문 */}
+                    {msg.responseDraft?.safety_disclaimer && (
+                      <p className="safety-disclaimer-text">
+                        ※ {msg.responseDraft.safety_disclaimer}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* 대화 내 인라인 원본 서류 이미지 미리보기 목록 (단일/다중 모두 지원) */}
                 {msg.attachedDocuments && msg.attachedDocuments.length > 0 && runtime && (
@@ -1446,6 +1629,8 @@ export function HealthAssistantDrawer({
                     onSave={() => saveChallenge()}
                   />
                 )}
+
+
 
                 {/* 시계열 검진/측정 수치 변화 추이 차트 카드 */}
                 {msg.showTrendChart && msg.trendMetrics && msg.trendMetrics.length > 0 && (
@@ -2806,6 +2991,120 @@ function ChallengeConfirmationCard({
       >
         🚀 이 챌린지 시작하기 (홈 화면 등록)
       </button>
+    </div>
+  );
+}
+
+function FacilitySearchResultCard({ draft }: { draft: FacilitySearchResult }) {
+  const typeLabel =
+    draft.facility_type === "emergency_room"
+      ? "응급의료기관"
+      : draft.facility_type === "pharmacy"
+        ? "약국"
+        : "병원·의원";
+
+  const displayItems = (draft.items || []).slice(0, 5);
+
+  return (
+    <div className="facility-search-card">
+      <div className="facility-search-header">
+        <span className={`facility-badge badge-${draft.facility_type}`}>{typeLabel}</span>
+        <span className="facility-count">가까운 {displayItems.length}곳</span>
+      </div>
+
+      {draft.emergency_notice && (
+        <div className="facility-emergency-notice">{draft.emergency_notice}</div>
+      )}
+
+      {displayItems.length === 0 ? (
+        <div className="facility-empty-message">
+          {draft.message || "주변에 조회된 시설이 없습니다."}
+        </div>
+      ) : (
+        <div className="facility-list">
+          {displayItems.map((item, idx) => {
+            const tel = item.emergency_room_phone || item.phone;
+            const distanceText =
+              item.distance_m != null
+                ? item.distance_m >= 1000
+                  ? `${(item.distance_m / 1000).toFixed(1)}km`
+                  : `${item.distance_m}m`
+                : null;
+
+            // 네이버 지도 PC 검색 연동 (좌측 상세 정보 패널 + 우측 지도 핀 동시 노출)
+            const addrParts = item.address.split(" ");
+            const district = addrParts.length >= 2 ? `${addrParts[0]} ${addrParts[1]}` : "";
+            const naverSearchQuery = district ? `${district} ${item.name}` : item.name;
+            const naverMapUrl = `https://map.naver.com/p/search/${encodeURIComponent(naverSearchQuery)}`;
+
+            const isOpenText = draft.facility_type === "pharmacy" ? "영업 중" : "진료 중";
+            const isClosedText = draft.facility_type === "pharmacy" ? "영업 마감" : "진료 마감";
+
+            return (
+              <div key={idx} className="facility-item">
+                <div className="facility-item-header">
+                  <div className="facility-item-title-row">
+                    <span className="facility-item-name">{item.name}</span>
+                    {item.category && <span className="facility-item-category">{item.category}</span>}
+                  </div>
+                  {distanceText && <span className="facility-distance">{distanceText}</span>}
+                </div>
+
+                <div className="facility-item-address">{item.address}</div>
+
+                {/* 실시간 운영 상태 및 진료 시간 */}
+                <div className="facility-item-hours">
+                  {item.is_open === true && (
+                    <span className="facility-status-badge is-open">
+                      {isOpenText}
+                      {item.today_hours ? ` (${item.today_hours})` : ""}
+                    </span>
+                  )}
+                  {item.is_open === false && (
+                    <span className="facility-status-badge is-closed">
+                      {isClosedText}
+                      {item.today_hours ? ` (${item.today_hours})` : ""}
+                    </span>
+                  )}
+                  {item.is_open == null && item.today_hours && (
+                    <span className="facility-status-badge is-closed">
+                      운영시간: {item.today_hours}
+                    </span>
+                  )}
+                  {item.break_hours && (
+                    <span className="facility-break-badge">
+                      휴게시간 {item.break_hours}
+                    </span>
+                  )}
+                </div>
+
+                {/* 실시간 병상 정보 */}
+                {item.available_beds && (
+                  <div className="facility-item-beds">
+                    <span className="bed-badge">{item.available_beds}</span>
+                  </div>
+                )}
+
+                <div className="facility-item-actions">
+                  {tel && (
+                    <a href={`tel:${tel}`} className="facility-action-btn tel-btn">
+                      전화 {tel}
+                    </a>
+                  )}
+                  <a
+                    href={naverMapUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="facility-action-btn map-btn"
+                  >
+                    지도보기
+                  </a>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
