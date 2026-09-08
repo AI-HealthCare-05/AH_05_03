@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { Navigate, createBrowserRouter } from "react-router-dom";
 
 import { ErrorPage } from "./ErrorPage";
 import { SignUpPage } from "../features/account/SignUpPage";
@@ -11,7 +11,6 @@ import {
   AssessmentPage,
   ChallengePage,
   ChallengeSetupPage,
-  DataManagementPage,
   HealthDataPage,
   InsightsPage,
   PainDiaryPage,
@@ -91,8 +90,10 @@ export const router = createBrowserRouter([
         element: <HealthDataPage />,
       },
       {
+        // 계정 화면으로 합쳤다. 주소는 살려 둔다 — 북마크와 지난 링크가 404 가
+        // 되면 사용자는 기능이 사라진 줄 안다.
         path: "data",
-        element: <DataManagementPage />,
+        element: <Navigate to="/account" replace />,
       },
       {
         path: "account",
