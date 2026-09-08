@@ -23,3 +23,9 @@ def test_build_system_instruction_with_context() -> None:
     assert "홍길동 (아빠)" in instruction
     assert "출생년도: 1970년" in instruction
     assert "최근 8월 31일 혈압 120/80" in instruction
+
+
+def test_build_system_instruction_forbids_claiming_location_was_checked() -> None:
+    instruction = build_system_instruction()
+
+    assert "실제 위치를 확인하거나 날씨·대기질을 조회한 것처럼 말하지 마세요" in instruction

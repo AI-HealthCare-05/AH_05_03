@@ -483,6 +483,25 @@ TARGETS: dict[str, Target] = {
         note="키·체중이 필수 입력이라 현재 판정은 늘 확정이다. 이 모델의 값어치는 나이 이동 곡선에 있다.",
         criteria=(Criterion("bmi", "체질량지수", "kg/m²", ">=", 25.0),),
     ),
+    # ------------------------------------------------------------- 만성염증
+    "inflammation": Target(
+        key="inflammation",
+        name="만성염증",
+        label="label_chronic_inflammation",
+        definition="고감도 CRP 3~10 mg/L (AHA/CDC 심혈관 위험 3구간의 '고위험')",
+        threshold_source="AHA/CDC Circulation 2003 hs-CRP 임상 적용 성명",
+        # CRP 만 막으면 된다. 이 라벨은 다른 검사값으로 정의되지 않으므로 지질·간효소·
+        # 혈당이 전부 정당한 특징이다 — 염증이 그 지표들과 함께 움직이는 것이
+        # 이 모델이 배울 내용이다.
+        blocked=("crp",),
+        note=(
+            "**10 mg/L 초과는 라벨에서 뺐다**(양성도 음성도 아니다). AHA 는 그 구간을 "
+            "심혈관 위험이 아니라 2주 뒤 재측정 대상으로 본다 — 감염·외상·수술이 만든 "
+            "일시적 값이라서다. 측정자의 9.5%가 여기 걸리는데 양성으로 두면 모델이 "
+            "만성염증이 아니라 감기를 맞힌다. 2011-2014 두 주기는 CRP 자체가 없다."
+        ),
+        criteria=(Criterion("crp", "고감도 CRP", "mg/L", ">", 3.0),),
+    ),
     # ------------------------------------------------------------ 고요산혈증
     "hyperuricemia": Target(
         key="hyperuricemia",

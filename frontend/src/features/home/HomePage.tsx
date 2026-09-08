@@ -24,7 +24,6 @@ import type { RiskLevel } from "../assessment/contracts";
 import { type LatestSummary, listLatestByProfile } from "../assessment/snapshots";
 import { regionRisks, type RegionRisk } from "./bodyRisk";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
-import { ChallengeDashboardCard } from "../challenge/ChallengeDashboardCard";
 
 const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
   default: module.VanatomeBodyMap,
@@ -382,9 +381,9 @@ export function HomePage() {
       {error ? <div className="alert error-alert" role="alert">{error}</div> : null}
       {actionError && !profileLifecycleAction && !hiddenProfilesDialogOpen ? <div className="alert error-alert" role="alert">{actionError}</div> : null}
 
-      {/* 챌린지 요약. 로그인 전이거나 서버가 안 붙으면 스스로 아무것도 안 그린다. */}
-      <ChallengeDashboardCard />
-
+      {/* **챌린지 요약을 여기서 뺐다.** 가족 홈이 답해야 하는 물음은 "누구의 기록을
+          볼까" 하나인데, 나무·점수·물주기가 그 위에 앉아 첫 화면을 차지했다.
+          챌린지는 전역 내비에 제 자리가 있으므로 길이 끊기지도 않는다. */}
       <section className="dashboard-section" aria-labelledby="members-heading">
         <div className="section-title-row">
           <div>

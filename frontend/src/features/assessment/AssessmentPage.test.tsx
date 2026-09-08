@@ -386,11 +386,72 @@ describe("AssessmentPage", () => {
     expect(within(panel).getAllByText(/그 나이에 기준을 넘고 있을 확률/)).toHaveLength(1);
   });
 
-  it("측정이 '기준 이내'라고 답한 카드에는 모델 확률을 덧붙이지 않는다", async () => {
+  it("급한 셋이 전부 이미 넘었어도 나머지 질환의 5년 뒤는 보여준다", async () => {
     const user = userEvent.setup();
-    // 라벨을 만드는 검사값은 그 질환의 ML 입력에서 차단된다. 그래서 이 모델은
-    // 사용자가 넣은 지질 넉 장을 보지 못한 채 74% 를 낸다. 규칙 엔진이 "기준 안에
-    // 있어요" 라고 한 카드 밑에 그 숫자가 붙는 것이 패널에서 가장 헷갈리는 지점이었다.
+    // 카드 세 장은 **급한 순** 셋이다. 그 셋이 전부 이미 기준을 넘은 상태이면
+    // 세 장 모두 "지금 넘었어요" 만 적고 앞날 숫자가 하나도 안 남는다 — 실측으로
+    // 그런 화면이 나왔고(지질 셋이 전부 '높음'), 제목이 "발병 예측" 인데 예측이
+    // 한 줄도 없었다. 순위를 흔들지 않고 나머지 질환의 앞날을 같이 싣는다.
+    const response = structuredClone(RESPONSE) as typeof RESPONSE;
+    (response.verdicts[0].reference as Record<string, unknown>).prevalence_trajectory = {
+      horizons_years: [1, 2, 3, 4, 5],
+      prevalence_probability: [0.58, 0.6, 0.62, 0.64, 0.66],
+      current_probability: 0.57,
+      direction: "상승",
+      conditional_on: "지금의 수치가 유지된다는 가정",
+      irreversible: false,
+      truncated_at_age: null,
+      caveats: ["지금 넘었는지와 무관합니다.", "내려가는 구간은 치료 시작 때문입니다.", "NHANES 기준입니다."],
+    };
+    // 이미 넘어서 서버가 곡선을 지운 칸 하나. 이 자리를 비우면 "그 질환은 어떻게
+    // 됐나" 를 사용자가 다시 찾아야 한다.
+    const settled = structuredClone(response.verdicts[0]);
+    settled.key = "hyperchol";
+    settled.name = "고콜레스테롤혈증";
+    settled.risk_level = "HIGH";
+    delete (settled.reference as Record<string, unknown>).trajectory;
+    delete (settled.reference as Record<string, unknown>).prevalence_trajectory;
+    response.verdicts.push(settled);
+
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(response as never);
+    renderPage();
+
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const outlook = await screen.findByRole("region", { name: /년 뒤/ });
+    // **뜻이 다른 둘을 블록으로 가른다.** 한 줄로 정렬하면 동년배보다 낮은 발병
+    // 확률이 기준 초과 옆에 나란히 서고, 훑는 사람은 꼬리표보다 순서를 먼저 읽는다.
+    expect(within(outlook).getByText(/새로 생길 확률/)).toBeInTheDocument();
+    expect(within(outlook).getByText(/기준을 넘고 있을 확률/)).toBeInTheDocument();
+
+    // 유병 줄은 **움직였을 때만** 변화폭을 적는다. 57% -> 66% 라 오른 줄이다.
+    const htn = within(outlook).getByText("고혈압").closest("li") as HTMLElement;
+    expect(htn).toHaveTextContent("66%");
+    expect(htn).toHaveTextContent(/지금 57% → ▲ 9%p/);
+    expect(htn.querySelector(".outlook-note.is-up")).not.toBeNull();
+
+    // 발병 줄은 동년배와의 비교가 답이다 — 절대값만으로는 크고 작음을 못 읽는다.
+    const anemia = within(outlook).getByText("빈혈").closest("li") as HTMLElement;
+    expect(anemia).toHaveTextContent(/동년배 \d+%(보다|와)/);
+
+    // 곡선이 없는 칸도 자리를 지우지 않고 왜 없는지 적는다.
+    // 이미 넘은 것은 줄마다 반복하지 않고 한 줄로 묶는다.
+    const settledRow = outlook.querySelector(".outlook-settled") as HTMLElement;
+    expect(settledRow).toHaveTextContent("앞날 숫자를 내지 않은 1가지");
+    expect(settledRow).toHaveTextContent("고콜레스테롤혈증");
+    // 그 줄에는 숫자를 적지 않는다 — 라벨 검사값이 ML 입력에서 차단돼 모델이 낮은
+    // 값을 내므로, "높음" 배지 밑에 놓으면 어느 쪽을 믿어야 하는지 알 수 없다.
+    expect(settledRow.querySelector(".outlook-value")).toBeNull();
+    expect(within(outlook).queryAllByText("고콜레스테롤혈증").length).toBe(1);
+  });
+
+  it("서버가 지운 곡선을 화면이 되살리지 않는다 — 판단은 한 곳이다", async () => {
+    const user = userEvent.setup();
+    // 측정과 모델이 서로 반대 방향을 가리키면 서버가 곡선을 지운다
+    // (`assessment.model_contradicts_measurement`). 예전에는 화면도 따로 막았는데,
+    // 같은 판단이 두 곳에 있으면 한쪽만 고쳐진다 — 실제로 판정과 어긋나지 않는
+    // 값(비만 91% · 지방간 66%)까지 화면 쪽 규칙이 같이 지우고 있었다.
     const settled = {
       ...RESPONSE,
       top_suspects: [
@@ -403,14 +464,11 @@ describe("AssessmentPage", () => {
           suspected: false,
           basis: "측정",
           level: "정상 범위",
+          risk_level: "NORMAL",
           reason: "의심 신호는 없지만 함께 볼 만한 항목이에요.",
           onset_trajectory: null,
           onset_status: "not_applicable",
-          prevalence_trajectory: {
-            ...RESPONSE.top_suspects[0].prevalence_trajectory,
-            current_probability: 0.74,
-            prevalence_probability: [0.74, 0.75],
-          },
+          prevalence_trajectory: null,
         },
       ],
     };
@@ -424,6 +482,48 @@ describe("AssessmentPage", () => {
     expect(within(card).getByText("정상 범위")).toBeInTheDocument();
     expect(within(card).queryByText("74%")).not.toBeInTheDocument();
     expect(within(card).getByText(/검사값이 기준 안에 있어/)).toBeInTheDocument();
+  });
+
+  it("서버가 보낸 곡선은 확진 카드에서도 그대로 그린다", async () => {
+    const user = userEvent.setup();
+    // 이미 넘은 카드라도 모델이 같은 방향을 가리키면 5년 숫자가 배지와 다투지
+    // 않는다. 실측으로 비만 91% · 지방간 66% · 대사증후군 58% 가 그 자리다.
+    const confirmed = {
+      ...RESPONSE,
+      top_suspects: [
+        {
+          ...RESPONSE.top_suspects[0],
+          target: "obesity",
+          name: "비만",
+          rank: 1,
+          basis: "측정",
+          level: "높음",
+          risk_level: "HIGH",
+          onset_trajectory: null,
+          onset_status: "not_applicable",
+          prevalence_trajectory: {
+            horizons_years: [1, 2, 3, 4, 5],
+            prevalence_probability: [0.91, 0.91, 0.91, 0.91, 0.91],
+            current_probability: 0.91,
+            direction: "유지",
+            conditional_on: "지금의 수치가 유지된다는 가정",
+            irreversible: false,
+            truncated_at_age: null,
+            caveats: ["지금 넘었는지와 무관합니다.", "치료 시작 때문입니다.", "NHANES 기준입니다."],
+          },
+        },
+      ],
+    };
+    vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(confirmed as never);
+    renderPage();
+    await fillRequired(user);
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    const panel = (await screen.findByRole("region", { name: /만성질환 발병 예측/ })) as HTMLElement;
+    const card = within(panel).getByRole("heading", { name: /비만/ }).closest("article") as HTMLElement;
+    expect(within(card).getAllByText("91%").length).toBeGreaterThan(0);
+    // 숫자를 보여주더라도 "지금 넘었다" 는 사실과 다음 행동은 같이 적는다.
+    expect(within(card).getByText(/재측정과 진료 상담/)).toBeInTheDocument();
   });
 
   it("발병 궤적이 있는 카드는 앞면에 한 줄, 접이에 동년배와 나란한 표를 그린다", async () => {

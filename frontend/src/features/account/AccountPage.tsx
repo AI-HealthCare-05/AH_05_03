@@ -1,5 +1,6 @@
 import { type FormEvent, type MouseEvent, useCallback, useEffect, useState } from "react";
 
+import { DataManagementPage } from "../data/DataManagementPage";
 import { useAuth } from "../../app/authContext";
 import { useLocalDomain } from "../../app/localDomainContext";
 import type {
@@ -825,6 +826,11 @@ function ConfirmationDialog({
           </div>
         </form>
       </section>
+
+      {/* **데이터 관리를 계정 안으로 들였다.** 백업·복구·삭제는 계정에 딸린 일이라
+          메뉴를 하나 더 둘 무게가 아니었고, 사용자는 "내 데이터를 어떻게 하나" 를
+          계정에서 먼저 찾는다. `/data` 주소는 살려서 이리로 보낸다. */}
+      <DataManagementPage embedded />
     </div>
   );
 }

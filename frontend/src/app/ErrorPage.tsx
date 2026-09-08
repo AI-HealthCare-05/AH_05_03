@@ -1,4 +1,17 @@
+import { useEffect } from "react";
 import { Link, isRouteErrorResponse, useRouteError } from "react-router-dom";
+
+/**
+ * 배포로 청크 해시가 바뀌면 **이미 열려 있던 탭**은 옛 진입 청크를 들고 있다.
+ * 그 탭에서 지연 로딩 화면으로 이동하면 없는 파일을 찾으므로 이 오류가 난다.
+ *
+ * 사용자가 고칠 방법은 새로고침뿐인데, 그걸 알 도리가 없다. 한 번만 대신 눌러
+ * 준다 — `sessionStorage` 로 잠가서, 진짜로 깨진 배포에서 무한 새로고침에
+ * 빠지지 않게 한다.
+ */
+const STALE_CHUNK = /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i;
+const RELOAD_ONCE = "ieobom:stale-chunk-reloaded";
+
 
 /**
  * 라우터가 잡은 오류를 사용자 언어로 옮긴다.
@@ -37,18 +50,47 @@ export function ErrorPage() {
     console.error("[router]", error);
   }
 
+  // 옛 청크를 들고 있는 탭이면 한 번만 새로고침해서 스스로 낫게 한다.
+  const staleChunk = typeof detail === "string" && STALE_CHUNK.test(detail);
+  useEffect(() => {
+    if (!staleChunk) return;
+    let already: string;
+    try {
+      already = sessionStorage.getItem(RELOAD_ONCE) ?? "";
+      if (!already) sessionStorage.setItem(RELOAD_ONCE, "1");
+    } catch {
+      // 시크릿 모드에서 sessionStorage 가 막힐 수 있다. 그때는 새로고침하지 않는다 —
+      // 잠글 방법이 없으면 무한 루프가 더 나쁘다.
+      return;
+    }
+    if (!already) window.location.reload();
+  }, [staleChunk]);
+
   return (
     <main className="product-page error-page">
       <p className="page-kicker">{notFound ? "페이지 없음" : "문제 발생"}</p>
       <div className="error-card">
-        <h1>{notFound ? "찾으시는 페이지가 없습니다" : "화면을 불러오지 못했습니다"}</h1>
+        <h1>
+          {notFound
+            ? "찾으시는 페이지가 없습니다"
+            : staleChunk
+              ? "새 버전이 배포됐어요"
+              : "화면을 불러오지 못했습니다"}
+        </h1>
         <p className="error-lede">
           {notFound
             ? "주소가 바뀌었거나 잘못 입력됐을 수 있습니다. 기록은 그대로 기기에 남아 있습니다."
-            : "잠시 후 다시 시도해 주세요. 저장된 기록에는 영향이 없습니다."}
+            : staleChunk
+              ? "열어 두신 탭이 이전 버전이라 화면을 못 찾았습니다. 새로고침하면 바로 열립니다. 저장된 기록에는 영향이 없습니다."
+              : "잠시 후 다시 시도해 주세요. 저장된 기록에는 영향이 없습니다."}
         </p>
 
         <div className="error-actions">
+          {staleChunk ? (
+            <button type="button" className="error-primary" onClick={() => window.location.reload()}>
+              새로고침
+            </button>
+          ) : null}
           <Link to="/" className="error-primary">
             홈으로 가기
           </Link>
