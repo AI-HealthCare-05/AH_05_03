@@ -7038,15 +7038,22 @@ main {
 .verdict-modal-head strong { font-size: 0.95rem; }
 
 /* ---------------------------------------------------------------------------
- * 5년 뒤 — 열세 질환 전부
+ * 5년 뒤 — 질환 전부
  *
  * 카드 세 장이 전부 "이미 넘음" 이면 패널에 앞날 숫자가 하나도 안 남는다. 순위를
- * 흔들지 않고 나머지 질환의 앞날을 같이 싣는다. 막대는 0~100% 고정 축이다 —
- * 줄마다 축이 다르면 줄 사이 비교가 거짓이 된다.
+ * 흔들지 않고 나머지 질환의 앞날을 같이 싣는다.
+ *
+ * **뜻이 다른 둘을 블록으로 가른다.** "새로 생길" 과 "그때 넘고 있을" 은 같은 자를
+ * 쓰지 않아서 한 줄로 정렬하면 평균 이하인 발병 확률이 기준 초과 옆에 나란히 선다.
+ * 막대 축은 블록 안에서 0~100% 고정이다 — 줄마다 축이 다르면 비교가 거짓이 된다.
  * ------------------------------------------------------------------------- */
 .suspect-outlook { margin-top: 0.9rem; border-top: 1px solid var(--line-soft); padding-top: 0.8rem; }
-.suspect-outlook h4 { margin: 0 0 0.55rem; font-size: 0.88rem; }
+.suspect-outlook h4 { margin: 0 0 0.6rem; font-size: 0.88rem; }
 .suspect-outlook h4 .assess-muted { font-size: 0.76rem; font-weight: 600; }
+
+.outlook-block + .outlook-block { margin-top: 0.75rem; }
+.outlook-block-title { margin: 0 0 0.35rem; font-size: 0.78rem; font-weight: 700; color: var(--muted-strong); }
+.outlook-block-title .assess-muted { font-weight: 500; font-size: 0.72rem; }
 
 .suspect-outlook-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; }
 .suspect-outlook-list li {
@@ -7060,19 +7067,88 @@ main {
 .outlook-name { grid-area: name; font-weight: 600; color: var(--ink); }
 .outlook-value { grid-area: value; text-align: right; font-variant-numeric: tabular-nums; }
 .outlook-note { grid-area: note; font-size: 0.68rem; color: var(--muted); }
+/* 오른 것과 내린 것만 색을 준다. "지금과 비슷해요" 는 색이 없어야 눈이 안 멈춘다. */
+.outlook-note.is-up { color: var(--danger); font-weight: 600; }
+.outlook-note.is-down { color: var(--safe); font-weight: 600; }
 
 .outlook-bar { grid-area: bar; position: relative; height: 7px; border-radius: 999px; background: var(--line-soft); overflow: visible; }
 .outlook-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--blue-500); }
 /* 동년배 눈금. 채움과 같은 축 위에 있어야 "몇 배" 가 산수 없이 읽힌다. */
 .outlook-bar em { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--muted-strong); border-radius: 1px; }
-
-/* 발병 궤적은 채도를 올려 유병 곡선과 가른다 — 뜻이 다른 두 숫자다. */
 .outlook-onset .outlook-bar i { background: var(--blue-700); }
 
-/* 숫자가 없는 줄. 자리를 지우지 않고 왜 없는지를 적는다. */
-.outlook-none { grid-area: bar / bar / value / value; font-size: 0.72rem; color: var(--muted); }
+/* 이미 넘은 것은 한 줄로 묶는다 — 각각 한 줄씩 두면 같은 문장이 여섯 번 반복되면서
+   실제로 읽어야 하는 위쪽 숫자를 밀어낸다. */
+.outlook-settled {
+  margin: 0.7rem 0 0;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  background: var(--blue-50);
+  font-size: 0.74rem;
+  line-height: 1.65;
+}
+.outlook-settled b { color: var(--ink); margin-right: 0.25rem; }
 
 @media (max-width: 640px) {
   .suspect-outlook-list li { grid-template-columns: 6.5rem 1fr 2.8rem; }
 }
-.suspect-outlook-lead { margin: 0 0 0.55rem; font-size: 0.72rem; line-height: 1.6; max-width: 66ch; }
+
+/* 신호가 하나도 안 걸린 매트릭스 카드. 여섯 신호가 겹친 카드와 같은 높이를 차지하면
+   "정상인데 왜 이렇게 크게 보여주나" 가 된다. 줄 높이를 맞추지 않고 내용만큼만. */
+.assess-matrix.is-clear { align-self: start; gap: 0.4rem; }
+.assess-matrix-clear { margin: 0; font-size: 0.8rem; color: var(--muted-strong); line-height: 1.6; }
+
+/* 목록 안의 순위 칩. 위 카드 세 장과 같은 질환이라는 것을 한눈에 잇는다. */
+.outlook-rank {
+  display: inline-block;
+  min-width: 1.05rem;
+  margin-right: 0.3rem;
+  padding: 0 0.15rem;
+  border-radius: 4px;
+  background: var(--blue-600);
+  color: #fff;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: 1px;
+}
+
+/* 다섯 해가 같은 칸에 떨어졌을 때의 한 줄. 세로로 여섯 번 쌓는 대신 말로 접는다. */
+.suspect-flat { margin: 0.3rem 0 0; font-size: 0.72rem; line-height: 1.55; }
+/* 계열 제목의 부제 — 전제를 제목 옆에 둔다. */
+.suspect-series h5 .assess-muted { font-weight: 500; font-size: 0.7rem; }
+
+/* ---------------------------------------------------------------------------
+ * 검진표 자리는 언제나 있다
+ *
+ * 예전에는 가족 홈에서 넘어온 state 하나로 갈려서, 내비로 들어오면 업로드 자리가
+ * 아예 없었다 — 같은 주소가 두 화면이었다. 지금은 늘 서고, **문서가 붙었을 때만**
+ * 두 칸으로 갈라져 원본과 폼을 나란히 본다.
+ * ------------------------------------------------------------------------- */
+.assess-workspace { display: block; }
+/* 문서가 없을 때: 폼 위에 얇게 앉는다. sticky 를 풀어야 위로 붙는다. */
+.assess-workspace:not(.has-document) .checkup-pane {
+  position: static;
+  margin-bottom: 16px;
+}
+.assess-workspace:not(.has-document) .checkup-pane-head h2 { font-size: 1rem; }
+.assess-workspace:not(.has-document) .checkup-privacy { font-size: 0.72rem; }
+
+/* 파일 고르는 자리를 눌러야 할 곳으로 보이게. 예전에는 브라우저 기본 file input
+   하나라 어디를 눌러야 하는지 알기 어려웠다. */
+.checkup-picker {
+  display: block;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  background: var(--blue-50);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.checkup-picker:hover,
+.checkup-picker.is-dragging { border-color: var(--blue-500); background: var(--blue-100); }
+.checkup-picker span { margin-top: 4px; color: var(--blue-800); font-weight: 600; }
+
+/* 계정 화면 안으로 들어온 데이터 관리. 바깥 페이지 여백을 두 번 주지 않는다. */
+.data-page.is-embedded { margin-top: 1.6rem; padding-top: 1.2rem; border-top: 1px solid var(--line); }
+.data-page.is-embedded .dashboard-heading h2 { margin: 0; font-size: 1.25rem; }
