@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.dtos.medical_facility import FacilitySearchResult
+from app.dtos.medication import MedicationSearchResult
 
 
 class ChatMessage(BaseModel):
@@ -192,6 +193,10 @@ class HealthAssistantResponse(BaseModel):
     challenge_draft: ChallengeDraft | None = Field(default=None, description="챌린지 생성·조정·완료 초안")
     facility_search_draft: FacilitySearchResult | None = Field(
         default=None, description="주변 의료시설(응급실, 병원, 약국) 조회 결과"
+    )
+    medication_search_result: MedicationSearchResult | None = Field(
+        default=None,
+        description="식약처 e약은요·DUR API로 조회한 의약품 정보 및 병용금기 결과",
     )
     missing_fields: list[str] = Field(
         default_factory=list, description="초안 완성을 위해 사용자에게 추가 확인이 필요한 필드 목록"
