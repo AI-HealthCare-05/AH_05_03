@@ -9,6 +9,7 @@ export interface ChatMessage {
 }
 
 export interface ProfileContext {
+  profile_id?: string;
   profile_name: string;
   relationship?: string;
   birth_year?: number;
@@ -168,6 +169,25 @@ export interface OutdoorConditionsResult {
   errors: string[];
 }
 
+export interface HealthRecordQueryResult {
+  record_type: "blood_pressure";
+  metric: "systolic";
+  unit: "mmHg";
+  operator: "gt" | "gte";
+  threshold: number;
+  period: {
+    date_from: string;
+    date_to: string;
+    timezone: "Asia/Seoul";
+  };
+  matched_days: number;
+  matched_measurements: number;
+  total_measurements: number;
+  latest_matches: Array<{ date: string; value: number }>;
+  empty_reason?: "no_records" | "no_matches" | null;
+  message: string;
+}
+
 export interface HealthAssistantResponse {
   intent:
     | "record_exercise"
@@ -194,6 +214,7 @@ export interface HealthAssistantResponse {
   lab_result_draft?: LabResultDraft | null;
   challenge_draft?: ChallengeDraft | null;
   query_draft?: QueryDraft | null;
+  health_record_query_result?: HealthRecordQueryResult | null;
   facility_search_draft?: FacilitySearchResult | null;
   outdoor_conditions?: OutdoorConditionsResult | null;
   missing_fields: string[];

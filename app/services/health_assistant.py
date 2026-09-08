@@ -1,18 +1,27 @@
+import re
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any, cast
 
 from app.dtos.health_assistant import (
     HealthAssistantChatRequest,
     HealthAssistantResponse,
-    ProfileContext,
     UserLocation,
 )
+from app.dtos.health_record_query import HealthRecordQueryResult
+from app.dtos.medical_facility import FacilitySearchResult
 from app.exceptions import LlmProviderFailedError
 from app.integrations.llm.chain import shared_chat_client
 from app.integrations.llm.protocol import LLMClientProtocol
+from app.models.service_accounts import ServiceAccount
 from app.prompts.health_assistant import build_system_instruction
-from app.repositories.health_record_repository import HealthRecordRepository
 from app.services.health_assistant_safety import HealthAssistantSafetyService
+from app.services.health_record_tools import (
+    QUERY_HEALTH_RECORDS_TOOL_NAME,
+    execute_health_record_tool,
+    get_health_record_tools,
+)
+from app.services.health_records import HealthRecordService
 from app.services.medical_facility_client import MedicalFacilityClient
 from app.services.medical_facility_tools import (
     execute_facility_tool,
@@ -131,14 +140,36 @@ class HealthAssistantService:
         llm_client: LLMClientProtocol | None = None,
         safety_service: HealthAssistantSafetyService | None = None,
         facility_client: MedicalFacilityClient | None = None,
-        record_repo: HealthRecordRepository | None = None,
+        health_record_service: HealthRecordService | None = None,
         outdoor_conditions_client: OutdoorConditionsClientProtocol | None = None,
     ):
         self._llm_client = llm_client
         self.safety_service = safety_service or HealthAssistantSafetyService()
         self.facility_client = facility_client or MedicalFacilityClient()
-        self.record_repo = record_repo
+        self.health_record_service = health_record_service
         self.outdoor_conditions_client = outdoor_conditions_client or OutdoorConditionsClient()
+
+    @staticmethod
+    def _needs_health_record_query_tool(request: HealthAssistantChatRequest) -> bool:
+        """1차 수직 슬라이스인 기간별 혈압 기준 초과 일수 질문만 연다."""
+
+        if not request.messages:
+            return False
+        message = request.messages[-1].content.replace(" ", "")
+        # 현재 도구 스키마는 1~12개월의 rolling period만 표현한다. "최근"처럼
+        # 길이가 불명확하거나 "작년"처럼 달력 구간인 표현을 임의 개월 수로 바꾸지 않는다.
+        has_period = re.search(r"(?<!\d)(?:[1-9]|1[0-2])개월", message) is not None
+        has_threshold = any(word in message for word in ("넘", "초과", "이상"))
+        has_day_count = any(word in message for word in ("며칠", "몇일", "몇번", "몇회", "날이", "날은"))
+        return "혈압" in message and has_period and has_threshold and has_day_count
+
+    @classmethod
+    def _tools_for_request(cls, request: HealthAssistantChatRequest) -> Any:
+        if cls._needs_health_record_query_tool(request):
+            return get_health_record_tools()
+        if cls._needs_facility_tools(request):
+            return get_facility_tools()
+        return None
 
     @staticmethod
     def _needs_facility_tools(request: HealthAssistantChatRequest) -> bool:
@@ -339,36 +370,59 @@ class HealthAssistantService:
             lines.append("일부 조회 실패: " + "; ".join(result.errors))
         return "\n".join(lines) or "실시간 야외 환경 정보를 불러오지 못했습니다."
 
-    async def _enrich_context(self, context: ProfileContext | None) -> ProfileContext | None:
-        if context is None or context.recent_records_summary or not context.profile_id or not self.record_repo:
-            return context
-        try:
-            records = await self.record_repo.list_by_profile(context.profile_id, limit=5)
-            if records:
-                summaries = []
-                for r in records:
-                    date_str = r.recorded_at.strftime("%Y-%m-%d")
-                    summaries.append(f"[{date_str}] {r.record_type}: {r.payload}")
-                context.recent_records_summary = "; ".join(summaries)[:2000]
-        except Exception:
-            pass
-        return context
-
     @property
     def llm_client(self) -> LLMClientProtocol:
         if self._llm_client is None:
             self._llm_client = shared_chat_client()
         return self._llm_client
 
-    async def _execute_tool(self, name: str, args: dict[str, Any]) -> Any:
+    async def _execute_tool(
+        self,
+        name: str,
+        args: dict[str, Any],
+        *,
+        account: ServiceAccount | None = None,
+        profile_id: uuid.UUID | None = None,
+    ) -> Any:
+        if name == QUERY_HEALTH_RECORDS_TOOL_NAME:
+            if account is None or profile_id is None or self.health_record_service is None:
+                raise ValueError("건강기록 조회에 필요한 인증 프로필 정보가 없습니다.")
+            return await execute_health_record_tool(
+                name,
+                args,
+                account=account,
+                profile_id=profile_id,
+                record_service=self.health_record_service,
+            )
         return await execute_facility_tool(name, args, self.facility_client)
 
-    async def respond(self, request: HealthAssistantChatRequest) -> HealthAssistantResponse:
+    @staticmethod
+    def _profile_required_response() -> HealthAssistantResponse:
+        return HealthAssistantResponse(
+            intent="query_records",
+            assistant_message="건강기록을 조회할 대상을 확인할 수 없습니다. 먼저 대화할 프로필을 선택해 주세요.",
+            missing_fields=["profile_id"],
+            needs_confirmation=False,
+        )
+
+    async def respond(
+        self,
+        request: HealthAssistantChatRequest,
+        account: ServiceAccount | None = None,
+    ) -> HealthAssistantResponse:
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
             return safety_check
 
-        profile_context = await self._enrich_context(request.profile_context)
+        profile_context = request.profile_context
+        needs_health_query = self._needs_health_record_query_tool(request)
+        if needs_health_query and (
+            profile_context is None
+            or profile_context.profile_id is None
+            or account is None
+            or self.health_record_service is None
+        ):
+            return self._profile_required_response()
         loc = await self._resolve_request_location(request)
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
@@ -379,9 +433,17 @@ class HealthAssistantService:
             else None,
         )
 
-        tools = get_facility_tools() if self._needs_facility_tools(request) else None
+        tools = self._tools_for_request(request)
         response: HealthAssistantResponse
         client_any = cast(Any, self.llm_client)
+
+        async def tool_executor(name: str, args: dict[str, Any]) -> Any:
+            return await self._execute_tool(
+                name,
+                args,
+                account=account,
+                profile_id=profile_context.profile_id if profile_context else None,
+            )
 
         if tools and hasattr(client_any, "generate_structured_response_with_tools"):
             res_tuple = await client_any.generate_structured_response_with_tools(
@@ -389,12 +451,16 @@ class HealthAssistantService:
                 messages=request.messages,
                 response_schema=HealthAssistantResponse,
                 tools=tools,
-                tool_executor=self._execute_tool,
+                tool_executor=tool_executor,
             )
             response, tool_result = res_tuple
-            if tool_result and not response.facility_search_draft:
+            if isinstance(tool_result, HealthRecordQueryResult):
+                response.intent = "query_records"
+                response.health_record_query_result = tool_result
+                response.assistant_message = tool_result.message
+            elif isinstance(tool_result, FacilitySearchResult) and not response.facility_search_draft:
                 response.facility_search_draft = tool_result
-                if getattr(tool_result, "message", None):
+                if tool_result.message:
                     response.assistant_message = tool_result.message
         else:
             response = await self.llm_client.generate_structured_response(
@@ -408,14 +474,29 @@ class HealthAssistantService:
         validated_response = self.safety_service.validate_response(response)
         return validated_response
 
-    async def stream(self, request: HealthAssistantChatRequest) -> AsyncIterator[tuple[str, Any]]:
+    async def stream(  # noqa: C901 - 안전·도구·SSE 종료 경로를 한 상태기계에서 다룬다.
+        self,
+        request: HealthAssistantChatRequest,
+        account: ServiceAccount | None = None,
+    ) -> AsyncIterator[tuple[str, Any]]:
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
             yield "delta", {"text": safety_check.assistant_message}
             yield "result", safety_check.model_dump(mode="json")
             return
 
-        profile_context = await self._enrich_context(request.profile_context)
+        profile_context = request.profile_context
+        needs_health_query = self._needs_health_record_query_tool(request)
+        if needs_health_query and (
+            profile_context is None
+            or profile_context.profile_id is None
+            or account is None
+            or self.health_record_service is None
+        ):
+            response = self._profile_required_response()
+            yield "delta", {"text": response.assistant_message}
+            yield "result", response.model_dump(mode="json")
+            return
         loc = await self._resolve_request_location(request)
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
@@ -429,8 +510,16 @@ class HealthAssistantService:
         raw = ""
         tool_result = None
 
-        tools = get_facility_tools() if self._needs_facility_tools(request) else None
+        tools = self._tools_for_request(request)
         client_any = cast(Any, self.llm_client)
+
+        async def tool_executor(name: str, args: dict[str, Any]) -> Any:
+            return await self._execute_tool(
+                name,
+                args,
+                account=account,
+                profile_id=profile_context.profile_id if profile_context else None,
+            )
 
         if tools and hasattr(client_any, "stream_structured_response_with_tools"):
             stream_gen, tool_result = await client_any.stream_structured_response_with_tools(
@@ -438,7 +527,7 @@ class HealthAssistantService:
                 messages=request.messages,
                 response_schema=HealthAssistantResponse,
                 tools=tools,
-                tool_executor=self._execute_tool,
+                tool_executor=tool_executor,
             )
         else:
             stream_gen = self.llm_client.stream_structured_response(
@@ -447,7 +536,18 @@ class HealthAssistantService:
                 response_schema=HealthAssistantResponse,
             )
 
-        if tool_result is not None:
+        if isinstance(tool_result, HealthRecordQueryResult):
+            yield "delta", {"text": tool_result.message}
+            res_obj = HealthAssistantResponse(
+                intent="query_records",
+                assistant_message=tool_result.message,
+                health_record_query_result=tool_result,
+                outdoor_conditions=outdoor_conditions,
+            )
+            yield "result", self.safety_service.validate_response(res_obj).model_dump(mode="json")
+            return
+
+        if isinstance(tool_result, FacilitySearchResult):
             payload = tool_result.model_dump(mode="json") if hasattr(tool_result, "model_dump") else tool_result
             yield "facility", payload
             summary_msg = getattr(tool_result, "message", None) or "주변 의료시설을 조회했습니다."
@@ -469,7 +569,7 @@ class HealthAssistantService:
 
         try:
             parsed = HealthAssistantResponse.model_validate_json(raw)
-            if tool_result and not parsed.facility_search_draft:
+            if isinstance(tool_result, FacilitySearchResult) and not parsed.facility_search_draft:
                 parsed.facility_search_draft = tool_result
             if outdoor_conditions and not parsed.outdoor_conditions:
                 parsed.outdoor_conditions = outdoor_conditions

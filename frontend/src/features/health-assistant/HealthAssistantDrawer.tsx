@@ -738,6 +738,7 @@ export function HealthAssistantDrawer({
         promptMessages,
         applyDelta,
         {
+          profile_id: profile.id,
           profile_name: profile.displayName,
           relationship: profile.relationship,
           birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
@@ -871,6 +872,7 @@ export function HealthAssistantDrawer({
 
       const shouldExecuteQuery =
         Boolean(runtime) &&
+        !res.health_record_query_result &&
         (res.intent === "query_records" || isExplicitDocRequest || isTrendRequest || isExplicitRecordQuery);
 
       if (shouldExecuteQuery) {

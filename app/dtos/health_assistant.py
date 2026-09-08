@@ -3,6 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.dtos.health_record_query import HealthRecordQueryResult
 from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
 
@@ -16,10 +17,11 @@ class ChatMessage(BaseModel):
 
 
 class ProfileContext(BaseModel):
-    """클라이언트가 채워 보내는 값. **시스템 지시문에 그대로 삽입된다**
-    (`prompts.health_assistant.build_system_instruction`). 로컬 우선 구조라
-    서버가 기록을 갖고 있지 않아 클라이언트가 보내는 것은 맞지만, 그만큼
-    길이를 묶어 두지 않으면 지시문을 통째로 덮어쓸 수 있다."""
+    """현재 대화 대상과 조건부 최소 컨텍스트.
+
+    ``profile_id``는 권한 확인에만 사용하고 시스템 지시문에는 넣지 않는다.
+    표시용 문자열과 최근 요약은 프롬프트 경계에 들어가므로 길이를 제한한다.
+    """
 
     profile_id: uuid.UUID | None = Field(default=None, description="서버 프로필 ID (선택)")
     profile_name: str = Field(max_length=100)
@@ -200,6 +202,10 @@ class HealthAssistantResponse(BaseModel):
     )
     lab_result_draft: LabResultDraft | None = Field(default=None, description="검사/검진 서류 결과 초안")
     query_draft: QueryDraft | None = Field(default=None, description="기록 조회 조건 초안")
+    health_record_query_result: HealthRecordQueryResult | None = Field(
+        default=None,
+        description="PostgreSQL이 계산한 장기 건강기록 조건별 집계 결과",
+    )
     challenge_draft: ChallengeDraft | None = Field(default=None, description="챌린지 생성·조정·완료 초안")
     outdoor_conditions: OutdoorConditionsResult | None = Field(
         default=None,

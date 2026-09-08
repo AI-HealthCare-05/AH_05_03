@@ -25,8 +25,11 @@ from app.dtos.health_assistant import (
 )
 from app.models.service_accounts import ServiceAccount
 from app.repositories.health_record_repository import HealthRecordRepository
+from app.repositories.household_repository import HouseholdRepository
+from app.repositories.profile_repository import ProfileRepository
 from app.services.chat_session_service import ChatSessionService
 from app.services.health_assistant import HealthAssistantService
+from app.services.health_records import HealthRecordService
 from app.services.rate_limit import RateLimiter
 
 health_assistant_router = APIRouter(prefix="/health-assistant", tags=["health-assistant"])
@@ -48,7 +51,14 @@ _ERRORS = (
 def get_health_assistant_service(
     session: SessionDep,
 ) -> HealthAssistantService:
-    return HealthAssistantService(record_repo=HealthRecordRepository(session))
+    record_repo = HealthRecordRepository(session)
+    record_service = HealthRecordService(
+        session=session,
+        record_repo=record_repo,
+        profile_repo=ProfileRepository(session),
+        household_repo=HouseholdRepository(session),
+    )
+    return HealthAssistantService(health_record_service=record_service)
 
 
 @health_assistant_router.post(
@@ -79,7 +89,7 @@ async def chat_with_assistant(
             content=request.messages[-1].content,
         )
 
-    data = await service.respond(request)
+    data = await service.respond(request, account)
 
     if request.session_id is not None:
         await chat_session_service.add_message(
@@ -137,7 +147,7 @@ async def stream_chat_with_assistant(
     async def frames() -> AsyncIterator[str]:
         final_payload: dict[str, Any] | None = None
         try:
-            async for name, payload in service.stream(request):
+            async for name, payload in service.stream(request, account):
                 if name == "result" and isinstance(payload, dict):
                     final_payload = payload
                 body = json.dumps(payload, ensure_ascii=False)
