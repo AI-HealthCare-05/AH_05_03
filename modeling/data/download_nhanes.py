@@ -62,6 +62,12 @@ STEMS: list[tuple[str, str]] = [
     ("TRIGLY", "triglycerides, LDL"),
     ("BIOPRO", "creatinine for eGFR, liver enzymes, GGT, uric acid"),
     ("CBC", "haemoglobin for the anaemia label"),
+    # 만성염증 라벨. **파일 이름이 두 벌이다** — 2005-2010 은 `CRP`(mg/dL, 구형),
+    # 2015-2023 은 `HSCRP`(mg/L, 고감도). 2011-2014 는 둘 다 없어 404 로 빠진다.
+    # 여섯 파일이 이미 `raw/` 에 있었지만 여기 등록이 안 돼 있어서, 원본을 다시
+    # 받으면 조용히 사라지는 상태였다.
+    ("CRP", "C-reactive protein, 2005-2010 only (mg/dL, older assay)"),
+    ("HSCRP", "high-sensitivity CRP, 2015-2023 (mg/L) — the chronic inflammation label"),
     ("ALB_CR", "urine albumin-to-creatinine ratio, the second KDIGO criterion"),
     ("LUX", "liver elastography CAP, measured hepatic steatosis (2017-2018 and 2021-2023 only)"),
     ("DIQ", "self-reported diabetes diagnosis and medication"),

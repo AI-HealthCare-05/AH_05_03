@@ -121,6 +121,16 @@ export const FIELD_GROUPS: FieldGroup[] = [
       { name: "hemoglobin", label: "혈색소", kind: "number", unit: "g/dL", min: 3, max: 25, step: 0.1 },
       { name: "albumin", label: "알부민", kind: "number", unit: "g/dL", min: 1, max: 7, step: 0.1 },
       { name: "urine_acr", label: "요알부민/크레아티닌비", kind: "number", unit: "mg/g", min: 0, max: 20000 },
+      {
+        name: "crp",
+        label: "고감도 CRP",
+        kind: "number",
+        unit: "mg/L",
+        min: 0.01,
+        max: 500,
+        step: 0.01,
+        hint: "국가건강검진에는 없고 종합검진에서 나옵니다. 없으면 비워 두세요 — 모델이 대신 추정합니다",
+      },
     ],
   },
   {
@@ -230,6 +240,7 @@ export const LAB_FIELDS = [
   "hemoglobin",
   "albumin",
   "urine_acr",
+  "crp",
 ];
 
 /**
@@ -272,6 +283,7 @@ export const DISEASE_MEASURES: Record<string, string[]> = {
   liver: ["ast", "alt", "ggt"],
   anemia: ["hemoglobin"],
   uric_acid: ["uric_acid"],
+  inflammation: ["crp"],
 };
 
 /** 라벨 옆에 붙일 단위. 카드가 "149" 만 띄우면 무엇의 149 인지 알 수 없다. */

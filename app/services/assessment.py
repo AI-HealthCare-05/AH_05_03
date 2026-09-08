@@ -136,6 +136,10 @@ SPECS: tuple[DiseaseSpec, ...] = (
     DiseaseSpec("liver", "간기능", "liver", "E1", "liver_enzyme_high"),
     DiseaseSpec("anemia", "빈혈", "anemia", "E1", "anemia"),
     DiseaseSpec("uric_acid", "요산", "uric_acid", "E1", "hyperuricemia"),
+    # 라벨이 고감도 CRP 라 규칙 쪽도 같은 값을 본다(`lab_staging.evaluate_inflammation`).
+    # CRP 는 국가건강검진 밖이라 대부분의 사용자는 안 갖고 있고, 그래서 이 카드는
+    # ML 이 답하는 자리가 실제로 있다 — 빈혈·고요산혈증과 같은 꼴이다.
+    DiseaseSpec("inflammation", "만성염증", "inflammation", "E1", "inflammation"),
 )
 
 SPEC_BY_KEY = {spec.key: spec for spec in SPECS}
@@ -433,7 +437,16 @@ def arbitrate(
                     recommendation="정확히 알려면 해당 검사를 받아 값을 입력해 주세요.",
                     input_values={},
                     missing_fields=list((domain or {}).get("missing_fields", [])),
-                    flags=["측정하지 않고 추정한 등급이라 최고 등급(VERY_HIGH)은 나오지 않습니다."],
+                    # **결정론 엔진이 침묵하며 남긴 말은 버리지 않는다.**
+                    # 값이 없어서 못 답한 경우에는 남길 것이 없지만, 값이 있는데도
+                    # 등급을 안 매긴 경우가 있다 — 만성염증의 급성 구간(CRP>10)이
+                    # 그렇다. 규칙 엔진은 "2주 뒤 재측정" 이라는 가장 행동에 가까운
+                    # 말을 남기고 물러나는데, 그걸 안 옮기면 CRP 15 를 넣은 사람이
+                    # 그 문장을 영영 못 본다(실측으로 사라지고 있었다).
+                    flags=[
+                        *(domain or {}).get("flags", []),
+                        "측정하지 않고 추정한 등급이라 최고 등급(VERY_HIGH)은 나오지 않습니다.",
+                    ],
                     superseded_by=None,
                     reference=_ml_reference(condition),
                 )

@@ -264,4 +264,5 @@ export const DISEASE_NAMES: Record<string, string> = {
   liver: "간기능",
   anemia: "빈혈",
   uric_acid: "요산",
+  inflammation: "만성염증",
 };
