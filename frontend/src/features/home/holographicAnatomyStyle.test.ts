@@ -7,6 +7,7 @@ import {
   createAdaptiveFlowGuideMaterial,
   createFocusPresets,
   createHolographicMaterials,
+  createHoverMaterials,
   createMatteScalpMaterials,
   createPaintStrokeMaterials,
   createRegionalBoundaryMaterial,
@@ -211,5 +212,14 @@ describe("focused anatomy camera zoom-out return", () => {
     expect(paintMat.color.getHexString()).toBe("f43f5e");
     expect(paintMat.emissive.getHexString()).toBe("be123c");
     expect(paintMat.emissiveIntensity).toBeCloseTo(0.85);
+  });
+
+  it("마우스 오버 재질은 고대비 앰버/골드 계열 하이라이트를 적용한다", () => {
+    const source = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+    const hoverMat = createHoverMaterials(source) as THREE.MeshStandardMaterial;
+
+    expect(hoverMat.color.getHexString()).toBe("f59e0b");
+    expect(hoverMat.emissive.getHexString()).toBe("d97706");
+    expect(hoverMat.emissiveIntensity).toBeCloseTo(0.85);
   });
 });

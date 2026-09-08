@@ -1526,21 +1526,42 @@ main {
 }
 
 .body-map-selection {
-  margin-top: 22px;
-  display: grid;
-  gap: 5px;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   border-top: 1px solid var(--line-soft);
-  padding-top: 18px;
+  padding-top: 14px;
+  min-height: 104px;
+  box-sizing: border-box;
 }
 
-.body-map-selection span,
-.body-map-selection small {
+.body-map-selection span {
   color: var(--muted);
   font-size: 0.75rem;
+  line-height: 1.2;
 }
 
 .body-map-selection strong {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  min-height: 2.7em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: keep-all;
+}
+
+.body-map-selection small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  min-height: 2.7em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .body-map-viewer {
@@ -1601,15 +1622,24 @@ main {
 }
 
 .vanatome-card {
-  min-height: 520px;
-  align-items: start;
+  min-height: 620px;
+  height: 100%;
+  align-items: stretch;
+  grid-template-columns: minmax(320px, 360px) 1fr;
+}
+
+.vanatome-card .body-map-copy {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  max-height: 100%;
 }
 
 .vanatome-viewer {
-  height: clamp(520px, 70vh, 760px);
-  min-height: 520px;
-  max-height: 760px;
-  align-self: start;
+  height: clamp(620px, 75vh, 860px);
+  min-height: 620px;
+  max-height: 860px;
+  align-self: stretch;
   overflow: hidden;
   background: radial-gradient(circle at center, #f9fbff 0, #edf3ff 72%, #e8f0fd 100%);
 }

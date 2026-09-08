@@ -236,6 +236,34 @@ export function createPaintStrokeMaterials(source: THREE.Material | THREE.Materi
   return Array.isArray(source) ? highlighted : highlighted[0];
 }
 
+const HOVER_COLOR = new THREE.Color(0xf59e0b);
+
+export function createHoverMaterials(source: THREE.Material | THREE.Material[]) {
+  const highlighted = materialsOf(source).map((material) => {
+    const clone = material.clone();
+    if (
+      clone instanceof THREE.MeshStandardMaterial ||
+      clone instanceof THREE.MeshLambertMaterial ||
+      clone instanceof THREE.MeshBasicMaterial
+    ) {
+      if ("vertexColors" in clone) clone.vertexColors = false;
+      clone.color.copy(HOVER_COLOR);
+      if ("emissive" in clone) {
+        (clone as THREE.MeshStandardMaterial).emissive.setHex(0xd97706);
+        (clone as THREE.MeshStandardMaterial).emissiveIntensity = 0.85;
+      }
+      clone.opacity = 1.0;
+      clone.transparent = false;
+      clone.wireframe = false;
+      clone.depthTest = true;
+      clone.depthWrite = true;
+      clone.needsUpdate = true;
+    }
+    return clone;
+  });
+  return Array.isArray(source) ? highlighted : highlighted[0];
+}
+
 export function materialsOf(material: THREE.Material | THREE.Material[]) {
   return Array.isArray(material) ? material : [material];
 }

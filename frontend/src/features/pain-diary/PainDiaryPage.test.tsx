@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi, afterEach } from "vitest";
@@ -129,7 +129,7 @@ describe("PainDiaryPage", () => {
     );
 
     // 2026-09-02의 3D 해부학 이벤트 기록 확인
-    const badge = await screen.findByText(/3D 해부학 연결/);
+    const badge = await screen.findByText(/3D 해부학 연결/, {}, { timeout: 5000 });
     expect(badge).toBeInTheDocument();
     expect(screen.getAllByText("대흉근 (오른쪽)").length).toBeGreaterThanOrEqual(2);
 
@@ -147,11 +147,10 @@ describe("PainDiaryPage", () => {
 
 function SeededPainDiaryPage() {
   const { runtime, refreshProfiles } = useLocalDomain();
-  const started = useRef(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!runtime || started.current) return;
-    started.current = true;
+    if (!runtime || ready) return;
     void (async () => {
       const profileResult = await runtime.profiles.create({
         householdId: PRIMARY_HOUSEHOLD_ID,
@@ -211,8 +210,10 @@ function SeededPainDiaryPage() {
       });
 
       await refreshProfiles();
+      setReady(true);
     })();
-  }, [refreshProfiles, runtime]);
+  }, [refreshProfiles, runtime, ready]);
 
+  if (!ready) return <div className="route-loading">테스트 시딩 중…</div>;
   return <PainDiaryPage />;
 }

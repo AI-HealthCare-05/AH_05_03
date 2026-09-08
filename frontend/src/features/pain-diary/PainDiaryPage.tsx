@@ -74,6 +74,10 @@ export function PainDiaryPage() {
   const [bodyArea, setBodyArea] = useState("");
   const [anatomyEvent, setAnatomyEvent] = useState<AnatomyEvent | undefined>();
   const [show3DSelector, setShow3DSelector] = useState(false);
+  const [stagedStructure, setStagedStructure] = useState<{
+    name: string;
+    anatomyEvent?: AnatomyEvent;
+  } | null>(null);
   const [intensity, setIntensity] = useState<number>(5);
   const [sensation, setSensation] = useState("");
   const [aggravatingFactors, setAggravatingFactors] = useState("");
@@ -465,9 +469,12 @@ export function PainDiaryPage() {
                     type="button"
                     className="secondary-button"
                     style={{ fontSize: "0.82rem", padding: "3px 8px" }}
-                    onClick={() => setShow3DSelector(true)}
+                    onClick={() => {
+                      setStagedStructure(null);
+                      setShow3DSelector(true);
+                    }}
                   >
-                    🩺 3D 모델에서 선택
+                    3D 모델에서 선택
                   </button>
                 </div>
                 <input
@@ -746,7 +753,8 @@ export function PainDiaryPage() {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -760,13 +768,14 @@ export function PainDiaryPage() {
             style={{
               background: "#ffffff",
               borderRadius: "16px",
-              maxWidth: "720px",
-              width: "100%",
-              maxHeight: "90vh",
+              maxWidth: "1160px",
+              width: "94vw",
+              height: "90vh",
+              maxHeight: "92vh",
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -779,32 +788,97 @@ export function PainDiaryPage() {
                 alignItems: "center",
               }}
             >
-              <h3 style={{ margin: 0, fontSize: "1.1rem" }}>3D 인체 모델에서 통증 부위 선택</h3>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#111827" }}>
+                  3D 인체 모델에서 통증 부위 선택
+                </h3>
+                <p style={{ margin: "2px 0 0 0", fontSize: "0.82rem", color: "#6b7280" }}>
+                  마우스를 올려 부위를 확인하고 클릭하거나 통증 범위를 칠하세요. 선택 완료 버튼을 눌러야 반영됩니다.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShow3DSelector(false)}
-                style={{ background: "none", border: "none", fontSize: "1.2rem", cursor: "pointer", color: "#6b7280" }}
+                style={{ background: "none", border: "none", fontSize: "1.3rem", cursor: "pointer", color: "#6b7280", padding: "4px" }}
               >
                 ✕
               </button>
             </div>
-            <div style={{ padding: "16px", overflowY: "auto", flex: 1 }}>
-              <p style={{ margin: "0 0 12px 0", fontSize: "0.88rem", color: "#4b5563" }}>
-                신체 모델을 회전/확대하고 원하는 부위를 클릭하면 통증 부위와 해부학 이벤트가 자동으로 연결됩니다.
-              </p>
+            <div style={{ padding: "12px 16px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column" }}>
               <Suspense fallback={<div className="body-map-loading">3D 인체 모델을 불러오는 중…</div>}>
                 <VanatomeBodyMap
                   profileName={selectedProfile?.displayName ?? "가족"}
                   gender={selectedProfile?.gender}
                   onStructureSelect={(structure) => {
-                    if (structure) {
-                      setBodyArea(structure.name);
-                      setAnatomyEvent(structure.anatomyEvent);
-                      setShow3DSelector(false);
-                    }
+                    setStagedStructure(structure ?? null);
                   }}
                 />
               </Suspense>
+            </div>
+            <div
+              style={{
+                padding: "12px 20px",
+                borderTop: "1px solid #e5e7eb",
+                background: "#f9fafb",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: "220px", fontSize: "0.88rem" }}>
+                {stagedStructure ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontWeight: 600, color: "#1e40af" }}>반영 예정:</span>
+                    <span style={{ color: "#1f2937", fontWeight: 500 }}>{stagedStructure.name}</span>
+                  </div>
+                ) : (
+                  <span style={{ color: "#9ca3af" }}>부위를 클릭하거나 '통증 범위 칠하기'로 선택해 주세요.</span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setShow3DSelector(false)}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #d1d5db",
+                    background: "#ffffff",
+                    color: "#4b5563",
+                    fontSize: "0.88rem",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                  }}
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  disabled={!stagedStructure}
+                  onClick={() => {
+                    if (stagedStructure) {
+                      setBodyArea(stagedStructure.name);
+                      setAnatomyEvent(stagedStructure.anatomyEvent);
+                    }
+                    setShow3DSelector(false);
+                  }}
+                  style={{
+                    padding: "8px 18px",
+                    borderRadius: "8px",
+                    border: "none",
+                    background: stagedStructure ? "linear-gradient(135deg, #2563eb, #1d4ed8)" : "#9ca3af",
+                    color: "#ffffff",
+                    fontSize: "0.88rem",
+                    fontWeight: 600,
+                    cursor: stagedStructure ? "pointer" : "not-allowed",
+                    boxShadow: stagedStructure ? "0 2px 4px rgba(37, 99, 235, 0.2)" : "none",
+                  }}
+                >
+                  선택 완료
+                </button>
+              </div>
             </div>
           </div>
         </div>
