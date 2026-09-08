@@ -12,12 +12,14 @@ import {
   lazyLayersForFocus,
   loadAnatomyAtlasManifest,
   loadAnatomyMetadata,
+  readableStructureName,
   type AnatomyAtlasAsset,
   type AnatomyFocus,
   type AnatomyAtlasId,
   type AnatomyAtlasManifest,
   type AnatomyLazyLayer,
 } from "./anatomyAtlas";
+import { createAnatomyEvent, type AnatomyEvent } from "./anatomyEventContracts";
 import {
   applyCostalCartilageStyle,
   createAdaptiveFlowGuideMaterial,
@@ -34,7 +36,11 @@ import { ProceduralBodyMap } from "./ProceduralBodyMap";
 import { fetchCachedAnatomyResource } from "./anatomyResourceCache";
 import type { RegionRisk } from "./bodyRisk";
 
-type SelectedStructure = { name: string; system?: string };
+export type SelectedStructure = {
+  name: string;
+  system?: string;
+  anatomyEvent?: AnatomyEvent;
+};
 type BodyFocus = AnatomyFocus | "leftHand" | "rightHand";
 type HandPose = "Open Hand" | "Fist" | "Spread" | "Point";
 
@@ -78,13 +84,19 @@ const DEFAULT_ANATOMY_ATLAS: AnatomyAtlasId = "vanatome-male-reference";
 export function VanatomeBodyMap({
   profileName,
   gender,
+  onStructureSelect,
 }: {
   profileName: string;
   gender?: "male" | "female" | null;
   risks?: RegionRisk[];
   risksAt?: string;
+  onStructureSelect?: (structure: SelectedStructure | undefined) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const onStructureSelectRef = useRef(onStructureSelect);
+  useEffect(() => {
+    onStructureSelectRef.current = onStructureSelect;
+  }, [onStructureSelect]);
   const clearSelectionRef = useRef<() => void>(() => undefined);
   const focusCameraRef = useRef<(focus: BodyFocus) => void>(() => undefined);
   const pelvicOrganFocusRef = useRef<(active: boolean) => void>(() => undefined);
@@ -147,7 +159,10 @@ export function VanatomeBodyMap({
             setLoadError(undefined);
           },
           onWebGlUnavailable: () => setWebGlUnavailable(true),
-          onSelectedStructure: setSelectedStructure,
+          onSelectedStructure: (structure) => {
+            setSelectedStructure(structure);
+            onStructureSelectRef.current?.(structure);
+          },
           onFocusChange: setActiveFocus,
           onSystemsReady: setReadySystems,
           initialHiddenSystems,
@@ -709,9 +724,57 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     const mesh = hit.object;
     mesh.material = createSelectedMaterials(mesh.material);
     selectedMesh = mesh;
+
+    const structureLabel = String(mesh.userData.structureLabel ?? readableStructureName(mesh.name));
+    const structureSystem = systemLabel(String(mesh.userData.structureSystem ?? ""));
+    const rawSystem = String(mesh.userData.structureSystem ?? "regional-anatomy");
+    const anatomyId = String(mesh.userData.anatomyId ?? mesh.name);
+    const sourceKey = String(mesh.userData.sourceKey ?? `vanatome:${manifest.id}:${manifest.version}:${mesh.name}`);
+
+    let anatomyEvent: AnatomyEvent | undefined;
+    try {
+      anatomyEvent = createAnatomyEvent({
+        atlas: {
+          id: manifest.id,
+          version: manifest.version,
+          referenceSex: manifest.referenceSex,
+        },
+        concept: {
+          canonicalConceptId: anatomyId,
+          sourceKey,
+          sourceMeshId: mesh.name,
+          label: structureLabel,
+          system: rawSystem,
+          mappingStatus: anatomyId ? "canonical" : "source_fallback",
+        },
+        geometry: {
+          coordinateSpace: "world",
+          point: [
+            Number(hit.point.x.toFixed(4)),
+            Number(hit.point.y.toFixed(4)),
+            Number(hit.point.z.toFixed(4)),
+          ],
+          normal: hit.normal
+            ? [
+                Number(hit.normal.x.toFixed(4)),
+                Number(hit.normal.y.toFixed(4)),
+                Number(hit.normal.z.toFixed(4)),
+              ]
+            : undefined,
+          faceIndex: typeof hit.faceIndex === "number" ? hit.faceIndex : undefined,
+          distance: typeof hit.distance === "number" ? Number(hit.distance.toFixed(4)) : undefined,
+        },
+        inputSource: "tap",
+        state: "confirmed",
+      });
+    } catch {
+      // safe fallback
+    }
+
     onSelectedStructure({
-      name: String(mesh.userData.structureLabel ?? "선택한 해부 구조"),
-      system: systemLabel(String(mesh.userData.structureSystem ?? "")),
+      name: structureLabel,
+      system: structureSystem,
+      anatomyEvent,
     });
     renderScene();
   };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
@@ -6,7 +6,14 @@ import type { HealthRecord } from "../../shared/local/domainContracts";
 import { FamilyProfileSidebar } from "../family/FamilyProfileSidebar";
 import { PRIMARY_HOUSEHOLD_ID } from "../health-assistant/healthAssistantLogic";
 import { sendHealthAssistantMessage } from "../health-assistant/healthAssistantClient";
+import type { AnatomyEvent } from "../home/anatomyEventContracts";
 import { NotionMarkdownEditor } from "./NotionMarkdownEditor";
+
+const VanatomeBodyMap = lazy(() =>
+  import("../home/VanatomeBodyMap").then((module) => ({
+    default: module.VanatomeBodyMap,
+  })),
+);
 
 interface PainPayload {
   type?: string;
@@ -16,6 +23,7 @@ interface PainPayload {
   aggravatingFactors?: string;
   note?: string;
   onsetAt?: string;
+  anatomyEvent?: AnatomyEvent;
 }
 
 function formatDateKey(date: Date): string {
@@ -64,6 +72,8 @@ export function PainDiaryPage() {
 
   // 폼 입력 상태
   const [bodyArea, setBodyArea] = useState("");
+  const [anatomyEvent, setAnatomyEvent] = useState<AnatomyEvent | undefined>();
+  const [show3DSelector, setShow3DSelector] = useState(false);
   const [intensity, setIntensity] = useState<number>(5);
   const [sensation, setSensation] = useState("");
   const [aggravatingFactors, setAggravatingFactors] = useState("");
@@ -144,6 +154,7 @@ export function PainDiaryPage() {
       setCurrentRecord(targetRecord);
       setSelectedRecordId(targetRecord.id);
       setBodyArea(payload.bodyArea || "");
+      setAnatomyEvent(payload.anatomyEvent);
       setIntensity(typeof payload.intensity === "number" ? payload.intensity : 5);
       setSensation(payload.sensation || "");
       setAggravatingFactors(payload.aggravatingFactors || "");
@@ -152,6 +163,7 @@ export function PainDiaryPage() {
       setCurrentRecord(null);
       setSelectedRecordId(null);
       setBodyArea("");
+      setAnatomyEvent(undefined);
       setIntensity(5);
       setSensation("");
       setAggravatingFactors("");
@@ -169,6 +181,7 @@ export function PainDiaryPage() {
   // 해당 일자에 새 기록 작성 시작
   const handleStartNewRecord = () => {
     setSelectedRecordId("__NEW__");
+    setAnatomyEvent(undefined);
     setFeedbackMessage(undefined);
     setError(undefined);
   };
@@ -262,6 +275,7 @@ export function PainDiaryPage() {
             sensation: sensation.trim() || undefined,
             aggravatingFactors: aggravatingFactors.trim() || undefined,
             note: note.trim() || undefined,
+            anatomyEvent: anatomyEvent || undefined,
           },
           expectedVersion: currentRecord.version,
         });
@@ -283,6 +297,7 @@ export function PainDiaryPage() {
             sensation: sensation.trim() || undefined,
             aggravatingFactors: aggravatingFactors.trim() || undefined,
             note: note.trim() || undefined,
+            anatomyEvent: anatomyEvent || undefined,
           },
         });
         if (!createRes.ok) throw new Error(createRes.error.message);
@@ -443,8 +458,18 @@ export function PainDiaryPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="diary-form">
-              <label className="form-group">
-                <span>통증 부위 *</span>
+              <div className="form-group">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                  <span>통증 부위 *</span>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ fontSize: "0.82rem", padding: "3px 8px" }}
+                    onClick={() => setShow3DSelector(true)}
+                  >
+                    🩺 3D 모델에서 선택
+                  </button>
+                </div>
                 <input
                   type="text"
                   placeholder="예: 오른쪽 무릎, 허리 아래쪽, 목 뒷덜미"
@@ -452,7 +477,43 @@ export function PainDiaryPage() {
                   onChange={(e) => setBodyArea(e.target.value)}
                   required
                 />
-              </label>
+                {anatomyEvent ? (
+                  <div
+                    className="anatomy-event-badge"
+                    style={{
+                      marginTop: "6px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "4px 10px",
+                      background: "rgba(37, 99, 235, 0.08)",
+                      border: "1px solid rgba(37, 99, 235, 0.25)",
+                      borderRadius: "6px",
+                      fontSize: "0.82rem",
+                      color: "#1d4ed8",
+                    }}
+                  >
+                    <span>
+                      🧬 3D 해부학 연결: <strong>{anatomyEvent.concept.label}</strong> ({anatomyEvent.concept.system})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAnatomyEvent(undefined)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "#6b7280",
+                        padding: "0 2px",
+                        fontSize: "0.9rem",
+                      }}
+                      title="3D 해부학 연결 해제"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : null}
+              </div>
 
               <div className="form-group">
                 <div className="intensity-header">
@@ -675,6 +736,79 @@ export function PainDiaryPage() {
           </aside>
         </div>
       </main>
+
+      {show3DSelector ? (
+        <div
+          className="dialog-backdrop"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "20px",
+          }}
+          onClick={() => setShow3DSelector(false)}
+        >
+          <div
+            className="dialog-card"
+            style={{
+              background: "#ffffff",
+              borderRadius: "16px",
+              maxWidth: "720px",
+              width: "100%",
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid #e5e7eb",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: "1.1rem" }}>3D 인체 모델에서 통증 부위 선택</h3>
+              <button
+                type="button"
+                onClick={() => setShow3DSelector(false)}
+                style={{ background: "none", border: "none", fontSize: "1.2rem", cursor: "pointer", color: "#6b7280" }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: "16px", overflowY: "auto", flex: 1 }}>
+              <p style={{ margin: "0 0 12px 0", fontSize: "0.88rem", color: "#4b5563" }}>
+                신체 모델을 회전/확대하고 원하는 부위를 클릭하면 통증 부위와 해부학 이벤트가 자동으로 연결됩니다.
+              </p>
+              <Suspense fallback={<div className="body-map-loading">3D 인체 모델을 불러오는 중…</div>}>
+                <VanatomeBodyMap
+                  profileName={selectedProfile?.displayName ?? "가족"}
+                  gender={selectedProfile?.gender}
+                  onStructureSelect={(structure) => {
+                    if (structure) {
+                      setBodyArea(structure.name);
+                      setAnatomyEvent(structure.anatomyEvent);
+                      setShow3DSelector(false);
+                    }
+                  }}
+                />
+              </Suspense>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
