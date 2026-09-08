@@ -36,6 +36,7 @@ import {
   ServerApiError,
   serverApiClient,
 } from "../../shared/api/serverApiClient";
+import type { LocalDocument } from "../../shared/local/domainContracts";
 import type { AssessmentSummaryData, RiskLevel } from "./contracts";
 import { LEVEL_ORDER } from "./contracts";
 import { DetailReport } from "./DetailReport";
@@ -149,12 +150,24 @@ export function AssessmentPage() {
     () => (location.state as { prefillSource?: "document" | "record" } | null)?.prefillSource,
   );
   const [values, setValues] = useState<Record<string, string>>(prefilled);
-  // 가족 홈에서 "검진표로 판정" 으로 들어왔는지. 켜져 있으면 왼쪽에 문서 패널이 선다.
-  const [withDocument] = useState(() =>
-    Boolean(
-      (location.state as { withDocument?: boolean } | null)?.withDocument,
-    ),
+  /**
+   * 검진표를 붙였는가. **화면을 가르는 것은 이제 진입 경로가 아니라 이 값이다.**
+   *
+   * 예전에는 가족 홈의 "검진표 올려서 판정" 이 넘겨준 `state.withDocument` 하나로
+   * 갈렸다. 그래서 같은 `/assessment` 인데 내비로 들어오면 **검진표를 올릴 자리가
+   * 아예 없었다** — 같은 주소가 두 화면이었고, 사용자는 왜 어떤 날은 업로드가
+   * 보이고 어떤 날은 안 보이는지 알 수 없었다.
+   *
+   * 지금은 언제나 올릴 수 있다. 문서가 없으면 폼 위에 얇게 앉고, 붙으면 왼쪽으로
+   * 펼쳐져 원본과 폼을 나란히 본다. 가족 홈에서 온 state 는 "그 의도로 들어왔다"
+   * 는 표시로만 남아 저장 출처(`ocr`)를 가른다.
+   */
+  const [document, setDocument] = useState<LocalDocument>();
+  const cameForDocument = useMemo(
+    () => Boolean((location.state as { withDocument?: boolean } | null)?.withDocument),
+    [location.state],
   );
+  const hasDocument = document !== undefined;
   // **어느 칸을 사람이 아니라 모델이 채웠는가.** 표시가 없으면 사용자는 자기가 적은
   // 값과 읽어 온 값을 구분하지 못해, 원본과 대조할 자리를 고를 수 없다.
   // 사용자가 그 칸을 고치는 순간 표시를 뗀다 — 그때부터는 사람이 쓴 값이다.
@@ -282,7 +295,7 @@ export function AssessmentPage() {
     setSaved(undefined);
     setKeeping(true);
     try {
-      await saveSnapshot(
+      const outcome = await saveSnapshot(
         runtime,
         activeProfileId,
         values,
@@ -290,10 +303,17 @@ export function AssessmentPage() {
         new Date().toISOString(),
         // 자동 저장과 같은 판정을 다른 출처로 적으면 안 된다. 나중에 "이 숫자는
         // 어디서 왔나" 를 되짚을 때 같은 판정이 두 출처로 남는다.
-        readFields.size > 0 || withDocument ? "ocr" : "manual",
+        readFields.size > 0 || hasDocument || cameForDocument ? "ocr" : "manual",
+        document?.id,
       );
       await reloadSnapshots();
-      setSaved("이 시점을 기록에 남겼습니다. 기기 안에만 저장됩니다.");
+      setSaved(
+        outcome.kind === "created"
+          ? "이 시점을 기록에 남겼습니다."
+          : outcome.kind === "changed"
+            ? `같은 값인데 등급이 달라져 ${outcome.run}차로 남겼어요. 모델이나 기준이 갱신됐다는 뜻입니다.`
+            : "바로 앞 기록과 값·등급이 같아 새로 남기지 않았어요. 수치를 고쳐 판정하면 새 시점이 됩니다.",
+      );
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "기록 저장에 실패했습니다.",
@@ -301,7 +321,7 @@ export function AssessmentPage() {
     } finally {
       setKeeping(false);
     }
-  }, [runtime, activeProfileId, result, values, reloadSnapshots, keeping, readFields, withDocument]);
+  }, [runtime, activeProfileId, result, values, reloadSnapshots, keeping, readFields, hasDocument, cameForDocument, document]);
 
   // 최근 창만 그린다. 이유는 `TREND_WINDOW` 설명 참조 — 보관함에는 다 남아 있다.
   const recent = useMemo(() => snapshots.slice(-TREND_WINDOW), [snapshots]);
@@ -457,17 +477,24 @@ export function AssessmentPage() {
         // 다시 모을 방법도 없다. 실패해도 판정 결과는 지키려고 따로 감싼다.
         if (runtime && activeProfileId) {
           try {
-            await saveSnapshot(
+            const outcome = await saveSnapshot(
               runtime,
               activeProfileId,
               values,
               data,
               new Date().toISOString(),
               // 검진표에서 한 칸이라도 읽어 왔으면 그 기록의 출처는 사람이 아니다.
-              readFields.size > 0 || withDocument ? "ocr" : "manual",
+              readFields.size > 0 || hasDocument || cameForDocument ? "ocr" : "manual",
+              document?.id,
             );
             await reloadSnapshots();
-            setSaved("판정 결과와 수치를 이 기기의 기록에 남겼어요.");
+            setSaved(
+              outcome.kind === "created"
+                ? "판정 결과와 수치를 기록에 남겼어요."
+                : outcome.kind === "changed"
+                  ? `같은 값인데 등급이 달라져 ${outcome.run}차로 남겼어요.`
+                  : "바로 앞 기록과 값·등급이 같아 새 기록을 만들지 않았어요.",
+            );
           } catch {
             setSaved(undefined);
             setError(
@@ -516,7 +543,9 @@ export function AssessmentPage() {
       activeProfileId,
       reloadSnapshots,
       readFields,
-      withDocument,
+      hasDocument,
+      cameForDocument,
+      document,
       markSignedOut,
     ],
   );
@@ -569,18 +598,18 @@ export function AssessmentPage() {
         </p>
       )}
 
-      <div
-        className={
-          withDocument ? "assess-workspace has-document" : "assess-workspace"
-        }
-      >
-        {withDocument && activeProfile ? (
+      <div className={hasDocument ? "assess-workspace has-document" : "assess-workspace"}>
+        {/* **언제 들어와도 올릴 수 있다.** 문서가 없으면 폼 위에 얇게 앉고, 붙으면
+            왼쪽으로 펼쳐져 원본과 폼을 나란히 본다 — 화면을 가르는 것은 진입
+            경로가 아니라 문서 유무다(위 `hasDocument` 머리말). */}
+        {activeProfile ? (
           <DocumentPane
             runtime={runtime}
             householdId={activeProfile.householdId}
             profileId={activeProfile.id}
             profileName={activeProfile.displayName}
             onRead={applyReading}
+            onDocument={setDocument}
           />
         ) : null}
 
@@ -910,8 +939,9 @@ export function AssessmentPage() {
                     {keeping ? "저장 중…" : "이 구성원의 기록으로 다시 남기기"}
                   </button>
                   <p className="assess-muted">
-                    입력값과 등급을 <strong>기기 안 암호화 보관함</strong>에만
-                    저장합니다. 서버는 판정을 저장하지 않습니다.
+                    입력값과 등급을 <strong>기기 안 암호화 보관함</strong>에 남기고,
+                    로그인한 계정의 <strong>서버 기록</strong>으로 동기화합니다 (ADR-011).
+                    같은 계정이면 다른 기기에서도 같은 기록을 봅니다.
                   </p>
                 </>
               )}
