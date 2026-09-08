@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import re
 import time
 import urllib.parse
 from datetime import datetime, timedelta
@@ -24,12 +25,16 @@ from app.dtos.outdoor_conditions import AirQualityConditions, OutdoorConditionsR
 class OutdoorConditionsClientProtocol(Protocol):
     async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult: ...
 
+    async def resolve_location(self, text: str) -> tuple[float, float, str] | None: ...
+
 
 _TIMEOUT_SECONDS = 5.0
 _CACHE_SECONDS = 600.0
 _SEOUL_TZ = ZoneInfo("Asia/Seoul")
 _KMA_ULTRA_SHORT_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
 _AIRKOREA_REALTIME_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getCtprvnRltmMesureDnsty"
+_KAKAO_KEYWORD_URL = "https://dapi.kakao.com/v2/local/search/keyword.json"
+_KAKAO_REGION_URL = "https://dapi.kakao.com/v2/local/geo/coord2regioncode.json"
 
 # 기상청 단기예보용 DFS 격자 상수.
 _RE = 6371.00877
@@ -51,6 +56,7 @@ _PRECIPITATION_TYPES = {
     "7": "눈날림",
 }
 _AIR_GRADES = {"1": "좋음", "2": "보통", "3": "나쁨", "4": "매우 나쁨"}
+_LOCATION_TOKEN_PATTERN = re.compile(r"[가-힣A-Za-z0-9·]{2,30}(?:역|숲|공원|산|해변|해수욕장|구|시|군|동|읍|면)")
 
 # AirKorea 시도별 실시간 조회를 위한 권역 중심점. 측정소는 API 응답에서 함께 받는다.
 _SIDO_CENTERS = {
@@ -72,12 +78,37 @@ _SIDO_CENTERS = {
     "경남": (35.4606, 128.2132),
     "제주": (33.4890, 126.4983),
 }
+_SIDO_ALIASES = {
+    "서울": ("서울특별시", "서울시", "서울"),
+    "부산": ("부산광역시", "부산시", "부산"),
+    "대구": ("대구광역시", "대구시", "대구"),
+    "인천": ("인천광역시", "인천시", "인천"),
+    "광주": ("광주광역시", "광주시", "광주"),
+    "대전": ("대전광역시", "대전시", "대전"),
+    "울산": ("울산광역시", "울산시", "울산"),
+    "세종": ("세종특별자치시", "세종시", "세종"),
+    "경기": ("경기도", "경기"),
+    "강원": ("강원특별자치도", "강원도", "강원"),
+    "충북": ("충청북도", "충북"),
+    "충남": ("충청남도", "충남"),
+    "전북": ("전북특별자치도", "전라북도", "전북"),
+    "전남": ("전라남도", "전남"),
+    "경북": ("경상북도", "경북"),
+    "경남": ("경상남도", "경남"),
+    "제주": ("제주특별자치도", "제주도", "제주"),
+}
 
 
 def resolve_sido_coordinates(text: str) -> tuple[str, float, float] | None:
     """텍스트에서 시도 명칭을 감지하여 대표 좌표(위도, 경도)를 반환한다."""
-    for sido, (lat, lon) in _SIDO_CENTERS.items():
-        if sido in text:
+    for sido, aliases in _SIDO_ALIASES.items():
+        for alias in aliases:
+            if re.search(rf"(?<![가-힣]){re.escape(alias)}(?![가-힣])", text):
+                lat, lon = _SIDO_CENTERS[sido]
+                return sido, lat, lon
+        short_name = aliases[-1]
+        if re.search(rf"{re.escape(short_name)}(?=날씨|미세먼지|초미세먼지|대기질|살아|살아요)", text):
+            lat, lon = _SIDO_CENTERS[sido]
             return sido, lat, lon
     return None
 
@@ -89,12 +120,14 @@ class OutdoorConditionsClient:
         self,
         kma_api_key: str | None = None,
         airkorea_api_key: str | None = None,
+        kakao_api_key: str | None = None,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self.kma_api_key = self._clean_key(kma_api_key if kma_api_key is not None else config.KMA_API_KEY)
         self.airkorea_api_key = self._clean_key(
             airkorea_api_key if airkorea_api_key is not None else config.AIRKOREA_API_KEY
         )
+        self.kakao_api_key = self._clean_key(kakao_api_key if kakao_api_key is not None else config.KAKAO_REST_API_KEY)
         self._http_client = http_client
         self._cache: dict[tuple[float, float], tuple[float, OutdoorConditionsResult]] = {}
 
@@ -104,6 +137,37 @@ class OutdoorConditionsClient:
 
     def _get_client(self) -> httpx.AsyncClient:
         return self._http_client or httpx.AsyncClient(timeout=_TIMEOUT_SECONDS)
+
+    async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
+        """건강 문장 전체가 아닌 장소 토큰만 카카오 로컬 검색으로 좌표화한다."""
+        if not self.kakao_api_key:
+            return None
+        queries = list(dict.fromkeys(_LOCATION_TOKEN_PATTERN.findall(text)))
+        if not queries:
+            return None
+
+        client = self._get_client()
+        try:
+            for query in reversed(queries):
+                try:
+                    response = await client.get(
+                        _KAKAO_KEYWORD_URL,
+                        params={"query": query, "size": "1"},
+                        headers={"Authorization": f"KakaoAK {self.kakao_api_key}"},
+                    )
+                    if response.status_code != 200:
+                        continue
+                    documents = response.json().get("documents", [])
+                    if not documents:
+                        continue
+                    document = documents[0]
+                    return float(document["y"]), float(document["x"]), str(document.get("place_name") or query)
+                except (httpx.HTTPError, KeyError, TypeError, ValueError):
+                    continue
+            return None
+        finally:
+            if self._http_client is None:
+                await client.aclose()
 
     @staticmethod
     def to_kma_grid(latitude: float, longitude: float) -> tuple[int, int]:
@@ -215,23 +279,20 @@ class OutdoorConditionsClient:
     ) -> tuple[AirQualityConditions | None, str | None]:
         if not self.airkorea_api_key:
             return None, "AirKorea API 키가 설정되지 않았습니다."
-        region_name = self._resolve_sido(latitude, longitude)
         try:
-            response = await client.get(
-                _AIRKOREA_REALTIME_URL,
-                params={
-                    "serviceKey": self.airkorea_api_key,
-                    "returnType": "json",
-                    "numOfRows": "100",
-                    "pageNo": "1",
-                    "sidoName": region_name,
-                    "ver": "1.4",
-                },
+            region_name, district_names = await self._resolve_air_quality_area(client, latitude, longitude)
+            region_items = await self._fetch_region_air_quality_items(client, region_name)
+            item = next(
+                (
+                    candidate
+                    for candidate in region_items
+                    if self._station_matches_district(candidate, district_names)
+                    and self._has_air_quality_value(candidate)
+                ),
+                None,
             )
-            if response.status_code != 200:
-                return None, "AirKorea 대기질 정보를 불러오지 못했습니다."
-            items = response.json().get("response", {}).get("body", {}).get("items", [])
-            item = next((candidate for candidate in items if candidate.get("pm10Value") not in (None, "-")), None)
+            if item is None:
+                item = next((candidate for candidate in region_items if self._has_air_quality_value(candidate)), None)
             if item is None:
                 return None, "AirKorea 대기질 정보가 아직 준비되지 않았습니다."
             return (
@@ -247,6 +308,75 @@ class OutdoorConditionsClient:
             )
         except (httpx.HTTPError, ValueError, TypeError):
             return None, "AirKorea 대기질 정보를 불러오지 못했습니다."
+
+    async def _fetch_region_air_quality_items(
+        self, client: httpx.AsyncClient, region_name: str
+    ) -> list[dict[str, Any]]:
+        response = await client.get(
+            _AIRKOREA_REALTIME_URL,
+            params={
+                "serviceKey": self.airkorea_api_key,
+                "returnType": "json",
+                "numOfRows": "100",
+                "pageNo": "1",
+                "sidoName": region_name,
+                "ver": "1.4",
+            },
+        )
+        if response.status_code != 200:
+            raise httpx.HTTPStatusError("AirKorea region lookup failed", request=response.request, response=response)
+        items = response.json().get("response", {}).get("body", {}).get("items", [])
+        return items if isinstance(items, list) else []
+
+    async def _resolve_air_quality_area(
+        self,
+        client: httpx.AsyncClient,
+        latitude: float,
+        longitude: float,
+    ) -> tuple[str, tuple[str, ...]]:
+        fallback_region = self._resolve_sido(latitude, longitude)
+        if not self.kakao_api_key:
+            return fallback_region, ()
+        try:
+            response = await client.get(
+                _KAKAO_REGION_URL,
+                params={"x": str(longitude), "y": str(latitude)},
+                headers={"Authorization": f"KakaoAK {self.kakao_api_key}"},
+            )
+            if response.status_code != 200:
+                return fallback_region, ()
+            documents = response.json().get("documents", [])
+            if not documents:
+                return fallback_region, ()
+            document = next(
+                (candidate for candidate in documents if candidate.get("region_type") == "H"),
+                documents[0],
+            )
+            region_1depth = str(document.get("region_1depth_name") or "")
+            region_name = next(
+                (sido for sido, aliases in _SIDO_ALIASES.items() if any(alias in region_1depth for alias in aliases)),
+                fallback_region,
+            )
+            district_names = tuple(
+                name
+                for name in (
+                    str(document.get("region_2depth_name") or ""),
+                    str(document.get("region_3depth_name") or ""),
+                )
+                if name
+            )
+            return region_name, district_names
+        except (httpx.HTTPError, KeyError, TypeError, ValueError):
+            return fallback_region, ()
+
+    @staticmethod
+    def _station_matches_district(item: dict[str, Any], district_names: tuple[str, ...]) -> bool:
+        station_name = str(item.get("stationName") or "")
+        return bool(station_name and any(station_name == name or station_name in name for name in district_names))
+
+    @staticmethod
+    def _has_air_quality_value(item: dict[str, Any]) -> bool:
+        return item.get("pm10Value") not in (None, "-") or item.get("pm25Value") not in (None, "-")
 
     @staticmethod
     def _as_float(value: Any) -> float | None:

@@ -80,12 +80,41 @@ _FACILITY_KEYWORDS = (
     "진료소",
     "보건소",
     "의료원",
-    "진료",
-    "처방",
-    "문 연 곳",
-    "문연 곳",
-    "어디 가야",
-    "어디로 가",
+)
+_FACILITY_SEARCH_KEYWORDS = (
+    "찾아",
+    "검색",
+    "조회",
+    "알려",
+    "추천",
+    "가까운",
+    "가까이",
+    "근처",
+    "주변",
+    "위치",
+    "어디",
+    "문 연",
+    "문연",
+    "진료 중",
+    "진료중",
+    "운영 중",
+    "운영중",
+    "가야",
+    "갈 수",
+    "전화번호",
+    "지도",
+)
+_FACILITY_HISTORY_OR_ADVICE_KEYWORDS = (
+    "다녀",
+    "갔다",
+    "왔어",
+    "받았",
+    "진료받",
+    "처방받",
+    "기록해",
+    "복용",
+    "먹어도",
+    "부작용",
 )
 
 
@@ -117,6 +146,7 @@ class HealthAssistantService:
         if not request.messages:
             return False
         last_msg = request.messages[-1].content
+        compact_msg = last_msg.replace(" ", "")
         # 날씨나 대기질을 묻는 질문은 의료시설 조회가 아님
         if any(w in last_msg for w in ("날씨", "미세먼지", "초미세먼지", "대기질")):
             return False
@@ -125,8 +155,19 @@ class HealthAssistantService:
             k in last_msg for k in ("병원", "약국", "응급실", "의원")
         ):
             return False
-        # 의료시설 관련 키워드 확인
-        if any(k in last_msg for k in _FACILITY_KEYWORDS):
+        has_facility = any(k in last_msg for k in _FACILITY_KEYWORDS)
+        has_search_intent = any(k in last_msg for k in _FACILITY_SEARCH_KEYWORDS)
+        if has_facility and has_search_intent:
+            return True
+        # "강남응급실", "서울 내과"처럼 짧은 검색어만 입력한 경우는 허용하되,
+        # 과거 진료·복약 상담 문장은 시설 검색으로 오인하지 않는다.
+        if (
+            has_facility
+            and len(compact_msg) <= 15
+            and not any(k in last_msg for k in _FACILITY_HISTORY_OR_ADVICE_KEYWORDS)
+        ):
+            return True
+        if any(k in last_msg for k in ("어디 가야", "어디로 가")):
             return True
         # 이전 어시스턴트 메시지가 시설 위치를 되묻던 상황인지 확인
         if len(request.messages) >= 2:
@@ -137,22 +178,29 @@ class HealthAssistantService:
                 return True
         return False
 
-    @staticmethod
-    def _resolve_request_location(request: HealthAssistantChatRequest) -> UserLocation | None:
-        """요청에 위치가 없더라도 최근 대화에서 시도 명칭이 있으면 대표 좌표로 보정한다."""
+    async def _resolve_request_location(self, request: HealthAssistantChatRequest) -> UserLocation | None:
+        """동의된 좌표를 우선하고, 야외 질문의 사용자 장소명만 보조적으로 좌표화한다."""
         loc = request.location
         if loc is not None:
             return loc
-        if request.messages:
-            for m in reversed(request.messages[-3:]):
-                resolved = resolve_sido_coordinates(m.content)
-                if resolved:
-                    sido, lat, lon = resolved
-                    return UserLocation(
-                        latitude=lat,
-                        longitude=lon,
-                        address=f"{sido}특별시" if sido == "서울" else sido,
-                    )
+
+        recent_user_messages = [message for message in request.messages[-3:] if message.role == "user"]
+        for message in reversed(recent_user_messages):
+            resolved = resolve_sido_coordinates(message.content)
+            if resolved:
+                sido, lat, lon = resolved
+                return UserLocation(
+                    latitude=lat,
+                    longitude=lon,
+                    address=f"{sido}특별시" if sido == "서울" else sido,
+                )
+
+        if self._needs_outdoor_conditions(request):
+            for message in reversed(recent_user_messages):
+                resolved_place = await self.outdoor_conditions_client.resolve_location(message.content)
+                if resolved_place:
+                    lat, lon, address = resolved_place
+                    return UserLocation(latitude=lat, longitude=lon, address=address)
         return None
 
     @staticmethod
@@ -199,6 +247,45 @@ class HealthAssistantService:
         )
 
     @staticmethod
+    def _temperature_risk(temperature_c: float | None) -> tuple[str | None, str | None]:
+        if temperature_c is None:
+            return None, None
+        if temperature_c >= 33:
+            return "폭염 수준 고온", None
+        if temperature_c <= -10:
+            return "한파 수준 저온", None
+        if temperature_c >= 30:
+            return None, "높은 기온"
+        if temperature_c <= 0:
+            return None, "낮은 기온"
+        return None, None
+
+    @staticmethod
+    def _classify_weather_risks(weather: Any) -> tuple[list[str], list[str]]:
+        unsafe_reasons: list[str] = []
+        caution_reasons: list[str] = []
+        if weather.precipitation_type and weather.precipitation_type != "강수 없음":
+            unsafe_reasons.append("비/강수")
+        unsafe_temperature, caution_temperature = HealthAssistantService._temperature_risk(weather.temperature_c)
+        if unsafe_temperature:
+            unsafe_reasons.append(unsafe_temperature)
+        if caution_temperature:
+            caution_reasons.append(caution_temperature)
+        if weather.wind_speed_mps is not None:
+            if weather.wind_speed_mps >= 14:
+                unsafe_reasons.append("강풍")
+            elif weather.wind_speed_mps >= 9:
+                caution_reasons.append("강한 바람")
+        if (
+            weather.temperature_c is not None
+            and weather.temperature_c >= 28
+            and weather.humidity_percent is not None
+            and weather.humidity_percent >= 80
+        ):
+            caution_reasons.append("고온다습")
+        return unsafe_reasons, caution_reasons
+
+    @staticmethod
     def _format_outdoor_conditions_context(result: Any | None, location_available: bool) -> str | None:
         if result is None:
             return (
@@ -208,11 +295,13 @@ class HealthAssistantService:
             )
 
         lines: list[str] = []
-        is_raining = False
-        bad_air = False
+        unsafe_reasons: list[str] = []
+        caution_reasons: list[str] = []
         if result.weather:
             weather = result.weather
-            is_raining = bool(weather.precipitation_type and weather.precipitation_type != "강수 없음")
+            weather_unsafe, weather_caution = HealthAssistantService._classify_weather_risks(weather)
+            unsafe_reasons.extend(weather_unsafe)
+            caution_reasons.extend(weather_caution)
             lines.append(
                 "날씨: "
                 f"기온 {weather.temperature_c if weather.temperature_c is not None else '확인 불가'}℃, "
@@ -226,20 +315,22 @@ class HealthAssistantService:
                 (air.pm10_grade in ("나쁨", "매우 나쁨", "매우나쁨"))
                 or (air.pm25_grade in ("나쁨", "매우 나쁨", "매우나쁨"))
             )
+            if bad_air:
+                unsafe_reasons.append("미세먼지 나쁨")
             lines.append(
                 "대기질: "
                 f"{air.region_name} {air.station_name or '측정소'}, "
                 f"PM10 {air.pm10 if air.pm10 is not None else '확인 불가'}㎍/㎥({air.pm10_grade or '등급 확인 불가'}), "
                 f"PM2.5 {air.pm25 if air.pm25 is not None else '확인 불가'}㎍/㎥({air.pm25_grade or '등급 확인 불가'})"
             )
-        if is_raining or bad_air:
-            reasons = []
-            if is_raining:
-                reasons.append("비/강수")
-            if bad_air:
-                reasons.append("미세먼지 나쁨")
+        if unsafe_reasons:
             lines.append(
-                f"환경 종합 평가: 야외 활동 비권장 ({', '.join(reasons)} - 야외 유산소 대신 실내 운동 추천 필요)"
+                f"환경 종합 평가: 야외 활동 비권장 ({', '.join(unsafe_reasons)} - 야외 유산소 대신 실내 운동 추천 필요)"
+            )
+        elif caution_reasons:
+            lines.append(
+                f"환경 종합 평가: 야외 활동 주의 필요 ({', '.join(caution_reasons)} - "
+                "운동 강도와 시간을 낮추고 수분 섭취 및 컨디션 확인 필요)"
             )
         elif result.weather and result.air_quality:
             lines.append("환경 종합 평가: 야외 활동 적합 (쾌적한 환경 - 가벼운 산책이나 야외 러닝 적극 추천 가능)")
@@ -278,7 +369,7 @@ class HealthAssistantService:
             return safety_check
 
         profile_context = await self._enrich_context(request.profile_context)
-        loc = self._resolve_request_location(request)
+        loc = await self._resolve_request_location(request)
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
             profile_context,
@@ -325,7 +416,7 @@ class HealthAssistantService:
             return
 
         profile_context = await self._enrich_context(request.profile_context)
-        loc = self._resolve_request_location(request)
+        loc = await self._resolve_request_location(request)
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
             profile_context,
