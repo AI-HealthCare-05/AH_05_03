@@ -1,11 +1,12 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app.dtos.health_assistant import ProfileContext
+from app.dtos.health_assistant import ProfileContext, UserLocation
 
 
 def build_system_instruction(
     profile_context: ProfileContext | None = None,
+    user_location: UserLocation | None = None,
     outdoor_conditions_context: str | None = None,
 ) -> str:
     now = datetime.now(ZoneInfo("Asia/Seoul"))
@@ -17,6 +18,11 @@ def build_system_instruction(
     two_years_ago = current_year - 2
 
     context_info = f"[현재 시스템 기준 일자 및 한국 표준시: {today_str} {current_time_str} (올해: {current_year}년, 작년: {last_year}년, 재작년: {two_years_ago}년)]\n"
+    if user_location:
+        addr_part = f" ({user_location.address})" if user_location.address else ""
+        context_info += (
+            f"[사용자 현재 위치 좌표: 위도 {user_location.latitude}, 경도 {user_location.longitude}{addr_part}]\n"
+        )
     if profile_context:
         ctx = profile_context
         details = []
@@ -32,7 +38,7 @@ def build_system_instruction(
         context_info += f"[이번 질문에 조회한 실시간 야외 환경 정보]\n{outdoor_conditions_context}\n"
 
     system_instruction = f"""당신은 가족 건강관리 서비스 '이어봄'의 친절하고 꼼꼼한 AI 건강 비서 '봄이'입니다.
-사용자의 자연어 대화를 분석하여 구조화된 건강기록 초안을 작성하거나, 기록 조회/건강 질문에 답변합니다.
+사용자의 자연어 대화를 분석하여 구조화된 건강기록 초안을 작성하거나, 주변 의료시설(응급실, 병원, 약국) 조회 및 건강 질문에 답변합니다.
 
 {context_info}
 [핵심 원칙 및 안전 수칙 (매우 중요)]
@@ -112,6 +118,12 @@ def build_system_instruction(
   * `challenge_draft`에 `action: "adjust"`, `adjusted_minutes`: 단축된 시간(예: 10), `set_rest_day`: True/False를 설정하세요.
 - `complete_challenge`: 사용자가 오늘 과제를 완수했다고 보고할 때("오늘 20분 걷기 완료했어", "오늘 챌린지 다 했어").
   * `challenge_draft`에 `action: "complete"`를 설정하세요.
+- `search_facility`: 사용자가 주변 응급실, 병원, 의원, 약국을 찾거나 안내를 요청할 때.
+  * 사용자가 "홍대 내과", "장충동 약국", "강남구 응급실"처럼 특정 지역명(상권, 동, 구)을 언급한 경우, 위치 좌표가 없더라도 해당 지역명을 query나 stage로 넘겨 즉시 시설 조회 도구를 호출하세요.
+  * 위치 좌표(GPS)도 없고 구체적인 지역명도 전혀 없는 경우(예: "근처 병원 찾아줘"), 임의의 위치를 지어내지 말고 `missing_fields=["user_location"]`과 함께 "가까운 병원이나 약국을 찾으시려면 브라우저의 위치 권한을 허용해 주시거나, 계신 지역명(예: '홍대 내과', '장충동 약국')을 알려주시겠어요?"라고 정중히 되물으세요.
+  * 위치 좌표 또는 지역명이 제공되어 도구 결과가 전달된 경우:
+    - `assistant_message`: 조회된 상위 의료시설 목록(명칭, 거리, 주소, 대표 전화번호, 실시간 가용 병상 등)을 정갈하게 요약하여 작성하세요.
+    - 응급실 조회인 경우, "응급 상황 시 지체 없이 119에 도움을 요청하시거나 해당 응급실에 직접 전화하여 확인하세요"라는 필수 안내를 `emergency_notice`와 답변에 반드시 포함하세요.
 - `health_advice`: 개인 건강기록(복약, 혈압 등)을 연계한 안전하고 구체적인 일반 건강정보 및 주의사항 안내.
 - `general_chat`: 친절한 일상 인사 및 사용법 안내.
 

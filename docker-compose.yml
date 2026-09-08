@@ -113,6 +113,10 @@ services:
       REFRESH_COOKIE_NAME: ieobom_refresh
       REFRESH_COOKIE_SECURE: "false"
       ENABLE_DEV_OCR_BRIDGE: ${ENABLE_DEV_OCR_BRIDGE:-true}
+      EMERGENCY_MEDICAL_API_KEY: ${EMERGENCY_MEDICAL_API_KEY:-}
+      HOSPITAL_INFO_API_KEY: ${HOSPITAL_INFO_API_KEY:-}
+      PHARMACY_INFO_API_KEY: ${PHARMACY_INFO_API_KEY:-}
+      KAKAO_REST_API_KEY: ${KAKAO_REST_API_KEY:-}
       # **예비 공급자다 (2026-09-03).** Gemini 가 앞이고 이쪽이 뒤다 — 무료 등급
       # 할당량은 모델마다 하루로 따로 세서, 소진되는 날 이게 없으면 인식이 멈춘다.
       # 순서는 `DEV_OCR_MODELS` 가 정한다.

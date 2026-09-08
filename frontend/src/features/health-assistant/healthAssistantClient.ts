@@ -106,6 +106,68 @@ export interface ChallengeDraft {
   set_rest_day?: boolean;
 }
 
+export interface FacilityItem {
+  name: string;
+  category?: string | null;
+  address: string;
+  phone?: string | null;
+  emergency_room_phone?: string | null;
+  distance_m?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  available_beds?: string | null;
+  operating_hours?: string | null;
+  homepage?: string | null;
+  hpid?: string | null;
+  place_url?: string | null;
+  is_open?: boolean | null;
+  today_hours?: string | null;
+  break_hours?: string | null;
+  additional_info?: Record<string, unknown>;
+}
+
+export interface FacilitySearchResult {
+  facility_type: "emergency_room" | "hospital" | "pharmacy";
+  total_count: number;
+  search_type?: string | null;
+  count?: number | null;
+  items: FacilityItem[];
+  emergency_notice?: string | null;
+  message?: string | null;
+  error?: string | null;
+}
+
+export interface UserLocation {
+  latitude: number;
+  longitude: number;
+  accuracy?: number | null;
+}
+
+export interface WeatherConditions {
+  temperature_c?: number | null;
+  humidity_percent?: number | null;
+  precipitation_type: string;
+  precipitation_mm?: number | null;
+  wind_speed_mps?: number | null;
+}
+
+export interface AirQualityConditions {
+  region_name: string;
+  station_name?: string | null;
+  pm10?: number | null;
+  pm25?: number | null;
+  pm10_grade?: string | null;
+  pm25_grade?: string | null;
+}
+
+export interface OutdoorConditionsResult {
+  latitude: number;
+  longitude: number;
+  weather?: WeatherConditions | null;
+  air_quality?: AirQualityConditions | null;
+  errors: string[];
+}
+
 export interface HealthAssistantResponse {
   intent:
     | "record_exercise"
@@ -118,6 +180,7 @@ export interface HealthAssistantResponse {
     | "create_challenge"
     | "adjust_challenge"
     | "complete_challenge"
+    | "search_facility"
     | "health_advice"
     | "general_chat"
     | "unknown";
@@ -131,6 +194,8 @@ export interface HealthAssistantResponse {
   lab_result_draft?: LabResultDraft | null;
   challenge_draft?: ChallengeDraft | null;
   query_draft?: QueryDraft | null;
+  facility_search_draft?: FacilitySearchResult | null;
+  outdoor_conditions?: OutdoorConditionsResult | null;
   missing_fields: string[];
   needs_confirmation: boolean;
   auto_save?: boolean;
@@ -175,7 +240,8 @@ export async function streamHealthAssistantMessage(
   profileContext?: ProfileContext,
   signal?: AbortSignal,
   sessionId?: string,
-  currentLocation?: CurrentLocation,
+  userLocation?: UserLocation,
+  onFacility?: (result: FacilitySearchResult) => void,
 ): Promise<HealthAssistantResponse> {
   let final: HealthAssistantResponse | undefined;
   let failure: string | undefined;
@@ -184,10 +250,12 @@ export async function streamHealthAssistantMessage(
       messages,
       profile_context: profileContext,
       session_id: sessionId,
-      current_location: currentLocation,
+      user_location: userLocation,
+      current_location: userLocation,
     },
     (event, data) => {
       if (event === "delta" && typeof data.text === "string") onDelta(data.text);
+      else if (event === "facility") onFacility?.(data as unknown as FacilitySearchResult);
       else if (event === "result") final = data as unknown as HealthAssistantResponse;
       else if (event === "error" && typeof data.message === "string") failure = data.message;
     },
@@ -202,10 +270,12 @@ export async function sendHealthAssistantMessage(
   messages: ChatMessage[],
   profileContext?: ProfileContext,
   sessionId?: string,
+  userLocation?: UserLocation,
 ): Promise<HealthAssistantResponse> {
   return serverApiClient.healthAssistantChat<HealthAssistantResponse>({
     messages,
     profile_context: profileContext,
     session_id: sessionId,
+    user_location: userLocation,
   });
 }

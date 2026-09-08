@@ -3,6 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
 
 
@@ -149,6 +150,18 @@ class QueryDraft(BaseModel):
     keyword: str | None = Field(default=None, description="검색 키워드 (예: 원본, 건강검진 등)")
 
 
+class UserLocation(BaseModel):
+    """클라이언트가 제공하는 현재 사용자 위치 정보."""
+
+    latitude: float = Field(ge=-90.0, le=90.0, description="위도 (WGS84)")
+    longitude: float = Field(ge=-180.0, le=180.0, description="경도 (WGS84)")
+    address: str | None = Field(
+        default=None, max_length=200, description="현재 주소 또는 동/구 명칭 (예: 서울특별시 강남구 역삼동)"
+    )
+
+CurrentLocation = UserLocation
+
+
 HealthIntent = Literal[
     "record_exercise",
     "record_blood_pressure",
@@ -161,6 +174,7 @@ HealthIntent = Literal[
     "create_challenge",
     "adjust_challenge",
     "complete_challenge",
+    "search_facility",
     "general_chat",
     "unknown",
 ]
@@ -169,8 +183,17 @@ HealthIntent = Literal[
 class HealthAssistantChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=12, description="대화 이력 리스트")
     profile_context: ProfileContext | None = Field(default=None, description="현재 선택된 가족 구성원의 컨텍스트 정보")
-    current_location: CurrentLocation | None = Field(default=None, description="사용자 동의로 받은 이번 요청의 현재 좌표")
+    user_location: UserLocation | None = Field(
+        default=None, description="사용자의 현재 위치 (주변 병원·약국·응급실 및 날씨·대기질 조회용)"
+    )
+    current_location: UserLocation | None = Field(
+        default=None, description="사용자 동의로 받은 이번 요청의 현재 좌표 (user_location과 호환)"
+    )
     session_id: uuid.UUID | None = Field(default=None, description="대화 세션 ID (DB 영구 보존용)")
+
+    @property
+    def location(self) -> UserLocation | None:
+        return self.user_location or self.current_location
 
 
 class HealthAssistantResponse(BaseModel):
@@ -191,6 +214,9 @@ class HealthAssistantResponse(BaseModel):
     outdoor_conditions: OutdoorConditionsResult | None = Field(
         default=None,
         description="야외 활동 질문에서 조회한 실시간 날씨·대기질 결과",
+    )
+    facility_search_draft: FacilitySearchResult | None = Field(
+        default=None, description="주변 의료시설(응급실, 병원, 약국) 조회 결과"
     )
     missing_fields: list[str] = Field(
         default_factory=list, description="초안 완성을 위해 사용자에게 추가 확인이 필요한 필드 목록"
