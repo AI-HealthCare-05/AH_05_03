@@ -211,7 +211,9 @@ describe("HomePage", () => {
     const user = userEvent.setup();
     const domainRef = renderHomePage();
     await createProfile(user, "엄마", "부모");
-
+    await waitFor(() => {
+      expect(domainRef.current?.profiles?.length).toBeGreaterThan(0);
+    });
     const profile = domainRef.current!.profiles[0];
     await domainRef.current!.runtime!.healthRecords.create({
       householdId: profile.householdId,
