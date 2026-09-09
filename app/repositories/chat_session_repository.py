@@ -55,6 +55,22 @@ class ChatSessionRepository:
         )
         return bool(result.rowcount)
 
+    async def update_session_title(self, session_id: uuid.UUID, account_id: uuid.UUID, title: str) -> bool:
+        now = datetime.now(timezone.utc)
+        result = cast(
+            CursorResult[Any],
+            await self.session.execute(
+                update(ChatSession)
+                .where(
+                    ChatSession.id == session_id,
+                    ChatSession.account_id == account_id,
+                    ChatSession.deleted_at.is_(None),
+                )
+                .values(title=title, updated_at=now)
+            ),
+        )
+        return bool(result.rowcount)
+
     async def get_next_sequence_number(self, session_id: uuid.UUID) -> int:
         # 같은 세션의 동시 요청만 직렬화해 중복 순번을 막는다.
         await self.session.scalar(select(ChatSession.id).where(ChatSession.id == session_id).with_for_update())

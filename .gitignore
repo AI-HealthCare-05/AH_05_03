@@ -52,3 +52,5 @@ modeling/**/__pycache__/
 # artifacts/models_singleton_backup 은 빼지 않는다 — 앙상블로 바꾸며 내려간 두 칸을
 # 되돌릴 원본이고(docs/30 §7) 2.4MB 라 값이 있다.
 modeling/artifacts/models_ensemble/
+.agents/hooks.json
+.cursor/hooks.json

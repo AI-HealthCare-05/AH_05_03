@@ -12,6 +12,10 @@ class ChatSessionCreateRequest(BaseRequestModel):
     title: str | None = Field(default=None, max_length=255, description="대화 세션 제목")
 
 
+class ChatSessionUpdateRequest(BaseRequestModel):
+    title: str = Field(min_length=1, max_length=255, description="수정할 대화 세션 제목")
+
+
 class ChatSessionResponse(BaseSerializerModel):
     id: uuid.UUID
     account_id: uuid.UUID

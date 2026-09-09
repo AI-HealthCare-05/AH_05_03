@@ -1932,7 +1932,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       expect(sentMessages.at(-1)?.content).toBe("새 질문");
     });
 
-    it("열 때 대화 목록을 먼저 보여주고 새 대화 버튼을 제공한다", async () => {
+    it("열 때 이전 대화를 유지하여 보여주고 대화 목록 버튼 클릭 시 목록이 열린다", async () => {
       saveChatSession(mockProfile.id, [
         { id: "msg-1", role: "user", content: "이전 질문입니다" },
         { id: "msg-2", role: "assistant", content: "이전 답변입니다" },
@@ -1948,9 +1948,55 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       );
 
       expect(screen.getByText("이전 질문입니다")).toBeInTheDocument();
+      expect(screen.getByText("이전 답변입니다")).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "대화 목록" })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "대화 목록" }));
       expect(screen.getByRole("region", { name: "대화 목록" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "새 대화" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "대화 목록" })).toBeInTheDocument();
+    });
+
+    it("대화 목록에서 케밥 버튼 클릭 시 이름 변경 및 삭제 메뉴가 노출된다", async () => {
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      vi.spyOn(clientModule, "listChatSessions").mockResolvedValue([
+        {
+          id: "session-1",
+          account_id: "acc-1",
+          profile_id: mockProfile.id,
+          title: "혈압 상담",
+          created_at: "2026-09-01T00:00:00Z",
+          updated_at: "2026-09-01T00:00:00Z",
+        },
+      ]);
+
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={mockRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+        />,
+      );
+
+      // 대화 목록 열기
+      fireEvent.click(screen.getByRole("button", { name: "대화 목록" }));
+
+      // 더보기(케밥) 버튼이 렌더링되어 있는지 확인
+      const kebabButtons = await screen.findAllByRole("button", { name: "더보기" });
+      expect(kebabButtons.length).toBeGreaterThan(0);
+
+      // 첫 번째 세션의 케밥 버튼 클릭
+      fireEvent.click(kebabButtons[0]);
+
+      // 팝오버 메뉴 항목 확인
+      expect(screen.getByRole("button", { name: "이름 변경" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "대화 삭제" })).toBeInTheDocument();
+
+      // 이름 변경 클릭 시 인라인 입력 폼 노출
+      fireEvent.click(screen.getByRole("button", { name: "이름 변경" }));
+      expect(screen.getByPlaceholderText("대화방 이름 입력")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "취소" })).toBeInTheDocument();
     });
   });
 });
