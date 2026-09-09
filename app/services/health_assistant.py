@@ -9,7 +9,6 @@ from app.dtos.health_assistant import (
     ProfileContext,
     UserLocation,
 )
-from app.dtos.health_record_query import HealthRecordQueryResult
 from app.exceptions import LlmProviderFailedError
 from app.integrations.llm.chain import shared_chat_client
 from app.integrations.llm.protocol import LLMClientProtocol
@@ -364,6 +363,8 @@ class HealthAssistantService:
             return True
 
         return False
+
+    @staticmethod
     def _needs_health_record_query_tool(request: HealthAssistantChatRequest) -> bool:
         """1차 수직 슬라이스인 기간별 혈압 기준 초과 일수 질문만 연다."""
         if not request.messages:
@@ -859,11 +860,6 @@ class HealthAssistantService:
             self._llm_client = shared_chat_client()
         return self._llm_client
 
-    async def _execute_tool(self, name: str, args: dict[str, Any]) -> Any:
-        # 식품영양성분 툴 확인
-        if name == "search_food_nutrition":
-            return await execute_food_nutrition_tool(name, args, self.food_nutrition_client)
-        # 의약품 툴 확인
     async def _execute_tool(
         self,
         name: str,
@@ -872,6 +868,8 @@ class HealthAssistantService:
         account: ServiceAccount | None = None,
         profile_id: uuid.UUID | None = None,
     ) -> Any:
+        if name == "search_food_nutrition":
+            return await execute_food_nutrition_tool(name, args, self.food_nutrition_client)
         if name == QUERY_HEALTH_RECORDS_TOOL_NAME:
             if account is None or profile_id is None or self.health_record_service is None:
                 raise ValueError("건강기록 조회에 필요한 인증 프로필 정보가 없습니다.")
@@ -907,11 +905,16 @@ class HealthAssistantService:
         if tool_result is None:
             return
         from app.dtos.food_nutrition import FoodNutritionSearchResult
+        from app.dtos.health_record_query import HealthRecordQueryResult
         from app.dtos.medication import MedicationSearchResult
 
         if isinstance(tool_result, FoodNutritionSearchResult):
             if not response.food_nutrition_search_result:
                 response.food_nutrition_search_result = tool_result
+        elif isinstance(tool_result, HealthRecordQueryResult):
+            response.intent = "query_records"
+            response.health_record_query_result = tool_result
+            response.assistant_message = tool_result.message
         elif isinstance(tool_result, MedicationSearchResult):
             if not response.medication_search_result:
                 response.medication_search_result = tool_result
@@ -920,7 +923,7 @@ class HealthAssistantService:
             if getattr(tool_result, "message", None):
                 response.assistant_message = tool_result.message
 
-    async def respond(
+    @staticmethod
     def _profile_required_response() -> HealthAssistantResponse:
         return HealthAssistantResponse(
             intent="query_records",
@@ -929,7 +932,7 @@ class HealthAssistantService:
             needs_confirmation=False,
         )
 
-    async def respond(  # noqa: C901 - 안전·권한·도구 경로를 한 흐름에서 처리한다.
+    async def respond(
         self,
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None = None,
@@ -985,20 +988,6 @@ class HealthAssistantService:
             )
             response, tool_result = res_tuple
             self._attach_tool_result_to_response(response, tool_result)
-            if tool_result is not None:
-                from app.dtos.medication import MedicationSearchResult
-
-                if isinstance(tool_result, HealthRecordQueryResult):
-                    response.intent = "query_records"
-                    response.health_record_query_result = tool_result
-                    response.assistant_message = tool_result.message
-                elif isinstance(tool_result, MedicationSearchResult):
-                    if not response.medication_search_result:
-                        response.medication_search_result = tool_result
-                elif not response.facility_search_draft:
-                    response.facility_search_draft = tool_result
-                    if getattr(tool_result, "message", None):
-                        response.assistant_message = tool_result.message
         else:
             response = await self.llm_client.generate_structured_response(
                 system_instruction=system_instruction,
@@ -1044,12 +1033,13 @@ class HealthAssistantService:
     ) -> HealthAssistantResponse:
         if tool_result:
             from app.dtos.food_nutrition import FoodNutritionSearchResult
+            from app.dtos.health_record_query import HealthRecordQueryResult
             from app.dtos.medication import MedicationSearchResult
 
             if isinstance(tool_result, FoodNutritionSearchResult):
                 if not parsed.food_nutrition_search_result:
                     parsed.food_nutrition_search_result = tool_result
-            if isinstance(tool_result, HealthRecordQueryResult):
+            elif isinstance(tool_result, HealthRecordQueryResult):
                 parsed.intent = "query_records"
                 parsed.health_record_query_result = tool_result
                 parsed.assistant_message = tool_result.message
@@ -1062,7 +1052,7 @@ class HealthAssistantService:
             parsed.outdoor_conditions = outdoor_conditions
         return parsed
 
-    async def stream(
+    async def stream(  # noqa: C901 - 안전·권한·도구 경로를 한 흐름에서 스트리밍한다.
         self,
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None = None,
@@ -1122,13 +1112,13 @@ class HealthAssistantService:
 
         if tool_result is not None:
             from app.dtos.food_nutrition import FoodNutritionSearchResult
+            from app.dtos.health_record_query import HealthRecordQueryResult
             from app.dtos.medication import MedicationSearchResult
 
             payload = tool_result.model_dump(mode="json") if hasattr(tool_result, "model_dump") else tool_result
             if isinstance(tool_result, FoodNutritionSearchResult):
                 yield "food_nutrition", payload
-            elif isinstance(tool_result, MedicationSearchResult):
-            if isinstance(tool_result, HealthRecordQueryResult):
+            elif isinstance(tool_result, HealthRecordQueryResult):
                 yield "delta", {"text": tool_result.message}
                 res_obj = HealthAssistantResponse(
                     intent="query_records",
@@ -1138,7 +1128,7 @@ class HealthAssistantService:
                 )
                 yield "result", self.safety_service.validate_response(res_obj).model_dump(mode="json")
                 return
-            if isinstance(tool_result, MedicationSearchResult):
+            elif isinstance(tool_result, MedicationSearchResult):
                 yield "medication", payload
             else:
                 yield "facility", payload
