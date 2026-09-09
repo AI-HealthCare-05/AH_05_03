@@ -20,7 +20,9 @@ import {
 } from "./healthAssistantLogic";
 import type { FamilyProfile, HealthRecord } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
+import type { ChatSessionData, ChatMessageData } from "../../shared/api/contracts";
 import * as clientModule from "./healthAssistantClient";
+
 
 if (!globalThis.URL.createObjectURL) {
   globalThis.URL.createObjectURL = vi.fn(() => "blob:fake-url");
@@ -2247,5 +2249,92 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       expect(streamSpy.mock.calls[0][4]).toBe("session-new");
       expect(streamSpy.mock.calls[0][4]).not.toBe(savedSession.id);
     });
+
+    it("대화 목록에서 새 대화 버튼을 누르고 질문을 보내면 기존 세션이 아니라 새 세션으로 생성된다", async () => {
+      const existingSession: ChatSessionData = {
+        id: "session-old-123",
+        account_id: "acc-1",
+        profile_id: mockProfile.id,
+        title: "이전 두통 상담",
+        created_at: "2026-09-08T10:00:00Z",
+        updated_at: "2026-09-08T10:05:00Z",
+      };
+      const existingMessages: ChatMessageData[] = [
+        {
+          id: "m-1",
+          session_id: existingSession.id,
+          role: "user",
+          content: "머리가 아파요",
+          sequence_number: 1,
+          metadata: null,
+          created_at: "2026-09-08T10:00:00Z",
+        },
+        {
+          id: "m-2",
+          session_id: existingSession.id,
+          role: "assistant",
+          content: "두통 양상을 알려주세요.",
+          sequence_number: 2,
+          metadata: null,
+          created_at: "2026-09-08T10:01:00Z",
+        },
+      ];
+
+      vi.spyOn(clientModule, "listChatSessions").mockResolvedValue([existingSession]);
+      vi.spyOn(clientModule, "listChatMessages").mockResolvedValue(existingMessages);
+      const newSessionCreated: ChatSessionData = {
+        id: "session-brand-new-999",
+        account_id: "acc-1",
+        profile_id: mockProfile.id,
+        title: "새 건강 상담",
+        created_at: "2026-09-10T10:00:00Z",
+        updated_at: "2026-09-10T10:00:00Z",
+      };
+      const createSpy = vi.spyOn(clientModule, "createChatSession").mockResolvedValue(newSessionCreated);
+      const streamSpy = vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValue({
+        intent: "general_chat",
+        assistant_message: "물이나 식이섬유를 섭취해보세요.",
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: [],
+      });
+
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={mockRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+          onRecordSaved={mockOnRecordSaved}
+        />,
+      );
+
+      // 초기 동기화 완료 후 기존 대화가 표시됨
+      await screen.findByText("머리가 아파요");
+
+      // 1. 대화 목록으로 이동
+      fireEvent.click(screen.getByRole("button", { name: "대화 목록" }));
+      await screen.findByText("이전 두통 상담");
+
+      // 2. 새 대화 버튼 클릭
+      fireEvent.click(screen.getByRole("button", { name: "새 대화" }));
+
+      // 3. 새 대화 환영 메시지 노출 및 이전 대화 내용 비워짐 확인
+      await screen.findByText(/안녕하세요! 홍길동님의 건강 비서/);
+      expect(screen.queryByText("머리가 아파요")).not.toBeInTheDocument();
+
+      // 4. 새 대화에서 질문 전송
+      fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), {
+        target: { value: "변비에 커피가 도움될까?" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      // 5. 이전 세션(session-old-123)이 아니라 반드시 createChatSession이 호출되어 새 세션(session-brand-new-999)으로 전송되어야 함
+      await waitFor(() => expect(createSpy).toHaveBeenCalledWith(mockProfile.id));
+      await waitFor(() => expect(streamSpy).toHaveBeenCalled());
+      expect(streamSpy.mock.calls[0][4]).toBe("session-brand-new-999");
+      expect(streamSpy.mock.calls[0][4]).not.toBe(existingSession.id);
+    });
   });
 });
+
