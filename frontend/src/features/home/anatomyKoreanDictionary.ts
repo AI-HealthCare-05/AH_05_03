@@ -583,6 +583,338 @@ export const ANATOMY_DICTIONARY: Record<string, DictionaryEntry> = {
     systemKorean: "골격계",
     description: "정강뼈와 종골 사이에 위치하여 발목 관절의 굴곡 및 신전을 매개합니다.",
   },
+
+  // --- 수근골 (Carpal bones, 손목뼈 8종) - 대한해부학회 제6판 표준 ---
+  capitate: {
+    korean: "유두골 (알머리뼈)",
+    canonical: "Capitate bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손목뼈(수근골) 원위부 중앙에 위치한 가장 큰 뼈로 손목 관절의 중심축입니다.",
+  },
+  "capitate bone": {
+    korean: "유두골 (알머리뼈)",
+    canonical: "Capitate bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손목뼈(수근골) 원위부 중앙에 위치한 가장 큰 뼈로 손목 관절의 중심축입니다.",
+  },
+  lunate: {
+    korean: "월상골 (반달뼈)",
+    canonical: "Lunate bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손목뼈 근위부 중앙의 반달 모양 뼈로 요골과 관절하여 손목 운동을 주도합니다.",
+  },
+  "lunate bone": {
+    korean: "월상골 (반달뼈)",
+    canonical: "Lunate bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손목뼈 근위부 중앙의 반달 모양 뼈로 요골과 관절하여 손목 운동을 주도합니다.",
+  },
+  scaphoid: {
+    korean: "주상골 (손배뼈)",
+    canonical: "Scaphoid bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손목 엄지 쪽에 위치한 배 모양 뼈로 손을 짚고 넘어질 때 골절이 가장 흔한 부위입니다.",
+  },
+  "scaphoid bone": {
+    korean: "주상골 (손배뼈)",
+    canonical: "Scaphoid bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손목 엄지 쪽에 위치한 배 모양 뼈로 손을 짚고 넘어질 때 골절이 가장 흔한 부위입니다.",
+  },
+  triquetrum: {
+    korean: "삼각골 (세모뼈)",
+    canonical: "Triquetral bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손목뼈 근위부 새끼손가락 쪽에 위치한 피라미드형 세모뼈입니다.",
+  },
+  triquetral: {
+    korean: "삼각골 (세모뼈)",
+    canonical: "Triquetral bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손목뼈 근위부 새끼손가락 쪽에 위치한 피라미드형 세모뼈입니다.",
+  },
+  "triquetral bone": {
+    korean: "삼각골 (세모뼈)",
+    canonical: "Triquetral bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손목뼈 근위부 새끼손가락 쪽에 위치한 피라미드형 세모뼈입니다.",
+  },
+  pisiform: {
+    korean: "두상골 (콩알뼈)",
+    canonical: "Pisiform bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "삼각골 앞면에 위치한 작은 콩알 모양의 종자골로 척측수근굴근 힘줄 속에 있습니다.",
+  },
+  "pisiform bone": {
+    korean: "두상골 (콩알뼈)",
+    canonical: "Pisiform bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "삼각골 앞면에 위치한 작은 콩알 모양의 종자골로 척측수근굴근 힘줄 속에 있습니다.",
+  },
+  trapezium: {
+    korean: "대능형골 (큰마름뼈)",
+    canonical: "Trapezium bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "엄지손가락 중수골과 안장관절을 이루어 엄지의 맞섬(대립) 운동을 가능하게 합니다.",
+  },
+  "trapezium bone": {
+    korean: "대능형골 (큰마름뼈)",
+    canonical: "Trapezium bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "엄지손가락 중수골과 안장관절을 이루어 엄지의 맞섬(대립) 운동을 가능하게 합니다.",
+  },
+  trapezoid: {
+    korean: "소능형골 (작은마름뼈)",
+    canonical: "Trapezoid bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "둘째 손가락 중수골 바닥과 견고하게 결합하는 작은 마름모형 손목뼈입니다.",
+  },
+  "trapezoid bone": {
+    korean: "소능형골 (작은마름뼈)",
+    canonical: "Trapezoid bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "둘째 손가락 중수골 바닥과 견고하게 결합하는 작은 마름모형 손목뼈입니다.",
+  },
+  hamate: {
+    korean: "유구골 (갈고리뼈)",
+    canonical: "Hamate bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손바닥 쪽에 튀어나온 갈고리(유구)가 있어 척골신경과 인대가 주행하는 뼈입니다.",
+  },
+  "hamate bone": {
+    korean: "유구골 (갈고리뼈)",
+    canonical: "Hamate bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손바닥 쪽에 튀어나온 갈고리(유구)가 있어 척골신경과 인대가 주행하는 뼈입니다.",
+  },
+
+  // --- 손허리뼈 및 손가락뼈 (Metacarpals & Phalanges of hand) ---
+  metacarpal: {
+    korean: "중수골 (손허리뼈)",
+    canonical: "Metacarpal bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손목과 손가락 사이 손바닥 뼈대를 구성하는 원통형 긴뼈입니다.",
+  },
+  "metacarpal bone": {
+    korean: "중수골 (손허리뼈)",
+    canonical: "Metacarpal bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손목과 손가락 사이 손바닥 뼈대를 구성하는 원통형 긴뼈입니다.",
+  },
+  "proximal phalanx hand": {
+    korean: "수지 기절골 (손가락 첫마디뼈)",
+    canonical: "Proximal phalanx of hand",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손가락의 뿌리 쪽에 위치한 첫 번째 마디 뼈입니다.",
+  },
+  "middle phalanx hand": {
+    korean: "수지 중절골 (손가락 중간마디뼈)",
+    canonical: "Middle phalanx of hand",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손가락의 중간 마디 뼈입니다 (엄지 제외).",
+  },
+  "distal phalanx hand": {
+    korean: "수지 말절골 (손가락 끝마디뼈)",
+    canonical: "Distal phalanx of hand",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손톱을 받치는 손가락의 가장 끝마디 뼈입니다.",
+  },
+  phalanx: {
+    korean: "지골 (마디뼈)",
+    canonical: "Phalanx",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "손가락 또는 발가락을 구성하는 마디뼈입니다.",
+  },
+
+  // --- 골반 및 하지대 (Pelvic girdle & Lower limb) ---
+  "hip bone": {
+    korean: "관골 (볼기뼈 / 골반골)",
+    canonical: "Hip bone (Coxal bone)",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "장골, 좌골, 치골이 융합되어 골반환을 형성하고 대퇴골과 고관절을 이룹니다.",
+  },
+  "coxal bone": {
+    korean: "관골 (볼기뼈 / 골반골)",
+    canonical: "Hip bone (Coxal bone)",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "장골, 좌골, 치골이 융합되어 골반환을 형성하고 대퇴골과 고관절을 이룹니다.",
+  },
+  ischium: {
+    korean: "좌골 (궁둥뼈)",
+    canonical: "Ischium",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "골반의 후하부를 이루며 앉을 때 바닥에 체중이 실리는 궁둥뼈 결절을 포함합니다.",
+  },
+  pubis: {
+    korean: "치골 (두덩뼈)",
+    canonical: "Pubis",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "골반의 전하부를 이루며 좌우가 결합하여 치골결합을 형성합니다.",
+  },
+  coccyx: {
+    korean: "미골 (꼬리뼈)",
+    canonical: "Coccyx",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "천골 아래에 연결된 척추의 가장 끝 부분 융합 뼈입니다.",
+  },
+
+  // --- 족근골, 중족골 및 족지골 (Tarsals, Metatarsals & Foot phalanges) ---
+  navicular: {
+    korean: "주상골 (발배뼈)",
+    canonical: "Navicular bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "발목 안쪽에 위치하여 거골과 설상골 사이에서 내측 발아치를 지탱하는 배 모양 뼈입니다.",
+  },
+  "navicular bone": {
+    korean: "주상골 (발배뼈)",
+    canonical: "Navicular bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "발목 안쪽에 위치하여 거골과 설상골 사이에서 내측 발아치를 지탱하는 배 모양 뼈입니다.",
+  },
+  cuboid: {
+    korean: "입방골 (입방뼈)",
+    canonical: "Cuboid bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "발목 외측에 위치하여 종골과 제4,5 중족골을 연결하는 주사위 모양 뼈입니다.",
+  },
+  "cuboid bone": {
+    korean: "입방골 (입방뼈)",
+    canonical: "Cuboid bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "발목 외측에 위치하여 종골과 제4,5 중족골을 연결하는 주사위 모양 뼈입니다.",
+  },
+  cuneiform: {
+    korean: "설상골 (쐐기뼈)",
+    canonical: "Cuneiform bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "발등 중앙 아치를 형성하는 쐐기 모양의 뼈입니다.",
+  },
+  "medial cuneiform": {
+    korean: "내측 설상골 (안쪽 쐐기뼈)",
+    canonical: "Medial cuneiform bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "발목뼈 중 가장 안쪽에 위치한 쐐기뼈로 제1 중족골(엄지발가락)과 관절합니다.",
+  },
+  "intermediate cuneiform": {
+    korean: "중간 설상골 (중간 쐐기뼈)",
+    canonical: "Intermediate cuneiform bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "내측과 외측 설상골 사이에 위치한 가장 작은 쐐기뼈입니다.",
+  },
+  "lateral cuneiform": {
+    korean: "외측 설상골 (가쪽 쐐기뼈)",
+    canonical: "Lateral cuneiform bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "입방골 안쪽에 위치한 쐐기뼈로 제3 중족골과 관절합니다.",
+  },
+  metatarsal: {
+    korean: "중족골 (발허리뼈)",
+    canonical: "Metatarsal bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "발목과 발가락 사이 발바닥 아치를 이루는 5개의 긴 뼈입니다.",
+  },
+  "metatarsal bone": {
+    korean: "중족골 (발허리뼈)",
+    canonical: "Metatarsal bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "발목과 발가락 사이 발바닥 아치를 이루는 5개의 긴 뼈입니다.",
+  },
+  "proximal phalanx foot": {
+    korean: "족지 기절골 (발가락 첫마디뼈)",
+    canonical: "Proximal phalanx of foot",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "발가락의 뿌리 쪽에 위치한 첫 번째 마디 뼈입니다.",
+  },
+  "middle phalanx foot": {
+    korean: "족지 중절골 (발가락 중간마디뼈)",
+    canonical: "Middle phalanx of foot",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "발가락의 중간 마디 뼈입니다.",
+  },
+  "distal phalanx foot": {
+    korean: "족지 말절골 (발가락 끝마디뼈)",
+    canonical: "Distal phalanx of foot",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "발톱을 받치는 발가락의 가장 끝마디 뼈입니다.",
+  },
+
+  // --- 척추 및 두개골 보강 ---
+  atlas: {
+    korean: "환추 (제1목뼈 / 고리뼈)",
+    canonical: "Atlas (C1 vertebra)",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "두개골을 직접 받치는 첫 번째 경추뼈로 머리의 끄덕임 운동을 담당합니다.",
+  },
+  axis: {
+    korean: "축추 (제2목뼈 / 중쇠뼈)",
+    canonical: "Axis (C2 vertebra)",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "치돌기가 솟아 있어 환추와 결합하여 머리의 좌우 회전 운동 축을 제공합니다.",
+  },
+  "costal cartilage": {
+    korean: "늑연골 (갈비연골)",
+    canonical: "Costal cartilage",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "갈비뼈 앞쪽 끝을 흉골에 연결하는 탄력 있는 유리연골로 흉곽 팽창을 돕습니다.",
+  },
+  "palatine bone": {
+    korean: "구개골 (입천장뼈)",
+    canonical: "Palatine bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "단단한 입천장(경구개)의 뒷부분과 비강 외측벽을 형성하는 L자형 안면골입니다.",
+  },
+  vomer: {
+    korean: "서골 (보습뼈)",
+    canonical: "Vomer",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "비중격의 후하부를 이루는 얇은 사다리꼴 쟁기 모양 뼈입니다.",
+  },
 };
 
 /**
@@ -813,6 +1145,31 @@ function resolveSegmentalBoneInfo(
 }
 
 /**
+ * 런타임에 감지된 미등록 해부학 부위 레지스트리 (중복 제거)
+ */
+export const unregisteredAnatomyRegistry = new Set<string>();
+
+/**
+ * 현재까지 감지된 미등록 해부학 부위 목록 반환
+ */
+export function getUnregisteredAnatomyList(): string[] {
+  return Array.from(unregisteredAnatomyRegistry).sort();
+}
+
+if (typeof window !== "undefined") {
+  (window as unknown as { __getUnregisteredAnatomy: typeof getUnregisteredAnatomyList }).__getUnregisteredAnatomy =
+    getUnregisteredAnatomyList;
+}
+
+/**
+ * 미등록 해부학 부위 목록 초기화
+ */
+export function clearUnregisteredAnatomyList(): void {
+  unregisteredAnatomyRegistry.clear();
+}
+
+
+/**
  * 메쉬명에서 좌/우 방향성 및 기본 토큰을 추출하고 표준 한글/라틴어 병기 정보를 반환
  */
 export function resolveAnatomyDisplayInfo(
@@ -820,31 +1177,60 @@ export function resolveAnatomyDisplayInfo(
   fallbackSystem?: string,
 ): AnatomyDisplayInfo {
   const resolvedFallback = fallbackSystem ?? inferSystemFromName(rawName);
+
+  // 1. Z-Anatomy 계층 접두사 및 모델 래퍼 접두사 정리
   let cleaned = rawName
     .replace(/^body-shell__/, "")
     .replace(/^VH_[FM]_/, "")
+    .replace(/^appendicular skeleton\s*/i, "")
+    .replace(/^axial skeleton\s*/i, "")
+    .replace(/^skeleton\s*/i, "")
     .trim();
 
   let side: "left" | "right" | "bilateral" | undefined;
 
-  // 방향성 검출 (.l, .r, _L, _R, -l, -r, .left, .right 등)
-  if (/\.l$/i.test(cleaned) || /_l$/i.test(cleaned) || /-l$/i.test(cleaned) || /\bleft\b/i.test(cleaned)) {
+  // 2. 방향성 검출 (접미사 .l, _l, -l 뿐 아니라 문자열 내부 단어 left/right 매칭)
+  if (/\bleft\b/i.test(cleaned) || /\.l$/i.test(cleaned) || /_l$/i.test(cleaned) || /-l$/i.test(cleaned)) {
     side = "left";
     cleaned = cleaned
       .replace(/\.l$/i, "")
       .replace(/_l$/i, "")
       .replace(/-l$/i, "")
-      .replace(/\bleft\b/i, "")
+      .replace(/\bleft\b/gi, "")
       .trim();
-  } else if (/\.r$/i.test(cleaned) || /_r$/i.test(cleaned) || /-r$/i.test(cleaned) || /\bright\b/i.test(cleaned)) {
+  } else if (/\bright\b/i.test(cleaned) || /\.r$/i.test(cleaned) || /_r$/i.test(cleaned) || /-r$/i.test(cleaned)) {
     side = "right";
     cleaned = cleaned
       .replace(/\.r$/i, "")
       .replace(/_r$/i, "")
       .replace(/-r$/i, "")
-      .replace(/\bright\b/i, "")
+      .replace(/\bright\b/gi, "")
       .trim();
   }
+
+  // 3. Z-Anatomy 특유의 끝글자 오타 또는 방향성 잔여어(Bonel, Boner 등) 정규화
+  cleaned = cleaned
+    .replace(/\bbonel\b/gi, "bone")
+    .replace(/\bboner\b/gi, "bone")
+    .replace(/[_.-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // 4. 반복되는 중복 토큰 정규화 (예: "Capitate Bone Capitate Bone" -> "Capitate Bone", "Exotic Test Bone Exotic Bone" -> "Exotic Test Bone")
+  const rawWords = cleaned.split(/\s+/).filter(Boolean);
+  const dedupedWords: string[] = [];
+  const seenLower = new Set<string>();
+  for (const w of rawWords) {
+    const lower = w.toLowerCase();
+    if (!seenLower.has(lower)) {
+      dedupedWords.push(w);
+      seenLower.add(lower);
+    }
+  }
+  if (dedupedWords.length > 0) {
+    cleaned = dedupedWords.join(" ");
+  }
+
 
   // 척추/갈비뼈 등 분절 번호 보존 매칭 우선 수행
   const segmental = resolveSegmentalBoneInfo(`${rawName} ${cleaned}`, side);
@@ -853,16 +1239,17 @@ export function resolveAnatomyDisplayInfo(
   }
 
   // 언더스코어 공백 치환 및 정규화
-  const normalizedKey = cleaned.replace(/[_.-]+/g, " ").trim().toLowerCase();
+  const normalizedKey = cleaned.toLowerCase().trim();
 
   // 사전 검색 (완전 일치 또는 부분 일치)
   let entry: DictionaryEntry | undefined = ANATOMY_DICTIONARY[normalizedKey];
 
   if (!entry) {
-    // 키워드 탐색 (예: "gastrocnemius medial head" -> "gastrocnemius")
-    for (const [key, val] of Object.entries(ANATOMY_DICTIONARY)) {
-      if (normalizedKey.includes(key)) {
-        entry = val;
+    // 단어 기반 탐색: 더 구체적인 키를 우선 매칭하기 위해 키 길이 내림차순 정렬 후 탐색
+    const sortedKeys = Object.keys(ANATOMY_DICTIONARY).sort((a, b) => b.length - a.length);
+    for (const key of sortedKeys) {
+      if (normalizedKey === key || normalizedKey.includes(key)) {
+        entry = ANATOMY_DICTIONARY[key];
         break;
       }
     }
@@ -888,11 +1275,13 @@ export function resolveAnatomyDisplayInfo(
     };
   }
 
-  // 사전에 없는 경우 자연어 표기 복원
+  // 사전에 없는 경우: 미등록 레지스트리에 메모 등록 및 정돈된 자연어 표기
+  unregisteredAnatomyRegistry.add(rawName);
+
   const titleCased = cleaned
-    .replace(/[_.-]+/g, " ")
     .split(" ")
-    .map((w) => (w.length > 0 ? w[0].toUpperCase() + w.slice(1).toLowerCase() : ""))
+    .filter((w) => w.length > 0)
+    .map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
     .join(" ");
 
   const fallbackKr = `${sidePrefixKr}${titleCased}`;
@@ -933,3 +1322,4 @@ function systemToKorean(system: string): string {
       return "해부학계통";
   }
 }
+

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveAnatomyDisplayInfo } from "./anatomyKoreanDictionary";
+import { getUnregisteredAnatomyList, resolveAnatomyDisplayInfo } from "./anatomyKoreanDictionary";
 
 describe("anatomyKoreanDictionary", () => {
   it("Fascia lata.l 메쉬명을 좌측 대퇴근막 및 라틴어 병기 레이블로 해석한다", () => {
@@ -67,4 +67,42 @@ describe("anatomyKoreanDictionary", () => {
     expect(rib8Left.fullBilingualLabel).toBe("좌측 갈비뼈 8번 (Rib 8 L)");
     expect(rib8Left.side).toBe("left");
   });
+
+  it("Z-Anatomy 원문 계층 메쉬명(Capitate, Lunate, Scaphoid, Hip bone)을 대한해부학회 표준 한글명으로 정확히 파싱한다", () => {
+    const capitate = resolveAnatomyDisplayInfo("Appendicular Skeleton Capitate Bone Left Capitate Bonel");
+    expect(capitate.koreanName).toBe("좌측 유두골 (알머리뼈)");
+    expect(capitate.canonicalName).toBe("Capitate bone (Left)");
+    expect(capitate.side).toBe("left");
+    expect(capitate.systemKorean).toBe("골격계");
+
+    const lunate = resolveAnatomyDisplayInfo("Appendicular Skeleton Lunate Bone Left Lunate Bonel");
+    expect(lunate.koreanName).toBe("좌측 월상골 (반달뼈)");
+    expect(lunate.canonicalName).toBe("Lunate bone (Left)");
+    expect(lunate.side).toBe("left");
+
+    const scaphoid = resolveAnatomyDisplayInfo("Appendicular Skeleton Scaphoid Bone Left Scaphoid Bonel");
+    expect(scaphoid.koreanName).toBe("좌측 주상골 (손배뼈)");
+    expect(scaphoid.canonicalName).toBe("Scaphoid bone (Left)");
+    expect(scaphoid.side).toBe("left");
+
+    const hip = resolveAnatomyDisplayInfo("Skeleton Hip Bone Left Hip Bonel");
+    expect(hip.koreanName).toBe("좌측 관골 (볼기뼈 / 골반골)");
+    expect(hip.canonicalName).toBe("Hip bone (Coxal bone) (Left)");
+    expect(hip.side).toBe("left");
+  });
+
+  it("사전에 없는 미등록 부위가 감지되면 unregisteredAnatomyRegistry에 등록되고 정돈된 학명으로 폴백된다", () => {
+    const unknownRaw = "Appendicular Skeleton Exotic Test Bone Left Exotic Bonel";
+    const result = resolveAnatomyDisplayInfo(unknownRaw);
+
+    expect(result.koreanName).toBe("좌측 Exotic Test Bone");
+    expect(result.canonicalName).toBe("Exotic Test Bone (Left)");
+    expect(result.side).toBe("left");
+
+    // 미등록 레지스트리에 원문이 기록되었는지 확인
+    const list = getUnregisteredAnatomyList();
+    expect(list).toContain(unknownRaw);
+  });
 });
+
+
