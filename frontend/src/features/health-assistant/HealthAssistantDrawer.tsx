@@ -428,6 +428,8 @@ export function HealthAssistantDrawer({
     if (!profile) return;
     activeSessionIdRef.current = null;
     setActiveSessionId(null);
+    sessionSyncPromiseRef.current = null;
+    clearChatSession(profile.id);
     setMessages([createWelcomeMessage(profile.displayName)]);
     setSelectedImage(null);
     setImagePreview(null);
@@ -867,14 +869,15 @@ export function HealthAssistantDrawer({
       if (!sessionId && sessionSyncPromiseRef.current) {
         sessionId = await sessionSyncPromiseRef.current;
       }
-      // 초기 동기화가 실패했더라도 온라인 요청이 가능한 시점이면 세션을 다시 만든다.
+      // 세션이 없으면(새 대화 모드이거나 초기 세션이 없는 경우) 서버에 새 대화 세션을 생성한다.
       if (!sessionId && activeProfileIdRef.current === profile.id) {
         try {
           const newSession = await createChatSession(profile.id);
           sessionId = newSession.id;
           activeSessionIdRef.current = sessionId;
           setActiveSessionId(sessionId);
-          setChatSessions((previous) => [newSession, ...previous]);
+          sessionSyncPromiseRef.current = Promise.resolve(sessionId);
+          setChatSessions((previous) => [newSession, ...previous.filter((s) => s.id !== newSession.id)]);
         } catch (sessionError) {
           // 세션 저장 장애가 기존 챗봇 자체를 막아서는 안 된다. 대화는 계속하고
           // sessionStorage 캐시로 복구하며 다음 요청에서 다시 서버 세션을 시도한다.
@@ -1623,6 +1626,9 @@ export function HealthAssistantDrawer({
                 setShowSessionList(true);
                 if (profile) {
                   saveChatViewMode(profile.id, "list");
+                  void listChatSessions(profile.id)
+                    .then((sessions) => setChatSessions(sessions))
+                    .catch(() => undefined);
                 }
               }}
               aria-label="대화 목록"
