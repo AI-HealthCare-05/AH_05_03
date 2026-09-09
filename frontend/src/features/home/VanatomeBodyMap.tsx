@@ -1518,6 +1518,10 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     canvas.removeEventListener("pointermove", handlePointerMove, true);
     canvas.removeEventListener("pointerup", handlePointerUp);
     canvas.removeEventListener("pointercancel", handlePointerCancel);
+    // canvas 는 canvasRef 의 같은 DOM 노드라 이펙트가 다시 돌아도 살아남는다. 이걸
+    // 빼먹으면 핸들러가 쌓이고, 낡은 핸들러가 이미 dispose 한 씬의 renderScene 과
+    // 재질 맵을 계속 붙잡는다.
+    canvas.removeEventListener("pointerleave", handlePointerLeave);
     canvas.removeEventListener("webglcontextlost", handleContextLost);
     canvas.style.cursor = "";
     controls.removeEventListener("change", renderScene);
