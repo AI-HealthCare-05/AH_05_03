@@ -9,10 +9,12 @@ export interface ChatMessage {
 }
 
 export interface ProfileContext {
+  profile_id?: string;
   profile_name: string;
   relationship?: string;
   birth_year?: number;
   recent_records_summary?: string;
+  previous_conversations_summary?: string;
 }
 
 export interface CurrentLocation {

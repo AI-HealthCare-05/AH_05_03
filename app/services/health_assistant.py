@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any, cast
 
@@ -10,8 +11,13 @@ from app.dtos.health_assistant import (
 from app.exceptions import LlmProviderFailedError
 from app.integrations.llm.chain import shared_chat_client
 from app.integrations.llm.protocol import LLMClientProtocol
+from app.models.households import HouseholdStatus
+from app.models.service_accounts import ServiceAccount
 from app.prompts.health_assistant import build_system_instruction
+from app.repositories.chat_session_repository import ChatSessionRepository
 from app.repositories.health_record_repository import HealthRecordRepository
+from app.repositories.household_repository import HouseholdRepository
+from app.repositories.profile_repository import ProfileRepository
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.medical_facility_client import MedicalFacilityClient
 from app.services.medical_facility_tools import (
@@ -128,9 +134,15 @@ _MEDICATION_KEYWORDS = (
     "부작용",
     "병용",
     "같이 먹",
+    "같이먹",
     "함께 먹",
+    "함께먹",
     "먹어도 돼",
+    "먹어도돼",
     "먹어도 되",
+    "먹어도되",
+    "복용해도 돼",
+    "복용해도돼",
     "금기",
     "처방",
     "성분",
@@ -146,6 +158,20 @@ _MEDICATION_KEYWORDS = (
     "메트포르민",
     "이지엔",
     "게보린",
+    "탁센",
+    "피임약",
+    "감기약",
+    "소화제",
+    "진통제",
+    "소염진통제",
+    "항생제",
+    "위장약",
+    "스테로이드",
+    "영양제",
+    "비타민",
+    "마그네슘",
+    "오메가",
+    "유산균",
 )
 
 
@@ -163,15 +189,21 @@ class HealthAssistantService:
         safety_service: HealthAssistantSafetyService | None = None,
         facility_client: MedicalFacilityClient | None = None,
         record_repo: HealthRecordRepository | None = None,
+        chat_session_repo: ChatSessionRepository | None = None,
         outdoor_conditions_client: OutdoorConditionsClientProtocol | None = None,
         medication_client: MedicationClientProtocol | None = None,
+        profile_repo: ProfileRepository | None = None,
+        household_repo: HouseholdRepository | None = None,
     ):
         self._llm_client = llm_client
         self.safety_service = safety_service or HealthAssistantSafetyService()
         self.facility_client = facility_client or MedicalFacilityClient()
         self.record_repo = record_repo
+        self.chat_session_repo = chat_session_repo
         self.outdoor_conditions_client = outdoor_conditions_client or OutdoorConditionsClient()
         self.medication_client: MedicationClientProtocol = medication_client or MedicationClient()
+        self.profile_repo = profile_repo
+        self.household_repo = household_repo
 
     @staticmethod
     def _needs_medication_info(request: HealthAssistantChatRequest) -> bool:
@@ -188,21 +220,30 @@ class HealthAssistantService:
             return False
 
         # 2) 병용 가능 여부 질문("같이 먹어도 돼?", "함께 복용해도 되나요?")은 최우선 검색
+        compact_msg = last_msg.replace(" ", "")
         is_interaction_question = any(
-            k in last_msg
-            for k in ("같이", "함께", "병용", "동시에", "먹어도 돼", "먹어도 되", "복용해도 돼", "복용해도 되")
+            k in compact_msg
+            for k in (
+                "같이",
+                "함께",
+                "병용",
+                "동시에",
+                "먹어도돼",
+                "먹어도되",
+                "복용해도돼",
+                "복용해도되",
+                "먹어도괜찮",
+                "복용해도괜찮",
+                "먹어도될까",
+                "복용해도될까",
+                "먹어도되나요",
+                "복용해도되나요",
+            )
         )
         if is_interaction_question:
             return True
 
-        # 3) 단순 복약 기록 완료형 발화는 검색에서 제외 ("복용했어", "먹었어", "먹음", "1알 복용" 등)
-        is_past_record = any(
-            suffix in last_msg for suffix in ("복용했", "먹었", "먹음", "복용함", "투약함", "챙겨먹", "먹은", "복용한")
-        )
-        if is_past_record:
-            return False
-
-        # 4) 정보/질문 의도 키워드가 포함되어 있어야 함
+        # 3) 질문 의도 키워드 또는 물음표가 있는 경우 질문으로 우선 처리
         has_question_intent = any(
             k in last_msg
             for k in (
@@ -223,9 +264,39 @@ class HealthAssistantService:
                 "알려줘",
                 "궁금",
                 "설명",
+                "몇 알",
+                "얼마나",
+                "언제",
+                "되나요",
+                "될까",
+                "괜찮",
             )
         ) or last_msg.strip().endswith("?")
-        return has_question_intent
+        if has_question_intent:
+            return True
+
+        # 4) 단순 복약 기록 완료형 발화는 검색에서 제외 ("복용했어", "먹었어", "먹음", "1알 복용" 등)
+        is_past_record = any(
+            suffix in last_msg
+            for suffix in (
+                "복용했",
+                "복용햇",
+                "먹었",
+                "먹엇",
+                "머것",
+                "먹음",
+                "먹어씀",
+                "복용함",
+                "투약함",
+                "챙겨먹",
+                "먹은",
+                "복용한",
+            )
+        )
+        if is_past_record:
+            return False
+
+        return False
 
     @staticmethod
     def _needs_facility_tools(request: HealthAssistantChatRequest) -> bool:
@@ -426,19 +497,105 @@ class HealthAssistantService:
             lines.append("일부 조회 실패: " + "; ".join(result.errors))
         return "\n".join(lines) or "실시간 야외 환경 정보를 불러오지 못했습니다."
 
-    async def _enrich_context(self, context: ProfileContext | None) -> ProfileContext | None:
-        if context is None or context.recent_records_summary or not context.profile_id or not self.record_repo:
-            return context
+    @staticmethod
+    def _parse_profile_id(raw: str | uuid.UUID | None) -> uuid.UUID | None:
+        if isinstance(raw, uuid.UUID):
+            return raw
+        if isinstance(raw, str):
+            try:
+                return uuid.UUID(raw)
+            except ValueError:
+                return None
+        return None
+
+    async def _has_profile_access(self, profile_id: uuid.UUID, account_id: uuid.UUID) -> bool:
+        """현재 계정(account_id)이 대상 프로필(profile_id)의 활성 가구 구성원인지 검증한다."""
+        if not self.profile_repo or not self.household_repo:
+            return False
         try:
-            records = await self.record_repo.list_by_profile(context.profile_id, limit=5)
+            profile = await self.profile_repo.get(profile_id)
+            if profile is None or profile.status != "active":
+                return False
+            household = await self.household_repo.get(profile.household_id)
+            if household is None or household.status != HouseholdStatus.ACTIVE:
+                return False
+            return await self.household_repo.has_active_membership(profile.household_id, account_id)
+        except Exception:
+            return False
+
+    async def _enrich_records_summary(
+        self,
+        context: ProfileContext,
+        account_id: uuid.UUID | None,
+    ) -> None:
+        if context.recent_records_summary or not context.profile_id or not self.record_repo or not account_id:
+            return
+        profile_id = self._parse_profile_id(context.profile_id)
+        if profile_id is None or not await self._has_profile_access(profile_id, account_id):
+            return
+
+        try:
+            records = await self.record_repo.list_by_profile(profile_id, limit=5)
             if records:
-                summaries = []
-                for r in records:
-                    date_str = r.recorded_at.strftime("%Y-%m-%d")
-                    summaries.append(f"[{date_str}] {r.record_type}: {r.payload}")
+                summaries = [f"[{r.recorded_at.strftime('%Y-%m-%d')}] {r.record_type}: {r.payload}" for r in records]
                 context.recent_records_summary = "; ".join(summaries)[:2000]
         except Exception:
             pass
+
+    async def _build_past_sessions_summary(self, sessions: list[Any]) -> str:
+        if not self.chat_session_repo:
+            return ""
+        session_summaries: list[str] = []
+        for s in sessions:
+            msgs = await self.chat_session_repo.list_messages(s.id, limit=6)
+            if msgs:
+                msg_lines = [
+                    f"  * {'사용자' if m.role == 'user' else '봄이'}: {m.content[:120].replace(chr(10), ' ')}"
+                    for m in msgs
+                ]
+                session_summaries.append(f"- 세션 '{s.title or '이전 대화'}':\n" + "\n".join(msg_lines))
+        return "\n".join(session_summaries)
+
+    async def _enrich_cross_session_summary(
+        self,
+        context: ProfileContext,
+        account_id: uuid.UUID | None,
+        current_session_id: uuid.UUID | None,
+    ) -> None:
+        if (
+            context.previous_conversations_summary
+            or not context.profile_id
+            or not self.chat_session_repo
+            or not account_id
+        ):
+            return
+        profile_id = self._parse_profile_id(context.profile_id)
+        if profile_id is not None and not await self._has_profile_access(profile_id, account_id):
+            return
+
+        try:
+            sessions = await self.chat_session_repo.list_sessions(
+                account_id=account_id, profile_id=str(context.profile_id), limit=6
+            )
+            past_sessions = [s for s in sessions if s.id != current_session_id][:3]
+            if not past_sessions:
+                return
+            summaries = await self._build_past_sessions_summary(past_sessions)
+            if summaries:
+                context.previous_conversations_summary = summaries[:2500]
+        except Exception:
+            pass
+
+    async def _enrich_context(
+        self,
+        context: ProfileContext | None,
+        account_id: uuid.UUID | None = None,
+        current_session_id: uuid.UUID | None = None,
+    ) -> ProfileContext | None:
+        if context is None:
+            return None
+        await self._enrich_records_summary(context, account_id=account_id)
+        await self._enrich_cross_session_summary(context, account_id, current_session_id)
         return context
 
     @property
@@ -462,12 +619,21 @@ class HealthAssistantService:
             tools.extend(get_medication_tools())
         return tools if tools else None
 
-    async def respond(self, request: HealthAssistantChatRequest) -> HealthAssistantResponse:
+    async def respond(
+        self,
+        request: HealthAssistantChatRequest,
+        account: ServiceAccount | None = None,
+    ) -> HealthAssistantResponse:
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
             return safety_check
 
-        profile_context = await self._enrich_context(request.profile_context)
+        account_id = account.id if account else None
+        profile_context = await self._enrich_context(
+            request.profile_context,
+            account_id=account_id,
+            current_session_id=request.session_id,
+        )
         loc = await self._resolve_request_location(request)
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
@@ -513,14 +679,65 @@ class HealthAssistantService:
         validated_response = self.safety_service.validate_response(response)
         return validated_response
 
-    async def stream(self, request: HealthAssistantChatRequest) -> AsyncIterator[tuple[str, Any]]:
+    async def _get_stream_generator(
+        self,
+        request: HealthAssistantChatRequest,
+        system_instruction: str,
+        tools: list[Any] | None,
+    ) -> tuple[AsyncIterator[str], Any]:
+        client_any = cast(Any, self.llm_client)
+        if tools and hasattr(client_any, "stream_structured_response_with_tools"):
+            return await client_any.stream_structured_response_with_tools(
+                system_instruction=system_instruction,
+                messages=request.messages,
+                response_schema=HealthAssistantResponse,
+                tools=tools,
+                tool_executor=self._execute_tool,
+            )
+        return (
+            self.llm_client.stream_structured_response(
+                system_instruction=system_instruction,
+                messages=request.messages,
+                response_schema=HealthAssistantResponse,
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _enrich_parsed_response(
+        parsed: HealthAssistantResponse,
+        tool_result: Any,
+        outdoor_conditions: Any,
+    ) -> HealthAssistantResponse:
+        if tool_result:
+            from app.dtos.medication import MedicationSearchResult
+
+            if isinstance(tool_result, MedicationSearchResult):
+                if not parsed.medication_search_result:
+                    parsed.medication_search_result = tool_result
+            elif not parsed.facility_search_draft:
+                parsed.facility_search_draft = tool_result
+        if outdoor_conditions and not parsed.outdoor_conditions:
+            parsed.outdoor_conditions = outdoor_conditions
+        return parsed
+
+    async def stream(
+        self,
+        request: HealthAssistantChatRequest,
+        account: ServiceAccount | None = None,
+    ) -> AsyncIterator[tuple[str, Any]]:
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
             yield "delta", {"text": safety_check.assistant_message}
             yield "result", safety_check.model_dump(mode="json")
             return
 
-        profile_context = await self._enrich_context(request.profile_context)
+        account_id = account.id if account else None
+        profile_context = await self._enrich_context(
+            request.profile_context,
+            account_id=account_id,
+            current_session_id=request.session_id,
+        )
         loc = await self._resolve_request_location(request)
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
@@ -532,25 +749,9 @@ class HealthAssistantService:
         )
         reader = PartialJsonTextReader("assistant_message")
         raw = ""
-        tool_result = None
 
         tools = self._get_tools(request)
-        client_any = cast(Any, self.llm_client)
-
-        if tools and hasattr(client_any, "stream_structured_response_with_tools"):
-            stream_gen, tool_result = await client_any.stream_structured_response_with_tools(
-                system_instruction=system_instruction,
-                messages=request.messages,
-                response_schema=HealthAssistantResponse,
-                tools=tools,
-                tool_executor=self._execute_tool,
-            )
-        else:
-            stream_gen = self.llm_client.stream_structured_response(
-                system_instruction=system_instruction,
-                messages=request.messages,
-                response_schema=HealthAssistantResponse,
-            )
+        stream_gen, tool_result = await self._get_stream_generator(request, system_instruction, tools)
 
         if tool_result is not None:
             from app.dtos.medication import MedicationSearchResult
@@ -558,15 +759,6 @@ class HealthAssistantService:
             payload = tool_result.model_dump(mode="json") if hasattr(tool_result, "model_dump") else tool_result
             if isinstance(tool_result, MedicationSearchResult):
                 yield "medication", payload
-                summary_msg = tool_result.message or "의약품 정보를 조회했습니다."
-                yield "delta", {"text": summary_msg}
-                res_obj = HealthAssistantResponse(
-                    intent="health_advice",
-                    assistant_message=summary_msg,
-                    medication_search_result=tool_result,
-                    outdoor_conditions=outdoor_conditions,
-                )
-                yield "result", self.safety_service.validate_response(res_obj).model_dump(mode="json")
             else:
                 yield "facility", payload
                 summary_msg = getattr(tool_result, "message", None) or "주변 의료시설을 조회했습니다."
@@ -578,7 +770,7 @@ class HealthAssistantService:
                     outdoor_conditions=outdoor_conditions,
                 )
                 yield "result", self.safety_service.validate_response(res_obj).model_dump(mode="json")
-            return
+                return
 
         async for piece in stream_gen:
             raw += piece
@@ -588,10 +780,7 @@ class HealthAssistantService:
 
         try:
             parsed = HealthAssistantResponse.model_validate_json(raw)
-            if tool_result and not parsed.facility_search_draft:
-                parsed.facility_search_draft = tool_result
-            if outdoor_conditions and not parsed.outdoor_conditions:
-                parsed.outdoor_conditions = outdoor_conditions
+            parsed = self._enrich_parsed_response(parsed, tool_result, outdoor_conditions)
         except Exception as ex:
             raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex
 

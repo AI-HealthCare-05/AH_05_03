@@ -17,16 +17,19 @@ class ChatMessage(BaseModel):
 
 
 class ProfileContext(BaseModel):
-    """클라이언트가 채워 보내는 값. **시스템 지시문에 그대로 삽입된다**
+    """클라이언트가 채워 보내거나 서버가 보강하는 값. **시스템 지시문에 그대로 삽입된다**
     (`prompts.health_assistant.build_system_instruction`). 로컬 우선 구조라
     서버가 기록을 갖고 있지 않아 클라이언트가 보내는 것은 맞지만, 그만큼
     길이를 묶어 두지 않으면 지시문을 통째로 덮어쓸 수 있다."""
 
-    profile_id: uuid.UUID | None = Field(default=None, description="서버 프로필 ID (선택)")
+    profile_id: str | uuid.UUID | None = Field(default=None, description="프로필 ID (선택)")
     profile_name: str = Field(max_length=100)
     relationship: str | None = Field(default=None, max_length=50)
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
     recent_records_summary: str | None = Field(default=None, max_length=2000)
+    previous_conversations_summary: str | None = Field(
+        default=None, max_length=3000, description="이전 대화 세션들에서 파악된 건강 정보 및 대화 맥락 요약"
+    )
 
 
 class ExerciseDraft(BaseModel):

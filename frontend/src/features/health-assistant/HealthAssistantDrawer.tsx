@@ -738,6 +738,7 @@ export function HealthAssistantDrawer({
         promptMessages,
         applyDelta,
         {
+          profile_id: profile.id,
           profile_name: profile.displayName,
           relationship: profile.relationship,
           birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
@@ -758,7 +759,11 @@ export function HealthAssistantDrawer({
       if (res.lab_result_draft && extractedExamDate && (!res.lab_result_draft.recorded_at || res.lab_result_draft.recorded_at === new Date().toISOString().slice(0, 10))) {
         res.lab_result_draft.recorded_at = extractedExamDate;
       }
-      if (res.medication_draft && containsNewMedicationRecord(textToSend)) {
+      const isMedicationRecordCandidate =
+        res.intent === "record_medication" ||
+        containsNewMedicationRecord(textToSend);
+
+      if (res.medication_draft && isMedicationRecordCandidate) {
         res.medication_draft.taken_at = resolveMedicationTakenAt(
           textToSend,
           res.medication_draft.taken_at,
@@ -1070,13 +1075,25 @@ export function HealthAssistantDrawer({
     }
   }
 
-  // 운동 초안 로컬 저장
+  // 초안 자동 저장: 사용자 의도(intent)와 일치하는 초안만 엄격히 검증하여 저장한다.
+  // LLM이 여러 초안을 동시에 반환하더라도 사용자가 의도하지 않은 다른 유형의 기록이 오저장되는 위험을 차단한다.
   async function saveStructuredDraftAutomatically(response: HealthAssistantResponse, msgId: string): Promise<boolean> {
-    if (response.intent === "record_exercise" && response.exercise_draft) return saveExercise(response.exercise_draft, msgId);
-    if (response.intent === "record_blood_pressure" && response.blood_pressure_draft) return saveBloodPressure(response.blood_pressure_draft, msgId);
-    if (response.intent === "record_blood_glucose" && response.blood_glucose_draft) return saveBloodGlucose(response.blood_glucose_draft, msgId);
-    if (response.intent === "record_medication" && response.medication_draft) return saveMedication(response.medication_draft, msgId);
-    if (response.intent === "record_pain" && response.pain_draft) return savePain(response.pain_draft, msgId);
+    const intent = response.intent;
+    if (intent === "record_medication" && response.medication_draft) {
+      return saveMedication(response.medication_draft, msgId);
+    }
+    if (intent === "record_exercise" && response.exercise_draft) {
+      return saveExercise(response.exercise_draft, msgId);
+    }
+    if (intent === "record_blood_pressure" && response.blood_pressure_draft) {
+      return saveBloodPressure(response.blood_pressure_draft, msgId);
+    }
+    if (intent === "record_blood_glucose" && response.blood_glucose_draft) {
+      return saveBloodGlucose(response.blood_glucose_draft, msgId);
+    }
+    if (intent === "record_pain" && response.pain_draft) {
+      return savePain(response.pain_draft, msgId);
+    }
     return false;
   }
 
@@ -1217,11 +1234,15 @@ export function HealthAssistantDrawer({
     setLoading(true);
     try {
       const summaryText = `복약: ${draft.medication_name}${draft.dosage ? ` ${draft.dosage}` : ""}${draft.taken_at ? ` (${draft.taken_at})` : ""}`;
+      const recordedAt =
+        draft.taken_at && !Number.isNaN(Date.parse(draft.taken_at))
+          ? new Date(draft.taken_at).toISOString()
+          : new Date().toISOString();
       const result = await runtime.healthRecords.create({
         householdId: PRIMARY_HOUSEHOLD_ID,
         profileId: profile.id,
         recordType: "medication",
-        recordedAt: new Date().toISOString(),
+        recordedAt,
         source: "local_ai",
         payload: {
           type: "medication",
@@ -1240,6 +1261,7 @@ export function HealthAssistantDrawer({
       if (onRecordSaved) await onRecordSaved();
       return true;
     } catch (caught) {
+      console.error("복약 기록 저장 실패:", caught);
       setError(caught instanceof Error ? caught.message : "복약 기록 저장에 실패했습니다.");
       return false;
     } finally {

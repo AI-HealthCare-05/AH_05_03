@@ -1,5 +1,6 @@
+import uuid
 from collections.abc import AsyncIterator
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import pytest
 from pydantic import BaseModel
@@ -616,3 +617,245 @@ async def test_health_assistant_service_calls_format_pain_diary_tool() -> None:
     assert "팔꿈치" in response.pain_diary_tool.body_area
     assert "웨이트 트레이닝 후" in response.pain_diary_tool.formatted_diary
     assert response.pain_draft is not None
+
+
+@pytest.mark.asyncio
+async def test_needs_medication_info_flexible_routing() -> None:
+    """다양한 구어체/띄어쓰기 없는 복약 질문도 툴 라우팅이 정상 작동한다."""
+    cases = [
+        "타이레놀이랑 피임약 같이먹어도돼?",
+        "탁센이랑 소화제 함께복용해도되나요",
+        "판콜 먹어도돼?",
+        "혈압약이랑 비타민 같이먹어도되나",
+        "타이레놀 부작용 알려줘",
+        "타이레놀 먹었는데 또 먹어도돼?",
+        "타이레놀 먹었는데 몇 알까지 가능해?",
+    ]
+    for text in cases:
+        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
+        assert HealthAssistantService._needs_medication_info(req) is True, f"Failed for: {text}"
+
+    # 단순 기록형 발화는 툴 호출 없이 False
+    record_cases = [
+        "타이레놀 1알 먹었어",
+        "혈압약 먹음",
+        "탁센 복용완료",
+        "비타민 챙겨먹었어",
+    ]
+    for text in record_cases:
+        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
+        assert HealthAssistantService._needs_medication_info(req) is False, f"Failed for: {text}"
+
+
+@pytest.mark.asyncio
+async def test_medication_tool_stream_preserves_llm_answer() -> None:
+    """의약품 도구 실행 후에도 조기 return 없이 LLM의 자연어 스트리밍 답변이 유지된다."""
+    from unittest.mock import AsyncMock
+
+    from app.dtos.medication import MedicationSearchResult
+
+    fake_json = """{
+        "intent": "health_advice",
+        "assistant_message": "타이레놀과 피임약은 병용이 가능하지만 진통 효과가 다소 줄어들 수 있습니다.",
+        "exercise_draft": null,
+        "blood_pressure_draft": null,
+        "blood_glucose_draft": null,
+        "medication_draft": null,
+        "pain_draft": null,
+        "lab_result_draft": null,
+        "query_draft": null,
+        "challenge_draft": null,
+        "missing_fields": [],
+        "needs_confirmation": false,
+        "auto_save": false,
+        "suggested_quick_replies": [],
+        "emergency_notice": null,
+        "safety_disclaimer": "본 서비스는 의료 진단을 대신하지 않습니다."
+    }"""
+
+    mock_med_result = MedicationSearchResult(
+        query="타이레놀",
+        message="[식약처 정보] 아세트아미노펜",
+        items=[],
+    )
+
+    async def fake_chunks():
+        yield fake_json
+
+    mock_llm = AsyncMock()
+    mock_llm.stream_structured_response_with_tools = AsyncMock(return_value=(fake_chunks(), mock_med_result))
+
+    service = HealthAssistantService(llm_client=mock_llm)
+    req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="타이레놀이랑 피임약 같이먹어도돼?")])
+
+    events: list[tuple[str, Any]] = []
+    async for event_type, data in service.stream(req):
+        events.append((event_type, data))
+
+    event_types = [e[0] for e in events]
+    assert "medication" in event_types
+    assert "delta" in event_types
+    assert "result" in event_types
+
+    # final result 객체에 medication_search_result가 포함되어 있고 assistant_message는 LLM 답변임
+    result_event = next(e[1] for e in events if e[0] == "result")
+    assert "타이레놀과 피임약은 병용이 가능하지만" in result_event["assistant_message"]
+    assert result_event["medication_search_result"] is not None
+
+
+async def test_enrich_records_summary_denies_without_account_id() -> None:
+    """account_id가 없으면(비인증 등) 건강기록을 절대 조회·보강하지 않는다."""
+    from unittest.mock import AsyncMock
+
+    mock_record_repo = AsyncMock()
+    service = HealthAssistantService(record_repo=mock_record_repo)
+    ctx = ProfileContext(profile_name="홍길동", profile_id=str(uuid.uuid4()))
+
+    await service._enrich_records_summary(ctx, account_id=None)
+
+    assert ctx.recent_records_summary is None
+    mock_record_repo.list_by_profile.assert_not_called()
+
+
+async def test_enrich_records_summary_denies_unauthorized_account() -> None:
+    """해당 프로필 가구의 활성 구성원이 아닌 계정은 건강기록을 조회할 수 없다."""
+    from unittest.mock import AsyncMock
+
+    from app.models.households import HouseholdStatus
+
+    profile_id = uuid.uuid4()
+    household_id = uuid.uuid4()
+    account_id = uuid.uuid4()
+
+    mock_profile = AsyncMock(id=profile_id, household_id=household_id, status="active")
+    mock_household = AsyncMock(id=household_id, status=HouseholdStatus.ACTIVE)
+
+    mock_profile_repo = AsyncMock()
+    mock_profile_repo.get = AsyncMock(return_value=mock_profile)
+
+    mock_household_repo = AsyncMock()
+    mock_household_repo.get = AsyncMock(return_value=mock_household)
+    # 가구 구성원 아님
+    mock_household_repo.has_active_membership = AsyncMock(return_value=False)
+
+    mock_record_repo = AsyncMock()
+
+    service = HealthAssistantService(
+        record_repo=mock_record_repo,
+        profile_repo=mock_profile_repo,
+        household_repo=mock_household_repo,
+    )
+    ctx = ProfileContext(profile_name="홍길동", profile_id=str(profile_id))
+
+    await service._enrich_records_summary(ctx, account_id=account_id)
+
+    assert ctx.recent_records_summary is None
+    mock_record_repo.list_by_profile.assert_not_called()
+
+
+async def test_enrich_records_summary_denies_inactive_profile_or_household() -> None:
+    """프로필이 비활성이거나 가구가 비활성이면 건강기록 조회가 차단된다."""
+    from unittest.mock import AsyncMock
+
+    from app.models.households import HouseholdStatus
+
+    profile_id = uuid.uuid4()
+    household_id = uuid.uuid4()
+    account_id = uuid.uuid4()
+
+    # 1) 비활성 프로필
+    mock_profile_inactive = AsyncMock(id=profile_id, household_id=household_id, status="inactive")
+    mock_profile_repo = AsyncMock()
+    mock_profile_repo.get = AsyncMock(return_value=mock_profile_inactive)
+    mock_household_repo = AsyncMock()
+    mock_record_repo = AsyncMock()
+
+    service = HealthAssistantService(
+        record_repo=mock_record_repo,
+        profile_repo=mock_profile_repo,
+        household_repo=mock_household_repo,
+    )
+    ctx = ProfileContext(profile_name="홍길동", profile_id=str(profile_id))
+    await service._enrich_records_summary(ctx, account_id=account_id)
+    assert ctx.recent_records_summary is None
+    mock_record_repo.list_by_profile.assert_not_called()
+
+    # 2) 비활성 가구
+    mock_profile_active = AsyncMock(id=profile_id, household_id=household_id, status="active")
+    mock_profile_repo.get = AsyncMock(return_value=mock_profile_active)
+    mock_household_inactive = AsyncMock(id=household_id, status=HouseholdStatus.CLOSED)
+    mock_household_repo.get = AsyncMock(return_value=mock_household_inactive)
+
+    await service._enrich_records_summary(ctx, account_id=account_id)
+    assert ctx.recent_records_summary is None
+    mock_record_repo.list_by_profile.assert_not_called()
+
+
+async def test_enrich_records_summary_allows_authorized_member() -> None:
+    """정상 가구 구성원인 계정은 건강기록을 안전하게 보강받는다."""
+    from datetime import datetime, timezone
+    from unittest.mock import AsyncMock
+
+    from app.models.households import HouseholdStatus
+
+    profile_id = uuid.uuid4()
+    household_id = uuid.uuid4()
+    account_id = uuid.uuid4()
+
+    mock_profile = AsyncMock(id=profile_id, household_id=household_id, status="active")
+    mock_household = AsyncMock(id=household_id, status=HouseholdStatus.ACTIVE)
+
+    mock_profile_repo = AsyncMock()
+    mock_profile_repo.get = AsyncMock(return_value=mock_profile)
+
+    mock_household_repo = AsyncMock()
+    mock_household_repo.get = AsyncMock(return_value=mock_household)
+    mock_household_repo.has_active_membership = AsyncMock(return_value=True)
+
+    mock_record1 = AsyncMock(
+        recorded_at=datetime(2026, 9, 7, 10, 0, tzinfo=timezone.utc),
+        record_type="blood_pressure",
+        payload={"systolic": 120, "diastolic": 80},
+    )
+    mock_record_repo = AsyncMock()
+    mock_record_repo.list_by_profile = AsyncMock(return_value=[mock_record1])
+
+    service = HealthAssistantService(
+        record_repo=mock_record_repo,
+        profile_repo=mock_profile_repo,
+        household_repo=mock_household_repo,
+    )
+    ctx = ProfileContext(profile_name="홍길동", profile_id=str(profile_id))
+
+    await service._enrich_records_summary(ctx, account_id=account_id)
+
+    assert ctx.recent_records_summary is not None
+    assert "blood_pressure" in ctx.recent_records_summary
+    assert "120" in ctx.recent_records_summary
+    mock_record_repo.list_by_profile.assert_called_once_with(profile_id, limit=5)
+
+
+async def test_enrich_cross_session_summary_denies_unauthorized_account() -> None:
+    """해당 프로필 가구원이 아니면 이전 대화 세션도 조회되지 않는다."""
+    from unittest.mock import AsyncMock
+
+    profile_id = uuid.uuid4()
+    account_id = uuid.uuid4()
+
+    mock_profile_repo = AsyncMock()
+    mock_profile_repo.get = AsyncMock(return_value=None)  # 프로필 없음 또는 미인증
+
+    mock_household_repo = AsyncMock()
+    mock_chat_session_repo = AsyncMock()
+
+    service = HealthAssistantService(
+        chat_session_repo=mock_chat_session_repo,
+        profile_repo=mock_profile_repo,
+        household_repo=mock_household_repo,
+    )
+    ctx = ProfileContext(profile_name="홍길동", profile_id=str(profile_id))
+
+    await service._enrich_cross_session_summary(ctx, account_id=account_id, current_session_id=None)
+
+    assert ctx.previous_conversations_summary is None
+    mock_chat_session_repo.list_sessions.assert_not_called()

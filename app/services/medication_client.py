@@ -8,6 +8,7 @@ MFDS_API_KEY 가 없으면 API 호출 없이 빈 결과를 반환한다 (서비�
 from __future__ import annotations
 
 import logging
+import re
 import time
 import urllib.parse
 from typing import Any, Protocol
@@ -18,6 +19,19 @@ from app.core import config
 from app.dtos.medication import DrugInfo, DurItem, MedicationSearchResult
 
 logger = logging.getLogger(__name__)
+
+
+def _mask_credentials(text: str, secret: str | None = None) -> str:
+    """오류 메시지나 URL에서 인증키를 마스킹하여 로그 노출을 방지한다."""
+    if not text:
+        return text
+    # 쿼리스트링 내 serviceKey 마스킹
+    masked = re.sub(r"serviceKey=[^&'\"]+", "serviceKey=***", text)
+    # 혹시 키 원문이 메시지에 그대로 포함된 경우 마스킹
+    if secret and secret in masked:
+        masked = masked.replace(secret, "***")
+    return masked
+
 
 _TIMEOUT_SECONDS = 5.0
 _CACHE_SECONDS = 600.0
@@ -113,6 +127,16 @@ def _build_summary_message(drug_name: str, items: list[DrugInfo]) -> str:
     return "\n".join(parts)
 
 
+def _extract_primary_drug_name(drug_name: str) -> str:
+    clean = drug_name.strip()
+    for sep in (",", "/", "&", "+", "이랑", "하고", "과", "와"):
+        if sep in clean:
+            parts = [p.strip() for p in clean.split(sep) if p.strip()]
+            if parts:
+                return parts[0]
+    return clean
+
+
 class MedicationClient:
     """식약처 e약은요 + DUR API 클라이언트."""
 
@@ -122,10 +146,11 @@ class MedicationClient:
             logger.debug("MFDS_API_KEY 미설정 — 의약품 조회 건너뜀")
             return MedicationSearchResult(
                 query=drug_name,
-                message="의약품 정보 서비스가 현재 설정되어 있지 않습니다.",
+                message="식약처 공공 API 키가 설정되지 않아 공식 DB 조회가 생략되었습니다. 일반 의약품 지식을 바탕으로 안내해 드립니다.",
             )
 
-        cache_key = drug_name.strip().lower()
+        clean_name = _extract_primary_drug_name(drug_name)
+        cache_key = clean_name.lower()
         cached = _cache_get(cache_key)
         if cached is not None:
             return cached
@@ -140,7 +165,7 @@ class MedicationClient:
             # serviceKey만 URL에 직접 붙이고 나머지 파라미터는 urllib.parse로 처리한다.
             try:
                 extra_params = urllib.parse.urlencode(
-                    {"itemName": drug_name, "type": "json", "numOfRows": "3", "pageNo": "1"}
+                    {"itemName": clean_name, "type": "json", "numOfRows": "3", "pageNo": "1"}
                 )
                 url_easydr = f"{_EASYDR_URL}?serviceKey={api_key}&{extra_params}"
                 resp = await client.get(url_easydr)
@@ -152,13 +177,14 @@ class MedicationClient:
                     raw_items = [raw_items]
                 drug_items = [_parse_easydr_item(r) for r in raw_items if r]
             except Exception as exc:
-                logger.warning("e약은요 API 오류: %s", exc)
+                safe_err = _mask_credentials(str(exc), api_key)
+                logger.warning("e약은요 API 오류 (%s): %s", type(exc).__name__, safe_err)
                 errors.append(f"의약품 기본 정보 조회 실패: {type(exc).__name__}")
 
             # 2) DUR API — 병용금기·연령금기·임부금기
             try:
                 extra_params_dur = urllib.parse.urlencode(
-                    {"itemName": drug_name, "type": "json", "numOfRows": "10", "pageNo": "1"}
+                    {"itemName": clean_name, "type": "json", "numOfRows": "10", "pageNo": "1"}
                 )
                 url_dur = f"{_DUR_URL}?serviceKey={api_key}&{extra_params_dur}"
                 resp_dur = await client.get(url_dur)
@@ -173,13 +199,14 @@ class MedicationClient:
                 if drug_items and dur_items_parsed:
                     drug_items[0].dur_items = dur_items_parsed
             except Exception as exc:
-                logger.warning("DUR API 오류: %s", exc)
+                safe_err = _mask_credentials(str(exc), api_key)
+                logger.warning("DUR API 오류 (%s): %s", type(exc).__name__, safe_err)
                 errors.append(f"DUR 병용금기 조회 실패: {type(exc).__name__}")
 
         result = MedicationSearchResult(
             query=drug_name,
             items=drug_items,
-            message=_build_summary_message(drug_name, drug_items),
+            message=_build_summary_message(clean_name, drug_items),
             errors=errors,
         )
         _cache_set(cache_key, result)

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import pytest_asyncio
 
 from app.dtos.medication import DrugInfo, DurItem, MedicationSearchResult
 from app.services.medication_client import (
@@ -13,6 +16,12 @@ from app.services.medication_client import (
     _parse_dur_items,
     _parse_easydr_item,
 )
+
+
+@pytest_asyncio.fixture(loop_scope="session", autouse=True)
+async def _override_session() -> AsyncIterator[None]:
+    """식약처 클라이언트 단위 테스트는 DB 불필요하므로 상위 conftest의 DB 세션 오버라이드를 끈다."""
+    yield
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +60,7 @@ class TestParseEasydrItem:
 
 class TestParseDurItems:
     def test_parse_prohibition_items(self) -> None:
-        raw_list = [
+        raw_list: list[dict[str, Any]] = [
             {
                 "prohibitContent": "병용금기",
                 "ingdIngdNm": "와파린",
@@ -92,9 +101,7 @@ class TestBuildSummaryMessage:
     def test_with_dur_items(self) -> None:
         drug = DrugInfo(
             item_name="아스피린정100밀리그람",
-            dur_items=[
-                DurItem(prohibition_type="병용금기", ingredient_name="와파린", reason="출혈 위험")
-            ],
+            dur_items=[DurItem(prohibition_type="병용금기", ingredient_name="와파린", reason="출혈 위험")],
         )
         msg = _build_summary_message("아스피린", [drug])
         assert "DUR 주의·금기" in msg
@@ -115,9 +122,7 @@ class TestNeedsMedicationInfoRouting:
         from app.dtos.health_assistant import ChatMessage, HealthAssistantChatRequest
         from app.services.health_assistant import HealthAssistantService
 
-        req = HealthAssistantChatRequest(
-            messages=[ChatMessage(role="user", content="타이레놀이 어떤 약이야?")]
-        )
+        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="타이레놀이 어떤 약이야?")])
         assert HealthAssistantService._needs_medication_info(req) is True
 
     def test_interaction_question_returns_true(self) -> None:
@@ -212,6 +217,7 @@ async def test_search_medication_success(
             client = MedicationClient()
             # 캐시 초기화
             from app.services import medication_client as mc_mod
+
             mc_mod._cache.clear()
             result = await client.search_medication("타이레놀")
 
@@ -234,6 +240,7 @@ async def test_search_medication_api_error() -> None:
             mock_http.return_value.__aexit__ = AsyncMock(return_value=False)
             client = MedicationClient()
             from app.services import medication_client as mc_mod
+
             mc_mod._cache.clear()
             result = await client.search_medication("타이레놀")
 
@@ -261,9 +268,41 @@ async def test_search_medication_cache(mock_easydr_response: dict, mock_dur_resp
             mock_http.return_value.__aexit__ = AsyncMock(return_value=False)
             client = MedicationClient()
             from app.services import medication_client as mc_mod
+
             mc_mod._cache.clear()
             await client.search_medication("아스피린")
             first_count = call_count
             await client.search_medication("아스피린")  # 캐시 히트
             assert call_count == first_count  # 추가 호출 없음
 
+
+@pytest.mark.asyncio
+async def test_search_medication_masks_api_key_in_logs(caplog: pytest.LogCaptureFixture) -> None:
+    """API 오류 발생 시 로그에 인증키가 노출되지 않고 마스킹된다."""
+    real_secret_key = "SECRET_API_KEY_12345"
+
+    with patch("app.services.medication_client.config") as mock_cfg:
+        mock_cfg.MFDS_API_KEY = real_secret_key
+        with patch("httpx.AsyncClient") as mock_http:
+            mock_client = MagicMock()
+            # httpx 오류처럼 URL과 serviceKey가 포함된 예외 발생
+            mock_client.get = AsyncMock(
+                side_effect=Exception(
+                    f"403 Forbidden for url 'https://apis.data.go.kr/...?serviceKey={real_secret_key}&itemName=test'"
+                )
+            )
+            mock_http.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_http.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            client = MedicationClient()
+            from app.services import medication_client as mc_mod
+
+            mc_mod._cache.clear()
+            with caplog.at_level("WARNING"):
+                result = await client.search_medication("타이레놀")
+
+    assert result.items == []
+    # 로그에 실제 시크릿 키가 절대 포함되지 않아야 함
+    assert real_secret_key not in caplog.text
+    # 마스킹 표시가 포함되어야 함
+    assert "serviceKey=***" in caplog.text
