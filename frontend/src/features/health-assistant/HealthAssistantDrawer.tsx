@@ -1602,15 +1602,7 @@ export function HealthAssistantDrawer({
           <div>
             <h3>
               봄이 · 건강 비서
-              {profile && (
-                <span className="target-profile-pill">{profile.displayName} ({profile.relationship})</span>
-              )}
             </h3>
-            {isEmbedded ? (
-              <p>
-                <span className="privacy-pill">기록은 기기에 암호화 보관</span>
-              </p>
-            ) : null}
           </div>
         </div>
         <div className="assistant-header-actions">
