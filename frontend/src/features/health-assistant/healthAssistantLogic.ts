@@ -740,6 +740,64 @@ export function clearChatSession(
   }
 }
 
+export type ChatViewMode = "chat" | "list";
+
+export function chatViewModeStorageKey(profileId: string): string {
+  return `ieobom_chat_view_mode_${profileId}`;
+}
+
+export const LAST_OPENED_PROFILE_KEY = "ieobom_chat_last_opened_profile";
+
+export function loadChatViewMode(
+  profileId: string,
+  storage?: Storage,
+): ChatViewMode | null {
+  if (!profileId) return null;
+  const targetStorage = storage ?? (typeof window !== "undefined" ? window.sessionStorage : undefined);
+  if (!targetStorage) return null;
+  try {
+    const val = targetStorage.getItem(chatViewModeStorageKey(profileId));
+    return val === "list" || val === "chat" ? val : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveChatViewMode(
+  profileId: string,
+  mode: ChatViewMode,
+  storage?: Storage,
+): void {
+  if (!profileId) return;
+  const targetStorage = storage ?? (typeof window !== "undefined" ? window.sessionStorage : undefined);
+  if (!targetStorage) return;
+  try {
+    targetStorage.setItem(chatViewModeStorageKey(profileId), mode);
+  } catch (err) {
+    console.warn("Failed to persist chat view mode:", err);
+  }
+}
+
+export function getLastOpenedProfileId(storage?: Storage): string | null {
+  const targetStorage = storage ?? (typeof window !== "undefined" ? window.sessionStorage : undefined);
+  if (!targetStorage) return null;
+  try {
+    return targetStorage.getItem(LAST_OPENED_PROFILE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setLastOpenedProfileId(profileId: string, storage?: Storage): void {
+  const targetStorage = storage ?? (typeof window !== "undefined" ? window.sessionStorage : undefined);
+  if (!targetStorage) return;
+  try {
+    targetStorage.setItem(LAST_OPENED_PROFILE_KEY, profileId);
+  } catch (err) {
+    console.warn("Failed to set last opened profile:", err);
+  }
+}
+
 export function createWelcomeMessage(profileName: string): ExtendedChatMessage {
   return {
     id: "welcome",

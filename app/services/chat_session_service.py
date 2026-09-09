@@ -66,6 +66,18 @@ class ChatSessionService:
             raise ChatSessionNotFoundError()
         await self.session.commit()
 
+    async def update_session_title(
+        self,
+        account: ServiceAccount,
+        session_id: uuid.UUID,
+        title: str,
+    ) -> ChatSession:
+        updated = await self.chat_session_repo.update_session_title(session_id, account.id, title)
+        if not updated:
+            raise ChatSessionNotFoundError()
+        await self.session.commit()
+        return await self.get_session(account, session_id)
+
     async def list_messages(
         self,
         account: ServiceAccount,
