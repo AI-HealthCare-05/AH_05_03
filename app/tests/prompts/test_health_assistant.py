@@ -43,3 +43,11 @@ def test_build_system_instruction_contains_supplement_guidance() -> None:
 
     assert "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다" in instruction
     assert "일반적으로는 ~" in instruction
+
+
+def test_build_system_instruction_contains_food_nutrition_guidance() -> None:
+    instruction = build_system_instruction()
+
+    assert "음식 및 영양성분(칼로리/나트륨/당류) 문의 지침" in instruction
+    assert "search_food_nutrition" in instruction
+    assert "1일 나트륨 2,000mg 권장치" in instruction

@@ -18,6 +18,14 @@ from app.repositories.chat_session_repository import ChatSessionRepository
 from app.repositories.health_record_repository import HealthRecordRepository
 from app.repositories.household_repository import HouseholdRepository
 from app.repositories.profile_repository import ProfileRepository
+from app.services.food_nutrition_client import (
+    FoodNutritionClient,
+    FoodNutritionClientProtocol,
+)
+from app.services.food_nutrition_tools import (
+    execute_food_nutrition_tool,
+    get_food_nutrition_tools,
+)
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.medical_facility_client import MedicalFacilityClient
 from app.services.medical_facility_tools import (
@@ -174,13 +182,92 @@ _MEDICATION_KEYWORDS = (
     "유산균",
 )
 
+_FOOD_NUTRITION_KEYWORDS = (
+    "칼로리",
+    "열량",
+    "나트륨",
+    "당류",
+    "당분",
+    "설탕",
+    "탄수화물",
+    "단백질",
+    "지방",
+    "영양성분",
+    "영양정보",
+    "영양소",
+    "성분표",
+    "몇칼로리",
+    "얼마나들어",
+)
+
+_FOOD_EATING_QUERY_KEYWORDS = (
+    "먹어도돼",
+    "먹어도되",
+    "먹어도될까",
+    "먹어도괜찮",
+    "먹어도되나요",
+    "먹어도될까요",
+    "먹어도됨",
+    "먹을까",
+    "먹어도",
+    "섭취해도돼",
+    "섭취해도되",
+    "마셔도돼",
+    "마셔도되",
+)
+
+_COMMON_FOOD_NAMES = (
+    "라면",
+    "신라면",
+    "진라면",
+    "짜장면",
+    "자장면",
+    "짬뽕",
+    "김밥",
+    "떡볶이",
+    "순대",
+    "튀김",
+    "찌개",
+    "김치찌개",
+    "된장찌개",
+    "순두부",
+    "삼겹살",
+    "제육",
+    "불고기",
+    "치킨",
+    "피자",
+    "햄버거",
+    "돈까스",
+    "돈가스",
+    "냉면",
+    "칼국수",
+    "바나나",
+    "사과",
+    "고구마",
+    "감자",
+    "계란",
+    "달걀",
+    "우유",
+    "콜라",
+    "사이다",
+    "커피",
+    "라떼",
+    "소주",
+    "맥주",
+    "음식",
+    "식단",
+    "야식",
+    "간식",
+)
+
 
 class HealthAssistantService:
     """통합 건강 어시스턴트 (봄이) 서비스.
 
     자연어 입력을 분석하여 건강기록(운동, 혈압, 혈당, 복약, 통증 등) 추출,
     기록 조회 의도 분류, 주변 의료시설(응급실, 병원, 약국) 도구 호출(Tool Calling),
-    식약처 의약품 정보·DUR 품목정보 조회, 안전 가이드라인 기반 상담 응답을 생성합니다.
+    식약처 의약품 정보·DUR 품목정보 및 식품영양성분(칼로리/나트륨/당류) 조회,
+    안전 가이드라인 기반 상담 응답을 생성합니다.
     """
 
     def __init__(
@@ -192,6 +279,7 @@ class HealthAssistantService:
         chat_session_repo: ChatSessionRepository | None = None,
         outdoor_conditions_client: OutdoorConditionsClientProtocol | None = None,
         medication_client: MedicationClientProtocol | None = None,
+        food_nutrition_client: FoodNutritionClientProtocol | None = None,
         profile_repo: ProfileRepository | None = None,
         household_repo: HouseholdRepository | None = None,
     ):
@@ -202,8 +290,65 @@ class HealthAssistantService:
         self.chat_session_repo = chat_session_repo
         self.outdoor_conditions_client = outdoor_conditions_client or OutdoorConditionsClient()
         self.medication_client: MedicationClientProtocol = medication_client or MedicationClient()
+        self.food_nutrition_client: FoodNutritionClientProtocol = food_nutrition_client or FoodNutritionClient()
         self.profile_repo = profile_repo
         self.household_repo = household_repo
+
+    @staticmethod
+    def _needs_food_nutrition(request: HealthAssistantChatRequest) -> bool:
+        """음식 영양성분(칼로리, 나트륨, 당류 등) 조회가 필요한 질문인지 판별한다."""
+        if not request.messages:
+            return False
+        last_msg = request.messages[-1].content
+        compact_msg = last_msg.replace(" ", "")
+
+        # 1) 명시적 영양성분 키워드가 포함된 경우 우선 처리
+        if any(k in compact_msg for k in _FOOD_NUTRITION_KEYWORDS):
+            return True
+
+        # 2) 의약품 전용 명칭이 포함된 복약 질문인 경우 제외
+        explicit_drug_terms = (
+            "약",
+            "약품",
+            "약물",
+            "복약",
+            "복용",
+            "처방",
+            "DUR",
+            "dur",
+            "혈압약",
+            "당뇨약",
+            "혈당약",
+            "타이레놀",
+            "판콜",
+            "아스피린",
+            "노바스크",
+            "메트포르민",
+            "이지엔",
+            "게보린",
+            "탁센",
+            "피임약",
+            "감기약",
+            "소화제",
+            "진통제",
+            "소염진통제",
+            "항생제",
+            "위장약",
+            "스테로이드",
+            "영양제",
+        )
+        if any(k in last_msg for k in explicit_drug_terms):
+            return False
+
+        # 3) 음식 섭취 가능 여부 질문
+        has_eating_query = any(k in compact_msg for k in _FOOD_EATING_QUERY_KEYWORDS)
+        has_food_term = any(k in last_msg for k in _COMMON_FOOD_NAMES) or any(
+            k in compact_msg for k in ("밥", "국", "탕", "찌개", "면", "고기", "과일")
+        )
+        if has_eating_query and has_food_term:
+            return True
+
+        return False
 
     @staticmethod
     def _needs_medication_info(request: HealthAssistantChatRequest) -> bool:
@@ -679,7 +824,10 @@ class HealthAssistantService:
         return self._llm_client
 
     async def _execute_tool(self, name: str, args: dict[str, Any]) -> Any:
-        # 의약품 툴 먼저 확인
+        # 식품영양성분 툴 확인
+        if name == "search_food_nutrition":
+            return await execute_food_nutrition_tool(name, args, self.food_nutrition_client)
+        # 의약품 툴 확인
         if name == "search_medication_info":
             return await execute_medication_tool(name, args, self.medication_client)
         return await execute_facility_tool(name, args, self.facility_client)
@@ -691,7 +839,30 @@ class HealthAssistantService:
             tools.extend(get_facility_tools())
         if self._needs_medication_info(request):
             tools.extend(get_medication_tools())
+        if self._needs_food_nutrition(request):
+            tools.extend(get_food_nutrition_tools())
         return tools if tools else None
+
+    @staticmethod
+    def _attach_tool_result_to_response(
+        response: HealthAssistantResponse,
+        tool_result: Any,
+    ) -> None:
+        if tool_result is None:
+            return
+        from app.dtos.food_nutrition import FoodNutritionSearchResult
+        from app.dtos.medication import MedicationSearchResult
+
+        if isinstance(tool_result, FoodNutritionSearchResult):
+            if not response.food_nutrition_search_result:
+                response.food_nutrition_search_result = tool_result
+        elif isinstance(tool_result, MedicationSearchResult):
+            if not response.medication_search_result:
+                response.medication_search_result = tool_result
+        elif not response.facility_search_draft:
+            response.facility_search_draft = tool_result
+            if getattr(tool_result, "message", None):
+                response.assistant_message = tool_result.message
 
     async def respond(
         self,
@@ -731,16 +902,7 @@ class HealthAssistantService:
                 tool_executor=self._execute_tool,
             )
             response, tool_result = res_tuple
-            if tool_result is not None:
-                from app.dtos.medication import MedicationSearchResult
-
-                if isinstance(tool_result, MedicationSearchResult):
-                    if not response.medication_search_result:
-                        response.medication_search_result = tool_result
-                elif not response.facility_search_draft:
-                    response.facility_search_draft = tool_result
-                    if getattr(tool_result, "message", None):
-                        response.assistant_message = tool_result.message
+            self._attach_tool_result_to_response(response, tool_result)
         else:
             response = await self.llm_client.generate_structured_response(
                 system_instruction=system_instruction,
@@ -784,9 +946,13 @@ class HealthAssistantService:
         outdoor_conditions: Any,
     ) -> HealthAssistantResponse:
         if tool_result:
+            from app.dtos.food_nutrition import FoodNutritionSearchResult
             from app.dtos.medication import MedicationSearchResult
 
-            if isinstance(tool_result, MedicationSearchResult):
+            if isinstance(tool_result, FoodNutritionSearchResult):
+                if not parsed.food_nutrition_search_result:
+                    parsed.food_nutrition_search_result = tool_result
+            elif isinstance(tool_result, MedicationSearchResult):
                 if not parsed.medication_search_result:
                     parsed.medication_search_result = tool_result
             elif not parsed.facility_search_draft:
@@ -828,10 +994,13 @@ class HealthAssistantService:
         stream_gen, tool_result = await self._get_stream_generator(request, system_instruction, tools)
 
         if tool_result is not None:
+            from app.dtos.food_nutrition import FoodNutritionSearchResult
             from app.dtos.medication import MedicationSearchResult
 
             payload = tool_result.model_dump(mode="json") if hasattr(tool_result, "model_dump") else tool_result
-            if isinstance(tool_result, MedicationSearchResult):
+            if isinstance(tool_result, FoodNutritionSearchResult):
+                yield "food_nutrition", payload
+            elif isinstance(tool_result, MedicationSearchResult):
                 yield "medication", payload
             else:
                 yield "facility", payload

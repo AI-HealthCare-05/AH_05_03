@@ -181,6 +181,8 @@ class Config(BaseSettings):
     # 공공데이터포털(data.go.kr)의 일반 인증키와 동일하며, MFDS_API_KEY 가 없으면
     # 의약품 툴콜링이 조용히 꺼진다 (서비스 중단 없음).
     MFDS_API_KEY: str | None = None
+    # 식품의약품안전처 식품영양성분 API 키. 미설정 시 MFDS_API_KEY 로 폴백.
+    FOOD_NUTRITION_API_KEY: str | None = None
     # 카카오 로컬 REST API 키 (병원/약국 초고속 검색용).
     KAKAO_REST_API_KEY: str | None = None
     # OpenAI 예비 경로. **비어 있으면 그냥 꺼진 상태다** — 아래 `DEV_OCR_MODELS` 에

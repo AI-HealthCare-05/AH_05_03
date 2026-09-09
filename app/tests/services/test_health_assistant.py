@@ -648,6 +648,34 @@ async def test_needs_medication_info_flexible_routing() -> None:
 
 
 @pytest.mark.asyncio
+async def test_needs_food_nutrition_routing() -> None:
+    """음식 영양성분 및 섭취 질문 시 식품영양성분 툴 라우팅이 정상 작동한다."""
+    food_cases = [
+        "라면 먹어도 될까?",
+        "짜장면 칼로리 얼마야?",
+        "김치찌개 나트륨 많아?",
+        "바나나 당류 알려줘",
+        "삼겹살 먹어도 돼?",
+        "떡볶이 영양성분 알려줘",
+        "치킨 칼로리 몇이야?",
+    ]
+    for text in food_cases:
+        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
+        assert HealthAssistantService._needs_food_nutrition(req) is True, f"Failed for: {text}"
+
+    # 단순 운동/복약 발화는 False
+    non_food_cases = [
+        "타이레놀 1알 먹었어",
+        "타이레놀 먹어도 돼?",
+        "오늘 30분 달렸어",
+        "혈압 120에 80 나왔어",
+    ]
+    for text in non_food_cases:
+        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
+        assert HealthAssistantService._needs_food_nutrition(req) is False, f"Failed for: {text}"
+
+
+@pytest.mark.asyncio
 async def test_medication_tool_stream_preserves_llm_answer() -> None:
     """의약품 도구 실행 후에도 조기 return 없이 LLM의 자연어 스트리밍 답변이 유지된다."""
     from unittest.mock import AsyncMock
