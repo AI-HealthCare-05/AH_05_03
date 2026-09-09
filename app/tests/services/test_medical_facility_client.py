@@ -1,7 +1,7 @@
 import httpx
 import pytest
 
-from app.services.medical_facility_client import MedicalFacilityClient
+from app.services.medical_facility_client import _SEOUL_DISTRICTS, MedicalFacilityClient
 
 MOCK_EMERGENCY_LCINFO_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <response>
@@ -427,6 +427,143 @@ def test_parse_location_nationwide() -> None:
     assert MedicalFacilityClient._parse_location("수원 내과") == ("경기도", "수원시")
     assert MedicalFacilityClient._parse_location("해운대 약국") == ("부산광역시", "해운대구")
     assert MedicalFacilityClient._parse_location("대전 유성 이비인후과") == ("대전광역시", "유성구")
+
+
+def test_extract_items_handles_empty_string_payload() -> None:
+    """공공데이터포털은 0건일 때 items 를 빈 객체가 아니라 빈 문자열로 내려준다.
+
+    이 값에 그대로 `.get` 을 부르면 AttributeError 가 나고, 호출부의 except 가
+    정상적인 0건을 "일시적인 오류" 안내로 바꿔 버린다.
+    """
+    assert MedicalFacilityClient._extract_items({"response": {"body": {"items": ""}}}) == []
+    assert MedicalFacilityClient._extract_items({"response": {"body": {"items": {}}}}) == []
+    assert MedicalFacilityClient._extract_items({"response": {"body": ""}}) == []
+    assert MedicalFacilityClient._extract_items({"response": ""}) == []
+    assert MedicalFacilityClient._extract_items(None) == []
+    # 정상 응답은 그대로 통과한다.
+    assert MedicalFacilityClient._extract_items({"response": {"body": {"items": {"item": {"dutyName": "A"}}}}}) == [
+        {"dutyName": "A"}
+    ]
+    assert MedicalFacilityClient._extract_items(
+        {"response": {"body": {"items": {"item": [{"dutyName": "A"}, {"dutyName": "B"}]}}}}
+    ) == [{"dutyName": "A"}, {"dutyName": "B"}]
+
+
+@pytest.mark.asyncio
+async def test_zero_results_reported_as_no_match_not_as_error() -> None:
+    """0건은 오류가 아니다. error 를 채우면 화면이 '일시적인 오류' 를 띄운다."""
+    empty_payload = '{"response":{"body":{"items":"","numOfRows":10,"pageNo":1,"totalCount":0}}}'
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "dapi.kakao.com" in str(request.url):
+            return httpx.Response(200, json={"documents": []})
+        return httpx.Response(200, text=empty_payload)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = MedicalFacilityClient(
+            hospital_api_key="test_hosp_key",
+            pharmacy_api_key="test_pharm_key",
+            emergency_api_key="test_emer_key",
+            http_client=http_client,
+        )
+        hospital = await client.search_nearby_hospital(query="강남역 정형외과")
+        pharmacy = await client.search_nearby_pharmacy(query="강남역 약국")
+        emergency = await client.search_nearby_emergency_room(latitude=37.4979, longitude=127.0276)
+
+    for result in (hospital, pharmacy, emergency):
+        assert result.total_count == 0
+        assert result.error is None
+        assert result.message is not None
+        assert "오류" not in result.message
+
+
+def test_parse_location_resolves_every_seoul_district() -> None:
+    """자치구 이름을 짧게 끊거나 랜드마크에 양보하면 다른 구를 검색한다.
+
+    두 가지가 겹쳐 있었다 — `중구` 를 `중` 으로 줄여 비교해 `중랑구` 가 중구가 되고,
+    랜드마크 `동대문`(중구) 이 자치구 `동대문구` 보다 먼저 걸렸다.
+    """
+    for district in _SEOUL_DISTRICTS:
+        assert MedicalFacilityClient._parse_location(f"{district} 병원") == ("서울특별시", district)
+
+
+def test_parse_location_keeps_abbreviated_district_forms() -> None:
+    """자치구를 먼저 보게 바꿔도 `구` 없는 줄임말은 그대로 통해야 한다."""
+    assert MedicalFacilityClient._parse_location("강남 내과") == ("서울특별시", "강남구")
+    assert MedicalFacilityClient._parse_location("홍대 약국") == ("서울특별시", "마포구")
+    assert MedicalFacilityClient._parse_location("중랑 병원") == ("서울특별시", "중랑구")
+    # 동대문시장·동대문역은 실제로 중구다. 자치구 `동대문구` 와 갈라져야 한다.
+    assert MedicalFacilityClient._parse_location("동대문 병원") == ("서울특별시", "중구")
+    assert MedicalFacilityClient._parse_location("동대문구 병원") == ("서울특별시", "동대문구")
+
+
+def test_location_label_does_not_shorten_district_name() -> None:
+    """안내 문구의 지역 표기도 검색한 구와 같아야 한다."""
+    assert MedicalFacilityClient._extract_location_label(None, "중랑구") == "중랑구"
+    assert MedicalFacilityClient._extract_location_label(None, "동대문구") == "동대문구"
+    assert MedicalFacilityClient._extract_location_label(None, "중구") == "중구"
+
+
+def test_match_department_prefers_longest_name() -> None:
+    """'정형외과'가 일반 '외과'(D005)로 접히면 다른 과의 병원이 나온다."""
+    assert MedicalFacilityClient._match_department("정형외과", None) == ("정형외과", "D006")
+    assert MedicalFacilityClient._match_department("신경외과", None) == ("신경외과", "D007")
+    assert MedicalFacilityClient._match_department("성형외과", None) == ("성형외과", "D009")
+    assert MedicalFacilityClient._match_department("흉부외과", None) == ("흉부외과", "D008")
+    assert MedicalFacilityClient._match_department("심장혈관흉부외과", None) == ("심장혈관흉부외과", "D008")
+    assert MedicalFacilityClient._match_department("강남역 정형외과 찾아줘", None) == ("정형외과", "D006")
+    # 짧은 이름 자체는 그대로 남는다.
+    assert MedicalFacilityClient._match_department("외과", None) == ("외과", "D005")
+    assert MedicalFacilityClient._match_department("일반외과", None) == ("외과", "D005")
+    assert MedicalFacilityClient._match_department("동네 병원", None) == (None, None)
+
+
+def test_match_department_keeps_region_label_intact() -> None:
+    """과목명을 짧게 끊으면 남은 글자가 지명으로 새어 들어간다."""
+    assert MedicalFacilityClient._extract_place_query("강남역 정형외과 찾아줘") == "강남역"
+    assert MedicalFacilityClient._extract_location_label("강남역 정형외과", None) == "강남역"
+    assert MedicalFacilityClient._extract_place_query("흉부외과") is None
+
+
+@pytest.mark.asyncio
+async def test_orthopedics_query_uses_its_own_department_code() -> None:
+    """'정형외과'는 D006 으로 조회한다. D005 로 나가면 일반외과 병원이 돌아온다."""
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "search/keyword.json" in url:
+            return httpx.Response(200, json={"documents": [{"x": "127.0276", "y": "37.4979"}]})
+        if "coord2regioncode.json" in url:
+            return httpx.Response(
+                200,
+                json={
+                    "documents": [
+                        {
+                            "region_type": "B",
+                            "region_1depth_name": "서울",
+                            "region_2depth_name": "강남구",
+                        }
+                    ]
+                },
+            )
+        assert "getHsptlMdcncListInfoInqire" in url
+        seen["QD"] = request.url.params["QD"]
+        return httpx.Response(200, text=MOCK_HOSPITAL_XML)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = MedicalFacilityClient(
+            hospital_api_key="test_hosp_key",
+            kakao_api_key="test_kakao_key",
+            http_client=http_client,
+        )
+        result = await client.search_nearby_hospital(query="강남역 정형외과")
+
+    assert seen["QD"] == "D006"
+    assert result.message is not None
+    assert "정형외과" in result.message
 
 
 @pytest.mark.asyncio
