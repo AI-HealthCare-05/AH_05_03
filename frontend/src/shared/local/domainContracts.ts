@@ -26,6 +26,7 @@ export interface FamilyProfile {
   relationship: string;
   birthDate: ISODate | null;
   gender?: Gender | null;
+  accountEmail?: string | null;
   opaqueServerRef: string | null;
   serverRefState: "none" | "pending" | "active" | "retired";
   status: "active" | "hidden" | "merged";

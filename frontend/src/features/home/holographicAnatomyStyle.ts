@@ -217,6 +217,35 @@ export function createSelectedMaterials(source: THREE.Material | THREE.Material[
   return Array.isArray(source) ? highlighted : highlighted[0];
 }
 
+export function createSelectedTransparentMaterials(
+  source: THREE.Material | THREE.Material[],
+  opacity = 0.35,
+) {
+  const highlighted = materialsOf(source).map((material) => {
+    const clone = material.clone();
+    if (
+      clone instanceof THREE.MeshStandardMaterial ||
+      clone instanceof THREE.MeshLambertMaterial ||
+      clone instanceof THREE.MeshBasicMaterial
+    ) {
+      if ("vertexColors" in clone) clone.vertexColors = false;
+      clone.color.copy(SELECTED_COLOR);
+      if ("emissive" in clone) {
+        clone.emissive.setHex(0x0284c7);
+        clone.emissiveIntensity = 0.85;
+      }
+      clone.opacity = opacity;
+      clone.transparent = true;
+      clone.depthWrite = false;
+      clone.depthTest = true;
+      clone.wireframe = false;
+      clone.side = THREE.DoubleSide;
+    }
+    return clone;
+  });
+  return Array.isArray(source) ? highlighted : highlighted[0];
+}
+
 const PAIN_STROKE_COLOR = new THREE.Color(0xf43f5e);
 
 export function createPaintStrokeMaterials(source: THREE.Material | THREE.Material[]) {
@@ -289,8 +318,8 @@ export function createFocusPresets(bounds: THREE.Box3) {
       target: center.clone(),
     },
     head: {
-      position: new THREE.Vector3(center.x, bounds.max.y - size.y * 0.045, closeDistance),
-      target: new THREE.Vector3(center.x, bounds.max.y - size.y * 0.045, center.z),
+      position: new THREE.Vector3(center.x, bounds.max.y - size.y * 0.09, closeDistance),
+      target: new THREE.Vector3(center.x, bounds.max.y - size.y * 0.09, center.z),
     },
     upper: {
       position: new THREE.Vector3(center.x, center.y + size.y * 0.18, upperDistance),
@@ -323,12 +352,187 @@ export function createFocusPresets(bounds: THREE.Box3) {
   };
 }
 
+export interface FullBodyReturnThresholdOptions {
+  thresholdRatio?: number;
+  frontThreshold?: number;
+  backThreshold?: number;
+  cameraPosition?: { x: number; z: number };
+  targetPosition?: { x: number; z: number };
+}
+
+/**
+ * 전신 복귀 판정 임계 비율을 계산합니다:
+ * - 정면(Front): 0.85 (85%)
+ * - 후면(Back): 0.95 (95% - 후면 체감 거리가 짧아 튕기는 현상 완화)
+ * - 측면 및 회전 중: 코사인 보간을 통해 매끄러운 임계값 적용
+ */
+export function getFullBodyReturnThreshold(
+  options?: FullBodyReturnThresholdOptions | number,
+): number {
+  if (typeof options === "number") {
+    return options;
+  }
+  if (options?.thresholdRatio !== undefined) {
+    return options.thresholdRatio;
+  }
+  const front = options?.frontThreshold ?? 0.85;
+  const back = options?.backThreshold ?? 0.95;
+  if (!options?.cameraPosition || !options?.targetPosition) {
+    return front;
+  }
+  const dx = options.cameraPosition.x - options.targetPosition.x;
+  const dz = options.cameraPosition.z - options.targetPosition.z;
+  const radius = Math.hypot(dx, dz);
+  if (radius < 1e-6) {
+    return dz >= 0 ? front : back;
+  }
+  // dz > 0: 카메라가 모델 앞쪽에 위치 (정면 cosTheta = 1)
+  // dz < 0: 카메라가 모델 뒤쪽에 위치 (후면 cosTheta = -1)
+  const cosTheta = Math.max(-1, Math.min(1, dz / radius));
+  const backFactor = (1 - cosTheta) / 2;
+  return Number((front + (back - front) * backFactor).toFixed(4));
+}
+
 export function shouldReturnToFullBody(
   activeFocus: string,
   cameraDistance: number,
   fullBodyDistance: number,
-  thresholdRatio = 0.45,
+  thresholdOrOptions: FullBodyReturnThresholdOptions | number = {
+    frontThreshold: 0.85,
+    backThreshold: 0.95,
+  },
 ) {
-  return activeFocus !== "full"
-    && cameraDistance >= fullBodyDistance * thresholdRatio;
+  if (activeFocus === "full") return false;
+  const thresholdRatio = getFullBodyReturnThreshold(thresholdOrOptions);
+  return cameraDistance >= fullBodyDistance * thresholdRatio;
 }
+
+export interface AdaptiveSprayMetrics {
+  sprayRadius: number;
+  particleMinScale: number;
+  particleMaxScale: number;
+  particleCount: number;
+  scaleFactor: number;
+  agitationMultiplier?: number;
+}
+
+/**
+ * 3D 통증 범위 칠하기(스프레이 브러시) 입자 흩뿌림 반경 및 알갱이 크기 계산:
+ * 1) 카메라 거리/확대 비율 적응:
+ *    전신 원거리 뷰에서는 지나치게 옆으로 흩뿌려지지 않도록 기본 반경(0.055m, 5.5cm)과 알갱이 크기를 유지하고,
+ *    얼굴/머리/관절 등 특정 부위를 확대(줌인)했을 때는 섬세한 분사가 가능하도록
+ *    줌 배율에 반비례 이상(지수 1.15)의 비율로 흩어지는 반경과 입자 크기를 축소합니다.
+ * 2) 커서 흔들림(Agitation) 동적 적응:
+ *    커서를 흔들며 빠르게 칠할수록 흩뿌림 반경과 입자 알갱이가 점차 스무스하게 커지며,
+ *    칠하기를 멈추거나 천천히 움직이면 부드럽게 원래의 정밀한 상태로 복귀합니다.
+ */
+export function calculateAdaptiveSprayMetrics(options: {
+  cameraDistance: number;
+  referenceDistance?: number;
+  baseRadius?: number;
+  baseParticleMinScale?: number;
+  baseParticleMaxScale?: number;
+  exponent?: number;
+  agitation?: number;
+  maxAgitationRadiusMultiplier?: number;
+  maxAgitationParticleMultiplier?: number;
+}): AdaptiveSprayMetrics {
+  const reference = options.referenceDistance ?? 5.0;
+  const baseRadius = options.baseRadius ?? 0.055;
+  const baseMin = options.baseParticleMinScale ?? 0.004;
+  const baseMax = options.baseParticleMaxScale ?? 0.008;
+  const exponent = options.exponent ?? 1.15;
+  const agitation = Math.max(0, Math.min(1, options.agitation ?? 0));
+  const maxRadiusMultiplier = options.maxAgitationRadiusMultiplier ?? 2.55;
+  const maxParticleMultiplier = options.maxAgitationParticleMultiplier ?? 2.1;
+
+  const rawRatio = options.cameraDistance / Math.max(0.1, reference);
+  const clampedRatio = Math.max(0.1, Math.min(1.25, rawRatio));
+  const scaleFactor = Math.pow(clampedRatio, exponent);
+
+  // 커서를 흔드는 정도에 따라 스무스하게 흩뿌림 반경 및 입자 크기 확장 (초기 버전과 대폭 확대 버전의 황금 밸런스)
+  const radiusMultiplier = 1.0 + agitation * (maxRadiusMultiplier - 1.0);
+  const particleMultiplier = 1.0 + agitation * (maxParticleMultiplier - 1.0);
+
+  const sprayRadius = Number((baseRadius * scaleFactor * radiusMultiplier).toFixed(5));
+  const particleMinScale = Number((baseMin * scaleFactor * particleMultiplier).toFixed(6));
+  const particleMaxScale = Number((baseMax * scaleFactor * particleMultiplier).toFixed(6));
+
+  const baseCount = Math.max(8, Math.min(15, Math.round(15 * Math.pow(clampedRatio, 0.25))));
+  // 흔들며 칠할 때 입자수도 균형감 있게 15개 -> 최대 30개로 증량
+  const particleCount = Math.round(baseCount * (1.0 + agitation * 1.0));
+
+  return {
+    sprayRadius,
+    particleMinScale,
+    particleMaxScale,
+    particleCount,
+    scaleFactor,
+    agitationMultiplier: Number(radiusMultiplier.toFixed(3)),
+  };
+}
+
+export interface SprayAgitationState {
+  smoothedAgitation: number;
+  lastX: number;
+  lastY: number;
+  lastTime: number;
+  lastDx: number;
+  lastDy: number;
+}
+
+export function createSprayAgitationState(x: number, y: number, time: number): SprayAgitationState {
+  return {
+    smoothedAgitation: 0,
+    lastX: x,
+    lastY: y,
+    lastTime: time,
+    lastDx: 0,
+    lastDy: 0,
+  };
+}
+
+export function updateSprayAgitation(
+  state: SprayAgitationState,
+  currentX: number,
+  currentY: number,
+  currentTime: number,
+): number {
+  const dt = Math.max(1, Math.min(100, currentTime - state.lastTime));
+  const dx = currentX - state.lastX;
+  const dy = currentY - state.lastY;
+  const dist = Math.hypot(dx, dy);
+
+  const speed = dist / dt; // px / ms
+
+  let shakeBonus = 1.0;
+  if (dist > 3 && (state.lastDx !== 0 || state.lastDy !== 0)) {
+    const prevDist = Math.hypot(state.lastDx, state.lastDy);
+    if (prevDist > 1) {
+      const dot = (dx * state.lastDx + dy * state.lastDy) / (dist * prevDist);
+      if (dot < 0.2) {
+        shakeBonus = 1.0 + Math.min(1.5, (0.2 - dot) * 1.25);
+      }
+    }
+  }
+
+  const effectiveSpeed = Math.max(0, speed - 0.18) * shakeBonus;
+  const targetAgitation = Math.min(1.0, effectiveSpeed / 2.0);
+
+  const isAttacking = targetAgitation > state.smoothedAgitation;
+  const smoothingFactor = isAttacking ? 0.27 : 0.08;
+  state.smoothedAgitation += (targetAgitation - state.smoothedAgitation) * smoothingFactor;
+  state.smoothedAgitation = Math.max(0, Math.min(1, state.smoothedAgitation));
+
+  state.lastX = currentX;
+  state.lastY = currentY;
+  state.lastTime = currentTime;
+  if (dist > 2) {
+    state.lastDx = dx;
+    state.lastDy = dy;
+  }
+
+  return state.smoothedAgitation;
+}
+
+

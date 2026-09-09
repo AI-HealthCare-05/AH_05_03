@@ -103,6 +103,34 @@ async def test_get_outdoor_conditions_combines_weather_and_air_quality() -> None
 
 
 @pytest.mark.asyncio
+async def test_empty_public_data_payload_degrades_instead_of_crashing() -> None:
+    """0건일 때 오는 `items: ""` 가 요청 전체를 깨뜨리면 안 된다.
+
+    봉투를 직접 이어 붙이면 빈 문자열에 `.get` 을 불러 AttributeError 가 나는데,
+    이 함수의 except 는 그 종류를 잡지 않는다. 그래서 관측이 아직 안 올라온 시각에
+    날씨만 비는 게 아니라 채팅 요청 자체가 500 으로 떨어졌다.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "coord2regioncode" in str(request.url):
+            return httpx.Response(200, json={"documents": []})
+        return httpx.Response(200, json={"response": {"body": {"items": ""}}})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = OutdoorConditionsClient(
+            kma_api_key="test-key",
+            airkorea_api_key="test-key",
+            kakao_api_key="test-key",
+            http_client=http_client,
+        )
+        result = await client.get_outdoor_conditions(37.5665, 126.9780)
+
+    assert result.weather is None
+    assert result.air_quality is None
+    assert result.errors  # 조용히 성공한 척하지 않고 사유를 남긴다.
+
+
+@pytest.mark.asyncio
 async def test_outdoor_tool_requires_coordinates() -> None:
     client = OutdoorConditionsClient(kma_api_key="test-key", airkorea_api_key="test-key")
     result = await execute_outdoor_conditions_tool("get_outdoor_health_conditions", {}, client)

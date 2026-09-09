@@ -104,7 +104,7 @@ main {
 }
 
 .header-inner {
-  width: min(1240px, calc(100% - 48px));
+  width: min(1760px, calc(100% - 48px));
   min-height: 76px;
   margin: 0 auto;
   display: grid;
@@ -572,7 +572,7 @@ main {
 
 .product-page,
 .content-width {
-  width: min(1240px, calc(100% - 48px));
+  width: min(1760px, calc(100% - 48px));
   margin: 0 auto;
 }
 
@@ -977,9 +977,26 @@ main {
 .member-dashboard {
   margin-top: 28px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 480px;
   align-items: start;
   gap: 20px;
+}
+
+.member-dashboard-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.assistant-loading-card {
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 22px;
+  background: white;
+  padding: 24px;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.9rem;
 }
 
 .member-dashboard-main,
@@ -1579,15 +1596,132 @@ main {
 
 .body-map-hint {
   position: absolute;
-  right: 14px;
+  left: 50%;
   bottom: 12px;
+  transform: translateX(-50%);
+  width: max-content !important;
+  max-width: calc(100% - 28px) !important;
+  height: auto !important;
+  box-sizing: border-box;
   border: 1px solid rgba(159, 183, 232, 0.65);
   border-radius: 999px;
-  padding: 6px 9px;
+  padding: 6px 12px;
   color: #526985;
   background: rgba(255, 255, 255, 0.82);
   font-size: 0.68rem;
   pointer-events: none;
+  z-index: 3;
+}
+
+.body-map-hint.is-actionable {
+  pointer-events: auto;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-family: inherit;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.2;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  user-select: none;
+}
+
+.body-map-hint.is-actionable:hover {
+  background: rgba(8, 30, 48, 0.92);
+  border-color: rgba(103, 232, 249, 0.7);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), 0 0 10px rgba(56, 189, 248, 0.3);
+  transform: translate(-50%, -1px);
+}
+
+.body-map-hint.is-actionable:active {
+  transform: translate(-50%, 0);
+}
+
+.body-map-hint.is-actionable.is-active {
+  background: rgba(12, 38, 58, 0.95);
+  border-color: #38bdf8;
+  color: #e0f2fe;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+}
+
+.body-map-hint-action-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: -0.01em;
+  background: rgba(56, 189, 248, 0.16);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #38bdf8;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  pointer-events: auto;
+  font-family: inherit;
+}
+
+.body-map-hint-action-badge:hover {
+  background: rgba(56, 189, 248, 0.28);
+  border-color: rgba(56, 189, 248, 0.8);
+  color: #7dd3fc;
+  transform: translateY(-0.5px);
+}
+
+.body-map-hint-action-badge.is-active {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
+.body-map-hint-action-badge.is-peritoneum-badge {
+  background: rgba(251, 146, 60, 0.16);
+  border-color: rgba(251, 146, 60, 0.45);
+  color: #fb923c;
+}
+
+.body-map-hint-action-badge.is-peritoneum-badge:hover {
+  background: rgba(251, 146, 60, 0.28);
+  border-color: rgba(251, 146, 60, 0.8);
+  color: #fdba74;
+}
+
+.body-map-hint-action-badge.is-peritoneum-badge.is-active {
+  background: #ea580c;
+  border-color: #fb923c;
+  color: #ffffff;
+}
+
+.body-map-hint.is-actionable:hover .body-map-hint-action-badge:not(:hover):not(.is-active) {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: rgba(56, 189, 248, 0.65);
+}
+
+.body-map-hint.is-actionable:hover .body-map-hint-action-badge.is-peritoneum-badge:not(:hover):not(.is-active) {
+  background: rgba(251, 146, 60, 0.22);
+  border-color: rgba(251, 146, 60, 0.65);
+}
+
+.body-map-hint-text {
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vanatome-stage-clear-btn:hover {
+  background: #ffe4e6 !important;
+  border-color: #e11d48 !important;
+  color: #9f1239 !important;
+}
+
+.vanatome-stage-clear-btn:active {
+  background: #fecdd3 !important;
+  transform: translateY(1px);
 }
 
 .body-map-fallback {
@@ -1626,6 +1760,7 @@ main {
   height: 100%;
   align-items: stretch;
   grid-template-columns: minmax(320px, 360px) 1fr;
+  grid-template-rows: 1fr auto;
 }
 
 .vanatome-card .body-map-copy {
@@ -1678,7 +1813,7 @@ main {
   background: rgba(4, 16, 24, 0.78);
 }
 
-.vanatome-viewer > div {
+.vanatome-viewer > div:not(.body-map-hint) {
   width: 100%;
   height: 100%;
 }
@@ -1865,10 +2000,13 @@ main {
 }
 
 .vanatome-attribution {
-  margin-top: 20px !important;
+  grid-column: 1 / -1;
+  margin: 0 !important;
   border-top: 1px solid var(--line-soft);
-  padding-top: 14px;
-  font-size: 0.7rem;
+  padding: 8px 20px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  background: #f8fafc;
 }
 
 .vanatome-attribution a {
@@ -2039,6 +2177,91 @@ main {
 
 .quick-actions-panel {
   padding: 24px;
+}
+
+.sidebar-reorder-card {
+  position: relative;
+  will-change: transform;
+  width: 100%;
+}
+
+.sidebar-reorder-card.is-dragging {
+  z-index: 10;
+}
+
+.sidebar-reorder-card.is-dragging .quick-actions-panel,
+.sidebar-reorder-card.is-dragging .health-assistant-drawer,
+.sidebar-reorder-card.is-dragging .dental-picker-panel {
+  box-shadow: 0 20px 48px rgba(35, 61, 112, 0.22) !important;
+  border-color: #3b82f6 !important;
+}
+
+.sidebar-card-drag-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 28px;
+  border-radius: 6px;
+  color: #94a3b8;
+  font-size: 16px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.sidebar-card-drag-grip:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.is-dragging .sidebar-card-drag-grip,
+.is-dragging .quick-actions-header-row,
+.is-dragging .assistant-header,
+.is-dragging .dental-embedded-header-row {
+  cursor: grabbing !important;
+}
+
+.quick-actions-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.quick-actions-header-title-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.quick-actions-minimize-btn {
+  width: 32px !important;
+  height: 32px;
+  min-width: 32px;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 1px solid var(--line-soft, #e2e8f0) !important;
+  border-radius: 8px !important;
+  background: #f8fafc !important;
+  color: #64748b !important;
+  font-size: 18px;
+  font-weight: 500;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quick-actions-minimize-btn:hover {
+  background: #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 .quick-actions-panel h2 {
@@ -5257,6 +5480,33 @@ main {
  * 떠 있으므로 저기 두면 **처음 여는 순간까지 맨 글자로 보인다** — 검은 텍스트가
  * 본문 흐름에 얹혀 버튼처럼 보이지 않는다. 늘 보이는 것은 늘 로드되는 곳에 둔다.
  */
+/* 우측 하단 플로팅 런처 스택 (봄이 대화 및 빠른 작업 최소화 시) */
+.floating-launchers-stack {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-end;
+  z-index: 999;
+  pointer-events: auto;
+}
+
+.floating-launchers-stack .health-assistant-launcher-btn,
+.floating-launchers-stack .quick-actions-floating-btn,
+.floating-launchers-stack .dental-picker-floating-btn {
+  position: relative;
+  bottom: auto;
+  right: auto;
+  width: 130px;
+  min-width: 130px;
+  height: 46px;
+  box-sizing: border-box;
+  padding: 0 16px;
+  justify-content: flex-start;
+}
+
 /* 우측 하단 봄이 런처 플로팅 버튼 */
 .health-assistant-launcher-btn {
   position: fixed;
@@ -5287,6 +5537,41 @@ main {
 }
 
 .health-assistant-launcher-btn .launcher-icon {
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.25);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 우측 하단 빠른 작업 플로팅 버튼 */
+.quick-actions-floating-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4), 0 2px 6px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.quick-actions-floating-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5), 0 3px 8px rgba(0, 0, 0, 0.12);
+}
+.quick-actions-floating-btn:active {
+  transform: translateY(0);
+}
+.quick-actions-floating-btn .launcher-icon {
   font-size: 13px;
   font-weight: 700;
   background: rgba(255, 255, 255, 0.25);
@@ -7182,3 +7467,1068 @@ main {
 /* 계정 화면 안으로 들어온 데이터 관리. 바깥 페이지 여백을 두 번 주지 않는다. */
 .data-page.is-embedded { margin-top: 1.6rem; padding-top: 1.2rem; border-top: 1px solid var(--line); }
 .data-page.is-embedded .dashboard-heading h2 { margin: 0; font-size: 1.25rem; }
+
+/* ---------------------------------------------------------------------------
+ * 3D 해부학 정밀 UX (48번 지침: 계통·X-ray·치아·깊이 관통·검색 드로어)
+ * ------------------------------------------------------------------------- */
+.vanatome-precision-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+  padding: 8px 10px;
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+}
+
+.vanatome-precision-toolbar .toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 9px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.vanatome-precision-toolbar .toolbar-btn:hover {
+  background: var(--blue-50);
+  border-color: var(--blue-400);
+  color: var(--blue-700);
+}
+
+.vanatome-precision-toolbar .toolbar-btn.is-active {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* 3D 화면과 깊이 패널을 수직 배치하는 스테이지 컬럼 */
+.vanatome-stage-column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  gap: 12px;
+}
+
+.vanatome-stage-column > .vanatome-viewer {
+  flex: 1 1 500px;
+  min-height: clamp(480px, 48vh, 720px);
+  height: auto;
+  max-height: none;
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+/* 상시 고정 하단 해부학 구조 대시보드 패널: 3D 모델 창 크기를 불변 고정 유지 (임시 확장 340px) */
+.vanatome-bottom-panel,
+.depth-candidates-panel {
+  flex-shrink: 0;
+  height: 340px;
+  max-height: 340px;
+  background: #09121d;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.bottom-panel-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* 통증 범위 칠하기 / 선택 부위 패널 액션 헤더 */
+.bottom-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panel-action-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 0.74rem;
+  font-weight: 500;
+  padding: 3px 8px;
+  transition: all 0.15s ease;
+}
+
+.panel-action-btn:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+}
+
+.panel-action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.panel-action-btn.is-shortcut {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 5px;
+  font-weight: 700;
+  font-size: 0.76rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.02em;
+}
+
+.panel-action-btn.is-confirm {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  font-weight: 700;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-action-btn.is-confirm:hover {
+  background: #0369a1;
+  border-color: #7dd3fc;
+  color: #ffffff;
+}
+
+.panel-action-btn.is-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.panel-action-btn.is-clear:hover {
+  background: rgba(244, 63, 94, 0.25);
+  border-color: rgba(244, 63, 94, 0.5);
+  color: #fda4af;
+}
+
+/* 드래그 마키(범위성 멀티플 선택) 반투명 컬러 사각형 */
+.marquee-selection-box {
+  position: fixed;
+  pointer-events: none;
+  z-index: 10000;
+  border: 1.5px solid rgba(56, 189, 248, 0.9);
+  background: rgba(56, 189, 248, 0.18);
+  border-radius: 4px;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+}
+
+.paint-candidate-row.is-marquee-hovered,
+.depth-candidate-row.is-marquee-hovered {
+  border-color: #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.25) !important;
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+}
+
+.staged-item-row {
+  cursor: pointer;
+}
+
+.staged-item-row:hover {
+  border-color: #f59e0b !important;
+  background: #fffbeb !important;
+  box-shadow: 0 0 0 1.5px rgba(245, 158, 11, 0.35) !important;
+}
+
+.staged-item-row.is-recently-added {
+  background: #fff1f2 !important;
+  border-color: #f43f5e !important;
+  box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.28) !important;
+  animation: stagedItemPulse 1.8s ease-out;
+}
+
+@keyframes stagedItemPulse {
+  0% {
+    transform: scale(1.02);
+    box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.4);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.28);
+  }
+}
+
+.paint-candidates-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 6px;
+  align-content: start;
+}
+
+.paint-candidate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  transition: all 0.15s ease;
+}
+
+.paint-candidate-row:hover {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.65);
+}
+
+.paint-candidate-row.is-excluded {
+  opacity: 0.55;
+  background: rgba(15, 23, 42, 0.6);
+  border-style: dashed;
+}
+
+.paint-candidate-row.is-excluded .candidate-name {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+.candidate-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.candidate-en-name {
+  font-size: 0.68rem;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.system-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.toggle-exclude-btn {
+  font-size: 0.72rem;
+  padding: 3px 7px;
+  border-radius: 4px;
+  border: 1px solid;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.toggle-exclude-btn.is-exclude {
+  border-color: rgba(244, 63, 94, 0.5);
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.15);
+}
+
+.toggle-exclude-btn.is-exclude:hover {
+  background: rgba(244, 63, 94, 0.3);
+  color: #fff;
+}
+
+.toggle-exclude-btn.is-include {
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.15);
+}
+
+.toggle-exclude-btn.is-include:hover {
+  background: rgba(56, 189, 248, 0.3);
+  color: #fff;
+}
+
+/* 대기 상태 플레이스홀더 (Placeholder) */
+.bottom-panel-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 16px 24px;
+  text-align: center;
+  background: radial-gradient(circle at 50% 40%, rgba(56, 189, 248, 0.04), transparent 70%);
+}
+
+.placeholder-text strong {
+  font-size: 0.88rem;
+  color: #e2e8f0;
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.placeholder-text p {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+  max-width: 520px;
+}
+
+.placeholder-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.placeholder-tag {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+}
+
+.depth-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background: rgba(15, 23, 42, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.depth-panel-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.depth-panel-title strong {
+  font-size: 0.85rem;
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+.depth-panel-desc {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.depth-panel-close {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 3px 8px;
+  transition: all 0.15s ease;
+}
+
+.depth-panel-close:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+.depth-candidates-panel .depth-candidates-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 6px;
+  align-content: start;
+}
+
+/* 깊이 관통 후보 레거시 팝오버 호환 (D1) */
+.depth-candidates-popover {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(92%, 460px);
+  max-height: 280px;
+  background: rgba(15, 23, 42, 0.94);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  color: #f8fafc;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUpFade 0.2s ease-out;
+}
+
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.depth-popover-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(30, 41, 59, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.depth-popover-header strong {
+  font-size: 0.82rem;
+  color: #38bdf8;
+}
+
+.depth-popover-close {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.depth-candidates-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.depth-candidate-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  color: #e2e8f0;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.8rem;
+  transition: all 0.12s ease;
+}
+
+.depth-candidate-row:hover {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.65);
+}
+
+.depth-candidate-row.is-selected {
+  background: rgba(37, 99, 235, 0.35);
+  border-color: #38bdf8;
+}
+
+.depth-candidate-row.is-unselected {
+  opacity: 0.7;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.depth-candidate-row.is-unselected:hover {
+  opacity: 1;
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.candidate-staged-tag {
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(244, 63, 94, 0.2);
+  color: #fda4af;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  font-weight: 500;
+}
+
+.candidate-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.depth-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.depth-badge.is-surface { background: #0284c7; color: #fff; }
+.depth-badge.is-shallow { background: #0d9488; color: #fff; }
+.depth-badge.is-mid { background: #d97706; color: #fff; }
+.depth-badge.is-deep { background: #7c3aed; color: #fff; }
+
+.candidate-name { font-weight: 600; color: #f1f5f9; }
+.candidate-system { font-size: 0.7rem; color: #94a3b8; }
+
+/* 치아 전용 선택기 플로팅 윈도우 (D4) - 블러 및 배경 차단 완전 해제 */
+.dental-floating-container,
+.dental-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10000;
+  background: transparent;
+  backdrop-filter: none;
+  display: block;
+}
+
+.dental-modal-card {
+  width: min(96vw, 640px);
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 20px 36px -4px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  pointer-events: auto;
+}
+
+.dental-modal-card.is-floating {
+  position: fixed;
+  top: 0;
+  left: 0;
+  margin: 0;
+  will-change: transform;
+}
+
+.dental-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #f8fafc;
+}
+
+.dental-modal-header.is-draggable {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.dental-modal-header.is-draggable:active {
+  cursor: grabbing;
+}
+
+.dental-drag-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: #0284c7;
+  background: #e0f2fe;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.dental-modal-header h3 { margin: 0 0 4px; font-size: 1.05rem; color: var(--ink); }
+.dental-modal-header p { margin: 0; font-size: 0.8rem; color: var(--muted); }
+.dental-modal-close { background: none; border: none; font-size: 1.1rem; cursor: pointer; color: var(--muted); }
+
+.dental-arch-container {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dental-arch-section { display: flex; flex-direction: column; gap: 8px; }
+.dental-arch-label { display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 600; color: var(--ink); }
+.dental-arch-label small { color: var(--muted); font-weight: 400; font-size: 0.72rem; }
+
+.dental-arch-grid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: #f1f5f9;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.dental-quadrant-row { display: flex; gap: 4px; }
+.dental-midline-divider { width: 2px; height: 36px; background: #94a3b8; border-radius: 1px; margin: 0 4px; }
+
+.dental-tooth-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 40px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.dental-tooth-button:hover {
+  background: var(--blue-50);
+  border-color: var(--blue-400);
+}
+
+.dental-tooth-button.is-selected {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3);
+}
+
+.dental-tooth-button.is-wisdom { opacity: 0.8; }
+.dental-tooth-button .tooth-code { font-size: 0.65rem; font-weight: 700; }
+.dental-tooth-button .tooth-icon { font-size: 0.75rem; line-height: 1; }
+
+.dental-occlusal-plane {
+  height: 1px;
+  border-top: 1px dashed var(--line);
+  margin: 4px 0;
+}
+
+.dental-selected-detail {
+  padding: 10px 20px;
+  background: var(--blue-50);
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.dental-detail-badge { font-size: 0.88rem; color: #1d4ed8; font-weight: 600; margin-bottom: 2px; }
+.dental-detail-desc { font-size: 0.78rem; margin: 0; color: var(--muted-strong); }
+.dental-selected-empty { padding: 12px 20px; text-align: center; color: var(--muted); font-size: 0.82rem; }
+
+.dental-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  background: #f8fafc;
+}
+
+/* 해부학 부위 검색 드로어 (D6/D7) */
+.anatomy-search-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 10000;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.anatomy-search-drawer {
+  width: min(92%, 420px);
+  height: 100%;
+  background: #ffffff;
+  box-shadow: -10px 0 25px -5px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.2s ease-out;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.anatomy-search-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.search-input-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.anatomy-search-input {
+  width: 100%;
+  padding: 8px 30px 8px 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  outline: none;
+}
+
+.anatomy-search-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.drawer-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.anatomy-search-suggestions {
+  padding: 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.anatomy-search-suggestions p { margin: 0 0 8px; font-size: 0.78rem; font-weight: 600; color: var(--muted); }
+.suggestion-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.suggestion-chip {
+  padding: 4px 8px;
+  font-size: 0.76rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #f8fafc;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.suggestion-chip:hover {
+  background: var(--blue-50);
+  border-color: var(--blue-400);
+  color: var(--blue-700);
+}
+
+.anatomy-search-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.search-result-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+
+.search-result-row:hover {
+  background: #f1f5f9;
+  border-color: var(--line-soft);
+}
+
+.result-main-info { display: flex; justify-content: space-between; align-items: baseline; }
+.result-korean-name { font-size: 0.88rem; font-weight: 700; color: var(--ink); }
+.result-canonical-name { font-size: 0.74rem; color: var(--muted); }
+
+.result-meta-info { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+
+.system-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.system-badge.is-skeletal { background: #fef3c7; color: #92400e; }
+.system-badge.is-muscular { background: #fee2e2; color: #991b1b; }
+.system-badge.is-visceral { background: #e0e7ff; color: #3730a3; }
+.system-badge.is-dental { background: #e0f2fe; color: #075985; }
+
+.result-desc {
+  font-size: 0.72rem;
+  color: var(--muted-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-empty-state {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* 치아 전용 선택기 사이드바 임베드 카드 (D5) */
+.dental-picker-panel {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 10px 32px rgba(35, 61, 112, 0.05);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dental-embedded-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.dental-header-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dental-header-title-wrap h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.dental-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.dental-minimize-btn,
+.dental-close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #e2e8f0);
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.dental-minimize-btn:hover,
+.dental-close-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.dental-arch-container.is-embedded {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dental-arch-grid.is-embedded {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px;
+  background: #f8fafc;
+  padding: 8px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--line, #e2e8f0);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dental-quadrant-row.is-embedded {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.dental-tooth-button.is-embedded {
+  flex: 1;
+  min-width: 0;
+  max-width: 26px;
+  height: 38px;
+  padding: 2px 1px;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line, #cbd5e1);
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.dental-tooth-button.is-embedded .tooth-code {
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+.dental-tooth-button.is-embedded .tooth-icon {
+  font-size: 10px;
+  line-height: 1;
+}
+
+.dental-tooth-button.is-embedded.is-selected {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.35);
+}
+
+.dental-selected-detail.is-embedded {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dental-selected-empty.is-embedded {
+  background: #f8fafc;
+  border: 1px dashed var(--line, #cbd5e1);
+  border-radius: 10px;
+  padding: 10px 14px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.dental-embedded-footer {
+  display: flex;
+  width: 100%;
+}
+
+.dental-embedded-save-btn {
+  width: 100%;
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+.dental-embedded-save-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
+.dental-embedded-save-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+/* 우측 하단 치아 선택기 플로팅 버튼 */
+.dental-picker-floating-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4), 0 2px 6px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dental-picker-floating-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.5), 0 3px 8px rgba(0, 0, 0, 0.12);
+}
+
+.dental-picker-floating-btn:active {
+  transform: translateY(0);
+}
+
+.dental-picker-floating-btn .launcher-icon {
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.25);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+

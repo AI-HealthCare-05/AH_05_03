@@ -1,4 +1,4 @@
-import { lazy, Suspense, type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
@@ -24,6 +24,10 @@ import type { RiskLevel } from "../assessment/contracts";
 import { type LatestSummary, listLatestByProfile } from "../assessment/snapshots";
 import { regionRisks, type RegionRisk } from "./bodyRisk";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
+
+import { DentalPickerModal } from "./DentalPickerModal";
+import type { ToothDefinition } from "./dentalPickerLogic";
+import type { StagingItem } from "./VanatomeBodyMap";
 
 const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
   default: module.VanatomeBodyMap,
@@ -84,7 +88,208 @@ export function HomePage() {
   // 3D 인체에 색을 입힐 판정. `openRecord` 와 따로 두는 이유는 모달을 닫아도 색은
   // 남아야 하기 때문이다 — 모달을 닫는 동작은 "그만 볼래" 지 "선택을 풀래" 가 아니다.
   const [bodyRecord, setBodyRecord] = useState<HealthRecord>();
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(true);
+  const [quickActionsMinimized, setQuickActionsMinimized] = useState(true);
+
+  type SidebarCardId = "quickActions" | "assistant" | "dentalPicker";
+  const [dentalPickerOpen, setDentalPickerOpen] = useState(true);
+  const [dentalPickerMinimized, setDentalPickerMinimized] = useState(true);
+  const [, setSelectedTooth] = useState<ToothDefinition>();
+  const [stagedItems, setStagedItems] = useState<StagingItem[]>([]);
+  const selectedDentalFdis = useMemo(() => {
+    const set = new Set<number>();
+    for (const item of stagedItems) {
+      if (item.id.startsWith("dental-fdi-")) {
+        const num = Number(item.id.replace("dental-fdi-", ""));
+        if (!isNaN(num)) set.add(num);
+      }
+    }
+    return set;
+  }, [stagedItems]);
+  const toothSelectRef = useRef<((toothCode: number, toothName: string, shouldSelect?: boolean) => void) | undefined>(undefined);
+
+  const [sidebarOrder, setSidebarOrder] = useState<SidebarCardId[]>(() => {
+    try {
+      const saved = localStorage.getItem("ieobom_sidebar_order");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const valid = parsed.filter(
+            (id): id is SidebarCardId =>
+              id === "quickActions" || id === "assistant" || id === "dentalPicker",
+          );
+          if (valid.includes("quickActions") && valid.includes("assistant")) {
+            if (!valid.includes("dentalPicker")) {
+              valid.push("dentalPicker");
+            }
+            return valid;
+          }
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return ["quickActions", "assistant", "dentalPicker"];
+  });
+
+  const [draggingCard, setDraggingCard] = useState<SidebarCardId | null>(null);
+  const [dragOffsetY, setDragOffsetY] = useState(0);
+  const [dragStartIndex, setDragStartIndex] = useState<number | null>(null);
+  const [dragActiveCards, setDragActiveCards] = useState<SidebarCardId[]>([]);
+  const [previewTargetIndex, setPreviewTargetIndex] = useState<number | null>(null);
+  const [cardHeights, setCardHeights] = useState<Record<SidebarCardId, number>>({
+    quickActions: 240,
+    assistant: 840,
+    dentalPicker: 460,
+  });
+
+  const dragStartPosRef = useRef<{
+    y: number;
+    cardId: SidebarCardId;
+    startIndex: number;
+    activeCards: SidebarCardId[];
+  } | null>(null);
+
+  const quickActionsCardRef = useRef<HTMLDivElement>(null);
+  const assistantCardRef = useRef<HTMLDivElement>(null);
+  const dentalPickerCardRef = useRef<HTMLDivElement>(null);
+
+  const getActiveSidebarCards = useCallback((): SidebarCardId[] => {
+    return sidebarOrder.filter((id) => {
+      if (id === "quickActions") return !quickActionsMinimized;
+      if (id === "assistant") return assistantOpen;
+      if (id === "dentalPicker") return dentalPickerOpen && !dentalPickerMinimized;
+      return false;
+    });
+  }, [sidebarOrder, quickActionsMinimized, assistantOpen, dentalPickerOpen, dentalPickerMinimized]);
+
+  const handleCardDragStart = (cardId: SidebarCardId, e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest("button, a, input, select, textarea")) return;
+
+    const activeCards = getActiveSidebarCards();
+    if (activeCards.length < 2) return;
+
+    e.preventDefault();
+    const currentTarget = e.currentTarget as HTMLElement;
+    if (typeof currentTarget.setPointerCapture === "function") {
+      currentTarget.setPointerCapture(e.pointerId);
+    }
+
+    setCardHeights({
+      quickActions: quickActionsCardRef.current?.offsetHeight || 240,
+      assistant: assistantCardRef.current?.offsetHeight || 840,
+      dentalPicker: dentalPickerCardRef.current?.offsetHeight || 460,
+    });
+
+    const startIndex = activeCards.indexOf(cardId);
+    dragStartPosRef.current = { y: e.clientY, cardId, startIndex, activeCards };
+    setDraggingCard(cardId);
+    setDragOffsetY(0);
+    setDragStartIndex(startIndex);
+    setDragActiveCards(activeCards);
+    setPreviewTargetIndex(startIndex);
+  };
+
+  const handleCardDragMove = (e: React.PointerEvent) => {
+    if (!dragStartPosRef.current) return;
+    const deltaY = e.clientY - dragStartPosRef.current.y;
+    setDragOffsetY(deltaY);
+
+    const { startIndex, activeCards } = dragStartPosRef.current;
+    const stepThreshold = 70;
+    let targetIdx = startIndex;
+
+    if (deltaY > 0) {
+      const steps = Math.floor((deltaY + stepThreshold / 2) / stepThreshold);
+      targetIdx = Math.min(activeCards.length - 1, startIndex + steps);
+    } else if (deltaY < 0) {
+      const steps = Math.floor((-deltaY + stepThreshold / 2) / stepThreshold);
+      targetIdx = Math.max(0, startIndex - steps);
+    }
+
+    setPreviewTargetIndex(targetIdx);
+  };
+
+  const handleCardDragEnd = (e: React.PointerEvent) => {
+    if (!dragStartPosRef.current) return;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // ignore
+    }
+
+    const { startIndex, activeCards } = dragStartPosRef.current;
+    const targetIdx = previewTargetIndex ?? startIndex;
+
+    if (targetIdx !== startIndex && targetIdx >= 0 && targetIdx < activeCards.length) {
+      const newActive = [...activeCards];
+      const [moved] = newActive.splice(startIndex, 1);
+      newActive.splice(targetIdx, 0, moved);
+
+      setSidebarOrder((prev) => {
+        const inactive = prev.filter((id) => !newActive.includes(id));
+        const nextOrder = [...newActive, ...inactive];
+        try {
+          localStorage.setItem("ieobom_sidebar_order", JSON.stringify(nextOrder));
+        } catch {
+          // ignore
+        }
+        return nextOrder;
+      });
+    }
+
+    dragStartPosRef.current = null;
+    setDraggingCard(null);
+    setDragOffsetY(0);
+    setDragStartIndex(null);
+    setDragActiveCards([]);
+    setPreviewTargetIndex(null);
+  };
+
+  const getCardStyle = (cardId: SidebarCardId): React.CSSProperties => {
+    const isDragging = draggingCard === cardId;
+    const gap = 20;
+
+    if (isDragging) {
+      return {
+        transform: `translateY(${dragOffsetY}px)`,
+        zIndex: 10,
+        boxShadow: "0 18px 40px rgba(35, 61, 112, 0.18)",
+        transition: "none",
+      };
+    }
+
+    if (draggingCard && dragStartIndex !== null && previewTargetIndex !== null) {
+      const origIdx = dragActiveCards.indexOf(cardId);
+      const targetIdx = previewTargetIndex;
+      const draggedHeight = cardHeights[draggingCard] || 300;
+
+      if (origIdx !== -1) {
+        if (targetIdx > dragStartIndex) {
+          if (origIdx > dragStartIndex && origIdx <= targetIdx) {
+            return {
+              transform: `translateY(-${draggedHeight + gap}px)`,
+              transition: "transform 0.28s cubic-bezier(0.2, 0, 0, 1)",
+              zIndex: 1,
+            };
+          }
+        } else if (targetIdx < dragStartIndex) {
+          if (origIdx >= targetIdx && origIdx < dragStartIndex) {
+            return {
+              transform: `translateY(${draggedHeight + gap}px)`,
+              transition: "transform 0.28s cubic-bezier(0.2, 0, 0, 1)",
+              zIndex: 1,
+            };
+          }
+        }
+      }
+    }
+
+    return {
+      transform: "translateY(0)",
+      transition: "transform 0.28s cubic-bezier(0.2, 0, 0, 1)",
+    };
+  };
   // 영구 삭제를 물어볼 대상. **한 번 더 누르게 한다** — 되돌릴 수 없는데 복원 버튼
   // 바로 옆이라, 한 번에 지워지면 누르려던 것과 다른 것이 사라진다.
   const [purgingRecord, setPurgingRecord] = useState<HealthRecord>();
@@ -122,7 +327,7 @@ export function HomePage() {
         setDashboardLoading(false);
       }
     },
-    [runtime],
+    [runtime, setActionError],
   );
 
   /**
@@ -258,6 +463,7 @@ export function HomePage() {
         relationship: String(form.get("relationship") ?? ""),
         birthDate: optionalDate(form.get("birthDate")),
         gender: optionalGender(form.get("gender")),
+        accountEmail: selectedProfile.accountEmail,
         expectedVersion: selectedProfile.version,
       });
       setProfileEditDialogOpen(false);
@@ -487,6 +693,13 @@ export function HomePage() {
                 gender={selectedProfile.gender}
                 risks={bodyRisks}
                 risksAt={activeBodyRecord ? formatDateTime(activeBodyRecord.recordedAt) : undefined}
+                isDentalOpen={dentalPickerOpen}
+                onDentalOpenChange={(open) => {
+                  setDentalPickerOpen(open);
+                  if (open) setDentalPickerMinimized(false);
+                }}
+                onToothSelectRef={toothSelectRef}
+                onStagingChange={setStagedItems}
               />
             </Suspense>
 
@@ -561,25 +774,137 @@ export function HomePage() {
             </div>
           </div>
 
-          <aside className="quick-actions-panel">
-            <p className="section-kicker">빠른 작업</p>
-            <h2>무엇을 기록할까요?</h2>
-            <button type="button" onClick={() => setRecordChoiceOpen(true)}>
-              <strong>건강기록 작성</strong>
-              <small>직접 적거나, 검진표를 올려 판정까지</small>
-            </button>
-            <button type="button" onClick={() => {
-              setFamilyHistoryDialogOpen(true);
-              void navigate(`/members/${selectedProfile.id}/family-history`);
-            }}>
-              <strong>가족력 관리</strong>
-              <small>구성원별 질환·친족 정보</small>
-            </button>
-            <NavLink to="/data">
-              <strong>암호화 백업</strong>
-              <small>파일로 내보내기·가져오기</small>
-            </NavLink>
-          </aside>
+          <div className="member-dashboard-sidebar">
+            {sidebarOrder.map((cardId) => {
+              if (cardId === "quickActions") {
+                if (quickActionsMinimized) return null;
+                return (
+                  <div
+                    key="quickActions"
+                    ref={quickActionsCardRef}
+                    className={`sidebar-reorder-card ${draggingCard === "quickActions" ? "is-dragging" : ""}`}
+                    style={getCardStyle("quickActions")}
+                  >
+                    <aside className="quick-actions-panel">
+                      <div
+                        className="quick-actions-header-row"
+                        onPointerDown={(e) => handleCardDragStart("quickActions", e)}
+                        onPointerMove={handleCardDragMove}
+                        onPointerUp={handleCardDragEnd}
+                        onPointerCancel={handleCardDragEnd}
+                        title="드래그하여 위치 변경"
+                      >
+                        <div className="quick-actions-header-title-wrap">
+                          <span
+                            className="sidebar-card-drag-grip"
+                            aria-hidden="true"
+                            title="드래그하여 위치 변경"
+                          >
+                            ⠿
+                          </span>
+                          <div>
+                            <p className="section-kicker">빠른 작업</p>
+                            <h2>무엇을 기록할까요?</h2>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="quick-actions-minimize-btn"
+                          onClick={() => setQuickActionsMinimized(true)}
+                          aria-label="빠른 작업 최소화"
+                          title="빠른 작업 최소화"
+                        >
+                          −
+                        </button>
+                      </div>
+                      <button type="button" onClick={() => setRecordChoiceOpen(true)}>
+                        <strong>건강기록 작성</strong>
+                        <small>직접 적거나, 검진표를 올려 판정까지</small>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFamilyHistoryDialogOpen(true);
+                          void navigate(`/members/${selectedProfile.id}/family-history`);
+                        }}
+                      >
+                        <strong>가족력 관리</strong>
+                        <small>구성원별 질환·친족 정보</small>
+                      </button>
+                      <NavLink to="/data">
+                        <strong>암호화 백업</strong>
+                        <small>파일로 내보내기·가져오기</small>
+                      </NavLink>
+                    </aside>
+                  </div>
+                );
+              }
+
+              if (cardId === "assistant") {
+                if (!selectedProfile || !runtime || !assistantOpen) return null;
+                return (
+                  <div
+                    key="assistant"
+                    ref={assistantCardRef}
+                    className={`sidebar-reorder-card ${draggingCard === "assistant" ? "is-dragging" : ""}`}
+                    style={getCardStyle("assistant")}
+                  >
+                    <Suspense fallback={<div className="assistant-loading-card">봄이 대화를 준비하는 중…</div>}>
+                      <HealthAssistantDrawer
+                        key={selectedProfile.id}
+                        profile={selectedProfile}
+                        runtime={runtime}
+                        isOpen={assistantOpen}
+                        variant="embedded"
+                        onMinimize={() => setAssistantOpen(false)}
+                        onClose={() => setAssistantOpen(false)}
+                        onRecordSaved={() => refreshDashboard(selectedProfile.id)}
+                        onNavigateToRecords={() => setDeletedRecordsDialogOpen(false)}
+                        onNavigateToDiary={(dateKey) => navigate(`/pain-diary?date=${dateKey}`)}
+                        dragHandleProps={{
+                          onPointerDown: (e) => handleCardDragStart("assistant", e),
+                          onPointerMove: handleCardDragMove,
+                          onPointerUp: handleCardDragEnd,
+                          onPointerCancel: handleCardDragEnd,
+                          title: "드래그하여 위치 변경",
+                        }}
+                      />
+                    </Suspense>
+                  </div>
+                );
+              }
+
+              if (cardId === "dentalPicker") {
+                if (!dentalPickerOpen || dentalPickerMinimized) return null;
+                return (
+                  <div
+                    key="dentalPicker"
+                    ref={dentalPickerCardRef}
+                    className={`sidebar-reorder-card ${draggingCard === "dentalPicker" ? "is-dragging" : ""}`}
+                    style={getCardStyle("dentalPicker")}
+                  >
+                    <DentalPickerModal
+                      isOpen={dentalPickerOpen}
+                      mode="embedded"
+                      selectedFdis={selectedDentalFdis}
+                      onClose={() => setDentalPickerMinimized(true)}
+                      onMinimize={() => setDentalPickerMinimized(true)}
+                      onSelectTooth={(tooth, shouldSelect) => {
+                        setSelectedTooth(tooth);
+                        toothSelectRef.current?.(tooth.fdiNumber, tooth.koreanName, shouldSelect);
+                      }}
+                      onPointerDown={(e) => handleCardDragStart("dentalPicker", e)}
+                      onPointerMove={handleCardDragMove}
+                      onPointerUp={handleCardDragEnd}
+                      onPointerCancel={handleCardDragEnd}
+                    />
+                  </div>
+                );
+              }
+
+              return null;
+            })}
+          </div>
         </section>
       ) : null}
 
@@ -815,6 +1140,18 @@ export function HomePage() {
               </select>
             </label>
             <BirthDateInput defaultValue={selectedProfile.birthDate ?? ""} />
+            {selectedProfile.accountEmail ? (
+              <label>
+                연동 계정 (Google)
+                <input
+                  type="text"
+                  readOnly
+                  disabled
+                  defaultValue={selectedProfile.accountEmail}
+                  style={{ opacity: 0.85, cursor: "not-allowed" }}
+                />
+              </label>
+            ) : null}
             <div className="form-actions">
               <button className="secondary-button" type="button" onClick={() => setProfileEditDialogOpen(false)}>취소</button>
               <button className="primary-button" type="submit" disabled={saving}>{saving ? "저장 중…" : "변경사항 저장"}</button>
@@ -906,37 +1243,47 @@ export function HomePage() {
         }} />
       ) : null}
 
-      {/* 건강 비서 "봄이". 대화로 기록을 남기고 서류를 읽는다. 프로필이 있어야
-          누구의 기록인지 정해지므로 그때만 띄운다. */}
-      {selectedProfile && runtime ? (
-        <>
-          <button
-            type="button"
-            className="health-assistant-launcher-btn"
-            onClick={() => setAssistantOpen(true)}
-            aria-label="건강 비서 봄이 열기"
-          >
-            <span className="launcher-icon" aria-hidden="true">봄</span>
-            <span>봄이 대화</span>
-          </button>
-          {assistantOpen ? (
-            <Suspense fallback={null}>
-              <HealthAssistantDrawer
-                // 구성원을 바꾸면 대화를 새로 연다. 인사말이 초기 상태라 effect 로
-                // 되맞추지 않고 이 한 줄로 끝낸다 — 남의 대화가 남아 있으면 안 된다.
-                key={selectedProfile.id}
-                profile={selectedProfile}
-                runtime={runtime}
-                isOpen={assistantOpen}
-                onClose={() => setAssistantOpen(false)}
-                onRecordSaved={() => refreshDashboard(selectedProfile.id)}
-                onNavigateToRecords={() => setDeletedRecordsDialogOpen(false)}
-                onNavigateToDiary={(dateKey) => navigate(`/pain-diary?date=${dateKey}`)}
-              />
-            </Suspense>
+      {/* 우측 하단 플로팅 버튼 (봄이 대화 및 빠른 작업 최소화 시 표시) */}
+      {selectedProfile && (
+        <div className="floating-launchers-stack">
+          {!assistantOpen && runtime ? (
+            <button
+              type="button"
+              className="health-assistant-launcher-btn"
+              onClick={() => setAssistantOpen(true)}
+              aria-label="건강 비서 봄이 열기"
+              title="건강 비서 봄이 열기"
+            >
+              <span className="launcher-icon" aria-hidden="true">봄</span>
+              <span>봄이 대화</span>
+            </button>
           ) : null}
-        </>
-      ) : null}
+          {quickActionsMinimized ? (
+            <button
+              type="button"
+              className="quick-actions-floating-btn"
+              onClick={() => setQuickActionsMinimized(false)}
+              aria-label="빠른 작업 열기"
+              title="빠른 작업 열기"
+            >
+              <span className="launcher-icon" aria-hidden="true">⚡</span>
+              <span>빠른 작업</span>
+            </button>
+          ) : null}
+          {dentalPickerOpen && dentalPickerMinimized ? (
+            <button
+              type="button"
+              className="dental-picker-floating-btn"
+              onClick={() => setDentalPickerMinimized(false)}
+              aria-label="치아 선택 열기"
+              title="치아 선택 열기"
+            >
+              <span className="launcher-icon" aria-hidden="true">🦷</span>
+              <span>치아 선택</span>
+            </button>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

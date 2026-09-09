@@ -163,6 +163,7 @@ export interface ProfileServerData {
   relationship: string;
   birth_date: string | null;
   gender: "male" | "female" | null;
+  account_email?: string | null;
   status: "active" | "hidden" | "deleted";
   row_version: number;
   created_at: string;

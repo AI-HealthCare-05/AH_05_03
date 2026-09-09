@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.dtos.food_nutrition import FoodNutritionSearchResult
+from app.dtos.health_record_query import HealthRecordQueryResult
 from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.medication import MedicationSearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
@@ -210,6 +211,10 @@ class HealthAssistantResponse(BaseModel):
     )
     lab_result_draft: LabResultDraft | None = Field(default=None, description="검사/검진 서류 결과 초안")
     query_draft: QueryDraft | None = Field(default=None, description="기록 조회 조건 초안")
+    health_record_query_result: HealthRecordQueryResult | None = Field(
+        default=None,
+        description="PostgreSQL이 계산한 장기 건강기록 조건별 집계 결과",
+    )
     challenge_draft: ChallengeDraft | None = Field(default=None, description="챌린지 생성·조정·완료 초안")
     outdoor_conditions: OutdoorConditionsResult | None = Field(
         default=None,

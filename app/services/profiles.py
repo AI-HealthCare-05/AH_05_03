@@ -61,6 +61,7 @@ class ProfileService:
             relationship=req.relationship,
             birth_date=req.birth_date,
             gender=req.gender,
+            account_email=req.account_email,
             status="active",
         )
         created = await self.profile_repo.create(profile)
@@ -98,6 +99,8 @@ class ProfileService:
             profile.birth_date = req.birth_date
         if req.gender is not None:
             profile.gender = req.gender
+        if req.account_email is not None:
+            profile.account_email = req.account_email
         if req.status is not None:
             profile.status = req.status
 
@@ -128,6 +131,7 @@ class ProfileService:
                 relationship=p.relationship,
                 birth_date=p.birth_date,
                 gender=p.gender,
+                account_email=p.account_email,
                 status=p.status,
                 row_version=p.row_version,
             )

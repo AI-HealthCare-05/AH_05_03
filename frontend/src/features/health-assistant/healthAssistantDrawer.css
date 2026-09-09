@@ -52,6 +52,24 @@
   to { transform: translateX(100%); }
 }
 
+/* 임베드 모드: 빠른 작업 밑에 자연스럽게 들어가는 카드형 인터페이스 */
+.health-assistant-embedded-container {
+  width: 100%;
+}
+
+.health-assistant-drawer.is-embedded {
+  width: 100%;
+  max-width: 100%;
+  height: 840px;
+  min-height: 720px;
+  max-height: calc(100vh - 120px);
+  border-radius: 22px;
+  border: 1px solid var(--line, #e2e8f0);
+  box-shadow: 0 10px 32px rgba(35, 61, 112, 0.05);
+  animation: none;
+  overflow: hidden;
+}
+
 /* 대화 세션 목록 패널 */
 .chat-session-list {
   position: absolute;
@@ -133,7 +151,8 @@
   background: #f8fafc;
 }
 
-.chat-session-select-btn {
+.chat-session-select-btn,
+.chat-session-list li .chat-session-open {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -150,22 +169,48 @@
 }
 
 .chat-session-select-btn:hover,
-.chat-session-select-btn.active {
+.chat-session-select-btn.active,
+.chat-session-list li .chat-session-open:hover,
+.chat-session-list li .chat-session-open.active {
   background: #ecfdf5;
 }
 
-.chat-session-select-btn strong {
+.chat-session-select-btn strong,
+.chat-session-list li strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 14px;
 }
 
-.chat-session-select-btn time {
+.chat-session-select-btn time,
+.chat-session-list li time {
   color: #94a3b8;
   font-size: 11px;
   white-space: nowrap;
 }
+
+.chat-session-list li .chat-session-delete {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.chat-session-list li .chat-session-delete:hover,
+.chat-session-list li .chat-session-delete:focus-visible {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.chat-session-confirm { margin: 0 0 10px; }
 
 .chat-session-actions-wrap {
   position: relative;
@@ -286,6 +331,7 @@
   background: #f1f5f9;
 }
 
+
 .chat-session-empty { padding: 52px 20px; text-align: center; color: #334155; }
 
 @keyframes slideLeft {
@@ -301,6 +347,12 @@
   padding: 16px 20px;
   border-bottom: 1px solid #f1f5f9;
   background-color: #f8fafc;
+}
+
+.health-assistant-drawer.is-embedded .assistant-header {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
 }
 
 .assistant-header-title {
@@ -394,10 +446,12 @@
   color: #ffffff;
 }
 
-.assistant-close-btn {
+.assistant-close-btn,
+.assistant-minimize-btn {
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: 22px;
+  line-height: 1;
   color: #94a3b8;
   cursor: pointer;
   padding: 4px 8px;
@@ -405,7 +459,8 @@
   transition: color 0.15s, background-color 0.15s;
 }
 
-.assistant-close-btn:hover {
+.assistant-close-btn:hover,
+.assistant-minimize-btn:hover {
   color: #1e293b;
   background-color: #e2e8f0;
 }
@@ -414,6 +469,7 @@
 .assistant-messages-container {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -435,6 +491,12 @@
   justify-content: flex-start;
 }
 
+.assistant-message-row.assistant .msg-bubble-wrap {
+  flex: 1;
+  max-width: calc(100% - 40px);
+  min-width: 0;
+}
+
 .msg-avatar {
   font-size: 13px;
   font-weight: 700;
@@ -448,13 +510,6 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-}
-
-.msg-bubble-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: 85%;
 }
 
 .msg-bubble {
@@ -541,6 +596,10 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .draft-confirm-card.is-saved {
@@ -559,6 +618,8 @@
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .card-header strong {
@@ -571,6 +632,14 @@
   font-size: 11px;
 }
 
+.card-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .card-inputs label {
   display: flex;
   flex-direction: column;
@@ -578,31 +647,56 @@
   font-weight: 500;
   color: #475569;
   gap: 4px;
-  margin-bottom: 6px;
+  margin-bottom: 0;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.card-inputs input {
-  padding: 6px 10px;
+.card-inputs input,
+.card-inputs textarea {
+  padding: 7px 10px;
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   font-size: 13px;
   outline: none;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.card-inputs input:focus {
+.card-inputs input:focus,
+.card-inputs textarea:focus {
   border-color: #10b981;
+}
+
+.pain-tool-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pain-tool-grid .grid-full-col {
+  grid-column: 1 / -1;
 }
 
 .input-row {
   display: flex;
   gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .input-row label {
   flex: 1;
+  min-width: 0;
 }
 
 .confirm-save-btn {
+  width: 100%;
+  box-sizing: border-box;
   background-color: #10b981;
   color: #ffffff;
   border: none;
@@ -1530,12 +1624,17 @@
 .pain-intensity-slider-wrap {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-top: 4px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .pain-intensity-slider-wrap input[type="range"] {
   flex: 1;
+  min-width: 0;
+  width: 100%;
   accent-color: #ef4444;
   cursor: pointer;
 }
@@ -1544,8 +1643,9 @@
   font-size: 13px;
   font-weight: 700;
   color: #ef4444;
-  min-width: 24px;
+  min-width: 20px;
   text-align: right;
+  flex-shrink: 0;
 }
 
 /* 조회된 건강 기록 깔끔한 표(Table) 스타일 */

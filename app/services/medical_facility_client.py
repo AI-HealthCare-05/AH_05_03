@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app.core import config
+from app.core.utils.public_data import extract_public_data_items
 from app.dtos.medical_facility import FacilityItem, FacilitySearchResult
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ _NMC_DEPARTMENT_CODES = {
     "정형외과": "D006",
     "신경외과": "D007",
     "심장혈관흉부외과": "D008",
+    "흉부외과": "D008",
     "성형외과": "D009",
     "산부인과": "D010",
     "안과": "D011",
@@ -57,6 +59,10 @@ _NMC_DEPARTMENT_CODES = {
     "한방": "D034",
     "한의원": "D034",
 }
+
+# 과목명은 부분 문자열로 찾는다. 짧은 이름을 먼저 보면 "정형외과"가 일반 "외과"
+# 로 걸려 다른 과의 병원이 나오므로, 검사 순서는 항상 긴 이름이 먼저다.
+_DEPARTMENTS_LONGEST_FIRST: tuple[str, ...] = tuple(sorted(_NMC_DEPARTMENT_CODES, key=len, reverse=True))
 
 _SEOUL_DISTRICTS = [
     "강남구",
@@ -657,33 +663,51 @@ class MedicalFacilityClient:
     def _extract_items(data: dict[str, Any] | None) -> list[dict[str, Any]]:
         if not data:
             return []
-        items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
         # NMC는 결과가 없을 때 items를 빈 객체가 아닌 빈 문자열로 내려준다.
-        # 이는 정상적인 0건 응답이므로 파싱 오류로 취급하지 않는다.
-        if not isinstance(items, (dict, list)):
-            return []
-        if isinstance(items, dict):
-            return [items]
-        if isinstance(items, list):
-            return items
-        if "item" in data:
-            it = data["item"]
-            return [it] if isinstance(it, dict) else it
-        return []
+        # 이는 정상적인 0건 응답이므로 파싱 오류로 취급하지 않는다. 봉투를 푸는
+        # 판단은 기상청·에어코리아 쪽과 같아서 한 곳에 모아 두었다.
+        return extract_public_data_items(data)
+
+    @staticmethod
+    def _match_district_exact(text: str) -> str | None:
+        """자치구 정식 명칭을 찾는다. 긴 이름이 먼저다 — `중구` 가 `중랑구` 를 가로챈다."""
+        for d in sorted(_SEOUL_DISTRICTS, key=len, reverse=True):
+            if d in text:
+                return d
+        return None
+
+    @staticmethod
+    def _match_district_abbreviated(text: str) -> str | None:
+        """`구` 를 뗀 줄임말("강남 내과")을 찾는다.
+
+        한 글자로 줄어드는 `중구` 는 뺀다. `중` 하나로 비교하면 `중랑구`·`중계동`
+        같은 다른 지명이 전부 중구가 된다.
+        """
+        for d in sorted(_SEOUL_DISTRICTS, key=len, reverse=True):
+            short = d[:-1]
+            if len(short) >= 2 and short in text:
+                return d
+        return None
 
     @staticmethod
     def _parse_location(query: str | None) -> tuple[str | None, str | None]:
         if not query:
             return None, None
-        # 1. 랜드마크/시군구 사전 매핑 (긴 키워드 우선)
+        # 1. 자치구 정식 명칭이 통째로 있으면 그게 가장 구체적이다. 랜드마크보다
+        #    먼저 본다 — 사전의 `동대문`(중구) 이 `동대문구` 를 가로채면 안 된다.
+        exact = MedicalFacilityClient._match_district_exact(query)
+        if exact:
+            return "서울특별시", exact
+        # 2. 랜드마크/시군구 사전 매핑 (긴 키워드 우선)
         for k, v in sorted(_LANDMARK_TO_STAGE.items(), key=lambda x: len(x[0]), reverse=True):
             if k in query:
                 return v
-        # 2. 서울 25개 자치구
-        for d in _SEOUL_DISTRICTS:
-            if d in query or d[:-1] in query:
-                return "서울특별시", d
-        # 3. 17개 광역시·도 단독 매칭 (긴 이름 우선: '부산광역시' > '부산')
+        # 3. `구` 를 뗀 자치구 줄임말. 랜드마크보다 뒤에 둬야 `강남` 이 `강남구` 로
+        #    뭉개지지 않고 사전의 정확한 좌표를 쓴다.
+        abbreviated = MedicalFacilityClient._match_district_abbreviated(query)
+        if abbreviated:
+            return "서울특별시", abbreviated
+        # 4. 17개 광역시·도 단독 매칭 (긴 이름 우선: '부산광역시' > '부산')
         for p_key, p_val in sorted(_PROVINCE_MAP.items(), key=lambda x: len(x[0]), reverse=True):
             if p_key in query:
                 return p_val, None
@@ -711,7 +735,7 @@ class MedicalFacilityClient:
         """시설·진료과 표현을 제외한 지명만 카카오 장소 검색에 전달한다."""
         if not query:
             return None
-        department_words = "|".join(sorted(map(re.escape, _NMC_DEPARTMENT_CODES), key=len, reverse=True))
+        department_words = "|".join(map(re.escape, _DEPARTMENTS_LONGEST_FIRST))
         place = re.sub(
             rf"({department_words}|응급실|응급의료기관|병원|의원|약국|찾아줘|찾아|알려줘|알려|조회|검색|근처|주변|가까운|현재|지금|좀|해줘)",
             "",
@@ -792,9 +816,9 @@ class MedicalFacilityClient:
     @staticmethod
     def _match_department(query: str | None, keyword: str | None) -> tuple[str | None, str | None]:
         text = f"{query or ''} {keyword or ''}".strip()
-        for dept_name, code in _NMC_DEPARTMENT_CODES.items():
+        for dept_name in _DEPARTMENTS_LONGEST_FIRST:
             if dept_name in text:
-                return dept_name, code
+                return dept_name, _NMC_DEPARTMENT_CODES[dept_name]
         return None, None
 
     @staticmethod
@@ -812,11 +836,13 @@ class MedicalFacilityClient:
         for lm in sorted(_LANDMARK_COORDS.keys(), key=len, reverse=True):
             if lm in target:
                 return lm
-        for d in _SEOUL_DISTRICTS:
-            if d in target or d[:-1] in target:
-                return d
+        district = MedicalFacilityClient._match_district_exact(target) or (
+            MedicalFacilityClient._match_district_abbreviated(target)
+        )
+        if district:
+            return district
         # 2. 불필요한 단어 제거 후 남은 단어
-        department_words = "|".join(sorted(map(re.escape, _NMC_DEPARTMENT_CODES), key=len, reverse=True))
+        department_words = "|".join(map(re.escape, _DEPARTMENTS_LONGEST_FIRST))
         cleaned = re.sub(
             rf"({department_words}|약국|병원|의원|응급실|찾아줘|알려줘|어디|주변|근처)",
             "",

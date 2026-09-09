@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app.core import config
+from app.core.utils.public_data import extract_public_data_items
 from app.dtos.outdoor_conditions import AirQualityConditions, OutdoorConditionsResult, WeatherConditions
 
 
@@ -254,7 +255,10 @@ class OutdoorConditionsClient:
             )
             if response.status_code != 200:
                 return None, "기상청 날씨 정보를 불러오지 못했습니다."
-            items = response.json().get("response", {}).get("body", {}).get("items", {}).get("item", [])
+            # 관측이 아직 안 올라온 시각에는 items 가 빈 문자열로 온다. 봉투를 직접
+            # 이어 붙이면 거기서 AttributeError 가 나는데, 아래 except 가 안 잡는 종류라
+            # 날씨 조회만 실패하는 게 아니라 채팅 요청 전체가 깨진다.
+            items = extract_public_data_items(response.json())
             categories = {item.get("category"): item.get("obsrValue") for item in items}
             if not categories:
                 return None, "기상청 날씨 정보가 아직 준비되지 않았습니다."
@@ -325,8 +329,8 @@ class OutdoorConditionsClient:
         )
         if response.status_code != 200:
             raise httpx.HTTPStatusError("AirKorea region lookup failed", request=response.request, response=response)
-        items = response.json().get("response", {}).get("body", {}).get("items", [])
-        return items if isinstance(items, list) else []
+        # 에어코리아는 items 가 바로 목록이다. 0건일 때의 빈 문자열은 공용 함수가 받는다.
+        return extract_public_data_items(response.json())
 
     async def _resolve_air_quality_area(
         self,

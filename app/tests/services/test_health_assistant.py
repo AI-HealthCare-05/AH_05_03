@@ -1038,3 +1038,37 @@ async def test_enrich_context_enriches_records_on_health_symptom() -> None:
     assert enriched.recent_records_summary is not None
     assert "무릎 뻐근함" in enriched.recent_records_summary
     mock_record_repo.list_by_profile.assert_called_once_with(profile_id, limit=5)
+
+
+@pytest.mark.asyncio
+async def test_standalone_medicine_word_does_not_match_unrelated_korean() -> None:
+    """`약` 한 글자를 부분 문자열로 찾으면 약간·약속·요약·계약이 전부 의약품 질문이 된다.
+
+    질문 의도 키워드(`어떻게`·`언제`·`괜찮`)나 물음표와 겹치면 그대로 도구가 붙어,
+    의약품과 무관한 대화마다 식약처 조회 도구가 LLM 에 노출됐다.
+    """
+    unrelated = [
+        "약간 어지러운데 괜찮을까요?",
+        "오늘 운동 약속 언제였지?",
+        "검진 결과 요약해서 알려줘",
+        "계약서 어떻게 쓰지?",
+        "다리에 힘이 약해요, 괜찮을까요?",
+        "만약 혈압이 높으면 어떻게 해요?",
+        "병원 예약 언제 되나요?",
+        "절약하려면 어떻게 해야 돼?",
+    ]
+    for text in unrelated:
+        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
+        assert HealthAssistantService._needs_medication_info(req) is False, f"오탐: {text}"
+
+    # 홀로 쓰인 `약` 과 조사가 붙은 형태는 그대로 잡아야 한다.
+    medicine = [
+        "이 약 효능이 뭐야?",
+        "약을 언제 먹어도 되나요?",
+        "이 약은 부작용이 뭔가요?",
+        "감기약 먹어도 돼?",
+        "혈압약 복용법이 어떻게 되나요?",
+    ]
+    for text in medicine:
+        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
+        assert HealthAssistantService._needs_medication_info(req) is True, f"미탐: {text}"

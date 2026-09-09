@@ -9,10 +9,10 @@ import { GeminiOcrAdapter } from "../../shared/api/geminiOcrAdapter";
 import {
   streamHealthAssistantMessage,
   createChatSession,
+  deleteChatSession,
   listChatSessions,
   listChatMessages,
   updateChatSession,
-  deleteChatSession,
   type ChatSessionData,
   type HealthAssistantResponse,
   type ExerciseDraft,
@@ -31,8 +31,10 @@ import {
   containsNewMedicationRecord,
   detectMetricKeyFromQuery,
   extractMetricsFromRecords,
+  extractRegionHint,
   filterRecordsByTimeRange,
   formatTargetDateTime,
+  isFacilityQuery,
   isValidContentKeyword,
   type MetricSeries,
   normalizeRecordTypes,
@@ -48,6 +50,7 @@ import {
   normalizeBloodGlucoseTiming,
   removeMedicationSavePrompt,
   reviewItemsToText,
+  clearChatSession,
   loadChatSession,
   saveChatSession,
   createWelcomeMessage,
@@ -167,10 +170,13 @@ interface HealthAssistantDrawerProps {
   runtime?: LocalDomainRuntime;
   isOpen: boolean;
   onClose: () => void;
+  onMinimize?: () => void;
+  variant?: "drawer" | "embedded";
   onRecordSaved?: () => Promise<void> | void;
   onChallengeSaved?: () => Promise<void> | void;
   onNavigateToRecords?: () => void;
   onNavigateToDiary?: (dateKey: string) => void;
+  dragHandleProps?: React.HTMLAttributes<HTMLElement>;
 }
 
 export function HealthAssistantDrawer({
@@ -178,9 +184,12 @@ export function HealthAssistantDrawer({
   runtime,
   isOpen,
   onClose,
+  onMinimize,
+  variant = "drawer",
   onRecordSaved,
   onNavigateToRecords,
   onNavigateToDiary,
+  dragHandleProps,
 }: HealthAssistantDrawerProps) {
   // 초기 메시지는 이전 세션이 있으면 복원하고, 없으면 환영 메시지로 시작한다.
   const [messages, setMessages] = useState<ExtendedChatMessage[]>(() => {
@@ -208,6 +217,8 @@ export function HealthAssistantDrawer({
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+  const [pendingDeleteSessionId, setPendingDeleteSessionId] = useState<string | null>(null);
+  const [deletingSession, setDeletingSession] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [error, setError] = useState<string>();
@@ -320,7 +331,6 @@ export function HealthAssistantDrawer({
     const profileDisplayName = profile.displayName;
     const isProfileChanged = activeProfileIdRef.current !== currentProfileId;
     activeProfileIdRef.current = currentProfileId;
-
     const lastProfileId = getLastOpenedProfileId();
     const isProfileSwitched = lastProfileId !== null && lastProfileId !== currentProfileId;
     setLastOpenedProfileId(currentProfileId);
@@ -338,6 +348,9 @@ export function HealthAssistantDrawer({
         setShowSessionList(false);
       }
     }
+    // 확인을 띄워 둔 채 구성원을 바꾸면 다른 사람의 대화에 삭제가 걸린다.
+    setPendingDeleteSessionId(null);
+    setDeletingSession(false);
 
     const saved = loadChatSession(currentProfileId);
 
@@ -421,6 +434,44 @@ export function HealthAssistantDrawer({
     setShowSessionList(false);
     saveChatViewMode(profile.id, "chat");
     scrollToBottom("auto");
+  }
+
+  /**
+   * 대화 삭제. 서버가 지운 뒤에만 목록에서 뺀다 — 먼저 지우면 실패했을 때
+   * 화면에서만 사라진 대화가 새로고침에 되살아난다.
+   */
+  async function handleDeleteChat(session: ChatSessionData) {
+    if (!profile || deletingSession) return;
+    setDeletingSession(true);
+    setError(undefined);
+
+    try {
+      await deleteChatSession(session.id);
+    } catch (err) {
+      console.warn("대화 세션 삭제 실패:", err);
+      setError("대화를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setDeletingSession(false);
+      return;
+    }
+
+    setChatSessions((previous) => previous.filter((item) => item.id !== session.id));
+    setPendingDeleteSessionId(null);
+    setDeletingSession(false);
+
+    // 열려 있던 대화를 지웠으면 화면과 로컬 캐시도 같이 비운다. 남겨 두면
+    // 서버에 없는 대화가 계속 보이고 다음 메시지가 삭제된 세션으로 나간다.
+    if (activeSessionIdRef.current === session.id) {
+      activeSessionIdRef.current = null;
+      setActiveSessionId(null);
+      // 최초 동기화 프로미스는 방금 지운 세션 id 로 이미 확정돼 있다. 남겨 두면
+      // 다음 전송이 그 id 를 되찾아 없는 세션에 메시지를 밀어 넣는다.
+      sessionSyncPromiseRef.current = null;
+      clearChatSession(profile.id);
+      setMessages([createWelcomeMessage(profile.displayName)]);
+      setSelectedImage(null);
+      setImagePreview(null);
+      setShowSessionList(true);
+    }
   }
 
   async function handleSelectChat(session: ChatSessionData) {
@@ -706,17 +757,12 @@ export function HealthAssistantDrawer({
 
     try {
       // 주변 의료시설(응급실, 병원, 약국) 조회 의도 감지 시 Geolocation 확인
-      const isFacilityQuery = /(응급실|병원|의원|약국|당직의료|당번약국|야간약국|야간진료|응급의료|내과|외과|이비인후과|소아과|소아청소년과|신경과|정신과|정신건강의학과|정형외과|신경외과|성형외과|산부인과|안과|피부과|비뇨의학과|비뇨기과|영상의학과|마취통증의학과|통증의학과|재활의학과|가정의학과|응급의학과|치과|한방|한의원)/.test(userContent);
+      const facilityQuery = isFacilityQuery(userContent);
       // 질의어에서 시설명 및 질의용 불용어를 제외했을 때 특정 지역명/장소 키워드가 남아있는지 확인
-      const cleanedForRegion = userContent
-        .replace(/(응급실|병원|의원|약국|내과|외과|이비인후과|소아과|소아청소년과|신경과|정신과|정신건강의학과|정형외과|신경외과|성형외과|산부인과|안과|피부과|비뇨의학과|비뇨기과|영상의학과|마취통증의학과|통증의학과|재활의학과|가정의학과|응급의학과|치과|한방|한의원|한방병원|보건소|의료원|당직의료|당번약국|야간약국|야간진료|응급의료)/g, "")
-        .replace(/(주변|근처|가까운|현재|지금|문연|문\s*연|당직|당번|야간|24시|휴일|일요일|주말)/g, "")
-        .replace(/(찾아줘|찾아|알려줘|알려|어디야|어디에|어디|추천|조회|검색|부탁|있어|있니|있나요|가려는데|가려고|좀|해줘|해\s*줘|이야|야|\?|!|\.)/g, "")
-        .trim();
-      const hasRegionHint = cleanedForRegion.length >= 1;
+      const hasRegionHint = extractRegionHint(userContent).length >= 1;
 
       let userLocation: UserLocation | undefined = undefined;
-      if (isFacilityQuery) {
+      if (facilityQuery) {
         const { location, errorReason } = await getBrowserLocation();
         if (location) {
           userLocation = location;
@@ -979,6 +1025,7 @@ export function HealthAssistantDrawer({
 
       const shouldExecuteQuery =
         Boolean(runtime) &&
+        !res.health_record_query_result &&
         (res.intent === "query_records" || isExplicitDocRequest || isTrendRequest || isExplicitRecordQuery);
 
       if (shouldExecuteQuery) {
@@ -1531,57 +1578,76 @@ export function HealthAssistantDrawer({
     "저녁 8시에 타이레놀 1알 복용했어",
   ];
 
-  return (
-    <div
-      className={`health-assistant-backdrop ${isClosing ? "closing" : ""}`}
-      role="presentation"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) handleAnimatedClose();
-      }}
+  const isEmbedded = variant === "embedded";
+
+  const drawerContent = (
+    <aside
+      className={`health-assistant-drawer ${isEmbedded ? "is-embedded" : ""} ${isClosing ? "closing" : ""}`}
+      role={isEmbedded ? "region" : "dialog"}
+      aria-label="AI 건강 비서 봄이"
     >
-      <aside
-        className={`health-assistant-drawer ${isClosing ? "closing" : ""}`}
-        role="dialog"
-        aria-label="AI 건강 비서 봄이"
-      >
-        {/* 헤더 */}
-        <header className="assistant-header">
-          <div className="assistant-header-title">
-            <span className="assistant-avatar" aria-hidden="true">봄</span>
-            <div>
-              <h3>
-                봄이 · 건강 비서
-                {profile && (
-                  <span className="target-profile-pill">{profile.displayName} ({profile.relationship})</span>
-                )}
-              </h3>
-            </div>
+      {/* 헤더 */}
+      <header className="assistant-header" {...dragHandleProps}>
+        <div className="assistant-header-title">
+          {isEmbedded && (
+            <span
+              className="sidebar-card-drag-grip"
+              title="드래그하여 위치 변경"
+              aria-label="드래그하여 위치 변경"
+            >
+              ⠿
+            </span>
+          )}
+          <span className="assistant-avatar" aria-hidden="true">봄</span>
+          <div>
+            <h3>
+              봄이 · 건강 비서
+              {profile && (
+                <span className="target-profile-pill">{profile.displayName} ({profile.relationship})</span>
+              )}
+            </h3>
+            {isEmbedded ? (
+              <p>
+                <span className="privacy-pill">기록은 기기에 암호화 보관</span>
+              </p>
+            ) : null}
           </div>
-          <div className="assistant-header-actions">
-            {showSessionList ? (
-              <button
-                className="assistant-new-chat-header-btn"
-                type="button"
-                onClick={() => void handleCreateChat()}
-                aria-label="새 대화"
-              >
-                + 새 대화
-              </button>
-            ) : (
-              <button
-                className="assistant-clear-btn"
-                type="button"
-                onClick={() => {
-                  setShowSessionList(true);
-                  if (profile) {
-                    saveChatViewMode(profile.id, "list");
-                  }
-                }}
-                aria-label="대화 목록"
-              >
-                대화 목록
-              </button>
-            )}
+        </div>
+        <div className="assistant-header-actions">
+          {showSessionList ? (
+            <button
+              className="assistant-new-chat-header-btn"
+              type="button"
+              onClick={() => void handleCreateChat()}
+              aria-label="새 대화"
+            >
+              + 새 대화
+            </button>
+          ) : (
+            <button
+              className="assistant-clear-btn"
+              type="button"
+              onClick={() => {
+                setShowSessionList(true);
+                if (profile) {
+                  saveChatViewMode(profile.id, "list");
+                }
+              }}
+              aria-label="대화 목록"
+            >
+              대화 목록
+            </button>
+          )}
+          <button
+            className="assistant-minimize-btn"
+            type="button"
+            onClick={onMinimize ?? (isEmbedded ? onClose : handleAnimatedClose)}
+            aria-label="최소화"
+            title="최소화"
+          >
+            −
+          </button>
+          {!isEmbedded && (
             <button
               className="assistant-close-btn"
               type="button"
@@ -1590,8 +1656,9 @@ export function HealthAssistantDrawer({
             >
               ×
             </button>
-          </div>
-        </header>
+          )}
+        </div>
+      </header>
 
         {showSessionList && (
           <section className="chat-session-list" aria-label="대화 목록">
@@ -1603,97 +1670,145 @@ export function HealthAssistantDrawer({
               </div>
             ) : (
               <ul>
-                {chatSessions.map((session) => (
-                  <li key={session.id} className="chat-session-item">
-                    {editingSessionId === session.id ? (
-                      <form
-                        className="chat-session-rename-form"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          void handleSaveSessionTitle(session.id, editingTitle);
-                        }}
-                      >
-                        <input
-                          type="text"
-                          value={editingTitle}
-                          onChange={(e) => setEditingTitle(e.target.value)}
-                          autoFocus
-                          maxLength={100}
-                          placeholder="대화방 이름 입력"
-                          className="chat-session-rename-input"
-                        />
-                        <div className="chat-session-rename-actions">
-                          <button type="submit" className="rename-save-btn">
-                            저장
-                          </button>
-                          <button
-                            type="button"
-                            className="rename-cancel-btn"
-                            onClick={() => setEditingSessionId(null)}
-                          >
-                            취소
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="chat-session-row">
-                        <button
-                          type="button"
-                          className={`chat-session-select-btn ${activeSessionId === session.id ? "active" : ""}`}
-                          onClick={() => void handleSelectChat(session)}
+                {chatSessions.map((session) => {
+                  const sessionTitle = session.title || "새 건강 상담";
+                  return (
+                    <li key={session.id} className="chat-session-item">
+                      {editingSessionId === session.id ? (
+                        <form
+                          className="chat-session-rename-form"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            void handleSaveSessionTitle(session.id, editingTitle);
+                          }}
                         >
-                          <strong title={session.title || "새 건강 상담"}>
-                            {session.title || "새 건강 상담"}
-                          </strong>
-                          <time dateTime={session.updated_at}>
-                            {new Date(session.updated_at).toLocaleDateString("ko-KR")}
-                          </time>
-                        </button>
-                        <div className="chat-session-actions-wrap">
+                          <input
+                            type="text"
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            autoFocus
+                            maxLength={100}
+                            placeholder="대화방 이름 입력"
+                            className="chat-session-rename-input"
+                          />
+                          <div className="chat-session-rename-actions">
+                            <button type="submit" className="rename-save-btn">
+                              저장
+                            </button>
+                            <button
+                              type="button"
+                              className="rename-cancel-btn"
+                              onClick={() => setEditingSessionId(null)}
+                            >
+                              취소
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="chat-session-row">
                           <button
                             type="button"
-                            className="chat-session-kebab-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenMenuSessionId(
-                                openMenuSessionId === session.id ? null : session.id
-                              );
-                            }}
-                            aria-label="더보기"
-                            title="더보기"
+                            className={`chat-session-select-btn ${activeSessionId === session.id ? "active" : ""}`}
+                            onClick={() => void handleSelectChat(session)}
                           >
-                            ···
+                            <strong title={sessionTitle}>
+                              {sessionTitle}
+                            </strong>
+                            <time dateTime={session.updated_at}>
+                              {new Date(session.updated_at).toLocaleDateString("ko-KR")}
+                            </time>
                           </button>
-                          {openMenuSessionId === session.id && (
-                            <div
-                              className="chat-session-menu-popover"
-                              onClick={(e) => e.stopPropagation()}
+                          <button
+                            type="button"
+                            className="chat-session-delete"
+                            aria-label={`${sessionTitle} 대화 삭제`}
+                            onClick={() => setPendingDeleteSessionId(session.id)}
+                          >
+                            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                              <path
+                                d="M6.5 1.5h3M2.5 3.5h11M4.5 3.5l.6 10a1 1 0 0 0 1 .95h3.8a1 1 0 0 0 1-.95l.6-10M6.6 6.5v5.2M9.4 6.5v5.2"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.3"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </button>
+                          <div className="chat-session-actions-wrap">
+                            <button
+                              type="button"
+                              className="chat-session-kebab-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMenuSessionId(
+                                  openMenuSessionId === session.id ? null : session.id
+                                );
+                              }}
+                              aria-label="더보기"
+                              title="더보기"
                             >
-                              <button
-                                type="button"
-                                className="chat-session-menu-item"
-                                onClick={() => {
-                                  setEditingSessionId(session.id);
-                                  setEditingTitle(session.title || "");
-                                  setOpenMenuSessionId(null);
-                                }}
+                              ···
+                            </button>
+                            {openMenuSessionId === session.id && (
+                              <div
+                                className="chat-session-menu-popover"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                이름 변경
-                              </button>
-                              <button
-                                type="button"
-                                className="chat-session-menu-item danger"
-                                onClick={(e) => void handleDeleteSession(session.id, e)}
-                              >
-                                대화 삭제
-                              </button>
-                            </div>
-                          )}
+                                <button
+                                  type="button"
+                                  className="chat-session-menu-item"
+                                  onClick={() => {
+                                    setEditingSessionId(session.id);
+                                    setEditingTitle(session.title || "");
+                                    setOpenMenuSessionId(null);
+                                  }}
+                                >
+                                  이름 변경
+                                </button>
+                                <button
+                                  type="button"
+                                  className="chat-session-menu-item danger"
+                                  onClick={(e) => void handleDeleteSession(session.id, e)}
+                                >
+                                  대화 삭제
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </li>
-                ))}
+                      )}
+                      {pendingDeleteSessionId === session.id && (
+                        <div
+                          className="inline-confirmation chat-session-confirm"
+                          role="alertdialog"
+                          aria-label="대화 삭제 확인"
+                        >
+                          <p>
+                            <strong>{sessionTitle}</strong> 대화를 삭제할까요? 주고받은 내용은 되돌릴 수 없습니다.
+                          </p>
+                          <div className="form-actions">
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => setPendingDeleteSessionId(null)}
+                            >
+                              취소
+                            </button>
+                            <button
+                              type="button"
+                              className="danger-button"
+                              disabled={deletingSession}
+                              onClick={() => void handleDeleteChat(session)}
+                            >
+                              {deletingSession ? "삭제 중…" : "삭제"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
@@ -1979,6 +2094,55 @@ export function HealthAssistantDrawer({
           </form>
         </footer>
       </aside>
+  );
+
+  if (isEmbedded) {
+    return (
+      <div className="health-assistant-embedded-container">
+        {drawerContent}
+
+        {/* 원본 서류 이미지 크게 보기 모달 */}
+        {sourcePreviewModal && (
+          <div className="modal-backdrop source-preview-backdrop" role="presentation" onMouseDown={() => setSourcePreviewModal(null)}>
+            <section className="source-preview-modal" role="dialog" aria-modal="true" aria-label="연결된 원본 서류" onMouseDown={(e) => e.stopPropagation()}>
+              <header>
+                <strong>{sourcePreviewModal.name}</strong>
+                <button type="button" aria-label="닫기" onClick={() => setSourcePreviewModal(null)}>×</button>
+              </header>
+              <div className="source-image-wrap">
+                <img src={sourcePreviewModal.url} alt="건강기록에 연결된 원본 서류 이미지" />
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* 건강 서류 상세 검토 및 건강기록 확정 저장 모달 */}
+        {ocrModalOpen && ocrImagePreviewUrl && (
+          <OcrReviewModal
+            key={`${ocrImagePreviewUrl}:${ocrReviewDraft ? "draft" : "empty"}`}
+            profileName={profile.displayName}
+            imageUrl={ocrImagePreviewUrl}
+            fileName={ocrImageFile?.name ?? "검진 서류"}
+            draft={ocrReviewDraft}
+            items={ocrReviewItems}
+            error={ocrModalError}
+            working={ocrModalWorking}
+            onClose={() => {
+              setOcrModalOpen(false);
+              clearSelectedImage();
+            }}
+            onConfirm={(updatedDraft, updatedItems) => void handleConfirmOcrModalSave(updatedDraft, updatedItems)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="health-assistant-backdrop" role="presentation" onMouseDown={(e) => {
+      if (e.target === e.currentTarget) onClose();
+    }}>
+      {drawerContent}
 
       {/* 원본 서류 이미지 크게 보기 모달 */}
       {sourcePreviewModal && (
@@ -1998,11 +2162,6 @@ export function HealthAssistantDrawer({
       {/* 건강 서류 상세 검토 및 건강기록 확정 저장 모달 */}
       {ocrModalOpen && ocrImagePreviewUrl && (
         <OcrReviewModal
-          // 인식 결과가 바뀌면 새로 마운트한다. 모달 안의 편집 상태를 effect 로
-          // 되맞추는 대신 이 한 줄로 끝낸다.
-          // 초안이 늦게 도착하면 **새로 마운트**한다. 예전에는 effect 로 상태를
-          // 되맞췄는데 그게 렌더 연쇄를 만들었다. 초안이 오기 전에는 채울 값이
-          // 기본값뿐이라 잃을 편집도 없다.
           key={`${ocrImagePreviewUrl}:${ocrReviewDraft ? "draft" : "empty"}`}
           profileName={profile.displayName}
           imageUrl={ocrImagePreviewUrl}
@@ -3402,21 +3561,13 @@ function PainDiaryToolCard({
           />
         </label>
 
-        <div className="input-row">
+        <div className="pain-tool-grid">
           <label>
             기록 날짜
             <input
               type="date"
               value={diaryDate}
               onChange={(e) => setDiaryDate(e.target.value)}
-            />
-          </label>
-          <label>
-            통증 부위
-            <input
-              value={bodyArea}
-              onChange={(e) => setBodyArea(e.target.value)}
-              placeholder="팔꿈치, 왼쪽 고관절 등"
             />
           </label>
           <label>
@@ -3432,9 +3583,14 @@ function PainDiaryToolCard({
               <span className="pain-intensity-val">{intensity}</span>
             </div>
           </label>
-        </div>
-
-        <div className="input-row">
+          <label className="grid-full-col">
+            통증 부위
+            <input
+              value={bodyArea}
+              onChange={(e) => setBodyArea(e.target.value)}
+              placeholder="팔꿈치, 왼쪽 고관절 등"
+            />
+          </label>
           <label>
             통증 양상
             <input
