@@ -9,6 +9,7 @@ export interface ChatMessage {
 }
 
 export interface ProfileContext {
+  profile_id?: string;
   profile_name: string;
   relationship?: string;
   birth_year?: number;

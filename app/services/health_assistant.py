@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any, cast
 
@@ -10,14 +11,21 @@ from app.dtos.health_assistant import (
 from app.exceptions import LlmProviderFailedError
 from app.integrations.llm.chain import shared_chat_client
 from app.integrations.llm.protocol import LLMClientProtocol
+from app.models.households import HouseholdStatus
+from app.models.service_accounts import ServiceAccount
 from app.prompts.health_assistant import build_system_instruction
+from app.repositories.chat_session_repository import ChatSessionRepository
 from app.repositories.health_record_repository import HealthRecordRepository
+from app.repositories.household_repository import HouseholdRepository
+from app.repositories.profile_repository import ProfileRepository
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.medical_facility_client import MedicalFacilityClient
 from app.services.medical_facility_tools import (
     execute_facility_tool,
     get_facility_tools,
 )
+from app.services.medication_client import MedicationClient, MedicationClientProtocol
+from app.services.medication_tools import execute_medication_tool, get_medication_tools
 from app.services.ocr_partial import PartialJsonTextReader
 from app.services.outdoor_conditions_client import (
     OutdoorConditionsClient,
@@ -117,13 +125,62 @@ _FACILITY_HISTORY_OR_ADVICE_KEYWORDS = (
     "부작용",
 )
 
+_MEDICATION_KEYWORDS = (
+    "약",
+    "약품",
+    "약물",
+    "복약",
+    "복용",
+    "부작용",
+    "병용",
+    "같이 먹",
+    "같이먹",
+    "함께 먹",
+    "함께먹",
+    "먹어도 돼",
+    "먹어도돼",
+    "먹어도 되",
+    "먹어도되",
+    "복용해도 돼",
+    "복용해도돼",
+    "금기",
+    "처방",
+    "성분",
+    "DUR",
+    "dur",
+    "혈압약",
+    "당뇨약",
+    "혈당약",
+    "타이레놀",
+    "판콜",
+    "아스피린",
+    "노바스크",
+    "메트포르민",
+    "이지엔",
+    "게보린",
+    "탁센",
+    "피임약",
+    "감기약",
+    "소화제",
+    "진통제",
+    "소염진통제",
+    "항생제",
+    "위장약",
+    "스테로이드",
+    "영양제",
+    "비타민",
+    "마그네슘",
+    "오메가",
+    "유산균",
+)
+
 
 class HealthAssistantService:
     """통합 건강 어시스턴트 (봄이) 서비스.
 
     자연어 입력을 분석하여 건강기록(운동, 혈압, 혈당, 복약, 통증 등) 추출,
     기록 조회 의도 분류, 주변 의료시설(응급실, 병원, 약국) 도구 호출(Tool Calling),
-    안전 가이드라인 기반 상담 응답을 생성합니다.
+    식약처 의약품 정보·DUR 품목정보 조회, 안전 가이드라인 기반 상담 응답을 생성합니다.
     """
 
     def __init__(
@@ -132,13 +189,114 @@ class HealthAssistantService:
         safety_service: HealthAssistantSafetyService | None = None,
         facility_client: MedicalFacilityClient | None = None,
         record_repo: HealthRecordRepository | None = None,
+        chat_session_repo: ChatSessionRepository | None = None,
         outdoor_conditions_client: OutdoorConditionsClientProtocol | None = None,
+        medication_client: MedicationClientProtocol | None = None,
+        profile_repo: ProfileRepository | None = None,
+        household_repo: HouseholdRepository | None = None,
     ):
         self._llm_client = llm_client
         self.safety_service = safety_service or HealthAssistantSafetyService()
         self.facility_client = facility_client or MedicalFacilityClient()
         self.record_repo = record_repo
+        self.chat_session_repo = chat_session_repo
         self.outdoor_conditions_client = outdoor_conditions_client or OutdoorConditionsClient()
+        self.medication_client: MedicationClientProtocol = medication_client or MedicationClient()
+        self.profile_repo = profile_repo
+        self.household_repo = household_repo
+
+    @staticmethod
+    def _needs_medication_info(request: HealthAssistantChatRequest) -> bool:
+        """의약품 허가정보(효능·부작용·주의사항) 조회가 실제로 필요한 질문인지 판별한다.
+
+        - 단순 복약 기록 발화("저녁 8시에 타이레놀 1알 복용했어", "혈압약 먹음")는 기록 의도이므로 검색 도구를 부르지 않는다.
+        - 효능, 부작용, 복용법, 주의사항 등을 묻는 질문형 발화에만 검색 도구를 활성화한다.
+        """
+        if not request.messages:
+            return False
+        last_msg = request.messages[-1].content
+        # 1) 의약품 키워드가 반드시 있어야 함
+        if not any(k in last_msg for k in _MEDICATION_KEYWORDS):
+            return False
+
+        # 2) 병용 가능 여부 질문("같이 먹어도 돼?", "함께 복용해도 되나요?")은 최우선 검색
+        compact_msg = last_msg.replace(" ", "")
+        is_interaction_question = any(
+            k in compact_msg
+            for k in (
+                "같이",
+                "함께",
+                "병용",
+                "동시에",
+                "먹어도돼",
+                "먹어도되",
+                "복용해도돼",
+                "복용해도되",
+                "먹어도괜찮",
+                "복용해도괜찮",
+                "먹어도될까",
+                "복용해도될까",
+                "먹어도되나요",
+                "복용해도되나요",
+            )
+        )
+        if is_interaction_question:
+            return True
+
+        # 3) 질문 의도 키워드 또는 물음표가 있는 경우 질문으로 우선 처리
+        has_question_intent = any(
+            k in last_msg
+            for k in (
+                "뭐야",
+                "무슨 약",
+                "어떤 약",
+                "어떻게",
+                "용법",
+                "용량",
+                "효능",
+                "효과",
+                "부작용",
+                "주의사항",
+                "주의점",
+                "성분",
+                "금기",
+                "상호작용",
+                "알려줘",
+                "궁금",
+                "설명",
+                "몇 알",
+                "얼마나",
+                "언제",
+                "되나요",
+                "될까",
+                "괜찮",
+            )
+        ) or last_msg.strip().endswith("?")
+        if has_question_intent:
+            return True
+
+        # 4) 단순 복약 기록 완료형 발화는 검색에서 제외 ("복용했어", "먹었어", "먹음", "1알 복용" 등)
+        is_past_record = any(
+            suffix in last_msg
+            for suffix in (
+                "복용했",
+                "복용햇",
+                "먹었",
+                "먹엇",
+                "머것",
+                "먹음",
+                "먹어씀",
+                "복용함",
+                "투약함",
+                "챙겨먹",
+                "먹은",
+                "복용한",
+            )
+        )
+        if is_past_record:
+            return False
+
+        return False
 
     @staticmethod
     def _needs_facility_tools(request: HealthAssistantChatRequest) -> bool:
@@ -339,11 +497,45 @@ class HealthAssistantService:
             lines.append("일부 조회 실패: " + "; ".join(result.errors))
         return "\n".join(lines) or "실시간 야외 환경 정보를 불러오지 못했습니다."
 
-    async def _enrich_context(self, context: ProfileContext | None) -> ProfileContext | None:
-        if context is None or context.recent_records_summary or not context.profile_id or not self.record_repo:
-            return context
+    @staticmethod
+    def _parse_profile_id(raw: str | uuid.UUID | None) -> uuid.UUID | None:
+        if isinstance(raw, uuid.UUID):
+            return raw
+        if isinstance(raw, str):
+            try:
+                return uuid.UUID(raw)
+            except ValueError:
+                return None
+        return None
+
+    async def _has_profile_access(self, profile_id: uuid.UUID, account_id: uuid.UUID) -> bool:
+        """현재 계정(account_id)이 대상 프로필(profile_id)의 활성 가구 구성원인지 검증한다."""
+        if not self.profile_repo or not self.household_repo:
+            return False
         try:
-            records = await self.record_repo.list_by_profile(context.profile_id, limit=5)
+            profile = await self.profile_repo.get(profile_id)
+            if profile is None or profile.status != "active":
+                return False
+            household = await self.household_repo.get(profile.household_id)
+            if household is None or household.status != HouseholdStatus.ACTIVE:
+                return False
+            return await self.household_repo.has_active_membership(profile.household_id, account_id)
+        except Exception:
+            return False
+
+    async def _enrich_records_summary(
+        self,
+        context: ProfileContext,
+        account_id: uuid.UUID | None,
+    ) -> None:
+        if context.recent_records_summary or not context.profile_id or not self.record_repo or not account_id:
+            return
+        profile_id = self._parse_profile_id(context.profile_id)
+        if profile_id is None or not await self._has_profile_access(profile_id, account_id):
+            return
+
+        try:
+            records = await self.record_repo.list_by_profile(profile_id, limit=5)
             if records:
                 summaries = []
                 for r in records:
@@ -370,6 +562,114 @@ class HealthAssistantService:
                 context.recent_records_summary = "; ".join(summaries)[:2000]
         except Exception:
             pass
+
+    @staticmethod
+    def _needs_recent_records(request: HealthAssistantChatRequest) -> bool:
+        """일반 인사나 비건강 잡담에는 건강기록을 조회·주입하지 않는다.
+
+        건강정보는 '필요할 때만 전달'하는 원칙(Issue #102)을 준수하며,
+        통증·증상·복약·혈압·혈당 등 건강 관련 맥락이 감지될 때만 선별 보강한다.
+        """
+        if not request.messages:
+            return False
+        content = request.messages[-1].content.strip()
+        normalized = content.replace(" ", "")
+
+        # 1) 명백한 인사말/잡담 단독 발화는 차단
+        greeting_words = {
+            "안녕",
+            "안녕하세요",
+            "안녕하십니까",
+            "하이",
+            "반가워",
+            "반갑습니다",
+            "좋은아침",
+            "좋은아침입니다",
+            "헬로",
+            "방가",
+        }
+        if normalized in greeting_words:
+            return False
+
+        # 2) 감사/작별/단순 응답 등 잡담 차단
+        chitchat_words = {
+            "고마워",
+            "감사합니다",
+            "고맙습니다",
+            "수고했어",
+            "수고하세요",
+            "잘있어",
+            "잘가",
+            "바이",
+            "네",
+            "응",
+            "알겠어",
+            "그래",
+        }
+        if normalized in chitchat_words:
+            return False
+
+        # 3) 건강/증상/부위/측정/기록 관련 키워드가 있는 경우에만 보강
+        return any(
+            kw in normalized
+            for kw in (
+                "통증",
+                "아파",
+                "아프",
+                "결려",
+                "쑤셔",
+                "뻐근",
+                "묵직",
+                "저려",
+                "찌릿",
+                "혈압",
+                "혈당",
+                "당뇨",
+                "수축기",
+                "이완기",
+                "체온",
+                "약",
+                "복용",
+                "처방",
+                "영양제",
+                "운동",
+                "스쿼트",
+                "러닝",
+                "달리",
+                "걸었",
+                "헬스",
+                "기록",
+                "수치",
+                "검진",
+                "지난번",
+                "최근",
+                "어땠",
+                "허리",
+                "무릎",
+                "어깨",
+                "목",
+                "등",
+                "배",
+                "머리",
+                "가슴",
+                "허벅지",
+                "종아리",
+                "발",
+                "손",
+            )
+        )
+
+    async def _enrich_context(
+        self,
+        context: ProfileContext | None,
+        account_id: uuid.UUID | None = None,
+        request: HealthAssistantChatRequest | None = None,
+    ) -> ProfileContext | None:
+        if context is None:
+            return None
+        if request is not None and not self._needs_recent_records(request):
+            return context
+        await self._enrich_records_summary(context, account_id=account_id)
         return context
 
     @property
@@ -379,14 +679,35 @@ class HealthAssistantService:
         return self._llm_client
 
     async def _execute_tool(self, name: str, args: dict[str, Any]) -> Any:
+        # 의약품 툴 먼저 확인
+        if name == "search_medication_info":
+            return await execute_medication_tool(name, args, self.medication_client)
         return await execute_facility_tool(name, args, self.facility_client)
 
-    async def respond(self, request: HealthAssistantChatRequest) -> HealthAssistantResponse:
+    def _get_tools(self, request: HealthAssistantChatRequest) -> list[Any] | None:
+        """요청에 필요한 Tool 목록을 반환한다. 불필요한 툴은 포함하지 않는다."""
+        tools: list[Any] = []
+        if self._needs_facility_tools(request):
+            tools.extend(get_facility_tools())
+        if self._needs_medication_info(request):
+            tools.extend(get_medication_tools())
+        return tools if tools else None
+
+    async def respond(
+        self,
+        request: HealthAssistantChatRequest,
+        account: ServiceAccount | None = None,
+    ) -> HealthAssistantResponse:
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
             return safety_check
 
-        profile_context = await self._enrich_context(request.profile_context)
+        account_id = account.id if account else None
+        profile_context = await self._enrich_context(
+            request.profile_context,
+            account_id=account_id,
+            request=request,
+        )
         loc = await self._resolve_request_location(request)
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
@@ -397,7 +718,7 @@ class HealthAssistantService:
             else None,
         )
 
-        tools = get_facility_tools() if self._needs_facility_tools(request) else None
+        tools = self._get_tools(request)
         response: HealthAssistantResponse
         client_any = cast(Any, self.llm_client)
 
@@ -410,10 +731,16 @@ class HealthAssistantService:
                 tool_executor=self._execute_tool,
             )
             response, tool_result = res_tuple
-            if tool_result and not response.facility_search_draft:
-                response.facility_search_draft = tool_result
-                if getattr(tool_result, "message", None):
-                    response.assistant_message = tool_result.message
+            if tool_result is not None:
+                from app.dtos.medication import MedicationSearchResult
+
+                if isinstance(tool_result, MedicationSearchResult):
+                    if not response.medication_search_result:
+                        response.medication_search_result = tool_result
+                elif not response.facility_search_draft:
+                    response.facility_search_draft = tool_result
+                    if getattr(tool_result, "message", None):
+                        response.assistant_message = tool_result.message
         else:
             response = await self.llm_client.generate_structured_response(
                 system_instruction=system_instruction,
@@ -426,14 +753,65 @@ class HealthAssistantService:
         validated_response = self.safety_service.validate_response(response)
         return validated_response
 
-    async def stream(self, request: HealthAssistantChatRequest) -> AsyncIterator[tuple[str, Any]]:
+    async def _get_stream_generator(
+        self,
+        request: HealthAssistantChatRequest,
+        system_instruction: str,
+        tools: list[Any] | None,
+    ) -> tuple[AsyncIterator[str], Any]:
+        client_any = cast(Any, self.llm_client)
+        if tools and hasattr(client_any, "stream_structured_response_with_tools"):
+            return await client_any.stream_structured_response_with_tools(
+                system_instruction=system_instruction,
+                messages=request.messages,
+                response_schema=HealthAssistantResponse,
+                tools=tools,
+                tool_executor=self._execute_tool,
+            )
+        return (
+            self.llm_client.stream_structured_response(
+                system_instruction=system_instruction,
+                messages=request.messages,
+                response_schema=HealthAssistantResponse,
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _enrich_parsed_response(
+        parsed: HealthAssistantResponse,
+        tool_result: Any,
+        outdoor_conditions: Any,
+    ) -> HealthAssistantResponse:
+        if tool_result:
+            from app.dtos.medication import MedicationSearchResult
+
+            if isinstance(tool_result, MedicationSearchResult):
+                if not parsed.medication_search_result:
+                    parsed.medication_search_result = tool_result
+            elif not parsed.facility_search_draft:
+                parsed.facility_search_draft = tool_result
+        if outdoor_conditions and not parsed.outdoor_conditions:
+            parsed.outdoor_conditions = outdoor_conditions
+        return parsed
+
+    async def stream(
+        self,
+        request: HealthAssistantChatRequest,
+        account: ServiceAccount | None = None,
+    ) -> AsyncIterator[tuple[str, Any]]:
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
             yield "delta", {"text": safety_check.assistant_message}
             yield "result", safety_check.model_dump(mode="json")
             return
 
-        profile_context = await self._enrich_context(request.profile_context)
+        account_id = account.id if account else None
+        profile_context = await self._enrich_context(
+            request.profile_context,
+            account_id=account_id,
+            request=request,
+        )
         loc = await self._resolve_request_location(request)
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
@@ -445,39 +823,28 @@ class HealthAssistantService:
         )
         reader = PartialJsonTextReader("assistant_message")
         raw = ""
-        tool_result = None
 
-        tools = get_facility_tools() if self._needs_facility_tools(request) else None
-        client_any = cast(Any, self.llm_client)
-
-        if tools and hasattr(client_any, "stream_structured_response_with_tools"):
-            stream_gen, tool_result = await client_any.stream_structured_response_with_tools(
-                system_instruction=system_instruction,
-                messages=request.messages,
-                response_schema=HealthAssistantResponse,
-                tools=tools,
-                tool_executor=self._execute_tool,
-            )
-        else:
-            stream_gen = self.llm_client.stream_structured_response(
-                system_instruction=system_instruction,
-                messages=request.messages,
-                response_schema=HealthAssistantResponse,
-            )
+        tools = self._get_tools(request)
+        stream_gen, tool_result = await self._get_stream_generator(request, system_instruction, tools)
 
         if tool_result is not None:
+            from app.dtos.medication import MedicationSearchResult
+
             payload = tool_result.model_dump(mode="json") if hasattr(tool_result, "model_dump") else tool_result
-            yield "facility", payload
-            summary_msg = getattr(tool_result, "message", None) or "주변 의료시설을 조회했습니다."
-            yield "delta", {"text": summary_msg}
-            res_obj = HealthAssistantResponse(
-                intent="search_facility",
-                assistant_message=summary_msg,
-                facility_search_draft=tool_result,
-                outdoor_conditions=outdoor_conditions,
-            )
-            yield "result", self.safety_service.validate_response(res_obj).model_dump(mode="json")
-            return
+            if isinstance(tool_result, MedicationSearchResult):
+                yield "medication", payload
+            else:
+                yield "facility", payload
+                summary_msg = getattr(tool_result, "message", None) or "주변 의료시설을 조회했습니다."
+                yield "delta", {"text": summary_msg}
+                res_obj = HealthAssistantResponse(
+                    intent="search_facility",
+                    assistant_message=summary_msg,
+                    facility_search_draft=tool_result,
+                    outdoor_conditions=outdoor_conditions,
+                )
+                yield "result", self.safety_service.validate_response(res_obj).model_dump(mode="json")
+                return
 
         async for piece in stream_gen:
             raw += piece
@@ -487,10 +854,7 @@ class HealthAssistantService:
 
         try:
             parsed = HealthAssistantResponse.model_validate_json(raw)
-            if tool_result and not parsed.facility_search_draft:
-                parsed.facility_search_draft = tool_result
-            if outdoor_conditions and not parsed.outdoor_conditions:
-                parsed.outdoor_conditions = outdoor_conditions
+            parsed = self._enrich_parsed_response(parsed, tool_result, outdoor_conditions)
         except Exception as ex:
             raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex
 
