@@ -116,7 +116,9 @@ class TestBuildSummary:
 class TestFoodNutritionClient:
     async def test_search_uses_catalog_fallback_when_api_fails(self) -> None:
         client = FoodNutritionClient()
-        with patch("app.core.config.FOOD_NUTRITION_API_KEY", "mock-key"):
+        with patch("app.services.food_nutrition_client.config") as mock_cfg:
+            mock_cfg.FOOD_NUTRITION_API_KEY = "mock-key"
+            mock_cfg.MFDS_API_KEY = None
             with patch("httpx.AsyncClient.get", side_effect=Exception("API connection error")):
                 res = await client.search_food_nutrition("신라면")
                 assert res.query == "신라면"
