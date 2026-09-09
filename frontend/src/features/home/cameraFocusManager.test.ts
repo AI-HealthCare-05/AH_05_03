@@ -123,4 +123,27 @@ describe("cameraFocusManager", () => {
     expect(surfaceMesh.material).toBe(transparentMat);
     expect(surfaceMesh.renderOrder).toBe(15);
   });
+
+  it("선택 세트가 비워져도(스프레이 취소/지우기 등) 투시모드에서는 메쉬가 불투명으로 돌아가지 않고 고스트 반투명을 유지한다", () => {
+    const origMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, opacity: 1.0, transparent: false });
+    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), origMaterial);
+    mesh.name = "Gluteus Maximus";
+
+    const originalMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+    const ghostMaterialsMap = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+
+    // 선택이 없는 상태에서 applyIsolateShading 호출 (스프레이 E버튼 클리어 후 복원 시뮬레이션)
+    applyIsolateShading([mesh], new Set(), {
+      originalMaterials,
+      ghostMaterialsMap,
+    });
+
+    const currentMat = mesh.material as THREE.MeshStandardMaterial;
+    expect(currentMat.transparent).toBe(true);
+    expect(currentMat.opacity).toBeLessThan(0.2);
+    expect(currentMat.opacity).toBeCloseTo(0.08);
+    expect(mesh.renderOrder).toBe(1);
+    expect(currentMat).not.toBe(origMaterial);
+  });
 });
+
