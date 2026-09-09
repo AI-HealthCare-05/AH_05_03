@@ -2080,6 +2080,10 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
           onClose={mockOnClose}
         />,
       );
+      const listBtn = screen.queryByRole("button", { name: "대화 목록" });
+      if (listBtn) {
+        fireEvent.click(listBtn);
+      }
       await screen.findByRole("button", { name: "무릎 통증 상담 대화 삭제" });
     }
 

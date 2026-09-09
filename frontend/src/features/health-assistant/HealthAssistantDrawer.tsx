@@ -13,7 +13,6 @@ import {
   listChatSessions,
   listChatMessages,
   updateChatSession,
-  deleteChatSession,
   type ChatSessionData,
   type HealthAssistantResponse,
   type ExerciseDraft,
