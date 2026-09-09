@@ -14,7 +14,7 @@ export interface AnatomyDisplayInfo {
   description: string;
 }
 
-interface DictionaryEntry {
+export interface DictionaryEntry {
   korean: string;
   canonical: string;
   system: string;
@@ -25,7 +25,44 @@ interface DictionaryEntry {
 /**
  * 주요 근육, 골격, 인대, 관절 및 장기 해부학 표준 명칭 사전
  */
-const ANATOMY_DICTIONARY: Record<string, DictionaryEntry> = {
+export const ANATOMY_DICTIONARY: Record<string, DictionaryEntry> = {
+  // --- 소화기계 및 복막 (Peritoneum / Omentum) ---
+  "greater omentum": {
+    korean: "대망 (큰그물망)",
+    canonical: "Greater omentum",
+    system: "digestive",
+    systemKorean: "소화기계",
+    description: "위와 대장 앞을 앞치마처럼 넓게 덮고 있는 복막 주름으로, 복부 장기를 보호하고 면역 기능을 담당합니다.",
+  },
+  "lesser omentum": {
+    korean: "소망 (작은그물망)",
+    canonical: "Lesser omentum",
+    system: "digestive",
+    systemKorean: "소화기계",
+    description: "간과 위의 작은만곡, 십이지장을 연결하는 복막 주름입니다.",
+  },
+  "mesocolon": {
+    korean: "결장간막",
+    canonical: "Mesocolon",
+    system: "digestive",
+    systemKorean: "소화기계",
+    description: "대장(결장)을 후복벽에 연결하고 지지하는 복막 주름입니다.",
+  },
+  "meso appendix": {
+    korean: "충수간막",
+    canonical: "Meso-appendix",
+    system: "digestive",
+    systemKorean: "소화기계",
+    description: "충수를 맹장 및 장간막에 연결하고 혈관을 공급하는 복막 주름입니다.",
+  },
+  "peritoneum": {
+    korean: "복막",
+    canonical: "Peritoneum",
+    system: "digestive",
+    systemKorean: "소화기계",
+    description: "복강 내부 벽과 복부 장기 전체를 감싸 보호하는 장막입니다.",
+  },
+
   // --- 하지 근육 및 근막 ---
   "fascia lata": {
     korean: "대퇴근막",
@@ -439,15 +476,350 @@ const ANATOMY_DICTIONARY: Record<string, DictionaryEntry> = {
     systemKorean: "골격계",
     description: "가슴 부위를 둥글게 둘러싸며 호흡과 내부 장기 보호를 담당하는 갈비뼈입니다.",
   },
+  // --- 두개골 및 안면골 ---
+  "frontal bone": {
+    korean: "전두골",
+    canonical: "Frontal bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "이마 부위를 형성하고 안와(눈구멍)의 천장을 이루는 머리뼈입니다.",
+  },
+  "parietal bone": {
+    korean: "두정골",
+    canonical: "Parietal bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "머리의 정수리와 양 측면 상부를 이루는 판 모양의 뼈입니다.",
+  },
+  "occipital bone": {
+    korean: "후두골",
+    canonical: "Occipital bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "머리의 뒤통수와 바닥을 이루며 척수와 뇌가 연결되는 대후두공을 포함합니다.",
+  },
+  "temporal bone": {
+    korean: "측두골",
+    canonical: "Temporal bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "머리의 관자 부위와 귀 주변을 둘러싸는 뼈로 청각 및 평형 기관을 보호합니다.",
+  },
+  "sphenoid bone": {
+    korean: "접형골",
+    canonical: "Sphenoid bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "나비 모양의 뼈로 두개골 바닥 중앙에 위치하여 여러 뼈들을 연결합니다.",
+  },
+  "ethmoid bone": {
+    korean: "사골",
+    canonical: "Ethmoid bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "비강(코안)의 천장과 안와 안쪽 벽을 이루는 벌집 모양의 가벼운 뼈입니다.",
+  },
+  mandible: {
+    korean: "하악골",
+    canonical: "Mandible",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "아래턱을 형성하는 가장 크고 단단한 안면골로 저작과 발음에 핵심입니다.",
+  },
+  maxilla: {
+    korean: "상악골",
+    canonical: "Maxilla",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "위턱을 이루고 상악 치아를 지지하며 안면 중앙을 구성하는 뼈입니다.",
+  },
+  "zygomatic bone": {
+    korean: "협골",
+    canonical: "Zygomatic bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "뺨의 도드라진 윤곽(광대뼈)을 형성하는 안면골입니다.",
+  },
+  "nasal bone": {
+    korean: "비골",
+    canonical: "Nasal bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "콧등의 뼈대를 이루는 한 쌍의 작은 장방형 뼈입니다.",
+  },
+  "lacrimal bone": {
+    korean: "누골",
+    canonical: "Lacrimal bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "안와의 안쪽 벽을 이루는 작고 얇은 눈물뼈입니다.",
+  },
+  "hyoid bone": {
+    korean: "설골",
+    canonical: "Hyoid bone",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "목 앞쪽에 떠 있는 U자형 뼈로 혀와 후두의 움직임을 지지합니다.",
+  },
+  // --- 척추 및 체간/사지 골격 ---
+  vertebra: {
+    korean: "척추뼈",
+    canonical: "Vertebra",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "척추를 구성하는 마디 뼈로 척수를 보호하고 상체의 하중을 지탱합니다.",
+  },
+  calcaneus: {
+    korean: "종골",
+    canonical: "Calcaneus",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "발뒤꿈치를 형성하는 가장 큰 발뼈로 보행 시 지면 충격을 가장 먼저 받습니다.",
+  },
+  talus: {
+    korean: "거골",
+    canonical: "Talus",
+    system: "skeletal",
+    systemKorean: "골격계",
+    description: "정강뼈와 종골 사이에 위치하여 발목 관절의 굴곡 및 신전을 매개합니다.",
+  },
 };
+
+/**
+ * 이름 기반 계통(System) 스마트 추론
+ */
+function inferSystemFromName(name: string): string {
+  const lower = name.toLowerCase();
+  if (
+    lower.includes("bone") ||
+    lower.includes("skull") ||
+    lower.includes("cran") ||
+    lower.includes("mandib") ||
+    lower.includes("maxill") ||
+    lower.includes("verteb") ||
+    lower.includes("spine") ||
+    lower.includes("sacrum") ||
+    lower.includes("rib") ||
+    lower.includes("cartilage") ||
+    lower.includes("femur") ||
+    lower.includes("tibia") ||
+    lower.includes("fibula") ||
+    lower.includes("humerus") ||
+    lower.includes("radius") ||
+    lower.includes("ulna") ||
+    lower.includes("patell") ||
+    lower.includes("clavic") ||
+    lower.includes("scapul") ||
+    lower.includes("carpal") ||
+    lower.includes("tarsal") ||
+    lower.includes("phalang") ||
+    lower.includes("pelvis") ||
+    lower.includes("ilium") ||
+    lower.includes("ischium") ||
+    lower.includes("pubis")
+  ) {
+    return "skeletal";
+  }
+  if (
+    lower.includes("joint") ||
+    lower.includes("ligament") ||
+    lower.includes("capsule") ||
+    lower.includes("articular") ||
+    lower.includes("meniscus")
+  ) {
+    return "joints";
+  }
+  if (
+    lower.includes("artery") ||
+    lower.includes("vein") ||
+    lower.includes("aorta") ||
+    lower.includes("vena") ||
+    lower.includes("vascular")
+  ) {
+    return "cardiovascular";
+  }
+  if (lower.includes("nerve") || lower.includes("ganglion") || lower.includes("brain")) {
+    return "nervous";
+  }
+  if (lower.includes("lymph")) {
+    return "lymphatic";
+  }
+  if (
+    lower.includes("stomach") ||
+    lower.includes("intestine") ||
+    lower.includes("colon") ||
+    lower.includes("rectum") ||
+    lower.includes("esophagus") ||
+    lower.includes("liver") ||
+    lower.includes("gallbladder") ||
+    lower.includes("pancreas") ||
+    lower.includes("appendix") ||
+    lower.includes("omentum") ||
+    lower.includes("mesocolon") ||
+    lower.includes("peritoneum")
+  ) {
+    return "digestive";
+  }
+  return "muscular";
+}
+
+/**
+ * 척추(경추 C1~C7, 흉추 T1~T12, 요추 L1~L5), 천골, 미골 및 갈비뼈(늑골 1~12번)의
+ * 분절 번호와 한글/라틴어 표준 명칭을 보존하여 개별 식별을 보장합니다.
+ */
+function resolveSegmentalBoneInfo(
+  fullName: string,
+  side?: "left" | "right" | "bilateral",
+): AnatomyDisplayInfo | undefined {
+  const lower = fullName.toLowerCase().replace(/[_.-]+/g, " ");
+  const sidePrefixKr = side === "left" ? "좌측 " : side === "right" ? "우측 " : "";
+  const sideSuffixEn = side === "left" ? " (Left)" : side === "right" ? " (Right)" : "";
+  const sideShortEn = side === "left" ? " L" : side === "right" ? " R" : "";
+
+  // 1. 환추 (경추 1번, Atlas)
+  if (/\batlas\b/i.test(lower) || /\b(?:vertebra[_\s-]?)?c1\b/i.test(lower)) {
+    return {
+      koreanName: "환추 (경추 1번)",
+      canonicalName: "Atlas (C1)",
+      fullBilingualLabel: "환추 (경추 1번) (Atlas C1)",
+      side,
+      system: "skeletal",
+      systemKorean: "골격계",
+      description: "머리뼈를 직접 받치는 첫 번째 목뼈(경추 1번)로 고개를 끄덕이는 굽힘/폄 움직임을 담당합니다.",
+    };
+  }
+
+  // 2. 축추 (경추 2번, Axis)
+  if (/\baxis\b/i.test(lower) || /\b(?:vertebra[_\s-]?)?c2\b/i.test(lower)) {
+    return {
+      koreanName: "축추 (경추 2번)",
+      canonicalName: "Axis (C2)",
+      fullBilingualLabel: "축추 (경추 2번) (Axis C2)",
+      side,
+      system: "skeletal",
+      systemKorean: "골격계",
+      description: "환추와 맞물려 머리를 좌우로 도리도리 회전시키는 축 역할을 하는 두 번째 목뼈(경추 2번)입니다.",
+    };
+  }
+
+  // 3. 경추 (C3 ~ C7)
+  const cMatch = lower.match(/\b(?:vertebra|cervical)?\s*c([3-7])\b/i) || lower.match(/\bc([3-7])\b/i);
+  if (cMatch && (lower.includes("vertebra") || lower.includes("cervical") || lower.includes("skeleton"))) {
+    const num = cMatch[1];
+    return {
+      koreanName: `경추 ${num}번`,
+      canonicalName: `Vertebra C${num}`,
+      fullBilingualLabel: `경추 ${num}번 (Vertebra C${num})`,
+      side,
+      system: "skeletal",
+      systemKorean: "골격계",
+      description: `목 부위 척추를 구성하는 제${num}경추로 목의 하중을 분산하고 척수를 안전하게 보호합니다.`,
+    };
+  }
+
+  // 4. 흉추 (T1 ~ T12)
+  const tMatch = lower.match(/\b(?:vertebra|thoracic)?\s*t(1[0-2]|[1-9])\b/i) || lower.match(/\bt(1[0-2]|[1-9])\b/i);
+  if (tMatch && (lower.includes("vertebra") || lower.includes("thoracic") || lower.includes("skeleton"))) {
+    const num = tMatch[1];
+    return {
+      koreanName: `흉추 ${num}번`,
+      canonicalName: `Vertebra T${num}`,
+      fullBilingualLabel: `흉추 ${num}번 (Vertebra T${num})`,
+      side,
+      system: "skeletal",
+      systemKorean: "골격계",
+      description: `등 부위 척추를 구성하는 제${num}흉추로 갈비뼈와 관절을 이루어 흉곽을 형성합니다.`,
+    };
+  }
+
+  // 5. 요추 (L1 ~ L5)
+  const lMatch = lower.match(/\b(?:vertebra|lumbar)?\s*l([1-5])\b/i) || lower.match(/\bl([1-5])\b/i);
+  if (lMatch && (lower.includes("vertebra") || lower.includes("lumbar") || lower.includes("skeleton"))) {
+    const num = lMatch[1];
+    return {
+      koreanName: `요추 ${num}번`,
+      canonicalName: `Vertebra L${num}`,
+      fullBilingualLabel: `요추 ${num}번 (Vertebra L${num})`,
+      side,
+      system: "skeletal",
+      systemKorean: "골격계",
+      description: `허리 부위 척추를 구성하는 제${num}요추로 상체의 가장 큰 체중 하중을 지탱하는 핵심 뼈입니다.`,
+    };
+  }
+
+  // 6. 천골 / 엉치뼈
+  if (/\bsacrum\b/i.test(lower) || /\bsacral\b/i.test(lower)) {
+    return {
+      koreanName: "천골 (엉치뼈)",
+      canonicalName: "Sacrum",
+      fullBilingualLabel: "천골 (엉치뼈) (Sacrum)",
+      side,
+      system: "skeletal",
+      systemKorean: "골격계",
+      description: "척추의 아래쪽에서 골반과 척추를 단단히 연결하는 삼각형 형태의 뼈입니다.",
+    };
+  }
+
+  // 7. 미골 / 꼬리뼈
+  if (/\bcoccyx\b/i.test(lower) || /\bcoccygeal\b/i.test(lower)) {
+    return {
+      koreanName: "미골 (꼬리뼈)",
+      canonicalName: "Coccyx",
+      fullBilingualLabel: "미골 (꼬리뼈) (Coccyx)",
+      side,
+      system: "skeletal",
+      systemKorean: "골격계",
+      description: "척추의 가장 아래쪽 끝에 위치한 꼬리뼈입니다.",
+    };
+  }
+
+  // 8. 갈비뼈 (늑골 1~12번)
+  const ORDINAL_RIB: Record<string, number> = {
+    first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6,
+    seventh: 7, eighth: 8, ninth: 9, tenth: 10, eleventh: 11, twelfth: 12,
+  };
+  if (lower.includes("rib")) {
+    let ribNum: number | undefined;
+    for (const [word, n] of Object.entries(ORDINAL_RIB)) {
+      if (lower.includes(word)) {
+        ribNum = n;
+        break;
+      }
+    }
+    if (!ribNum) {
+      const digitMatch = lower.match(/\b(?:rib|costa)[_\s-]?([0-9]{1,2})\b/i) || lower.match(/\b([0-9]{1,2})(?:st|nd|rd|th)?\s*rib\b/i);
+      if (digitMatch) {
+        const parsed = parseInt(digitMatch[1], 10);
+        if (parsed >= 1 && parsed <= 12) ribNum = parsed;
+      }
+    }
+    if (ribNum) {
+      const koreanName = `${sidePrefixKr}갈비뼈 ${ribNum}번 (제${ribNum}늑골)`;
+      const canonicalName = `Rib ${ribNum}${sideSuffixEn}`;
+      const fullBilingualLabel = `${sidePrefixKr}갈비뼈 ${ribNum}번 (Rib ${ribNum}${sideShortEn})`;
+      return {
+        koreanName,
+        canonicalName,
+        fullBilingualLabel,
+        side,
+        system: "skeletal",
+        systemKorean: "골격계",
+        description: `흉곽을 둘러싸 심장과 폐를 보호하는 좌/우 제${ribNum}번째 갈비뼈(늑골)입니다.`,
+      };
+    }
+  }
+
+  return undefined;
+}
 
 /**
  * 메쉬명에서 좌/우 방향성 및 기본 토큰을 추출하고 표준 한글/라틴어 병기 정보를 반환
  */
 export function resolveAnatomyDisplayInfo(
   rawName: string,
-  fallbackSystem: string = "muscular",
+  fallbackSystem?: string,
 ): AnatomyDisplayInfo {
+  const resolvedFallback = fallbackSystem ?? inferSystemFromName(rawName);
   let cleaned = rawName
     .replace(/^body-shell__/, "")
     .replace(/^VH_[FM]_/, "")
@@ -472,6 +844,12 @@ export function resolveAnatomyDisplayInfo(
       .replace(/-r$/i, "")
       .replace(/\bright\b/i, "")
       .trim();
+  }
+
+  // 척추/갈비뼈 등 분절 번호 보존 매칭 우선 수행
+  const segmental = resolveSegmentalBoneInfo(`${rawName} ${cleaned}`, side);
+  if (segmental) {
+    return segmental;
   }
 
   // 언더스코어 공백 치환 및 정규화
@@ -526,8 +904,8 @@ export function resolveAnatomyDisplayInfo(
     canonicalName,
     fullBilingualLabel,
     side,
-    systemKorean: systemToKorean(fallbackSystem),
-    system: fallbackSystem,
+    systemKorean: systemToKorean(resolvedFallback),
+    system: resolvedFallback,
     description: "인체 3D 모델에서 선택된 세부 해부학 구조입니다.",
   };
 }

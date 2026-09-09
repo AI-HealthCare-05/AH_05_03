@@ -12,9 +12,14 @@ import {
   createPaintStrokeMaterials,
   createRegionalBoundaryMaterial,
   createSelectedMaterials,
+  createSelectedTransparentMaterials,
   createStructuredFlowShellFillMaterials,
   INTERNALS_READABILITY_STYLE,
   shouldReturnToFullBody,
+  getFullBodyReturnThreshold,
+  calculateAdaptiveSprayMetrics,
+  createSprayAgitationState,
+  updateSprayAgitation,
 } from "./holographicAnatomyStyle";
 
 describe("final anatomy hologram materials", () => {
@@ -81,6 +86,18 @@ describe("final anatomy hologram materials", () => {
 
     expect(selected.vertexColors).toBe(false);
     expect(selected.color.getHex()).toBe(0x38bdf8);
+  });
+
+  it("createSelectedTransparentMaterials는 표층 투시용 반투명 사이안 셰이딩을 생성한다", () => {
+    const source = new THREE.MeshStandardMaterial({ vertexColors: true });
+    const selected = createSelectedTransparentMaterials(source, 0.35) as THREE.MeshStandardMaterial;
+
+    expect(selected.vertexColors).toBe(false);
+    expect(selected.color.getHex()).toBe(0x38bdf8);
+    expect(selected.transparent).toBe(true);
+    expect(selected.opacity).toBe(0.35);
+    expect(selected.depthWrite).toBe(false);
+    expect(selected.side).toBe(THREE.DoubleSide);
   });
 
   it("골격 단독 화면은 분절된 두개골이 조각처럼 보이지 않도록 불투명하게 렌더링한다", () => {
@@ -181,7 +198,7 @@ describe("anatomy camera focus presets", () => {
     );
     const presets = createFocusPresets(bounds);
 
-    expect(presets.head.target.y).toBeCloseTo(2.1385);
+    expect(presets.head.target.y).toBeCloseTo(1.927);
     expect(presets.lower.target.y).toBeCloseTo(-0.094);
     expect(presets.knee.target.y).toBeCloseTo(-1.457);
     expect(presets.foot.target.y).toBeCloseTo(-1.927);
@@ -196,9 +213,38 @@ describe("anatomy camera focus presets", () => {
 });
 
 describe("focused anatomy camera zoom-out return", () => {
-  it("빠른 확대 중 전신 거리의 45% 이상 줌아웃하면 전체 보기로 복귀한다", () => {
-    expect(shouldReturnToFullBody("head", 3.06, 6.8)).toBe(true);
-    expect(shouldReturnToFullBody("head", 3.05, 6.8)).toBe(false);
+  it("전면에서는 85%, 후면에서는 95% 임계값을 적용하여 후면 조작 시 튕김을 방지한다", () => {
+    // 1) 전면 카메라 (z > target.z)
+    const frontOpts = {
+      cameraPosition: { x: 0, z: 6.8 },
+      targetPosition: { x: 0, z: 0 },
+    };
+    expect(getFullBodyReturnThreshold(frontOpts)).toBe(0.85);
+    // 전면: 6.8 * 0.85 = 5.78m
+    expect(shouldReturnToFullBody("head", 5.80, 6.8, frontOpts)).toBe(true);
+    expect(shouldReturnToFullBody("head", 5.75, 6.8, frontOpts)).toBe(false);
+
+    // 2) 후면 카메라 (z < target.z)
+    const backOpts = {
+      cameraPosition: { x: 0, z: -6.8 },
+      targetPosition: { x: 0, z: 0 },
+    };
+    expect(getFullBodyReturnThreshold(backOpts)).toBe(0.95);
+    // 후면: 6.8 * 0.95 = 6.46m (후면에서는 6.46m까지 더 멀리 빼야만 복귀)
+    expect(shouldReturnToFullBody("head", 6.47, 6.8, backOpts)).toBe(true);
+    expect(shouldReturnToFullBody("head", 6.40, 6.8, backOpts)).toBe(false);
+
+    // 3) 측면 카메라 (z = target.z) - 90% 중간값 보간
+    const sideOpts = {
+      cameraPosition: { x: 6.8, z: 0 },
+      targetPosition: { x: 0, z: 0 },
+    };
+    expect(getFullBodyReturnThreshold(sideOpts)).toBe(0.90);
+  });
+
+  it("단일 숫자 비율 지정 시 해당 비율을 우선 적용한다", () => {
+    expect(shouldReturnToFullBody("head", 6.35, 6.8, 0.93)).toBe(true);
+    expect(shouldReturnToFullBody("head", 6.30, 6.8, 0.93)).toBe(false);
   });
 
   it("이미 전체 보기라면 같은 거리에서도 다시 전환하지 않는다", () => {
@@ -223,3 +269,105 @@ describe("focused anatomy camera zoom-out return", () => {
     expect(hoverMat.emissiveIntensity).toBeCloseTo(0.85);
   });
 });
+
+describe("calculateAdaptiveSprayMetrics (스프레이 브러시 확대 적응형 크기/반경)", () => {
+  it("전신 거리(5.0m)에서는 단정해진 기본 반경(0.055m)과 기본 입자 크기(0.004~0.008)를 유지한다", () => {
+    const metrics = calculateAdaptiveSprayMetrics({
+      cameraDistance: 5.0,
+      referenceDistance: 5.0,
+    });
+
+    expect(metrics.sprayRadius).toBe(0.055);
+    expect(metrics.particleMinScale).toBe(0.004);
+    expect(metrics.particleMaxScale).toBe(0.008);
+    expect(metrics.scaleFactor).toBe(1.0);
+    expect(metrics.particleCount).toBe(15);
+  });
+
+  it("머리/얼굴 확대 거리(1.25m)에서는 반경과 입자 크기가 줌 비율에 반비례 이상으로 대폭 축소된다", () => {
+    const fullMetrics = calculateAdaptiveSprayMetrics({
+      cameraDistance: 5.0,
+      referenceDistance: 5.0,
+    });
+    const headMetrics = calculateAdaptiveSprayMetrics({
+      cameraDistance: 1.25,
+      referenceDistance: 5.0,
+    });
+
+    // 4배 줌인 시, 단순 선형 비율(0.25)보다 더 크게 축소(지수 1.15 -> 약 0.203)
+    expect(headMetrics.sprayRadius).toBeLessThan(fullMetrics.sprayRadius * 0.25);
+    expect(headMetrics.particleMinScale).toBeLessThan(fullMetrics.particleMinScale * 0.25);
+    expect(headMetrics.particleMaxScale).toBeLessThan(fullMetrics.particleMaxScale * 0.25);
+
+    // 구체적 수치 검증: 반경 약 1.1cm 수준으로 초섬세 분사 지원
+    expect(headMetrics.sprayRadius).toBeCloseTo(0.0112, 3);
+    expect(headMetrics.particleMinScale).toBeCloseTo(0.00081, 4);
+    expect(headMetrics.particleMaxScale).toBeCloseTo(0.00162, 4);
+  });
+
+  it("초근접 확대(0.8m) 시에도 최소 안전 계수(0.1)가 적용되어 0으로 퇴화하지 않는다", () => {
+    const metrics = calculateAdaptiveSprayMetrics({
+      cameraDistance: 0.8,
+      referenceDistance: 5.0,
+    });
+
+    expect(metrics.sprayRadius).toBeGreaterThan(0.005);
+    expect(metrics.particleMinScale).toBeGreaterThan(0.0003);
+    expect(metrics.particleCount).toBeGreaterThanOrEqual(8);
+  });
+
+  it("커서 흔들림(agitation) 강도에 따라 흩뿌림 반경과 입자 크기가 스무스하게 확대된다", () => {
+    const calmMetrics = calculateAdaptiveSprayMetrics({
+      cameraDistance: 5.0,
+      referenceDistance: 5.0,
+      agitation: 0.0,
+    });
+    const midMetrics = calculateAdaptiveSprayMetrics({
+      cameraDistance: 5.0,
+      referenceDistance: 5.0,
+      agitation: 0.5,
+    });
+    const vigorousMetrics = calculateAdaptiveSprayMetrics({
+      cameraDistance: 5.0,
+      referenceDistance: 5.0,
+      agitation: 1.0,
+    });
+
+    // 흩뿌림 반경: 0.055m -> 최대 2.55배 (약 0.140m)
+    expect(midMetrics.sprayRadius).toBeGreaterThan(calmMetrics.sprayRadius);
+    expect(vigorousMetrics.sprayRadius).toBeCloseTo(calmMetrics.sprayRadius * 2.55, 3);
+
+    // 알갱이 크기: 0.004~0.008 -> 최대 2.1배 (0.0084~0.0168)
+    expect(vigorousMetrics.particleMinScale).toBeCloseTo(calmMetrics.particleMinScale * 2.1, 4);
+    expect(vigorousMetrics.particleMaxScale).toBeCloseTo(calmMetrics.particleMaxScale * 2.1, 4);
+
+    // 입자 개수도 균형감 있게 15개 -> 최대 30개로 증량
+    expect(vigorousMetrics.particleCount).toBe(30);
+  });
+
+  it("updateSprayAgitation은 커서를 빠르게 왕복 흔들 때 점차 스무스하게 강도를 높이고, 정지 시 부드럽게 감쇠한다", () => {
+    const state = createSprayAgitationState(100, 100, 1000);
+    expect(state.smoothedAgitation).toBe(0);
+
+    // 1. 느린 미세 이동 (speed < 0.2 px/ms)
+    updateSprayAgitation(state, 102, 100, 1020);
+    expect(state.smoothedAgitation).toBeCloseTo(0, 2);
+
+    // 2. 좌우 왕복 빠른 흔들림 (100 -> 140 -> 90 -> 150)
+    const ag1 = updateSprayAgitation(state, 140, 100, 1040); // speed 2.0 px/ms
+    const ag2 = updateSprayAgitation(state, 90, 100, 1060); // speed 2.5 px/ms + 방향 반전
+    const ag3 = updateSprayAgitation(state, 150, 100, 1080); // speed 3.0 px/ms + 방향 반전
+
+    expect(ag2).toBeGreaterThan(ag1);
+    expect(ag3).toBeGreaterThan(ag2);
+    expect(ag3).toBeGreaterThan(0.3); // 점차 스무스하게 커짐
+
+    // 3. 정지/감속 (움직임 멈춤)
+    const agDecay1 = updateSprayAgitation(state, 150, 100, 1100);
+    const agDecay2 = updateSprayAgitation(state, 150, 100, 1120);
+    expect(agDecay1).toBeLessThan(ag3);
+    expect(agDecay2).toBeLessThan(agDecay1); // 점차 스무스하게 감소
+  });
+});
+
+
