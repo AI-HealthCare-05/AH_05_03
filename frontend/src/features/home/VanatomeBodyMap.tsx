@@ -52,7 +52,6 @@ export interface StagingItem {
   info: AnatomyDisplayInfo;
   excluded: boolean;
 }
-
 type BodyFocus = AnatomyFocus | "leftHand" | "rightHand";
 type HandPose = "Open Hand" | "Fist" | "Spread" | "Point";
 
@@ -1926,4 +1925,3 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
 
   return cleanup;
 }
-

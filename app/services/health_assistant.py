@@ -1,6 +1,6 @@
 import re
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, cast
 
 from app.dtos.health_assistant import (
@@ -9,6 +9,7 @@ from app.dtos.health_assistant import (
     ProfileContext,
     UserLocation,
 )
+from app.dtos.health_record_query import HealthRecordQueryResult
 from app.exceptions import LlmProviderFailedError
 from app.integrations.llm.chain import shared_chat_client
 from app.integrations.llm.protocol import LLMClientProtocol
@@ -20,6 +21,12 @@ from app.repositories.health_record_repository import HealthRecordRepository
 from app.repositories.household_repository import HouseholdRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.services.health_assistant_safety import HealthAssistantSafetyService
+from app.services.health_record_tools import (
+    QUERY_HEALTH_RECORDS_TOOL_NAME,
+    execute_health_record_tool,
+    get_health_record_tools,
+)
+from app.services.health_records import HealthRecordService
 from app.services.medical_facility_client import MedicalFacilityClient
 from app.services.medical_facility_tools import (
     execute_facility_tool,
@@ -200,16 +207,29 @@ class HealthAssistantService:
         medication_client: MedicationClientProtocol | None = None,
         profile_repo: ProfileRepository | None = None,
         household_repo: HouseholdRepository | None = None,
+        health_record_service: HealthRecordService | None = None,
     ):
         self._llm_client = llm_client
         self.safety_service = safety_service or HealthAssistantSafetyService()
         self.facility_client = facility_client or MedicalFacilityClient()
-        self.record_repo = record_repo
+        self.health_record_service = health_record_service
+        self.record_repo = record_repo or getattr(health_record_service, "record_repo", None)
         self.chat_session_repo = chat_session_repo
         self.outdoor_conditions_client = outdoor_conditions_client or OutdoorConditionsClient()
         self.medication_client: MedicationClientProtocol = medication_client or MedicationClient()
         self.profile_repo = profile_repo
         self.household_repo = household_repo
+
+    @staticmethod
+    def _needs_health_record_query_tool(request: HealthAssistantChatRequest) -> bool:
+        """1차 수직 슬라이스인 기간별 혈압 기준 초과 일수 질문만 연다."""
+        if not request.messages:
+            return False
+        message = request.messages[-1].content.replace(" ", "")
+        has_period = re.search(r"(?<!\d)(?:[1-9]|1[0-2])개월", message) is not None
+        has_threshold = any(word in message for word in ("넘", "초과", "이상"))
+        has_day_count = any(word in message for word in ("며칠", "몇일", "몇번", "몇회", "날이", "날은"))
+        return "혈압" in message and has_period and has_threshold and has_day_count
 
     @staticmethod
     def _needs_medication_info(request: HealthAssistantChatRequest) -> bool:
@@ -644,9 +664,14 @@ class HealthAssistantService:
                 "달리",
                 "걸었",
                 "헬스",
+                "건강",
                 "기록",
                 "수치",
                 "검진",
+                "술",
+                "음주",
+                "식사",
+                "챌린지",
                 "지난번",
                 "최근",
                 "어땠",
@@ -665,6 +690,13 @@ class HealthAssistantService:
             )
         )
 
+    @classmethod
+    def _needs_recent_records_context(cls, request: HealthAssistantChatRequest) -> bool:
+        """건강기록 Tool Calling 요청은 요약 선조회 없이 툴 결과만 사용한다."""
+        if not request.messages or cls._needs_health_record_query_tool(request):
+            return False
+        return cls._needs_recent_records(request)
+
     async def _enrich_context(
         self,
         context: ProfileContext | None,
@@ -673,7 +705,7 @@ class HealthAssistantService:
     ) -> ProfileContext | None:
         if context is None:
             return None
-        if request is not None and not self._needs_recent_records(request):
+        if request is not None and not self._needs_recent_records_context(request):
             return context
         await self._enrich_records_summary(context, account_id=account_id)
         return context
@@ -684,14 +716,32 @@ class HealthAssistantService:
             self._llm_client = shared_chat_client()
         return self._llm_client
 
-    async def _execute_tool(self, name: str, args: dict[str, Any]) -> Any:
-        # 의약품 툴 먼저 확인
+    async def _execute_tool(
+        self,
+        name: str,
+        args: dict[str, Any],
+        *,
+        account: ServiceAccount | None = None,
+        profile_id: uuid.UUID | None = None,
+    ) -> Any:
+        if name == QUERY_HEALTH_RECORDS_TOOL_NAME:
+            if account is None or profile_id is None or self.health_record_service is None:
+                raise ValueError("건강기록 조회에 필요한 인증 프로필 정보가 없습니다.")
+            return await execute_health_record_tool(
+                name,
+                args,
+                account=account,
+                profile_id=profile_id,
+                record_service=self.health_record_service,
+            )
         if name == "search_medication_info":
             return await execute_medication_tool(name, args, self.medication_client)
         return await execute_facility_tool(name, args, self.facility_client)
 
     def _get_tools(self, request: HealthAssistantChatRequest) -> list[Any] | None:
         """요청에 필요한 Tool 목록을 반환한다. 불필요한 툴은 포함하지 않는다."""
+        if self._needs_health_record_query_tool(request):
+            return get_health_record_tools()
         tools: list[Any] = []
         if self._needs_facility_tools(request):
             tools.extend(get_facility_tools())
@@ -699,7 +749,16 @@ class HealthAssistantService:
             tools.extend(get_medication_tools())
         return tools if tools else None
 
-    async def respond(
+    @staticmethod
+    def _profile_required_response() -> HealthAssistantResponse:
+        return HealthAssistantResponse(
+            intent="query_records",
+            assistant_message="건강기록을 조회할 대상을 확인할 수 없습니다. 먼저 대화할 프로필을 선택해 주세요.",
+            missing_fields=["profile_id"],
+            needs_confirmation=False,
+        )
+
+    async def respond(  # noqa: C901 - 안전·권한·도구 경로를 한 흐름에서 처리한다.
         self,
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None = None,
@@ -707,6 +766,15 @@ class HealthAssistantService:
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
             return safety_check
+
+        needs_health_query = self._needs_health_record_query_tool(request)
+        if needs_health_query and (
+            request.profile_context is None
+            or request.profile_context.profile_id is None
+            or account is None
+            or self.health_record_service is None
+        ):
+            return self._profile_required_response()
 
         account_id = account.id if account else None
         profile_context = await self._enrich_context(
@@ -728,19 +796,31 @@ class HealthAssistantService:
         response: HealthAssistantResponse
         client_any = cast(Any, self.llm_client)
 
+        async def tool_executor(name: str, args: dict[str, Any]) -> Any:
+            return await self._execute_tool(
+                name,
+                args,
+                account=account,
+                profile_id=self._parse_profile_id(profile_context.profile_id) if profile_context else None,
+            )
+
         if tools and hasattr(client_any, "generate_structured_response_with_tools"):
             res_tuple = await client_any.generate_structured_response_with_tools(
                 system_instruction=system_instruction,
                 messages=request.messages,
                 response_schema=HealthAssistantResponse,
                 tools=tools,
-                tool_executor=self._execute_tool,
+                tool_executor=tool_executor,
             )
             response, tool_result = res_tuple
             if tool_result is not None:
                 from app.dtos.medication import MedicationSearchResult
 
-                if isinstance(tool_result, MedicationSearchResult):
+                if isinstance(tool_result, HealthRecordQueryResult):
+                    response.intent = "query_records"
+                    response.health_record_query_result = tool_result
+                    response.assistant_message = tool_result.message
+                elif isinstance(tool_result, MedicationSearchResult):
                     if not response.medication_search_result:
                         response.medication_search_result = tool_result
                 elif not response.facility_search_draft:
@@ -764,6 +844,7 @@ class HealthAssistantService:
         request: HealthAssistantChatRequest,
         system_instruction: str,
         tools: list[Any] | None,
+        tool_executor: Callable[[str, dict[str, Any]], Awaitable[Any]],
     ) -> tuple[AsyncIterator[str], Any]:
         client_any = cast(Any, self.llm_client)
         if tools and hasattr(client_any, "stream_structured_response_with_tools"):
@@ -772,7 +853,7 @@ class HealthAssistantService:
                 messages=request.messages,
                 response_schema=HealthAssistantResponse,
                 tools=tools,
-                tool_executor=self._execute_tool,
+                tool_executor=tool_executor,
             )
         return (
             self.llm_client.stream_structured_response(
@@ -792,7 +873,11 @@ class HealthAssistantService:
         if tool_result:
             from app.dtos.medication import MedicationSearchResult
 
-            if isinstance(tool_result, MedicationSearchResult):
+            if isinstance(tool_result, HealthRecordQueryResult):
+                parsed.intent = "query_records"
+                parsed.health_record_query_result = tool_result
+                parsed.assistant_message = tool_result.message
+            elif isinstance(tool_result, MedicationSearchResult):
                 if not parsed.medication_search_result:
                     parsed.medication_search_result = tool_result
             elif not parsed.facility_search_draft:
@@ -810,6 +895,18 @@ class HealthAssistantService:
         if safety_check:
             yield "delta", {"text": safety_check.assistant_message}
             yield "result", safety_check.model_dump(mode="json")
+            return
+
+        needs_health_query = self._needs_health_record_query_tool(request)
+        if needs_health_query and (
+            request.profile_context is None
+            or request.profile_context.profile_id is None
+            or account is None
+            or self.health_record_service is None
+        ):
+            response = self._profile_required_response()
+            yield "delta", {"text": response.assistant_message}
+            yield "result", response.model_dump(mode="json")
             return
 
         account_id = account.id if account else None
@@ -831,12 +928,36 @@ class HealthAssistantService:
         raw = ""
 
         tools = self._get_tools(request)
-        stream_gen, tool_result = await self._get_stream_generator(request, system_instruction, tools)
+
+        async def tool_executor(name: str, args: dict[str, Any]) -> Any:
+            return await self._execute_tool(
+                name,
+                args,
+                account=account,
+                profile_id=self._parse_profile_id(profile_context.profile_id) if profile_context else None,
+            )
+
+        stream_gen, tool_result = await self._get_stream_generator(
+            request,
+            system_instruction,
+            tools,
+            tool_executor,
+        )
 
         if tool_result is not None:
             from app.dtos.medication import MedicationSearchResult
 
             payload = tool_result.model_dump(mode="json") if hasattr(tool_result, "model_dump") else tool_result
+            if isinstance(tool_result, HealthRecordQueryResult):
+                yield "delta", {"text": tool_result.message}
+                res_obj = HealthAssistantResponse(
+                    intent="query_records",
+                    assistant_message=tool_result.message,
+                    health_record_query_result=tool_result,
+                    outdoor_conditions=outdoor_conditions,
+                )
+                yield "result", self.safety_service.validate_response(res_obj).model_dump(mode="json")
+                return
             if isinstance(tool_result, MedicationSearchResult):
                 yield "medication", payload
             else:

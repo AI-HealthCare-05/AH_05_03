@@ -1018,6 +1018,7 @@ export function HealthAssistantDrawer({
 
       const shouldExecuteQuery =
         Boolean(runtime) &&
+        !res.health_record_query_result &&
         (res.intent === "query_records" || isExplicitDocRequest || isTrendRequest || isExplicitRecordQuery);
 
       if (shouldExecuteQuery) {
