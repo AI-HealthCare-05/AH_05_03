@@ -133,8 +133,13 @@ _FACILITY_HISTORY_OR_ADVICE_KEYWORDS = (
     "부작용",
 )
 
+# `약` 한 글자를 부분 문자열로 찾으면 약간·약속·요약·계약·예약·절약·만약·약해요가
+# 전부 의약품 질문이 된다. 홀로 쓰인 `약`(뒤에 조사까지만)에만 맞춘다 —
+# "이 약 효능이 뭐야", "약을 먹어도 되나요". 혈압약·감기약 같은 합성어는 아래
+# 키워드 목록이 따로 잡으므로 잃는 것이 없다.
+_STANDALONE_MEDICINE_WORD = re.compile(r"(?<![가-힣])약[은는이가을를도만에의과와로]?(?![가-힣])")
+
 _MEDICATION_KEYWORDS = (
-    "약",
     "약품",
     "약물",
     "복약",
@@ -237,7 +242,7 @@ class HealthAssistantService:
             return False
         last_msg = request.messages[-1].content
         # 1) 의약품 키워드가 반드시 있어야 함
-        if not any(k in last_msg for k in _MEDICATION_KEYWORDS):
+        if not (_STANDALONE_MEDICINE_WORD.search(last_msg) or any(k in last_msg for k in _MEDICATION_KEYWORDS)):
             return False
 
         # 2) 병용 가능 여부 질문("같이 먹어도 돼?", "함께 복용해도 되나요?")은 최우선 검색

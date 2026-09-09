@@ -284,6 +284,65 @@ export function isValidContentKeyword(keyword?: string | null): string | null {
   return keyword.trim();
 }
 
+/**
+ * 국립중앙의료원 진료과 명칭. 서버 `_NMC_DEPARTMENT_CODES` 와 짝이며, 한쪽만
+ * 늘리면 화면과 검색 결과의 과가 어긋난다.
+ */
+const DEPARTMENT_KEYWORDS = [
+  "내과", "소아과", "소아청소년과", "신경과", "정신과", "정신건강의학과", "외과",
+  "정형외과", "신경외과", "심장혈관흉부외과", "흉부외과", "성형외과", "산부인과",
+  "안과", "이비인후과", "피부과", "비뇨의학과", "비뇨기과", "영상의학과",
+  "마취통증의학과", "통증의학과", "재활의학과", "가정의학과", "응급의학과",
+  "치과", "한방", "한의원",
+];
+
+const FACILITY_TYPE_KEYWORDS = [
+  "응급실", "병원", "의원", "약국", "당직의료", "당번약국", "야간약국", "야간진료", "응급의료",
+];
+
+// 지역명만 남기려고 지울 때만 쓴다. 시설 질의 판단에는 넣지 않는다(기존 동작 유지).
+const EXTRA_PLACE_KEYWORDS = ["한방병원", "보건소", "의료원"];
+
+/**
+ * 부분 문자열로 검사·삭제하므로 **항상 긴 이름이 먼저**다. "흉부외과"보다 "외과"
+ * 가 먼저 걸리면 "흉부"가 지역명으로 남아, 위치 권한이 없어도 지역을 입력한 것처럼
+ * 취급되고 결국 0건으로 끝난다.
+ */
+function toLongestFirstSource(...groups: string[][]): string {
+  const words = [...new Set(groups.flat())]
+    .sort((a, b) => b.length - a.length)
+    .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  return `(${words.join("|")})`;
+}
+
+// 탐지용은 전역 플래그를 빼 둔다. /g 정규식은 test() 사이에 lastIndex 가 남아
+// 같은 문장을 두 번 물으면 두 번째가 false 로 나온다.
+const FACILITY_QUERY_PATTERN = new RegExp(toLongestFirstSource(FACILITY_TYPE_KEYWORDS, DEPARTMENT_KEYWORDS));
+const FACILITY_NOUN_PATTERN = new RegExp(
+  toLongestFirstSource(FACILITY_TYPE_KEYWORDS, DEPARTMENT_KEYWORDS, EXTRA_PLACE_KEYWORDS),
+  "g",
+);
+const PROXIMITY_WORD_PATTERN = /(주변|근처|가까운|현재|지금|문연|문\s*연|당직|당번|야간|24시|휴일|일요일|주말)/g;
+const REQUEST_WORD_PATTERN =
+  /(찾아줘|찾아|알려줘|알려|어디야|어디에|어디|추천|조회|검색|부탁|있어|있니|있나요|가려는데|가려고|좀|해줘|해\s*줘|이야|야|\?|!|\.)/g;
+
+/** 주변 의료시설(응급실·병원·약국) 조회 의도인지 판단한다. */
+export function isFacilityQuery(text: string): boolean {
+  return FACILITY_QUERY_PATTERN.test(text);
+}
+
+/**
+ * 시설명·진료과·불용어를 걷어내고 남은 지역 표기를 돌려준다. 빈 문자열이면
+ * 사용자가 지역을 말하지 않은 것이므로 위치 권한이 필요하다.
+ */
+export function extractRegionHint(text: string): string {
+  return text
+    .replace(FACILITY_NOUN_PATTERN, "")
+    .replace(PROXIMITY_WORD_PATTERN, "")
+    .replace(REQUEST_WORD_PATTERN, "")
+    .trim();
+}
+
 // 기간(time_range) 기반 건강기록 필터링 헬퍼 함수
 export function filterRecordsByTimeRange(records: HealthRecord[], timeRange?: string | null): HealthRecord[] {
   if (!timeRange) return records;

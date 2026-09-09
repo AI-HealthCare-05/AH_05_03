@@ -35,6 +35,7 @@ def _mask_credentials(text: str, secret: str | None = None) -> str:
 
 _TIMEOUT_SECONDS = 5.0
 _CACHE_SECONDS = 600.0
+_CACHE_MAX_ENTRIES = 256
 
 # 식약처 공공데이터포털 엔드포인트
 _EASYDR_URL = "https://apis.data.go.kr/1471000/DrbEasyDrugInfoService/getDrbEasyDrugList"
@@ -56,7 +57,23 @@ def _cache_get(key: str) -> MedicationSearchResult | None:
 
 
 def _cache_set(key: str, result: MedicationSearchResult) -> None:
-    _cache[key] = (time.monotonic(), result)
+    """조회에 성공한 결과만 싣는다.
+
+    **실패를 실으면 10분 동안 굳는다.** 일시적인 타임아웃 한 번으로 "찾지 못했습니다"
+    가 캐시에 박혀, API 가 돌아온 뒤에도 그 약을 묻는 모든 사용자에게 같은 답이 나간다.
+    조회 자체는 성공했는데 등록 약품이 없는 경우(errors 가 빈 경우)는 사실이므로 싣는다.
+    """
+    if result.errors:
+        return
+
+    now = time.monotonic()
+    # 읽을 때만 만료를 보면 지워지지 않은 항목이 쌓인다. 약품명은 대화에서 오므로
+    # 종류에 상한이 없고, 오래 뜨는 프로세스에서 그대로 메모리 증가가 된다.
+    for stale in [k for k, (ts, _) in _cache.items() if (now - ts) >= _CACHE_SECONDS]:
+        del _cache[stale]
+    if len(_cache) >= _CACHE_MAX_ENTRIES:
+        del _cache[min(_cache, key=lambda k: _cache[k][0])]
+    _cache[key] = (now, result)
 
 
 def _parse_easydr_item(raw: dict[str, Any]) -> DrugInfo:
@@ -127,14 +144,19 @@ def _build_summary_message(drug_name: str, items: list[DrugInfo]) -> str:
     return "\n".join(parts)
 
 
+# 약품명을 가르는 자리.
+#
+# **한글 조사는 앞말에 붙고 뒤에 공백이 온다**("타이레놀과 게보린"). 그래서 조사를
+# 어디서나 찾으면 약품명 안이 잘린다 — `와파린`은 `파린`, `베아제과립`은 `베아제`가
+# 됐다. 특히 와파린은 항응고제라 상호작용을 잘못 조회하면 안내가 어긋난다.
+# 앞에 글자가 있고 뒤에 공백이 오는 자리에서만 조사로 인정한다.
+_DRUG_NAME_SEPARATOR = re.compile(r"\s*[,/&+]\s*|(?<=\S)(?:이랑|하고|과|와)\s+")
+
+
 def _extract_primary_drug_name(drug_name: str) -> str:
     clean = drug_name.strip()
-    for sep in (",", "/", "&", "+", "이랑", "하고", "과", "와"):
-        if sep in clean:
-            parts = [p.strip() for p in clean.split(sep) if p.strip()]
-            if parts:
-                return parts[0]
-    return clean
+    parts = [p.strip() for p in _DRUG_NAME_SEPARATOR.split(clean) if p.strip()]
+    return parts[0] if parts else clean
 
 
 class MedicationClient:

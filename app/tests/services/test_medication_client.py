@@ -13,6 +13,7 @@ from app.dtos.medication import DrugInfo, DurItem, MedicationSearchResult
 from app.services.medication_client import (
     MedicationClient,
     _build_summary_message,
+    _extract_primary_drug_name,
     _parse_dur_items,
     _parse_easydr_item,
 )
@@ -306,3 +307,61 @@ async def test_search_medication_masks_api_key_in_logs(caplog: pytest.LogCapture
     assert real_secret_key not in caplog.text
     # 마스킹 표시가 포함되어야 함
     assert "serviceKey=***" in caplog.text
+
+
+def test_drug_name_particles_do_not_cut_into_the_name() -> None:
+    """한글 조사는 앞말에 붙고 뒤에 공백이 온다. 어디서나 찾으면 약품명이 잘린다.
+
+    `와파린`이 `파린`이 되면 항응고제를 엉뚱한 이름으로 조회한다.
+    """
+    for name in (
+        "와파린",
+        "와이팜",
+        "와이드필",
+        "베아제과립",
+        "훼스탈골드과립",
+        "과립형진통제",
+        "하고초",
+        "타이레놀",
+        "이지엔6이브",
+    ):
+        assert _extract_primary_drug_name(name) == name
+
+
+def test_multiple_drug_names_keep_only_the_first() -> None:
+    assert _extract_primary_drug_name("타이레놀과 게보린") == "타이레놀"
+    assert _extract_primary_drug_name("와파린과 아스피린") == "와파린"
+    assert _extract_primary_drug_name("타이레놀이랑 게보린") == "타이레놀"
+    assert _extract_primary_drug_name("감기약하고 두통약") == "감기약"
+    assert _extract_primary_drug_name("타이레놀, 게보린") == "타이레놀"
+    assert _extract_primary_drug_name("타이레놀/게보린") == "타이레놀"
+    assert _extract_primary_drug_name("타이레놀 + 게보린") == "타이레놀"
+
+
+def test_failed_lookup_is_not_cached() -> None:
+    """실패를 실으면 10분 굳는다 — API 가 돌아와도 같은 답이 계속 나간다."""
+    from app.services import medication_client as mc_mod
+
+    mc_mod._cache.clear()
+    failed = MedicationSearchResult(query="타이레놀", items=[], message="조회 실패", errors=["타임아웃"])
+    mc_mod._cache_set("타이레놀", failed)
+    assert mc_mod._cache_get("타이레놀") is None
+
+    # 조회에 성공했는데 등록 약품이 없는 경우는 사실이므로 싣는다.
+    empty_but_valid = MedicationSearchResult(query="없는약", items=[], message="찾지 못했습니다", errors=[])
+    mc_mod._cache_set("없는약", empty_but_valid)
+    assert mc_mod._cache_get("없는약") is empty_but_valid
+    mc_mod._cache.clear()
+
+
+def test_cache_does_not_grow_without_bound() -> None:
+    """약품명은 대화에서 오므로 종류에 상한이 없다. 읽을 때만 만료를 보면 계속 쌓인다."""
+    from app.services import medication_client as mc_mod
+
+    mc_mod._cache.clear()
+    for i in range(mc_mod._CACHE_MAX_ENTRIES + 50):
+        mc_mod._cache_set(f"약-{i}", MedicationSearchResult(query=f"약-{i}", items=[], message="", errors=[]))
+    assert len(mc_mod._cache) <= mc_mod._CACHE_MAX_ENTRIES
+    # 가장 최근 것은 남아 있다.
+    assert mc_mod._cache_get(f"약-{mc_mod._CACHE_MAX_ENTRIES + 49}") is not None
+    mc_mod._cache.clear()
