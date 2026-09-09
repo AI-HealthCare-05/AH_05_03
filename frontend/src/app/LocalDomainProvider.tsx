@@ -152,13 +152,18 @@ export function LocalDomainProvider({
                       relationship = isMe ? "본인" : "가족";
                       birthDate = "1988-10-28";
                       gender = "male";
-                    } else if (email.includes("fabxoe.se")) {
+                    } else if (email.includes("fabxoe.se") || email.includes("fabxoe.usa")) {
                       displayName = "오민재";
                       relationship = isMe ? "본인" : "자녀";
-                      birthDate = "2010-05-10";
+                      birthDate = "2000-01-29";
                       gender = "male";
+                    } else if (email.includes("evophygene")) {
+                      displayName = "오공백";
+                      relationship = "배우자";
+                      birthDate = "1990-10-20";
+                      gender = "female";
                     } else {
-                      displayName = isMaster ? "마스터" : (isMe ? "본인" : email.split("@")[0] || "가족 구성원");
+                      displayName = isMaster ? "마스터" : (isMe ? "본인" : "가족 구성원");
                       relationship = isMe ? "본인" : "가족";
                     }
 
@@ -169,6 +174,7 @@ export function LocalDomainProvider({
                       relationship,
                       birth_date: birthDate,
                       gender,
+                      account_email: m.masked_email,
                       status: "active" as const,
                       row_version: 1,
                     };

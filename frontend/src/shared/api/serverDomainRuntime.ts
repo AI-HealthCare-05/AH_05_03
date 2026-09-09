@@ -24,6 +24,7 @@ export function toClientProfile(server: ProfileServerData): FamilyProfile {
     relationship: server.relationship,
     birthDate: (server.birth_date as ISODate | null) ?? null,
     gender: server.gender,
+    accountEmail: server.account_email ?? null,
     opaqueServerRef: null,
     serverRefState: "active",
     status: server.status === "deleted" ? "hidden" : server.status,
@@ -105,6 +106,7 @@ export class ServerProfileService {
     relationship: string;
     birthDate?: ISODate;
     gender?: "male" | "female" | null;
+    accountEmail?: string | null;
   }): Promise<LocalResult<FamilyProfile>> {
     try {
       const created = await this.client.createProfile({
@@ -113,6 +115,7 @@ export class ServerProfileService {
         relationship: input.relationship,
         birth_date: input.birthDate ?? null,
         gender: input.gender ?? null,
+        account_email: input.accountEmail ?? null,
       });
       return success(toClientProfile(created));
     } catch (err) {
@@ -127,6 +130,7 @@ export class ServerProfileService {
       relationship: string;
       birthDate?: ISODate;
       gender?: "male" | "female" | null;
+      accountEmail?: string | null;
       expectedVersion?: number;
     },
   ): Promise<LocalResult<FamilyProfile>> {
@@ -136,6 +140,7 @@ export class ServerProfileService {
         relationship: input.relationship,
         birth_date: input.birthDate ?? null,
         gender: input.gender ?? null,
+        account_email: input.accountEmail,
       });
       return success(toClientProfile(updated));
     } catch (err) {
