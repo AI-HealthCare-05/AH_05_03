@@ -907,50 +907,50 @@ export function VanatomeBodyMap({
             다시진행(Redo)
           </button>
         </div>
-        {stagedItems.length > 0 ? (
-          <div
-            className="vanatome-staging-panel"
-            style={{
-              margin: "12px 0 0 0",
-              padding: "12px",
-              background: "rgba(248, 250, 252, 0.95)",
-              borderRadius: "12px",
-              border: "1px solid #e2e8f0",
-              height: "340px",
-              maxHeight: "340px",
-              boxSizing: "border-box",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexShrink: 0 }}>
-              <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#1e293b" }}>
-                확정 부위 ({stagedItems.length}개)
-              </span>
-              {stagedItems.length > 0 && (
-                <button
-                  type="button"
-                  className="vanatome-stage-clear-btn"
-                  style={{
-                    padding: "2px 8px",
-                    fontSize: "0.72rem",
-                    borderRadius: "4px",
-                    border: "1px solid #f43f5e",
-                    color: "#be123c",
-                    background: "#fff1f2",
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    fontWeight: 600,
-                    transition: "background-color 0.15s ease, border-color 0.15s ease",
-                  }}
-                  onClick={() => clearAllStagedItemsRef.current()}
-                  title="확정 부위 전체 일괄 삭제"
-                  aria-label="확정 부위 일괄 삭제"
-                >
-                  일괄 삭제
-                </button>
-              )}
-            </div>
+        <div
+          className="vanatome-staging-panel"
+          style={{
+            margin: "12px 0 0 0",
+            padding: "12px",
+            background: "rgba(248, 250, 252, 0.95)",
+            borderRadius: "12px",
+            border: "1px solid #e2e8f0",
+            height: "340px",
+            maxHeight: "340px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexShrink: 0 }}>
+            <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#1e293b" }}>
+              확정 부위 ({stagedItems.length}개)
+            </span>
+            {stagedItems.length > 0 && (
+              <button
+                type="button"
+                className="vanatome-stage-clear-btn"
+                style={{
+                  padding: "2px 8px",
+                  fontSize: "0.72rem",
+                  borderRadius: "4px",
+                  border: "1px solid #f43f5e",
+                  color: "#be123c",
+                  background: "#fff1f2",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  fontWeight: 600,
+                  transition: "background-color 0.15s ease, border-color 0.15s ease",
+                }}
+                onClick={() => clearAllStagedItemsRef.current()}
+                title="확정 부위 전체 일괄 삭제"
+                aria-label="확정 부위 일괄 삭제"
+              >
+                일괄 삭제
+              </button>
+            )}
+          </div>
+          {stagedItems.length > 0 ? (
             <div
               ref={stagingListRef}
               style={{ display: "flex", flexDirection: "column", gap: "6px", flex: 1, minHeight: 0, overflowY: "auto" }}
@@ -978,48 +978,85 @@ export function VanatomeBodyMap({
                       transition: "all 0.2s ease",
                     }}
                   >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      color: isRecentlyAdded ? "#9f1239" : "var(--ink, #0f172a)",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}>
-                      {item.info.koreanName}
-                      <span style={{ fontWeight: 400, fontSize: "0.74rem", color: "#64748b", marginLeft: "4px" }}>
-                        ({item.info.canonicalName})
-                      </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          color: isRecentlyAdded ? "#9f1239" : "var(--ink, #0f172a)",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                        title={`${item.info.koreanName} (${item.info.canonicalName})`}
+                      >
+                        {item.info.koreanName}
+                        <span style={{ fontWeight: 400, fontSize: "0.74rem", color: "#64748b", marginLeft: "4px" }}>
+                          ({item.info.canonicalName})
+                        </span>
+                      </div>
+                      <div
+                        style={{ fontSize: "0.7rem", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                        title={item.info.description}
+                      >
+                        <span style={{ color: isRecentlyAdded ? "#be123c" : "#64748b", fontWeight: 500 }}>[{item.info.systemKorean}]</span> {item.info.description}
+                      </div>
                     </div>
-                    <div style={{ fontSize: "0.7rem", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      <span style={{ color: isRecentlyAdded ? "#be123c" : "#64748b", fontWeight: 500 }}>[{item.info.systemKorean}]</span> {item.info.description}
-                    </div>
+                    <button
+                      type="button"
+                      className="vanatome-stage-remove-btn"
+                      style={{
+                        padding: "2px 7px",
+                        fontSize: "0.72rem",
+                        borderRadius: "4px",
+                        border: isRecentlyAdded ? "1px solid #f43f5e" : "1px solid var(--line, #cbd5e1)",
+                        color: isRecentlyAdded ? "#be123c" : "#64748b",
+                        background: isRecentlyAdded ? "#fff1f2" : "#f8fafc",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        flexShrink: 0,
+                      }}
+                      onClick={() => removeStagedItemRef.current(item.id)}
+                      title={`${item.info.koreanName} 삭제`}
+                      aria-label={`${item.info.koreanName} 삭제`}
+                    >
+                      삭제
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    style={{
-                      padding: "2px 7px",
-                      fontSize: "0.72rem",
-                      borderRadius: "4px",
-                      border: isRecentlyAdded ? "1px solid #f43f5e" : "1px solid var(--line, #cbd5e1)",
-                      color: isRecentlyAdded ? "#be123c" : "#64748b",
-                      background: isRecentlyAdded ? "#fff1f2" : "#f8fafc",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                    onClick={() => removeStagedItemRef.current(item.id)}
-                    title="확정 부위에서 삭제"
-                  >
-                    삭제
-                  </button>
-                </div>
-              );
-            })}
+                );
+              })}
             </div>
-          </div>
-        ) : null}
+          ) : (
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#64748b",
+                fontSize: "0.76rem",
+                textAlign: "center",
+                padding: "16px 12px",
+                background: "#f8fafc",
+                borderRadius: "8px",
+                border: "1px dashed #cbd5e1",
+                boxSizing: "border-box",
+                gap: "6px",
+              }}
+            >
+              <span style={{ fontWeight: 600, color: "#475569", fontSize: "0.82rem" }}>
+                확정된 부위가 없습니다
+              </span>
+              <p style={{ margin: 0, color: "#94a3b8", lineHeight: 1.4, maxWidth: "220px" }}>
+                인체 모델에서 부위를 클릭하거나 스프레이로 칠한 뒤 확정할 수 있습니다.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
+
       <div className="vanatome-stage-column">
         <div className="body-map-viewer vanatome-viewer is-hologram">
           <canvas ref={canvasRef} aria-label="회전 가능한 해부학 인체 모니터" />
@@ -1358,14 +1395,24 @@ export function VanatomeBodyMap({
                         >
                           {item.info.systemKorean || "기타"}
                         </span>
-                        <div className="candidate-text">
-                          <span className="candidate-name">
+                        <div
+                          className="candidate-text"
+                          title={`${item.info.koreanName || item.info.canonicalName || item.id} (${item.info.canonicalName || item.id})`}
+                        >
+                          <span
+                            className="candidate-name"
+                            title={item.info.koreanName || item.info.canonicalName || item.id}
+                          >
                             {item.info.koreanName || item.info.canonicalName || item.id}
                           </span>
-                          <span className="candidate-en-name">
+                          <span
+                            className="candidate-en-name"
+                            title={item.info.canonicalName || item.id}
+                          >
                             {item.info.canonicalName || item.id}
                           </span>
                         </div>
+
                       </div>
                       <button
                         type="button"
