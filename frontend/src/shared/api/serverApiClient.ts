@@ -267,6 +267,14 @@ export class ServerApiClient {
     });
   }
 
+  public updateChatSession(sessionId: string, title: string): Promise<ChatSessionData> {
+    return this.request<ChatSessionData>(`/chat-sessions/${encodeURIComponent(sessionId)}`, {
+      method: "PATCH",
+      authenticated: true,
+      body: JSON.stringify({ title }),
+    });
+  }
+
   public async deleteChatSession(sessionId: string): Promise<void> {
     await this.request(`/chat-sessions/${encodeURIComponent(sessionId)}`, {
       method: "DELETE",

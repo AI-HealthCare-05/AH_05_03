@@ -251,6 +251,10 @@ export async function listChatMessages(sessionId: string): Promise<ChatMessageDa
   return serverApiClient.listChatMessages(sessionId);
 }
 
+export async function updateChatSession(sessionId: string, title: string): Promise<ChatSessionData> {
+  return serverApiClient.updateChatSession(sessionId, title);
+}
+
 export async function deleteChatSession(sessionId: string): Promise<void> {
   return serverApiClient.deleteChatSession(sessionId);
 }
