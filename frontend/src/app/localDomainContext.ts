@@ -10,6 +10,7 @@ export interface CreateProfileInput {
   relationship: string;
   birthDate?: `${number}-${number}-${number}`;
   gender?: Gender | null;
+  accountEmail?: string | null;
 }
 
 export interface UpdateProfileInput extends CreateProfileInput {

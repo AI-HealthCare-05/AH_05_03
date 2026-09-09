@@ -38,6 +38,7 @@ class ProfileRepository:
                 relationship=profile.relationship,
                 birth_date=profile.birth_date,
                 gender=profile.gender,
+                account_email=profile.account_email,
                 status=profile.status,
                 row_version=profile.row_version,
             )
@@ -48,6 +49,7 @@ class ProfileRepository:
                     "relationship": profile.relationship,
                     "birth_date": profile.birth_date,
                     "gender": profile.gender,
+                    "account_email": profile.account_email,
                     "status": profile.status,
                     "row_version": profile.row_version,
                 },

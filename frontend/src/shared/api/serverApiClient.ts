@@ -290,6 +290,7 @@ export class ServerApiClient {
     relationship: string;
     birth_date?: string | null;
     gender?: "male" | "female" | null;
+    account_email?: string | null;
   }): Promise<ProfileServerData> {
     return this.request<ProfileServerData>("/profiles", {
       method: "POST",
@@ -320,6 +321,7 @@ export class ServerApiClient {
       relationship?: string;
       birth_date?: string | null;
       gender?: "male" | "female" | null;
+      account_email?: string | null;
       status?: "active" | "hidden" | "deleted";
     },
   ): Promise<ProfileServerData> {
@@ -345,6 +347,7 @@ export class ServerApiClient {
       relationship: string;
       birth_date?: string | null;
       gender?: "male" | "female" | null;
+      account_email?: string | null;
       status?: string;
       row_version?: number;
     }>,

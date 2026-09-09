@@ -28,6 +28,7 @@ class FamilyProfile(TimestampMixin, Base):
     relationship: Mapped[str] = mapped_column(String(30), nullable=False)
     gender: Mapped[str | None] = mapped_column(String(10), nullable=True)
     birth_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    account_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="active", server_default="active", nullable=False)
     row_version: Mapped[int] = mapped_column(BigInteger, default=1, server_default="1", nullable=False)
 
