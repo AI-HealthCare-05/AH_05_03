@@ -941,27 +941,72 @@ async def test_enrich_records_summary_allows_authorized_member() -> None:
     mock_record_repo.list_by_profile.assert_called_once_with(profile_id, limit=5)
 
 
-async def test_enrich_cross_session_summary_denies_unauthorized_account() -> None:
-    """해당 프로필 가구원이 아니면 이전 대화 세션도 조회되지 않는다."""
+async def test_enrich_context_skips_records_on_greeting() -> None:
+    """일반 인사(안녕, 안녕하세요 등)에는 건강기록을 조회하거나 주입하지 않는다."""
     from unittest.mock import AsyncMock
 
+    from app.dtos.health_assistant import ChatMessage, HealthAssistantChatRequest
+
+    mock_record_repo = AsyncMock()
+    service = HealthAssistantService(record_repo=mock_record_repo)
+    ctx = ProfileContext(profile_name="홍길동", profile_id=str(uuid.uuid4()))
+
+    greeting_req = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="안녕하세요 봄이님!")],
+        profile_context=ctx,
+    )
+
+    enriched = await service._enrich_context(ctx, account_id=uuid.uuid4(), request=greeting_req)
+
+    assert enriched is not None
+    assert enriched.recent_records_summary is None
+    mock_record_repo.list_by_profile.assert_not_called()
+
+
+async def test_enrich_context_enriches_records_on_health_symptom() -> None:
+    """통증이나 건강 증상 언급 시에는 인가된 계정에 한해 건강기록을 보강한다."""
+    from datetime import datetime, timezone
+    from unittest.mock import AsyncMock
+
+    from app.dtos.health_assistant import ChatMessage, HealthAssistantChatRequest
+    from app.models.households import HouseholdStatus
+
     profile_id = uuid.uuid4()
+    household_id = uuid.uuid4()
     account_id = uuid.uuid4()
 
-    mock_profile_repo = AsyncMock()
-    mock_profile_repo.get = AsyncMock(return_value=None)  # 프로필 없음 또는 미인증
+    mock_profile = AsyncMock(id=profile_id, household_id=household_id, status="active")
+    mock_household = AsyncMock(id=household_id, status=HouseholdStatus.ACTIVE)
 
+    mock_profile_repo = AsyncMock()
+    mock_profile_repo.get = AsyncMock(return_value=mock_profile)
     mock_household_repo = AsyncMock()
-    mock_chat_session_repo = AsyncMock()
+    mock_household_repo.get = AsyncMock(return_value=mock_household)
+    mock_household_repo.has_active_membership = AsyncMock(return_value=True)
+
+    mock_record = AsyncMock(
+        recorded_at=datetime(2026, 9, 8, 9, 0, tzinfo=timezone.utc),
+        record_type="pain",
+        payload={"note": "오른쪽 무릎 뻐근함"},
+    )
+    mock_record_repo = AsyncMock()
+    mock_record_repo.list_by_profile = AsyncMock(return_value=[mock_record])
 
     service = HealthAssistantService(
-        chat_session_repo=mock_chat_session_repo,
+        record_repo=mock_record_repo,
         profile_repo=mock_profile_repo,
         household_repo=mock_household_repo,
     )
     ctx = ProfileContext(profile_name="홍길동", profile_id=str(profile_id))
 
-    await service._enrich_cross_session_summary(ctx, account_id=account_id, current_session_id=None)
+    health_req = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="오늘 무릎 통증이 좀 심해졌어")],
+        profile_context=ctx,
+    )
 
-    assert ctx.previous_conversations_summary is None
-    mock_chat_session_repo.list_sessions.assert_not_called()
+    enriched = await service._enrich_context(ctx, account_id=account_id, request=health_req)
+
+    assert enriched is not None
+    assert enriched.recent_records_summary is not None
+    assert "무릎 뻐근함" in enriched.recent_records_summary
+    mock_record_repo.list_by_profile.assert_called_once_with(profile_id, limit=5)

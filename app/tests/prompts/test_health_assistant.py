@@ -31,15 +31,8 @@ def test_build_system_instruction_forbids_claiming_location_was_checked() -> Non
     assert "실제 위치를 확인하거나 날씨·대기질을 조회한 것처럼 말하지 마세요" in instruction
 
 
-def test_build_system_instruction_with_previous_conversations_summary() -> None:
-    ctx = ProfileContext(
-        profile_name="김영희",
-        relationship="본인",
-        previous_conversations_summary="- 세션 '임신 초기 상담':\n  * 사용자: 나 지금 임신 12주차야",
-    )
-    instruction = build_system_instruction(ctx)
+def test_build_system_instruction_contains_health_condition_guidance() -> None:
+    instruction = build_system_instruction()
 
-    assert "대화 대상 프로필 컨텍스트" in instruction
-    assert "이전 대화 세션 기록" in instruction
-    assert "임신 12주차야" in instruction
-    assert "이전 대화 맥락 및 지속적 건강 상태(임신, 수유, 만성질환 등) 연계 안내" in instruction
+    assert "대화 맥락 및 지속적 건강 상태(임신, 수유, 만성질환 등) 연계 안내" in instruction
+    assert "이전 대화 세션 기록" not in instruction

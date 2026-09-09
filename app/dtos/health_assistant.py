@@ -27,9 +27,6 @@ class ProfileContext(BaseModel):
     relationship: str | None = Field(default=None, max_length=50)
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
     recent_records_summary: str | None = Field(default=None, max_length=2000)
-    previous_conversations_summary: str | None = Field(
-        default=None, max_length=3000, description="이전 대화 세션들에서 파악된 건강 정보 및 대화 맥락 요약"
-    )
 
 
 class ExerciseDraft(BaseModel):

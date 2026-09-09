@@ -563,60 +563,113 @@ class HealthAssistantService:
         except Exception:
             pass
 
-    async def _build_past_sessions_summary(self, sessions: list[Any]) -> str:
-        if not self.chat_session_repo:
-            return ""
-        session_summaries: list[str] = []
-        for s in sessions:
-            msgs = await self.chat_session_repo.list_messages(s.id, limit=6)
-            if msgs:
-                msg_lines = [
-                    f"  * {'사용자' if m.role == 'user' else '봄이'}: {m.content[:120].replace(chr(10), ' ')}"
-                    for m in msgs
-                ]
-                session_summaries.append(f"- 세션 '{s.title or '이전 대화'}':\n" + "\n".join(msg_lines))
-        return "\n".join(session_summaries)
+    @staticmethod
+    def _needs_recent_records(request: HealthAssistantChatRequest) -> bool:
+        """일반 인사나 비건강 잡담에는 건강기록을 조회·주입하지 않는다.
 
-    async def _enrich_cross_session_summary(
-        self,
-        context: ProfileContext,
-        account_id: uuid.UUID | None,
-        current_session_id: uuid.UUID | None,
-    ) -> None:
-        if (
-            context.previous_conversations_summary
-            or not context.profile_id
-            or not self.chat_session_repo
-            or not account_id
-        ):
-            return
-        profile_id = self._parse_profile_id(context.profile_id)
-        if profile_id is not None and not await self._has_profile_access(profile_id, account_id):
-            return
+        건강정보는 '필요할 때만 전달'하는 원칙(Issue #102)을 준수하며,
+        통증·증상·복약·혈압·혈당 등 건강 관련 맥락이 감지될 때만 선별 보강한다.
+        """
+        if not request.messages:
+            return False
+        content = request.messages[-1].content.strip()
+        normalized = content.replace(" ", "")
 
-        try:
-            sessions = await self.chat_session_repo.list_sessions(
-                account_id=account_id, profile_id=str(context.profile_id), limit=6
+        # 1) 명백한 인사말/잡담 단독 발화는 차단
+        greeting_words = {
+            "안녕",
+            "안녕하세요",
+            "안녕하십니까",
+            "하이",
+            "반가워",
+            "반갑습니다",
+            "좋은아침",
+            "좋은아침입니다",
+            "헬로",
+            "방가",
+        }
+        if normalized in greeting_words:
+            return False
+
+        # 2) 감사/작별/단순 응답 등 잡담 차단
+        chitchat_words = {
+            "고마워",
+            "감사합니다",
+            "고맙습니다",
+            "수고했어",
+            "수고하세요",
+            "잘있어",
+            "잘가",
+            "바이",
+            "네",
+            "응",
+            "알겠어",
+            "그래",
+        }
+        if normalized in chitchat_words:
+            return False
+
+        # 3) 건강/증상/부위/측정/기록 관련 키워드가 있는 경우에만 보강
+        return any(
+            kw in normalized
+            for kw in (
+                "통증",
+                "아파",
+                "아프",
+                "결려",
+                "쑤셔",
+                "뻐근",
+                "묵직",
+                "저려",
+                "찌릿",
+                "혈압",
+                "혈당",
+                "당뇨",
+                "수축기",
+                "이완기",
+                "체온",
+                "약",
+                "복용",
+                "처방",
+                "영양제",
+                "운동",
+                "스쿼트",
+                "러닝",
+                "달리",
+                "걸었",
+                "헬스",
+                "기록",
+                "수치",
+                "검진",
+                "지난번",
+                "최근",
+                "어땠",
+                "허리",
+                "무릎",
+                "어깨",
+                "목",
+                "등",
+                "배",
+                "머리",
+                "가슴",
+                "허벅지",
+                "종아리",
+                "발",
+                "손",
             )
-            past_sessions = [s for s in sessions if s.id != current_session_id][:3]
-            if not past_sessions:
-                return
-            summaries = await self._build_past_sessions_summary(past_sessions)
-            if summaries:
-                context.previous_conversations_summary = summaries[:2500]
-        except Exception:
-            pass
+        )
 
     async def _enrich_context(
         self,
         context: ProfileContext | None,
         account_id: uuid.UUID | None = None,
-        current_session_id: uuid.UUID | None = None,
+        request: HealthAssistantChatRequest | None = None,
     ) -> ProfileContext | None:
         if context is None:
             return None
+        if request is not None and not self._needs_recent_records(request):
+            return context
         await self._enrich_records_summary(context, account_id=account_id)
-        await self._enrich_cross_session_summary(context, account_id, current_session_id)
         return context
 
     @property
@@ -653,7 +706,7 @@ class HealthAssistantService:
         profile_context = await self._enrich_context(
             request.profile_context,
             account_id=account_id,
-            current_session_id=request.session_id,
+            request=request,
         )
         loc = await self._resolve_request_location(request)
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
@@ -757,7 +810,7 @@ class HealthAssistantService:
         profile_context = await self._enrich_context(
             request.profile_context,
             account_id=account_id,
-            current_session_id=request.session_id,
+            request=request,
         )
         loc = await self._resolve_request_location(request)
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
