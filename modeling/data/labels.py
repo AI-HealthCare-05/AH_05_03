@@ -83,6 +83,15 @@ class Thresholds:
     uric_acid_high_male: float = 7.0  # mg/dL
     uric_acid_high_female: float = 6.0
 
+    # 만성염증 — AHA/CDC 2003 심혈관 위험 3구간의 상단(<1 저 / 1~3 중 / >3 고).
+    #
+    # **급성 경계를 따로 두는 것이 이 라벨의 핵심이다.** 10 mg/L 를 넘으면 AHA 는
+    # 심혈관 위험으로 읽지 말고 2주 뒤 다시 재라고 한다 — 감염·외상·수술처럼
+    # 일시적인 원인이 그 구간을 만든다. 실측으로 CRP 측정자의 9.5% 가 여기 걸린다.
+    # 이들을 양성으로 두면 모델이 만성염증이 아니라 **감기를 맞히게** 된다.
+    crp_chronic_high: float = 3.0  # mg/L
+    crp_acute: float = 10.0  # mg/L. 초과는 라벨에서 뺀다(양성도 음성도 아니다)
+
     reviewed_by: str | None = None  # fill in once a clinician signs off
     reviewed_on: str | None = None
 
@@ -323,6 +332,13 @@ def add_extended_labels(frame: pd.DataFrame, thresholds: Thresholds = DEFAULT) -
     # 것과 어긋나지 않는다. 라벨이 BMI 이고 허리둘레는 그것을 맞히는 재료다.
     bmi = _numeric(result, "bmi")
     result["label_obesity"] = (bmi >= thresholds.bmi_obesity).astype("boolean").where(bmi.notna())
+
+    # ---------------- 만성염증 ----------------
+    # 양성은 3~10, 음성은 3 이하, **10 초과는 결측**이다. 임신부를 뺀 빈혈 라벨과
+    # 같은 꼴 — 기준이 다른 집단을 음성으로 두면 그 편향이 계수에 실린다.
+    crp = _numeric(result, "crp")
+    chronic = (crp > thresholds.crp_chronic_high) & (crp <= thresholds.crp_acute)
+    result["label_chronic_inflammation"] = chronic.astype("boolean").where(crp.notna() & (crp <= thresholds.crp_acute))
 
     # ---------------- 고요산혈증 ----------------
     uric_acid = _numeric(result, "uric_acid")

@@ -169,6 +169,45 @@ class TestProfileAndRecordAPIs:
         get_res = await client.get(f"/api/v1/health-records/{record_id}", headers=user_headers)
         assert get_res.status_code == status.HTTP_404_NOT_FOUND
 
+    async def test_source_document_id_survives_the_round_trip(self, client: AsyncClient) -> None:
+        """**원본 서류와 기록을 잇는 고리가 서버를 왕복하는가.**
+
+        검진표를 올려 판정하면 원본은 기기 보관함에, 판정은 이 표에 남는다. 그 둘을
+        잇는 것이 이 값 하나다. 화면은 서버에서 기록을 읽으므로, 서버가 안 들고 있으면
+        건강 데이터의 검진 이력이 영원히 빈다 — 실제로 그 상태였다.
+        """
+        user_headers = await _login(client, "doclink@example.com")
+        household_id = await _create_household(client, user_headers)
+        profile_res = await client.post(
+            "/api/v1/profiles",
+            headers=user_headers,
+            json={"household_id": household_id, "display_name": "나", "relationship": "self"},
+        )
+        profile_id = profile_res.json()["data"]["id"]
+
+        created = await client.post(
+            "/api/v1/health-records",
+            headers=user_headers,
+            json={
+                "profile_id": profile_id,
+                "record_type": "assessment",
+                "recorded_at": "2026-09-08T00:00:00Z",
+                "source": "ocr",
+                "payload": {"inputs": {"sbp": 132}},
+                "source_document_id": "doc-abc-123",
+            },
+        )
+        assert created.status_code == status.HTTP_201_CREATED, created.text
+        assert created.json()["data"]["source_document_id"] == "doc-abc-123"
+
+        # 다시 읽어도 남아 있어야 한다. 응답에서만 되비치고 저장이 안 되면 새로고침
+        # 한 번에 사라진다.
+        listed = await client.get(
+            f"/api/v1/health-records?profile_id={profile_id}",
+            headers=user_headers,
+        )
+        assert listed.json()["data"]["items"][0]["source_document_id"] == "doc-abc-123"
+
     async def test_access_denied_for_other_household(self, client: AsyncClient) -> None:
         user_a = await _login(client, "user-a@example.com")
         user_b = await _login(client, "user-b@example.com")

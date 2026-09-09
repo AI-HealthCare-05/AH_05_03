@@ -27,7 +27,6 @@ const NAVIGATION = [
   { to: "/challenge", label: "챌린지", end: false },
   { to: "/insights", label: "건강 현황", end: false },
   { to: "/health-data", label: "건강 데이터", end: false },
-  { to: "/data", label: "데이터 관리", end: false },
   { to: "/account", label: "계정", end: false },
 ] as const;
 

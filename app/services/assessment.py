@@ -136,6 +136,10 @@ SPECS: tuple[DiseaseSpec, ...] = (
     DiseaseSpec("liver", "간기능", "liver", "E1", "liver_enzyme_high"),
     DiseaseSpec("anemia", "빈혈", "anemia", "E1", "anemia"),
     DiseaseSpec("uric_acid", "요산", "uric_acid", "E1", "hyperuricemia"),
+    # 라벨이 고감도 CRP 라 규칙 쪽도 같은 값을 본다(`lab_staging.evaluate_inflammation`).
+    # CRP 는 국가건강검진 밖이라 대부분의 사용자는 안 갖고 있고, 그래서 이 카드는
+    # ML 이 답하는 자리가 실제로 있다 — 빈혈·고요산혈증과 같은 꼴이다.
+    DiseaseSpec("inflammation", "만성염증", "inflammation", "E1", "inflammation"),
 )
 
 SPEC_BY_KEY = {spec.key: spec for spec in SPECS}
@@ -314,6 +318,78 @@ def _ml_reference(condition: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+#: 모델이 "이 사람은 높은 쪽" 이라고 같이 말하는 의학 등급. `risk.py` 의
+#: `MEDICAL_LEVELS` 와 같은 이름이어야 한다 — 거기가 정본이다.
+#:
+#: 경계를 `주의`(이 점수대의 50% 이상이 기준 초과) 에 둔 이유가 있다. 측정이
+#: "넘었다" 고 한 사람 옆에 50% 미만짜리 숫자가 서면 그 숫자가 배지와 다투는
+#: 것으로 읽힌다. 절반을 넘겨야 같은 방향을 가리킨다고 말할 수 있다.
+_MODEL_AGREES_LEVELS = frozenset({"주의", "높음"})
+
+
+def model_contradicts_measurement(verdict: DiseaseVerdict) -> bool:
+    """측정과 모델이 **서로 반대 방향**을 가리키는가. 양쪽 다 본다.
+
+    측정이 "넘었다" 인데 모델이 "낮다" 는 경우와, 측정이 "기준 안" 인데 모델이
+    "높다" 는 경우가 대칭이다. 후자는 규칙 엔진이 "기준 안에 있어요" 라고 한 카드
+    바로 밑에 모델의 74% 가 붙던 자리다 — 이 패널에서 가장 헷갈리던 지점이었고
+    화면이 따로 막고 있었다. 판단을 한 곳으로 모은다.
+
+    라벨을 만드는 검사값은 그 질환의 ML 입력에서 차단되므로(`modeling/targets.py`)
+    차단이 심한 질환에서 이 어긋남이 생긴다. 실측(대사증후군 프리셋)
+
+        비만          높음      모델 91%  의학 '높음'   → 동의
+        지방간        높음      모델 66%  의학 '주의'   → 동의
+        대사증후군    매우 높음  모델 56%  의학 '주의'   → 동의
+        이상지질혈증  높음      모델 65%  의학 '주의'   → 동의
+        고중성지방    높음      모델 15%  의학 '낮음'   → **모순** (지질 넉 장이 전부 차단)
+        낮은 HDL      높음      모델 22%  의학 '낮음'   → **모순**
+
+    열넷 중 둘만 모순이다. 그래서 "넘었으면 무조건 지운다" 는 규칙은 멀쩡한 열두
+    칸의 앞날까지 같이 버린다 — 실제로 사용자가 볼 숫자가 통째로 사라졌다.
+    """
+    if not verdict.measured:
+        return False
+    level = str(((verdict.reference or {}).get("medical") or {}).get("level", ""))
+    if not level:
+        return False
+    if verdict.risk_level in _PRESENT_LEVELS:
+        return level not in _MODEL_AGREES_LEVELS
+    if verdict.risk_level == RiskLevel.NORMAL.value:
+        # 측정이 "기준 안" 이라고 답했는데 모델이 최상위 구간을 말하면 어긋난다.
+        return level == "높음"
+    return False
+
+
+def _drop_forecasts_when_already_present(verdict: DiseaseVerdict) -> None:
+    """이미 기준을 넘은 카드에서 **낼 수 없는** 앞날 숫자만 지운다.
+
+    두 가지를 다르게 다룬다.
+
+    `trajectory`(새로 생길 확률)
+        무조건 지운다. "지금 없다면" 이 전제인데 이미 있으므로 물음 자체가 성립하지
+        않는다. `CAUTION` 은 남긴다 — 전당뇨·고혈압 전단계는 아직 그 질환이 아니라서
+        앞날이 오히려 가장 쓸모 있는 자리다.
+
+    `prevalence_trajectory`(기준을 넘고 있을 확률)
+        **모델이 판정과 어긋날 때만** 지운다. 이 물음은 이미 넘은 사람에게도 성립하고
+        (5년 뒤에도 넘고 있을 확률), 모델이 같은 방향을 가리키면 그 숫자가 배지와
+        다투지 않는다. 첫 판에서 이것까지 싸잡아 지웠더니 비만 91%·지방간 66%·
+        대사증후군 58% 처럼 판정과 맞아떨어지는 값이 통째로 사라졌다.
+
+    **두 분기가 같이 쓴다.** 규칙·공식이 답한 칸(1순위)과 ML 이 검사값을 기준과
+    대조한 칸(2순위) 둘 다 `measured=True` 다.
+    """
+    reference = verdict.reference
+    if reference is None:
+        return
+    if verdict.risk_level in _PRESENT_LEVELS and reference.get("trajectory") is not None:
+        reference["trajectory"] = None
+        reference["trajectory_status"] = STATUS_ALREADY_PRESENT
+    if model_contradicts_measurement(verdict):
+        reference["prevalence_trajectory"] = None
+
+
 # ---------------------------------------------------------------------------
 # 중재
 # ---------------------------------------------------------------------------
@@ -352,17 +428,7 @@ def arbitrate(
                 verdict.superseded_by = spec.deterministic_engine
                 verdict.reference = _ml_reference(condition)
                 # 측정값이 이미 질환 범위면 "지금 없다면 앞으로" 라는 전제가 무너진다.
-                # 궤적을 지우고 상태로 이유를 남긴다. CAUTION(전당뇨·고혈압 전단계) 은
-                # 아직 그 질환이 아니므로 궤적이 오히려 가장 쓸모 있는 자리라 남긴다.
-                if verdict.risk_level in _PRESENT_LEVELS and verdict.reference.get("trajectory") is not None:
-                    verdict.reference["trajectory"] = None
-                    verdict.reference["trajectory_status"] = STATUS_ALREADY_PRESENT
-                # 유병 곡선도 같이 지운다. 라벨을 만드는 검사값은 그 질환의 ML 입력에서
-                # 차단되므로(`modeling/targets.py`), 공복혈당 148 로 확진된 사람에게도
-                # 당뇨 모델은 그 값을 못 보고 16% 를 낸다 — "매우 높음" 배지 밑에
-                # "기준 초과 지금 16%" 가 붙던 것이 이 화면에서 가장 헷갈리는 곳이었다.
-                if verdict.risk_level in _PRESENT_LEVELS:
-                    verdict.reference["prevalence_trajectory"] = None
+                _drop_forecasts_when_already_present(verdict)
             verdicts.append(verdict)
             continue
 
@@ -409,6 +475,9 @@ def arbitrate(
                     reference=_ml_reference(condition),
                 )
             )
+            # 1순위와 **같은 억제**를 건다. 이쪽도 검사값으로 판정한 칸이라
+            # 기준을 넘었으면 앞날 숫자가 배지와 부딪힌다.
+            _drop_forecasts_when_already_present(verdicts[-1])
             continue
 
         # --- 3순위. ML 확률 --------------------------------------------------
@@ -433,7 +502,16 @@ def arbitrate(
                     recommendation="정확히 알려면 해당 검사를 받아 값을 입력해 주세요.",
                     input_values={},
                     missing_fields=list((domain or {}).get("missing_fields", [])),
-                    flags=["측정하지 않고 추정한 등급이라 최고 등급(VERY_HIGH)은 나오지 않습니다."],
+                    # **결정론 엔진이 침묵하며 남긴 말은 버리지 않는다.**
+                    # 값이 없어서 못 답한 경우에는 남길 것이 없지만, 값이 있는데도
+                    # 등급을 안 매긴 경우가 있다 — 만성염증의 급성 구간(CRP>10)이
+                    # 그렇다. 규칙 엔진은 "2주 뒤 재측정" 이라는 가장 행동에 가까운
+                    # 말을 남기고 물러나는데, 그걸 안 옮기면 CRP 15 를 넣은 사람이
+                    # 그 문장을 영영 못 본다(실측으로 사라지고 있었다).
+                    flags=[
+                        *(domain or {}).get("flags", []),
+                        "측정하지 않고 추정한 등급이라 최고 등급(VERY_HIGH)은 나오지 않습니다.",
+                    ],
                     superseded_by=None,
                     reference=_ml_reference(condition),
                 )
@@ -706,11 +784,20 @@ def assess(payload: Any, models: Any) -> tuple[list[DiseaseVerdict], dict[str, A
     # 위에서 `to_key` 로 되돌려 놨으므로 여기는 `SPECS.key` 공간이다.
     name_by_target = {spec.key: spec.name for spec in SPECS}
     level_by_target = {verdict.key: verdict.risk_level for verdict in verdicts}
+    # **앞날을 낼지 말지는 한 곳에서만 정한다.** 의심 카드의 곡선은 중재를 거치지 않은
+    # `ConditionRisk` 에서 곧장 오므로, 판정 쪽에서 지운 칸이 패널에는 남아 있었다.
+    # 그러면 같은 질환이 위아래에서 다른 말을 한다 — 화면이 각자 판단하게 두면
+    # 한쪽만 고쳐진다. 여기서 같은 결정을 옮겨 담는다.
+    muted_targets = {v.key for v in verdicts if model_contradicts_measurement(v)}
+    present_targets = {v.key for v in verdicts if v.risk_level in _PRESENT_LEVELS}
     suspects = [
         card.model_copy(
             update={
                 "name": name_by_target.get(card.target, card.name),
                 "risk_level": level_by_target.get(card.target, ""),
+                "prevalence_trajectory": (None if card.target in muted_targets else card.prevalence_trajectory),
+                # "지금 없다면" 이 전제라 이미 넘은 칸에서는 성립하지 않는다.
+                "onset_trajectory": (None if card.target in present_targets else card.onset_trajectory),
             }
         )
         for card in suspects

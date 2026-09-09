@@ -18,11 +18,13 @@ import {
   type AnatomyAtlasManifest,
   type AnatomyLazyLayer,
 } from "./anatomyAtlas";
+import { createAnatomyEvent, type AnatomyEvent } from "./anatomyEventContracts";
 import {
   applyCostalCartilageStyle,
   createAdaptiveFlowGuideMaterial,
   createFocusPresets,
   createHolographicMaterials,
+  createHoverMaterials,
   createMatteScalpMaterials,
   INTERNALS_READABILITY_STYLE,
   createRegionalBoundaryMaterial,
@@ -30,11 +32,27 @@ import {
   materialsOf,
   shouldReturnToFullBody,
 } from "./holographicAnatomyStyle";
+import {
+  resolveAnatomyDisplayInfo,
+  type AnatomyDisplayInfo,
+} from "./anatomyKoreanDictionary";
 import { ProceduralBodyMap } from "./ProceduralBodyMap";
 import { fetchCachedAnatomyResource } from "./anatomyResourceCache";
 import type { RegionRisk } from "./bodyRisk";
 
-type SelectedStructure = { name: string; system?: string };
+export type SelectedStructure = {
+  name: string;
+  system?: string;
+  anatomyEvent?: AnatomyEvent;
+};
+
+export interface StagingItem {
+  id: string;
+  mesh: THREE.Mesh;
+  info: AnatomyDisplayInfo;
+  excluded: boolean;
+}
+
 type BodyFocus = AnatomyFocus | "leftHand" | "rightHand";
 type HandPose = "Open Hand" | "Fist" | "Spread" | "Point";
 
@@ -78,13 +96,25 @@ const DEFAULT_ANATOMY_ATLAS: AnatomyAtlasId = "vanatome-male-reference";
 export function VanatomeBodyMap({
   profileName,
   gender,
+  onStructureSelect,
+  onStagingChange,
 }: {
   profileName: string;
   gender?: "male" | "female" | null;
   risks?: RegionRisk[];
   risksAt?: string;
+  onStructureSelect?: (structure: SelectedStructure | undefined) => void;
+  onStagingChange?: (items: StagingItem[]) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const onStructureSelectRef = useRef(onStructureSelect);
+  useEffect(() => {
+    onStructureSelectRef.current = onStructureSelect;
+  }, [onStructureSelect]);
+  const onStagingChangeRef = useRef(onStagingChange);
+  useEffect(() => {
+    onStagingChangeRef.current = onStagingChange;
+  }, [onStagingChange]);
   const clearSelectionRef = useRef<() => void>(() => undefined);
   const focusCameraRef = useRef<(focus: BodyFocus) => void>(() => undefined);
   const pelvicOrganFocusRef = useRef<(active: boolean) => void>(() => undefined);
@@ -95,6 +125,13 @@ export function VanatomeBodyMap({
     : DEFAULT_ANATOMY_ATLAS;
   const [manifest, setManifest] = useState<AnatomyAtlasManifest>();
   const [selectedStructure, setSelectedStructure] = useState<SelectedStructure>();
+  const [stagedItems, setStagedItems] = useState<StagingItem[]>([]);
+  const [hoveredInfo, setHoveredInfo] = useState<AnatomyDisplayInfo | null>(null);
+  const toggleExcludeStagedRef = useRef<(id: string) => void>(() => undefined);
+  const [interactionMode, setInteractionMode] = useState<"inspect" | "paint">("inspect");
+  const setInteractionModeRef = useRef<(mode: "inspect" | "paint") => void>(() => undefined);
+  const undoPaintRef = useRef<() => void>(() => undefined);
+  const clearPaintRef = useRef<() => void>(() => undefined);
   const [activeFocus, setActiveFocus] = useState<BodyFocus>("full");
   const [pelvicOrganFocus, setPelvicOrganFocus] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
@@ -147,7 +184,10 @@ export function VanatomeBodyMap({
             setLoadError(undefined);
           },
           onWebGlUnavailable: () => setWebGlUnavailable(true),
-          onSelectedStructure: setSelectedStructure,
+          onSelectedStructure: (structure) => {
+            setSelectedStructure(structure);
+            onStructureSelectRef.current?.(structure);
+          },
           onFocusChange: setActiveFocus,
           onSystemsReady: setReadySystems,
           initialHiddenSystems,
@@ -156,6 +196,15 @@ export function VanatomeBodyMap({
           pelvicOrganFocusRef,
           setHiddenSystemsRef,
           playHandPoseRef,
+          setInteractionModeRef,
+          undoPaintRef,
+          clearPaintRef,
+          onStagingChange: (items) => {
+            setStagedItems(items);
+            onStagingChangeRef.current?.(items);
+          },
+          onHoverStructure: setHoveredInfo,
+          toggleExcludeRef: toggleExcludeStagedRef,
         });
         cleanupScene = nextCleanupScene;
         if (disposed) cleanupScene();
@@ -174,6 +223,9 @@ export function VanatomeBodyMap({
       pelvicOrganFocusRef.current = () => undefined;
       setHiddenSystemsRef.current = () => undefined;
       playHandPoseRef.current = () => undefined;
+      setInteractionModeRef.current = () => undefined;
+      undoPaintRef.current = () => undefined;
+      clearPaintRef.current = () => undefined;
     };
   }, [atlasId, isTestEnvironment, sceneAttempt]);
 
@@ -333,19 +385,158 @@ export function VanatomeBodyMap({
           </fieldset>
         ) : null}
         <div className="body-map-selection" aria-live="polite">
-          <span>선택한 구조</span>
-          <strong>{selectedStructure?.name ?? "인체에서 구조를 선택하세요"}</strong>
+          <span style={{ color: !selectedStructure && hoveredInfo ? "#d97706" : undefined, fontWeight: !selectedStructure && hoveredInfo ? 600 : undefined }}>
+            {selectedStructure
+              ? "선택한 구조"
+              : hoveredInfo
+              ? "마우스 오버 부위 (클릭하여 선택)"
+              : "선택한 구조"}
+          </span>
+          <strong style={{ color: !selectedStructure && hoveredInfo ? "#b45309" : undefined }}>
+            {selectedStructure
+              ? selectedStructure.name
+              : hoveredInfo
+              ? `${hoveredInfo.koreanName} (${hoveredInfo.canonicalName})`
+              : "인체에서 구조를 선택하세요"}
+          </strong>
           <small>
             {selectedStructure
-              ? `${selectedStructure.system ? `${selectedStructure.system} · ` : ""}현재 선택은 저장되지 않습니다.`
+              ? `${selectedStructure.system ? `${selectedStructure.system} · ` : ""}선택 완료 버튼을 눌러 기록에 반영할 수 있습니다.`
+              : hoveredInfo
+              ? `${hoveredInfo.systemKorean} 계통 · ${hoveredInfo.description || "클릭하면 이 부위가 선택됩니다."}`
               : "모델 드래그는 회전, 검은 배경 드래그는 상하 카메라 이동, 클릭은 구조 선택입니다."}
           </small>
         </div>
-        <div className="vanatome-actions">
-          <button type="button" disabled={!selectedStructure} onClick={() => clearSelectionRef.current()}>
-            선택 해제
+        <div className="vanatome-mode-actions" style={{ display: "flex", gap: "6px", margin: "12px 0 8px" }}>
+          <button
+            type="button"
+            className="secondary-button"
+            style={{
+              flex: 1,
+              padding: "6px 8px",
+              fontSize: "0.82rem",
+              background: interactionMode === "inspect" ? "rgba(37, 99, 235, 0.12)" : undefined,
+              borderColor: interactionMode === "inspect" ? "#2563eb" : undefined,
+              color: interactionMode === "inspect" ? "#1d4ed8" : undefined,
+              fontWeight: interactionMode === "inspect" ? "600" : undefined,
+            }}
+            onClick={() => {
+              setInteractionMode("inspect");
+              setInteractionModeRef.current("inspect");
+            }}
+          >
+            부위 탐색/선택
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
+            style={{
+              flex: 1,
+              padding: "6px 8px",
+              fontSize: "0.82rem",
+              background: interactionMode === "paint" ? "rgba(244, 63, 94, 0.12)" : undefined,
+              borderColor: interactionMode === "paint" ? "#f43f5e" : undefined,
+              color: interactionMode === "paint" ? "#be123c" : undefined,
+              fontWeight: interactionMode === "paint" ? "600" : undefined,
+            }}
+            onClick={() => {
+              setInteractionMode("paint");
+              setInteractionModeRef.current("paint");
+            }}
+          >
+            통증 범위 칠하기
           </button>
         </div>
+        <div className="vanatome-actions" style={{ display: "flex", gap: "6px" }}>
+          {interactionMode === "paint" ? (
+            <>
+              <button
+                type="button"
+                style={{ flex: 1, padding: "5px 8px", fontSize: "0.8rem" }}
+                onClick={() => undoPaintRef.current()}
+              >
+                되돌리기(Undo)
+              </button>
+              <button
+                type="button"
+                style={{ flex: 1, padding: "5px 8px", fontSize: "0.8rem" }}
+                onClick={() => clearPaintRef.current()}
+              >
+                칠한 부위 지우기
+              </button>
+            </>
+          ) : (
+            <button type="button" disabled={!selectedStructure} onClick={() => clearSelectionRef.current()}>
+              선택 해제
+            </button>
+          )}
+        </div>
+        {stagedItems.length > 0 ? (
+          <div
+            className="vanatome-staging-panel"
+            style={{
+              margin: "12px 0",
+              padding: "10px",
+              background: "rgba(248, 250, 252, 0.8)",
+              borderRadius: "10px",
+              border: "1px solid #e2e8f0",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#1e293b" }}>
+                📋 선택된 부위 ({stagedItems.filter((i) => !i.excluded).length}/{stagedItems.length}개 활성)
+              </span>
+              <small style={{ fontSize: "0.72rem", color: "#64748b" }}>제외/포함 번복 가능</small>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "180px", overflowY: "auto" }}>
+              {stagedItems.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    padding: "6px 8px",
+                    borderRadius: "6px",
+                    background: item.excluded ? "#f1f5f9" : "#ffffff",
+                    border: item.excluded ? "1px dashed #cbd5e1" : "1px solid #fecdd3",
+                    opacity: item.excluded ? 0.6 : 1,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 600, color: item.excluded ? "#64748b" : "#9f1239", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {item.info.koreanName}
+                      <span style={{ fontWeight: 400, fontSize: "0.74rem", color: "#64748b", marginLeft: "4px" }}>
+                        ({item.info.canonicalName})
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.7rem", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <span style={{ color: "#be123c", fontWeight: 500 }}>[{item.info.systemKorean}]</span> {item.info.description}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    style={{
+                      padding: "2px 7px",
+                      fontSize: "0.72rem",
+                      borderRadius: "4px",
+                      border: "1px solid",
+                      borderColor: item.excluded ? "#3b82f6" : "#f43f5e",
+                      color: item.excluded ? "#1d4ed8" : "#be123c",
+                      background: item.excluded ? "#eff6ff" : "#fff1f2",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                    onClick={() => toggleExcludeStagedRef.current(item.id)}
+                  >
+                    {item.excluded ? "다시 포함 ⟲" : "제외 ✕"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {manifest ? (
           <p className="vanatome-attribution">
             모델: {manifest.shortLabel} ·{" "}
@@ -357,7 +548,11 @@ export function VanatomeBodyMap({
       </div>
       <div className="body-map-viewer vanatome-viewer is-hologram">
         <canvas ref={canvasRef} aria-label="회전 가능한 해부학 인체 모니터" />
-        <span className="body-map-hint">모델 드래그 회전 · 배경 드래그 상하 이동 · 클릭 선택</span>
+        <span className="body-map-hint">
+          {interactionMode === "paint"
+            ? "인체 위 드래그로 스프레이 분사 · 외곽선 드래그로 회전 · 배경 드래그로 상하 이동"
+            : "인체 클릭으로 부위 선택 · 외곽선 드래그로 회전 · 배경 드래그로 상하 이동"}
+        </span>
       </div>
     </section>
   );
@@ -380,6 +575,12 @@ type CreateAnatomySceneOptions = {
   pelvicOrganFocusRef: React.MutableRefObject<(active: boolean) => void>;
   setHiddenSystemsRef: React.MutableRefObject<(systems: ReadonlySet<string>) => void>;
   playHandPoseRef: React.MutableRefObject<(pose: HandPose) => void>;
+  setInteractionModeRef: React.MutableRefObject<(mode: "inspect" | "paint") => void>;
+  undoPaintRef: React.MutableRefObject<() => void>;
+  clearPaintRef: React.MutableRefObject<() => void>;
+  onStagingChange: (items: StagingItem[]) => void;
+  onHoverStructure: (info: AnatomyDisplayInfo | null) => void;
+  toggleExcludeRef: React.MutableRefObject<(id: string) => void>;
 };
 
 async function createAnatomyScene(options: CreateAnatomySceneOptions) {
@@ -389,6 +590,8 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     clearSelectionRef, focusCameraRef,
     pelvicOrganFocusRef, setHiddenSystemsRef,
     playHandPoseRef,
+    setInteractionModeRef, undoPaintRef, clearPaintRef,
+    onStagingChange, onHoverStructure, toggleExcludeRef,
   } = options;
   let renderer: THREE.WebGLRenderer;
   try {
@@ -426,8 +629,9 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   const ownedMaterials = new Set<THREE.Material>();
   const sourceMaterials = new Set<THREE.Material>();
   const originalMaterials = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+  const originalRenderOrders = new Map<THREE.Mesh, number>();
   const progressByUrl = new Map<string, { loaded: number; total: number }>();
-  let selectedMesh: THREE.Mesh | undefined;
+  const selectedMeshes = new Set<THREE.Mesh>();
   let focusAnimationFrame: number | undefined;
   let poseAnimationFrame: number | undefined;
   let poseAnimationLastTime = 0;
@@ -509,24 +713,317 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   resize();
 
   const clearSelectedMaterial = () => {
-    if (!selectedMesh) return;
-    materialsOf(selectedMesh.material).forEach((material) => {
-      if (!ownedMaterials.has(material)) material.dispose();
+    if (selectedMeshes.size === 0) return;
+    selectedMeshes.forEach((mesh) => {
+      materialsOf(mesh.material).forEach((material) => {
+        if (!ownedMaterials.has(material)) material.dispose();
+      });
+      const original = originalMaterials.get(mesh);
+      if (original) mesh.material = original;
     });
-    const original = originalMaterials.get(selectedMesh);
-    if (original) selectedMesh.material = original;
-    selectedMesh = undefined;
+    selectedMeshes.clear();
     renderScene();
   };
+
+  // 3D 에어로졸 스프레이(Aerosol Spray) 및 임시 검토(Staging) 상태 관리
+  let interactionMode: "inspect" | "paint" = "inspect";
+  const paintMarkersGroup = new THREE.Group();
+  paintMarkersGroup.renderOrder = 20;
+  scene.add(paintMarkersGroup);
+  const sprayParticleGeo = new THREE.SphereGeometry(1, 4, 4);
+  const sprayParticleMat = new THREE.MeshBasicMaterial({
+    color: 0xf43f5e,
+    transparent: true,
+    opacity: 0.72,
+    depthWrite: false,
+  });
+
+  type PaintSample = {
+    point: THREE.Vector3;
+    normal?: THREE.Vector3;
+    mesh: THREE.Mesh;
+    markers: THREE.Object3D[];
+  };
+  type PaintStroke = {
+    samples: PaintSample[];
+    touchedMeshes: THREE.Mesh[];
+  };
+  const paintHistory: PaintStroke[] = [];
+  let currentStroke: PaintStroke | null = null;
+  let isPainting = false;
+  let lastSampleTime = 0;
+
+  const stagedItemsMap = new Map<string, StagingItem>();
+
+  const isMeshSelected = (mesh: THREE.Mesh): boolean => {
+    const item = stagedItemsMap.get(mesh.name);
+    return Boolean((item && !item.excluded) || selectedMeshes.has(mesh));
+  };
+
+  const ensureStagedItem = (mesh: THREE.Mesh): StagingItem => {
+    const id = mesh.name;
+    let item = stagedItemsMap.get(id);
+    if (!item) {
+      const info = resolveAnatomyDisplayInfo(mesh.name, String(mesh.userData.structureSystem ?? ""));
+      item = {
+        id,
+        mesh,
+        info,
+        excluded: false,
+      };
+      stagedItemsMap.set(id, item);
+    }
+    return item;
+  };
+
+  const recordPaintSample = (hit: THREE.Intersection) => {
+    if (!(hit.object instanceof THREE.Mesh) || !currentStroke) return;
+    const mesh = hit.object;
+
+    const normal = hit.normal ?? new THREE.Vector3(0, 0, 1);
+    const up = Math.abs(normal.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+    const tangent1 = new THREE.Vector3().crossVectors(normal, up).normalize();
+    const tangent2 = new THREE.Vector3().crossVectors(normal, tangent1).normalize();
+
+    const SPRAY_RADIUS = 0.085;
+    const PARTICLE_COUNT = 15;
+    const markers: THREE.Object3D[] = [];
+
+    // 가우시안 흩뿌림으로 에어로졸 스프레이 입자 분사
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      const u = Math.random();
+      const r = SPRAY_RADIUS * Math.pow(u, 0.65);
+      const angle = Math.random() * Math.PI * 2;
+      const x = Math.cos(angle) * r;
+      const y = Math.sin(angle) * r;
+      const particlePos = hit.point.clone()
+        .addScaledVector(tangent1, x)
+        .addScaledVector(tangent2, y)
+        .addScaledVector(normal, 0.002 + Math.random() * 0.003);
+
+      const marker = new THREE.Mesh(sprayParticleGeo, sprayParticleMat);
+      const particleScale = 0.004 + Math.random() * 0.004;
+      marker.scale.setScalar(particleScale);
+      marker.position.copy(particlePos);
+      marker.renderOrder = 20;
+      paintMarkersGroup.add(marker);
+      markers.push(marker);
+    }
+
+    currentStroke.samples.push({
+      point: hit.point.clone(),
+      normal: hit.normal?.clone(),
+      mesh,
+      markers,
+    });
+
+    ensureStagedItem(mesh);
+
+    // 스프레이 반경 내 인접 가시 메쉬도 스테이징에 감지 (메쉬 전체 색상 덮어쓰기는 비활성화)
+    for (const other of selectableMeshes) {
+      if (other !== mesh && other.visible) {
+        const box = new THREE.Box3().setFromObject(other);
+        if (box.distanceToPoint(hit.point) < SPRAY_RADIUS * 0.75) {
+          ensureStagedItem(other);
+          if (!currentStroke.touchedMeshes.includes(other)) {
+            currentStroke.touchedMeshes.push(other);
+          }
+        }
+      }
+    }
+
+    if (!currentStroke.touchedMeshes.includes(mesh)) {
+      currentStroke.touchedMeshes.push(mesh);
+    }
+    renderScene();
+  };
+
+  const emitStagedSummary = () => {
+    const allItems = Array.from(stagedItemsMap.values());
+    onStagingChange(allItems);
+
+    const activeItems = allItems.filter((i) => !i.excluded);
+    if (activeItems.length === 0) {
+      onSelectedStructure(undefined);
+      return;
+    }
+
+    const allActiveSamples = paintHistory
+      .flatMap((s) => s.samples)
+      .filter((s) => !stagedItemsMap.get(s.mesh.name)?.excluded);
+
+    const centroid = new THREE.Vector3();
+    if (allActiveSamples.length > 0) {
+      for (const s of allActiveSamples) centroid.add(s.point);
+      centroid.divideScalar(allActiveSamples.length);
+    } else if (selectedMeshes.size > 0) {
+      for (const m of selectedMeshes) {
+        const p = new THREE.Vector3();
+        m.getWorldPosition(p);
+        centroid.add(p);
+      }
+      centroid.divideScalar(selectedMeshes.size);
+    }
+
+    let maxDist = 0;
+    for (const s of allActiveSamples) {
+      const d = centroid.distanceTo(s.point);
+      if (d > maxDist) maxDist = d;
+    }
+    const radius = Number(maxDist.toFixed(4));
+
+    const primary = activeItems[0];
+    const primarySystem = primary.info.systemKorean;
+    const rawSystem = primary.info.system;
+
+    const combinedLabel = activeItems
+      .map((i) => i.info.fullBilingualLabel)
+      .join(", ") + (paintHistory.length > 0 ? " (3D 스프레이)" : "");
+
+    let anatomyEvent: AnatomyEvent | undefined;
+    try {
+      anatomyEvent = createAnatomyEvent({
+        atlas: {
+          id: manifest.id,
+          version: manifest.version,
+          referenceSex: manifest.referenceSex,
+        },
+        concept: {
+          canonicalConceptId: primary.mesh.name,
+          sourceKey: String(primary.mesh.userData.sourceKey ?? `vanatome:${manifest.id}:${manifest.version}:${primary.mesh.name}`),
+          sourceMeshId: primary.mesh.name,
+          label: combinedLabel,
+          system: rawSystem,
+          mappingStatus: "canonical",
+        },
+        geometry: {
+          coordinateSpace: "world",
+          point: [Number(centroid.x.toFixed(4)), Number(centroid.y.toFixed(4)), Number(centroid.z.toFixed(4))],
+          distance: radius || undefined,
+        },
+        inputSource: paintHistory.length > 0 ? "brush" : "tap",
+        state: "confirmed",
+        coverage: paintHistory.length > 0 ? {
+          radius,
+          sampleCount: allActiveSamples.length,
+          hitRatio: Number(Math.min(1.0, allActiveSamples.length / 20).toFixed(2)),
+        } : undefined,
+      });
+    } catch {
+      // safe fallback
+    }
+
+    onSelectedStructure({
+      name: combinedLabel,
+      system: primarySystem,
+      anatomyEvent,
+    });
+  };
+
+  toggleExcludeRef.current = (id: string) => {
+    const item = stagedItemsMap.get(id);
+    if (!item) return;
+    item.excluded = !item.excluded;
+
+    if (item.excluded) {
+      const orig = originalMaterials.get(item.mesh);
+      if (orig) item.mesh.material = orig;
+      selectedMeshes.delete(item.mesh);
+      for (const stroke of paintHistory) {
+        for (const s of stroke.samples) {
+          if (s.mesh === item.mesh) {
+            for (const m of s.markers) m.visible = false;
+          }
+        }
+      }
+    } else {
+      item.mesh.material = createSelectedMaterials(item.mesh.material);
+      selectedMeshes.add(item.mesh);
+      for (const stroke of paintHistory) {
+        for (const s of stroke.samples) {
+          if (s.mesh === item.mesh) {
+            for (const m of s.markers) m.visible = true;
+          }
+        }
+      }
+    }
+    renderScene();
+    emitStagedSummary();
+  };
+
+  const clearPaint = () => {
+    while (paintMarkersGroup.children.length > 0) {
+      paintMarkersGroup.remove(paintMarkersGroup.children[0]);
+    }
+    for (const stroke of paintHistory) {
+      for (const mesh of stroke.touchedMeshes) {
+        const orig = originalMaterials.get(mesh);
+        if (orig) mesh.material = orig;
+      }
+    }
+    paintHistory.length = 0;
+    currentStroke = null;
+    stagedItemsMap.clear();
+    if (selectedMeshes.size > 0) clearSelectedMaterial();
+    renderScene();
+    emitStagedSummary();
+  };
+
+  const undoPaint = () => {
+    const last = paintHistory.pop();
+    if (!last) return;
+    for (const s of last.samples) {
+      for (const m of s.markers) {
+        paintMarkersGroup.remove(m);
+      }
+    }
+    const remainingMeshes = new Set(paintHistory.flatMap((s) => s.touchedMeshes));
+    for (const mesh of last.touchedMeshes) {
+      if (!remainingMeshes.has(mesh) && !selectedMeshes.has(mesh)) {
+        const orig = originalMaterials.get(mesh);
+        if (orig) mesh.material = orig;
+        stagedItemsMap.delete(mesh.name);
+      }
+    }
+    renderScene();
+    emitStagedSummary();
+  };
+
+  setInteractionModeRef.current = (mode) => {
+    interactionMode = mode;
+    if (mode === "paint") {
+      if (hoveredMesh && !isMeshSelected(hoveredMesh)) {
+        const orig = originalMaterials.get(hoveredMesh);
+        if (orig) hoveredMesh.material = orig;
+        const origOrder = originalRenderOrders.get(hoveredMesh);
+        if (origOrder !== undefined) hoveredMesh.renderOrder = origOrder;
+        hoveredMesh = undefined;
+      }
+      onHoverStructure(null);
+      renderScene();
+    }
+    canvas.style.cursor = mode === "paint" ? "crosshair" : "";
+  };
+  undoPaintRef.current = undoPaint;
+  clearPaintRef.current = clearPaint;
+
   clearSelectionRef.current = () => {
     clearSelectedMaterial();
-    onSelectedStructure(undefined);
+    clearPaint();
+    stagedItemsMap.clear();
+    emitStagedSummary();
   };
 
   setHiddenSystemsRef.current = (systems) => {
     hiddenSystems = new Set(systems);
-    if (selectedMesh && hiddenSystems.has(String(selectedMesh.userData.structureSystem ?? ""))) {
-      clearSelectedMaterial();
+    selectedMeshes.forEach((mesh) => {
+      if (hiddenSystems.has(String(mesh.userData.structureSystem ?? ""))) {
+        const orig = originalMaterials.get(mesh);
+        if (orig) mesh.material = orig;
+        selectedMeshes.delete(mesh);
+      }
+    });
+    if (selectedMeshes.size === 0 && stagedItemsMap.size === 0) {
       onSelectedStructure(undefined);
     }
     anatomyMeshes.forEach(applyMeshVisibility);
@@ -616,40 +1113,158 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   const pointer = new THREE.Vector2();
   let pointerGesture: {
     pointerId: number;
-    mode: "rotate" | "vertical-pan";
+    mode: "rotate" | "vertical-pan" | "paint";
     startX: number;
     startY: number;
     lastY: number;
   } | undefined;
   let verticalPanLimits = { min: -2.35, max: 2.35 };
 
+  // 3D 회전 제어를 위한 OS 내장 커서 (외곽선 마우스 오버 시 grab, 드래그 회전 시 grabbing)
+  const ROTATE_CURSOR = "grab";
+
   const setPointerFromEvent = (event: PointerEvent) => {
     const bounds = canvas.getBoundingClientRect();
     pointer.x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
     pointer.y = -((event.clientY - bounds.top) / bounds.height) * 2 + 1;
   };
-  const pointerHitsVisibleModel = (event: PointerEvent) => {
+
+  const checkPointerZone = (event: PointerEvent): {
+    zone: "model" | "outline" | "background";
+    hitMesh?: THREE.Mesh;
+    hit?: THREE.Intersection;
+  } => {
     setPointerFromEvent(event);
     raycaster.setFromCamera(pointer, camera);
-    return raycaster.intersectObjects(
-      anatomyMeshes.filter((mesh) => mesh.visible),
+
+    // 1. 인체 모델 직접 적중 검사 (칠할 수 있는 가시적 메쉬)
+    const selectableHits = raycaster.intersectObjects(
+      selectableMeshes.filter((m) => m.visible),
       false,
-    ).length > 0;
+    );
+    const hit = selectableHits[0];
+    if (hit?.object instanceof THREE.Mesh) {
+      return { zone: "model", hitMesh: hit.object, hit };
+    }
+
+    const anyModelHits = raycaster.intersectObjects(
+      anatomyMeshes.filter((m) => m.visible),
+      false,
+    );
+    if (anyModelHits.length > 0) {
+      const first = anyModelHits[0];
+      return {
+        zone: "model",
+        hitMesh: first.object instanceof THREE.Mesh ? first.object : undefined,
+        hit: first,
+      };
+    }
+
+    // 2. 인체와 검정 배경 사이의 외곽선 마진 (약 8px로 좁혀 작은 신체 선택 방해 최소화)
+    const bounds = canvas.getBoundingClientRect();
+    const marginPx = 8;
+    const dx = (marginPx / Math.max(bounds.width, 1)) * 2;
+    const dy = (marginPx / Math.max(bounds.height, 1)) * 2;
+
+    const offsets = [
+      [-dx, 0], [dx, 0], [0, -dy], [0, dy],
+      [-dx * 0.707, -dy * 0.707], [dx * 0.707, -dy * 0.707],
+      [-dx * 0.707, dy * 0.707], [dx * 0.707, dy * 0.707],
+    ];
+
+    const tempPointer = new THREE.Vector2();
+    for (const [ox, oy] of offsets) {
+      tempPointer.set(pointer.x + ox, pointer.y + oy);
+      raycaster.setFromCamera(tempPointer, camera);
+      const marginHits = raycaster.intersectObjects(
+        anatomyMeshes.filter((m) => m.visible),
+        false,
+      );
+      if (marginHits.length > 0) {
+        return { zone: "outline" };
+      }
+    }
+
+    // 3. 완전한 검정 배경
+    return { zone: "background" };
   };
+
   const handlePointerDown = (event: PointerEvent) => {
     if (!event.isPrimary || event.button !== 0) return;
-    const mode = pointerHitsVisibleModel(event) ? "rotate" : "vertical-pan";
-    pointerGesture = {
-      pointerId: event.pointerId,
-      mode,
-      startX: event.clientX,
-      startY: event.clientY,
-      lastY: event.clientY,
-    };
-    if (mode === "rotate") return;
 
-    // Capture before OrbitControls receives a background event. Model events
-    // continue to the existing orbit handler unchanged.
+    const { zone, hit } = checkPointerZone(event);
+
+    if (interactionMode === "paint") {
+      // Zone 1: 인체 위 -> 스프레이 분사 시작
+      if (zone === "model" && hit?.object instanceof THREE.Mesh) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        canvas.setPointerCapture(event.pointerId);
+        isPainting = true;
+        controls.enabled = false;
+        currentStroke = { samples: [], touchedMeshes: [] };
+        recordPaintSample(hit);
+        pointerGesture = {
+          pointerId: event.pointerId,
+          mode: "paint" as const,
+          startX: event.clientX,
+          startY: event.clientY,
+          lastY: event.clientY,
+        };
+        canvas.style.cursor = "crosshair";
+        return;
+      }
+
+      // Zone 2: 인체 외곽선 -> 회전 제스처
+      if (zone === "outline") {
+        controls.enabled = true;
+        pointerGesture = {
+          pointerId: event.pointerId,
+          mode: "rotate" as const,
+          startX: event.clientX,
+          startY: event.clientY,
+          lastY: event.clientY,
+        };
+        canvas.style.cursor = "grabbing";
+        return;
+      }
+
+      // Zone 3: 배경 -> 상하 카메라 이동
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      canvas.setPointerCapture(event.pointerId);
+      canvas.style.cursor = "ns-resize";
+      if (focusAnimationFrame !== undefined) {
+        window.cancelAnimationFrame(focusAnimationFrame);
+        focusAnimationFrame = undefined;
+      }
+      pointerGesture = {
+        pointerId: event.pointerId,
+        mode: "vertical-pan" as const,
+        startX: event.clientX,
+        startY: event.clientY,
+        lastY: event.clientY,
+      };
+      return;
+    }
+
+    // inspect 모드일 때:
+    if (zone === "model" || zone === "outline") {
+      controls.enabled = true;
+      pointerGesture = {
+        pointerId: event.pointerId,
+        mode: "rotate" as const,
+        startX: event.clientX,
+        startY: event.clientY,
+        lastY: event.clientY,
+      };
+      if (zone === "outline") {
+        canvas.style.cursor = "grabbing";
+      }
+      return;
+    }
+
+    // inspect 모드 배경: 상하 카메라 이동
     event.preventDefault();
     event.stopImmediatePropagation();
     canvas.setPointerCapture(event.pointerId);
@@ -658,10 +1273,129 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       window.cancelAnimationFrame(focusAnimationFrame);
       focusAnimationFrame = undefined;
     }
+    pointerGesture = {
+      pointerId: event.pointerId,
+      mode: "vertical-pan" as const,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastY: event.clientY,
+    };
   };
+
+  let hoveredMesh: THREE.Mesh | undefined;
+
+  const handleHover = (event: PointerEvent) => {
+    const { zone, hitMesh } = checkPointerZone(event);
+
+    if (interactionMode === "paint") {
+      if (hoveredMesh && !isMeshSelected(hoveredMesh)) {
+        const orig = originalMaterials.get(hoveredMesh);
+        if (orig) hoveredMesh.material = orig;
+        const origOrder = originalRenderOrders.get(hoveredMesh);
+        if (origOrder !== undefined) hoveredMesh.renderOrder = origOrder;
+        hoveredMesh = undefined;
+        renderScene();
+      }
+
+      if (zone === "model") {
+        canvas.style.cursor = "crosshair";
+      } else if (zone === "outline") {
+        canvas.style.cursor = ROTATE_CURSOR;
+      } else {
+        canvas.style.cursor = "ns-resize";
+      }
+      return;
+    }
+
+    // inspect 모드:
+    if (zone === "model") {
+      const mesh = hitMesh;
+      if (mesh !== hoveredMesh) {
+        if (hoveredMesh && !isMeshSelected(hoveredMesh)) {
+          const orig = originalMaterials.get(hoveredMesh);
+          if (orig) hoveredMesh.material = orig;
+          const origOrder = originalRenderOrders.get(hoveredMesh);
+          if (origOrder !== undefined) hoveredMesh.renderOrder = origOrder;
+        }
+
+        hoveredMesh = mesh;
+
+        if (mesh) {
+          const info = resolveAnatomyDisplayInfo(mesh.name, String(mesh.userData.structureSystem ?? ""));
+          onHoverStructure(info);
+          if (!isMeshSelected(mesh)) {
+            if (!originalRenderOrders.has(mesh)) {
+              originalRenderOrders.set(mesh, mesh.renderOrder);
+            }
+            mesh.renderOrder = 10;
+            const orig = originalMaterials.get(mesh) ?? mesh.material;
+            mesh.material = createHoverMaterials(orig);
+          }
+        }
+        renderScene();
+      }
+      canvas.style.cursor = "pointer";
+    } else {
+      if (hoveredMesh && !isMeshSelected(hoveredMesh)) {
+        const orig = originalMaterials.get(hoveredMesh);
+        if (orig) hoveredMesh.material = orig;
+        const origOrder = originalRenderOrders.get(hoveredMesh);
+        if (origOrder !== undefined) hoveredMesh.renderOrder = origOrder;
+        hoveredMesh = undefined;
+        renderScene();
+      }
+      onHoverStructure(null);
+
+      if (zone === "outline") {
+        canvas.style.cursor = ROTATE_CURSOR;
+      } else {
+        canvas.style.cursor = "ns-resize";
+      }
+    }
+  };
+
+  const handlePointerLeave = () => {
+    if (hoveredMesh && !isMeshSelected(hoveredMesh)) {
+      const orig = originalMaterials.get(hoveredMesh);
+      if (orig) hoveredMesh.material = orig;
+      const origOrder = originalRenderOrders.get(hoveredMesh);
+      if (origOrder !== undefined) hoveredMesh.renderOrder = origOrder;
+      renderScene();
+    }
+    hoveredMesh = undefined;
+    onHoverStructure(null);
+    canvas.style.cursor = "";
+  };
+  canvas.addEventListener("pointerleave", handlePointerLeave);
+
   const handlePointerMove = (event: PointerEvent) => {
-    if (pointerGesture?.pointerId !== event.pointerId
-      || pointerGesture.mode !== "vertical-pan") return;
+    if (!pointerGesture || pointerGesture.pointerId !== event.pointerId) {
+      if (!pointerGesture && !isPainting) {
+        handleHover(event);
+      }
+      return;
+    }
+
+    if (isPainting && currentStroke && pointerGesture.mode === "paint") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const now = performance.now();
+      if (now - lastSampleTime > 25) {
+        lastSampleTime = now;
+        setPointerFromEvent(event);
+        raycaster.setFromCamera(pointer, camera);
+        const hit = raycaster.intersectObjects(
+          selectableMeshes.filter((m) => m.visible),
+          false,
+        )[0];
+        if (hit?.object instanceof THREE.Mesh) {
+          recordPaintSample(hit);
+        }
+      }
+      return;
+    }
+
+    if (pointerGesture.mode !== "vertical-pan") return;
     event.preventDefault();
     event.stopImmediatePropagation();
 
@@ -684,17 +1418,50 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     controls.update();
     renderScene();
   };
+
   const handlePointerUp = (event: PointerEvent) => {
     const gesture = pointerGesture;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     pointerGesture = undefined;
+
+    if (isPainting) {
+      isPainting = false;
+      controls.enabled = true;
+      if (canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+      }
+      if (currentStroke && currentStroke.samples.length > 0) {
+        paintHistory.push(currentStroke);
+        currentStroke = null;
+        emitStagedSummary();
+      }
+      renderScene();
+      handleHover(event);
+      return;
+    }
+
     if (gesture.mode === "vertical-pan") {
       event.preventDefault();
       event.stopImmediatePropagation();
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-      canvas.style.cursor = "";
+      handleHover(event);
       return;
     }
+
+    if (gesture.mode === "rotate") {
+      handleHover(event);
+      if (Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > 6) {
+        camera.updateMatrixWorld(true);
+        renderScene();
+        return;
+      }
+    }
+
+    if (interactionMode === "paint") {
+      handleHover(event);
+      return;
+    }
+
     if (Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY) > 6) {
       camera.updateMatrixWorld(true);
       renderScene();
@@ -702,17 +1469,27 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     }
     setPointerFromEvent(event);
     raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObjects(selectableMeshes, false)[0];
+    const hit = raycaster.intersectObjects(
+      selectableMeshes.filter((m) => m.visible),
+      false,
+    )[0];
     if (!(hit?.object instanceof THREE.Mesh)) return;
 
-    clearSelectedMaterial();
     const mesh = hit.object;
-    mesh.material = createSelectedMaterials(mesh.material);
-    selectedMesh = mesh;
-    onSelectedStructure({
-      name: String(mesh.userData.structureLabel ?? "선택한 해부 구조"),
-      system: systemLabel(String(mesh.userData.structureSystem ?? "")),
-    });
+    const existing = stagedItemsMap.get(mesh.name);
+    if (existing) {
+      if (existing.excluded) {
+        existing.excluded = false;
+        mesh.material = createSelectedMaterials(mesh.material);
+        selectedMeshes.add(mesh);
+      }
+    } else {
+      ensureStagedItem(mesh);
+      mesh.material = createSelectedMaterials(mesh.material);
+      selectedMeshes.add(mesh);
+    }
+
+    emitStagedSummary();
     renderScene();
   };
   const handlePointerCancel = (event: PointerEvent) => {
@@ -1032,8 +1809,14 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
           if (!targetIds.has(layerId)) controller.abort();
         });
       }
-      if (selectedMesh?.userData.lazyLayerId && !targetIds.has(selectedMesh.userData.lazyLayerId)) {
-        clearSelectedMaterial();
+      selectedMeshes.forEach((mesh) => {
+        if (mesh.userData.lazyLayerId && !targetIds.has(mesh.userData.lazyLayerId)) {
+          const orig = originalMaterials.get(mesh);
+          if (orig) mesh.material = orig;
+          selectedMeshes.delete(mesh);
+        }
+      });
+      if (selectedMeshes.size === 0 && stagedItemsMap.size === 0) {
         onSelectedStructure(undefined);
       }
       renderScene();
@@ -1140,22 +1923,3 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   return cleanup;
 }
 
-function systemLabel(system: string) {
-  const labels: Record<string, string> = {
-    cardiovascular: "심혈관계",
-    digestive: "소화기계",
-    endocrine: "내분비계",
-    integumentary: "외피계",
-    lymphatic: "림프계",
-    reproductive: "생식계",
-    mammary: "유방·유선",
-    muscular: "근육계",
-    nervous: "신경계",
-    respiratory: "호흡기계",
-    skeletal: "골격계",
-    joints: "관절·인대·막",
-    urinary: "비뇨기계",
-    "regional-anatomy": "외부 해부 구조",
-  };
-  return labels[system] ?? system;
-}

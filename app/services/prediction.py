@@ -59,6 +59,7 @@ DISPLAY_ORDER = (
     "liver_enzyme_high",
     "anemia",
     "hyperuricemia",
+    "inflammation",
 )
 
 # 비교 집단 표시 문구. 모델 참조표의 연령 구간과 같아야 한다.

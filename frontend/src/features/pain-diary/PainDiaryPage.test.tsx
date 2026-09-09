@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi, afterEach } from "vitest";
@@ -118,15 +118,39 @@ describe("PainDiaryPage", () => {
     expect(screen.getByRole("button", { name: "체크리스트" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "인용구" })).toBeInTheDocument();
   });
+
+  it("3D 해부학 이벤트가 연결된 기록을 선택하면 해부학 연결 배지가 표시되고 해제 및 3D 모달 열기가 가능하다", async () => {
+    render(
+      <MemoryRouter initialEntries={["/pain-diary?date=2026-09-02"]}>
+        <LocalDomainProvider databaseName={`ieobom-pain-diary-${crypto.randomUUID()}`}>
+          <SeededPainDiaryPage />
+        </LocalDomainProvider>
+      </MemoryRouter>,
+    );
+
+    // 2026-09-02의 3D 해부학 이벤트 기록 확인
+    const badge = await screen.findByText(/3D 해부학 연결/, {}, { timeout: 5000 });
+    expect(badge).toBeInTheDocument();
+    expect(screen.getAllByText("대흉근 (오른쪽)").length).toBeGreaterThanOrEqual(2);
+
+    // 3D 해부학 연결 해제 테스트
+    const clearBtn = screen.getByTitle("3D 해부학 연결 해제");
+    fireEvent.click(clearBtn);
+    expect(screen.queryByText(/3D 해부학 연결/)).not.toBeInTheDocument();
+
+    // 3D 모델에서 선택 모달 열기 테스트
+    const open3DBtn = screen.getByRole("button", { name: /3D 모델에서 선택/ });
+    fireEvent.click(open3DBtn);
+    expect(await screen.findByRole("heading", { level: 3, name: /3D 인체 모델에서 통증 부위 선택/ })).toBeInTheDocument();
+  });
 });
 
 function SeededPainDiaryPage() {
   const { runtime, refreshProfiles } = useLocalDomain();
-  const started = useRef(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!runtime || started.current) return;
-    started.current = true;
+    if (!runtime || ready) return;
     void (async () => {
       const profileResult = await runtime.profiles.create({
         householdId: PRIMARY_HOUSEHOLD_ID,
@@ -151,9 +175,45 @@ function SeededPainDiaryPage() {
         },
       });
 
-      await refreshProfiles();
-    })();
-  }, [refreshProfiles, runtime]);
+      // 2026-09-02 에 3D 해부학 이벤트가 연결된 통증 기록 추가
+      await runtime.healthRecords.create({
+        householdId: PRIMARY_HOUSEHOLD_ID,
+        profileId: profileResult.value.id,
+        recordType: "pain",
+        recordedAt: "2026-09-02T12:00:00.000Z",
+        source: "manual",
+        payload: {
+          type: "pain",
+          bodyArea: "대흉근 (오른쪽)",
+          intensity: 4,
+          sensation: "당김",
+          note: "운동 후 뻐근함",
+          anatomyEvent: {
+            schemaVersion: "1.0.0",
+            eventId: "ev-test-pec-1",
+            atlas: { id: "vanatome-male-reference", version: "1.0", referenceSex: "male" },
+            concept: {
+              canonicalConceptId: "fma:pectoralis-major-r",
+              sourceKey: "vanatome:1.0:pectoralis_major_r",
+              sourceMeshId: "VH_M_pectoralis_major_r",
+              label: "대흉근 (오른쪽)",
+              system: "muscular",
+              side: "right",
+              mappingStatus: "canonical",
+            },
+            geometry: { coordinateSpace: "world", point: [0.1, 1.4, 0.2] },
+            inputSource: "tap",
+            state: "confirmed",
+            recordedAt: "2026-09-02T12:00:00.000Z",
+          },
+        },
+      });
 
+      await refreshProfiles();
+      setReady(true);
+    })();
+  }, [refreshProfiles, runtime, ready]);
+
+  if (!ready) return <div className="route-loading">테스트 시딩 중…</div>;
   return <PainDiaryPage />;
 }

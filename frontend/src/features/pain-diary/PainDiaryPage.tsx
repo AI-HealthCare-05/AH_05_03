@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
@@ -6,7 +6,14 @@ import type { HealthRecord } from "../../shared/local/domainContracts";
 import { FamilyProfileSidebar } from "../family/FamilyProfileSidebar";
 import { PRIMARY_HOUSEHOLD_ID } from "../health-assistant/healthAssistantLogic";
 import { sendHealthAssistantMessage } from "../health-assistant/healthAssistantClient";
+import type { AnatomyEvent } from "../home/anatomyEventContracts";
 import { NotionMarkdownEditor } from "./NotionMarkdownEditor";
+
+const VanatomeBodyMap = lazy(() =>
+  import("../home/VanatomeBodyMap").then((module) => ({
+    default: module.VanatomeBodyMap,
+  })),
+);
 
 interface PainPayload {
   type?: string;
@@ -16,6 +23,7 @@ interface PainPayload {
   aggravatingFactors?: string;
   note?: string;
   onsetAt?: string;
+  anatomyEvent?: AnatomyEvent;
 }
 
 function formatDateKey(date: Date): string {
@@ -64,6 +72,12 @@ export function PainDiaryPage() {
 
   // 폼 입력 상태
   const [bodyArea, setBodyArea] = useState("");
+  const [anatomyEvent, setAnatomyEvent] = useState<AnatomyEvent | undefined>();
+  const [show3DSelector, setShow3DSelector] = useState(false);
+  const [stagedStructure, setStagedStructure] = useState<{
+    name: string;
+    anatomyEvent?: AnatomyEvent;
+  } | null>(null);
   const [intensity, setIntensity] = useState<number>(5);
   const [sensation, setSensation] = useState("");
   const [aggravatingFactors, setAggravatingFactors] = useState("");
@@ -121,16 +135,19 @@ export function PainDiaryPage() {
 
   // 현재 편집 중인 기록 ID ("__NEW__"이면 새 기록 추가 모드, null이면 기본 자동선택)
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
+  const lastLoadedKeyRef = useRef<string>("");
 
   // 선택된 날짜 또는 기록 ID 변경 시 폼 상태 동기화
   useEffect(() => {
     if (selectedRecordId === "__NEW__") {
       setCurrentRecord(null);
       setBodyArea("");
+      setAnatomyEvent(undefined);
       setIntensity(5);
       setSensation("");
       setAggravatingFactors("");
       setNote("");
+      lastLoadedKeyRef.current = `${selectedDate}:__NEW__`;
       return;
     }
 
@@ -138,29 +155,40 @@ export function PainDiaryPage() {
       ? dayRecords.find((r) => r.id === selectedRecordId)
       : null;
     const targetRecord = matched ?? dayRecords[0] ?? null;
+    const targetId = targetRecord?.id ?? null;
+    const loadKey = `${selectedDate}:${targetId}`;
 
     if (targetRecord) {
-      const payload = (targetRecord.payload ?? {}) as PainPayload;
-      setCurrentRecord(targetRecord);
-      setSelectedRecordId(targetRecord.id);
-      setBodyArea(payload.bodyArea || "");
-      setIntensity(typeof payload.intensity === "number" ? payload.intensity : 5);
-      setSensation(payload.sensation || "");
-      setAggravatingFactors(payload.aggravatingFactors || "");
-      setNote(payload.note || "");
+      if (lastLoadedKeyRef.current !== loadKey) {
+        lastLoadedKeyRef.current = loadKey;
+        const payload = (targetRecord.payload ?? {}) as PainPayload;
+        setCurrentRecord(targetRecord);
+        setSelectedRecordId(targetRecord.id);
+        setBodyArea(payload.bodyArea || "");
+        setAnatomyEvent(payload.anatomyEvent);
+        setIntensity(typeof payload.intensity === "number" ? payload.intensity : 5);
+        setSensation(payload.sensation || "");
+        setAggravatingFactors(payload.aggravatingFactors || "");
+        setNote(payload.note || "");
+      }
     } else {
-      setCurrentRecord(null);
-      setSelectedRecordId(null);
-      setBodyArea("");
-      setIntensity(5);
-      setSensation("");
-      setAggravatingFactors("");
-      setNote("");
+      if (lastLoadedKeyRef.current !== loadKey) {
+        lastLoadedKeyRef.current = loadKey;
+        setCurrentRecord(null);
+        setSelectedRecordId(null);
+        setBodyArea("");
+        setAnatomyEvent(undefined);
+        setIntensity(5);
+        setSensation("");
+        setAggravatingFactors("");
+        setNote("");
+      }
     }
   }, [selectedDate, dayRecords, selectedRecordId]);
 
   // 특정 기록 선택
   const handleSelectRecord = (rec: HealthRecord) => {
+    lastLoadedKeyRef.current = "";
     setSelectedRecordId(rec.id);
     setFeedbackMessage(undefined);
     setError(undefined);
@@ -168,7 +196,9 @@ export function PainDiaryPage() {
 
   // 해당 일자에 새 기록 작성 시작
   const handleStartNewRecord = () => {
+    lastLoadedKeyRef.current = "";
     setSelectedRecordId("__NEW__");
+    setAnatomyEvent(undefined);
     setFeedbackMessage(undefined);
     setError(undefined);
   };
@@ -262,6 +292,7 @@ export function PainDiaryPage() {
             sensation: sensation.trim() || undefined,
             aggravatingFactors: aggravatingFactors.trim() || undefined,
             note: note.trim() || undefined,
+            anatomyEvent: anatomyEvent || undefined,
           },
           expectedVersion: currentRecord.version,
         });
@@ -283,12 +314,14 @@ export function PainDiaryPage() {
             sensation: sensation.trim() || undefined,
             aggravatingFactors: aggravatingFactors.trim() || undefined,
             note: note.trim() || undefined,
+            anatomyEvent: anatomyEvent || undefined,
           },
         });
         if (!createRes.ok) throw new Error(createRes.error.message);
         setFeedbackMessage("통증 다이어리 기록이 안전하게 저장되었습니다.");
         setSelectedRecordId(createRes.value.id);
       }
+      lastLoadedKeyRef.current = "";
       await loadRecords();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "통증 다이어리 저장에 실패했습니다.");
@@ -308,6 +341,7 @@ export function PainDiaryPage() {
       if (!delRes.ok) throw new Error(delRes.error.message);
       setFeedbackMessage("통증 기록이 삭제되었습니다.");
       setSelectedRecordId(null);
+      lastLoadedKeyRef.current = "";
       await loadRecords();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "기록 삭제에 실패했습니다.");
@@ -443,8 +477,21 @@ export function PainDiaryPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="diary-form">
-              <label className="form-group">
-                <span>통증 부위 *</span>
+              <div className="form-group">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                  <span>통증 부위 *</span>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ fontSize: "0.82rem", padding: "3px 8px" }}
+                    onClick={() => {
+                      setStagedStructure(null);
+                      setShow3DSelector(true);
+                    }}
+                  >
+                    3D 모델에서 선택
+                  </button>
+                </div>
                 <input
                   type="text"
                   placeholder="예: 오른쪽 무릎, 허리 아래쪽, 목 뒷덜미"
@@ -452,7 +499,43 @@ export function PainDiaryPage() {
                   onChange={(e) => setBodyArea(e.target.value)}
                   required
                 />
-              </label>
+                {anatomyEvent ? (
+                  <div
+                    className="anatomy-event-badge"
+                    style={{
+                      marginTop: "6px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "4px 10px",
+                      background: "rgba(37, 99, 235, 0.08)",
+                      border: "1px solid rgba(37, 99, 235, 0.25)",
+                      borderRadius: "6px",
+                      fontSize: "0.82rem",
+                      color: "#1d4ed8",
+                    }}
+                  >
+                    <span>
+                      🧬 3D 해부학 연결: <strong>{anatomyEvent.concept.label}</strong> ({anatomyEvent.concept.system})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAnatomyEvent(undefined)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        color: "#6b7280",
+                        padding: "0 2px",
+                        fontSize: "0.9rem",
+                      }}
+                      title="3D 해부학 연결 해제"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : null}
+              </div>
 
               <div className="form-group">
                 <div className="intensity-header">
@@ -675,6 +758,146 @@ export function PainDiaryPage() {
           </aside>
         </div>
       </main>
+
+      {show3DSelector ? (
+        <div
+          className="dialog-backdrop"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "20px",
+          }}
+          onClick={() => setShow3DSelector(false)}
+        >
+          <div
+            className="dialog-card"
+            style={{
+              background: "#ffffff",
+              borderRadius: "16px",
+              maxWidth: "1160px",
+              width: "94vw",
+              height: "90vh",
+              maxHeight: "92vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid #e5e7eb",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#111827" }}>
+                  3D 인체 모델에서 통증 부위 선택
+                </h3>
+                <p style={{ margin: "2px 0 0 0", fontSize: "0.82rem", color: "#6b7280" }}>
+                  마우스를 올려 부위를 확인하고 클릭하거나 통증 범위를 칠하세요. 선택 완료 버튼을 눌러야 반영됩니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShow3DSelector(false)}
+                style={{ background: "none", border: "none", fontSize: "1.3rem", cursor: "pointer", color: "#6b7280", padding: "4px" }}
+              >
+                ✕
+              </button>
+            </div>
+            <div style={{ padding: "12px 16px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column" }}>
+              <Suspense fallback={<div className="body-map-loading">3D 인체 모델을 불러오는 중…</div>}>
+                <VanatomeBodyMap
+                  profileName={selectedProfile?.displayName ?? "가족"}
+                  gender={selectedProfile?.gender}
+                  onStructureSelect={(structure) => {
+                    setStagedStructure(structure ?? null);
+                  }}
+                />
+              </Suspense>
+            </div>
+            <div
+              style={{
+                padding: "12px 20px",
+                borderTop: "1px solid #e5e7eb",
+                background: "#f9fafb",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: "220px", fontSize: "0.88rem" }}>
+                {stagedStructure ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontWeight: 600, color: "#1e40af" }}>반영 예정:</span>
+                    <span style={{ color: "#1f2937", fontWeight: 500 }}>{stagedStructure.name}</span>
+                  </div>
+                ) : (
+                  <span style={{ color: "#9ca3af" }}>부위를 클릭하거나 '통증 범위 칠하기'로 선택해 주세요.</span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setShow3DSelector(false)}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #d1d5db",
+                    background: "#ffffff",
+                    color: "#4b5563",
+                    fontSize: "0.88rem",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                  }}
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  disabled={!stagedStructure}
+                  onClick={() => {
+                    if (stagedStructure) {
+                      setBodyArea(stagedStructure.name);
+                      setAnatomyEvent(stagedStructure.anatomyEvent);
+                    }
+                    setShow3DSelector(false);
+                  }}
+                  style={{
+                    padding: "8px 18px",
+                    borderRadius: "8px",
+                    border: "none",
+                    background: stagedStructure ? "linear-gradient(135deg, #2563eb, #1d4ed8)" : "#9ca3af",
+                    color: "#ffffff",
+                    fontSize: "0.88rem",
+                    fontWeight: 600,
+                    cursor: stagedStructure ? "pointer" : "not-allowed",
+                    boxShadow: stagedStructure ? "0 2px 4px rgba(37, 99, 235, 0.2)" : "none",
+                  }}
+                >
+                  선택 완료
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

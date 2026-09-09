@@ -121,6 +121,16 @@ export const FIELD_GROUPS: FieldGroup[] = [
       { name: "hemoglobin", label: "혈색소", kind: "number", unit: "g/dL", min: 3, max: 25, step: 0.1 },
       { name: "albumin", label: "알부민", kind: "number", unit: "g/dL", min: 1, max: 7, step: 0.1 },
       { name: "urine_acr", label: "요알부민/크레아티닌비", kind: "number", unit: "mg/g", min: 0, max: 20000 },
+      {
+        name: "crp",
+        label: "고감도 CRP",
+        kind: "number",
+        unit: "mg/L",
+        min: 0.01,
+        max: 500,
+        step: 0.01,
+        hint: "국가건강검진에는 없고 종합검진에서 나옵니다. 없으면 비워 두세요 — 모델이 대신 추정합니다",
+      },
     ],
   },
   {
@@ -230,6 +240,7 @@ export const LAB_FIELDS = [
   "hemoglobin",
   "albumin",
   "urine_acr",
+  "crp",
 ];
 
 /**
@@ -272,7 +283,32 @@ export const DISEASE_MEASURES: Record<string, string[]> = {
   liver: ["ast", "alt", "ggt"],
   anemia: ["hemoglobin"],
   uric_acid: ["uric_acid"],
+  inflammation: ["crp"],
 };
+
+/**
+ * **검진결과지에 인쇄되는 값**만. 건강 데이터 화면의 "검진 수치" 목록이 쓴다.
+ *
+ * 판정 폼은 검사값 말고도 나이·키·주관적 건강·생활습관·진단 이력을 받는다. 그것까지
+ * 항목별 변화 그래프에 올리면 검진 수치가 아닌 것이 검진 수치인 척한다 — 실측으로
+ * **나이가 26 → 52 → 61 → 26 으로 그려졌다.** 프리셋을 바꿔 가며 판정한 흔적인데,
+ * 그래프는 그걸 "나이가 오르내렸다" 로 보여 준다. 개인 한 사람의 기록이라는 전제에서
+ * 나이·키는 애초에 비교할 값이 아니고, 주관 평가(1~5)와 문진 답변은 검사가 아니다.
+ *
+ * 그룹으로 가른다 — 폼에 필드를 더하면 그 필드가 속한 그룹이 답을 정하므로 여기
+ * 목록을 따로 손보지 않아도 된다. `basic` 에서는 허리둘레만 건진다(검진에서 잰다).
+ */
+const CHECKUP_GROUPS = new Set(["bp", "glucose", "lipid", "organ"]);
+const CHECKUP_EXTRA = new Set(["waist_cm"]);
+
+export const CHECKUP_FIELDS: ReadonlySet<string> = new Set(
+  FIELD_GROUPS.flatMap((group) =>
+    group.fields
+      .filter((field) => field.kind === "number")
+      .filter((field) => CHECKUP_GROUPS.has(group.key) || CHECKUP_EXTRA.has(field.name))
+      .map((field) => field.name),
+  ),
+);
 
 /** 라벨 옆에 붙일 단위. 카드가 "149" 만 띄우면 무엇의 149 인지 알 수 없다. */
 export const FIELD_UNITS: Record<string, string> = Object.fromEntries(

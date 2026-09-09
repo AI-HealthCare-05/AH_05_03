@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   calculateAgeFromBirthDate,
+  CHECKUP_FIELDS,
   profileGenderToSex,
   rejectedFields,
   valuesFromInputs,
@@ -98,3 +99,36 @@ describe("프로필 성별 → 폼 성별 변환", () => {
   });
 });
 
+/**
+ * 검진 수치 목록이 무엇을 담고 무엇을 안 담는가.
+ *
+ * 실측으로 항목별 변화 그래프에 **나이가 26 → 52 → 61 → 26** 으로 그려졌다.
+ * 프리셋을 바꿔 가며 판정한 흔적인데 그래프는 그걸 "나이가 오르내렸다" 로 보여 준다.
+ */
+describe("CHECKUP_FIELDS", () => {
+  it("검진결과지에 인쇄되는 값만 담는다", () => {
+    for (const name of ["hba1c", "total_chol", "hdl", "ldl", "triglyceride", "ast", "alt", "ggt", "uric_acid", "creatinine", "hemoglobin", "albumin", "urine_acr", "crp", "ogtt_2h"]) {
+      expect(CHECKUP_FIELDS.has(name), name).toBe(true);
+    }
+    // 허리둘레는 검진에서 잰다. 기본 그룹이지만 예외로 넣는다.
+    expect(CHECKUP_FIELDS.has("waist_cm")).toBe(true);
+  });
+
+  it("나이·키·주관 평가·생활습관·진단 이력은 담지 않는다", () => {
+    for (const name of [
+      "age",
+      "height_cm",
+      "self_rated_health",
+      "sleep_hours",
+      "alcohol_days_per_year",
+      "moderate_min_per_week",
+      "vigorous_min_per_week",
+      "sedentary_min_per_day",
+      "smoking_status",
+      "has_diabetes",
+      "is_fasting",
+    ]) {
+      expect(CHECKUP_FIELDS.has(name), name).toBe(false);
+    }
+  });
+});

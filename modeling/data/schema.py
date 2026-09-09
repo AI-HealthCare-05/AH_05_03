@@ -115,6 +115,10 @@ LABS = [
     "urine_acr",  # mg/g, 요알부민/크레아티닌비
     "cap_db_m",  # dB/m, 간 탄성초음파 감쇠계수 (측정 지방간 라벨의 근거)
     "casual_glucose",  # 공복 여부 불명. 진단 임계값을 적용하지 않는다
+    # 만성염증 라벨의 재료. **특징이 아니다** — `targets.py` 가 자기 타깃에서 차단하고
+    # 다른 타깃의 `LAB_FEATURES` 에도 넣지 않는다(주기 둘이 통째로 없고 국가건강검진
+    # 혈액 패널 밖이라 서빙에서 대부분 결측이다).
+    "crp",  # mg/L. 2005-2010 은 mg/dL 원본을 10 배 해 맞춘다
 ]
 
 # Self-reported status, used to build labels — never a model input.
@@ -148,6 +152,7 @@ LABELS = [
     "label_liver_enzyme_high",  # ALT 상승 — CAP 이 없는 주기의 대리 라벨
     "label_anemia",
     "label_obesity",  # BMI >= 25 (대한비만학회 2022 아시아-태평양 기준)
+    "label_chronic_inflammation",  # hs-CRP > 3 mg/L. 급성(>10)은 라벨에서 뺀다
     "label_hyperuricemia",  # 요산 >7.0(남) / >6.0(여) mg/dL
     "label_dm_incident",  # panel datasets only
     "label_htn_incident",  # panel datasets only

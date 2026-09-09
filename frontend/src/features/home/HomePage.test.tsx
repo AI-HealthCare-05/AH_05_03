@@ -27,7 +27,7 @@ describe("HomePage", () => {
 
     expect(await screen.findByRole("heading", { name: "나님의 건강기록" })).toBeInTheDocument();
     expect(screen.getByText("암호화 로컬 저장")).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "나님의 3D 인체" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "나님의 3D 인체" }, { timeout: 5000 })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "머리" }));
     expect(screen.getByText("선택한 부위").parentElement).toHaveTextContent("머리");
   });
@@ -199,7 +199,7 @@ describe("HomePage", () => {
     // 자세히를 누르면 그날 넣은 값과 질환별 등급 전부. 카드 원본이 없는 옛 기록이라
     // 등급만 남아 있다고 밝힌다.
     await user.click(screen.getByRole("button", { name: "자세히" }));
-    const modal = await screen.findByRole("dialog");
+    const modal = await screen.findByRole("dialog", {}, { timeout: 5000 });
     expect(within(modal).getByText("고혈압")).toBeInTheDocument();
     expect(within(modal).getByText("당뇨병")).toBeInTheDocument();
     expect(within(modal).getByText(/그날 넣은 값 4개/)).toBeInTheDocument();
@@ -211,7 +211,9 @@ describe("HomePage", () => {
     const user = userEvent.setup();
     const domainRef = renderHomePage();
     await createProfile(user, "엄마", "부모");
-
+    await waitFor(() => {
+      expect(domainRef.current?.profiles?.length).toBeGreaterThan(0);
+    });
     const profile = domainRef.current!.profiles[0];
     await domainRef.current!.runtime!.healthRecords.create({
       householdId: profile.householdId,
@@ -253,8 +255,8 @@ describe("HomePage", () => {
     await user.type(screen.getByRole("textbox", { name: "기록 내용" }), "메모");
     await user.click(screen.getByRole("button", { name: "기록 저장" }));
 
-    await user.click(await screen.findByRole("button", { name: "자세히" }));
-    const modal = await screen.findByRole("dialog");
+    await user.click(await screen.findByRole("button", { name: "자세히" }, { timeout: 5000 }));
+    const modal = await screen.findByRole("dialog", {}, { timeout: 5000 });
     // 등급 이름만이 아니라 그날 본 카드가 그대로 선다.
     expect(within(modal).getByText("고혈압 1기")).toBeInTheDocument();
     expect(within(modal).queryByText(/이 기록에는 등급만 남아 있어요/)).not.toBeInTheDocument();
@@ -330,7 +332,7 @@ async function createProfile(
   displayName: string,
   relationship: string,
 ) {
-  await user.click(await screen.findByRole("button", { name: "첫 구성원 등록" }));
+  await user.click(await screen.findByRole("button", { name: "첫 구성원 등록" }, { timeout: 5000 }));
   await user.type(screen.getByRole("textbox", { name: "이름 또는 호칭" }), displayName);
   await user.selectOptions(screen.getByRole("combobox", { name: "관계" }), relationship);
   await user.click(screen.getByRole("button", { name: "프로필 저장" }));
