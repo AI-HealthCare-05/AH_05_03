@@ -6,7 +6,9 @@ import { HealthAssistantDrawer, HealthMetricsTrendCard } from "./HealthAssistant
 import {
   containsNewMedicationRecord,
   extractMetricsFromRecords,
+  extractRegionHint,
   formatTargetDateTime,
+  isFacilityQuery,
   resolveHealthRecordDateTime,
   resolveMedicationTakenAt,
   shouldAutoSaveHealthRecord,
@@ -906,7 +908,10 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       expect(spySend).toHaveBeenCalledWith(
         expect.any(Array),
         expect.any(Function),
-        expect.objectContaining({ recent_records_summary: undefined }),
+        expect.objectContaining({
+          profile_id: "profile-1",
+          recent_records_summary: undefined,
+        }),
         undefined,
         undefined,
         undefined,
@@ -914,6 +919,64 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       );
     });
     expect(mockQueryRecords).not.toHaveBeenCalled();
+  });
+
+  it("서버 집계 결과가 있으면 같은 질문을 로컬 기록 조회로 다시 실행하지 않는다", async () => {
+    const spySend = vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "query_records",
+      assistant_message: "지난 3개월 동안 수축기 혈압이 140mmHg를 초과한 날은 총 7일입니다.",
+      health_record_query_result: {
+        record_type: "blood_pressure",
+        metric: "systolic",
+        unit: "mmHg",
+        operator: "gt",
+        threshold: 140,
+        period: {
+          date_from: "2026-06-08",
+          date_to: "2026-09-08",
+          timezone: "Asia/Seoul",
+        },
+        matched_days: 7,
+        matched_measurements: 9,
+        total_measurements: 42,
+        latest_matches: [{ date: "2026-09-03", value: 145 }],
+        message: "지난 3개월 동안 수축기 혈압이 140mmHg를 초과한 날은 총 7일입니다.",
+      },
+      query_draft: {
+        record_type: "blood_pressure",
+        time_range: "지난 3개월",
+      },
+      missing_fields: [],
+      needs_confirmation: false,
+      suggested_quick_replies: [],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={mockProfile}
+        runtime={mockRuntime}
+        isOpen={true}
+        onClose={mockOnClose}
+        onRecordSaved={mockOnRecordSaved}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), {
+      target: { value: "지난 3개월 동안 혈압 140을 넘은 날이 며칠이야?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    await waitFor(() => expect(spySend).toHaveBeenCalled());
+    expect(spySend.mock.calls[0][2]).toEqual(
+      expect.objectContaining({
+        profile_id: "profile-1",
+        recent_records_summary: undefined,
+      }),
+    );
+    expect(mockQueryRecords).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(/수축기 혈압이 140mmHg를 초과한 날은 총 7일/),
+    ).toBeInTheDocument();
   });
 
   it("누락 필드가 있거나 확인 준비가 되지 않은 초안에는 저장 카드를 표시하지 않는다", async () => {
@@ -1087,6 +1150,35 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     it("시각이 없거나 자정인 경우 'M월 D일'로 포맷팅한다", () => {
       const res = formatTargetDateTime("2022-05-30");
       expect(res).toBe("5월 30일");
+    });
+  });
+
+  describe("의료시설 질의 판별과 지역 추출", () => {
+    it("진료과·시설 표현을 시설 질의로 인식한다", () => {
+      expect(isFacilityQuery("근처 정형외과 찾아줘")).toBe(true);
+      expect(isFacilityQuery("흉부외과 알려줘")).toBe(true);
+      expect(isFacilityQuery("야간약국 어디야")).toBe(true);
+      expect(isFacilityQuery("오늘 점심 뭐 먹지")).toBe(false);
+    });
+
+    it("같은 문장을 다시 물어도 같은 결과를 준다", () => {
+      // /g 정규식으로 test() 를 부르면 lastIndex 가 남아 두 번째가 false 가 된다.
+      expect(isFacilityQuery("근처 내과")).toBe(true);
+      expect(isFacilityQuery("근처 내과")).toBe(true);
+    });
+
+    it("과목명을 통째로 걷어내 지역 표기만 남긴다", () => {
+      expect(extractRegionHint("강남역 정형외과 찾아줘")).toBe("강남역");
+      expect(extractRegionHint("종로구 한방병원 알려줘")).toBe("종로구");
+    });
+
+    it("지역 없이 진료과만 말하면 지역 표기가 남지 않는다", () => {
+      // "외과"가 먼저 걸리면 "흉부"가 지역명으로 남아, 위치 권한 없이도
+      // 지역을 입력한 것처럼 취급되고 결국 0건으로 끝난다.
+      expect(extractRegionHint("흉부외과 찾아줘")).toBe("");
+      expect(extractRegionHint("정형외과")).toBe("");
+      expect(extractRegionHint("심장혈관흉부외과 알려줘")).toBe("");
+      expect(extractRegionHint("근처 소아청소년과 추천")).toBe("");
     });
   });
 
@@ -1997,6 +2089,164 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       expect(screen.getByPlaceholderText("대화방 이름 입력")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "취소" })).toBeInTheDocument();
+    });
+  });
+
+  describe("대화 목록에서 삭제", () => {
+    const savedSession = {
+      id: "session-1",
+      account_id: "account-1",
+      profile_id: mockProfile.id,
+      title: "무릎 통증 상담",
+      created_at: "2026-09-07T00:00:00Z",
+      updated_at: "2026-09-08T00:00:00Z",
+    };
+    const otherSession = { ...savedSession, id: "session-2", title: "혈압 기록", updated_at: "2026-09-06T00:00:00Z" };
+
+    // 활성 세션(session-1)에 실제 대화가 실려야 삭제가 화면을 비우는지 볼 수 있다.
+    // 빈 배열을 주면 동기화 단계에서 이미 환영 메시지로 바뀌어 시험이 헛돈다.
+    const savedMessages = [
+      {
+        id: "db-1",
+        session_id: savedSession.id,
+        role: "user" as const,
+        content: "무릎이 아파요",
+        metadata: null,
+        sequence_number: 1,
+        created_at: "2026-09-08T00:00:00Z",
+      },
+      {
+        id: "db-2",
+        session_id: savedSession.id,
+        role: "assistant" as const,
+        content: "언제부터 아프셨나요?",
+        metadata: null,
+        sequence_number: 2,
+        created_at: "2026-09-08T00:00:01Z",
+      },
+    ];
+
+    function mockSessionList(messages: typeof savedMessages = []) {
+      vi.spyOn(clientModule, "listChatSessions").mockResolvedValue([savedSession, otherSession]);
+      vi.spyOn(clientModule, "listChatMessages").mockResolvedValue(messages);
+    }
+
+    async function openListWithSessions(messages: typeof savedMessages = []) {
+      mockSessionList(messages);
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={mockRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+        />,
+      );
+      const listBtn = screen.queryByRole("button", { name: "대화 목록" });
+      if (listBtn) {
+        fireEvent.click(listBtn);
+      }
+      await screen.findByRole("button", { name: "무릎 통증 상담 대화 삭제" });
+    }
+
+    it("대화마다 삭제 버튼을 제공하고, 누르면 바로 지우지 않고 확인을 먼저 받는다", async () => {
+      const deleteSpy = vi.spyOn(clientModule, "deleteChatSession").mockResolvedValue(undefined);
+      await openListWithSessions();
+
+      fireEvent.click(screen.getByRole("button", { name: "무릎 통증 상담 대화 삭제" }));
+
+      expect(screen.getByRole("alertdialog", { name: "대화 삭제 확인" })).toBeInTheDocument();
+      expect(deleteSpy).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: "취소" }));
+      expect(screen.queryByRole("alertdialog", { name: "대화 삭제 확인" })).not.toBeInTheDocument();
+      expect(deleteSpy).not.toHaveBeenCalled();
+    });
+
+    it("확인하면 해당 세션만 서버에서 지우고 목록에서 뺀다", async () => {
+      const deleteSpy = vi.spyOn(clientModule, "deleteChatSession").mockResolvedValue(undefined);
+      await openListWithSessions();
+
+      fireEvent.click(screen.getByRole("button", { name: "혈압 기록 대화 삭제" }));
+      fireEvent.click(screen.getByRole("button", { name: "삭제" }));
+
+      await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith("session-2"));
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: "혈압 기록 대화 삭제" })).not.toBeInTheDocument(),
+      );
+      expect(screen.getByRole("button", { name: "무릎 통증 상담 대화 삭제" })).toBeInTheDocument();
+    });
+
+    it("삭제가 실패하면 목록에 그대로 두고 안내를 띄운다", async () => {
+      vi.spyOn(clientModule, "deleteChatSession").mockRejectedValue(new Error("network"));
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      await openListWithSessions();
+
+      fireEvent.click(screen.getByRole("button", { name: "혈압 기록 대화 삭제" }));
+      fireEvent.click(screen.getByRole("button", { name: "삭제" }));
+
+      expect(await screen.findByText(/대화를 삭제하지 못했습니다/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "혈압 기록 대화 삭제" })).toBeInTheDocument();
+    });
+
+    it("열려 있지 않은 대화를 지워도 보고 있던 대화는 그대로 둔다", async () => {
+      vi.spyOn(clientModule, "deleteChatSession").mockResolvedValue(undefined);
+      await openListWithSessions(savedMessages);
+      await screen.findByText("무릎이 아파요");
+
+      fireEvent.click(screen.getByRole("button", { name: "혈압 기록 대화 삭제" }));
+      fireEvent.click(screen.getByRole("button", { name: "삭제" }));
+
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: "혈압 기록 대화 삭제" })).not.toBeInTheDocument(),
+      );
+      expect(screen.getByText("무릎이 아파요")).toBeInTheDocument();
+    });
+
+    it("열려 있던 대화를 지우면 화면과 로컬 캐시를 함께 비운다", async () => {
+      vi.spyOn(clientModule, "deleteChatSession").mockResolvedValue(undefined);
+      // 동기화가 최신 세션(session-1)을 활성으로 잡고 그 대화를 화면에 올린다.
+      await openListWithSessions(savedMessages);
+      await screen.findByText("무릎이 아파요");
+
+      fireEvent.click(screen.getByRole("button", { name: "무릎 통증 상담 대화 삭제" }));
+      fireEvent.click(screen.getByRole("button", { name: "삭제" }));
+
+      await waitFor(() => expect(screen.queryByText("무릎이 아파요")).not.toBeInTheDocument());
+      expect(screen.getByText(/안녕하세요! 홍길동님의 건강 비서/)).toBeInTheDocument();
+      expect(loadChatSession(mockProfile.id) ?? []).not.toContainEqual(
+        expect.objectContaining({ content: "무릎이 아파요" }),
+      );
+    });
+
+    it("활성 대화를 지운 뒤 보내는 메시지는 삭제된 세션이 아니라 새 세션으로 간다", async () => {
+      vi.spyOn(clientModule, "deleteChatSession").mockResolvedValue(undefined);
+      const createSpy = vi
+        .spyOn(clientModule, "createChatSession")
+        .mockResolvedValue({ ...savedSession, id: "session-new", title: null });
+      const streamSpy = vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValue({
+        intent: "general_chat",
+        assistant_message: "네, 말씀해 주세요.",
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: [],
+      });
+      await openListWithSessions(savedMessages);
+      await screen.findByText("무릎이 아파요");
+
+      fireEvent.click(screen.getByRole("button", { name: "무릎 통증 상담 대화 삭제" }));
+      fireEvent.click(screen.getByRole("button", { name: "삭제" }));
+      await waitFor(() => expect(screen.queryByText("무릎이 아파요")).not.toBeInTheDocument());
+
+      fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), {
+        target: { value: "다시 물어볼게요" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      // 삭제된 세션 id 를 재사용하면 서버가 404 를 돌려주고 대화가 저장되지 않는다.
+      await waitFor(() => expect(createSpy).toHaveBeenCalledWith(mockProfile.id));
+      await waitFor(() => expect(streamSpy).toHaveBeenCalled());
+      expect(streamSpy.mock.calls[0][4]).toBe("session-new");
+      expect(streamSpy.mock.calls[0][4]).not.toBe(savedSession.id);
     });
   });
 });

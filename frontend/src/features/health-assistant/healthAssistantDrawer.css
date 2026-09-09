@@ -151,7 +151,8 @@
   background: #f8fafc;
 }
 
-.chat-session-select-btn {
+.chat-session-select-btn,
+.chat-session-list li .chat-session-open {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -168,22 +169,48 @@
 }
 
 .chat-session-select-btn:hover,
-.chat-session-select-btn.active {
+.chat-session-select-btn.active,
+.chat-session-list li .chat-session-open:hover,
+.chat-session-list li .chat-session-open.active {
   background: #ecfdf5;
 }
 
-.chat-session-select-btn strong {
+.chat-session-select-btn strong,
+.chat-session-list li strong {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 14px;
 }
 
-.chat-session-select-btn time {
+.chat-session-select-btn time,
+.chat-session-list li time {
   color: #94a3b8;
   font-size: 11px;
   white-space: nowrap;
 }
+
+.chat-session-list li .chat-session-delete {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.chat-session-list li .chat-session-delete:hover,
+.chat-session-list li .chat-session-delete:focus-visible {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.chat-session-confirm { margin: 0 0 10px; }
 
 .chat-session-actions-wrap {
   position: relative;
@@ -303,6 +330,7 @@
 .rename-cancel-btn:hover {
   background: #f1f5f9;
 }
+
 
 .chat-session-empty { padding: 52px 20px; text-align: center; color: #334155; }
 
