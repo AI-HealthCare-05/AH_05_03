@@ -26,8 +26,11 @@ from app.dtos.health_assistant import (
 from app.models.service_accounts import ServiceAccount
 from app.repositories.chat_session_repository import ChatSessionRepository
 from app.repositories.health_record_repository import HealthRecordRepository
+from app.repositories.household_repository import HouseholdRepository
+from app.repositories.profile_repository import ProfileRepository
 from app.services.chat_session_service import ChatSessionService
 from app.services.health_assistant import HealthAssistantService
+from app.services.health_records import HealthRecordService
 from app.services.rate_limit import RateLimiter
 
 health_assistant_router = APIRouter(prefix="/health-assistant", tags=["health-assistant"])
@@ -49,9 +52,18 @@ _ERRORS = (
 def get_health_assistant_service(
     session: SessionDep,
 ) -> HealthAssistantService:
+    record_repo = HealthRecordRepository(session)
+    record_service = HealthRecordService(
+        session=session,
+        record_repo=record_repo,
+        profile_repo=ProfileRepository(session),
+        household_repo=HouseholdRepository(session),
+    )
     return HealthAssistantService(
-        record_repo=HealthRecordRepository(session),
+        health_record_service=record_service,
         chat_session_repo=ChatSessionRepository(session),
+        profile_repo=ProfileRepository(session),
+        household_repo=HouseholdRepository(session),
     )
 
 

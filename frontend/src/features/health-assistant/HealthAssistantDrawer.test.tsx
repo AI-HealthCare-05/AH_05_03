@@ -906,7 +906,10 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       expect(spySend).toHaveBeenCalledWith(
         expect.any(Array),
         expect.any(Function),
-        expect.objectContaining({ recent_records_summary: undefined }),
+        expect.objectContaining({
+          profile_id: "profile-1",
+          recent_records_summary: undefined,
+        }),
         undefined,
         undefined,
         undefined,
@@ -914,6 +917,64 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       );
     });
     expect(mockQueryRecords).not.toHaveBeenCalled();
+  });
+
+  it("서버 집계 결과가 있으면 같은 질문을 로컬 기록 조회로 다시 실행하지 않는다", async () => {
+    const spySend = vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "query_records",
+      assistant_message: "지난 3개월 동안 수축기 혈압이 140mmHg를 초과한 날은 총 7일입니다.",
+      health_record_query_result: {
+        record_type: "blood_pressure",
+        metric: "systolic",
+        unit: "mmHg",
+        operator: "gt",
+        threshold: 140,
+        period: {
+          date_from: "2026-06-08",
+          date_to: "2026-09-08",
+          timezone: "Asia/Seoul",
+        },
+        matched_days: 7,
+        matched_measurements: 9,
+        total_measurements: 42,
+        latest_matches: [{ date: "2026-09-03", value: 145 }],
+        message: "지난 3개월 동안 수축기 혈압이 140mmHg를 초과한 날은 총 7일입니다.",
+      },
+      query_draft: {
+        record_type: "blood_pressure",
+        time_range: "지난 3개월",
+      },
+      missing_fields: [],
+      needs_confirmation: false,
+      suggested_quick_replies: [],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={mockProfile}
+        runtime={mockRuntime}
+        isOpen={true}
+        onClose={mockOnClose}
+        onRecordSaved={mockOnRecordSaved}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), {
+      target: { value: "지난 3개월 동안 혈압 140을 넘은 날이 며칠이야?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    await waitFor(() => expect(spySend).toHaveBeenCalled());
+    expect(spySend.mock.calls[0][2]).toEqual(
+      expect.objectContaining({
+        profile_id: "profile-1",
+        recent_records_summary: undefined,
+      }),
+    );
+    expect(mockQueryRecords).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(/수축기 혈압이 140mmHg를 초과한 날은 총 7일/),
+    ).toBeInTheDocument();
   });
 
   it("누락 필드가 있거나 확인 준비가 되지 않은 초안에는 저장 카드를 표시하지 않는다", async () => {
