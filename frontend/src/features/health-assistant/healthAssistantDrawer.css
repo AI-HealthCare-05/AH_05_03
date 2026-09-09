@@ -7,11 +7,21 @@
   z-index: 1000;
   display: flex;
   justify-content: flex-end;
-  animation: fadeIn 0.2s ease-out;
+  animation: fadeIn 0.25s ease-out;
 }
+
+.health-assistant-backdrop.closing {
+  animation: fadeOut 0.22s ease-in forwards;
+}
+
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 /* 슬라이딩 드로어 패널 */
@@ -24,7 +34,22 @@
   display: flex;
   flex-direction: column;
   position: relative;
-  animation: slideLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+  animation: slideLeft 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.health-assistant-drawer.closing {
+  animation: slideRight 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideLeft {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slideRight {
+  from { transform: translateX(0); }
+  to { transform: translateX(100%); }
 }
 
 /* 임베드 모드: 빠른 작업 밑에 자연스럽게 들어가는 카드형 인터페이스 */
@@ -45,15 +70,22 @@
   overflow: hidden;
 }
 
-/* 카카오톡처럼 먼저 대화방을 고르고, 없으면 여기서 새 대화를 만든다. */
+/* 대화 세션 목록 패널 */
 .chat-session-list {
   position: absolute;
   z-index: 2;
   inset: 71px 0 0;
   overflow-y: auto;
   background: #ffffff;
-  padding: 18px 16px;
+  padding: 12px 16px;
+  animation: listFadeIn 0.2s ease-out;
 }
+
+@keyframes listFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 
 .chat-session-list-heading {
   display: flex;
@@ -102,8 +134,26 @@
 
 .chat-session-list li + li { border-top: 1px solid #f1f5f9; }
 
-.chat-session-list li button {
+.chat-session-item {
+  position: relative;
+}
+
+.chat-session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   width: 100%;
+  border-radius: 8px;
+  transition: background-color 0.15s ease;
+}
+
+.chat-session-row:hover {
+  background: #f8fafc;
+}
+
+.chat-session-select-btn {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -117,10 +167,142 @@
   cursor: pointer;
 }
 
-.chat-session-list li button:hover,
-.chat-session-list li button.active { background: #ecfdf5; }
-.chat-session-list li strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-session-list li time { color: #94a3b8; font-size: 11px; white-space: nowrap; }
+.chat-session-select-btn:hover,
+.chat-session-select-btn.active {
+  background: #ecfdf5;
+}
+
+.chat-session-select-btn strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.chat-session-select-btn time {
+  color: #94a3b8;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.chat-session-actions-wrap {
+  position: relative;
+  padding-right: 6px;
+}
+
+.chat-session-kebab-btn {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 15px;
+  font-weight: bold;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chat-session-kebab-btn:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.chat-session-menu-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 120px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-session-menu-item {
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.chat-session-menu-item:hover {
+  background: #f1f5f9;
+}
+
+.chat-session-menu-item.danger {
+  color: #ef4444;
+}
+
+.chat-session-menu-item.danger:hover {
+  background: #fef2f2;
+}
+
+.chat-session-rename-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px;
+  width: 100%;
+}
+
+.chat-session-rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid #059669;
+  border-radius: 6px;
+  outline: none;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+.chat-session-rename-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.rename-save-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 0;
+  border-radius: 6px;
+  background: #059669;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.rename-save-btn:hover {
+  background: #047857;
+}
+
+.rename-cancel-btn {
+  padding: 6px 10px;
+  font-size: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.rename-cancel-btn:hover {
+  background: #f1f5f9;
+}
 
 .chat-session-empty { padding: 52px 20px; text-align: center; color: #334155; }
 
@@ -167,25 +349,22 @@
 
 .assistant-header-title h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #0f172a;
-}
-
-.assistant-header-title p {
-  margin: 2px 0 0 0;
   display: flex;
-  gap: 6px;
   align-items: center;
-  font-size: 12px;
+  gap: 8px;
 }
 
 .target-profile-pill {
   background-color: #e0e7ff;
   color: #3730a3;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 4px;
+  font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .privacy-pill {
@@ -218,6 +397,25 @@
   background: #f1f5f9;
   border-color: #94a3b8;
   color: #1e293b;
+}
+
+.assistant-new-chat-header-btn {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #059669;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.assistant-new-chat-header-btn:hover {
+  background: #059669;
+  border-color: #059669;
+  color: #ffffff;
 }
 
 .assistant-close-btn,

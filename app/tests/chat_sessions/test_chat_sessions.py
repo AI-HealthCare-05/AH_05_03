@@ -67,6 +67,26 @@ class TestChatSessionsApi:
         assert get_res.status_code == status.HTTP_404_NOT_FOUND
         assert get_res.json()["error_code"] == "CHAT_SESSION_NOT_FOUND"
 
+    async def test_update_chat_session_title(self, authorized_client: AsyncClient) -> None:
+        create_res = await authorized_client.post(
+            "/api/v1/chat-sessions",
+            json={"profile_id": "profile-update", "title": "수정 전 제목"},
+        )
+        session_id = create_res.json()["data"]["id"]
+
+        patch_res = await authorized_client.patch(
+            f"/api/v1/chat-sessions/{session_id}",
+            json={"title": "수정 후 새로운 제목"},
+        )
+        assert patch_res.status_code == status.HTTP_200_OK
+        patch_body = patch_res.json()
+        assert patch_body["success"] is True
+        assert patch_body["data"]["title"] == "수정 후 새로운 제목"
+
+        get_res = await authorized_client.get(f"/api/v1/chat-sessions/{session_id}")
+        assert get_res.status_code == status.HTTP_200_OK
+        assert get_res.json()["data"]["title"] == "수정 후 새로운 제목"
+
     async def test_messages_sequence_and_history(self, authorized_client: AsyncClient) -> None:
         create_res = await authorized_client.post(
             "/api/v1/chat-sessions",

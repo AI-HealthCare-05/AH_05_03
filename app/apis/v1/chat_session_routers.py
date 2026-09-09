@@ -12,6 +12,7 @@ from app.dtos.chat_session import (
     ChatSessionCreateRequest,
     ChatSessionListData,
     ChatSessionResponse,
+    ChatSessionUpdateRequest,
 )
 from app.dtos.envelope import ApiResponse, error_responses
 from app.models.service_accounts import ServiceAccount
@@ -87,6 +88,29 @@ async def get_chat_session(
     return ApiResponse(
         data=ChatSessionResponse.model_validate(session),
         message="대화 세션을 조회했습니다.",
+    )
+
+
+@chat_session_router.patch(
+    "/{session_id}",
+    response_model=ApiResponse[ChatSessionResponse],
+    responses=error_responses(*_AUTH_ERRORS),
+    summary="대화 세션 제목 수정",
+)
+async def update_chat_session(
+    session_id: uuid.UUID,
+    request: ChatSessionUpdateRequest,
+    account: Annotated[ServiceAccount, Depends(require_active_account)],
+    service: Annotated[ChatSessionService, Depends(ChatSessionService)],
+) -> ApiResponse[ChatSessionResponse]:
+    session = await service.update_session_title(
+        account=account,
+        session_id=session_id,
+        title=request.title,
+    )
+    return ApiResponse(
+        data=ChatSessionResponse.model_validate(session),
+        message="대화 세션 제목을 수정했습니다.",
     )
 
 

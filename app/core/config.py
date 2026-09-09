@@ -177,6 +177,10 @@ class Config(BaseSettings):
     EMERGENCY_MEDICAL_API_KEY: str | None = None
     HOSPITAL_INFO_API_KEY: str | None = None
     PHARMACY_INFO_API_KEY: str | None = None
+    # 식품의약품안전처(MFDS) API 키. e약은요(의약품 기본정보) + DUR(품목정보) 조회에 사용.
+    # 공공데이터포털(data.go.kr)의 일반 인증키와 동일하며, MFDS_API_KEY 가 없으면
+    # 의약품 툴콜링이 조용히 꺼진다 (서비스 중단 없음).
+    MFDS_API_KEY: str | None = None
     # 카카오 로컬 REST API 키 (병원/약국 초고속 검색용).
     KAKAO_REST_API_KEY: str | None = None
     # OpenAI 예비 경로. **비어 있으면 그냥 꺼진 상태다** — 아래 `DEV_OCR_MODELS` 에

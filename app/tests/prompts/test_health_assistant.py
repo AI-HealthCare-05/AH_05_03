@@ -29,3 +29,17 @@ def test_build_system_instruction_forbids_claiming_location_was_checked() -> Non
     instruction = build_system_instruction()
 
     assert "실제 위치를 확인하거나 날씨·대기질을 조회한 것처럼 말하지 마세요" in instruction
+
+
+def test_build_system_instruction_contains_health_condition_guidance() -> None:
+    instruction = build_system_instruction()
+
+    assert "대화 맥락 및 지속적 건강 상태(임신, 수유, 만성질환 등) 연계 안내" in instruction
+    assert "이전 대화 세션 기록" not in instruction
+
+
+def test_build_system_instruction_contains_supplement_guidance() -> None:
+    instruction = build_system_instruction()
+
+    assert "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다" in instruction
+    assert "일반적으로는 ~" in instruction

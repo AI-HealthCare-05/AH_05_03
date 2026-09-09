@@ -9,6 +9,7 @@ export interface ChatMessage {
 }
 
 export interface ProfileContext {
+  profile_id?: string;
   profile_name: string;
   relationship?: string;
   birth_year?: number;
@@ -228,6 +229,10 @@ export async function listChatSessions(profileId?: string): Promise<ChatSessionD
 
 export async function listChatMessages(sessionId: string): Promise<ChatMessageData[]> {
   return serverApiClient.listChatMessages(sessionId);
+}
+
+export async function updateChatSession(sessionId: string, title: string): Promise<ChatSessionData> {
+  return serverApiClient.updateChatSession(sessionId, title);
 }
 
 export async function deleteChatSession(sessionId: string): Promise<void> {
