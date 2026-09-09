@@ -181,7 +181,7 @@ class MedicationClient:
                 logger.warning("e약은요 API 오류 (%s): %s", type(exc).__name__, safe_err)
                 errors.append(f"의약품 기본 정보 조회 실패: {type(exc).__name__}")
 
-            # 2) DUR API — 병용금기·연령금기·임부금기
+            # 2) DUR 품목정보 API — 해당 약품의 연령금기·임부금기·용량주의 등
             try:
                 extra_params_dur = urllib.parse.urlencode(
                     {"itemName": clean_name, "type": "json", "numOfRows": "10", "pageNo": "1"}
@@ -201,7 +201,7 @@ class MedicationClient:
             except Exception as exc:
                 safe_err = _mask_credentials(str(exc), api_key)
                 logger.warning("DUR API 오류 (%s): %s", type(exc).__name__, safe_err)
-                errors.append(f"DUR 병용금기 조회 실패: {type(exc).__name__}")
+                errors.append(f"DUR 품목정보 조회 실패: {type(exc).__name__}")
 
         result = MedicationSearchResult(
             query=drug_name,

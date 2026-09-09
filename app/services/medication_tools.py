@@ -12,9 +12,9 @@ from app.services.medication_client import MedicationClientProtocol
 MEDICATION_TOOL_DECLARATION = types.FunctionDeclaration(
     name="search_medication_info",
     description=(
-        "사용자가 특정 의약품의 효능·효과, 용법·용량, 부작용, 주의사항 또는 "
-        "두 가지 이상 약품의 병용 가능 여부(DUR 병용금기)를 물어볼 때 호출합니다. "
-        "식약처 e약은요 API와 DUR API를 통해 공식 데이터를 조회합니다. "
+        "사용자가 특정 의약품의 효능·효과, 용법·용량, 부작용, 주의사항을 물어볼 때 호출합니다. "
+        "식약처 e약은요 API와 DUR 품목정보 API를 통해 공식 허가 데이터를 조회합니다. "
+        "한 번에 한 가지 약품만 조회할 수 있으므로, 약품명이 여러 개이면 가장 핵심 약품 하나만 선택하세요. "
         "날씨, 대기질, 운동, 식단, 병원 찾기 등 의약품과 무관한 대화에서는 절대 호출하지 마세요. "
         "약품명이 명확하지 않으면 먼저 약품명을 사용자에게 확인하세요."
     ),

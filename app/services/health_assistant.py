@@ -180,7 +180,7 @@ class HealthAssistantService:
 
     자연어 입력을 분석하여 건강기록(운동, 혈압, 혈당, 복약, 통증 등) 추출,
     기록 조회 의도 분류, 주변 의료시설(응급실, 병원, 약국) 도구 호출(Tool Calling),
-    식약처 의약품 정보·병용금기(DUR) 조회, 안전 가이드라인 기반 상담 응답을 생성합니다.
+    식약처 의약품 정보·DUR 품목정보 조회, 안전 가이드라인 기반 상담 응답을 생성합니다.
     """
 
     def __init__(
@@ -207,10 +207,10 @@ class HealthAssistantService:
 
     @staticmethod
     def _needs_medication_info(request: HealthAssistantChatRequest) -> bool:
-        """의약품 정보·병용금기 조회가 실제로 필요한 질문인지 판별한다.
+        """의약품 허가정보(효능·부작용·주의사항) 조회가 실제로 필요한 질문인지 판별한다.
 
         - 단순 복약 기록 발화("저녁 8시에 타이레놀 1알 복용했어", "혈압약 먹음")는 기록 의도이므로 검색 도구를 부르지 않는다.
-        - 효능, 부작용, 복용법, 병용금기 등을 묻는 질문형 발화에만 검색 도구를 활성화한다.
+        - 효능, 부작용, 복용법, 주의사항 등을 묻는 질문형 발화에만 검색 도구를 활성화한다.
         """
         if not request.messages:
             return False

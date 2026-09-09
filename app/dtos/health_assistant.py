@@ -219,7 +219,7 @@ class HealthAssistantResponse(BaseModel):
     )
     medication_search_result: MedicationSearchResult | None = Field(
         default=None,
-        description="식약처 e약은요·DUR API로 조회한 의약품 정보 및 병용금기 결과",
+        description="식약처 e약은요·DUR 품목정보 API로 조회한 의약품 허가 정보",
     )
     missing_fields: list[str] = Field(
         default_factory=list, description="초안 완성을 위해 사용자에게 추가 확인이 필요한 필드 목록"

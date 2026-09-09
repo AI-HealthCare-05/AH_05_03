@@ -1,4 +1,4 @@
-"""식약처 의약품 정보 및 DUR 병용금기 조회 결과 DTO."""
+"""식약처 의약품 정보 및 DUR 품목정보 조회 결과 DTO."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class DurItem(BaseModel):
     """DUR 금기 항목 하나."""
 
-    prohibition_type: str = Field(description="금기 유형 (병용금기, 연령금기, 임부금기, 노인주의 등)")
+    prohibition_type: str = Field(description="DUR 금기 유형 (연령금기, 임부금기, 노인주의, 용량주의 등)")
     ingredient_name: str | None = Field(default=None, description="금기 상대 성분명")
     reason: str | None = Field(default=None, description="금기 사유 설명")
 
