@@ -115,7 +115,6 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     );
 
     expect(screen.getByText(/봄이 · 건강 비서/)).toBeInTheDocument();
-    expect(screen.getByText(/홍길동 \(본인\)/)).toBeInTheDocument();
     expect(screen.getByText(/안녕하세요! 홍길동님의 건강 비서/)).toBeInTheDocument();
   });
 

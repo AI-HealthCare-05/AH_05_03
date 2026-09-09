@@ -678,13 +678,12 @@ export function HomePage() {
             </div>
 
             <div className="metric-grid">
-              <MetricCard label="저장된 기록" value={`${summary?.totalRecords ?? 0}건`} helper="암호화 로컬 저장" />
+              <MetricCard label="저장된 기록" value={`${summary?.totalRecords ?? 0}건`} />
               <MetricCard
                 label="최근 기록"
                 value={summary?.latestRecordedAt ? formatDate(summary.latestRecordedAt) : "아직 없음"}
-                helper="이 브라우저 기준"
               />
-              <MetricCard label="프로필 상태" value="안전" helper="서버 전송 없음" tone="safe" />
+              <MetricCard label="프로필 상태" value="안전" tone="safe" />
             </div>
 
             <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
@@ -1340,12 +1339,12 @@ function DashboardSkeleton() {
   return <div className="dashboard-skeleton" aria-label="로컬 프로필 불러오는 중"><span /><span /><span /></div>;
 }
 
-function MetricCard({ label, value, helper, tone }: { label: string; value: string; helper: string; tone?: "safe" }) {
+function MetricCard({ label, value, helper, tone }: { label: string; value: string; helper?: string; tone?: "safe" }) {
   return (
     <article className={tone === "safe" ? "metric-card is-safe" : "metric-card"}>
       <span>{label}</span>
       <strong>{value}</strong>
-      <small>{helper}</small>
+      {helper ? <small>{helper}</small> : null}
     </article>
   );
 }

@@ -26,7 +26,7 @@ describe("HomePage", () => {
     await user.click(screen.getByRole("button", { name: "프로필 저장" }));
 
     expect(await screen.findByRole("heading", { name: "나님의 건강기록" })).toBeInTheDocument();
-    expect(screen.getByText("암호화 로컬 저장")).toBeInTheDocument();
+    expect(screen.getByText("저장된 기록")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "나님의 3D 인체" }, { timeout: 5000 })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "머리" }));
     expect(screen.getByText("선택한 부위").parentElement).toHaveTextContent("머리");
