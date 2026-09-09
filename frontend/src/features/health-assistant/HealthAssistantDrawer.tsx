@@ -9,6 +9,7 @@ import { GeminiOcrAdapter } from "../../shared/api/geminiOcrAdapter";
 import {
   streamHealthAssistantMessage,
   createChatSession,
+  deleteChatSession,
   listChatSessions,
   listChatMessages,
   type ChatSessionData,
@@ -48,6 +49,7 @@ import {
   normalizeBloodGlucoseTiming,
   removeMedicationSavePrompt,
   reviewItemsToText,
+  clearChatSession,
   loadChatSession,
   saveChatSession,
   createWelcomeMessage,
@@ -192,6 +194,9 @@ export function HealthAssistantDrawer({
   const [input, setInput] = useState("");
   const [chatSessions, setChatSessions] = useState<ChatSessionData[]>([]);
   const [showSessionList, setShowSessionList] = useState(true);
+  // 삭제는 되돌릴 수 없어 목록 안에서 한 번 더 확인받는다.
+  const [pendingDeleteSessionId, setPendingDeleteSessionId] = useState<string | null>(null);
+  const [deletingSession, setDeletingSession] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -307,6 +312,9 @@ export function HealthAssistantDrawer({
     setActiveSessionId(null);
     skipNextCacheWriteRef.current = true;
     setShowSessionList(true);
+    // 확인을 띄워 둔 채 구성원을 바꾸면 다른 사람의 대화에 삭제가 걸린다.
+    setPendingDeleteSessionId(null);
+    setDeletingSession(false);
 
     const saved = loadChatSession(currentProfileId);
     setMessages(saved && saved.length > 0 ? saved : [createWelcomeMessage(profileDisplayName)]);
@@ -386,6 +394,44 @@ export function HealthAssistantDrawer({
       setShowSessionList(false);
     } catch (err) {
       console.warn("새 대화 세션 생성 실패:", err);
+    }
+  }
+
+  /**
+   * 대화 삭제. 서버가 지운 뒤에만 목록에서 뺀다 — 먼저 지우면 실패했을 때
+   * 화면에서만 사라진 대화가 새로고침에 되살아난다.
+   */
+  async function handleDeleteChat(session: ChatSessionData) {
+    if (!profile || deletingSession) return;
+    setDeletingSession(true);
+    setError(undefined);
+
+    try {
+      await deleteChatSession(session.id);
+    } catch (err) {
+      console.warn("대화 세션 삭제 실패:", err);
+      setError("대화를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setDeletingSession(false);
+      return;
+    }
+
+    setChatSessions((previous) => previous.filter((item) => item.id !== session.id));
+    setPendingDeleteSessionId(null);
+    setDeletingSession(false);
+
+    // 열려 있던 대화를 지웠으면 화면과 로컬 캐시도 같이 비운다. 남겨 두면
+    // 서버에 없는 대화가 계속 보이고 다음 메시지가 삭제된 세션으로 나간다.
+    if (activeSessionIdRef.current === session.id) {
+      activeSessionIdRef.current = null;
+      setActiveSessionId(null);
+      // 최초 동기화 프로미스는 방금 지운 세션 id 로 이미 확정돼 있다. 남겨 두면
+      // 다음 전송이 그 id 를 되찾아 없는 세션에 메시지를 밀어 넣는다.
+      sessionSyncPromiseRef.current = null;
+      clearChatSession(profile.id);
+      setMessages([createWelcomeMessage(profile.displayName)]);
+      setSelectedImage(null);
+      setImagePreview(null);
+      setShowSessionList(true);
     }
   }
 
@@ -1479,18 +1525,70 @@ export function HealthAssistantDrawer({
               </div>
             ) : (
               <ul>
-                {chatSessions.map((session) => (
-                  <li key={session.id}>
-                    <button
-                      type="button"
-                      className={activeSessionId === session.id ? "active" : ""}
-                      onClick={() => void handleSelectChat(session)}
-                    >
-                      <strong>{session.title || "새 건강 상담"}</strong>
-                      <time dateTime={session.updated_at}>{new Date(session.updated_at).toLocaleDateString("ko-KR")}</time>
-                    </button>
-                  </li>
-                ))}
+                {chatSessions.map((session) => {
+                  const sessionTitle = session.title || "새 건강 상담";
+                  return (
+                    <li key={session.id}>
+                      <div className="chat-session-row">
+                        <button
+                          type="button"
+                          className={`chat-session-open${activeSessionId === session.id ? " active" : ""}`}
+                          onClick={() => void handleSelectChat(session)}
+                        >
+                          <strong>{sessionTitle}</strong>
+                          <time dateTime={session.updated_at}>
+                            {new Date(session.updated_at).toLocaleDateString("ko-KR")}
+                          </time>
+                        </button>
+                        <button
+                          type="button"
+                          className="chat-session-delete"
+                          aria-label={`${sessionTitle} 대화 삭제`}
+                          onClick={() => setPendingDeleteSessionId(session.id)}
+                        >
+                          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+                            <path
+                              d="M6.5 1.5h3M2.5 3.5h11M4.5 3.5l.6 10a1 1 0 0 0 1 .95h3.8a1 1 0 0 0 1-.95l.6-10M6.6 6.5v5.2M9.4 6.5v5.2"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                      {pendingDeleteSessionId === session.id && (
+                        <div
+                          className="inline-confirmation chat-session-confirm"
+                          role="alertdialog"
+                          aria-label="대화 삭제 확인"
+                        >
+                          <p>
+                            <strong>{sessionTitle}</strong> 대화를 삭제할까요? 주고받은 내용은 되돌릴 수 없습니다.
+                          </p>
+                          <div className="form-actions">
+                            <button
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => setPendingDeleteSessionId(null)}
+                            >
+                              취소
+                            </button>
+                            <button
+                              type="button"
+                              className="danger-button"
+                              disabled={deletingSession}
+                              onClick={() => void handleDeleteChat(session)}
+                            >
+                              {deletingSession ? "삭제 중…" : "삭제"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </section>
