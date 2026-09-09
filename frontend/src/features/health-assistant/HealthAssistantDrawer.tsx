@@ -60,6 +60,7 @@ import {
   getLastOpenedProfileId,
   setLastOpenedProfileId,
 } from "./healthAssistantLogic";
+import { FoodNutritionCard } from "./FoodNutritionCard";
 import "./healthAssistantDrawer.css";
 
 /**
@@ -1964,6 +1965,11 @@ export function HealthAssistantDrawer({
                     saved={Boolean(msg.saved)}
                     onSave={() => saveChallenge()}
                   />
+                )}
+
+                {/* 식품영양성분 카드 */}
+                {msg.responseDraft?.food_nutrition_search_result && msg.role === "assistant" && (
+                  <FoodNutritionCard searchResult={msg.responseDraft.food_nutrition_search_result} />
                 )}
 
 

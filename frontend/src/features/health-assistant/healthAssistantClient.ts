@@ -161,6 +161,28 @@ export interface AirQualityConditions {
   pm25_grade?: string | null;
 }
 
+export interface FoodNutritionItem {
+  food_name: string;
+  serving_size?: string | null;
+  calories_kcal?: number | null;
+  carbohydrate_g?: number | null;
+  protein_g?: number | null;
+  fat_g?: number | null;
+  sugar_g?: number | null;
+  sodium_mg?: number | null;
+  cholesterol_mg?: number | null;
+  saturated_fat_g?: number | null;
+  trans_fat_g?: number | null;
+  maker_name?: string | null;
+}
+
+export interface FoodNutritionSearchResult {
+  query: string;
+  items: FoodNutritionItem[];
+  message: string;
+  errors: string[];
+}
+
 export interface OutdoorConditionsResult {
   latitude: number;
   longitude: number;
@@ -217,6 +239,7 @@ export interface HealthAssistantResponse {
   health_record_query_result?: HealthRecordQueryResult | null;
   facility_search_draft?: FacilitySearchResult | null;
   outdoor_conditions?: OutdoorConditionsResult | null;
+  food_nutrition_search_result?: FoodNutritionSearchResult | null;
   missing_fields: string[];
   needs_confirmation: boolean;
   auto_save?: boolean;
@@ -267,6 +290,7 @@ export async function streamHealthAssistantMessage(
   sessionId?: string,
   userLocation?: UserLocation,
   onFacility?: (result: FacilitySearchResult) => void,
+  onFoodNutrition?: (result: FoodNutritionSearchResult) => void,
 ): Promise<HealthAssistantResponse> {
   let final: HealthAssistantResponse | undefined;
   let failure: string | undefined;
@@ -281,6 +305,7 @@ export async function streamHealthAssistantMessage(
     (event, data) => {
       if (event === "delta" && typeof data.text === "string") onDelta(data.text);
       else if (event === "facility") onFacility?.(data as unknown as FacilitySearchResult);
+      else if (event === "food_nutrition") onFoodNutrition?.(data as unknown as FoodNutritionSearchResult);
       else if (event === "result") final = data as unknown as HealthAssistantResponse;
       else if (event === "error" && typeof data.message === "string") failure = data.message;
     },

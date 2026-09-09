@@ -3,6 +3,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.dtos.food_nutrition import FoodNutritionSearchResult
 from app.dtos.health_record_query import HealthRecordQueryResult
 from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.medication import MedicationSearchResult
@@ -225,6 +226,10 @@ class HealthAssistantResponse(BaseModel):
     medication_search_result: MedicationSearchResult | None = Field(
         default=None,
         description="식약처 e약은요·DUR 품목정보 API로 조회한 의약품 허가 정보",
+    )
+    food_nutrition_search_result: FoodNutritionSearchResult | None = Field(
+        default=None,
+        description="식약처 식품영양성분 데이터베이스로 조회한 식품 영양 정보",
     )
     missing_fields: list[str] = Field(
         default_factory=list, description="초안 완성을 위해 사용자에게 추가 확인이 필요한 필드 목록"

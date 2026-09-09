@@ -2154,3 +2154,162 @@
 .facility-action-btn.map-btn:hover {
   background: #dbeafe;
 }
+
+/* 식품영양성분 카드 스타일 */
+.food-nutrition-card {
+  border-left: 4px solid #10b981;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 10px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+  border: 1px solid #e2e8f0;
+  border-left-width: 4px;
+}
+
+.food-nutrition-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.food-nutrition-title-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.food-nutrition-badge {
+  background: #d1fae5;
+  color: #065f46;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.food-nutrition-food-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.food-nutrition-maker {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.food-nutrition-serving {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  background: #f8fafc;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.food-nutrition-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.food-nutrition-tab-btn {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.food-nutrition-tab-btn.active {
+  background: #10b981;
+  border-color: #10b981;
+  color: #ffffff;
+}
+
+.food-nutrition-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.food-nutrition-stat-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.food-nutrition-stat-item.primary {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.food-nutrition-stat-item.warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.stat-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.food-nutrition-stat-item .stat-label {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.food-nutrition-stat-item .stat-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.stat-pill-warn {
+  font-size: 10px;
+  font-weight: 700;
+  background: #fef2f2;
+  color: #dc2626;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid #fecaca;
+}
+
+.food-nutrition-alert {
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #92400e;
+  line-height: 1.4;
+}
+
+.food-nutrition-alert p {
+  margin: 0;
+}
+
+.food-nutrition-alert p + p {
+  margin-top: 4px;
+}
