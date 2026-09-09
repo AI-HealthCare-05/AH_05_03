@@ -160,10 +160,13 @@ interface HealthAssistantDrawerProps {
   runtime?: LocalDomainRuntime;
   isOpen: boolean;
   onClose: () => void;
+  onMinimize?: () => void;
+  variant?: "drawer" | "embedded";
   onRecordSaved?: () => Promise<void> | void;
   onChallengeSaved?: () => Promise<void> | void;
   onNavigateToRecords?: () => void;
   onNavigateToDiary?: (dateKey: string) => void;
+  dragHandleProps?: React.HTMLAttributes<HTMLElement>;
 }
 
 export function HealthAssistantDrawer({
@@ -171,9 +174,12 @@ export function HealthAssistantDrawer({
   runtime,
   isOpen,
   onClose,
+  onMinimize,
+  variant = "drawer",
   onRecordSaved,
   onNavigateToRecords,
   onNavigateToDiary,
+  dragHandleProps,
 }: HealthAssistantDrawerProps) {
   // 초기 메시지는 이전 세션이 있으면 복원하고, 없으면 환영 메시지로 시작한다.
   const [messages, setMessages] = useState<ExtendedChatMessage[]>(() => {
@@ -1406,41 +1412,64 @@ export function HealthAssistantDrawer({
     "저녁 8시에 타이레놀 1알 복용했어",
   ];
 
-  return (
-    <div className="health-assistant-backdrop" role="presentation" onMouseDown={(e) => {
-      if (e.target === e.currentTarget) onClose();
-    }}>
-      <aside className="health-assistant-drawer" role="dialog" aria-label="AI 건강 비서 봄이">
-        {/* 헤더 */}
-        <header className="assistant-header">
-          <div className="assistant-header-title">
-            <span className="assistant-avatar" aria-hidden="true">봄</span>
-            <div>
-              <h3>봄이 · 건강 비서</h3>
-              <p>
-                {profile ? (
-                  <span className="target-profile-pill">{profile.displayName} ({profile.relationship})</span>
-                ) : (
-                  <span>프로필을 선택해 주세요</span>
-                )}
-                <span className="privacy-pill">기록은 기기에 암호화 보관</span>
-              </p>
-            </div>
-          </div>
-          <div className="assistant-header-actions">
-            <button
-              className="assistant-clear-btn"
-              type="button"
-              onClick={() => setShowSessionList(true)}
-              aria-label="대화 목록"
+  const isEmbedded = variant === "embedded";
+
+  const drawerContent = (
+    <aside
+      className={`health-assistant-drawer ${isEmbedded ? "is-embedded" : ""}`}
+      role={isEmbedded ? "region" : "dialog"}
+      aria-label="AI 건강 비서 봄이"
+    >
+      {/* 헤더 */}
+      <header className="assistant-header" {...dragHandleProps}>
+        <div className="assistant-header-title">
+          {isEmbedded && (
+            <span
+              className="sidebar-card-drag-grip"
+              title="드래그하여 위치 변경"
+              aria-label="드래그하여 위치 변경"
             >
-              대화 목록
-            </button>
+              ⠿
+            </span>
+          )}
+          <span className="assistant-avatar" aria-hidden="true">봄</span>
+          <div>
+            <h3>봄이 · 건강 비서</h3>
+            <p>
+              {profile ? (
+                <span className="target-profile-pill">{profile.displayName} ({profile.relationship})</span>
+              ) : (
+                <span>프로필을 선택해 주세요</span>
+              )}
+              <span className="privacy-pill">기록은 기기에 암호화 보관</span>
+            </p>
+          </div>
+        </div>
+        <div className="assistant-header-actions">
+          <button
+            className="assistant-clear-btn"
+            type="button"
+            onClick={() => setShowSessionList(true)}
+            aria-label="대화 목록"
+          >
+            대화 목록
+          </button>
+          <button
+            className="assistant-minimize-btn"
+            type="button"
+            onClick={onMinimize ?? onClose}
+            aria-label="최소화"
+            title="최소화"
+          >
+            −
+          </button>
+          {!isEmbedded && (
             <button className="assistant-close-btn" type="button" onClick={onClose} aria-label="닫기">
               ×
             </button>
-          </div>
-        </header>
+          )}
+        </div>
+      </header>
 
         {showSessionList && (
           <section className="chat-session-list" aria-label="대화 목록">
@@ -1752,6 +1781,55 @@ export function HealthAssistantDrawer({
           </form>
         </footer>
       </aside>
+  );
+
+  if (isEmbedded) {
+    return (
+      <div className="health-assistant-embedded-container">
+        {drawerContent}
+
+        {/* 원본 서류 이미지 크게 보기 모달 */}
+        {sourcePreviewModal && (
+          <div className="modal-backdrop source-preview-backdrop" role="presentation" onMouseDown={() => setSourcePreviewModal(null)}>
+            <section className="source-preview-modal" role="dialog" aria-modal="true" aria-label="연결된 원본 서류" onMouseDown={(e) => e.stopPropagation()}>
+              <header>
+                <strong>{sourcePreviewModal.name}</strong>
+                <button type="button" aria-label="닫기" onClick={() => setSourcePreviewModal(null)}>×</button>
+              </header>
+              <div className="source-image-wrap">
+                <img src={sourcePreviewModal.url} alt="건강기록에 연결된 원본 서류 이미지" />
+              </div>
+            </section>
+          </div>
+        )}
+
+        {/* 건강 서류 상세 검토 및 건강기록 확정 저장 모달 */}
+        {ocrModalOpen && ocrImagePreviewUrl && (
+          <OcrReviewModal
+            key={`${ocrImagePreviewUrl}:${ocrReviewDraft ? "draft" : "empty"}`}
+            profileName={profile.displayName}
+            imageUrl={ocrImagePreviewUrl}
+            fileName={ocrImageFile?.name ?? "검진 서류"}
+            draft={ocrReviewDraft}
+            items={ocrReviewItems}
+            error={ocrModalError}
+            working={ocrModalWorking}
+            onClose={() => {
+              setOcrModalOpen(false);
+              clearSelectedImage();
+            }}
+            onConfirm={(updatedDraft, updatedItems) => void handleConfirmOcrModalSave(updatedDraft, updatedItems)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="health-assistant-backdrop" role="presentation" onMouseDown={(e) => {
+      if (e.target === e.currentTarget) onClose();
+    }}>
+      {drawerContent}
 
       {/* 원본 서류 이미지 크게 보기 모달 */}
       {sourcePreviewModal && (
@@ -1771,11 +1849,6 @@ export function HealthAssistantDrawer({
       {/* 건강 서류 상세 검토 및 건강기록 확정 저장 모달 */}
       {ocrModalOpen && ocrImagePreviewUrl && (
         <OcrReviewModal
-          // 인식 결과가 바뀌면 새로 마운트한다. 모달 안의 편집 상태를 effect 로
-          // 되맞추는 대신 이 한 줄로 끝낸다.
-          // 초안이 늦게 도착하면 **새로 마운트**한다. 예전에는 effect 로 상태를
-          // 되맞췄는데 그게 렌더 연쇄를 만들었다. 초안이 오기 전에는 채울 값이
-          // 기본값뿐이라 잃을 편집도 없다.
           key={`${ocrImagePreviewUrl}:${ocrReviewDraft ? "draft" : "empty"}`}
           profileName={profile.displayName}
           imageUrl={ocrImagePreviewUrl}
@@ -3175,21 +3248,13 @@ function PainDiaryToolCard({
           />
         </label>
 
-        <div className="input-row">
+        <div className="pain-tool-grid">
           <label>
             기록 날짜
             <input
               type="date"
               value={diaryDate}
               onChange={(e) => setDiaryDate(e.target.value)}
-            />
-          </label>
-          <label>
-            통증 부위
-            <input
-              value={bodyArea}
-              onChange={(e) => setBodyArea(e.target.value)}
-              placeholder="팔꿈치, 왼쪽 고관절 등"
             />
           </label>
           <label>
@@ -3205,9 +3270,14 @@ function PainDiaryToolCard({
               <span className="pain-intensity-val">{intensity}</span>
             </div>
           </label>
-        </div>
-
-        <div className="input-row">
+          <label className="grid-full-col">
+            통증 부위
+            <input
+              value={bodyArea}
+              onChange={(e) => setBodyArea(e.target.value)}
+              placeholder="팔꿈치, 왼쪽 고관절 등"
+            />
+          </label>
           <label>
             통증 양상
             <input
