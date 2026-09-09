@@ -6,7 +6,9 @@ import { HealthAssistantDrawer, HealthMetricsTrendCard } from "./HealthAssistant
 import {
   containsNewMedicationRecord,
   extractMetricsFromRecords,
+  extractRegionHint,
   formatTargetDateTime,
+  isFacilityQuery,
   resolveHealthRecordDateTime,
   resolveMedicationTakenAt,
   shouldAutoSaveHealthRecord,
@@ -1087,6 +1089,35 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     it("시각이 없거나 자정인 경우 'M월 D일'로 포맷팅한다", () => {
       const res = formatTargetDateTime("2022-05-30");
       expect(res).toBe("5월 30일");
+    });
+  });
+
+  describe("의료시설 질의 판별과 지역 추출", () => {
+    it("진료과·시설 표현을 시설 질의로 인식한다", () => {
+      expect(isFacilityQuery("근처 정형외과 찾아줘")).toBe(true);
+      expect(isFacilityQuery("흉부외과 알려줘")).toBe(true);
+      expect(isFacilityQuery("야간약국 어디야")).toBe(true);
+      expect(isFacilityQuery("오늘 점심 뭐 먹지")).toBe(false);
+    });
+
+    it("같은 문장을 다시 물어도 같은 결과를 준다", () => {
+      // /g 정규식으로 test() 를 부르면 lastIndex 가 남아 두 번째가 false 가 된다.
+      expect(isFacilityQuery("근처 내과")).toBe(true);
+      expect(isFacilityQuery("근처 내과")).toBe(true);
+    });
+
+    it("과목명을 통째로 걷어내 지역 표기만 남긴다", () => {
+      expect(extractRegionHint("강남역 정형외과 찾아줘")).toBe("강남역");
+      expect(extractRegionHint("종로구 한방병원 알려줘")).toBe("종로구");
+    });
+
+    it("지역 없이 진료과만 말하면 지역 표기가 남지 않는다", () => {
+      // "외과"가 먼저 걸리면 "흉부"가 지역명으로 남아, 위치 권한 없이도
+      // 지역을 입력한 것처럼 취급되고 결국 0건으로 끝난다.
+      expect(extractRegionHint("흉부외과 찾아줘")).toBe("");
+      expect(extractRegionHint("정형외과")).toBe("");
+      expect(extractRegionHint("심장혈관흉부외과 알려줘")).toBe("");
+      expect(extractRegionHint("근처 소아청소년과 추천")).toBe("");
     });
   });
 
