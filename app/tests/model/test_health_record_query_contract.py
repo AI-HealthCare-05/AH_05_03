@@ -109,6 +109,15 @@ def test_non_aggregate_questions_do_not_enable_query_tool(message: str) -> None:
     assert not HealthAssistantService._needs_health_record_query_tool(_request(message))
 
 
+def test_recent_records_are_only_prefetched_for_relevant_health_questions() -> None:
+    assert not HealthAssistantService._needs_recent_records_context(_request("안녕하세요"))
+    assert HealthAssistantService._needs_recent_records_context(_request("오늘 술 마셔도 돼?"))
+    assert HealthAssistantService._needs_recent_records_context(_request("오른쪽 허벅지가 아파"))
+    assert not HealthAssistantService._needs_recent_records_context(
+        _request("지난 3개월 동안 혈압 140을 넘은 날이 며칠이야?")
+    )
+
+
 def test_profile_id_is_not_inserted_into_llm_system_instruction() -> None:
     profile_id = uuid.uuid4()
     private_summary = "최근 혈압은 141/90mmHg입니다."

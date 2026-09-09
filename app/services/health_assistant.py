@@ -6,6 +6,7 @@ from typing import Any, cast
 from app.dtos.health_assistant import (
     HealthAssistantChatRequest,
     HealthAssistantResponse,
+    ProfileContext,
     UserLocation,
 )
 from app.dtos.health_record_query import HealthRecordQueryResult
@@ -15,6 +16,7 @@ from app.integrations.llm.chain import shared_chat_client
 from app.integrations.llm.protocol import LLMClientProtocol
 from app.models.service_accounts import ServiceAccount
 from app.prompts.health_assistant import build_system_instruction
+from app.repositories.health_record_repository import HealthRecordRepository
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.health_record_tools import (
     QUERY_HEALTH_RECORDS_TOOL_NAME,
@@ -125,6 +127,27 @@ _FACILITY_HISTORY_OR_ADVICE_KEYWORDS = (
     "먹어도",
     "부작용",
 )
+_RECENT_RECORD_CONTEXT_KEYWORDS = (
+    "건강",
+    "기록",
+    "검진",
+    "혈압",
+    "혈당",
+    "복약",
+    "약",
+    "통증",
+    "아파",
+    "운동",
+    "산책",
+    "조깅",
+    "러닝",
+    "달리",
+    "걷",
+    "술",
+    "음주",
+    "식사",
+    "챌린지",
+)
 
 
 class HealthAssistantService:
@@ -140,13 +163,15 @@ class HealthAssistantService:
         llm_client: LLMClientProtocol | None = None,
         safety_service: HealthAssistantSafetyService | None = None,
         facility_client: MedicalFacilityClient | None = None,
-        health_record_service: HealthRecordService | None = None,
+        record_repo: HealthRecordRepository | None = None,
         outdoor_conditions_client: OutdoorConditionsClientProtocol | None = None,
+        health_record_service: HealthRecordService | None = None,
     ):
         self._llm_client = llm_client
         self.safety_service = safety_service or HealthAssistantSafetyService()
         self.facility_client = facility_client or MedicalFacilityClient()
         self.health_record_service = health_record_service
+        self.record_repo = record_repo or getattr(health_record_service, "record_repo", None)
         self.outdoor_conditions_client = outdoor_conditions_client or OutdoorConditionsClient()
 
     @staticmethod
@@ -170,6 +195,15 @@ class HealthAssistantService:
         if cls._needs_facility_tools(request):
             return get_facility_tools()
         return None
+
+    @classmethod
+    def _needs_recent_records_context(cls, request: HealthAssistantChatRequest) -> bool:
+        """건강 맥락이 필요한 질문에만 최근 기록을 선조회한다."""
+
+        if not request.messages or cls._needs_health_record_query_tool(request):
+            return False
+        message = request.messages[-1].content
+        return any(keyword in message for keyword in _RECENT_RECORD_CONTEXT_KEYWORDS)
 
     @staticmethod
     def _needs_facility_tools(request: HealthAssistantChatRequest) -> bool:
@@ -370,6 +404,49 @@ class HealthAssistantService:
             lines.append("일부 조회 실패: " + "; ".join(result.errors))
         return "\n".join(lines) or "실시간 야외 환경 정보를 불러오지 못했습니다."
 
+    async def _enrich_context(
+        self,
+        context: ProfileContext | None,
+        account: ServiceAccount | None = None,
+    ) -> ProfileContext | None:
+        if context is None or context.recent_records_summary or not context.profile_id or not self.record_repo:
+            return context
+        try:
+            records: list[Any]
+            if account is not None and self.health_record_service is not None:
+                records = list(
+                    (await self.health_record_service.list_records(account, context.profile_id, limit=5)).items
+                )
+            else:
+                records = list(await self.record_repo.list_by_profile(context.profile_id, limit=5))
+            if records:
+                summaries = []
+                for r in records:
+                    date_str = r.recorded_at.strftime("%Y-%m-%d")
+                    if r.record_type == "pain" and isinstance(r.payload, dict):
+                        anatomy = r.payload.get("anatomyEvent")
+                        if isinstance(anatomy, dict):
+                            concept = anatomy.get("concept", {})
+                            body = anatomy.get("body", {})
+                            coverage = anatomy.get("coverage", {})
+                            label = concept.get("label") or concept.get("id") or "지정 부위"
+                            side = body.get("side")
+                            region = body.get("region")
+                            side_kr = {"left": "왼쪽", "right": "오른쪽", "bilateral": "양쪽"}.get(side, side or "")
+                            side_desc = f"{side_kr} {region}".strip() if side_kr or region else ""
+                            area_part = f"{label}({side_desc})" if side_desc else label
+                            rad = coverage.get("radius")
+                            cov_part = f", 확산범위 {rad}mm" if rad is not None else ""
+                            note_part = r.payload.get("note") or r.payload.get("sensation") or ""
+                            desc = f": {note_part}" if note_part else ""
+                            summaries.append(f"[{date_str}] 통증[3D해부학: {area_part}{cov_part}]{desc}")
+                            continue
+                    summaries.append(f"[{date_str}] {r.record_type}: {r.payload}")
+                context.recent_records_summary = "; ".join(summaries)[:2000]
+        except Exception:
+            pass
+        return context
+
     @property
     def llm_client(self) -> LLMClientProtocol:
         if self._llm_client is None:
@@ -414,7 +491,11 @@ class HealthAssistantService:
         if safety_check:
             return safety_check
 
-        profile_context = request.profile_context
+        profile_context = (
+            await self._enrich_context(request.profile_context, account)
+            if self._needs_recent_records_context(request)
+            else request.profile_context
+        )
         needs_health_query = self._needs_health_record_query_tool(request)
         if needs_health_query and (
             profile_context is None
@@ -485,7 +566,11 @@ class HealthAssistantService:
             yield "result", safety_check.model_dump(mode="json")
             return
 
-        profile_context = request.profile_context
+        profile_context = (
+            await self._enrich_context(request.profile_context, account)
+            if self._needs_recent_records_context(request)
+            else request.profile_context
+        )
         needs_health_query = self._needs_health_record_query_tool(request)
         if needs_health_query and (
             profile_context is None

@@ -39,6 +39,12 @@ AST_UPPER = {"M": 40.0, "F": 32.0}
 GGT_UPPER = {"M": 73.0, "F": 38.0}
 
 URIC_ACID_UPPER = {"M": 7.0, "F": 6.0}
+# 고감도 CRP — AHA/CDC Circulation 2003. 심혈관 위험 3구간에 **급성 경계를 하나 더**.
+# 10 mg/L 초과는 위험 등급이 아니라 "2주 뒤 재측정" 이다. 감염·외상·수술이 만든
+# 일시적 값이라 심혈관 위험으로 읽으면 감기 걸린 사람을 고위험자로 부르게 된다.
+CRP_MODERATE = 1.0  # mg/L
+CRP_HIGH = 3.0
+CRP_ACUTE = 10.0
 
 # WHO 빈혈 진단선과 중증도. 임신부는 기준이 달라(11.0) 여기서 다루지 않는다.
 HEMOGLOBIN_FLOOR = {"M": 13.0, "F": 12.0}
@@ -389,6 +395,61 @@ def evaluate_uric_acid(profile: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# 만성염증
+# ---------------------------------------------------------------------------
+
+
+def evaluate_inflammation(profile: dict[str, Any]) -> dict[str, Any]:
+    """고감도 CRP 4구간. 위 세 구간은 AHA/CDC, 넷째는 급성 경계다."""
+    value = profile.get("crp")
+    if value is None:
+        return _insufficient("inflammation", ["고감도 CRP"], "만성염증")
+
+    value = float(value)
+    if value > CRP_ACUTE:
+        # **등급을 매기지 않는다.** 이 구간은 만성염증의 크기가 아니라 "지금 무슨 일이
+        # 있다" 는 신호다. 심혈관 위험으로 읽지 말라는 것이 AHA 의 문구 그대로다.
+        return _result(
+            "inflammation",
+            RiskLevel.INSUFFICIENT_DATA,
+            "급성 염증 가능",
+            "지금은 만성염증으로 읽을 수 없어요.",
+            f"고감도 CRP {value:g} mg/L 는 급성 경계({CRP_ACUTE:g})를 넘습니다. "
+            "감염·외상·수술 뒤에는 일시적으로 이만큼 오르므로 이 값만으로 심혈관 위험을 말하지 않습니다.",
+            {"crp": value},
+            "AHA/CDC Circulation 2003 — 10 mg/L 초과는 2주 뒤 재측정 대상",
+            "몸 상태가 회복된 뒤 2주쯤 지나 다시 재보시길 권합니다.",
+            flags=["급성 염증 구간이라 만성 위험 등급을 내지 않았습니다."],
+        )
+
+    if value < CRP_MODERATE:
+        risk, sub = RiskLevel.NORMAL, "낮음"
+    elif value <= CRP_HIGH:
+        risk, sub = RiskLevel.CAUTION, "보통"
+    else:
+        risk, sub = RiskLevel.HIGH, "높음"
+
+    label = {
+        RiskLevel.NORMAL: "만성염증 지표가 낮은 편이에요.",
+        RiskLevel.CAUTION: "만성염증 지표가 중간 구간이에요.",
+        RiskLevel.HIGH: "만성염증 지표가 높은 구간이에요.",
+    }[risk]
+    return _result(
+        "inflammation",
+        risk,
+        sub,
+        label,
+        f"고감도 CRP {value:g} mg/L 는 AHA/CDC 3구간(<{CRP_MODERATE:g} 낮음 / "
+        f"{CRP_MODERATE:g}~{CRP_HIGH:g} 보통 / >{CRP_HIGH:g} 높음)에서 '{sub}' 입니다.",
+        {"crp": value},
+        "AHA/CDC Circulation 2003 hs-CRP 임상 적용 성명",
+        "체중·활동량·금연이 이 수치를 가장 크게 움직입니다. 높은 구간이 반복되면 진료를 권합니다."
+        if risk != RiskLevel.NORMAL
+        else "현재 기준으로는 추가 조치가 필요하지 않습니다.",
+    )
+
+
+# ---------------------------------------------------------------------------
 # 빈혈
 # ---------------------------------------------------------------------------
 
@@ -586,7 +647,7 @@ def _order(level: RiskLevel) -> int:
 # 그 사실을 검사가 확인한다 — 겹치면 어느 쪽이 읽는지 모호해진다.
 # `bmi`·`waist_cm`·`triglycerides` 는 벤더 엔진도 쓰므로 여기 넣지 않는다 —
 # 이 집합은 "엔진에 없고 우리만 쓰는 필드" 라는 뜻이다.
-STAGING_FIELDS = frozenset({"creatinine", "urine_acr", "ast", "alt", "ggt", "uric_acid", "hemoglobin"})
+STAGING_FIELDS = frozenset({"creatinine", "urine_acr", "ast", "alt", "ggt", "uric_acid", "hemoglobin", "crp"})
 
 EXTRA_DOMAINS = {
     "kidney": evaluate_kidney,
@@ -594,11 +655,12 @@ EXTRA_DOMAINS = {
     "fatty_liver": evaluate_fatty_liver,
     "uric_acid": evaluate_uric_acid,
     "anemia": evaluate_anemia,
+    "inflammation": evaluate_inflammation,
 }
 
 
 def assess_extra_domains(profile: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """규칙 엔진이 다루지 않는 다섯 영역을 같은 모양으로 판정한다.
+    """규칙 엔진이 다루지 않는 여섯 영역을 같은 모양으로 판정한다.
 
     대사증후군은 여기 없다. 새 값을 읽는 것이 아니라 이미 읽은 값을 세는 공식이라
     `evaluate_metabolic_syndrome()` 을 중재자가 따로 부른다 — 위 절의 설명 참조.

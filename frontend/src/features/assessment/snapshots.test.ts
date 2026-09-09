@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import type { AssessmentSnapshotPayload, HealthRecord } from "../../shared/local/domainContracts";
-import { buildLevelTracks, buildSeries, TREND_SERIES, type Snapshot } from "./snapshots";
+import { buildLevelTracks, buildSeries, saveSnapshot, TREND_SERIES, type Snapshot } from "./snapshots";
+import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
+import type { AssessmentSummaryData } from "./contracts";
 
 function snapshot(at: string, payload: Partial<AssessmentSnapshotPayload>): Snapshot {
   return {
@@ -99,5 +101,108 @@ describe("buildLevelTracks", () => {
     broken.payload = {} as AssessmentSnapshotPayload;
     expect(() => buildLevelTracks([broken, broken])).not.toThrow();
     expect(() => buildSeries([broken, broken])).not.toThrow();
+  });
+});
+
+
+/**
+ * 같은 값으로 다시 판정해도 새 점이 생기지 않는다.
+ *
+ * 판정하기를 누를 때마다 자동으로 한 점이 쌓이는 구조라, "지난 판정으로 채우기" 로
+ * 값을 되불러와 다시 판정하면 한 글자도 안 바뀐 점이 계속 늘어난다. 실측으로 같은
+ * 날 8,603 바이트짜리 행이 두 번 나란히 저장돼 있었다.
+ */
+describe("saveSnapshot 중복 방지", () => {
+  const RESULT = {
+    bmi: 26,
+    summary: { evaluated: 2, total: 14, highest_level: "HIGH" },
+    verdicts: [{ key: "htn", risk_level: "HIGH", engine: "E1" }],
+    disease_risks: {},
+  } as unknown as AssessmentSummaryData;
+
+  function runtimeWith(existing: Snapshot[], created: { calls: number; updates: number }) {
+    return {
+      healthRecords: {
+        query: async () => ({ ok: true, value: existing }),
+        create: async (input: Record<string, unknown>) => {
+          created.calls += 1;
+          return {
+            ok: true,
+            value: { ...snapshot("2026-05-01T00:00:00Z", {}), payload: input.payload },
+          };
+        },
+        // 같은 입력이면 새로 만들지 않고 기존 기록에 회차를 얹는다.
+        update: async (_id: string, input: Record<string, unknown>) => {
+          created.updates += 1;
+          return {
+            ok: true,
+            value: { ...existing.at(-1), payload: input.payload },
+          };
+        },
+      },
+    } as unknown as LocalDomainRuntime;
+  }
+
+  it("앞 기록과 값·등급이 같으면 새로 만들지 않는다", async () => {
+    const previous = snapshot("2026-04-01T00:00:00Z", {
+      inputs: { age: 52, sbp: 148 },
+      levels: { htn: "HIGH" },
+    });
+    const created = { calls: 0, updates: 0 };
+    const outcome = await saveSnapshot(
+      runtimeWith([previous], created),
+      "p",
+      { age: "52", sbp: "148" },
+      RESULT,
+    );
+
+    expect(outcome.kind).toBe("rechecked");
+    expect(created.calls).toBe(0);
+    // 시각은 안 고친다 — 그날 본 화면을 남기는 것이 스냅샷의 존재 이유다.
+    expect(outcome.snapshot.recordedAt).toBe("2026-04-01T00:00:00Z");
+  });
+
+  it("수치가 하나라도 바뀌면 새 점이 된다", async () => {
+    const previous = snapshot("2026-04-01T00:00:00Z", {
+      inputs: { age: 52, sbp: 148 },
+      levels: { htn: "HIGH" },
+    });
+    const created = { calls: 0, updates: 0 };
+    const outcome = await saveSnapshot(
+      runtimeWith([previous], created),
+      "p",
+      { age: "52", sbp: "132" },
+      RESULT,
+    );
+
+    expect(outcome.kind).not.toBe("rechecked");
+    expect(created.calls).toBe(1);
+  });
+
+  it("값이 같은데 등급이 바뀌면 새 점이 아니라 2차로 쌓인다", async () => {
+    const previous = snapshot("2026-04-01T00:00:00Z", {
+      inputs: { age: 52, sbp: 148 },
+      levels: { htn: "CAUTION" },
+    });
+    const created = { calls: 0, updates: 0 };
+    const outcome = await saveSnapshot(
+      runtimeWith([previous], created),
+      "p",
+      { age: "52", sbp: "148" },
+      RESULT,
+    );
+
+    // 같은 입력이므로 기록은 하나다. 등급이 달라진 것을 회차로 남긴다 —
+    // 모델이나 임계값이 갱신됐다는 뜻이고, 그건 이 제품에서 남길 값어치가 있다.
+    expect(outcome.kind).toBe("changed");
+    expect(outcome.run).toBe(2);
+    expect(created.calls).toBe(0);
+  });
+
+  it("첫 기록은 언제나 만든다", async () => {
+    const created = { calls: 0, updates: 0 };
+    const outcome = await saveSnapshot(runtimeWith([], created), "p", { age: "52" }, RESULT);
+    expect(outcome.kind).not.toBe("rechecked");
+    expect(created.calls).toBe(1);
   });
 });

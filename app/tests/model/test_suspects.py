@@ -176,6 +176,9 @@ def test_settled_cards_fill_last() -> None:
     `low_hdl` 모델은 HDL 을 못 본다(라벨이라 차단). 그래서 HDL 81 인 사람도 확률이
     높게 나올 수 있고, 동점을 확률로만 깨면 "낮은 HDL 콜레스테롤" 이 자리채움 1 등이
     된다 — 바로 위 카드가 "기준 안에 있어요" 라고 한 항목을 다시 띄우는 것이다.
+
+    **이 계약은 `arbitrated` 것이다.** 배포된 `verdict` 순위는 2026-09-08 에 같은
+    등급 안을 확률 내림차순으로 바꿔서 반대로 나온다 — 바로 아래 §6-1 이 그것을 건다.
     """
     cards = [
         card("low_hdl", "낮음", 1.0, probability=0.44),  # 측정이 정상이라 답했지만 확률은 높다
@@ -184,6 +187,67 @@ def test_settled_cards_fill_last() -> None:
     ranked = sp.rank_suspects(cards, age=50, verdicts={"low_hdl": verdict("E2", "NORMAL", measured=True)}, top_n=2)
     assert [r["target"] for r in ranked] == ["fatty_liver", "low_hdl"]
     assert all(r["suspected"] is False for r in ranked), "둘 다 자리채움이다"
+
+
+# ---------------------------------------------------------------------------
+# 6-1. 배포된 순위(`RANK_SOURCE = "verdict"`) — 화면이 실제로 쓰는 경로
+#
+# 이 파일의 autouse 픽스처는 `arbitrated` 로 고정하므로, 배포 경로를 걸려면 테스트
+# 안에서 다시 되돌려야 한다. 사용자가 화면에서 본 순서는 전부 이쪽이다.
+# ---------------------------------------------------------------------------
+
+
+def test_deployed_rank_orders_by_probability_within_level(monkeypatch: pytest.MonkeyPatch) -> None:
+    """같은 등급 안에서는 **화면에 찍히는 확률** 이 순서를 정한다.
+
+    **2026-09-08 에 뒤집힌 계약이다(사용자 결정).** 그 전에는 `settled` 가 측정으로
+    정상이라 답한 카드를 뒤로 보내서, 화면에 확률이 9% · 2% · 18% 로 찍혔다.
+    `settled` 도 신호강도도 화면에 안 나오니 사용자에게는 순서가 고장난 것으로만
+    보인다. 그래서 보이는 값을 정렬 기준으로 삼는다.
+
+    **되돌릴 거면 `_by_verdict` 의 설명을 먼저 읽어라.** 이 순서는 `low_hdl` 모델이
+    HDL 을 못 본다는 것(라벨이라 차단)을 알면서 받아들인 결과다 — 바로 위 카드가
+    "기준 안에 있어요" 라고 한 항목이 자리채움 1 등에 올 수 있다.
+    """
+    monkeypatch.setattr(sp, "RANK_SOURCE", "verdict")
+    cards = [
+        card("low_hdl", "낮음", 1.0, probability=0.44),
+        card("fatty_liver", "낮음", 1.0, probability=0.11),
+    ]
+    ranked = sp.rank_suspects(
+        cards,
+        age=50,
+        verdicts={
+            "low_hdl": verdict("E2", "NORMAL", measured=True),
+            "fatty_liver": verdict("E2", "NORMAL", measured=False),
+        },
+        top_n=2,
+    )
+    assert [r["target"] for r in ranked] == ["low_hdl", "fatty_liver"]
+    assert all(r["suspected"] is False for r in ranked), "둘 다 자리채움이다"
+
+
+def test_deployed_rank_keeps_level_above_probability(monkeypatch: pytest.MonkeyPatch) -> None:
+    """확률이 아무리 높아도 **등급을 넘지는 못한다.** 패널 제목이 "급한 순" 이다.
+
+    확률 내림차순으로 바꾼 뒤에도 1 차 정렬은 등급이라는 것을 못 박는다. 이게 풀리면
+    '정상 범위 40%' 가 '주의 5%' 위에 올라 제목과 화면이 어긋난다.
+    """
+    monkeypatch.setattr(sp, "RANK_SOURCE", "verdict")
+    cards = [
+        card("fatty_liver", "낮음", 1.0, probability=0.40),  # 정상인데 확률이 높다
+        card("ckd", "낮음", 1.0, probability=0.05),  # 주의인데 확률이 낮다
+    ]
+    ranked = sp.rank_suspects(
+        cards,
+        age=50,
+        verdicts={
+            "fatty_liver": verdict("E2", "NORMAL", measured=True),
+            "ckd": verdict("E3", "CAUTION", measured=True),
+        },
+        top_n=2,
+    )
+    assert [r["target"] for r in ranked] == ["ckd", "fatty_liver"]
 
 
 def test_reason_says_where_the_signal_came_from() -> None:

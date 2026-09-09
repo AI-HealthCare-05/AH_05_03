@@ -21,6 +21,8 @@ class PainDraft(BaseSerializerModel):
     onset_description: str | None = None
     aggravating_factors: str | None = None
     note: str | None = None
+    anatomy_concept_id: str | None = None
+    anatomy_label: str | None = None
 
 
 class PainChatData(BaseSerializerModel):

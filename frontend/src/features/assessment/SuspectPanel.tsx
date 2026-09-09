@@ -27,10 +27,22 @@
  * 붙어 있던 것이 이 패널에서 가장 헷갈리는 지점이었다. 측정이 답한 칸은 답으로 닫는다.
  */
 
-import type { RiskLevel, SuspectCard } from "./contracts";
+import type { DiseaseVerdict, RiskLevel, SuspectCard } from "./contracts";
 import { LevelBadge } from "./VerdictCards";
 
 const percent = (value: number) => `${(value * 100).toFixed(0)}%`;
+
+/**
+ * 다섯 해가 전부 같은 칸에 떨어졌나.
+ *
+ * GBDT 는 나이를 계단으로 쓴다. 5년을 옮겨도 같은 잎에 남는 일이 흔하고, 그러면
+ * `지금 91% · 1년 91% · 2년 91% …` 여섯 줄이 세로로 쌓인다 — 읽을 것이 없는 자리에
+ * 카드 절반을 쓴다. 카드 앞면과 5년 목록도 같은 기준으로 접는다.
+ */
+function isFlat(curve: { current_probability: number; prevalence_probability: number[] }): boolean {
+  const points = [curve.current_probability, ...curve.prevalence_probability];
+  return Math.max(...points) - Math.min(...points) < 0.005;
+}
 
 /** 측정이 "기준 이내" 라고 이미 답했나. 그러면 모델 확률을 덧붙이지 않는다. */
 function isSettled(suspect: SuspectCard) {
@@ -82,9 +94,11 @@ function SuspectItem({ suspect }: { suspect: SuspectCard }) {
   const settled = isSettled(suspect);
   const confirmed = isConfirmed(suspect);
   const measured = suspect.basis === "측정";
-  // 측정이 답한 칸에는 모델 확률을 덧붙이지 않는다. 위 머리말 참조.
-  // 확진도 같다 — 그쪽은 모델이 라벨 검사값을 못 봐서 오히려 낮은 값을 낸다.
-  const showPrevalence = prevalence && !settled && !confirmed;
+  // **여기서 다시 판단하지 않는다.** 곡선을 낼지 말지는 서버가 한 곳에서 정한다
+  // (`assessment.model_contradicts_measurement`) — 측정과 모델이 서로 반대 방향을
+  // 가리킬 때만 지운다. 화면이 따로 막던 때는 판단이 두 곳에 있어서, 판정과
+  // 어긋나지 않는 값(비만 91% · 지방간 66% · 대사증후군 58%)까지 같이 사라졌다.
+  const showPrevalence = prevalence ?? undefined;
 
   return (
     <article className={`suspect-card ${suspect.suspected ? "is-suspected" : "is-filler"}`}>
@@ -132,7 +146,9 @@ function SuspectItem({ suspect }: { suspect: SuspectCard }) {
 
       {onset ? (
         <section className="suspect-series">
-          <h5>지금 없다면 새로 생길 확률</h5>
+          <h5>
+            아직 없다면, 앞으로 <span className="assess-muted">해마다 새로 생길 가능성</span>
+          </h5>
           <ul className="suspect-rows">
             {onset.horizons_years.map((year, i) => (
               <OnsetRow
@@ -151,22 +167,42 @@ function SuspectItem({ suspect }: { suspect: SuspectCard }) {
         // `지금 47% → 1년 46% → 2년 45% → …` 이 두 줄로 접히고, 그 줄에서 어느
         // 숫자가 어느 해인지 눈으로 되짚어야 했다. 발병 곡선과 같은 막대로 둔다 —
         // 두 곡선의 뜻은 다르지만 읽는 방법은 같아야 한다.
+        //
+        // **제목이 전제를 먼저 말한다.** "기준을 넘고 있을 확률" 은 명세서 문장이고,
+        // 정작 중요한 조건(`지금 수치가 유지된다는 가정`)이 저 아래 잔글씨에만 있었다.
         <section className="suspect-series">
-          <h5>기준을 넘고 있을 확률</h5>
-          <ul className="suspect-rows">
-            <OnsetRow years={0} value={prevalence.current_probability} />
-            {prevalence.horizons_years.map((year, i) => (
-              <OnsetRow key={year} years={year} value={prevalence.prevalence_probability[i]} />
-            ))}
-          </ul>
+          <h5>
+            이대로 지내면 <span className="assess-muted">해마다 기준을 넘고 있을 가능성</span>
+          </h5>
+          {isFlat(showPrevalence) ? (
+            // 여섯 줄이 전부 같은 숫자면(실측 비만 91% × 6) 세로로 쌓아 봐야 읽을 것이
+            // 없다. 한 줄만 두고 "그대로" 를 말로 적는다.
+            <>
+              <ul className="suspect-rows">
+                <OnsetRow years={0} value={showPrevalence.current_probability} />
+              </ul>
+              <p className="suspect-flat assess-muted">
+                {showPrevalence.horizons_years[showPrevalence.horizons_years.length - 1]}년 뒤까지 이 수준이
+                이어져요.
+              </p>
+            </>
+          ) : (
+            <ul className="suspect-rows">
+              <OnsetRow years={0} value={showPrevalence.current_probability} />
+              {showPrevalence.horizons_years.map((year, i) => (
+                <OnsetRow key={year} years={year} value={showPrevalence.prevalence_probability[i]} />
+              ))}
+            </ul>
+          )}
         </section>
       ) : null}
 
       {confirmed ? (
         <p className="suspect-now">
-          <b>지금</b> 기준을 넘은 상태예요. 앞날 예측이 아니라 <b>재측정과 진료 상담</b>이 다음 단계입니다.
+          <b>지금</b> 기준을 넘은 상태예요. <b>재측정과 진료 상담</b>이 다음 단계입니다.
         </p>
-      ) : !onset && !showPrevalence ? (
+      ) : null}
+      {!confirmed && !onset && !showPrevalence ? (
         <p className="suspect-none assess-muted">
           {settled
             ? "검사값이 기준 안에 있어 앞으로의 숫자는 내지 않았어요."
@@ -177,11 +213,198 @@ function SuspectItem({ suspect }: { suspect: SuspectCard }) {
   );
 }
 
+/** 유지로 볼 폭. 이보다 작은 변화는 GBDT 계단의 잡음이지 예측이 아니다. */
+const FLAT = 0.005;
+
+interface OutlookRow {
+  key: string;
+  name: string;
+  years: number;
+  value: number;
+  /** 발병 궤적일 때 동년배 값. 유병 곡선에는 없다. */
+  peer?: number;
+  /** 유병 곡선일 때 지금 값. 발병 궤적에는 없다(지금은 0 이라는 전제다). */
+  now?: number;
+}
+
+/**
+ * 질환마다 **5년 뒤 한 줄**. 세 장 카드 아래에 붙는다.
+ *
+ * ## 왜 필요했나
+ *
+ * 카드 세 장은 아래 질환별 결과의 **급한 순** 셋이다. 그런데 급한 셋이 전부 이미
+ * 기준을 넘은 상태이면 세 장 모두 "지금 넘었어요" 만 적고 앞날 숫자가 하나도 안
+ * 남는다 — 실측으로 그런 화면이 나왔다(지질 셋이 전부 '높음'). 제목이 "발병 예측"
+ * 인데 예측이 한 줄도 없는 셈이었다. 순위는 그대로 두고 나머지를 같이 싣는다.
+ *
+ * ## 두 물음을 섞어 정렬하지 않는다
+ *
+ * 첫 판에서는 열넷을 한 줄로 세워 확률 큰 순으로 정렬했다. 그런데 두 숫자의 뜻이
+ * 다르다 — "새로 생길" 과 "그때 넘고 있을" 은 같은 자를 쓰지 않는다. 실측에서
+ * 고혈압 18%(동년배 22% 라 **평균 이하**)가 만성염증 18%(기준 초과) 바로 옆에
+ * 섰다. 줄마다 꼬리표를 달아도 위에서 아래로 훑는 사람은 순서를 먼저 읽는다.
+ * 그래서 블록을 갈랐다.
+ *
+ * ## 안 변하는 줄에 같은 숫자를 두 번 적지 않는다
+ *
+ * GBDT 는 나이를 계단으로 쓰므로 5년을 옮겨도 같은 칸에 떨어지는 일이 흔하다.
+ * 실측(대사증후군 프리셋)에서 유병 여섯 줄 중 **다섯 줄이 +0.0%p** 였다.
+ * `지금 21% → 5년 21%` 는 정보가 없는 자리를 두 번 읽게 만든다. "유지" 한 단어로
+ * 접고, 실제로 움직인 줄에만 변화폭을 적는다.
+ */
+function ForwardOutlook({ verdicts, ranked }: { verdicts: DiseaseVerdict[]; ranked: Map<string, number> }) {
+  const onsets: OutlookRow[] = [];
+  const prevalences: OutlookRow[] = [];
+  const settled: string[] = [];
+  const unknown: string[] = [];
+  // 카드마다 지평이 다를 수 있다(나이가 표 상한에 가까우면 잘린다). 마지막으로
+  // 읽은 값을 쓰면 목록 순서가 제목을 바꾼다. 가장 먼 값으로 못 박는다.
+  let horizon = 0;
+
+  for (const verdict of verdicts) {
+    const onset = verdict.reference?.trajectory;
+    const prevalence = verdict.reference?.prevalence_trajectory;
+    if (onset && onset.onset_probability.length > 0) {
+      const last = onset.onset_probability.length - 1;
+      horizon = Math.max(horizon, onset.horizons_years[last]);
+      onsets.push({
+        key: verdict.key,
+        name: verdict.name,
+        years: horizon,
+        value: onset.onset_probability[last],
+        peer: onset.population_onset_probability?.[last],
+      });
+    } else if (prevalence && prevalence.prevalence_probability.length > 0) {
+      const last = prevalence.prevalence_probability.length - 1;
+      horizon = Math.max(horizon, prevalence.horizons_years[last]);
+      prevalences.push({
+        key: verdict.key,
+        name: verdict.name,
+        years: horizon,
+        value: prevalence.prevalence_probability[last],
+        now: prevalence.current_probability,
+      });
+    } else if (verdict.risk_level === "HIGH" || verdict.risk_level === "VERY_HIGH") {
+      // 서버가 곡선을 지운 칸(`assessment._drop_forecasts_when_already_present`).
+      settled.push(verdict.name);
+    } else {
+      unknown.push(verdict.name);
+    }
+  }
+
+  if (onsets.length === 0 && prevalences.length === 0 && settled.length === 0) return null;
+  // **위 세 장이 먼저 온다.** 패널이 "급한 순 세 가지" 를 세워 놓고 아래 목록은
+  // 전혀 다른 질환으로 시작하면, 같은 패널이 두 이야기를 하는 것으로 읽힌다.
+  // 그 셋을 순위대로 맨 위에 두고, 나머지는 확률 큰 순으로 잇는다.
+  const byRank = (a: OutlookRow, b: OutlookRow) => {
+    const ra = ranked.get(a.key);
+    const rb = ranked.get(b.key);
+    if (ra !== undefined && rb !== undefined) return ra - rb;
+    if (ra !== undefined) return -1;
+    if (rb !== undefined) return 1;
+    return b.value - a.value;
+  };
+  onsets.sort(byRank);
+  prevalences.sort(byRank);
+  const total = onsets.length + prevalences.length + settled.length + unknown.length;
+
+  return (
+    <section className="suspect-outlook" aria-labelledby="suspect-outlook-heading">
+      <h4 id="suspect-outlook-heading">
+        {horizon || 5}년 뒤 <span className="assess-muted">· 질환 {total}가지 전부</span>
+      </h4>
+
+      {onsets.length > 0 && (
+        <div className="outlook-block">
+          <p className="outlook-block-title">
+            새로 생길 확률{" "}
+            <span className="assess-muted">지금은 없다고 보고 낸 값 · 위 세 가지 먼저, 나머지는 확률 높은 순</span>
+          </p>
+          <ul className="suspect-outlook-list">
+            {onsets.map((row) => (
+              <li key={row.key} className="outlook-onset">
+                <span className="outlook-name">
+                  {ranked.has(row.key) && <b className="outlook-rank">{ranked.get(row.key)}</b>}
+                  {row.name}
+                </span>
+                <span className="outlook-bar" aria-hidden="true">
+                  <i style={{ width: `${Math.min(row.value * 100, 100)}%` }} />
+                  {row.peer !== undefined && <em style={{ left: `${Math.min(row.peer * 100, 100)}%` }} />}
+                </span>
+                <b className="outlook-value">{percent(row.value)}</b>
+                <span className="outlook-note">
+                  {row.peer === undefined
+                    ? "동년배 값이 없어요"
+                    : row.value > row.peer + FLAT
+                      ? `동년배 ${percent(row.peer)}보다 높아요`
+                      : row.value < row.peer - FLAT
+                        ? `동년배 ${percent(row.peer)}보다 낮아요`
+                        : `동년배 ${percent(row.peer)}와 비슷해요`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {prevalences.length > 0 && (
+        <div className="outlook-block">
+          <p className="outlook-block-title">
+            기준을 넘고 있을 확률{" "}
+            <span className="assess-muted">지금 넘었든 아니든 그때 재면 넘어 있을 가능성 · 위 세 가지 먼저, 나머지는 확률 높은 순</span>
+          </p>
+          <ul className="suspect-outlook-list">
+            {prevalences.map((row) => {
+              const delta = row.now === undefined ? 0 : row.value - row.now;
+              const flat = Math.abs(delta) < FLAT;
+              return (
+                <li key={row.key} className="outlook-prevalence">
+                  <span className="outlook-name">
+                    {ranked.has(row.key) && <b className="outlook-rank">{ranked.get(row.key)}</b>}
+                    {row.name}
+                  </span>
+                  <span className="outlook-bar" aria-hidden="true">
+                    <i style={{ width: `${Math.min(row.value * 100, 100)}%` }} />
+                  </span>
+                  <b className="outlook-value">{percent(row.value)}</b>
+                  <span className={`outlook-note${flat ? "" : delta > 0 ? " is-up" : " is-down"}`}>
+                    {flat
+                      ? "지금과 비슷해요"
+                      : `지금 ${percent(row.now ?? 0)} → ${delta > 0 ? "▲" : "▼"} ${Math.abs(delta * 100).toFixed(0)}%p`}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* 이미 넘은 칸은 한 줄로 묶는다. 각각 한 줄씩 두면 같은 문장이 여섯 번
+          반복되면서 실제로 읽어야 하는 위쪽 숫자를 밀어낸다. */}
+      {settled.length > 0 && (
+        <p className="outlook-settled">
+          <b>앞날 숫자를 내지 않은 {settled.length}가지</b> {settled.join(" · ")}
+          <span className="assess-muted">
+            {" "}
+            — 이미 기준을 넘었는데 모델은 그 검사값을 못 봅니다(라벨이라 학습에서 차단). 두 숫자가 서로 다투므로
+            적지 않았습니다. 재측정과 진료 상담이 다음 단계입니다.
+          </span>
+        </p>
+      )}
+      {unknown.length > 0 && (
+        <p className="outlook-settled assess-muted">
+          <b>앞날을 낼 근거가 없는 {unknown.length}가지</b> {unknown.join(" · ")}
+        </p>
+      )}
+    </section>
+  );
+}
+
 /**
  * 상위 세 장. 하나도 의심이 아니면 그 사실을 먼저 말한다 — 세 장이 떠 있는 것만으로
  * "뭔가 걸렸다" 로 읽히면 안 된다.
  */
-export function SuspectPanel({ suspects }: { suspects: SuspectCard[] }) {
+export function SuspectPanel({ suspects, verdicts = [] }: { suspects: SuspectCard[]; verdicts?: DiseaseVerdict[] }) {
   if (suspects.length === 0) return null;
   const anySuspected = suspects.some((s) => s.suspected);
   // 두 숫자의 뜻은 카드마다가 아니라 패널에 한 번만 적는다. 카드에 세 번 반복하면
@@ -210,6 +433,7 @@ export function SuspectPanel({ suspects }: { suspects: SuspectCard[] }) {
           <SuspectItem key={suspect.target} suspect={suspect} />
         ))}
       </div>
+      <ForwardOutlook verdicts={verdicts} ranked={new Map(suspects.map((s) => [s.target, s.rank]))} />
       {(anyOnset || anyPrevalence) && (
         <p className="assess-fineprint suspect-note">
           {anyOnset && <><b>새로 생길 확률</b>은 지금 그 질환이 없다는 전제 아래 그 사이에 새로 생길 확률입니다. </>}

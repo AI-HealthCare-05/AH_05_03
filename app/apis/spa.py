@@ -145,6 +145,17 @@ def mount(app: FastAPI) -> bool:
                 candidate,
                 headers={**SECURITY_HEADERS, "Cache-Control": _cache_control(f"/{full_path}")},
             )
+        # **해시가 박힌 산출물 경로는 폴백을 태우지 않는다.** `/assets/` 아래에는 SPA
+        # 라우트가 없으므로, 여기까지 왔다는 것은 파일이 없다는 뜻이고 그건 404 다.
+        #
+        # 폴백을 태우면 브라우저가 `index.html` 을 **200 과 text/html** 로 받아 놓고
+        # 자바스크립트 모듈로 파싱하려다 실패한다. 화면에는 `Failed to fetch
+        # dynamically imported module` 만 남아서, 배포로 청크 해시가 바뀐 것인지
+        # 코드가 깨진 것인지 구분할 수 없다 — 실제로 그 상태로 `/insights` 를 비롯한
+        # 지연 로딩 화면이 전부 열리지 않았다.
+        if full_path.startswith(tuple(prefix.lstrip("/") for prefix in IMMUTABLE_PREFIXES)):
+            raise StarletteHTTPException(status_code=404)
+
         return FileResponse(index, headers={**SECURITY_HEADERS, "Cache-Control": "no-cache"})
 
     return True

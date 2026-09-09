@@ -14,6 +14,14 @@ class HealthRecordCreateRequest(BaseRequestModel):
     recorded_at: datetime = Field(..., description="측정/기록 일시")
     source: str = Field(default="manual", max_length=30, description="출처")
     payload: dict[str, Any] = Field(..., description="기록 상세 데이터")
+    source_document_id: str | None = Field(
+        default=None,
+        max_length=64,
+        description=(
+            "이 기록을 채운 원본 서류의 id. 실물은 브라우저 보관함에 있으므로 서버는 "
+            "id 만 들고 있다 — 올린 기기에서만 열린다"
+        ),
+    )
     note: str | None = Field(default=None, description="메모")
 
 
@@ -22,6 +30,7 @@ class HealthRecordUpdateRequest(BaseRequestModel):
     recorded_at: datetime | None = None
     source: str | None = Field(default=None, max_length=30)
     payload: dict[str, Any] | None = None
+    source_document_id: str | None = Field(default=None, max_length=64)
     note: str | None = None
     status: str | None = None
 
@@ -33,6 +42,7 @@ class HealthRecordData(BaseSerializerModel):
     recorded_at: datetime
     source: str
     payload: dict[str, Any]
+    source_document_id: str | None = None
     note: str | None = None
     status: str
     row_version: int
@@ -52,6 +62,7 @@ class HealthRecordSyncItem(BaseRequestModel):
     recorded_at: datetime
     source: str = "manual"
     payload: dict[str, Any]
+    source_document_id: str | None = None
     note: str | None = None
     status: str = "active"
     row_version: int = 1
