@@ -120,10 +120,11 @@ export function containsNewMedicationRecord(message: string): boolean {
   const isHypothetical = /(?:먹어도|복용해도|먹을까|복용할까|먹으면|복용하면)/.test(normalized);
   if (isHypothetical) return false;
 
-  const statesCompletedIntake = /(?:먹었|복용했|복용함|먹음|투약했|삼켰)/.test(normalized);
-  const hasDoseWithoutQuestion = /\d+(?:\.\d+)?\s*(?:알|정|캡슐|포|mg|ml|밀리그램|밀리리터)/i.test(normalized) &&
+  const statesCompletedIntake = /(?:먹었|먹엇|머것|먹음|먹어씀|먹었음|먹엇음|머엇|복용했|복용햇|복용함|투약했|투약햇|투약함|삼켰|삼켯|삼킴|챙겨먹|챙겨머|먹ㅇ)/.test(normalized);
+  const hasDoseWithoutQuestion = /(?:[0-9]+(?:\.[0-9]+)?|[일이삼사오육칠팔구십한두세네반])\s*(?:알|정|캡슐|포|병|개|스푼|mg|ml|밀리그램|밀리리터)/i.test(normalized) &&
     !/(?:\?|？|돼|괜찮|가능)/.test(normalized);
-  return statesCompletedIntake || hasDoseWithoutQuestion;
+  const hasCompletedIntakeKeyword = /(?:복용\s*완료|투약\s*완료|먹는\s*거\s*완료|먹기\s*완료)/.test(normalized);
+  return statesCompletedIntake || hasDoseWithoutQuestion || hasCompletedIntakeKeyword;
 }
 
 export function removeMedicationSavePrompt(message: string): string {
@@ -140,8 +141,22 @@ export function shouldAutoSaveHealthRecord(response: HealthAssistantResponse, us
   if (response.auto_save === true) return true;
 
   const normalized = userMessage.trim().toLowerCase();
-  if (/(?:할\s*거|할게|하려고|예정|먹을\s*거|복용할\s*거|측정할\s*거)/.test(normalized)) return false;
-  return /(?:했어|했어요|했다|했습니다|완료|먹었|복용했|나왔|측정했|쟀|뛰었|달렸|걸었|마셨|잤어|잤어요)/.test(normalized);
+  // 미래 예정형 발화는 제외
+  if (/(?:할\s*거|할게|하려고|예정|먹을\s*거|복용할\s*거|측정할\s*거|잴\s*거)/.test(normalized)) return false;
+  // 질문형 어미가 명확한 경우 제외
+  if (/(?:\?|？|먹어도|복용해도|잴까|먹을까|어때|어떨까|괜찮|가능)/.test(normalized)) return false;
+
+  // 과거 완료형 표현이 있으면 자동저장
+  if (/(?:했어|햇어|했어요|햇어요|했다|햇다|했습니다|햇습니다|완료|먹었|먹엇|머것|먹음|먹어씀|먹었음|먹엇음|머엇|복용했|복용햇|복용함|투약했|투약햇|투약함|삼켰|삼켯|삼킴|나왔|나왓|측정했|측정햇|쟀|잿|뛰었|뛰엇|달렸|달렷|걸었|걸엇|마셨|마셧|잤어|잣어|잤어요|잣어요|먹ㅇ)/.test(normalized)) {
+    return true;
+  }
+
+  // 복약 기록의 경우 복약 완료 표현이나 단위가 있는 진술이면 자동저장
+  if (response.intent === "record_medication" && response.medication_draft && containsNewMedicationRecord(userMessage)) {
+    return true;
+  }
+
+  return false;
 }
 
 export function buildAutoSaveAssistantMessage(response: HealthAssistantResponse): string {

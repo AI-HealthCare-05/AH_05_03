@@ -24,6 +24,7 @@ from app.dtos.health_assistant import (
     HealthAssistantResponse,
 )
 from app.models.service_accounts import ServiceAccount
+from app.repositories.chat_session_repository import ChatSessionRepository
 from app.repositories.health_record_repository import HealthRecordRepository
 from app.repositories.household_repository import HouseholdRepository
 from app.repositories.profile_repository import ProfileRepository
@@ -58,7 +59,12 @@ def get_health_assistant_service(
         profile_repo=ProfileRepository(session),
         household_repo=HouseholdRepository(session),
     )
-    return HealthAssistantService(health_record_service=record_service)
+    return HealthAssistantService(
+        health_record_service=record_service,
+        chat_session_repo=ChatSessionRepository(session),
+        profile_repo=ProfileRepository(session),
+        household_repo=HouseholdRepository(session),
+    )
 
 
 @health_assistant_router.post(
@@ -81,7 +87,9 @@ async def chat_with_assistant(
         config.LLM_CHAT_RATE_WINDOW_SECONDS,
     )
     if request.session_id is not None:
-        await chat_session_service.get_session(account, request.session_id)
+        session_obj = await chat_session_service.get_session(account, request.session_id)
+        if request.profile_context and not request.profile_context.profile_id:
+            request.profile_context.profile_id = session_obj.profile_id
         await chat_session_service.add_message(
             account=account,
             session_id=request.session_id,
@@ -89,7 +97,7 @@ async def chat_with_assistant(
             content=request.messages[-1].content,
         )
 
-    data = await service.respond(request, account)
+    data = await service.respond(request, account=account)
 
     if request.session_id is not None:
         await chat_session_service.add_message(
@@ -136,7 +144,9 @@ async def stream_chat_with_assistant(
     )
 
     if request.session_id is not None:
-        await chat_session_service.get_session(account, request.session_id)
+        session_obj = await chat_session_service.get_session(account, request.session_id)
+        if request.profile_context and not request.profile_context.profile_id:
+            request.profile_context.profile_id = session_obj.profile_id
         await chat_session_service.add_message(
             account=account,
             session_id=request.session_id,
@@ -147,7 +157,7 @@ async def stream_chat_with_assistant(
     async def frames() -> AsyncIterator[str]:
         final_payload: dict[str, Any] | None = None
         try:
-            async for name, payload in service.stream(request, account):
+            async for name, payload in service.stream(request, account=account):
                 if name == "result" and isinstance(payload, dict):
                     final_payload = payload
                 body = json.dumps(payload, ensure_ascii=False)

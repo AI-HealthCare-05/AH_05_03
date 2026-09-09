@@ -147,7 +147,10 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
 
   it("새 복약 기록과 복약 관련 질문을 구분한다", () => {
     expect(containsNewMedicationRecord("이지엔 한 알 먹었어")).toBe(true);
+    expect(containsNewMedicationRecord("타이레놀 한알 먹엇어")).toBe(true);
+    expect(containsNewMedicationRecord("이지엔 두알 머것어")).toBe(true);
     expect(containsNewMedicationRecord("8시에 타이레놀 1알")).toBe(true);
+    expect(containsNewMedicationRecord("아스피린 1정 복용완료")).toBe(true);
     expect(containsNewMedicationRecord("나 담배 피워도 돼?")).toBe(false);
     expect(containsNewMedicationRecord("타이레놀 먹어도 돼?")).toBe(false);
   });
@@ -230,8 +233,167 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       suggested_quick_replies: [],
     };
     expect(shouldAutoSaveHealthRecord(medicationResponse, "타이레놀 1알 먹었어")).toBe(true);
+    expect(shouldAutoSaveHealthRecord(medicationResponse, "타이레놀 한알 먹엇어")).toBe(true);
+    expect(shouldAutoSaveHealthRecord(medicationResponse, "타이레놀 한알 먹ㅇ성서")).toBe(true);
     expect(shouldAutoSaveHealthRecord(medicationResponse, "타이레놀 먹어도 돼?")).toBe(false);
     expect(shouldAutoSaveHealthRecord({ ...response, missing_fields: ["reps"] }, "스쿼트 했어")).toBe(false);
+  });
+
+  it("구어체/오탈자로 복약 사실을 말해도 확인 카드 없이 즉시 자동 저장한다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "record_medication",
+      assistant_message: "타이레놀 1알 복용 기록을 저장할까요?",
+      medication_draft: {
+        medication_name: "타이레놀",
+        dosage: "1알",
+        taken_at: null,
+      },
+      missing_fields: [],
+      needs_confirmation: true,
+      auto_save: true,
+      suggested_quick_replies: [],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={mockProfile}
+        runtime={mockRuntime}
+        isOpen={true}
+        onClose={mockOnClose}
+        onRecordSaved={mockOnRecordSaved}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+    const sendBtn = screen.getByRole("button", { name: "전송" });
+
+    fireEvent.change(input, { target: { value: "타이레놀 한알 먹엇어" } });
+    fireEvent.click(sendBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/타이레놀 1알 복용 기록을 저장했습니다/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/입력하신 기록은 이해했지만 저장하지 못했습니다/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /복약 기록에 저장하기/ })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1);
+      expect(mockCreateRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          profileId: "profile-1",
+          recordType: "medication",
+          source: "local_ai",
+          payload: expect.objectContaining({
+            type: "medication",
+            medicationName: "타이레놀",
+            dosage: "1알",
+          }),
+        }),
+      );
+    });
+  });
+
+  it("자모 분리 오탈자(먹ㅇ성서)로 말해도 LLM의 record_medication 인텐트를 신뢰하여 즉시 자동 저장한다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "record_medication",
+      assistant_message: "타이레놀 1알 복용 기록을 저장할까요?",
+      medication_draft: {
+        medication_name: "타이레놀",
+        dosage: "1알",
+        taken_at: null,
+      },
+      missing_fields: [],
+      needs_confirmation: false,
+      auto_save: false,
+      suggested_quick_replies: [],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={mockProfile}
+        runtime={mockRuntime}
+        isOpen={true}
+        onClose={mockOnClose}
+        onRecordSaved={mockOnRecordSaved}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+    const sendBtn = screen.getByRole("button", { name: "전송" });
+
+    fireEvent.change(input, { target: { value: "타이레놀 한알 먹ㅇ성서" } });
+    fireEvent.click(sendBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/타이레놀 1알 복용 기록을 저장했습니다/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/입력하신 기록은 이해했지만 저장하지 못했습니다/)).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          profileId: "profile-1",
+          recordType: "medication",
+          source: "local_ai",
+          payload: expect.objectContaining({
+            type: "medication",
+            medicationName: "타이레놀",
+            dosage: "1알",
+          }),
+        }),
+      );
+    });
+  });
+
+  it("여러 초안이 동시에 반환되어도 intent와 일치하는 초안만 자동 저장하고 다른 초안은 저장하지 않는다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "record_exercise",
+      assistant_message: "스쿼트 20회 운동 기록을 저장했습니다.",
+      exercise_draft: {
+        exercise_name: "스쿼트",
+        reps: 20,
+        sets: 1,
+      },
+      medication_draft: {
+        medication_name: "타이레놀",
+        dosage: "1알",
+      },
+      missing_fields: [],
+      needs_confirmation: false,
+      auto_save: true,
+      suggested_quick_replies: [],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={mockProfile}
+        runtime={mockRuntime}
+        isOpen={true}
+        onClose={mockOnClose}
+        onRecordSaved={mockOnRecordSaved}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+    const sendBtn = screen.getByRole("button", { name: "전송" });
+
+    fireEvent.change(input, { target: { value: "스쿼트 20개 했어" } });
+    fireEvent.click(sendBtn);
+
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1);
+      expect(mockCreateRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordType: "exercise",
+          payload: expect.objectContaining({
+            exerciseName: "스쿼트",
+          }),
+        }),
+      );
+    });
+    expect(mockCreateRecord).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        recordType: "medication",
+      }),
+    );
   });
 
   it("운동을 저장하면 오늘 운동 전체 기록을 자동으로 다시 보여준다", async () => {
