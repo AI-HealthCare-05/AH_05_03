@@ -1664,8 +1664,12 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       materialsOf(mesh.material).forEach((material) => {
         if (!ownedMaterials.has(material)) material.dispose();
       });
-      const original = originalMaterials.get(mesh);
-      if (original) mesh.material = original;
+      if (typeof restoreMeshMaterial === "function") {
+        restoreMeshMaterial(mesh);
+      } else {
+        const original = originalMaterials.get(mesh);
+        if (original) mesh.material = original;
+      }
     });
     selectedMeshes.clear();
     renderScene();
@@ -1931,40 +1935,6 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     });
   };
 
-  const clearPaint = () => {
-    while (paintMarkersGroup.children.length > 0) {
-      paintMarkersGroup.remove(paintMarkersGroup.children[0]);
-    }
-    for (const stroke of paintHistory) {
-      for (const mesh of stroke.touchedMeshes) {
-        const orig = originalMaterials.get(mesh);
-        if (orig) mesh.material = orig;
-      }
-    }
-    paintHistory.length = 0;
-    currentStroke = null;
-    draftPaintedMap.clear();
-    emitDraftPaintedSummary();
-    renderScene();
-  };
-
-  const undoPaint = () => {
-    const last = paintHistory.pop();
-    if (!last) return;
-    for (const s of last.samples) {
-      for (const m of s.markers) {
-        paintMarkersGroup.remove(m);
-      }
-    }
-    const remainingMeshes = new Set(paintHistory.flatMap((s) => s.touchedMeshes));
-    draftPaintedMap.clear();
-    for (const mesh of remainingMeshes) {
-      ensureDraftPaintedItem(mesh);
-    }
-    emitDraftPaintedSummary();
-    renderScene();
-  };
-
   setInteractionModeRef.current = (mode) => {
     interactionMode = mode;
     if (mode === "paint") {
@@ -1978,10 +1948,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       }
       onRecentlyAddedStaged?.(null);
       if (hoveredMesh && !isMeshSelected(hoveredMesh)) {
-        const orig = originalMaterials.get(hoveredMesh);
-        if (orig) hoveredMesh.material = orig;
-        const origOrder = originalRenderOrders.get(hoveredMesh);
-        if (origOrder !== undefined) hoveredMesh.renderOrder = origOrder;
+        restoreMeshMaterial(hoveredMesh);
         hoveredMesh = undefined;
       }
       onHoverStructure(null);
@@ -1989,8 +1956,6 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     }
     canvas.style.cursor = mode === "paint" ? "crosshair" : "";
   };
-  undoPaintRef.current = undoPaint;
-  clearPaintRef.current = clearPaint;
 
   type HistoryAction =
     | {
@@ -2332,6 +2297,90 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     const origOrder = originalRenderOrders.get(mesh);
     if (origOrder !== undefined) mesh.renderOrder = origOrder;
   };
+
+  const clearPaint = () => {
+    while (paintMarkersGroup.children.length > 0) {
+      paintMarkersGroup.remove(paintMarkersGroup.children[0]);
+    }
+    for (const stroke of paintHistory) {
+      for (const mesh of stroke.touchedMeshes) {
+        restoreMeshMaterial(mesh);
+      }
+    }
+    draftPaintedMap.forEach((item) => {
+      if (item.mesh) {
+        restoreMeshMaterial(item.mesh);
+      }
+    });
+    paintHistory.length = 0;
+    currentStroke = null;
+    draftPaintedMap.clear();
+    emitDraftPaintedSummary();
+
+    if (isIsolateMode) {
+      applyIsolateShading(anatomyMeshes, selectedMeshes, {
+        originalMaterials,
+        ghostMaterialsMap,
+        isSurfaceMesh: isSurfaceStructure,
+        createSelectedTransparentMaterial: createSelectedTransparentMaterials,
+        createSelectedMaterial: createSelectedMaterials,
+      });
+    } else if (isXRayMode) {
+      applyXRayShading(anatomyMeshes, {
+        originalMaterials,
+        ghostMaterialsMap,
+        selectedMeshes,
+        createSelectedTransparentMaterial: createSelectedTransparentMaterials,
+        createSelectedMaterial: createSelectedMaterials,
+      });
+    }
+
+    renderScene();
+  };
+
+  const undoPaint = () => {
+    const last = paintHistory.pop();
+    if (!last) return;
+    for (const s of last.samples) {
+      for (const m of s.markers) {
+        paintMarkersGroup.remove(m);
+      }
+    }
+    const remainingMeshes = new Set(paintHistory.flatMap((s) => s.touchedMeshes));
+    draftPaintedMap.clear();
+    for (const mesh of remainingMeshes) {
+      ensureDraftPaintedItem(mesh);
+    }
+    for (const mesh of last.touchedMeshes) {
+      if (!remainingMeshes.has(mesh)) {
+        restoreMeshMaterial(mesh);
+      }
+    }
+    emitDraftPaintedSummary();
+
+    if (isIsolateMode) {
+      applyIsolateShading(anatomyMeshes, selectedMeshes, {
+        originalMaterials,
+        ghostMaterialsMap,
+        isSurfaceMesh: isSurfaceStructure,
+        createSelectedTransparentMaterial: createSelectedTransparentMaterials,
+        createSelectedMaterial: createSelectedMaterials,
+      });
+    } else if (isXRayMode) {
+      applyXRayShading(anatomyMeshes, {
+        originalMaterials,
+        ghostMaterialsMap,
+        selectedMeshes,
+        createSelectedTransparentMaterial: createSelectedTransparentMaterials,
+        createSelectedMaterial: createSelectedMaterials,
+      });
+    }
+
+    renderScene();
+  };
+
+  undoPaintRef.current = undoPaint;
+  clearPaintRef.current = clearPaint;
 
   const createAdaptiveHoverMaterials = (mesh: THREE.Mesh, orig: THREE.Material | THREE.Material[]) => {
     if (isXRayMode && !isSkeletonStructure(mesh)) {
