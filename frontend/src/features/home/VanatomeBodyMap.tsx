@@ -1703,6 +1703,11 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   controls.minDistance = 0.8;
   controls.maxDistance = 11;
   controls.target.set(0, 0.15, 0);
+  // 모바일 뷰포트 스크롤 트랩 방지: 1손가락 터치는 페이지 세로 스크롤 허용, 2손가락은 3D 회전/핀치 줌에 위임
+  controls.touches = {
+    ONE: -1 as unknown as THREE.TOUCH,
+    TWO: THREE.TOUCH.DOLLY_ROTATE,
+  };
 
   scene.add(new THREE.HemisphereLight(0xb9f6ff, 0x18344b, 1.8));
   const keyLight = new THREE.DirectionalLight(0xbff8ff, 2.2);
