@@ -9,11 +9,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import pytest_asyncio
 
-from app.dtos.medication import DrugInfo, DurItem, MedicationSearchResult
+from app.dtos.medication import DrugInfo, DrugInteractionItem, DurItem, MedicationSearchResult
 from app.services.medication_client import (
     MedicationClient,
+    _build_interaction_summary_message,
     _build_summary_message,
+    _extract_drug_names,
     _extract_primary_drug_name,
+    _parse_dur_interaction_items,
     _parse_dur_items,
     _parse_easydr_item,
 )
@@ -107,6 +110,81 @@ class TestBuildSummaryMessage:
         msg = _build_summary_message("아스피린", [drug])
         assert "DUR 주의·금기" in msg
         assert "와파린" in msg
+
+
+class TestParseDurInteractionItems:
+    def test_parse_matching_items(self) -> None:
+        raw_list = [
+            {
+                "ITEM_NAME": "타이레놀정500밀리그람",
+                "MIXTURE_ITEM_NAME": "아스피린장용정100밀리그람",
+                "MAIN_INGR": "아세트아미노펜",
+                "MIXTURE_MAIN_INGR": "아세틸살리실산",
+                "PROHBT_CONTENT": "출혈 위험 증가",
+                "TYPE_NAME": "병용금기",
+            },
+            {
+                "ITEM_NAME": "타이레놀정500밀리그람",
+                "MIXTURE_ITEM_NAME": "와파린정2밀리그람",
+                "MAIN_INGR": "아세트아미노펜",
+                "MIXTURE_MAIN_INGR": "와파린",
+                "PROHBT_CONTENT": "항응고 작용 증강",
+                "TYPE_NAME": "병용금기",
+            },
+        ]
+        items = _parse_dur_interaction_items(raw_list, target_drug_keyword="아스피린")
+        assert len(items) == 1
+        assert items[0].drug_a == "타이레놀정500밀리그람"
+        assert items[0].drug_b == "아스피린장용정100밀리그람"
+        assert items[0].ingredient_a == "아세트아미노펜"
+        assert items[0].ingredient_b == "아세틸살리실산"
+        assert items[0].prohibition_content == "출혈 위험 증가"
+
+    def test_parse_no_match(self) -> None:
+        raw_list = [
+            {
+                "ITEM_NAME": "타이레놀정",
+                "MIXTURE_ITEM_NAME": "와파린정",
+                "PROHBT_CONTENT": "출혈 위험",
+            }
+        ]
+        items = _parse_dur_interaction_items(raw_list, target_drug_keyword="게보린")
+        assert items == []
+
+
+class TestBuildInteractionSummaryMessage:
+    def test_with_interaction_danger(self) -> None:
+        item = DrugInteractionItem(
+            drug_a="타이레놀정500밀리그람",
+            drug_b="아스피린장용정100밀리그람",
+            ingredient_a="아세트아미노펜",
+            ingredient_b="아세틸살리실산",
+            prohibition_content="위장관 출혈 위험 증가",
+            type_name="병용금기",
+        )
+        msg = _build_interaction_summary_message("타이레놀", "아스피린", [item], [])
+        assert "DUR 병용금기 주의: 타이레놀 + 아스피린" in msg
+        assert "위장관 출혈 위험 증가" in msg
+        assert "타이레놀정500밀리그람 (아세트아미노펜)" in msg
+        assert "의사 또는 약사와 상담" in msg
+
+    def test_without_interaction_danger(self) -> None:
+        msg = _build_interaction_summary_message("타이레놀", "소화제", [], [])
+        assert "DUR 병용금기 확인: 타이레놀 + 소화제" in msg
+        assert "직접적인 병용금기 항목은 확인되지 않았습니다" in msg
+
+
+class TestExtractDrugNames:
+    def test_extract_single_name(self) -> None:
+        assert _extract_drug_names("타이레놀") == ["타이레놀"]
+        assert _extract_drug_names("아스피린장용정") == ["아스피린장용정"]
+
+    def test_extract_multiple_names_with_particles(self) -> None:
+        assert _extract_drug_names("타이레놀이랑 아스피린") == ["타이레놀", "아스피린"]
+        assert _extract_drug_names("판콜과 게보린") == ["판콜", "게보린"]
+        assert _extract_drug_names("와파린하고 아스피린") == ["와파린", "아스피린"]
+        assert _extract_drug_names("타이레놀, 게보린") == ["타이레놀", "게보린"]
+        assert _extract_drug_names("타이레놀 + 게보린") == ["타이레놀", "게보린"]
 
 
 class TestNeedsMedicationInfoRouting:
@@ -365,3 +443,167 @@ def test_cache_does_not_grow_without_bound() -> None:
     # 가장 최근 것은 남아 있다.
     assert mc_mod._cache_get(f"약-{mc_mod._CACHE_MAX_ENTRIES + 49}") is not None
     mc_mod._cache.clear()
+
+
+@pytest.fixture
+def mock_usjnt_response() -> dict:
+    return {
+        "body": {
+            "items": [
+                {
+                    "ITEM_NAME": "타이레놀정500밀리그람",
+                    "MIXTURE_ITEM_NAME": "아스피린장용정100밀리그람",
+                    "MAIN_INGR": "아세트아미노펜",
+                    "MIXTURE_MAIN_INGR": "아세틸살리실산",
+                    "PROHBT_CONTENT": "심각한 위장관계 출혈 위험 증가",
+                    "TYPE_NAME": "병용금기",
+                }
+            ]
+        }
+    }
+
+
+@pytest.mark.asyncio
+async def test_search_medication_interaction_contraindicated(
+    mock_easydr_response: dict,
+    mock_usjnt_response: dict,
+) -> None:
+    """병용금기 항목이 발견되면 has_interaction_danger=True 및 경고 메시지가 생성된다."""
+    mock_resp_easydr = MagicMock()
+    mock_resp_easydr.raise_for_status = MagicMock()
+    mock_resp_easydr.json.return_value = mock_easydr_response
+
+    mock_resp_usjnt = MagicMock()
+    mock_resp_usjnt.raise_for_status = MagicMock()
+    mock_resp_usjnt.json.return_value = mock_usjnt_response
+
+    async def fake_get(url: str, **kwargs):  # noqa: ANN001
+        if "DrbEasyDrugInfoService" in url:
+            return mock_resp_easydr
+        return mock_resp_usjnt
+
+    with patch("app.services.medication_client.config") as mock_cfg:
+        mock_cfg.MFDS_API_KEY = "test-api-key"
+        with patch("httpx.AsyncClient") as mock_http:
+            mock_http.return_value.__aenter__ = AsyncMock(return_value=MagicMock(get=AsyncMock(side_effect=fake_get)))
+            mock_http.return_value.__aexit__ = AsyncMock(return_value=False)
+            client = MedicationClient()
+            from app.services import medication_client as mc_mod
+
+            mc_mod._cache.clear()
+            result = await client.search_medication("타이레놀", target_drug_name="아스피린")
+
+    assert result.has_interaction_danger is True
+    assert len(result.interaction_items) == 1
+    assert result.interaction_items[0].drug_b == "아스피린장용정100밀리그람"
+    assert result.interaction_items[0].prohibition_content == "심각한 위장관계 출혈 위험 증가"
+    assert "DUR 병용금기 주의: 타이레놀 + 아스피린" in result.message
+    assert "위장관계 출혈 위험 증가" in result.message
+
+
+@pytest.mark.asyncio
+async def test_search_medication_interaction_safe(mock_easydr_response: dict) -> None:
+    """병용금기 항목이 없으면 has_interaction_danger=False 및 확인 메시지가 생성된다."""
+    mock_resp_easydr = MagicMock()
+    mock_resp_easydr.raise_for_status = MagicMock()
+    mock_resp_easydr.json.return_value = mock_easydr_response
+
+    mock_resp_usjnt_empty = MagicMock()
+    mock_resp_usjnt_empty.raise_for_status = MagicMock()
+    mock_resp_usjnt_empty.json.return_value = {"body": {"items": []}}
+
+    async def fake_get(url: str, **kwargs):  # noqa: ANN001
+        if "DrbEasyDrugInfoService" in url:
+            return mock_resp_easydr
+        return mock_resp_usjnt_empty
+
+    with patch("app.services.medication_client.config") as mock_cfg:
+        mock_cfg.MFDS_API_KEY = "test-api-key"
+        with patch("httpx.AsyncClient") as mock_http:
+            mock_http.return_value.__aenter__ = AsyncMock(return_value=MagicMock(get=AsyncMock(side_effect=fake_get)))
+            mock_http.return_value.__aexit__ = AsyncMock(return_value=False)
+            client = MedicationClient()
+            from app.services import medication_client as mc_mod
+
+            mc_mod._cache.clear()
+            result = await client.search_medication("타이레놀", target_drug_name="소화제")
+
+    assert result.has_interaction_danger is False
+    assert len(result.interaction_items) == 0
+    assert "DUR 병용금기 확인: 타이레놀 + 소화제" in result.message
+    assert "직접적인 병용금기 항목은 확인되지 않았습니다" in result.message
+
+
+@pytest.mark.asyncio
+async def test_search_medication_interaction_single_query_auto_split(
+    mock_easydr_response: dict,
+    mock_usjnt_response: dict,
+) -> None:
+    """약품명이 한 문자열에 조사로 연결된 경우 자동으로 병용금기 모드로 분기한다."""
+    mock_resp_easydr = MagicMock()
+    mock_resp_easydr.raise_for_status = MagicMock()
+    mock_resp_easydr.json.return_value = mock_easydr_response
+
+    mock_resp_usjnt = MagicMock()
+    mock_resp_usjnt.raise_for_status = MagicMock()
+    mock_resp_usjnt.json.return_value = mock_usjnt_response
+
+    async def fake_get(url: str, **kwargs):  # noqa: ANN001
+        if "DrbEasyDrugInfoService" in url:
+            return mock_resp_easydr
+        return mock_resp_usjnt
+
+    with patch("app.services.medication_client.config") as mock_cfg:
+        mock_cfg.MFDS_API_KEY = "test-api-key"
+        with patch("httpx.AsyncClient") as mock_http:
+            mock_http.return_value.__aenter__ = AsyncMock(return_value=MagicMock(get=AsyncMock(side_effect=fake_get)))
+            mock_http.return_value.__aexit__ = AsyncMock(return_value=False)
+            client = MedicationClient()
+            from app.services import medication_client as mc_mod
+
+            mc_mod._cache.clear()
+            result = await client.search_medication("타이레놀이랑 아스피린")
+
+    assert result.has_interaction_danger is True
+    assert result.target_drug_name == "아스피린"
+
+
+@pytest.mark.asyncio
+async def test_search_medication_interaction_bidirectional_cache(
+    mock_easydr_response: dict,
+    mock_usjnt_response: dict,
+) -> None:
+    """A-B 조회 후 B-A 조회 시 양방향 캐시 히트로 추가 네트워크 호출이 발생하지 않는다."""
+    call_count = 0
+
+    mock_resp_easydr = MagicMock()
+    mock_resp_easydr.raise_for_status = MagicMock()
+    mock_resp_easydr.json.return_value = mock_easydr_response
+
+    mock_resp_usjnt = MagicMock()
+    mock_resp_usjnt.raise_for_status = MagicMock()
+    mock_resp_usjnt.json.return_value = mock_usjnt_response
+
+    async def fake_get(url: str, **kwargs):  # noqa: ANN001
+        nonlocal call_count
+        call_count += 1
+        if "DrbEasyDrugInfoService" in url:
+            return mock_resp_easydr
+        return mock_resp_usjnt
+
+    with patch("app.services.medication_client.config") as mock_cfg:
+        mock_cfg.MFDS_API_KEY = "test-api-key"
+        with patch("httpx.AsyncClient") as mock_http:
+            mock_http.return_value.__aenter__ = AsyncMock(return_value=MagicMock(get=AsyncMock(side_effect=fake_get)))
+            mock_http.return_value.__aexit__ = AsyncMock(return_value=False)
+            client = MedicationClient()
+            from app.services import medication_client as mc_mod
+
+            mc_mod._cache.clear()
+            await client.search_medication("타이레놀", target_drug_name="아스피린")
+            first_count = call_count
+
+            # 순서를 바꿔서 B-A 로 조회
+            res2 = await client.search_medication("아스피린", target_drug_name="타이레놀")
+            assert call_count == first_count  # 캐시 히트
+            assert res2.has_interaction_danger is True
