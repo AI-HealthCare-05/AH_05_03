@@ -157,8 +157,8 @@ line-ending = "auto"
 [tool.mypy]
 exclude = ["app/core/db/migrations/", "chronic_disease_engine/"]
 
-# sklearn·tabpfn 은 py.typed 마커가 없고, schema 는 modeling/data 를 sys.path 에
-# 얹어 부르는 지역 모듈이라 mypy 가 경로로 찾지 못한다.
+# sklearn·tabpfn 은 py.typed 마커가 없고, schema·labels·splits 는 modeling/ 을 sys.path
+# 에 얹어 부르는 지역 모듈이라 mypy 가 경로로 찾지 못한다.
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "tabpfn.*", "schema"]
+module = ["sklearn.*", "tabpfn.*", "schema", "labels", "splits"]
 ignore_missing_imports = true

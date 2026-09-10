@@ -132,6 +132,38 @@ OUTCOME_SOURCE = [
     "dx_liver",
 ]
 
+# --------------------------------------------------------------------------
+# 발병(incidence) 라벨 — 파동이 둘 이상인 패널 자료만
+# --------------------------------------------------------------------------
+
+#: 발병 라벨을 만들 수 있는 질환과 그 근거가 되는 **자가보고 진단** 칸.
+#:
+#: 검사 실측 라벨(`add_prevalence_labels`)과 **성질이 다르다.** 이쪽은 "의사에게
+#: 들었다" 이므로 진단받지 않은 사람이 음성으로 세어지고, 그래서 여기서 만든 발병
+#: 라벨과 번들 20개의 유병 라벨을 같은 모델에 섞으면 안 된다. 두 라벨은 다른 사건이다.
+INCIDENCE_SOURCES: dict[str, str] = {
+    "dm": "dx_diabetes",
+    "htn": "dx_hypertension",
+    "hyperchol": "dx_high_cholesterol",
+    "ckd": "dx_kidney",
+    "fatty_liver": "dx_liver",
+    "stroke": "dx_stroke",
+    "heart_disease": "dx_heart_disease",
+}
+
+#: 지평(년). **화면·사망 모델과 같은 세 해를 쓴다** — `app/services/trajectory.py` 의
+#: `HORIZONS` 가 카드 앞면에 적는 해이고 `modeling/train_mortality_risk.py` 의
+#: `HORIZONS_MONTHS` 가 같은 셋(12·36·60개월)이다. 세 곳이 갈리면 카드 한 장 안에
+#: 다른 해의 숫자가 나란히 서게 된다.
+INCIDENCE_HORIZONS_YEARS: tuple[int, ...] = (1, 3, 5)
+
+
+def incidence_label(condition: str, horizon_years: int) -> str:
+    """발병 라벨 칸 이름. **여기서만 만든다** — 아래 `LABELS` 와 `labels.py` 가 같은
+    문자열을 봐야 한다."""
+    return f"label_{condition}_incident_{horizon_years}y"
+
+
 LABELS = [
     "label_dm_prevalent",
     "label_htn_prevalent",
@@ -154,8 +186,12 @@ LABELS = [
     "label_obesity",  # BMI >= 25 (대한비만학회 2022 아시아-태평양 기준)
     "label_chronic_inflammation",  # hs-CRP > 3 mg/L. 급성(>10)은 라벨에서 뺀다
     "label_hyperuricemia",  # 요산 >7.0(남) / >6.0(여) mg/dL
-    "label_dm_incident",  # panel datasets only
-    "label_htn_incident",  # panel datasets only
+    # 발병 라벨(패널 자료만). 질환 × 지평 곱이라 **손으로 적지 않는다** —
+    # `incidence_label` 이 이름을 만들고 여기서 그 함수로 생성한다. 목록과 함수가
+    # 갈리면 `conform()` 이 새 라벨을 조용히 떨어뜨리고, 학습은 "그 칸이 없다" 가
+    # 아니라 "그 라벨이 전부 결측이다" 로 보게 된다.
+    *[f"label_{condition}_incident" for condition in INCIDENCE_SOURCES],
+    *[incidence_label(condition, horizon) for condition in INCIDENCE_SOURCES for horizon in INCIDENCE_HORIZONS_YEARS],
     "label_chd_10yr",  # prospective cohorts only
 ]
 
