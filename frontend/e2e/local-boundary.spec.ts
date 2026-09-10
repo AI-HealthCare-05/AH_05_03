@@ -35,7 +35,7 @@ test("프로필과 건강기록은 서버 API(PostgreSQL)를 통해 등록·조�
   expect(apiRequests.some((req) => req.startsWith("POST /api/v1/profiles"))).toBe(true);
 
   // 2. 건강기록 작성
-  await page.getByRole("button", { name: /건강기록 작성/ }).first().click();
+  await page.getByRole("button", { name: "첫 기록 작성하기" }).click();
   await page.getByRole("button", { name: /직접 작성/ }).click();
   await page.getByRole("combobox", { name: "기록 종류" }).selectOption("note");
   await page.getByRole("textbox", { name: "기록 내용" }).fill("오늘 컨디션이 좋음");
