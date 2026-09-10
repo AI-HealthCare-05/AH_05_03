@@ -208,6 +208,72 @@ class TestProfileAndRecordAPIs:
         )
         assert listed.json()["data"]["items"][0]["source_document_id"] == "doc-abc-123"
 
+    async def test_record_values_maps_printed_labels_to_form_fields(self, client: AsyncClient) -> None:
+        """**검진표 한 장의 수치를 판정 칸 이름으로 풀어 주는가.**
+
+        표기 100개를 판정 칸 20개에 잇는 사전은 서버에만 있다(`ocr_measurements`).
+        클라이언트가 직접 풀면 같은 판단이 두 곳에 살고 한쪽만 고쳐진다. 그래서 이
+        길이 있고, 검진 수치를 고치는 화면이 여기에 기댄다.
+
+        `prefill` 로는 대신할 수 없다 — 그쪽은 칸마다 **가장 최근 기록**을 고르므로
+        더 새 기록이 있으면 이 검진표의 값이 가려진다.
+        """
+        user_headers = await _login(client, "recvalues@example.com")
+        household_id = await _create_household(client, user_headers)
+        profile_res = await client.post(
+            "/api/v1/profiles",
+            headers=user_headers,
+            json={"household_id": household_id, "display_name": "나", "relationship": "self"},
+        )
+        profile_id = profile_res.json()["data"]["id"]
+
+        created = await client.post(
+            "/api/v1/health-records",
+            headers=user_headers,
+            json={
+                "profile_id": profile_id,
+                "record_type": "health_screening",
+                "recorded_at": "2026-08-28T00:00:00Z",
+                "source": "ocr",
+                "payload": {
+                    "items": [
+                        {"testName": "공복혈당", "value": 104, "unit": "mg/dL"},
+                        {"testName": "수축기혈압", "value": 145, "unit": "mmHg"},
+                    ]
+                },
+            },
+        )
+        assert created.status_code == status.HTTP_201_CREATED, created.text
+        record_id = created.json()["data"]["id"]
+
+        got = await client.get(f"/api/v1/health-records/{record_id}/values", headers=user_headers)
+        assert got.status_code == status.HTTP_200_OK, got.text
+        values = got.json()["data"]["values"]
+        assert values["fasting_glucose"] == 104
+        assert values["sbp"] == 145
+
+        # 고친 값은 `values` 에 담긴다. 읽은 행이 그것을 덮으면 화면에는 고친 값이
+        # 보이는데 판정은 원본으로 돌아간다 — 정본이 이기는지 확인한다.
+        patched = await client.patch(
+            f"/api/v1/health-records/{record_id}",
+            headers=user_headers,
+            json={
+                "payload": {
+                    "items": [
+                        {"testName": "공복혈당", "value": 104, "unit": "mg/dL"},
+                        {"testName": "수축기혈압", "value": 145, "unit": "mmHg"},
+                    ],
+                    "values": {"fasting_glucose": 96},
+                }
+            },
+        )
+        assert patched.status_code == status.HTTP_200_OK, patched.text
+
+        after = await client.get(f"/api/v1/health-records/{record_id}/values", headers=user_headers)
+        assert after.json()["data"]["values"]["fasting_glucose"] == 96
+        # 고치지 않은 칸은 읽은 행에서 그대로 온다.
+        assert after.json()["data"]["values"]["sbp"] == 145
+
     async def test_access_denied_for_other_household(self, client: AsyncClient) -> None:
         user_a = await _login(client, "user-a@example.com")
         user_b = await _login(client, "user-b@example.com")

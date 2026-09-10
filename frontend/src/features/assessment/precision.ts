@@ -114,3 +114,32 @@ export function briefList(items: string[], limit = 3): string {
   if (items.length <= limit) return items.join(", ");
   return `${items.slice(0, limit).join(", ")} 외 ${items.length - limit}개`;
 }
+
+/**
+ * 여러 카드에 **똑같이** 걸리는 정밀화 입력을 골라낸다.
+ *
+ * 카드마다 `refining` 을 적으면 같은 문장이 그대로 반복된다 — 2026-09-10 실측으로
+ * "앉아 있는 시간을 넣으면 예측이 정밀해져요" 가 한 화면에 **14번** 나왔다. 같은
+ * 한 칸을 채우면 그 카드들이 동시에 정밀해지는 것이므로, 정보는 "여러 카드가 이
+ * 값을 기다린다" 하나뿐이고 자리도 하나여야 한다.
+ *
+ * `threshold` 이상의 카드에 걸린 항목만 올린다. 둘에만 걸린 값을 위로 올리면
+ * 사용자가 어느 카드 이야기인지 되짚어야 해서, 카드에 그대로 두는 편이 낫다.
+ */
+export function sharedRefining(
+  verdicts: DiseaseVerdict[],
+  values: Record<string, string>,
+  models: ModelSpec[],
+  threshold = 3,
+): string[] {
+  const counts = new Map<string, number>();
+  for (const verdict of verdicts) {
+    for (const label of new Set(precisionGains(verdict, values, models).refining)) {
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count >= threshold)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label]) => label);
+}

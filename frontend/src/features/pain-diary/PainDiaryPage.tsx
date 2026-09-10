@@ -33,10 +33,32 @@ function formatDateKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * 강도 색 — **면(칠하는 자리)에 쓴다.** 점·막대·배경처럼 글자가 아닌 곳이다.
+ * 글자에는 `getIntensityTextColor` 를 쓴다(아래 참조).
+ */
 function getIntensityColor(intensity: number): string {
   if (intensity <= 3) return "#10b981"; // 경미 (초록)
   if (intensity <= 6) return "#f59e0b"; // 보통 (주황)
   return "#ef4444"; // 심함 (빨강)
+}
+
+/**
+ * 강도 색 — **글자용.** 같은 색조를 어둡게 한 것이다.
+ *
+ * 위 색을 그대로 글자에 쓰면 대비가 무너진다. 강도 알약은 `색 + '22'` 를 배경으로
+ * 깔고 같은 색을 글자로 썼는데, 연한 주황 위의 주황 글자는 대비 **2.00** 으로
+ * WCAG 1.4.3(4.5:1)의 절반도 안 됐다(2026-09-10 실측. 경미 2.32 · 심함 3.32).
+ *
+ * 색조를 바꾸지 않고 명도만 내렸다 — 초록·주황·빨강이라는 강도 신호는 그대로 읽히고,
+ * 같은 틴트 배경 위에서 4.78~5.22 로 통과한다. 면에 쓰는 색을 어둡게 하지 않은 것은
+ * 점과 막대는 글자가 아니라 이 기준의 대상이 아니고, 어둡게 하면 강도 구분이
+ * 눈에 덜 띄기 때문이다.
+ */
+function getIntensityTextColor(intensity: number): string {
+  if (intensity <= 3) return "#0f7a5a"; // 경미 — 틴트 위 4.86
+  if (intensity <= 6) return "#a35c02"; // 보통 — 틴트 위 4.78
+  return "#c02626"; // 심함 — 틴트 위 5.22
 }
 
 function getIntensityLabel(intensity: number): string {
@@ -479,7 +501,9 @@ export function PainDiaryPage() {
             <form onSubmit={handleSubmit} className="diary-form">
               <div className="form-group">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                  <span>통증 부위 *</span>
+                  {/* `span` 이라 눈에는 라벨로 보이지만 입력과 **묶여 있지 않았다.**
+                      placeholder 는 값을 넣으면 사라져서 라벨이 못 된다. */}
+                  <label htmlFor="pain-body-area">통증 부위 *</label>
                   <button
                     type="button"
                     className="secondary-button"
@@ -493,6 +517,7 @@ export function PainDiaryPage() {
                   </button>
                 </div>
                 <input
+                  id="pain-body-area"
                   type="text"
                   placeholder="예: 오른쪽 무릎, 허리 아래쪽, 목 뒷덜미"
                   value={bodyArea}
@@ -542,13 +567,18 @@ export function PainDiaryPage() {
                   <span>통증 강도 (0 ~ 10): <strong>{intensity}점</strong></span>
                   <span
                     className="intensity-pill"
-                    style={{ backgroundColor: `${getIntensityColor(intensity)}22`, color: getIntensityColor(intensity) }}
+                    style={{ backgroundColor: `${getIntensityColor(intensity)}22`, color: getIntensityTextColor(intensity) }}
                   >
                     {getIntensityLabel(intensity)}
                   </span>
                 </div>
                 <div className="slider-wrapper">
                   <span className="slider-min">0 (통증 없음)</span>
+                  {/* 좌우에 "0 (통증 없음)" · "10 (극심한 통증)" 이 보이지만 그건
+                      **옆 텍스트**라 슬라이더의 접근 이름이 되지 않는다. 이름이 없으면
+                      스크린리더가 "슬라이더, 7" 만 읽고 무엇의 7인지 알려주지 못한다.
+                      `aria-valuetext` 는 숫자 대신 등급을 읽게 한다 — 화면에 보이는
+                      `intensity-pill` 과 같은 말이 귀에도 들려야 한다. */}
                   <input
                     type="range"
                     min="0"
@@ -557,6 +587,8 @@ export function PainDiaryPage() {
                     value={intensity}
                     onChange={(e) => setIntensity(Number(e.target.value))}
                     className="intensity-slider"
+                    aria-label="통증 강도"
+                    aria-valuetext={`${intensity}점 · ${getIntensityLabel(intensity)}`}
                   />
                   <span className="slider-max">10 (극심한 통증)</span>
                 </div>
@@ -586,7 +618,7 @@ export function PainDiaryPage() {
 
               <div className="form-group">
                 <div className="diary-note-header">
-                  <span>통증 일기 상세 본문</span>
+                  <span id="pain-note-label">통증 일기 상세 본문</span>
                   <button
                     type="button"
                     className="button button-outline ai-refine-btn"
@@ -597,7 +629,10 @@ export function PainDiaryPage() {
                     {aiRefining ? "AI 교정 중…" : "✨ AI 맞춤법 및 문장 정제"}
                   </button>
                 </div>
+                {/* 위 `span` 은 커스텀 에디터라 `label htmlFor` 로 못 잇는다.
+                    `aria-labelledby` 로 그 문구를 접근 이름으로 삼는다. */}
                 <NotionMarkdownEditor
+                  ariaLabelledBy="pain-note-label"
                   value={note}
                   onChange={setNote}
                   placeholder={"통증의 증상이나 불편함을 자유롭게 적어보세요.\n'#'(제목), '-'(불릿), '[]'(체크리스트), '>'(인용구) 입력으로 서식을 지정할 수 있습니다."}
@@ -663,7 +698,7 @@ export function PainDiaryPage() {
                         <div className="summary-item-meta">
                           <span
                             className="summary-intensity"
-                            style={{ color: getIntensityColor(p.intensity ?? 5) }}
+                            style={{ color: getIntensityTextColor(p.intensity ?? 5) }}
                           >
                             강도 {p.intensity ?? 5}/10
                           </span>

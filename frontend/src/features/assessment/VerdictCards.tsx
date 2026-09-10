@@ -40,10 +40,19 @@ export function LevelBadge({ level }: { level: RiskLevel }) {
 const percent = (value: number) => `${(value * 100).toFixed(0)}%`;
 
 /**
+ * 카드 앞면이 적는 앞날의 해. **모달 표는 지평 전부를 그대로 그린다.**
+ *
+ * 서버는 1~5년 다섯 점을 다 보내고(`trajectory.HORIZONS`) 앞면은 그중 하나만 쓴다.
+ * 앞면에서 골라 쓰는 것이지 지평을 줄이는 것이 아니다 — 줄이면 근거 모달의 곡선이
+ * 점 두 개짜리 직선이 된다.
+ */
+const CARD_HORIZON_YEARS = 5;
+
+/**
  * 발병 궤적 — "지금 없다면 앞으로 t년 안에 생길 확률".
  *
  * 선 둘을 같이 그린다. 내 곡선 하나만 있으면 "10년 27%" 가 큰 수인지 보통인지 알 수
- * 없다. 동년배 곡선이 자다. 표는 낭독기와 좁은 화면을 위한 같은 내용이다.
+ * 없다. 동년배 곡선이 그 자를 준다. 표는 낭독기와 좁은 화면을 위한 같은 내용이다.
  * 차트 라이브러리를 쓰지 않는 이유는 `TrendChart.tsx` 머리말과 같다.
  */
 export function TrajectoryChart({ trajectory }: { trajectory: OnsetTrajectory }) {
@@ -138,14 +147,21 @@ export function TrajectoryBlock({ verdict }: { verdict: DiseaseVerdict }) {
 /**
  * 카드 앞면의 앞날 한 칸. **열세 장 전부에 있다.**
  *
- * 예전에는 **마지막 지평 하나만** 적었다(10년). 5년을 빼 두면 "당장은 어떤가" 를
- * 물어볼 자리가 화면에 없고, 두 숫자 사이의 기울기 — 지금 손대면 달라지는 폭 —
- * 도 사라진다. 지평이 둘뿐이라 둘 다 적어도 한 줄에 들어간다.
+ * **앞면이 적는 것은 "지금" 과 "5년 뒤" 둘이다.** 다만 둘이 같은 줄에 있지 않다 —
+ * 지금은 이 줄 위의 `ML 예측 X% → 판정` 이 말하고, 이 줄은 5년 뒤만 맡는다.
+ *
+ * 지평을 여럿 적어 본 이력이 있다. 10년 하나 → 양 끝(1·5년) 둘 → 1·3·5년 셋 →
+ * 지금의 5년 하나다. 앞면에 점을 늘리면 줄이 길어져 카드 폭에서 줄바꿈되고
+ * (`.assess-trajectory-values` 는 `flex-wrap: wrap`) 카드 높이가 궤적 유무에 따라
+ * 제각각이 된다. **해마다의 값과 곡선은 근거 모달(`TrajectoryBlock`)이 지평 다섯
+ * 개를 다 그리므로 앞면에서 겹쳐 적을 이유가 없다.**
  *
  * ## 두 물음을 같은 자리에 놓되 이름을 다르게 쓴다
  *
  *   새로 생길 확률   지금 없다면 그 사이에 새로 생길 확률. 비가역 셋에만 있다.
+ *                    t=0 에서 정의상 0 이라 이 줄에는 "지금" 이 없다.
  *   기준 초과 확률   그 나이에 기준을 넘고 있을 확률. 열 질환 전부에 있다.
+ *                    이쪽은 `current_probability` 가 있어서 `지금 · 5년 뒤` 둘을 적는다.
  *
  * 발병 궤적이 셋뿐인 것은 학습이 덜 된 게 아니라 **가역 질환에서 누적 발병 곡선이
  * 거짓이 되기 때문**이다(이상지질혈증은 65세+ 사망연계 C 0.43 으로 방향이 뒤집힌다).
@@ -155,29 +171,35 @@ export function TrajectoryBlock({ verdict }: { verdict: DiseaseVerdict }) {
 export function TrajectoryLine({ verdict }: { verdict: DiseaseVerdict }) {
   const trajectory = verdict.reference?.trajectory;
   if (trajectory && trajectory.horizons_years.length > 0) {
-    // **양 끝만 적는다.** 지평이 1~5년 다섯 개가 되면서 카드 폭에 다 못 들어간다.
-    // 다섯 해를 한 줄에 밀어 넣으면 숫자가 줄바꿈되면서 카드 높이가 제각각이 된다.
-    // 처음과 끝이 있으면 기울기는 읽히고, 해마다의 값은 위 발병 예측 패널에 있다.
-    const last = trajectory.horizons_years.length - 1;
-    const ends = last === 0 ? [0] : [0, last];
+    // **앞날 한 점만 적는다 — 5년 뒤.**
+    //
+    // 이 줄에 "현재" 를 적지 않는 것은 자리를 아껴서가 아니다. 누적 발병 확률은
+    // t=0 에서 **정의상 0** 이라 적을 값이 자체적으로 없다. 그리고 카드가 이미
+    // 현재를 말하고 있다 — 이 줄 바로 위의 `ML 예측 X% → 판정` 이 그것이다.
+    // 그래서 카드 앞면은 (위) 지금 · (아래) 5년 뒤 두 층으로 읽힌다.
+    //
+    // 1·3년을 같이 적어 본 적이 있는데 되돌렸다. 해마다의 값과 곡선은 근거 모달의
+    // `TrajectoryBlock` 이 지평 다섯 개를 다 그리므로, 앞면에서 겹쳐 적을 이유가 없다.
+    //
+    // 지평을 **값으로** 고른다. 인덱스를 박으면 `trajectory.HORIZONS` 가 바뀌는 날
+    // 조용히 다른 해를 가리킨다 — 그때 화면은 아무 오류 없이 틀린 해를 적는다.
+    // 나이 상한에 5년이 잘리면(78세는 1·2년만 남는다) 있는 것 중 마지막을 쓴다.
+    const years = trajectory.horizons_years;
+    const wanted = years.indexOf(CARD_HORIZON_YEARS);
+    const at = wanted >= 0 ? wanted : years.length - 1;
     return (
       <div className="assess-trajectory-line is-onset">
         <span className="assess-trajectory-label">새로 생길 확률</span>
         <span className="assess-trajectory-values">
-          {ends.map((i) => (
-            <span className="assess-trajectory-step" key={trajectory.horizons_years[i]}>
-              <b>{percent(trajectory.onset_probability[i])}</b>
-              <small>
-                {trajectory.horizons_years[i]}년 뒤
-                {trajectory.population_onset_probability?.[i] !== undefined && (
-                  <span className="assess-muted">
-                    {" "}
-                    · 동년배 {percent(trajectory.population_onset_probability[i])}
-                  </span>
-                )}
-              </small>
-            </span>
-          ))}
+          <span className="assess-trajectory-step">
+            <b>{percent(trajectory.onset_probability[at])}</b>
+            <small>
+              {years[at]}년 뒤
+              {trajectory.population_onset_probability?.[at] !== undefined && (
+                <span className="assess-muted"> · 동년배 {percent(trajectory.population_onset_probability[at])}</span>
+              )}
+            </small>
+          </span>
         </span>
       </div>
     );
@@ -274,14 +296,24 @@ export function PrecisionHints({
   verdict,
   values,
   models,
+  shared,
 }: {
   verdict: DiseaseVerdict;
   values: Record<string, string>;
   models: ModelSpec[];
+  /**
+   * 패널 위에서 **이미 한 번 적은** 정밀화 입력. 카드에서는 뺀다.
+   *
+   * 없으면 예전처럼 카드마다 전부 적는다 — 기록 화면처럼 카드가 한 장만 있는
+   * 자리에서는 위에 올릴 곳이 없기 때문이다.
+   */
+  shared?: readonly string[];
 }) {
   const gain = precisionGains(verdict, values, models);
   const decisive = briefList(gain.decisive);
-  const refining = briefList(gain.refining);
+  // 판정을 가르는 값(`decisive`)은 카드마다 다르므로 그대로 둔다. 겹치는 것은
+  // "정밀해진다" 쪽뿐이고, 그건 한 번 채우면 여러 카드가 같이 좋아진다.
+  const refining = briefList(shared?.length ? gain.refining.filter((item) => !shared.includes(item)) : gain.refining);
 
   if (!decisive && !refining) {
     // 모델 목록을 못 받았으면(기록 화면·`model-info` 실패) "전부 들어왔다" 고 말할
@@ -548,11 +580,19 @@ export function VerdictCard({
   verdict,
   values,
   models = [],
+  sharedRefining,
 }: {
   verdict: DiseaseVerdict;
   values: Record<string, string>;
   /** `/predictions/model-info` 의 모델 목록. 없으면 "안 쓴 입력" 블록만 빠진다. */
   models?: ModelSpec[];
+  /**
+   * 패널이 카드 위에서 이미 한 번 적은 정밀화 입력. 카드에서는 뺀다.
+   *
+   * 카드가 여러 장 나란히 설 때만 넘어온다 — 기록 화면처럼 한 장뿐인 자리에는
+   * 위에 올릴 곳이 없으므로 넘기지 않고, 그때는 카드가 예전처럼 전부 적는다.
+   */
+  sharedRefining?: readonly string[];
 }) {
   const [open, setOpen] = useState(false);
   const short = verdict.sub_status || LEVEL_LABEL[verdict.risk_level];
@@ -577,8 +617,23 @@ export function VerdictCard({
           확률이 접이 안에만 있어서, 카드를 보는 동안 모델이 무엇을 말했는지
           알 수 없었다 — 두 엔진이 같이 도는데 하나만 보였다. */}
       <div className="assess-engines">
+        {/* **ML 이 정본이 아닐 때는 무게를 낮춘다.**
+            실측에서 "이상지질혈증 · 정상 범위 · ML 예측 77%" 와 "당뇨병 · 매우 높음 ·
+            ML 예측 15%" 가 같은 크기로 나란히 섰다(2026-09-10). 둘 다 모델이 고장난
+            것이 아니라 **라벨 정의 수치를 입력으로 못 받기 때문**이고(doc 45 §3.3 —
+            `low_hdl` 모델은 HDL 을 못 본다), 검사값이 있으면 규칙 엔진이 정본이 되어
+            그 확률은 참고로 내려간다. 화살표만으로는 그 내림이 안 보여서, 정본이
+            아닌 칸에 `is-superseded` 를 붙여 눈에도 뒤로 물러나게 한다.
+            숫자를 지우지는 않는다 — 두 엔진이 같이 돌았다는 사실은 남아야 한다. */}
         {probability !== null && probability !== undefined ? (
-          <span className="assess-engine-step is-ml">
+          <span
+            className={`assess-engine-step is-ml${verdict.engine === "E2" ? "" : " is-superseded"}`}
+            title={
+              verdict.engine === "E2"
+                ? undefined
+                : "검사값이 있어 규칙 엔진 판정이 정본입니다. 이 확률은 참고값이에요."
+            }
+          >
             <small>ML 예측</small>
             <b>{percent(probability)}</b>
           </span>
@@ -603,7 +658,7 @@ export function VerdictCard({
       <KeyFigures verdict={verdict} values={values} />
       <TrajectoryLine verdict={verdict} />
 
-      <PrecisionHints verdict={verdict} values={values} models={models} />
+      <PrecisionHints verdict={verdict} values={values} models={models} shared={sharedRefining} />
 
       {/* **근거는 카드 위에 겹쳐 띄운다.**
           한동안 접이(`<details>`)로 카드 안에서 펼쳤는데, 격자에서 한 장이 펼쳐지면

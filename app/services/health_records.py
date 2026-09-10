@@ -19,8 +19,11 @@ from app.dtos.health_records import (
     HealthRecordCreateRequest,
     HealthRecordData,
     HealthRecordListData,
+    HealthRecordPrefillData,
     HealthRecordSyncRequest,
     HealthRecordUpdateRequest,
+    HealthRecordValuesData,
+    PrefilledFieldData,
 )
 from app.exceptions import (
     HealthRecordNotFoundError,
@@ -35,6 +38,7 @@ from app.models.service_accounts import ServiceAccount
 from app.repositories.health_record_repository import HealthRecordRepository
 from app.repositories.household_repository import HouseholdRepository
 from app.repositories.profile_repository import ProfileRepository
+from app.services import record_prefill
 
 _SEOUL = ZoneInfo("Asia/Seoul")
 
@@ -160,6 +164,45 @@ class HealthRecordService:
             total=len(records),
         )
 
+    async def build_prefill(
+        self,
+        account: ServiceAccount,
+        profile_id: uuid.UUID,
+        limit: int = 200,
+    ) -> HealthRecordPrefillData:
+        """남긴 기록으로 판정 폼 값을 만든다. 판단은 `record_prefill` 한 곳에 있다.
+
+        `limit` 을 넉넉히 두는 이유는 **칸마다 가장 최근 것**을 골라야 하기 때문이다.
+        스무 개만 읽으면 최근 스무 개가 전부 혈압일 때 체중이 영영 안 잡힌다.
+        기록은 프로필 단위이고 소유권 검사는 아래 한 줄이 한다.
+        """
+        await self._verify_profile_access(profile_id, account)
+
+        records = await self.record_repo.list_by_profile(profile_id=profile_id, limit=limit, offset=0)
+        rows = [
+            {
+                "id": str(record.id),
+                "record_type": record.record_type,
+                "recorded_at": record.recorded_at.isoformat(),
+                "payload": record.payload,
+            }
+            for record in records
+        ]
+        values = record_prefill.build(rows)
+        return HealthRecordPrefillData(
+            items=[
+                PrefilledFieldData(
+                    field=item.field,
+                    value=item.value,
+                    measured_at=item.measured_at,
+                    record_type=item.record_type,
+                    record_id=item.record_id,
+                )
+                for item in values
+            ],
+            scanned=len(rows),
+        )
+
     async def query_numeric_summary(
         self,
         account: ServiceAccount,
@@ -252,6 +295,25 @@ class HealthRecordService:
             raise HealthRecordNotFoundError()
         await self._verify_profile_access(record.profile_id, account)
         return HealthRecordData.model_validate(record)
+
+    async def record_values(self, account: ServiceAccount, record_id: uuid.UUID) -> HealthRecordValuesData:
+        """기록 하나의 판정 칸 값. 판단은 `record_prefill` 한 곳에 있다.
+
+        검진표를 열어 수치를 고치는 화면이 쓴다. 그 화면은 **그 기록에 담긴 것만**
+        봐야 하므로 `build_prefill`(칸마다 가장 최근 것)을 쓸 수 없다 — 같은 칸을
+        더 새 기록이 들고 있으면 이 기록의 값이 가려진다.
+        """
+        record = await self.record_repo.get(record_id)
+        if record is None or record.status == "deleted":
+            raise HealthRecordNotFoundError()
+        await self._verify_profile_access(record.profile_id, account)
+
+        payload = record.payload if isinstance(record.payload, dict) else {}
+        return HealthRecordValuesData(
+            record_id=record.id,
+            record_type=record.record_type,
+            values=record_prefill.fields_for(record.record_type, payload),
+        )
 
     async def update_record(
         self, account: ServiceAccount, record_id: uuid.UUID, req: HealthRecordUpdateRequest

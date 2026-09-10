@@ -72,12 +72,14 @@ describe("RootLayout 로그인 관문", () => {
     expect(screen.getByRole("navigation", { name: "주 메뉴" })).toBeInTheDocument();
   });
 
-  it("메뉴에 가족 홈·건강 현황·계정이 있다", () => {
+  it("메뉴에 가족 홈·건강 데이터·계정이 있다", () => {
+    // **"건강 현황" 은 2026-09-10 에 "건강 데이터" 로 합쳤다.** 판정 스냅샷 추이와
+    // 기기 안 기록 추이가 화면 둘로 갈려 있었다 — 하나로 모았다.
     renderAt("signed-in");
 
     const navigation = screen.getByRole("navigation", { name: "주 메뉴" });
     expect(navigation).toHaveTextContent("가족 홈");
-    expect(navigation).toHaveTextContent("건강 현황");
+    expect(navigation).toHaveTextContent("건강 데이터");
     expect(navigation).toHaveTextContent("계정");
   });
 

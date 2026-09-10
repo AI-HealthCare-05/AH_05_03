@@ -178,6 +178,20 @@ const NUMERIC_SELECTS = new Set(["self_rated_health"]);
  * 적어 주려고 쓴다. 서버 메시지는 "Input should be less than or equal to 20" 이라
  * 그대로 띄우면 어느 칸인지도, 한국어도 아니다.
  */
+/**
+ * 사람을 가리키는 칸. **측정값이 아니다.**
+ *
+ * 나이는 생년월일에서, 성별은 프로필에서 나온다(`calculateAgeFromBirthDate` ·
+ * `profileGenderToSex`). 이것을 검진 기록의 수치로 저장하면 두 가지가 틀어진다.
+ *
+ * * 검진 기록을 열었을 때 채울 칸으로 보인다 — 사용자가 채울 일이 아니다.
+ * * **몇 년 전 나이가 오늘 판정에 덮인다.** 기록을 골라 "이 수치 사용하기" 는
+ *   고른 값을 덮으므로, 나이가 실려 있으면 그때 나이로 되돌아간다.
+ *
+ * 그래서 저장하지도, 수치 양식에 세우지도 않는다.
+ */
+export const IDENTITY_FIELDS: ReadonlySet<string> = new Set(["age", "sex"]);
+
 export const FIELD_RANGES: Record<string, { min?: number; max?: number; unit?: string }> =
   Object.fromEntries(
     FIELD_GROUPS.flatMap((group) =>
@@ -338,6 +352,17 @@ export function rejectedFields(message: string): Record<string, string> {
 }
 
 /** "60~260 mmHg 사이여야 해요". 범위를 모르는 칸이면 `undefined`. */
+/**
+ * 이름으로 칸 정의를 찾는다.
+ *
+ * **왜 필요한가.** 값을 폼에 부을 때 그 칸이 숫자인지 참·거짓인지 알아야 한다.
+ * `bool` 칸은 `"true"`/`"false"` 문자열을 쓰는데(`toRequestBody` 가 `raw === "true"`
+ * 로 되돌린다) 숫자를 넣으면 select 에 없는 값이라 **아무 오류 없이 빈칸으로 남는다**.
+ */
+export const FIELD_BY_NAME: Record<string, FieldSpec> = Object.fromEntries(
+  FIELD_GROUPS.flatMap((group) => group.fields.map((field) => [field.name, field])),
+);
+
 export function rangeHint(name: string): string | undefined {
   const range = FIELD_RANGES[name];
   if (!range || range.min === undefined || range.max === undefined) return undefined;

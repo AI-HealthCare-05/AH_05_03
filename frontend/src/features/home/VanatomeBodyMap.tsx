@@ -1114,7 +1114,7 @@ export function VanatomeBodyMap({
               <span style={{ fontWeight: 600, color: "#475569", fontSize: "0.82rem" }}>
                 확정된 부위가 없습니다
               </span>
-              <p style={{ margin: 0, color: "#94a3b8", lineHeight: 1.4, maxWidth: "220px" }}>
+              <p style={{ margin: 0, color: "var(--muted)", lineHeight: 1.4, maxWidth: "220px" }}>
                 인체 모델에서 부위를 클릭하거나 스프레이로 칠한 뒤 확정할 수 있습니다.
               </p>
             </div>
