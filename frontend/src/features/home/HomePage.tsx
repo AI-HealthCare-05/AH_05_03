@@ -28,6 +28,7 @@ import { FamilyHistoryManager } from "./FamilyHistoryManager";
 import { DentalPickerModal } from "./DentalPickerModal";
 import type { ToothDefinition } from "./dentalPickerLogic";
 import type { StagingItem } from "./VanatomeBodyMap";
+import { FamilyIntegratedMonitoring } from "./FamilyIntegratedMonitoring";
 
 const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
   default: module.VanatomeBodyMap,
@@ -96,6 +97,7 @@ export function HomePage() {
   const [dentalPickerMinimized, setDentalPickerMinimized] = useState(true);
   const [, setSelectedTooth] = useState<ToothDefinition>();
   const [stagedItems, setStagedItems] = useState<StagingItem[]>([]);
+  const [highlightOrganKey, setHighlightOrganKey] = useState<string>();
   const selectedDentalFdis = useMemo(() => {
     const set = new Set<number>();
     for (const item of stagedItems) {
@@ -376,7 +378,16 @@ export function HomePage() {
   useEffect(() => {
     if (!selectedProfile) return;
     const timeout = window.setTimeout(() => void refreshDashboard(selectedProfile.id), 0);
-    return () => window.clearTimeout(timeout);
+    const handleFocus = () => {
+      void refreshDashboard(selectedProfile.id);
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
   }, [refreshDashboard, selectedProfile]);
 
   // 판정 요약은 구성원 목록이 바뀔 때만 다시 읽는다. 판정 화면에서 돌아오면 라우트가
@@ -686,12 +697,24 @@ export function HomePage() {
               <MetricCard label="프로필 상태" value="안전" tone="safe" />
             </div>
 
+            <FamilyIntegratedMonitoring
+              profiles={profiles}
+              selectedProfileId={selectedProfile.id}
+              onSelectProfile={(id) => {
+                setSelectedProfileId(id);
+                void navigate(`/members/${id}`);
+              }}
+              records={records}
+              onSelectOrgan={(key) => setHighlightOrganKey(key)}
+            />
+
             <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
               <VanatomeBodyMap
                 profileName={selectedProfile.displayName}
                 gender={selectedProfile.gender}
                 risks={bodyRisks}
                 risksAt={activeBodyRecord ? formatDateTime(activeBodyRecord.recordedAt) : undefined}
+                highlightOrganKey={highlightOrganKey}
                 isDentalOpen={dentalPickerOpen}
                 onDentalOpenChange={(open) => {
                   setDentalPickerOpen(open);
