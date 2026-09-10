@@ -19,9 +19,9 @@
      이 값은 네 배경 전부에서 최저 4.79 로 통과하는 **가장 밝은** 값이다(더 어둡게
      하면 "보조" 라는 위계가 흐려진다). */
   --muted: #5b687e;
-  /* 구성원 대시보드의 오른쪽 칼럼 폭. **두 곳이 이 값을 본다** — 그리드와, 그 위에
-     앉지 않아야 하는 우하단 플로팅 버튼. 한쪽만 고치면 버튼이 다시 입력창을 덮는다. */
-  --dashboard-side: 480px;
+  /* 구성원 대시보드의 오른쪽 칼럼 폭.
+     기존 480px에서 챗봇이 분리됨에 따라 360px로 최적화하여 메인 대시보드(통합 모니터링·3D 바디맵)에 더 넓은 공간을 배분한다. */
+  --dashboard-side: 360px;
   --muted-strong: #45536c;
   --line: #dce3ee;
   --line-soft: #e8edf5;
@@ -168,7 +168,7 @@ main {
 .brand-copy small {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.82rem;
 }
 
 /* 항목이 셋에서 일곱으로 늘었다(2026-09-03). 좁은 화면에서 줄바꿈이 나야 하고,
@@ -266,7 +266,7 @@ main {
   align-items: center;
   gap: 7px;
   color: var(--safe-text);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   font-weight: 750;
 }
 
@@ -617,9 +617,9 @@ main {
 .card-kicker {
   margin: 0 0 9px;
   color: var(--blue-600);
-  font-size: 0.73rem;
+  font-size: 0.82rem;
   font-weight: 850;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -1049,9 +1049,18 @@ main:focus {
 .member-dashboard {
   margin-top: 28px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--dashboard-side);
+  grid-template-columns: 1fr;
   align-items: start;
-  gap: 20px;
+  gap: 24px;
+  width: 100%;
+}
+
+.member-dashboard.has-sidebar {
+  grid-template-columns: minmax(0, 1fr) var(--dashboard-side);
+}
+
+.member-dashboard.no-sidebar .member-dashboard-sidebar {
+  display: none;
 }
 
 .member-dashboard-sidebar {
@@ -1080,7 +1089,7 @@ main:focus {
  */
 @media (min-width: 1001px) {
   .member-dashboard-sidebar {
-    padding-bottom: 152px;
+    padding-bottom: 120px;
   }
 }
 
@@ -1549,7 +1558,7 @@ main:focus {
 
 .metric-card > span {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: 0.85rem;
   font-weight: 750;
 }
 
@@ -1700,10 +1709,10 @@ main:focus {
   box-sizing: border-box;
   border: 1px solid rgba(159, 183, 232, 0.65);
   border-radius: 999px;
-  padding: 6px 12px;
+  padding: 7px 14px;
   color: #526985;
-  background: rgba(255, 255, 255, 0.82);
-  font-size: 0.68rem;
+  background: rgba(255, 255, 255, 0.88);
+  font-size: 0.82rem;
   pointer-events: none;
   z-index: 3;
 }
@@ -1745,10 +1754,10 @@ main:focus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 2px 7px;
+  padding: 3px 8px;
   border-radius: 999px;
   font-weight: 700;
-  font-size: 0.65rem;
+  font-size: 0.78rem;
   letter-spacing: -0.01em;
   background: rgba(56, 189, 248, 0.16);
   border: 1px solid rgba(56, 189, 248, 0.45);
@@ -2021,55 +2030,55 @@ main:focus {
 
 .vanatome-system-layers legend {
   padding: 0;
-  color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 750;
+  color: var(--muted-strong, #475569);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .vanatome-system-layer-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 6px;
-  margin: -18px 0 8px;
+  gap: 8px;
+  margin: -20px 0 10px;
 }
 
-/* **높이가 19px 이었다.** WCAG 2.5.8 의 최소 타깃이 24×24 라 그 아래였고, 마우스로도
-   두 버튼이 6px 간격으로 붙어 있어 잘못 누르기 쉬웠다. 글자 크기는 그대로 두고
-   패딩만 키워 24px 를 넘긴다 — 레이어 목록이 이미 세로로 긴 자리라 글자를 키우면
-   3D 캔버스를 밀어낸다. */
 .vanatome-system-layer-actions button {
   border: 0;
-  padding: 5px 8px;
-  min-height: 24px;
+  padding: 4px 8px;
+  min-height: 26px;
   color: var(--blue-700);
   background: transparent;
-  font-size: 0.66rem;
-  font-weight: 750;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .vanatome-system-layer-buttons {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
 }
 
-/* 같은 이유로 29px → 최소 32px. 열 개가 3열 격자로 붙어 있어 오조작이 가장 쉬운
-   자리다(WCAG 2.5.8 최소 24, 2.5.5 권장 44 — 격자 폭 때문에 44 는 못 맞춘다). */
 .vanatome-system-layer-buttons button {
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 7px 5px;
-  min-height: 32px;
-  color: var(--muted);
+  padding: 8px 4px;
+  min-height: 38px;
+  color: var(--muted-strong, #334155);
   background: #f8fafc;
-  font-size: 0.66rem;
-  font-weight: 750;
+  font-size: 0.84rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .vanatome-system-layer-buttons button[aria-pressed="true"] {
   border-color: #82d6e5;
   color: #136478;
   background: #edfbfd;
+  font-weight: 700;
 }
 
 .vanatome-system-layer-actions button:disabled,
@@ -2087,26 +2096,31 @@ main:focus {
 .vanatome-focus-control > span {
   display: block;
   margin-bottom: 8px;
-  color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 750;
+  color: var(--muted-strong, #475569);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .vanatome-focus-buttons {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 8px;
 }
 
 .vanatome-focus-buttons button,
 .vanatome-pelvic-focus {
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 10px;
   padding: 8px 6px;
-  color: var(--muted-strong);
+  min-height: 38px;
+  color: var(--muted-strong, #334155);
   background: white;
-  font-size: 0.72rem;
-  font-weight: 750;
+  font-size: 0.84rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .vanatome-focus-buttons button[aria-pressed="true"] {
@@ -2182,11 +2196,12 @@ main:focus {
 .vanatome-actions button {
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 8px 11px;
+  padding: 8px 12px;
+  min-height: 36px;
   color: var(--blue-700);
   background: white;
-  font-size: 0.76rem;
-  font-weight: 750;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .vanatome-actions button:disabled {
@@ -3355,7 +3370,27 @@ main:focus {
   .brand-copy small { display: none; }
   .header-status { gap: 8px; }
   .header-status > span { display: none; }
-  .header-account { display: none; }
+  .header-account {
+    display: inline-flex;
+    align-items: center;
+    max-width: 135px;
+    font-size: 0.82rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-height: 44px;
+    padding: 0 6px;
+    border-radius: 8px;
+    box-sizing: border-box;
+  }
+  .header-signout {
+    min-height: 44px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+  }
 
   /* **균등 분할을 그만뒀다.** 항목이 셋일 때는 `grid-auto-columns: 1fr` 로 한 줄을
      꽉 채우는 게 맞았는데, 일곱이 된 지금 320px 화면에서는 한 칸이 40px 남짓이라
@@ -3363,10 +3398,14 @@ main:focus {
      내린 판단("잘리는 것보다 미는 편이 낫다")과 같다. */
   .primary-navigation {
     justify-self: stretch;
-    gap: 4px;
+    gap: 6px;
     flex-wrap: nowrap;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
     border-radius: 12px;
+    padding: 4px 6px;
+    box-sizing: border-box;
     /* 레일이 4px 패딩이라 늘 보이는 스크롤바가 뜨면 알약을 눌러 버린다. 터치와
        트랙패드로는 그대로 밀리고, 키보드는 탭으로 옮겨 다닌다. */
     scrollbar-width: none;
@@ -3376,9 +3415,16 @@ main:focus {
 
   .primary-navigation a {
     flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
     text-align: center;
-    padding: 9px 12px;
-    font-size: 0.86rem;
+    padding: 10px 14px;
+    font-size: 0.88rem;
+    box-sizing: border-box;
+    scroll-snap-align: start;
   }
 
   .product-page { padding-top: 32px; }
@@ -3488,6 +3534,52 @@ main:focus {
   .site-footer {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  /* 모바일 타임라인 모니터링 컨트롤 및 날짜 그리드 가로 스크롤 보장 */
+  .timeline-top-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .timeline-nav-controls {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 6px;
+  }
+
+  .timeline-nav-btn {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 12px;
+    font-size: 0.82rem;
+  }
+
+  .timeline-grid {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+  }
+
+  .timeline-grid-header,
+  .timeline-member-row {
+    min-width: 520px;
+  }
+
+  /* 모바일 3D 뷰어 터치 제어: 1손가락 상하 페이지 스크롤 허용, 2손가락 회전/줌 */
+  .body-map-viewer canvas,
+  .vanatome-viewer > canvas {
+    touch-action: pan-y;
+  }
+
+  .vanatome-card {
+    padding-bottom: 36px;
   }
 }
 @media (max-width: 480px) {
@@ -4422,7 +4514,21 @@ main:focus {
   grid-auto-rows: minmax(26.75rem, auto);
 }
 
-.assess-card { border: 1px solid var(--line); border-left-width: 5px; border-radius: 12px; padding: 0.9rem 1.05rem; background: var(--surface); display: flex; flex-direction: column; gap: 0.45rem; }
+.assess-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1rem 1.15rem;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.assess-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
+}
 .assess-card header { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; }
 .assess-card h3 { margin: 0; font-size: 1rem; }
 .assess-substatus { margin: 0; font-weight: 600; font-size: 0.9rem; }
@@ -4460,18 +4566,26 @@ main:focus {
 .suspect-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); gap: 0.7rem; align-items: start; }
 
 .suspect-card {
-  border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  padding: 0.75rem 0.85rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
-/* 의심과 자리채움을 **투명도가 아니라 구조로** 가른다. opacity 는 글자까지 흐려
-   대비를 떨어뜨리는데, 자리채움 카드도 읽히긴 해야 한다. 대신 왼쪽 띠와 배경으로
-   가르고, 자리채움에는 숫자 블록 자체가 붙지 않아 높이로도 구분된다. */
-.suspect-card.is-suspected { border-left: 3px solid var(--danger); }
+.suspect-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+/* 모던 앰비언트 카드 스타일: 낡은 좌측 색띠(border-left) 대신 은은한 앰비언트 틴트와 섬세한 1px 보더 */
+.suspect-card.is-suspected {
+  border-color: rgba(239, 68, 68, 0.32);
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.75) 0%, #ffffff 52px);
+  box-shadow: 0 1px 4px rgba(239, 68, 68, 0.08);
+}
 .suspect-card.is-filler { background: var(--blue-50); border-color: transparent; }
 .suspect-card.is-filler .suspect-reason { color: var(--muted); }
 
@@ -4593,10 +4707,25 @@ main:focus {
 .assess-trajectory-table th[scope="row"] { text-align: left; color: var(--muted); font-weight: 500; }
 .assess-trajectory-table thead th { color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--line-soft); }
 
-.assess-contributors { list-style: none; margin: 0.2rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
-.assess-contributors li { display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.78rem; padding-left: 0.6rem; border-left: 3px solid var(--line); }
-.assess-contributors li.weight-3 { border-left-color: var(--danger); }
-.assess-contributors li.weight-2 { border-left-color: var(--blue-500); }
+.assess-contributors { list-style: none; margin: 0.2rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.assess-contributors li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid var(--line-soft);
+}
+.assess-contributors li.weight-3 {
+  background: rgba(254, 242, 242, 0.55);
+  border-color: rgba(252, 165, 165, 0.45);
+}
+.assess-contributors li.weight-2 {
+  background: rgba(239, 246, 255, 0.55);
+  border-color: rgba(186, 230, 253, 0.45);
+}
 .assess-contrib-label { font-weight: 600; font-size: 0.83rem; }
 .assess-contrib-detail { color: var(--muted-strong); }
 .assess-contrib-effect { color: var(--ink); }
@@ -4604,17 +4733,58 @@ main:focus {
 .assess-disclaimers { margin-top: 1.5rem; border-top: 1px solid var(--line-soft); padding-top: 0.9rem; }
 .assess-disclaimers p { margin: 0 0 0.3rem; font-size: 0.76rem; color: var(--muted); }
 
-/* 등급 색. 카드 테두리와 배지가 같은 색을 쓴다. */
-.assess-card.level-very-high { border-left-color: var(--danger); }
-.assess-card.level-high { border-left-color: var(--danger); }
-.assess-card.level-caution { border-left-color: var(--blue-500); }
-.assess-card.level-normal { border-left-color: var(--safe); }
-.assess-card.level-unknown { border-left-color: var(--line); }
-.assess-badge.level-very-high { background: var(--danger); color: #fff; }
-.assess-badge.level-high { background: var(--danger-soft); color: var(--danger); }
-.assess-badge.level-caution { background: var(--blue-50); color: var(--blue-700); }
-.assess-badge.level-normal { background: var(--safe-soft); color: var(--safe-text); }
-.assess-badge.level-unknown { background: var(--line-soft); color: var(--muted); }
+/* 모던 앰비언트 카드 스타일: 낡은 좌측 색띠(border-left) 대신 섬세한 1px 보더와 상단 은은한 앰비언트 틴트 */
+.assess-card.level-very-high,
+.assess-card.level-high {
+  border-color: rgba(239, 68, 68, 0.32);
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.65) 0%, #ffffff 50px);
+}
+.assess-card.level-caution {
+  border-color: rgba(59, 130, 246, 0.28);
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.65) 0%, #ffffff 50px);
+}
+.assess-card.level-normal {
+  border-color: rgba(16, 185, 129, 0.25);
+  background: linear-gradient(180deg, rgba(240, 253, 244, 0.55) 0%, #ffffff 50px);
+}
+.assess-card.level-unknown {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.assess-badge {
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+.assess-badge.level-very-high {
+  background: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(239, 68, 68, 0.25);
+}
+.assess-badge.level-high {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+.assess-badge.level-caution {
+  background: #e0f2fe;
+  color: #0284c7;
+  border: 1px solid rgba(2, 132, 199, 0.25);
+}
+.assess-badge.level-normal {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid rgba(21, 128, 61, 0.22);
+}
+.assess-badge.level-unknown {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid var(--line-soft);
+}
 
 @media (max-width: 640px) {
   .assess-fields { grid-template-columns: 1fr 1fr; }
@@ -5725,11 +5895,27 @@ main:focus {
 .header-account {
   max-width: 32ch;
   overflow: hidden;
-  color: var(--muted) !important;
-  font-weight: 500 !important;
-  font-size: 0.78rem;
+  color: var(--muted-strong) !important;
+  font-weight: 600 !important;
+  font-size: 0.85rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-decoration: none;
+  border-radius: 8px;
+  padding: 5px 8px;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.header-account:hover {
+  color: var(--blue-600) !important;
+  background-color: var(--blue-50);
+  text-decoration: underline;
+}
+
+.header-account.active {
+  color: var(--blue-700) !important;
+  background-color: var(--blue-50);
+  font-weight: 750 !important;
 }
 
 .header-signout {
@@ -5775,33 +5961,6 @@ main:focus {
  * 떠 있으므로 저기 두면 **처음 여는 순간까지 맨 글자로 보인다** — 검은 텍스트가
  * 본문 흐름에 얹혀 버튼처럼 보이지 않는다. 늘 보이는 것은 늘 로드되는 곳에 둔다.
  */
-/* 우측 하단 플로팅 런처 스택 (봄이 대화 및 빠른 작업 최소화 시) */
-.floating-launchers-stack {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  align-items: flex-end;
-  z-index: 999;
-  pointer-events: auto;
-}
-
-.floating-launchers-stack .health-assistant-launcher-btn,
-.floating-launchers-stack .quick-actions-floating-btn,
-.floating-launchers-stack .dental-picker-floating-btn {
-  position: relative;
-  bottom: auto;
-  right: auto;
-  width: 130px;
-  min-width: 130px;
-  height: 46px;
-  box-sizing: border-box;
-  padding: 0 16px;
-  justify-content: flex-start;
-}
-
 /* 우측 하단 봄이 런처 플로팅 버튼 */
 .health-assistant-launcher-btn {
   position: fixed;
@@ -9096,7 +9255,7 @@ main:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   color: #64748b;
 }
 
@@ -9111,8 +9270,8 @@ main:focus {
 }
 
 .timeline-nav-btn {
-  padding: 3px 8px;
-  font-size: 0.72rem;
+  padding: 4px 10px;
+  font-size: 0.82rem;
   font-weight: 500;
   border: none;
   background: transparent;
@@ -9166,7 +9325,7 @@ main:focus {
 
 .timeline-grid-header {
   display: flex;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: #64748b;
   border-bottom: 1px solid #e2e8f0;
@@ -9176,12 +9335,14 @@ main:focus {
 .timeline-member-col {
   width: 140px;
   flex-shrink: 0;
+  font-size: 0.82rem;
 }
 
 .timeline-dates-row {
   display: flex;
   flex: 1;
   gap: 6px;
+  font-size: 0.82rem;
 }
 
 .timeline-date-cell {
@@ -9370,33 +9531,36 @@ main:focus {
 }
 
 .provenance-badge {
-  display: inline-block;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 4px;
-  margin-bottom: 4px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-bottom: 6px;
+  border: 1px solid transparent;
 }
 
-.badge-doc-confirmed { background: #dcfce7; color: #15803d; }
-.badge-user-report { background: #fef3c7; color: #b45309; }
-.badge-family { background: #f3e8ff; color: #7e22ce; }
-.badge-pending { background: #e0f2fe; color: #0369a1; }
-.badge-past { background: #f1f5f9; color: #475569; }
-.badge-suspected { background: #ffedd5; color: #c2410c; }
-.badge-negated { background: #e2e8f0; color: #334155; }
-.badge-ai-inferred { background: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe; }
+.badge-doc-confirmed { background: #f0fdf4; color: #166534; border-color: #bbf7d0; }
+.badge-user-report { background: #f8fafc; color: #475569; border-color: #e2e8f0; }
+.badge-family { background: #faf5ff; color: #6b21a8; border-color: #f3e8ff; }
+.badge-pending { background: #f0f9ff; color: #075985; border-color: #e0f2fe; }
+.badge-past { background: #f1f5f9; color: #475569; border-color: #e2e8f0; }
+.badge-suspected { background: #fff7ed; color: #9a3412; border-color: #fed7aa; }
+.badge-negated { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+.badge-ai-inferred { background: #f5f3ff; color: #5b21b6; border-color: #ddd6fe; }
 
 .organ-alert-tag {
   background: #fef2f2;
   border: 1px solid #fecaca;
   color: #991b1b;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 0.8rem;
-  display: flex;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  font-weight: 500;
 }
 
 .detail-time-grid {
@@ -9405,7 +9569,8 @@ main:focus {
   gap: 1rem;
   background: #f8fafc;
   padding: 1rem;
-  border-radius: 8px;
+  border-radius: 12px;
+  border: 1px solid #f1f5f9;
   margin-bottom: 1rem;
 }
 
@@ -9416,61 +9581,66 @@ main:focus {
 }
 
 .time-label {
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   color: #64748b;
+  font-weight: 500;
 }
 
 .time-val {
   font-size: 0.95rem;
   color: #0f172a;
+  font-weight: 600;
 }
 
 .delayed-input-note {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: #b45309;
 }
 
 .provenance-desc {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   color: #334155;
 }
 
 .source-evidence-box {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-left: 4px solid #ef4444;
-  padding: 0.875rem;
-  border-radius: 6px;
+  background: #f8fafc;
+  border: 1px solid var(--line, #e2e8f0);
+  padding: 14px 16px;
+  border-radius: 12px;
   margin-bottom: 0.75rem;
 }
 
 .box-title {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  color: #64748b;
-  margin-bottom: 4px;
+  color: #475569;
+  margin-bottom: 6px;
 }
 
 .evidence-sentence {
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   color: #1e293b;
-  margin: 0 0 6px 0;
-  font-style: italic;
+  margin: 0 0 8px 0;
+  font-style: normal;
+  line-height: 1.55;
+  font-weight: 500;
 }
 
 .doc-provenance-link {
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   color: #0284c7;
   font-weight: 600;
 }
 
 .monitoring-clinical-note {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   color: #475569;
-  background: #f1f5f9;
-  padding: 8px 12px;
-  border-radius: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  line-height: 1.5;
 }
 
 

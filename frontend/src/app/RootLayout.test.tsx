@@ -72,15 +72,20 @@ describe("RootLayout 로그인 관문", () => {
     expect(screen.getByRole("navigation", { name: "주 메뉴" })).toBeInTheDocument();
   });
 
-  it("메뉴에 가족 홈·건강 데이터·계정이 있다", () => {
+  it("메뉴에 가족 홈·건강 데이터가 있고, 계정은 상단 이메일 링크로 연결된다", () => {
     // **"건강 현황" 은 2026-09-10 에 "건강 데이터" 로 합쳤다.** 판정 스냅샷 추이와
     // 기기 안 기록 추이가 화면 둘로 갈려 있었다 — 하나로 모았다.
+    // **주 메뉴에서 '계정' 링크를 빼고 헤더 이메일 링크로 일원화했다.**
     renderAt("signed-in");
 
     const navigation = screen.getByRole("navigation", { name: "주 메뉴" });
     expect(navigation).toHaveTextContent("가족 홈");
     expect(navigation).toHaveTextContent("건강 데이터");
-    expect(navigation).toHaveTextContent("계정");
+    expect(navigation).not.toHaveTextContent("챌린지");
+    expect(navigation).not.toHaveTextContent("계정");
+
+    const accountLink = screen.getByRole("link", { name: /계정 관리/u });
+    expect(accountLink).toHaveAttribute("href", "/account");
   });
 
   it("메뉴 항목은 전부 앱 안 라우트다 — 죽은 바깥 링크를 두지 않는다", () => {
