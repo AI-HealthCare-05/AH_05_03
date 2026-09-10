@@ -63,7 +63,7 @@ export type AnatomyGeometry = {
 export type AnatomyBrushCoverage = {
   radius: number;
   sampleCount: number;
-  hitRatio: number;
+  hitRatio?: number;
 };
 
 export type AnatomyEvent = {
@@ -71,6 +71,7 @@ export type AnatomyEvent = {
   eventId: string;
   atlas: AnatomyAtlasReference;
   concept: AnatomyConcept;
+  relatedConcepts?: AnatomyConcept[];
   geometry?: AnatomyGeometry;
   inputSource: AnatomyInputSource;
   state: AnatomyConfirmationState;
@@ -157,6 +158,20 @@ export function validateAnatomyEvent(candidate: unknown): { valid: boolean; erro
     }
   }
 
+  // relatedConcepts (선택적 복수 구조) 검증
+  if (ev.relatedConcepts) {
+    if (!Array.isArray(ev.relatedConcepts)) {
+      errors.push("relatedConcepts는 배열이어야 합니다.");
+    } else {
+      for (let i = 0; i < ev.relatedConcepts.length; i++) {
+        const rc = ev.relatedConcepts[i];
+        if (!rc || !rc.canonicalConceptId || !rc.label) {
+          errors.push(`relatedConcepts[${i}]의 필수 필드가 누락되었습니다.`);
+        }
+      }
+    }
+  }
+
   // inputSource & state 검증
   const validSources: AnatomyInputSource[] = ["tap", "brush", "depth", "dental", "search"];
   if (!ev.inputSource || !validSources.includes(ev.inputSource)) {
@@ -187,6 +202,7 @@ export function validateAnatomyEvent(candidate: unknown): { valid: boolean; erro
 export function createAnatomyEvent(params: {
   atlas: AnatomyAtlasReference;
   concept: Omit<AnatomyConcept, "side"> & { side?: AnatomyBodySide };
+  relatedConcepts?: AnatomyConcept[];
   geometry?: AnatomyGeometry;
   inputSource?: AnatomyInputSource;
   state?: AnatomyConfirmationState;
@@ -205,6 +221,7 @@ export function createAnatomyEvent(params: {
       ...params.concept,
       side,
     },
+    relatedConcepts: params.relatedConcepts,
     geometry: params.geometry,
     inputSource: params.inputSource || "tap",
     state: params.state || "confirmed",

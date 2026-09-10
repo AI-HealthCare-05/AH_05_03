@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from fastapi import Depends
 
 from app.core.db.session import SessionDep
+from app.dtos.anatomy_event import AnatomyEvent
 from app.dtos.health_record_query import (
     HealthRecordQueryArguments,
     HealthRecordQueryMatch,
@@ -23,6 +24,7 @@ from app.dtos.health_records import (
 )
 from app.exceptions import (
     HealthRecordNotFoundError,
+    HealthRecordPayloadValidationError,
     HouseholdMembershipRequiredError,
     HouseholdNotFoundError,
     ProfileNotFoundError,
@@ -102,8 +104,23 @@ class HealthRecordService:
             raise HouseholdMembershipRequiredError()
         return profile.household_id
 
+    @staticmethod
+    def _validate_record_payload(payload: dict[str, object] | None) -> None:
+        """기록 페이로드에 3D 해부학 이벤트가 포함된 경우 표준 계약을 강제한다."""
+        if not payload:
+            return
+        anatomy_event = payload.get("anatomyEvent")
+        if anatomy_event is not None:
+            if not isinstance(anatomy_event, dict):
+                raise HealthRecordPayloadValidationError("anatomyEvent 페이로드는 객체(dict)여야 합니다.")
+            try:
+                AnatomyEvent.model_validate(anatomy_event)
+            except Exception as e:
+                raise HealthRecordPayloadValidationError(f"유효하지 않은 3D 해부학 이벤트 규격입니다: {e}") from e
+
     async def create_record(self, account: ServiceAccount, req: HealthRecordCreateRequest) -> HealthRecordData:
         await self._verify_profile_access(req.profile_id, account)
+        self._validate_record_payload(req.payload)
 
         record = HealthRecord(
             id=req.id or uuid.uuid4(),
@@ -251,6 +268,7 @@ class HealthRecordService:
         if req.source is not None:
             record.source = req.source
         if req.payload is not None:
+            self._validate_record_payload(req.payload)
             record.payload = req.payload
         if req.note is not None:
             record.note = req.note
@@ -278,6 +296,7 @@ class HealthRecordService:
         results: list[HealthRecordData] = []
         for r in req.records:
             await self._verify_profile_access(r.profile_id, account)
+            self._validate_record_payload(r.payload)
             model = HealthRecord(
                 id=r.id,
                 profile_id=r.profile_id,

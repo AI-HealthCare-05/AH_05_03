@@ -14,6 +14,7 @@ from app.dtos.health_assistant import (
     ProfileContext,
 )
 from app.dtos.outdoor_conditions import AirQualityConditions, OutdoorConditionsResult, WeatherConditions
+from app.models.households import HouseholdStatus
 from app.services.health_assistant import HealthAssistantService
 
 T = TypeVar("T", bound=BaseModel)
@@ -842,7 +843,7 @@ async def test_health_assistant_service_enriches_anatomy_context_and_draft() -> 
     assert enriched is not None
     assert enriched.recent_records_summary is not None
     assert "3D해부학: 우측 대퇴직근(오른쪽 thigh)" in enriched.recent_records_summary
-    assert "확산범위 15.0mm" in enriched.recent_records_summary
+    assert "반경 15.0" in enriched.recent_records_summary
 
     request = HealthAssistantChatRequest(
         messages=[ChatMessage(role="user", content="오른쪽 허벅지가 묵직하게 아파")],
@@ -856,6 +857,66 @@ async def test_health_assistant_service_enriches_anatomy_context_and_draft() -> 
     assert response.pain_draft.anatomy_label == "우측 대퇴직근"
     assert response.pain_diary_tool is not None
     assert response.pain_diary_tool.anatomy_concept_id == "muscle_rectus_femoris_r"
+
+
+async def test_enrich_records_summary_with_canonical_concept_side() -> None:
+    """P0-2: 신버전 표준 계약(concept.side)과 구버전(body.side)이 모두 정상 반영되는지 검증한다."""
+    from datetime import datetime
+    from unittest.mock import AsyncMock
+
+    account_id = uuid.uuid4()
+    profile_id = uuid.uuid4()
+    household_id = uuid.uuid4()
+
+    mock_profile = AsyncMock(id=profile_id, household_id=household_id, status="active")
+    mock_household = AsyncMock(id=household_id, status=HouseholdStatus.ACTIVE)
+    mock_profile_repo = AsyncMock()
+    mock_profile_repo.get = AsyncMock(return_value=mock_profile)
+    mock_household_repo = AsyncMock()
+    mock_household_repo.get = AsyncMock(return_value=mock_household)
+    mock_household_repo.has_active_membership = AsyncMock(return_value=True)
+
+    class CanonicalRecord:
+        def __init__(self) -> None:
+            self.recorded_at = datetime(2026, 9, 10, 9, 0)
+            self.record_type = "pain"
+            self.payload = {
+                "sensation": "욱신거림",
+                "anatomyEvent": {
+                    "schemaVersion": "1.0.0",
+                    "eventId": "evt-123",
+                    "atlas": {"id": "male-standard", "version": "1.0", "referenceSex": "male"},
+                    "concept": {
+                        "canonicalConceptId": "fma:12345",
+                        "sourceKey": "mesh_deltoid_l",
+                        "sourceMeshId": "mesh_deltoid_l",
+                        "label": "삼각근",
+                        "system": "근육계",
+                        "side": "left",
+                    },
+                    "coverage": {"radius": 0.25, "sampleCount": 8, "hitRatio": 0.4},
+                    "inputSource": "brush",
+                    "recordedAt": "2026-09-10T09:00:00Z",
+                },
+            }
+
+    mock_repo = AsyncMock()
+    mock_repo.list_by_profile.return_value = [CanonicalRecord()]
+
+    service = HealthAssistantService(
+        record_repo=mock_repo,
+        profile_repo=mock_profile_repo,
+        household_repo=mock_household_repo,
+    )
+
+    context = ProfileContext(profile_id=profile_id, profile_name="테스터")
+    enriched = await service._enrich_context(context, account_id=account_id)
+
+    assert enriched is not None
+    assert enriched.recent_records_summary is not None
+    assert "3D해부학: 삼각근(왼쪽)" in enriched.recent_records_summary
+    assert "반경 0.25" in enriched.recent_records_summary
+    assert "mm" not in enriched.recent_records_summary
 
 
 async def test_enrich_records_summary_denies_without_account_id() -> None:

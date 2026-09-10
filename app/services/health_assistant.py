@@ -720,13 +720,16 @@ class HealthAssistantService:
                             body = anatomy.get("body", {})
                             coverage = anatomy.get("coverage", {})
                             label = concept.get("label") or concept.get("id") or "지정 부위"
-                            side = body.get("side")
-                            region = body.get("region")
-                            side_kr = {"left": "왼쪽", "right": "오른쪽", "bilateral": "양쪽"}.get(side, side or "")
-                            side_desc = f"{side_kr} {region}".strip() if side_kr or region else ""
-                            area_part = f"{label}({side_desc})" if side_desc else label
+                            side = concept.get("side") or body.get("side")
+                            region = concept.get("region") or body.get("region")
+                            side_kr = {"left": "왼쪽", "right": "오른쪽", "bilateral": "양쪽", "midline": "중앙"}.get(
+                                side, side or ""
+                            )
+                            side_parts = [p for p in (side_kr, region) if p]
+                            side_desc = " ".join(side_parts)
+                            area_part = f"{label}({side_desc})" if side_desc and side_desc not in label else label
                             rad = coverage.get("radius")
-                            cov_part = f", 확산범위 {rad}mm" if rad is not None else ""
+                            cov_part = f", 반경 {rad}" if rad is not None else ""
                             note_part = r.payload.get("note") or r.payload.get("sensation") or ""
                             desc = f": {note_part}" if note_part else ""
                             summaries.append(f"[{date_str}] 통증[3D해부학: {area_part}{cov_part}]{desc}")

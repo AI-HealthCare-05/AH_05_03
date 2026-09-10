@@ -46,7 +46,7 @@ class AnatomyBrushCoverage(BaseModel):
 
     radius: float = Field(ge=0.0)
     sample_count: int = Field(ge=1, alias="sampleCount")
-    hit_ratio: float = Field(ge=0.0, le=1.0, alias="hitRatio")
+    hit_ratio: float | None = Field(default=None, ge=0.0, le=1.0, alias="hitRatio")
 
 
 class AnatomyEvent(BaseModel):
@@ -62,6 +62,7 @@ class AnatomyEvent(BaseModel):
     event_id: str = Field(min_length=1, max_length=100, alias="eventId")
     atlas: AnatomyAtlasReference
     concept: AnatomyConcept
+    related_concepts: list[AnatomyConcept] = Field(default_factory=list, alias="relatedConcepts")
     geometry: AnatomyGeometry | None = None
     input_source: AnatomyInputSource = Field(default="tap", alias="inputSource")
     state: AnatomyConfirmationState = Field(default="confirmed")
