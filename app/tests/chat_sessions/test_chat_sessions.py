@@ -5,7 +5,9 @@ from httpx import ASGITransport, AsyncClient
 from starlette import status
 
 from app.core import config
+from app.dtos.health_assistant import HealthAssistantScopeDecision
 from app.main import app
+from app.services.health_assistant_boundary import SERVICE_USAGE_MESSAGE
 from app.tests.conftest import TEST_BASE_URL
 
 
@@ -175,6 +177,12 @@ class TestChatSessionsApi:
 
         class FakeModels:
             async def generate_content(self, *args, **kwargs):
+                if kwargs["config"].response_schema is HealthAssistantScopeDecision:
+                    return type(
+                        "ScopeResponse",
+                        (),
+                        {"text": '{"scope":"service_usage","requires_authoritative_evidence":false}'},
+                    )()
                 return FakeResponse()
 
         class FakeAio:
@@ -220,7 +228,7 @@ class TestChatSessionsApi:
         assert messages[0]["sequence_number"] == 1
 
         assert messages[1]["role"] == "assistant"
-        assert messages[1]["content"] == "안녕하세요! 건강 관리를 도와드릴게요."
+        assert messages[1]["content"] == SERVICE_USAGE_MESSAGE
         assert messages[1]["sequence_number"] == 2
         assert messages[1]["metadata"]["intent"] == "general_chat"
 

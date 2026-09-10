@@ -9,6 +9,7 @@ from app.dtos.health_assistant import (
     ChatMessage,
     HealthAssistantChatRequest,
     HealthAssistantResponse,
+    HealthAssistantScopeDecision,
     UserLocation,
 )
 from app.dtos.medical_facility import FacilityItem, FacilitySearchResult
@@ -118,6 +119,15 @@ class MockToolEnabledLLMClient:
         messages: list[ChatMessage],
         response_schema: type[T],
     ) -> T:
+        if response_schema is HealthAssistantScopeDecision:
+            return cast(
+                T,
+                HealthAssistantScopeDecision(
+                    scope="health",
+                    requires_authoritative_evidence=True,
+                    required_evidence_types=["facility"],
+                ),
+            )
         return cast(T, self.final_response)
 
     def stream_structured_response(

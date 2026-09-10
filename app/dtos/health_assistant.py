@@ -181,6 +181,47 @@ HealthIntent = Literal[
 ]
 
 
+HealthAssistantScope = Literal[
+    "health",
+    "service_usage",
+    "mixed",
+    "out_of_scope",
+    "unrecognized",
+    "prompt_attack",
+]
+
+AuthoritativeEvidenceType = Literal[
+    "health_knowledge",
+    "medication",
+    "food_nutrition",
+    "outdoor",
+    "facility",
+    "health_records",
+]
+
+
+class HealthAssistantScopeDecision(BaseModel):
+    """메인 답변 전에 실행하는 서비스 범위 판정 결과.
+
+    Gemini는 여기서 주제를 분류할 뿐 건강 사실을 답하지 않는다. 실제 허용과
+    차단은 :mod:`app.services.health_assistant_boundary`가 이 값을 검증해 강제한다.
+    """
+
+    scope: HealthAssistantScope = Field(description="건강비서 서비스 범위 판정")
+    requires_authoritative_evidence: bool = Field(
+        description="사용자에게 건강 사실·수치·권고를 답하려면 승인된 근거 조회가 필요한지 여부"
+    )
+    required_evidence_types: list[AuthoritativeEvidenceType] = Field(
+        default_factory=list,
+        description="질문에 답하기 위해 모두 충족해야 하는 승인 근거 종류",
+    )
+    allowed_health_request: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="혼합 질문에서 그대로 떼어 낸 건강 관련 원문 부분. 혼합 질문이 아니면 null",
+    )
+
+
 class HealthAssistantChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(min_length=1, max_length=12, description="대화 이력 리스트")
     profile_context: ProfileContext | None = Field(default=None, description="현재 선택된 가족 구성원의 컨텍스트 정보")
