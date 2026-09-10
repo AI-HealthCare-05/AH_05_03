@@ -174,7 +174,8 @@ interface HealthAssistantDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onMinimize?: () => void;
-  variant?: "drawer" | "embedded";
+  variant?: "drawer" | "embedded" | "popover";
+  contextLabel?: string;
   onRecordSaved?: () => Promise<void> | void;
   onChallengeSaved?: () => Promise<void> | void;
   onNavigateToRecords?: () => void;
@@ -189,6 +190,7 @@ export function HealthAssistantDrawer({
   onClose,
   onMinimize,
   variant = "drawer",
+  contextLabel,
   onRecordSaved,
   onNavigateToRecords,
   onNavigateToDiary,
@@ -1750,9 +1752,19 @@ export function HealthAssistantDrawer({
           )}
           <span className="assistant-avatar" aria-hidden="true">봄</span>
           <div>
-            <h3>
-              봄이 · 건강 비서
-            </h3>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <h3>봄이 · 건강 비서</h3>
+              {contextLabel && (
+                <span className="channel-talk-context-tag" title="현재 화면 연동">
+                  {contextLabel}
+                </span>
+              )}
+            </div>
+            {profile && variant === "popover" && (
+              <small style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
+                {profile.displayName}님의 건강 비서
+              </small>
+            )}
           </div>
         </div>
         <div className="assistant-header-actions">
@@ -1787,21 +1799,11 @@ export function HealthAssistantDrawer({
             className="assistant-minimize-btn"
             type="button"
             onClick={onMinimize ?? (isEmbedded ? onClose : handleAnimatedClose)}
-            aria-label="최소화"
-            title="최소화"
+            aria-label="창 닫기"
+            title="창 닫기"
           >
             −
           </button>
-          {!isEmbedded && (
-            <button
-              className="assistant-close-btn"
-              type="button"
-              onClick={handleAnimatedClose}
-              aria-label="닫기"
-            >
-              ×
-            </button>
-          )}
         </div>
       </header>
 
@@ -2261,9 +2263,9 @@ export function HealthAssistantDrawer({
       </aside>
   );
 
-  if (isEmbedded) {
+  if (isEmbedded || variant === "popover") {
     return (
-      <div className="health-assistant-embedded-container">
+      <div className={isEmbedded ? "health-assistant-embedded-container" : "health-assistant-popover-container"}>
         {drawerContent}
 
         {/* 원본 서류 이미지 크게 보기 모달 */}
@@ -3698,7 +3700,7 @@ function PainDiaryToolCard({
           className="button button-outline view-diary-btn"
           onClick={() => onNavigateToDiary(diaryDate)}
         >
-          📅 통증 다이어리 캘린더에서 확인하기
+          통증 다이어리 캘린더에서 확인하기
         </button>
       </div>
     );
@@ -3708,7 +3710,7 @@ function PainDiaryToolCard({
     <div className="draft-confirm-card pain-tool-card">
       <div className="card-header">
         <div className="tool-badge-row">
-          <span className="tool-calling-badge">🛠️ [Tool Calling] format_pain_diary</span>
+          <span className="tool-calling-badge">[Tool Calling] format_pain_diary</span>
           <span className="tool-name">AI 맞춤법 교정 &amp; 구조화</span>
         </div>
         <small>맞춤법을 교정하고 정리한 일기입니다. 확인 후 저장해 주세요.</small>
