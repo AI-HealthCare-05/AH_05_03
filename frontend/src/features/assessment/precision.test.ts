@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DiseaseVerdict } from "./contracts";
 import type { ModelSpec } from "./Evidence";
-import { briefList, objectParticle, precisionGains } from "./precision";
+import { briefList, objectParticle, precisionGains, sharedRefining } from "./precision";
 
 function verdict(patch: Partial<DiseaseVerdict> = {}): DiseaseVerdict {
   return {
@@ -103,5 +103,49 @@ describe("briefList", () => {
   it("셋을 넘으면 나머지는 개수로 접는다", () => {
     expect(briefList(["가", "나"])).toBe("가, 나");
     expect(briefList(["가", "나", "다", "라", "마"])).toBe("가, 나, 다 외 2개");
+  });
+});
+
+/**
+ * 여러 카드에 똑같이 걸린 값을 카드 위로 올리는 규칙.
+ *
+ * 카드마다 적던 때 "앉아 있는 시간을 넣으면 예측이 정밀해져요" 가 한 화면에 **14번**
+ * 나왔다(2026-09-10 실측). 같은 한 칸을 채우면 그 카드들이 동시에 정밀해지므로
+ * 정보는 하나뿐이고, 열네 번 반복되면 정보가 아니라 배경이 된다.
+ */
+describe("sharedRefining", () => {
+  const values = { age: "54", sex: "M", bmi: "26", self_rated_health: "3" };
+
+  /**
+   * 카드 여러 장이 **같은 모델**을 본다. `precisionGains` 는 모델을
+   * `reference.model_target` 으로 찾으므로, 카드 키가 달라도 이 값을 맞춰야 같은
+   * refining 목록이 나온다 — 실제 화면도 그렇다(`liver` 카드는 `liver_enzyme_high`
+   * 번들이 답한다).
+   */
+  function cards(count: number): DiseaseVerdict[] {
+    return Array.from({ length: count }, (_, index) =>
+      verdict({ key: `card${index}`, reference: { model_target: "dm", tier: "basic" } as never }),
+    );
+  }
+
+  it("문턱 이상의 카드에 걸린 값만 올린다", () => {
+    const shared = sharedRefining(cards(3), values, [DM_BASIC, DM_LAB], 3);
+
+    expect(shared).toContain("중성지방");
+    // 둘에만 걸린 값은 올리지 않는다 — 어느 카드 이야기인지 되짚게 된다.
+    expect(sharedRefining(cards(2), values, [DM_BASIC, DM_LAB], 3)).toEqual([]);
+  });
+
+  it("이미 채운 값은 올리지 않는다", () => {
+    const filled = { ...values, triglyceride: "180" };
+    const shared = sharedRefining(cards(3), filled, [DM_BASIC, DM_LAB], 3);
+
+    expect(shared).not.toContain("중성지방");
+    // 다른 안 채운 값은 그대로 남는다 — 필터가 통째로 비우는 것이 아니다.
+    expect(shared.length).toBeGreaterThan(0);
+  });
+
+  it("카드가 없으면 아무것도 올리지 않는다", () => {
+    expect(sharedRefining([], values, [DM_BASIC, DM_LAB])).toEqual([]);
   });
 });
