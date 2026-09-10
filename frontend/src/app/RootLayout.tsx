@@ -2,6 +2,7 @@ import { Suspense, useContext, useEffect, useMemo, useRef, useState } from "reac
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { SignInPage } from "../features/account/SignInPage";
+import { GlobalHealthAssistant } from "../features/health-assistant/GlobalHealthAssistant";
 import { serverApiClient } from "../shared/api/serverApiClient";
 import { useAuth } from "./authContext";
 import { LocalDomainContext } from "./localDomainContext";
@@ -30,8 +31,12 @@ const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
   { to: "/pain-diary", label: "통증 다이어리", end: false },
   { to: "/assessment", label: "위험 판정", end: false },
-  { to: "/challenge", label: "챌린지", end: false },
   { to: "/health-data", label: "건강 데이터", end: false },
+] as const;
+
+const ROUTE_TITLES = [
+  ...NAVIGATION,
+  { to: "/challenge", label: "챌린지", end: false },
   { to: "/account", label: "계정", end: false },
 ] as const;
 
@@ -46,10 +51,8 @@ export function RootLayout() {
   const navigationRef = useRef<HTMLElement>(null);
   const { pathname } = useLocation();
 
-  // 라우트마다 탭 제목을 맞춘다. 제목의 원천은 아래 내비 표의 라벨이다 —
-  // 사용자가 아는 화면 이름이 이미 거기 있어서 따로 적어 둘 필요가 없다.
-  // 훅이라 이른 반환보다 위에 있어야 한다(로그인 관문에서도 돈다).
-  useRouteTitle(NAVIGATION);
+  // 라우트마다 탭 제목을 맞춘다.
+  useRouteTitle(ROUTE_TITLES);
 
   // 좁은 화면에서 메뉴는 가로로 미는 레일이다(`styles.css` 760px 블록). 링크를
   // 눌러 들어왔다면 누른 항목이 이미 보이지만, **새로고침하거나 주소로 바로
@@ -175,9 +178,14 @@ export function RootLayout() {
               <i aria-hidden="true" /> 계정 동기화
             </span>
             {email ? (
-              <span className="header-account" title={email}>
+              <NavLink
+                to="/account"
+                className="header-account"
+                title={`계정 관리 (${email})`}
+                aria-label={`계정 관리 (${email})`}
+              >
                 {matchedProfileName ? `${matchedProfileName} (${email})` : email}
-              </span>
+              </NavLink>
             ) : null}
             <button type="button" className="header-signout" onClick={() => void signOut()}>
               로그아웃
@@ -207,6 +215,9 @@ export function RootLayout() {
             함께 사라진다 — 숨기는 것이 아니라 빠진다. */}
         {import.meta.env.DEV ? <NavLink to="/dev/architecture">개발용 데이터 경계 확인</NavLink> : null}
       </footer>
+
+      {/* 채널톡 스타일 전역 연속형 건강 비서 (어느 화면에서나 유지되는 플로팅 챗봇) */}
+      <GlobalHealthAssistant />
     </div>
   );
 }
