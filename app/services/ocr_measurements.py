@@ -451,11 +451,23 @@ def _reference_conflict(target: str, raw_reference: str) -> str | None:
     )
 
 
-def _bounds_conflict(target: str, value: float) -> str | None:
+def bounds_conflict(target: str, value: float) -> str | None:
+    """DTO 허용 범위를 벗어나는가. `None` 이면 통과.
+
+    **공개 함수인 이유.** 손으로 남긴 기록을 판정 입력으로 옮기는 `record_prefill` 이
+    같은 관문을 써야 한다. 그쪽이 `_BOUNDS` 를 직접 읽으면 사설 이름에 기대는 셈이고,
+    범위를 베껴 적으면 DTO 가 바뀔 때 조용히 어긋난다 — 범위는 `AssessmentSummaryRequest`
+    한 곳에만 산다(위 `_bounds` 참조).
+    """
     low, high = _BOUNDS.get(target, (None, None))
     if (low is not None and value < low) or (high is not None and value > high):
         return f"값 {value:g} 이 입력 허용 범위를 벗어납니다."
     return None
+
+
+#: 모듈 안의 기존 호출부가 쓰는 이름. 공개 이름 하나만 두면 되지만, 이 파일 안에서
+#: `_` 접두사로 부르던 자리를 전부 고치면 diff 가 관문 로직과 섞인다.
+_bounds_conflict = bounds_conflict
 
 
 def _read_value(raw_value: str) -> tuple[float | None, str | None]:
