@@ -41,8 +41,11 @@ class ChatMessageResponse(BaseSerializerModel):
 
 
 class ChatMessageCreateRequest(BaseRequestModel):
-    # assistant 응답과 구조화 metadata는 health-assistant 처리 경로만 기록한다.
-    role: Literal["user"] = Field(description="사용자 메시지 역할")
+    # 구조화 metadata 는 health-assistant 처리 경로만 기록한다. **역할은 둘 다 받는다** —
+    # 서류를 확정 저장하는 경로(`HealthAssistantDrawer.handleConfirmOcrModalSave`)는
+    # LLM 을 거치지 않고 확인 문장을 그 자리에서 만든다. `user` 만 받던 동안 그 대화는
+    # 사용자 줄만 남거나(제목은 생기는데 답이 없다) 아예 저장되지 않았다.
+    role: Literal["user", "assistant"] = Field(description="메시지 역할")
     content: str = Field(min_length=1, max_length=10000, description="메시지 내용")
 
 
