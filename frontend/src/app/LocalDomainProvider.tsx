@@ -317,10 +317,20 @@ export function LocalDomainProvider({
   const updateHealthRecord = useCallback(
     async (recordId: string, input: UpdateHealthRecordInput) => {
       if (!runtime) throw new Error("저장소를 준비하는 중입니다.");
+      // **payload 를 통째로 보내면 안 된다.** 서버는 `record.payload = req.payload` 로
+      // 교체하므로, 예전처럼 `{ note }` 만 보내면 혈압·혈당 수치가 함께 지워졌다.
+      // 기존 payload 를 읽어 덧쓴다 — 한 번의 추가 조회로 값 손실을 막는다.
+      const current = await runtime.healthRecords.get(recordId);
+      if (!current.ok) throw new Error(current.error.message);
+      const merged = {
+        ...(current.value.payload as Record<string, unknown>),
+        ...(input.payload ?? {}),
+        note: input.note.trim(),
+      };
       const result = await runtime.healthRecords.update(recordId, {
         recordType: input.recordType,
         recordedAt: input.recordedAt,
-        payload: { note: input.note.trim() },
+        payload: merged,
         expectedVersion: input.expectedVersion,
       });
       if (!result.ok) throw new Error(result.error.message);

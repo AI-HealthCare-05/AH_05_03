@@ -1,17 +1,32 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { LocalDomainProvider } from "../../app/LocalDomainProvider";
 import { PRIMARY_HOUSEHOLD_ID, useLocalDomain } from "../../app/localDomainContext";
 import { HealthDataPage } from "./HealthDataPage";
 
+/** 운영에서는 `AppProviders` 가 항상 감싼다. `/insights` 를 이 화면으로 합치며
+ *  붙은 `ChallengeDashboardCard` 가 서버 상태를 읽으므로 이 하네스에도 필요하다
+ *  (`HomePage.test.tsx` 의 같은 코멘트 참조). */
+function newQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
+}
+
 describe("HealthDataPage", () => {
   it("선택 기간의 체중 변화를 실제 로컬 기록으로 계산한다", async () => {
+    // **라우터로 감싼다.** 이 화면은 라우트이고 "수치 고쳐 다시 판정" 이 `useNavigate`
+    // 를 쓴다. 감싸지 않으면 실제 앱에서는 없는 오류로 테스트만 죽는다.
     render(
-      <LocalDomainProvider databaseName={`ieobom-health-data-${crypto.randomUUID()}`}>
-        <SeededHealthDataPage />
-      </LocalDomainProvider>,
+      <QueryClientProvider client={newQueryClient()}>
+        <MemoryRouter>
+          <LocalDomainProvider databaseName={`ieobom-health-data-${crypto.randomUUID()}`}>
+            <SeededHealthDataPage />
+          </LocalDomainProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
 
     expect(await screen.findByRole("heading", { name: "나님의 건강 변화" }, { timeout: 5000 })).toBeInTheDocument();
@@ -25,9 +40,13 @@ describe("HealthDataPage", () => {
     // `payload.inputs` 에 통째로 들어간다. 이 화면은 `body_measurement` 같은
     // 전용 타입만 찾고 있어서 기록이 열두 건 있는데도 "아직 기록이 없습니다" 였다.
     const { container } = render(
-      <LocalDomainProvider databaseName={`ieobom-health-data-${crypto.randomUUID()}`}>
-        <SeededAssessmentPage />
-      </LocalDomainProvider>,
+      <QueryClientProvider client={newQueryClient()}>
+        <MemoryRouter>
+          <LocalDomainProvider databaseName={`ieobom-health-data-${crypto.randomUUID()}`}>
+            <SeededAssessmentPage />
+          </LocalDomainProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
 
     await screen.findAllByRole("heading", { name: "나님의 건강 변화" });

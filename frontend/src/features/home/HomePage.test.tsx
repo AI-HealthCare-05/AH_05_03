@@ -112,14 +112,19 @@ describe("HomePage", () => {
     await user.click(screen.getByRole("button", { name: "기록 저장" }));
     expect(await screen.findByText("수정 전 기록")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "수정" }));
+    // **수정은 이제 카드 안에 있다.** 목록에서 바로 고치던 때는 무엇을 고치는지
+    // 보기 전에 고치기 버튼을 먼저 만났고, 그 옆이 삭제였다.
+    await user.click(screen.getByRole("button", { name: "자세히 보기" }));
+    await user.click(await screen.findByRole("button", { name: "수정" }));
     const note = screen.getByRole("textbox", { name: "기록 내용" });
     await user.clear(note);
     await user.type(note, "수정 후 기록");
     await user.click(screen.getByRole("button", { name: "변경사항 저장" }));
     expect(await screen.findByText("수정 후 기록")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "삭제" }));
+    // 저장하면 카드가 닫힌다. 삭제도 카드 안에 있으므로 다시 열고 누른다.
+    await user.click(screen.getByRole("button", { name: "자세히 보기" }));
+    await user.click(await screen.findByRole("button", { name: "삭제" }));
     await user.click(screen.getByRole("button", { name: "삭제 목록으로 이동" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await user.click(await screen.findByRole("button", { name: "삭제된 기록 1건" }));
@@ -195,14 +200,19 @@ describe("HomePage", () => {
     await user.click(screen.getByRole("button", { name: "기록 저장" }));
 
     // 예전에는 여기가 "저장된 건강기록" 이었다 — 판정 payload 에 note 가 없어서다.
-    expect(await screen.findByText("높음")).toBeInTheDocument();
-    expect(screen.getByText(/3\/13개 판정 · 주의 2개/)).toBeInTheDocument();
-    expect(screen.getByText(/수축기 혈압 148 mmHg/)).toBeInTheDocument();
+    // **"높음" 으로 기다리지 않는다.** 위 구성원 카드도 같은 글자로 판정 요약
+    // 배지를 보여 준다 — `refreshDashboard` 가 기록을 저장할 때마다 그 배지도
+    // 같이 읽는다(2026-09-10). 행에만 있는 문구("N/13개 판정…")로 기다린 뒤
+    // 그 행 **안에서** 등급을 확인한다.
+    const metaText = await screen.findByText(/3\/13개 판정 · 주의 2개/);
+    const row = metaText.closest("li") as HTMLElement;
+    expect(within(row).getByText("높음")).toBeInTheDocument();
+    expect(within(row).getByText(/수축기 혈압 148 mmHg/)).toBeInTheDocument();
     expect(screen.queryByText("저장된 건강기록")).not.toBeInTheDocument();
 
     // 자세히를 누르면 그날 넣은 값과 질환별 등급 전부. 카드 원본이 없는 옛 기록이라
     // 등급만 남아 있다고 밝힌다.
-    await user.click(screen.getByRole("button", { name: "자세히" }));
+    await openAssessmentDetail(user);
     const modal = await screen.findByRole("dialog", {}, { timeout: 5000 });
     expect(within(modal).getByText("고혈압")).toBeInTheDocument();
     expect(within(modal).getByText("당뇨병")).toBeInTheDocument();
@@ -259,7 +269,7 @@ describe("HomePage", () => {
     await user.type(screen.getByRole("textbox", { name: "기록 내용" }), "메모");
     await user.click(screen.getByRole("button", { name: "기록 저장" }));
 
-    await user.click(await screen.findByRole("button", { name: "자세히" }, { timeout: 5000 }));
+    await openAssessmentDetail(user);
     const modal = await screen.findByRole("dialog", {}, { timeout: 5000 });
     // 등급 이름만이 아니라 그날 본 카드가 그대로 선다.
     expect(within(modal).getByText("고혈압 1기")).toBeInTheDocument();
@@ -392,6 +402,30 @@ function Probe({ intoRef }: { intoRef: { current?: ReturnType<typeof useLocalDom
     intoRef.current = domain;
   }, [domain, intoRef]);
   return null;
+}
+
+
+/** 판정 기록 줄의 `자세히 보기` 를 누른다.
+ *
+ * **줄마다 같은 이름의 버튼이 있다.** 목록에서 바로 고치던 때는 판정 기록에만
+ * `자세히` 가 붙어서 이름으로 하나가 잡혔는데, 이제는 모든 줄이 `자세히 보기` 다.
+ * 등급 배지(`높음`)가 붙은 줄이 판정 줄이므로 그 줄 안에서 찾는다.
+ *
+ * **"높음" 이 화면에 두 번 있을 수 있다.** 위 구성원 카드도 같은 글자로 최근
+ * 판정 등급을 보여 준다(`refreshDashboard` 가 기록을 저장할 때마다 그 배지도
+ * 같이 새로 읽는다, 2026-09-10). 카드는 `<button>` 이라 `<li>` 조상이 없으므로
+ * `.closest("li")` 로 걸러진다 — `findByText` 대신 `waitFor` 로 **`<li>` 안의
+ * 것이 나타날 때까지** 직접 기다린다. 카드 쪽이 먼저 떠도 조용히 계속 기다린다. */
+async function openAssessmentDetail(user: ReturnType<typeof userEvent.setup>) {
+  const row = await waitFor(
+    () => {
+      const inRow = screen.getAllByText("높음").map((badge) => badge.closest("li")).find((li): li is HTMLLIElement => li !== null);
+      if (!inRow) throw new Error("판정 기록 줄이 아직 없습니다.");
+      return inRow;
+    },
+    { timeout: 5000 },
+  );
+  await user.click(within(row).getByRole("button", { name: "자세히 보기" }));
 }
 
 function renderHomePage() {

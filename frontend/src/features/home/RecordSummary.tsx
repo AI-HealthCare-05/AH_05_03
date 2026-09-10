@@ -8,13 +8,16 @@
  */
 
 import type { HealthRecord } from "../../shared/local/domainContracts";
+import { recordSummary } from "../../shared/local/recordSummary";
 import { ATTENTION, LEVEL_TONE, headline, levelLabel, snapshot } from "./recordSummaryData";
 
-/** 목록 한 줄. 판정이면 등급과 수치를, 나머지는 지금까지처럼 메모를 낸다. */
+/** 목록 한 줄. 판정이면 등급과 수치를, 나머지는 정본 요약기가 만든 한 줄을 낸다. */
 export function RecordSummary({ record }: { record: HealthRecord }) {
   if (record.recordType !== "assessment") {
-    const note = record.payload.note;
-    return <p>{typeof note === "string" && note.trim() ? note : "저장된 건강기록"}</p>;
+    // **메모를 그대로 내던 자리다.** 검진표 기록의 메모는 OCR 전문이라 목록 한 줄에
+    // 수십 줄이 쏟아졌고, 메모가 없는 기록은 "저장된 건강기록" 이라고만 적혔다.
+    // 둘 다 같은 원인이다 — 수치를 안 읽었다. 읽는 방법은 `recordSummary` 한 곳에 있다.
+    return <p className="record-summary-line">{recordSummary(record)}</p>;
   }
 
   const payload = snapshot(record);
