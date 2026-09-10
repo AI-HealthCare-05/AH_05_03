@@ -5,6 +5,7 @@ from typing import Any, cast
 
 from app.dtos.health_assistant import (
     HealthAssistantChatRequest,
+    HealthAssistantLlmResponse,
     HealthAssistantResponse,
     ProfileContext,
     UserLocation,
@@ -720,13 +721,16 @@ class HealthAssistantService:
                             body = anatomy.get("body", {})
                             coverage = anatomy.get("coverage", {})
                             label = concept.get("label") or concept.get("id") or "지정 부위"
-                            side = body.get("side")
-                            region = body.get("region")
-                            side_kr = {"left": "왼쪽", "right": "오른쪽", "bilateral": "양쪽"}.get(side, side or "")
-                            side_desc = f"{side_kr} {region}".strip() if side_kr or region else ""
-                            area_part = f"{label}({side_desc})" if side_desc else label
+                            side = concept.get("side") or body.get("side")
+                            region = concept.get("region") or body.get("region")
+                            side_kr = {"left": "왼쪽", "right": "오른쪽", "bilateral": "양쪽", "midline": "중앙"}.get(
+                                side, side or ""
+                            )
+                            side_parts = [p for p in (side_kr, region) if p]
+                            side_desc = " ".join(side_parts)
+                            area_part = f"{label}({side_desc})" if side_desc and side_desc not in label else label
                             rad = coverage.get("radius")
-                            cov_part = f", 확산범위 {rad}mm" if rad is not None else ""
+                            cov_part = f", 반경 {rad}" if rad is not None else ""
                             note_part = r.payload.get("note") or r.payload.get("sensation") or ""
                             desc = f": {note_part}" if note_part else ""
                             summaries.append(f"[{date_str}] 통증[3D해부학: {area_part}{cov_part}]{desc}")
@@ -999,18 +1003,20 @@ class HealthAssistantService:
             res_tuple = await client_any.generate_structured_response_with_tools(
                 system_instruction=system_instruction,
                 messages=request.messages,
-                response_schema=HealthAssistantResponse,
+                response_schema=HealthAssistantLlmResponse,
                 tools=tools,
                 tool_executor=tool_executor,
             )
-            response, tool_result = res_tuple
+            llm_res, tool_result = res_tuple
+            response = HealthAssistantResponse.model_validate(llm_res.model_dump())
             self._attach_tool_result_to_response(response, tool_result)
         else:
-            response = await self.llm_client.generate_structured_response(
+            llm_res = await self.llm_client.generate_structured_response(
                 system_instruction=system_instruction,
                 messages=request.messages,
-                response_schema=HealthAssistantResponse,
+                response_schema=HealthAssistantLlmResponse,
             )
+            response = HealthAssistantResponse.model_validate(llm_res.model_dump())
 
         if outdoor_conditions and not response.outdoor_conditions:
             response.outdoor_conditions = outdoor_conditions
@@ -1034,7 +1040,7 @@ class HealthAssistantService:
             return await client_any.stream_structured_response_with_tools(
                 system_instruction=system_instruction,
                 messages=request.messages,
-                response_schema=HealthAssistantResponse,
+                response_schema=HealthAssistantLlmResponse,
                 tools=tools,
                 tool_executor=tool_executor,
             )
@@ -1042,7 +1048,7 @@ class HealthAssistantService:
             self.llm_client.stream_structured_response(
                 system_instruction=system_instruction,
                 messages=request.messages,
-                response_schema=HealthAssistantResponse,
+                response_schema=HealthAssistantLlmResponse,
             ),
             None,
         )
@@ -1220,7 +1226,8 @@ class HealthAssistantService:
                 yield "delta", {"text": fresh}
 
         try:
-            parsed = HealthAssistantResponse.model_validate_json(raw)
+            llm_parsed = HealthAssistantLlmResponse.model_validate_json(raw)
+            parsed = HealthAssistantResponse.model_validate(llm_parsed.model_dump())
             parsed = self._enrich_parsed_response(parsed, tool_result, outdoor_conditions)
         except Exception as ex:
             raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex

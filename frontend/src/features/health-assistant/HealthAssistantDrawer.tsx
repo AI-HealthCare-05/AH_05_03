@@ -27,6 +27,7 @@ import {
   type FacilitySearchResult,
   type UserLocation,
 } from "./healthAssistantClient";
+import { createAnatomyEvent, type AnatomyEvent } from "../home/anatomyEventContracts";
 import { selectContextRecordTypes } from "./healthAssistantContext";
 import {
   containsNewMedicationRecord,
@@ -1475,6 +1476,51 @@ export function HealthAssistantDrawer({
     if (!runtime || !profile || !draft.body_area) return false;
     setLoading(true);
     try {
+      let anatomyEvent: AnatomyEvent | undefined;
+      const suspectedIds = draft.suspected_anatomy_ids || [];
+      if (suspectedIds.length > 0) {
+        const primaryId = suspectedIds[0];
+        const primaryLabel =
+          primaryId === "cervical_spine"
+            ? "경추 (C1~C7) 및 신경근"
+            : primaryId === "nervous"
+            ? "중추 및 말초 신경계"
+            : draft.body_area || "원인 의심 해부학 부위";
+        try {
+          anatomyEvent = createAnatomyEvent({
+            atlas: {
+              id: "vanatome-human-atlas",
+              version: "1.0",
+              referenceSex: profile.gender === "male" ? "male" : "female",
+            },
+            concept: {
+              canonicalConceptId: primaryId,
+              sourceKey: `inferred:${primaryId}`,
+              sourceMeshId: primaryId === "cervical_spine" ? "skeleton-cervical-vertebra" : primaryId,
+              label: primaryLabel,
+              system: draft.suspected_system || "nervous",
+              mappingStatus: "canonical",
+            },
+            relatedConcepts: suspectedIds.slice(1).map((id) => ({
+              canonicalConceptId: id,
+              sourceKey: `inferred:${id}`,
+              sourceMeshId: id === "nervous" ? "nervous-system" : id,
+              label: id === "nervous" ? "신경계 및 척수근" : id,
+              system: draft.suspected_system || "nervous",
+              side: "midline",
+              mappingStatus: "canonical",
+            })),
+            inputSource: "ai_inference",
+            state: "confirmed",
+            uncertainty: draft.clinical_reasoning || undefined,
+            provenance: "clinical_ai_inferred",
+            clinicalReasoning: draft.clinical_reasoning || undefined,
+          });
+        } catch (err) {
+          console.warn("[HealthAssistantDrawer] createAnatomyEvent failed:", err);
+        }
+      }
+
       const summaryText = `통증: ${draft.body_area} (강도 ${draft.intensity}/10)${draft.sensation ? ` - ${draft.sensation}` : ""}`;
       const result = await runtime.healthRecords.create({
         householdId: PRIMARY_HOUSEHOLD_ID,
@@ -1489,6 +1535,10 @@ export function HealthAssistantDrawer({
           sensation: draft.sensation ?? undefined,
           onsetAt: draft.onset_at ?? undefined,
           note: draft.note || summaryText,
+          suspectedAnatomyIds: draft.suspected_anatomy_ids,
+          suspectedSystem: draft.suspected_system,
+          clinicalReasoning: draft.clinical_reasoning,
+          anatomyEvent,
         },
       });
 
@@ -1519,6 +1569,51 @@ export function HealthAssistantDrawer({
         ? new Date(`${tool.date_str}T12:00:00`).toISOString()
         : new Date().toISOString();
 
+      let anatomyEvent: AnatomyEvent | undefined;
+      const suspectedIds = tool.suspected_anatomy_ids || [];
+      if (suspectedIds.length > 0) {
+        const primaryId = suspectedIds[0];
+        const primaryLabel =
+          primaryId === "cervical_spine"
+            ? "경추 (C1~C7) 및 신경근"
+            : primaryId === "nervous"
+            ? "중추 및 말초 신경계"
+            : tool.body_area || "원인 의심 해부학 부위";
+        try {
+          anatomyEvent = createAnatomyEvent({
+            atlas: {
+              id: "vanatome-human-atlas",
+              version: "1.0",
+              referenceSex: profile.gender === "male" ? "male" : "female",
+            },
+            concept: {
+              canonicalConceptId: primaryId,
+              sourceKey: `inferred:${primaryId}`,
+              sourceMeshId: primaryId === "cervical_spine" ? "skeleton-cervical-vertebra" : primaryId,
+              label: primaryLabel,
+              system: tool.suspected_system || "nervous",
+              mappingStatus: "canonical",
+            },
+            relatedConcepts: suspectedIds.slice(1).map((id) => ({
+              canonicalConceptId: id,
+              sourceKey: `inferred:${id}`,
+              sourceMeshId: id === "nervous" ? "nervous-system" : id,
+              label: id === "nervous" ? "신경계 및 척수근" : id,
+              system: tool.suspected_system || "nervous",
+              side: "midline",
+              mappingStatus: "canonical",
+            })),
+            inputSource: "ai_inference",
+            state: "confirmed",
+            uncertainty: tool.clinical_reasoning || undefined,
+            provenance: "clinical_ai_inferred",
+            clinicalReasoning: tool.clinical_reasoning || undefined,
+          });
+        } catch (err) {
+          console.warn("[HealthAssistantDrawer] createAnatomyEvent failed:", err);
+        }
+      }
+
       const result = await runtime.healthRecords.create({
         householdId: PRIMARY_HOUSEHOLD_ID,
         profileId: profile.id,
@@ -1532,6 +1627,10 @@ export function HealthAssistantDrawer({
           sensation: tool.sensation || undefined,
           aggravatingFactors: tool.aggravating_factors || undefined,
           note: tool.formatted_diary,
+          suspectedAnatomyIds: tool.suspected_anatomy_ids,
+          suspectedSystem: tool.suspected_system,
+          clinicalReasoning: tool.clinical_reasoning,
+          anatomyEvent,
         },
       });
 
@@ -3682,6 +3781,7 @@ function PainDiaryToolCard({
         disabled={!bodyArea.trim() || !formattedDiary.trim()}
         onClick={() =>
           onSave({
+            ...toolCall,
             tool_name: "format_pain_diary",
             date_str: diaryDate,
             body_area: bodyArea.trim(),

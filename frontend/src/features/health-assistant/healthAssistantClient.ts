@@ -60,6 +60,11 @@ export interface PainDraft {
   sensation?: string | null;
   onset_at?: string | null;
   note?: string | null;
+  anatomy_concept_id?: string | null;
+  anatomy_label?: string | null;
+  suspected_anatomy_ids?: string[] | null;
+  suspected_system?: string | null;
+  clinical_reasoning?: string | null;
 }
 
 export interface PainDiaryToolCall {
@@ -70,6 +75,11 @@ export interface PainDiaryToolCall {
   aggravating_factors?: string | null;
   formatted_diary: string;
   date_str?: string | null;
+  anatomy_concept_id?: string | null;
+  anatomy_label?: string | null;
+  suspected_anatomy_ids?: string[] | null;
+  suspected_system?: string | null;
+  clinical_reasoning?: string | null;
 }
 
 export interface LabResultDraft {

@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 AnatomyBodySide = Literal["left", "right", "midline", "bilateral", "unknown"]
-AnatomyInputSource = Literal["tap", "brush", "depth", "dental", "search"]
+AnatomyInputSource = Literal["tap", "brush", "depth", "dental", "search", "ai_inference"]
 AnatomyConfirmationState = Literal["surface_report", "geometric_candidate", "confirmed"]
 AnatomyMappingStatus = Literal["canonical", "source_fallback", "unmapped"]
 
@@ -46,7 +46,7 @@ class AnatomyBrushCoverage(BaseModel):
 
     radius: float = Field(ge=0.0)
     sample_count: int = Field(ge=1, alias="sampleCount")
-    hit_ratio: float = Field(ge=0.0, le=1.0, alias="hitRatio")
+    hit_ratio: float | None = Field(default=None, ge=0.0, le=1.0, alias="hitRatio")
 
 
 class AnatomyEvent(BaseModel):
@@ -62,9 +62,12 @@ class AnatomyEvent(BaseModel):
     event_id: str = Field(min_length=1, max_length=100, alias="eventId")
     atlas: AnatomyAtlasReference
     concept: AnatomyConcept
+    related_concepts: list[AnatomyConcept] = Field(default_factory=list, alias="relatedConcepts")
     geometry: AnatomyGeometry | None = None
     input_source: AnatomyInputSource = Field(default="tap", alias="inputSource")
     state: AnatomyConfirmationState = Field(default="confirmed")
     coverage: AnatomyBrushCoverage | None = None
     uncertainty: str | None = Field(default=None, max_length=500)
+    provenance: str | None = Field(default=None, max_length=100)
+    clinical_reasoning: str | None = Field(default=None, max_length=2000, alias="clinicalReasoning")
     recorded_at: datetime = Field(alias="recordedAt")

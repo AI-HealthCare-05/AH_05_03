@@ -140,40 +140,16 @@ export function LocalDomainProvider({
                   const profilesToCreate = activeMembers.map((m) => {
                     const isMe = m.account_id === authAccountId;
                     const isMaster = m.is_master ?? false;
-                    const email = m.masked_email.toLowerCase();
-
-                    let displayName: string;
-                    let relationship: string;
-                    let birthDate: string | null = null;
-                    let gender: "male" | "female" | null = null;
-
-                    if (email.includes("fabxoe.kor") || isMaster) {
-                      displayName = "오성민";
-                      relationship = isMe ? "본인" : "가족";
-                      birthDate = "1988-10-28";
-                      gender = "male";
-                    } else if (email.includes("fabxoe.se") || email.includes("fabxoe.usa")) {
-                      displayName = "오민재";
-                      relationship = isMe ? "본인" : "자녀";
-                      birthDate = "2000-01-29";
-                      gender = "male";
-                    } else if (email.includes("evophygene")) {
-                      displayName = "오공백";
-                      relationship = "배우자";
-                      birthDate = "1990-10-20";
-                      gender = "female";
-                    } else {
-                      displayName = isMaster ? "마스터" : (isMe ? "본인" : "가족 구성원");
-                      relationship = isMe ? "본인" : "가족";
-                    }
+                    const displayName = isMaster ? "가족 대표" : (isMe ? "본인" : "가족 구성원");
+                    const relationship = isMe ? "본인" : "가족";
 
                     return {
                       id: crypto.randomUUID(),
                       household_id: activeHouseholdId,
                       display_name: displayName,
                       relationship,
-                      birth_date: birthDate,
-                      gender,
+                      birth_date: null,
+                      gender: null,
                       account_email: m.masked_email,
                       status: "active" as const,
                       row_version: 1,

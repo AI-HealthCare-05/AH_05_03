@@ -80,6 +80,13 @@ class PainDraft(BaseModel):
         default=None, description="표준 해부학 구조 식별자 (예: muscle_biceps_brachii_r)"
     )
     anatomy_label: str | None = Field(default=None, description="표준 해부학 한글/영문 명칭 (예: 우측 상완이두근)")
+    suspected_anatomy_ids: list[str] | None = Field(
+        default=None, description="신경계 연관통 및 방사통 의심 부위 식별자 목록 (예: ['cervical_spine', 'nervous'])"
+    )
+    suspected_system: str | None = Field(default=None, description="의심 해부학 계통 (예: nervous, skeletal 등)")
+    clinical_reasoning: str | None = Field(
+        default=None, description="신경해부학적 연관통 및 분절 증상 임상 추론 근거 요약"
+    )
 
 
 class PainDiaryToolCall(BaseModel):
@@ -102,6 +109,13 @@ class PainDiaryToolCall(BaseModel):
         default=None, description="표준 해부학 구조 식별자 (예: muscle_biceps_brachii_r)"
     )
     anatomy_label: str | None = Field(default=None, description="표준 해부학 한글/영문 명칭 (예: 우측 상완이두근)")
+    suspected_anatomy_ids: list[str] | None = Field(
+        default=None, description="신경계 연관통 및 방사통 의심 부위 식별자 목록 (예: ['cervical_spine', 'nervous'])"
+    )
+    suspected_system: str | None = Field(default=None, description="의심 해부학 계통 (예: nervous, skeletal 등)")
+    clinical_reasoning: str | None = Field(
+        default=None, description="신경해부학적 연관통 및 분절 증상 임상 추론 근거 요약"
+    )
 
 
 class LabResultDraft(BaseModel):
@@ -238,7 +252,11 @@ class HealthAssistantChatRequest(BaseModel):
         return self.user_location or self.current_location
 
 
-class HealthAssistantResponse(BaseModel):
+class HealthAssistantLlmResponse(BaseModel):
+    """Gemini 등 LLM이 직접 구조화 JSON으로 생성하는 코어 스키마.
+    외부 API·DB 조회 사후 주입 필드는 제외하여 Gemini의 OpenAPI 스키마 복잡도 한도(150개)를 넘지 않도록 경량화한다.
+    """
+
     intent: HealthIntent = Field(description="사용자의 자연어 의도 분류")
     assistant_message: str = Field(description="사용자에게 전달할 정갈하고 친절한 답변 (이모티콘 사용 금지)")
     exercise_draft: ExerciseDraft | None = Field(default=None, description="운동 기록 초안")
@@ -252,26 +270,7 @@ class HealthAssistantResponse(BaseModel):
     )
     lab_result_draft: LabResultDraft | None = Field(default=None, description="검사/검진 서류 결과 초안")
     query_draft: QueryDraft | None = Field(default=None, description="기록 조회 조건 초안")
-    health_record_query_result: HealthRecordQueryResult | None = Field(
-        default=None,
-        description="PostgreSQL이 계산한 장기 건강기록 조건별 집계 결과",
-    )
     challenge_draft: ChallengeDraft | None = Field(default=None, description="챌린지 생성·조정·완료 초안")
-    outdoor_conditions: OutdoorConditionsResult | None = Field(
-        default=None,
-        description="야외 활동 질문에서 조회한 실시간 날씨·대기질 결과",
-    )
-    facility_search_draft: FacilitySearchResult | None = Field(
-        default=None, description="주변 의료시설(응급실, 병원, 약국) 조회 결과"
-    )
-    medication_search_result: MedicationSearchResult | None = Field(
-        default=None,
-        description="식약처 e약은요·DUR 품목정보 API로 조회한 의약품 허가 정보",
-    )
-    food_nutrition_search_result: FoodNutritionSearchResult | None = Field(
-        default=None,
-        description="식약처 식품영양성분 데이터베이스로 조회한 식품 영양 정보",
-    )
     missing_fields: list[str] = Field(
         default_factory=list, description="초안 완성을 위해 사용자에게 추가 확인이 필요한 필드 목록"
     )
@@ -287,4 +286,30 @@ class HealthAssistantResponse(BaseModel):
     safety_disclaimer: str | None = Field(
         default="본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요.",
         description="비진단 안전 고지문구",
+    )
+
+
+class HealthAssistantResponse(HealthAssistantLlmResponse):
+    """프론트엔드에 전달되는 최종 건강 어시스턴트 응답 DTO.
+    LLM이 생성한 코어 응답에 백엔드가 실행한 도구 및 실시간 조회 결과(DB/외부 API)가 사후 주입된다.
+    """
+
+    health_record_query_result: HealthRecordQueryResult | None = Field(
+        default=None,
+        description="PostgreSQL이 계산한 장기 건강기록 조건별 집계 결과",
+    )
+    outdoor_conditions: OutdoorConditionsResult | None = Field(
+        default=None,
+        description="야외 활동 질문에서 조회한 실시간 날씨·대기질 결과",
+    )
+    facility_search_draft: FacilitySearchResult | None = Field(
+        default=None, description="주변 의료시설(응급실, 병원, 약국) 조회 결과"
+    )
+    medication_search_result: MedicationSearchResult | None = Field(
+        default=None,
+        description="식약처 e약은요·DUR 품목정보 API로 조회한 의약품 허가 정보",
+    )
+    food_nutrition_search_result: FoodNutritionSearchResult | None = Field(
+        default=None,
+        description="식약처 식품영양성분 데이터베이스로 조회한 식품 영양 정보",
     )

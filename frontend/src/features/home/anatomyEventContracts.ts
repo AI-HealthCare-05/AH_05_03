@@ -22,7 +22,8 @@ export type AnatomyInputSource =
   | "brush"
   | "depth"
   | "dental"
-  | "search";
+  | "search"
+  | "ai_inference";
 
 export type AnatomyConfirmationState =
   | "surface_report"      // 피부 표면에서 단순 보고된 위치
@@ -63,7 +64,7 @@ export type AnatomyGeometry = {
 export type AnatomyBrushCoverage = {
   radius: number;
   sampleCount: number;
-  hitRatio: number;
+  hitRatio?: number;
 };
 
 export type AnatomyEvent = {
@@ -71,11 +72,14 @@ export type AnatomyEvent = {
   eventId: string;
   atlas: AnatomyAtlasReference;
   concept: AnatomyConcept;
+  relatedConcepts?: AnatomyConcept[];
   geometry?: AnatomyGeometry;
   inputSource: AnatomyInputSource;
   state: AnatomyConfirmationState;
   coverage?: AnatomyBrushCoverage;
   uncertainty?: string;
+  provenance?: "user_confirmed" | "clinical_ai_inferred";
+  clinicalReasoning?: string;
   recordedAt: string; // ISO 8601
 };
 
@@ -157,8 +161,22 @@ export function validateAnatomyEvent(candidate: unknown): { valid: boolean; erro
     }
   }
 
+  // relatedConcepts (선택적 복수 구조) 검증
+  if (ev.relatedConcepts) {
+    if (!Array.isArray(ev.relatedConcepts)) {
+      errors.push("relatedConcepts는 배열이어야 합니다.");
+    } else {
+      for (let i = 0; i < ev.relatedConcepts.length; i++) {
+        const rc = ev.relatedConcepts[i];
+        if (!rc || !rc.canonicalConceptId || !rc.label) {
+          errors.push(`relatedConcepts[${i}]의 필수 필드가 누락되었습니다.`);
+        }
+      }
+    }
+  }
+
   // inputSource & state 검증
-  const validSources: AnatomyInputSource[] = ["tap", "brush", "depth", "dental", "search"];
+  const validSources: AnatomyInputSource[] = ["tap", "brush", "depth", "dental", "search", "ai_inference"];
   if (!ev.inputSource || !validSources.includes(ev.inputSource)) {
     errors.push(`inputSource가 올바르지 않습니다: ${ev.inputSource}`);
   }
@@ -187,11 +205,14 @@ export function validateAnatomyEvent(candidate: unknown): { valid: boolean; erro
 export function createAnatomyEvent(params: {
   atlas: AnatomyAtlasReference;
   concept: Omit<AnatomyConcept, "side"> & { side?: AnatomyBodySide };
+  relatedConcepts?: AnatomyConcept[];
   geometry?: AnatomyGeometry;
   inputSource?: AnatomyInputSource;
   state?: AnatomyConfirmationState;
   coverage?: AnatomyBrushCoverage;
   uncertainty?: string;
+  provenance?: "user_confirmed" | "clinical_ai_inferred";
+  clinicalReasoning?: string;
   eventId?: string;
   recordedAt?: string;
 }): AnatomyEvent {
@@ -205,11 +226,14 @@ export function createAnatomyEvent(params: {
       ...params.concept,
       side,
     },
+    relatedConcepts: params.relatedConcepts,
     geometry: params.geometry,
     inputSource: params.inputSource || "tap",
     state: params.state || "confirmed",
     coverage: params.coverage,
     uncertainty: params.uncertainty,
+    provenance: params.provenance,
+    clinicalReasoning: params.clinicalReasoning,
     recordedAt: params.recordedAt || new Date().toISOString(),
   };
 

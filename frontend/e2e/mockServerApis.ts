@@ -55,6 +55,16 @@ export async function setupE2eServerMocks(
     painRecords: initialState?.painRecords ?? [],
   };
 
+  await page.addInitScript(() => {
+    try {
+      window.localStorage?.clear();
+      window.sessionStorage?.clear();
+      window.indexedDB?.deleteDatabase("ieobom-local");
+    } catch {
+      // ignore
+    }
+  });
+
   // 0. Fallback for unhandled /api/v1/* requests (lowest priority since registered first in Playwright)
   await page.route(
     (url) => url.pathname.startsWith("/api/v1/"),
@@ -165,7 +175,17 @@ export async function setupE2eServerMocks(
   await page.route(
     (url) => url.pathname === "/api/v1/households" || url.pathname.startsWith("/api/v1/households/"),
     async (route) => {
+      const url = new URL(route.request().url());
       const method = route.request().method();
+
+      if (url.pathname.endsWith("/memberships")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ success: true, data: { items: [] } }),
+        });
+      }
+
       if (method === "POST") {
         const newHousehold = {
           id: `hh-${Date.now()}`,

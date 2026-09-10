@@ -31,6 +31,7 @@ import { FamilyHistoryManager } from "./FamilyHistoryManager";
 import { DentalPickerModal } from "./DentalPickerModal";
 import type { ToothDefinition } from "./dentalPickerLogic";
 import type { StagingItem } from "./VanatomeBodyMap";
+import { FamilyIntegratedMonitoring } from "./FamilyIntegratedMonitoring";
 
 const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
   default: module.VanatomeBodyMap,
@@ -127,6 +128,7 @@ export function HomePage() {
   const [dentalPickerMinimized, setDentalPickerMinimized] = useState(true);
   const [, setSelectedTooth] = useState<ToothDefinition>();
   const [stagedItems, setStagedItems] = useState<StagingItem[]>([]);
+  const [highlightOrganKey, setHighlightOrganKey] = useState<string>();
   const selectedDentalFdis = useMemo(() => {
     const set = new Set<number>();
     for (const item of stagedItems) {
@@ -413,6 +415,11 @@ export function HomePage() {
   );
 
   useEffect(() => {
+    setHighlightOrganKey(undefined);
+    setBodyRecord(undefined);
+  }, [selectedProfile?.id]);
+
+  useEffect(() => {
     if (!runtime || !routeRecordId) return;
     void runtime.healthRecords.get(routeRecordId).then((result) => {
       if (result.ok && !result.value.deletedAt) setEditingRecord(result.value);
@@ -425,7 +432,16 @@ export function HomePage() {
   useEffect(() => {
     if (!selectedProfile) return;
     const timeout = window.setTimeout(() => void refreshDashboard(selectedProfile.id), 0);
-    return () => window.clearTimeout(timeout);
+    const handleFocus = () => {
+      void refreshDashboard(selectedProfile.id);
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
   }, [refreshDashboard, selectedProfile]);
   /**
    * 다른 탭·다른 기기에서 바뀐 것을 **돌아왔을 때** 따라잡는다.
@@ -698,6 +714,8 @@ export function HomePage() {
                 aria-pressed={profile.id === selectedProfile?.id}
                 onClick={() => {
                   setSelectedProfileId(profile.id);
+                  setHighlightOrganKey(undefined);
+                  setBodyRecord(undefined);
                   void navigate(`/members/${profile.id}`);
                 }}
               >
@@ -757,12 +775,27 @@ export function HomePage() {
               <MetricCard label="프로필 상태" value="안전" tone="safe" />
             </div>
 
+            <FamilyIntegratedMonitoring
+              profiles={profiles}
+              selectedProfileId={selectedProfile.id}
+              onSelectProfile={(id) => {
+                setSelectedProfileId(id);
+                setHighlightOrganKey(undefined);
+                setBodyRecord(undefined);
+                void navigate(`/members/${id}`);
+              }}
+              records={records}
+              onSelectOrgan={(key) => setHighlightOrganKey(key || undefined)}
+            />
+
             <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
               <VanatomeBodyMap
+                key={`${selectedProfile.id}-${selectedProfile.gender}`}
                 profileName={selectedProfile.displayName}
                 gender={selectedProfile.gender}
                 risks={bodyRisks}
                 risksAt={activeBodyRecord ? formatDateTime(activeBodyRecord.recordedAt) : undefined}
+                highlightOrganKey={highlightOrganKey}
                 isDentalOpen={dentalPickerOpen}
                 onDentalOpenChange={(open) => {
                   setDentalPickerOpen(open);

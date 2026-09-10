@@ -290,3 +290,79 @@ class TestProfileAndRecordAPIs:
             },
         )
         assert create_res.status_code in (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND)
+
+    async def test_health_record_anatomy_event_validation(self, client: AsyncClient) -> None:
+        """P0-7: 3D 해부학 이벤트가 포함된 건강기록 저장 시 계약 유효성을 검증한다."""
+        user = await _login(client, "anatomy-record-user@example.com")
+        household_id = await _create_household(client, user)
+        profile_res = await client.post(
+            "/api/v1/profiles",
+            headers=user,
+            json={"household_id": household_id, "display_name": "환자", "relationship": "self"},
+        )
+        profile_id = profile_res.json()["data"]["id"]
+
+        # 1. 무효한 anatomyEvent (필수 필드 누락 등) 저장 시도 -> 422 또는 400 거부
+        invalid_res = await client.post(
+            "/api/v1/health-records",
+            headers=user,
+            json={
+                "profile_id": profile_id,
+                "record_type": "pain",
+                "recorded_at": "2026-09-10T10:00:00Z",
+                "source": "self_report",
+                "payload": {
+                    "anatomyEvent": {
+                        "schemaVersion": "invalid_version",
+                        "concept": {"canonicalConceptId": "foo"},
+                    }
+                },
+            },
+        )
+        assert invalid_res.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+        # 2. 유효한 표준 anatomyEvent 저장 -> 성공
+        valid_anatomy_event = {
+            "schemaVersion": "1.0.0",
+            "eventId": "evt-valid-101",
+            "atlas": {
+                "id": "male-standard",
+                "version": "1.0",
+                "referenceSex": "male",
+            },
+            "concept": {
+                "canonicalConceptId": "fma:67890",
+                "sourceKey": "mesh_trapezius_l",
+                "sourceMeshId": "mesh_trapezius_l",
+                "label": "승모근",
+                "system": "근육계",
+                "side": "left",
+                "mappingStatus": "canonical",
+            },
+            "geometry": {
+                "coordinateSpace": "world",
+                "point": [0.1, 1.4, -0.05],
+            },
+            "inputSource": "tap",
+            "state": "confirmed",
+            "recordedAt": "2026-09-10T10:00:00Z",
+        }
+
+        valid_res = await client.post(
+            "/api/v1/health-records",
+            headers=user,
+            json={
+                "profile_id": profile_id,
+                "record_type": "pain",
+                "recorded_at": "2026-09-10T10:00:00Z",
+                "source": "self_report",
+                "payload": {
+                    "sensation": "뻐근함",
+                    "anatomyEvent": valid_anatomy_event,
+                },
+            },
+        )
+        assert valid_res.status_code == status.HTTP_201_CREATED, valid_res.text
+        created_record = valid_res.json()["data"]
+        assert created_record["payload"]["anatomyEvent"]["concept"]["canonicalConceptId"] == "fma:67890"
+        assert created_record["payload"]["anatomyEvent"]["concept"]["side"] == "left"

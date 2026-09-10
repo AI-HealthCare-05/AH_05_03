@@ -246,6 +246,60 @@ export function createSelectedTransparentMaterials(
   return Array.isArray(source) ? highlighted : highlighted[0];
 }
 
+const DANGER_ORGAN_COLOR = new THREE.Color(0xf43f5e);
+
+export function createDangerOrganHighlightMaterials(source: THREE.Material | THREE.Material[]) {
+  const highlighted = materialsOf(source).map((material) => {
+    const clone = material.clone();
+    if (
+      clone instanceof THREE.MeshStandardMaterial ||
+      clone instanceof THREE.MeshLambertMaterial ||
+      clone instanceof THREE.MeshBasicMaterial
+    ) {
+      if ("vertexColors" in clone) clone.vertexColors = false;
+      clone.color.copy(DANGER_ORGAN_COLOR);
+      if ("emissive" in clone) {
+        (clone as THREE.MeshStandardMaterial).emissive.setHex(0xe11d48);
+        (clone as THREE.MeshStandardMaterial).emissiveIntensity = 0.95;
+      }
+      clone.opacity = 0.78; // 부드러운 반투명 깊이감
+      clone.transparent = true;
+      clone.depthTest = true;
+      clone.depthWrite = false; // 반투명 겹침 블렌딩
+      clone.wireframe = false;
+      clone.needsUpdate = true;
+    }
+    return clone;
+  });
+  return Array.isArray(source) ? highlighted : highlighted[0];
+}
+
+export function createDangerOrganHoverMaterials(source: THREE.Material | THREE.Material[]) {
+  const highlighted = materialsOf(source).map((material) => {
+    const clone = material.clone();
+    if (
+      clone instanceof THREE.MeshStandardMaterial ||
+      clone instanceof THREE.MeshLambertMaterial ||
+      clone instanceof THREE.MeshBasicMaterial
+    ) {
+      if ("vertexColors" in clone) clone.vertexColors = false;
+      clone.color.setHex(0xff2d55);
+      if ("emissive" in clone) {
+        (clone as THREE.MeshStandardMaterial).emissive.setHex(0xff0033);
+        (clone as THREE.MeshStandardMaterial).emissiveIntensity = 1.3;
+      }
+      clone.opacity = 0.9;
+      clone.transparent = true;
+      clone.depthTest = true;
+      clone.depthWrite = false;
+      clone.wireframe = false;
+      clone.needsUpdate = true;
+    }
+    return clone;
+  });
+  return Array.isArray(source) ? highlighted : highlighted[0];
+}
+
 const PAIN_STROKE_COLOR = new THREE.Color(0xf43f5e);
 
 export function createPaintStrokeMaterials(source: THREE.Material | THREE.Material[]) {
@@ -300,7 +354,7 @@ export function materialsOf(material: THREE.Material | THREE.Material[]) {
 export function createFocusPresets(bounds: THREE.Box3) {
   const size = bounds.getSize(new THREE.Vector3());
   const center = bounds.getCenter(new THREE.Vector3());
-  const frontDistance = Math.max(size.y * 1.45, 4.8);
+  const frontDistance = Math.max(size.y * 1.70, 5.6);
   const lowerDistance = frontDistance * 0.6;
   const closeDistance = Math.max(size.y * 0.31, 1.25);
   const upperDistance = Math.max(size.y * 0.68, 2.8);
@@ -314,8 +368,8 @@ export function createFocusPresets(bounds: THREE.Box3) {
 
   return {
     full: {
-      position: new THREE.Vector3(center.x, center.y, frontDistance),
-      target: center.clone(),
+      position: new THREE.Vector3(center.x, center.y - size.y * 0.03, frontDistance),
+      target: new THREE.Vector3(center.x, center.y - size.y * 0.03, center.z),
     },
     head: {
       position: new THREE.Vector3(center.x, bounds.max.y - size.y * 0.09, closeDistance),
@@ -534,5 +588,3 @@ export function updateSprayAgitation(
 
   return state.smoothedAgitation;
 }
-
-

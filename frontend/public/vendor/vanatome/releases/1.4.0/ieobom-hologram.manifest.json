@@ -40,6 +40,13 @@
       "adapter": "vanatome",
       "system": "skeletal",
       "sha256": "00325b6ae8f5ecca908dbb617f6baf31fce61ff14ea8b25b687e116e94ed6c20"
+    },
+    {
+      "url": "/vendor/vanatome/layers/official-32693313/vanatome-official-c8-ulnar-nerve.glb",
+      "visualRole": "organ",
+      "adapter": "vanatome",
+      "system": "nervous",
+      "sha256": "b25ed6531509b618d8bcab6fa7bfb5cbf8e0ef5642fc69e3d8920e008ac04801"
     }
   ],
   "lazyLayers": [
