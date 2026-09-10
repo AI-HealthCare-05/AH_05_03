@@ -271,7 +271,16 @@ export function HealthAssistantDrawer({
           return `[${dateStr} 통증] ${p.bodyArea} 강도 ${p.intensity}/10`;
         }
         if (r.recordType === "health_screening" || r.recordType === "lab_result") {
-          return `[${dateStr} 검진/검사] ${p.screeningName ?? p.testName ?? ""} ${p.note ?? p.summary ?? ""}`.slice(0, 100);
+          const name = (p.screeningName as string) ?? (p.testName as string) ?? "검진";
+          const items = Array.isArray(p.items)
+            ? (p.items as Array<Record<string, unknown>>)
+                .filter((item) => item?.testName && item?.value)
+                .map((item) => `${item.testName} ${item.value}${item.unit ?? ""}`)
+                .slice(0, 8)
+                .join(", ")
+            : "";
+          const desc = items || (p.itemsSummary as string) || (p.summary as string) || (p.note as string) || "";
+          return `[${dateStr} 검진/검사] ${name}${desc ? `: ${desc}` : ""}`.slice(0, 150);
         }
         return `[${dateStr} ${r.recordType}] ${p.note ?? ""}`;
       });
@@ -1194,20 +1203,32 @@ export function HealthAssistantDrawer({
           }
 
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsgId
-                ? {
-                    ...m,
-                    content: finalContent ?? m.content,
-                    attachedDocuments: attachedDocs.length > 0 ? attachedDocs : undefined,
-                    queriedRecords,
-                    queriedRecordsTitle,
-                    showTrendChart: hasTrendData,
-                    trendMetrics: hasTrendData ? metrics : undefined,
-                    trendInitialKey: hasTrendData ? trendInitialKey : undefined,
-                  }
-                : m,
-            ),
+            prev.map((m) => {
+              if (m.id !== assistantMsgId) return m;
+              let contentToUse = finalContent ?? m.content;
+              // 시계열 그래프 데이터가 존재하는 경우, LLM이 프롬프트에서 오판하여 생성한 "기록이 없습니다" 문구를
+              // 차트 안내 문구로 교체하여 UI 모순을 방지한다.
+              if (
+                hasTrendData &&
+                (contentToUse.includes("기록이 없습니다") ||
+                  contentToUse.includes("기록을 찾지 못했습니다") ||
+                  contentToUse.includes("기록이 필요하시면") ||
+                  contentToUse.includes("검진을 받아보시는 것을 권장"))
+              ) {
+                contentToUse =
+                  "등록된 건강검진 및 측정 기록의 시계열 수치 변화 그래프를 조회했습니다. 아래 차트에서 상세 변화 추이를 확인해 보세요.";
+              }
+              return {
+                ...m,
+                content: contentToUse,
+                attachedDocuments: attachedDocs.length > 0 ? attachedDocs : undefined,
+                queriedRecords,
+                queriedRecordsTitle,
+                showTrendChart: hasTrendData,
+                trendMetrics: hasTrendData ? metrics : undefined,
+                trendInitialKey: hasTrendData ? trendInitialKey : undefined,
+              };
+            }),
           );
         }
       }
@@ -1986,6 +2007,17 @@ export function HealthAssistantDrawer({
                 {msg.responseDraft?.food_nutrition_search_result && msg.role === "assistant" && (
                   <FoodNutritionCard searchResult={msg.responseDraft.food_nutrition_search_result} />
                 )}
+
+                {msg.responseDraft?.health_knowledge_search_result?.items.length && msg.role === "assistant" ? (
+                  <aside className="health-knowledge-sources" aria-label="공식 건강정보 출처">
+                    <strong>확인한 공식 건강정보</strong>
+                    {msg.responseDraft.health_knowledge_search_result.items.map((item) => (
+                      <a key={item.url} href={item.url} target="_blank" rel="noreferrer">
+                        질병관리청 국가건강정보포털 · {item.title}
+                      </a>
+                    ))}
+                  </aside>
+                ) : null}
 
 
 

@@ -242,7 +242,7 @@ class GeminiLLMClient(LLMClientProtocol):
         except asyncio.TimeoutError as ex:
             raise LlmTimeoutError() from ex
         except Exception as ex:
-            raise LlmProviderFailedError(f"Gemini 도구 판별 스트림 실패: {type(ex).__name__}") from ex
+            raise LlmProviderFailedError(f"Gemini 도구 판별 스트림 실패: {type(ex).__name__} - {ex}") from ex
 
         function_calls = getattr(first_turn, "function_calls", None)
         if function_calls:
@@ -286,6 +286,6 @@ class GeminiLLMClient(LLMClientProtocol):
 
                 return _stream_chunks(), tool_result
             except Exception as ex:
-                raise LlmProviderFailedError(f"Gemini 도구 실행 후 스트리밍 실패: {type(ex).__name__}") from ex
+                raise LlmProviderFailedError(f"Gemini 도구 실행 후 스트리밍 실패: {type(ex).__name__} - {ex}") from ex
 
         return self.stream_structured_response(system_instruction, messages, response_schema), None

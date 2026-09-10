@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -49,4 +49,43 @@ class HealthRecordQueryResult(BaseModel):
     total_measurements: int = Field(ge=0)
     latest_matches: list[HealthRecordQueryMatch] = Field(max_length=5)
     empty_reason: Literal["no_records", "no_matches"] | None = None
+    message: str
+
+
+class ConsultationBloodPressure(BaseModel):
+    systolic: float
+    diastolic: float | None = None
+    measured_at: datetime
+
+
+class ConsultationLabValue(BaseModel):
+    metric: Literal["ast", "alt", "ggt"]
+    value: float
+    unit: str
+    measured_at: datetime
+
+
+class ConsultationActivity(BaseModel):
+    activity: str
+    recorded_at: datetime
+    duration_minutes: float | None = None
+    weight_kg: float | None = None
+    reps: int | None = None
+    sets: int | None = None
+
+
+class ConsultationMedication(BaseModel):
+    name: str
+    recorded_at: datetime
+    dosage: str | None = None
+
+
+class AlcoholConsultationSnapshot(BaseModel):
+    topic: Literal["alcohol"] = "alcohol"
+    blood_pressure: ConsultationBloodPressure | None = None
+    liver_tests: list[ConsultationLabValue] = Field(default_factory=list)
+    today_activities: list[ConsultationActivity] = Field(default_factory=list)
+    recent_medications: list[ConsultationMedication] = Field(default_factory=list)
+    recent_alcohol_records: int = Field(default=0, ge=0)
+    missing_sections: list[str] = Field(default_factory=list)
     message: str

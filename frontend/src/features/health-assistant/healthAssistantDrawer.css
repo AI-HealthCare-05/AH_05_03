@@ -2167,6 +2167,24 @@
   border-left-width: 4px;
 }
 
+.health-knowledge-sources {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid #d7e8df;
+  border-radius: 12px;
+  background: #f7fbf9;
+  color: #29483b;
+  font-size: 12px;
+}
+
+.health-knowledge-sources a {
+  color: #187a57;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .food-nutrition-header {
   display: flex;
   justify-content: space-between;

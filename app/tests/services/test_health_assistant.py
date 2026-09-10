@@ -489,7 +489,7 @@ async def test_health_assistant_service_handles_emergency_notice() -> None:
 
 
 @pytest.mark.asyncio
-async def test_health_assistant_blocks_alcohol_advice_without_official_evidence() -> None:
+async def test_health_assistant_asks_for_profile_before_personalized_alcohol_advice() -> None:
     fake_json = """{
         "intent": "health_advice",
         "assistant_message": "최근 8월 31일에 타이레놀(아세트아미노펜) 복약 기록이 있습니다. 타이레놀 복용 중 알코올을 섭취하면 간 손상 위험이 급격히 증가하므로 음주를 피하시는 것이 안전합니다.",
@@ -517,10 +517,148 @@ async def test_health_assistant_blocks_alcohol_advice_without_official_evidence(
     )
     response = await service.respond(request)
 
-    assert response.intent == "health_advice"
+    assert response.intent == "query_records"
     assert "타이레놀" not in response.assistant_message
-    assert "근거 없이 건강정보를 안내하지 않겠습니다" in response.assistant_message
+    assert "프로필을 선택" in response.assistant_message
     assert response.needs_confirmation is False
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_combines_personal_snapshot_with_kdca_alcohol_evidence() -> None:
+    from datetime import datetime
+    from unittest.mock import AsyncMock
+    from zoneinfo import ZoneInfo
+
+    from app.dtos.health_record_query import (
+        AlcoholConsultationSnapshot,
+        ConsultationBloodPressure,
+        ConsultationLabValue,
+    )
+    from app.models.service_accounts import ServiceAccount
+
+    fake_json = """{
+        "intent": "health_advice",
+        "assistant_message": "최근 혈압과 간기능 검사 기록을 함께 보면 오늘은 음주를 피하는 편이 안전합니다.",
+        "missing_fields": [],
+        "needs_confirmation": false,
+        "suggested_quick_replies": []
+    }"""
+    now = datetime(2026, 9, 10, 12, 0, tzinfo=ZoneInfo("Asia/Seoul"))
+    snapshot = AlcoholConsultationSnapshot(
+        blood_pressure=ConsultationBloodPressure(systolic=138, diastolic=88, measured_at=now),
+        liver_tests=[ConsultationLabValue(metric="alt", value=52, unit="U/L", measured_at=now)],
+        message="최근 혈압과 간기능 검사를 확인했습니다.",
+    )
+    record_service = AsyncMock()
+    record_service.get_alcohol_consultation_snapshot = AsyncMock(return_value=snapshot)
+    service = HealthAssistantService(llm_client=MockLLMClient(fake_json), health_record_service=record_service)
+    profile_id = uuid.uuid4()
+    account = ServiceAccount(id=uuid.uuid4(), email="owner@example.com", password_hash="hash")
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="나 오늘 술 마셔도 돼?")],
+        profile_context=ProfileContext(profile_name="다원", relationship="본인", profile_id=profile_id),
+    )
+
+    response = await service.respond(request, account=account)
+
+    assert "오늘은 음주를 피하는 편이 안전" in response.assistant_message
+    assert response.alcohol_consultation_snapshot == snapshot
+    assert response.health_knowledge_search_result is not None
+    assert len(response.health_knowledge_search_result.items) == 2
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_grounds_statement_form_alcohol_question_via_scope_decision() -> None:
+    """평서문 음주 습관 질문은 fast-path 키워드(마셔/괜찮 등)에 안 걸려도 답을 받아야 한다.
+
+    회귀 테스트: 예전에는 근거 로딩(`_load_alcohol_evidence`)이 fast-path와 동일한
+    좁은 의도(intent) 키워드로 다시 판정했다. 그래서 LLM 분류기가 "이 질문엔 근거가
+    필요하다"고 올바르게 판단해도(`required_evidence_types=[health_knowledge, health_records]`),
+    근거 로딩 쪽이 못 알아채서 근거를 하나도 못 채우고 LLM 호출 자체 없이
+    "근거를 확인하지 못했습니다"로 차단됐다. 지금은 근거 로딩이 바운더리 판정
+    (`decision.required_evidence_types`)을 그대로 신뢰하므로, 이 문구가 나오면 안 된다.
+    """
+    from datetime import datetime
+    from unittest.mock import AsyncMock
+    from zoneinfo import ZoneInfo
+
+    from app.dtos.health_record_query import AlcoholConsultationSnapshot, ConsultationLabValue
+    from app.models.service_accounts import ServiceAccount
+
+    class ScopeDecidesEvidenceLLMClient:
+        def __init__(self) -> None:
+            self.main_answer_was_called = False
+
+        async def generate_structured_response(self, *args: Any, **kwargs: Any) -> Any:
+            if kwargs.get("response_schema") is HealthAssistantScopeDecision:
+                return HealthAssistantScopeDecision(
+                    scope="health",
+                    requires_authoritative_evidence=True,
+                    required_evidence_types=["health_knowledge", "health_records"],
+                )
+            self.main_answer_was_called = True
+            return HealthAssistantResponse(
+                intent="health_advice",
+                assistant_message="최근 간수치와 매일 마시는 습관을 같이 보면 오늘은 쉬시는 게 안전합니다.",
+                needs_confirmation=False,
+            )
+
+    now = datetime(2026, 9, 10, 20, 0, tzinfo=ZoneInfo("Asia/Seoul"))
+    snapshot = AlcoholConsultationSnapshot(
+        liver_tests=[ConsultationLabValue(metric="alt", value=88, unit="U/L", measured_at=now)],
+        message="최근 간기능 검사를 확인했습니다.",
+    )
+    record_service = AsyncMock()
+    record_service.get_alcohol_consultation_snapshot = AsyncMock(return_value=snapshot)
+    llm_client = ScopeDecidesEvidenceLLMClient()
+    service = HealthAssistantService(llm_client=llm_client, health_record_service=record_service)
+    profile_id = uuid.uuid4()
+    account = ServiceAccount(id=uuid.uuid4(), email="owner@example.com", password_hash="hash")
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="요즘 저녁마다 소주를 한 병씩 마시고 있어 걱정이야")],
+        profile_context=ProfileContext(profile_name="다원", relationship="본인", profile_id=profile_id),
+    )
+
+    response = await service.respond(request, account=account)
+
+    assert llm_client.main_answer_was_called is True
+    assert "근거를 확인하지 못했습니다" not in response.assistant_message
+    assert response.alcohol_consultation_snapshot == snapshot
+    assert response.health_knowledge_search_result is not None
+    assert len(response.health_knowledge_search_result.items) == 2
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_grounds_hypertension_question_without_fetching_personal_records() -> None:
+    """고혈압처럼 개인기록 스냅샷이 아직 없는 주제는 health_knowledge만 채우고,
+    health_records가 required_evidence_types에 없으면 개인기록을 조회하지 않아야 한다."""
+    from unittest.mock import AsyncMock
+
+    class HypertensionScopeLLMClient:
+        async def generate_structured_response(self, *args: Any, **kwargs: Any) -> Any:
+            if kwargs.get("response_schema") is HealthAssistantScopeDecision:
+                return HealthAssistantScopeDecision(
+                    scope="health",
+                    requires_authoritative_evidence=True,
+                    required_evidence_types=["health_knowledge"],
+                )
+            return HealthAssistantResponse(
+                intent="health_advice",
+                assistant_message="걷기·조깅 같은 유산소 운동이 혈압 관리에 도움이 됩니다.",
+                needs_confirmation=False,
+            )
+
+    record_service = AsyncMock()
+    service = HealthAssistantService(llm_client=HypertensionScopeLLMClient(), health_record_service=record_service)
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="고혈압에 좋은 운동 알려줘")])
+
+    response = await service.respond(request)
+
+    assert "근거를 확인하지 못했습니다" not in response.assistant_message
+    assert response.health_knowledge_search_result is not None
+    assert len(response.health_knowledge_search_result.items) == 3
+    assert response.alcohol_consultation_snapshot is None
+    record_service.get_alcohol_consultation_snapshot.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -985,9 +1123,9 @@ async def test_enrich_records_summary_allows_authorized_member() -> None:
     await service._enrich_records_summary(ctx, account_id=account_id)
 
     assert ctx.recent_records_summary is not None
-    assert "blood_pressure" in ctx.recent_records_summary
-    assert "120" in ctx.recent_records_summary
-    mock_record_repo.list_by_profile.assert_called_once_with(profile_id, limit=5)
+    assert "혈압" in ctx.recent_records_summary
+    assert "120/80" in ctx.recent_records_summary
+    mock_record_repo.list_by_profile.assert_called_once_with(profile_id, limit=20)
 
 
 async def test_enrich_context_skips_records_on_greeting() -> None:
@@ -1058,7 +1196,7 @@ async def test_enrich_context_enriches_records_on_health_symptom() -> None:
     assert enriched is not None
     assert enriched.recent_records_summary is not None
     assert "무릎 뻐근함" in enriched.recent_records_summary
-    mock_record_repo.list_by_profile.assert_called_once_with(profile_id, limit=5)
+    mock_record_repo.list_by_profile.assert_called_once_with(profile_id, limit=20)
 
 
 @pytest.mark.asyncio
