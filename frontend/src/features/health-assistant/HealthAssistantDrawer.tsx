@@ -61,6 +61,7 @@ import {
   setLastOpenedProfileId,
 } from "./healthAssistantLogic";
 import { FoodNutritionCard } from "./FoodNutritionCard";
+import { MedicationCard } from "./MedicationCard";
 import "./healthAssistantDrawer.css";
 
 /**
@@ -1836,14 +1837,30 @@ export function HealthAssistantDrawer({
                   </div>
                 ) : (
                   <div className="msg-bubble">
-                    {msg.content ? (
-                      msg.content.split("\n\n").map((para, i) => (
-                        <p key={i}>{para}</p>
-                      ))
+                    {msg.responseDraft?.medication_search_result ? (
+                      <MedicationCard searchResult={msg.responseDraft.medication_search_result}>
+                        {msg.content ? (
+                          msg.content.split("\n\n").map((para, i) => (
+                            <p key={i}>{para}</p>
+                          ))
+                        ) : (
+                          <div className="loading-dots">
+                            <span>.</span><span>.</span><span>.</span>
+                          </div>
+                        )}
+                      </MedicationCard>
                     ) : (
-                      <div className="loading-dots">
-                        <span>.</span><span>.</span><span>.</span>
-                      </div>
+                      <>
+                        {msg.content ? (
+                          msg.content.split("\n\n").map((para, i) => (
+                            <p key={i}>{para}</p>
+                          ))
+                        ) : (
+                          <div className="loading-dots">
+                            <span>.</span><span>.</span><span>.</span>
+                          </div>
+                        )}
+                      </>
                     )}
 
                     {/* 응급 주의사항 배너 */}
@@ -1969,6 +1986,7 @@ export function HealthAssistantDrawer({
                 {msg.responseDraft?.food_nutrition_search_result && msg.role === "assistant" && (
                   <FoodNutritionCard searchResult={msg.responseDraft.food_nutrition_search_result} />
                 )}
+
 
 
 

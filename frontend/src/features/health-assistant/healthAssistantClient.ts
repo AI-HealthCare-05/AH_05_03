@@ -210,6 +210,45 @@ export interface HealthRecordQueryResult {
   message: string;
 }
 
+export interface DurItem {
+  prohibition_type: string;
+  ingredient_name?: string | null;
+  reason?: string | null;
+}
+
+export interface DrugInfo {
+  item_name: string;
+  entp_name?: string | null;
+  class_name?: string | null;
+  efcy_qesitm?: string | null;
+  use_method_qesitm?: string | null;
+  atpn_warn_qesitm?: string | null;
+  atpn_qesitm?: string | null;
+  intrc_qesitm?: string | null;
+  se_qesitm?: string | null;
+  deposit_method_qesitm?: string | null;
+  dur_items?: DurItem[];
+}
+
+export interface DrugInteractionItem {
+  drug_a: string;
+  drug_b: string;
+  ingredient_a?: string | null;
+  ingredient_b?: string | null;
+  prohibition_content: string;
+  type_name: string;
+}
+
+export interface MedicationSearchResult {
+  query: string;
+  items: DrugInfo[];
+  interaction_items: DrugInteractionItem[];
+  has_interaction_danger: boolean;
+  target_drug_name?: string | null;
+  message: string;
+  errors: string[];
+}
+
 export interface HealthAssistantResponse {
   intent:
     | "record_exercise"
@@ -240,6 +279,7 @@ export interface HealthAssistantResponse {
   facility_search_draft?: FacilitySearchResult | null;
   outdoor_conditions?: OutdoorConditionsResult | null;
   food_nutrition_search_result?: FoodNutritionSearchResult | null;
+  medication_search_result?: MedicationSearchResult | null;
   missing_fields: string[];
   needs_confirmation: boolean;
   auto_save?: boolean;

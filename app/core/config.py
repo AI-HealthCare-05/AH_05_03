@@ -183,6 +183,10 @@ class Config(BaseSettings):
     MFDS_API_KEY: str | None = None
     # 식품의약품안전처 식품영양성분 API 키. 미설정 시 MFDS_API_KEY 로 폴백.
     FOOD_NUTRITION_API_KEY: str | None = None
+    # 질병관리청(KDCA) 질병정보 API 키 (감염병, 통계 등)
+    KDCA_DISEASE_INFO_API_KEY: str | None = None
+    # 질병관리청(KDCA) 국가건강정보포털 건강정보검색 API 키 (생활습관, 임신, 예방 가이드 등)
+    KDCA_HEALTH_INFO_API_KEY: str | None = None
     # 카카오 로컬 REST API 키 (병원/약국 초고속 검색용).
     KAKAO_REST_API_KEY: str | None = None
     # OpenAI 예비 경로. **비어 있으면 그냥 꺼진 상태다** — 아래 `DEV_OCR_MODELS` 에

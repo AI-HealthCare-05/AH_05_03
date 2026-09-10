@@ -29,10 +29,26 @@ class DrugInfo(BaseModel):
     dur_items: list[DurItem] = Field(default_factory=list, description="DUR 금기 항목 목록")
 
 
+class DrugInteractionItem(BaseModel):
+    """두 의약품 간의 DUR 병용금기 정보."""
+
+    drug_a: str = Field(description="기준 의약품명")
+    drug_b: str = Field(description="병용금기 상대 의약품명")
+    ingredient_a: str | None = Field(default=None, description="기준 의약품 성분명")
+    ingredient_b: str | None = Field(default=None, description="상대 의약품 성분명")
+    prohibition_content: str = Field(description="병용금기 사유 및 부작용 내용")
+    type_name: str = Field(default="병용금기", description="금기 구분명")
+
+
 class MedicationSearchResult(BaseModel):
     """의약품 검색 종합 결과."""
 
     query: str = Field(description="검색 질의어")
     items: list[DrugInfo] = Field(default_factory=list, description="검색된 의약품 목록")
+    interaction_items: list[DrugInteractionItem] = Field(
+        default_factory=list, description="두 약품 간의 DUR 병용금기 항목 목록"
+    )
+    has_interaction_danger: bool = Field(default=False, description="병용금기 해당 여부")
+    target_drug_name: str | None = Field(default=None, description="병용 확인 대상 의약품명")
     message: str = Field(default="", description="사용자에게 전달할 요약 안내 메시지")
     errors: list[str] = Field(default_factory=list, description="조회 중 발생한 오류 목록")
