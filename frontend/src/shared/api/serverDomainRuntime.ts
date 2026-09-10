@@ -374,18 +374,116 @@ export class DummyChallengeService {
   }
 }
 
+const FAMILY_HISTORY_STORAGE_PREFIX = "ieobom:family-history:";
+
 export class DummyFamilyHistoryService {
-  public async listByProfile(): Promise<LocalResult<FamilyHistory[]>> {
-    return success([]);
+  public constructor(private readonly householdId: string = "primary-household") {}
+
+  private getStorageKey(): string {
+    return `${FAMILY_HISTORY_STORAGE_PREFIX}${this.householdId}`;
   }
-  public async create() {
-    return failure("NOT_FOUND", "가족력 서버 연동 준비 중");
+
+  private loadAll(): FamilyHistory[] {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) return [];
+      const raw = window.localStorage.getItem(this.getStorageKey());
+      if (!raw) return [];
+      return JSON.parse(raw) as FamilyHistory[];
+    } catch {
+      return [];
+    }
   }
-  public async update() {
-    return failure("NOT_FOUND", "가족력 서버 연동 준비 중");
+
+  private saveAll(items: FamilyHistory[]): void {
+    try {
+      if (typeof window === "undefined" || !window.localStorage) return;
+      window.localStorage.setItem(this.getStorageKey(), JSON.stringify(items));
+    } catch {
+      // 무시
+    }
   }
-  public async delete() {
-    return failure("NOT_FOUND", "가족력 서버 연동 준비 중");
+
+  public async list(profileId: string): Promise<LocalResult<FamilyHistory[]>> {
+    const all = this.loadAll();
+    const filtered = all
+      .filter((item) => item.profileId === profileId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return success(filtered);
+  }
+
+  public async listByProfile(profileId: string): Promise<LocalResult<FamilyHistory[]>> {
+    return this.list(profileId);
+  }
+
+  public async create(input: {
+    householdId: string;
+    profileId: string;
+    relativeRelationship: string;
+    conditionName: string;
+    onsetAge?: number;
+    note?: string;
+  }): Promise<LocalResult<FamilyHistory>> {
+    if (!input.relativeRelationship.trim()) {
+      return failure("VALIDATION_ERROR", "친족 관계를 입력해 주세요.");
+    }
+    if (!input.conditionName.trim()) {
+      return failure("VALIDATION_ERROR", "질환명을 입력해 주세요.");
+    }
+    const now = new Date().toISOString();
+    const history: FamilyHistory = {
+      id: crypto.randomUUID(),
+      householdId: input.householdId,
+      profileId: input.profileId,
+      relativeRelationship: input.relativeRelationship.trim(),
+      conditionName: input.conditionName.trim(),
+      onsetAge: input.onsetAge ?? null,
+      note: input.note?.trim() || null,
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+    };
+    const all = this.loadAll();
+    all.push(history);
+    this.saveAll(all);
+    return success(history);
+  }
+
+  public async update(
+    historyId: string,
+    input: {
+      relativeRelationship: string;
+      conditionName: string;
+      onsetAge?: number;
+      note?: string;
+      expectedVersion: number;
+    },
+  ): Promise<LocalResult<FamilyHistory>> {
+    const all = this.loadAll();
+    const index = all.findIndex((item) => item.id === historyId);
+    if (index === -1) return failure("NOT_FOUND", "가족력 기록을 찾을 수 없습니다.");
+    const current = all[index];
+    if (current.version !== input.expectedVersion) {
+      return failure("VERSION_CONFLICT", "가족력 기록이 변경되었습니다.");
+    }
+    const updated: FamilyHistory = {
+      ...current,
+      relativeRelationship: input.relativeRelationship.trim(),
+      conditionName: input.conditionName.trim(),
+      onsetAge: input.onsetAge ?? null,
+      note: input.note?.trim() || null,
+      updatedAt: new Date().toISOString(),
+      version: current.version + 1,
+    };
+    all[index] = updated;
+    this.saveAll(all);
+    return success(updated);
+  }
+
+  public async delete(historyId: string): Promise<LocalResult<{ deleted: true }>> {
+    const all = this.loadAll();
+    const filtered = all.filter((item) => item.id !== historyId);
+    this.saveAll(filtered);
+    return success({ deleted: true });
   }
 }
 
@@ -397,7 +495,7 @@ export function createServerDomainRuntime(
   const healthRecords = new ServerHealthRecordService(client, householdId);
   const dashboard = new ServerDashboardService(healthRecords);
   const challenges = new DummyChallengeService();
-  const familyHistories = new DummyFamilyHistoryService();
+  const familyHistories = new DummyFamilyHistoryService(householdId);
 
   return {
     profiles: profiles as unknown as LocalDomainRuntime["profiles"],
