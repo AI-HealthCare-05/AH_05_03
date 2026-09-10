@@ -382,7 +382,6 @@ export function FamilyIntegratedMonitoring({
     <section className="family-monitoring-workspace" aria-labelledby="family-monitoring-heading">
       <div className="family-monitoring-header">
         <div>
-          <span className="monitoring-tag">XAIOps 기반 모니터링</span>
           <h2 id="family-monitoring-heading">가족 건강 통합 모니터링</h2>
           <p className="monitoring-subtext">
             가족 구성원 전체의 관찰·기록 사실과 AI 추세를 한눈에 확인하고 타임라인 시점으로 재현합니다.
@@ -398,7 +397,7 @@ export function FamilyIntegratedMonitoring({
             className={`monitoring-tab-btn ${activeTab === "records" ? "active-tab-records" : ""}`}
             onClick={() => setActiveTab("records")}
           >
-            📋 기록 기반 상태
+            기록 기반 상태
             <span className="tab-badge">{allEvents.length}건</span>
           </button>
           <button
@@ -408,7 +407,7 @@ export function FamilyIntegratedMonitoring({
             className={`monitoring-tab-btn ${activeTab === "predictions" ? "active-tab-predictions" : ""}`}
             onClick={() => setActiveTab("predictions")}
           >
-            🔮 예측·분석 뷰
+            예측·분석 뷰
             <span className="tab-badge prediction-badge">새 분석</span>
           </button>
         </div>
@@ -565,7 +564,6 @@ export function FamilyIntegratedMonitoring({
             </div>
             {selectedEvent.organLabel ? (
               <div className="organ-alert-tag">
-                <span className="organ-pin">📍</span>
                 연결 장기: <strong>
                   {selectedEventId === undefined && currentMemberDateEvents.length > 1
                     ? Array.from(new Set(currentMemberDateEvents.map((e) => e.organLabel).filter(Boolean))).join(", ") + " (동시 투시 모드)"
@@ -593,7 +591,7 @@ export function FamilyIntegratedMonitoring({
                   }
                 }}
               >
-                🔴 전체 위험 장기 동시 보기 (간 + 폐)
+                전체 위험 장기 동시 보기 (간 + 폐)
               </button>
               {currentMemberDateEvents.map((ev) => (
                 <button
@@ -609,7 +607,6 @@ export function FamilyIntegratedMonitoring({
                     }
                   }}
                 >
-                  {ev.category === "diagnosis" ? "🔴 " : ev.category === "symptom" ? "🔵 " : "⚪ "}
                   {ev.title}
                 </button>
               ))}
@@ -640,21 +637,28 @@ export function FamilyIntegratedMonitoring({
                 <span className="box-title">인용 원문 및 근거 내용</span>
                 <p className="evidence-sentence">"{selectedEvent.sourceSentence}"</p>
                 {selectedEvent.sourceDocumentName ? (
-                  <span className="doc-provenance-link">📄 출처 서류: {selectedEvent.sourceDocumentName}</span>
+                  <span className="doc-provenance-link">출처 서류: {selectedEvent.sourceDocumentName}</span>
                 ) : null}
               </div>
             ) : null}
 
             {selectedEvent.detailNote ? (
               <div className="monitoring-clinical-note">
-                ℹ️ <strong>해석 안내:</strong> {selectedEvent.detailNote}
+                <strong>해석 안내:</strong> {selectedEvent.detailNote}
               </div>
             ) : null}
           </div>
         </div>
       ) : (
         <div className="monitoring-empty-panel">
-          <div className="empty-panel-icon">📅</div>
+          <div className="empty-panel-icon" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+          </div>
           <div className="empty-panel-content">
             <h4>{selectedDate} 관찰 기록 없음</h4>
             <p>

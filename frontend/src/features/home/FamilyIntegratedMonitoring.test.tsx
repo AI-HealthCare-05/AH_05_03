@@ -293,7 +293,7 @@ describe("FamilyIntegratedMonitoring (#122)", () => {
     expect(multiCall).toBeDefined();
 
     // 상단에 전체 동시 보기 칩과 개별 칩 노출 확인
-    expect(screen.getByText("🔴 전체 위험 장기 동시 보기 (간 + 폐)")).toBeInTheDocument();
+    expect(screen.getByText(/전체 위험 장기 동시 보기 \(간 \+ 폐\)/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /간암 진단 기록/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /폐 암\/전이 판정 기록/ })).toBeInTheDocument();
 
@@ -304,8 +304,8 @@ describe("FamilyIntegratedMonitoring (#122)", () => {
     fireEvent.click(screen.getByRole("button", { name: /폐 암\/전이 판정 기록/ }));
     expect(onSelectOrgan).toHaveBeenLastCalledWith("lung", "폐 (폐 암/전이 판정)");
 
-    // 전체 위험 장기 동시 보기 버튼 클릭 시 다시 liver,lung 동시 전달
-    fireEvent.click(screen.getByText("🔴 전체 위험 장기 동시 보기 (간 + 폐)"));
+    // 다시 전체 보기 칩 클릭 시 둘 다 선택
+    fireEvent.click(screen.getByText(/전체 위험 장기 동시 보기 \(간 \+ 폐\)/));
     const lastCall = onSelectOrgan.mock.calls[onSelectOrgan.mock.calls.length - 1];
     expect(lastCall[0]).toContain("liver");
     expect(lastCall[0]).toContain("lung");
