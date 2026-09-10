@@ -12,6 +12,7 @@ export interface AnatomyDisplayInfo {
   systemKorean: string;
   system: string;
   description: string;
+  isStandardMatched?: boolean;
 }
 
 export interface DictionaryEntry {
@@ -1272,6 +1273,7 @@ export function resolveAnatomyDisplayInfo(
       systemKorean: entry.systemKorean,
       system: entry.system,
       description: entry.description,
+      isStandardMatched: true,
     };
   }
 
@@ -1296,6 +1298,7 @@ export function resolveAnatomyDisplayInfo(
     systemKorean: systemToKorean(resolvedFallback),
     system: resolvedFallback,
     description: "인체 3D 모델에서 선택된 세부 해부학 구조입니다.",
+    isStandardMatched: false,
   };
 }
 
