@@ -214,16 +214,25 @@ AuthoritativeEvidenceType = Literal[
 ]
 
 
-class HealthAssistantScopeDecision(BaseModel):
-    """메인 답변 전에 실행하는 서비스 범위 판정 결과.
+class QueryAnalyst(BaseModel):
+    """인풋 가드레일: 맥락 추론 및 쿼리 빌더 결과 DTO."""
 
-    Gemini는 여기서 주제를 분류할 뿐 건강 사실을 답하지 않는다. 실제 허용과
-    차단은 :mod:`app.services.health_assistant_boundary`가 이 값을 검증해 강제한다.
-    """
+    is_scientific_or_medical: bool = Field(
+        description="질문의 본질과 맥락이 과학, 의학, 보건, 건강, 신체 증상, 질병, 약물, 영양, 식단, 운동, 의료기관, 일상 건강관리 또는 건강비서 서비스 사용법에 해당하는지 여부"
+    )
+    inferred_intent: str = Field(description="사용자가 질문을 통해 진짜 알고 싶어하는 숨겨진 맥락 추론")
+    enriched_query: str = Field(
+        description="원문이 부실할 경우, 지식 DB 검색 및 도구 활용이 가능하도록 의학/과학적 키워드를 추가하여 풍부하게 재작성한 쿼리"
+    )
+
+
+class HealthAssistantScopeDecision(BaseModel):
+    """메인 답변 전에 실행하는 서비스 범위 판정 및 쿼리 인리치먼트 결과."""
 
     scope: HealthAssistantScope = Field(description="건강비서 서비스 범위 판정")
     requires_authoritative_evidence: bool = Field(
-        description="사용자에게 건강 사실·수치·권고를 답하려면 승인된 근거 조회가 필요한지 여부"
+        default=False,
+        description="사용자에게 건강 사실·수치·권고를 답하려면 승인된 근거 조회가 필요한지 여부",
     )
     required_evidence_types: list[AuthoritativeEvidenceType] = Field(
         default_factory=list,
@@ -233,6 +242,14 @@ class HealthAssistantScopeDecision(BaseModel):
         default=None,
         max_length=2000,
         description="혼합 질문에서 그대로 떼어 낸 건강 관련 원문 부분. 혼합 질문이 아니면 null",
+    )
+    inferred_intent: str | None = Field(
+        default=None,
+        description="사용자의 진짜 의도 및 맥락 추론 요약",
+    )
+    enriched_query: str | None = Field(
+        default=None,
+        description="도구 검색 및 메인 LLM 답변 품질을 극대화하기 위해 풍부하게 재구성된 쿼리",
     )
 
 
@@ -246,6 +263,14 @@ class HealthAssistantChatRequest(BaseModel):
         default=None, description="사용자 동의로 받은 이번 요청의 현재 좌표 (user_location과 호환)"
     )
     session_id: uuid.UUID | None = Field(default=None, description="대화 세션 ID (DB 영구 보존용)")
+    inferred_intent: str | None = Field(
+        default=None,
+        description="인풋 가드레일을 통해 추론된 사용자 의도 요약",
+    )
+    enriched_query: str | None = Field(
+        default=None,
+        description="인풋 가드레일 쿼리 빌더를 통해 의학/과학적 맥락이 보강된 질문 쿼리",
+    )
 
     @property
     def location(self) -> UserLocation | None:

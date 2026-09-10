@@ -313,11 +313,20 @@ class HealthAssistantService:
         self.household_repo = household_repo
 
     @staticmethod
-    def _needs_food_nutrition(request: HealthAssistantChatRequest) -> bool:
+    def _get_eval_text(request: HealthAssistantChatRequest) -> str:
+        if not request.messages:
+            return ""
+        base = request.messages[-1].content
+        if request.enriched_query:
+            return f"{base} {request.enriched_query}"
+        return base
+
+    @classmethod
+    def _needs_food_nutrition(cls, request: HealthAssistantChatRequest) -> bool:
         """음식 영양성분(칼로리, 나트륨, 당류 등) 조회가 필요한 질문인지 판별한다."""
         if not request.messages:
             return False
-        last_msg = request.messages[-1].content
+        last_msg = cls._get_eval_text(request)
         compact_msg = last_msg.replace(" ", "")
 
         # 1) 명시적 영양성분 키워드가 포함된 경우 우선 처리
@@ -379,8 +388,8 @@ class HealthAssistantService:
         has_day_count = any(word in message for word in ("며칠", "몇일", "몇번", "몇회", "날이", "날은"))
         return "혈압" in message and has_period and has_threshold and has_day_count
 
-    @staticmethod
-    def _needs_medication_info(request: HealthAssistantChatRequest) -> bool:
+    @classmethod
+    def _needs_medication_info(cls, request: HealthAssistantChatRequest) -> bool:
         """의약품 허가정보(효능·부작용·주의사항) 조회가 실제로 필요한 질문인지 판별한다.
 
         - 단순 복약 기록 발화("저녁 8시에 타이레놀 1알 복용했어", "혈압약 먹음")는 기록 의도이므로 검색 도구를 부르지 않는다.
@@ -388,7 +397,7 @@ class HealthAssistantService:
         """
         if not request.messages:
             return False
-        last_msg = request.messages[-1].content
+        last_msg = cls._get_eval_text(request)
         # 1) 의약품 키워드가 반드시 있어야 함
         if not (_STANDALONE_MEDICINE_WORD.search(last_msg) or any(k in last_msg for k in _MEDICATION_KEYWORDS)):
             return False
@@ -472,12 +481,12 @@ class HealthAssistantService:
 
         return False
 
-    @staticmethod
-    def _needs_facility_tools(request: HealthAssistantChatRequest) -> bool:
+    @classmethod
+    def _needs_facility_tools(cls, request: HealthAssistantChatRequest) -> bool:
         """의료시설 조회 도구가 실제로 필요한 질문인지 판별한다."""
         if not request.messages:
             return False
-        last_msg = request.messages[-1].content
+        last_msg = cls._get_eval_text(request)
         compact_msg = last_msg.replace(" ", "")
         # 날씨나 대기질을 묻는 질문은 의료시설 조회가 아님
         if any(w in last_msg for w in ("날씨", "미세먼지", "초미세먼지", "대기질")):
@@ -980,13 +989,6 @@ class HealthAssistantService:
         )
 
         tools = self._get_tools(request)
-        if boundary.decision.requires_authoritative_evidence and not tools and not outdoor_conditions:
-            return self.boundary_service.enforce_grounding(
-                boundary.decision,
-                HealthAssistantResponse(intent="health_advice", assistant_message=""),
-                tool_result=None,
-                outdoor_conditions=None,
-            )
         response: HealthAssistantResponse
         client_any = cast(Any, self.llm_client)
 
@@ -1131,17 +1133,6 @@ class HealthAssistantService:
 
         tools = self._get_tools(request)
 
-        if boundary.decision.requires_authoritative_evidence and not tools and not outdoor_conditions:
-            response = self.boundary_service.enforce_grounding(
-                boundary.decision,
-                HealthAssistantResponse(intent="health_advice", assistant_message=""),
-                tool_result=None,
-                outdoor_conditions=None,
-            )
-            yield "delta", {"text": response.assistant_message}
-            yield "result", response.model_dump(mode="json")
-            return
-
         async def tool_executor(name: str, args: dict[str, Any]) -> Any:
             return await self._execute_tool(
                 name,
@@ -1156,21 +1147,6 @@ class HealthAssistantService:
             tools,
             tool_executor,
         )
-
-        if boundary.decision.requires_authoritative_evidence and not self.boundary_service.has_required_evidence(
-            boundary.decision,
-            tool_result,
-            outdoor_conditions,
-        ):
-            response = self.boundary_service.enforce_grounding(
-                boundary.decision,
-                HealthAssistantResponse(intent="health_advice", assistant_message=""),
-                tool_result=tool_result,
-                outdoor_conditions=outdoor_conditions,
-            )
-            yield "delta", {"text": response.assistant_message}
-            yield "result", response.model_dump(mode="json")
-            return
 
         if tool_result is not None:
             from app.dtos.food_nutrition import FoodNutritionSearchResult
