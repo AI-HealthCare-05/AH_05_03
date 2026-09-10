@@ -76,7 +76,7 @@ async def test_prompt_attack_uses_the_same_health_only_message() -> None:
     )
 
     assert response.assistant_message == HEALTH_ONLY_MESSAGE
-    assert client.calls == 1
+    assert client.calls == 0
 
 
 @pytest.mark.asyncio
@@ -181,3 +181,30 @@ def test_one_official_result_cannot_substitute_for_another_required_source() -> 
     )
 
     assert boundary.has_required_evidence(decision, food_result, None) is False
+
+
+def test_fast_path_detects_service_usage_and_record_without_llm() -> None:
+    boundary = HealthAssistantBoundaryService()
+
+    # Greeting fast-path
+    greeting = boundary._fast_path_decision([ChatMessage(role="user", content="안녕하세요")])
+    assert greeting is not None
+    assert greeting.scope == "service_usage"
+    assert greeting.requires_authoritative_evidence is False
+
+    # Blood pressure record fast-path
+    bp_record = boundary._fast_path_decision([ChatMessage(role="user", content="오늘 혈압 120/80 측정했어")])
+    assert bp_record is not None
+    assert bp_record.scope == "health"
+    assert bp_record.requires_authoritative_evidence is False
+
+    # Clear drug inquiry fast-path
+    drug_query = boundary._fast_path_decision([ChatMessage(role="user", content="타이레놀 효능 알려줘")])
+    assert drug_query is not None
+    assert drug_query.scope == "health"
+    assert drug_query.requires_authoritative_evidence is True
+    assert "medication" in drug_query.required_evidence_types
+
+    # Ambiguous or complex question returns None to fallback to LLM classifier
+    ambiguous = boundary._fast_path_decision([ChatMessage(role="user", content="고혈압에 좋은 운동이 뭐야?")])
+    assert ambiguous is None
