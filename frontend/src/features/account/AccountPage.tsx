@@ -335,7 +335,7 @@ export function AccountPage() {
     await run(async () => {
       if (confirmation.kind === "leave-household") {
         await serverApiClient.leaveHousehold(confirmation.household.id);
-        setMessage("가정에서 나왔습니다. 이 브라우저의 로컬 건강정보는 유지됩니다.");
+        setMessage("가정에서 나왔습니다. 이 가정 구성원과의 연결이 해제되었습니다.");
       } else if (confirmation.kind === "close-household") {
         await serverApiClient.closeHousehold(confirmation.household.id);
         setMessage("가정을 종료했습니다. 구성원의 로컬 건강정보는 삭제되지 않습니다.");
@@ -355,7 +355,7 @@ export function AccountPage() {
         setMessage("보낸 초대를 취소했습니다.");
       } else if (confirmation.kind === "unlink-profile") {
         await serverApiClient.unlinkProfileLink(confirmation.link.id);
-        setMessage("서비스 계정 연결을 해제했습니다. 이 브라우저의 로컬 프로필과 건강정보는 변경하지 않았습니다.");
+        setMessage("서비스 계정 연결을 해제했습니다. 프로필과 건강기록 자체는 지우지 않았습니다.");
       } else if (confirmation.kind === "switch-household-on-accept") {
         if (confirmation.isSolo) {
           await executeAcceptAndLink(
@@ -401,7 +401,7 @@ export function AccountPage() {
       // 관문에도 알린다. 안 알리면 레이아웃은 아직 로그인 상태라고 믿어서,
       // 로그아웃한 사용자에게 메뉴와 화면이 그대로 남는다.
       markSignedOut();
-      setMessage("로그아웃했습니다. 로컬 건강정보는 이 브라우저에 유지됩니다.");
+      setMessage("로그아웃했습니다. 건강기록은 계정에 남아 다시 로그인하면 그대로 보입니다.");
     });
   }
 
@@ -694,7 +694,7 @@ function HouseholdCard({
             const connectionLabel = isLinked
               ? "가족 프로필 연결됨"
               : membership.local_profile_ref
-                ? "프로필 연결됨 · 이 브라우저에서 이름 확인 불가"
+                ? "프로필 연결됨 · 이름을 불러올 수 없음"
                 : "로컬 프로필 미연결";
 
               const emailToDisplay =
@@ -753,7 +753,8 @@ function HouseholdCard({
 function InvitationCard({ households, profiles, invitations, working, onSend, onAccept, onDecline, onCancel, linkRecovery, onRetry }: { households: HouseholdData[]; profiles: ReturnType<typeof useLocalDomain>["profiles"]; invitations: FamilyInvitationListData; working: boolean; onSend: (event: FormEvent<HTMLFormElement>) => Promise<void>; onAccept: (event: FormEvent<HTMLFormElement>) => Promise<void>; onDecline: (event: MouseEvent<HTMLButtonElement>) => Promise<void>; onCancel: (invitation: FamilyInvitationData) => void; linkRecovery?: LinkRecovery; onRetry: () => Promise<void> }) {
   const received = invitations.received.filter((item) => item.status === "pending");
   const fragment = readInvitationFragment();
-  return <><section className="account-card account-wide"><p className="section-kicker">가족 초대</p><h2>기존 로컬 프로필에 서비스 계정 초대</h2><p className="account-help">발신자가 여기서 선택한 프로필이 연결 대상입니다. 초대에는 건강정보 대신 무작위 불투명 참조값만 저장됩니다.</p><form className="account-inline-form" onSubmit={(event) => void onSend(event)}><select name="householdId" required defaultValue=""><option value="" disabled>가정 선택</option>{households.map((item) => <option key={item.id} value={item.id}>{item.id.slice(0, 8)}</option>)}</select><select name="profileId" required defaultValue=""><option value="" disabled>연결 대상 프로필 선택</option>{profiles.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select><input name="inviteeEmail" type="email" required placeholder="초대할 이메일" /><button className="primary-button" disabled={working || households.length === 0 || profiles.length === 0}>초대</button></form><InvitationList items={invitations.sent} onCancel={onCancel} /></section><section className="account-card account-wide"><p className="section-kicker">받은 초대</p><h2>발신자가 지정한 프로필과 계정 연결</h2><p className="account-help">연결 대상은 초대에 이미 지정돼 있습니다. 수락 후 건강정보는 자동으로 내려받지 않으며 별도의 기기 연결이 필요합니다.</p>{received.length === 0 ? <p className="account-empty">처리할 초대가 없습니다.</p> : received.map((invitation) => {
+  return <><section className="account-card account-wide"><p className="section-kicker">가족 초대</p><h2>기존 로컬 프로필에 서비스 계정 초대</h2><p className="account-help">발신자가 여기서 선택한 프로필이 연결 대상입니다. 초대에는 건강정보 대신 무작위 불투명 참조값만 저장됩니다.</p><form className="account-inline-form" onSubmit={(event) => void onSend(event)}>{/* 세 칸 다 접근 이름이 없었다. placeholder 와 `disabled` 첫 옵션은 라벨이 아니다 — 값을 고르면 사라지므로 스크린리더에도, 값을 채운 뒤 화면을 다시 훑는 사람에게도 남지 않는다. 가정 이름은 `id.slice(0, 8)` 이라 사용자가 UUID 조각 중에서 자기 가정을 골라야 했다. `HouseholdData` 에 이름 칸이 아예 없어서(서버 계약) 만든
+                     순서로 부른다 — 가정에 이름을 붙이는 것은 별도 작업이다. */}<label className="visually-hidden" htmlFor="invite-household">가정</label><select id="invite-household" name="householdId" required defaultValue=""><option value="" disabled>가정 선택</option>{households.map((item, index) => <option key={item.id} value={item.id}>{households.length > 1 ? `우리 가정 ${index + 1}` : "우리 가정"}</option>)}</select><label className="visually-hidden" htmlFor="invite-profile">연결 대상 프로필</label><select id="invite-profile" name="profileId" required defaultValue=""><option value="" disabled>연결 대상 프로필 선택</option>{profiles.map((item) => <option key={item.id} value={item.id}>{item.displayName}</option>)}</select><label className="visually-hidden" htmlFor="invite-email">초대할 이메일</label><input id="invite-email" name="inviteeEmail" type="email" required autoComplete="email" placeholder="초대할 이메일" /><button className="primary-button" disabled={working || households.length === 0 || profiles.length === 0}>초대</button></form><InvitationList items={invitations.sent} onCancel={onCancel} /></section><section className="account-card account-wide"><p className="section-kicker">받은 초대</p><h2>발신자가 지정한 프로필과 계정 연결</h2><p className="account-help">연결 대상은 초대에 이미 지정돼 있습니다. 수락 후 건강정보는 자동으로 내려받지 않으며 별도의 기기 연결이 필요합니다.</p>{received.length === 0 ? <p className="account-empty">처리할 초대가 없습니다.</p> : received.map((invitation) => {
     const isMatched = Boolean(fragment && (fragment.invitationId === invitation.id || received.length === 1));
     return <form className="received-invitation" key={invitation.id} onSubmit={(event) => void onAccept(event)}><input type="hidden" name="invitationId" value={invitation.id} /><span>{invitation.inviter_account_id.slice(0, 8)}…의 초대</span><input name="token" required placeholder="이메일 초대 토큰" defaultValue={isMatched ? fragment?.token : ""} /><div className="row-actions"><button className="secondary-button" type="button" disabled={working} onClick={(event) => void onDecline(event)}>거절</button><button className="primary-button" disabled={working}>초대 수락</button></div></form>;
   })}{linkRecovery ? <div className="inline-confirmation"><strong>계정 연결 복구가 필요합니다.</strong><p>초대 수락은 완료됐지만 서버의 계정 연결이 중단됐습니다. 로컬 프로필은 변경하지 않았습니다.</p><button className="primary-button" type="button" disabled={working} onClick={() => void onRetry()}>계정 연결 재시도</button></div> : null}</section></>;
@@ -836,7 +837,7 @@ function ConfirmationDialog({
 }
 
 function confirmationCopy(confirmation: Confirmation) {
-  if (confirmation.kind === "leave-household") return { title: "가정에서 나갈까요?", description: "서버 멤버십과 연결 상태가 변경됩니다. 이 브라우저의 로컬 건강정보는 유지됩니다.", action: "가정 나가기" };
+  if (confirmation.kind === "leave-household") return { title: "가정에서 나갈까요?", description: "가정 멤버십과 연결 상태가 변경됩니다. 구성원 기록 자체는 지우지 않습니다.", action: "가정 나가기" };
   if (confirmation.kind === "close-household") return { title: "가정을 종료할까요?", description: "다른 활성 멤버가 있으면 서버가 종료를 거절합니다. 로컬 건강정보는 삭제되지 않습니다.", action: "가정 종료" };
   if (confirmation.kind === "transfer-master") return { title: "가정 마스터 권한을 위임할까요?", description: `${confirmation.targetMember.masked_email} 님에게 마스터 권한을 위임합니다. 위임 후 귀하는 일반 멤버가 되며, 가정 구독 관리 권한도 이전됩니다.`, action: "마스터 위임" };
   if (confirmation.kind === "delete-member-history") return { title: "구성원 이력을 삭제할까요?", description: `${confirmation.targetMember.masked_email} 님의 구성원 탈퇴 이력을 목록에서 삭제합니다.`, action: "이력 삭제" };

@@ -185,7 +185,7 @@
 
 .chat-session-select-btn time,
 .chat-session-list li time {
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -200,7 +200,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #94a3b8;
+  color: var(--muted);
   cursor: pointer;
 }
 
@@ -218,11 +218,15 @@
 }
 
 .chat-session-kebab-btn {
+  /* 28x23 이었다. 1px 이 모자라 WCAG 2.5.8(24x24)을 못 넘겼다 — 손가락으로 누르는
+     자리라 이 1px 이 실제 빗나감을 만든다. */
+  min-width: 24px;
+  min-height: 24px;
   padding: 4px 8px;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 15px;
   font-weight: bold;
   line-height: 1;
@@ -430,7 +434,7 @@
 .assistant-new-chat-header-btn {
   background: #ecfdf5;
   border: 1px solid #a7f3d0;
-  color: #059669;
+  color: #047857;
   font-size: 12px;
   font-weight: 600;
   padding: 5px 10px;
@@ -452,7 +456,7 @@
   border: none;
   font-size: 22px;
   line-height: 1;
-  color: #94a3b8;
+  color: var(--muted);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 6px;
@@ -521,7 +525,7 @@
 }
 
 .user .msg-bubble {
-  background: #10b981;
+  background: #047857;
   color: #ffffff;
   border-bottom-right-radius: 4px;
 }
@@ -583,7 +587,7 @@
 .safety-disclaimer-text {
   margin-top: 8px !important;
   font-size: 11px !important;
-  color: #94a3b8;
+  color: var(--muted);
 }
 
 /* 확인 카드 (Draft Confirmation Cards) */
@@ -804,7 +808,7 @@
 }
 
 .query-item time {
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 11px;
 }
 
@@ -934,7 +938,7 @@
   background: none;
   border: none;
   font-size: 18px;
-  color: #94a3b8;
+  color: var(--muted);
   cursor: pointer;
   padding: 2px 6px;
 }
@@ -1779,7 +1783,7 @@
 }
 
 .no-doc-dash {
-  color: #94a3b8;
+  color: var(--muted);
   font-size: 12px;
   text-align: center;
   display: inline-block;
@@ -2614,5 +2618,5 @@
 
 .medication-source-text {
   font-size: 10px;
-  color: #94a3b8;
+  color: var(--muted);
 }
