@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
@@ -136,10 +136,6 @@ describe("HomePage", () => {
     const user = userEvent.setup();
     renderHomePage();
     await createProfile(user, "자녀", "자녀");
-    const openQuickActions = screen.queryByRole("button", { name: "빠른 작업 열기" });
-    if (openQuickActions) {
-      await user.click(openQuickActions);
-    }
     await user.click(screen.getByRole("button", { name: /가족력 관리/ }));
     await user.click(screen.getByRole("button", { name: "가족력 추가" }));
     await user.type(screen.getByRole("textbox", { name: "친족 관계" }), "외할머니");
@@ -160,8 +156,7 @@ describe("HomePage", () => {
     renderHomePage();
     await createProfile(user, "엄마", "부모");
 
-    // 같은 이름의 문이 둘이다(구성원 머리말·빠른 작업). 둘 다 갈림길로 간다.
-    await user.click(screen.getAllByRole("button", { name: /건강기록 작성/ })[0]);
+    await user.click(screen.getByRole("button", { name: "첫 기록 작성하기" }));
 
     // 갈림길이 먼저 뜬다 — 곧장 기록 폼이 열리지 않는다.
     expect(screen.getByRole("heading", { name: "엄마님의 기록을 어떻게 남길까요?" })).toBeInTheDocument();
@@ -296,96 +291,6 @@ describe("HomePage", () => {
 
     expect(screen.getByRole("listitem")).toHaveTextContent("판정 기록 없음");
   });
-
-  it("빠른 작업을 최소화하고 플로팅 버튼으로 다시 복원할 수 있다", async () => {
-    const user = userEvent.setup();
-    renderHomePage();
-    await createProfile(user, "엄마", "부모");
-
-    const floatBtn = screen.getByRole("button", { name: "빠른 작업 열기" });
-    expect(floatBtn).toBeInTheDocument();
-
-    await user.click(floatBtn);
-    expect(screen.getByRole("heading", { name: "무엇을 기록할까요?" })).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "빠른 작업 최소화" }));
-    expect(screen.queryByRole("heading", { name: "무엇을 기록할까요?" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "빠른 작업 열기" })).toBeInTheDocument();
-  });
-
-  it("빠른 작업과 봄이 창의 배치를 드래그하여 순서를 바꾸고 고정할 수 있다", async () => {
-    const user = userEvent.setup();
-    renderHomePage();
-    await createProfile(user, "엄마", "부모");
-
-    await user.click(screen.getByRole("button", { name: "빠른 작업 열기" }));
-    expect(screen.getByRole("heading", { name: "무엇을 기록할까요?" })).toBeInTheDocument();
-
-    const sidebar = document.querySelector(".member-dashboard-sidebar");
-    expect(sidebar).not.toBeNull();
-
-    let cards = sidebar!.querySelectorAll(".sidebar-reorder-card");
-    expect(cards).toHaveLength(2);
-    expect(cards[0].textContent).toContain("무엇을 기록할까요?");
-    expect(cards[1].textContent).toContain("봄이 · 건강 비서");
-
-    const quickActionsHeader = cards[0].querySelector(".quick-actions-header-row");
-    expect(quickActionsHeader).not.toBeNull();
-
-    fireEvent.pointerDown(quickActionsHeader!, { clientY: 100, pointerId: 1 });
-    fireEvent.pointerMove(quickActionsHeader!, { clientY: 220, pointerId: 1 });
-    fireEvent.pointerUp(quickActionsHeader!, { pointerId: 1 });
-
-    cards = sidebar!.querySelectorAll(".sidebar-reorder-card");
-    expect(cards[0].textContent).toContain("봄이 · 건강 비서");
-    expect(cards[1].textContent).toContain("무엇을 기록할까요?");
-  });
-
-  it("치열도를 열면 사이드바에 카드로 배치되고 드래그로 순서를 바꾸거나 최소화할 수 있다", async () => {
-    const user = userEvent.setup();
-    renderHomePage();
-    await createProfile(user, "엄마", "부모");
-
-    // 빠른 작업 열기
-    await user.click(screen.getByRole("button", { name: "빠른 작업 열기" }));
-
-    // 기본 플로팅 상태인 치아 선택 버튼 클릭하여 카드 열기
-    const dentalFloatBtn = await screen.findByRole("button", { name: "치아 선택 열기" }, { timeout: 8000 });
-    await user.click(dentalFloatBtn);
-
-    const sidebar = document.querySelector(".member-dashboard-sidebar");
-    expect(sidebar).not.toBeNull();
-
-    // 이제 사이드바에는 3개 카드가 있음
-    let cards = sidebar!.querySelectorAll(".sidebar-reorder-card");
-    expect(cards).toHaveLength(3);
-    expect(cards[2].textContent).toContain("치아 전용 선택기");
-
-    // 치아 선택기 헤더를 잡고 위로 드래그하여 맨 위로 이동
-    const dentalHeader = cards[2].querySelector(".dental-embedded-header-row");
-    expect(dentalHeader).not.toBeNull();
-
-    fireEvent.pointerDown(dentalHeader!, { clientY: 500, pointerId: 2 });
-    fireEvent.pointerMove(dentalHeader!, { clientY: 100, pointerId: 2 });
-    fireEvent.pointerUp(dentalHeader!, { pointerId: 2 });
-
-    cards = sidebar!.querySelectorAll(".sidebar-reorder-card");
-    expect(cards[0].textContent).toContain("치아 전용 선택기");
-
-    // 치아 선택기 최소화
-    const minimizeBtn = screen.getByRole("button", { name: "치아 선택기 최소화" });
-    await user.click(minimizeBtn);
-
-    cards = sidebar!.querySelectorAll(".sidebar-reorder-card");
-    expect(cards).toHaveLength(2);
-    expect(screen.getByRole("button", { name: "치아 선택 열기" })).toBeInTheDocument();
-
-    // 플로팅 버튼으로 다시 복원
-    await user.click(screen.getByRole("button", { name: "치아 선택 열기" }));
-    cards = sidebar!.querySelectorAll(".sidebar-reorder-card");
-    expect(cards).toHaveLength(3);
-    expect(cards[0].textContent).toContain("치아 전용 선택기");
-  });
 });
 
 /**
@@ -450,7 +355,7 @@ function renderHomePage() {
 
 /** 기록 폼은 갈림길을 한 번 지나서 열린다. 갈림길 자체는 아래 전용 테스트가 본다. */
 async function openRecordForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getAllByRole("button", { name: /건강기록 작성/ })[0]);
+  await user.click(screen.getByRole("button", { name: "첫 기록 작성하기" }));
   await user.click(screen.getByRole("button", { name: /직접 작성/ }));
   await screen.findByRole("combobox", { name: "기록 종류" });
 }
