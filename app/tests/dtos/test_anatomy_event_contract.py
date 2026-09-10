@@ -65,3 +65,35 @@ def test_anatomy_event_invalid_schema_version() -> None:
     }
     with pytest.raises(ValidationError):
         AnatomyEvent.model_validate(raw_payload)
+
+
+def test_anatomy_event_ai_inference_deserialization() -> None:
+    raw_payload = {
+        "schemaVersion": "1.0.0",
+        "eventId": "ev-ai-cervical-1",
+        "atlas": {
+            "id": "vanatome-female-reference",
+            "version": "1.0.0",
+            "referenceSex": "female",
+        },
+        "concept": {
+            "canonicalConceptId": "cervical_spine",
+            "sourceKey": "inferred:cervical_spine",
+            "sourceMeshId": "skeleton-cervical-vertebra",
+            "label": "경추 (C1~C7) 및 신경근",
+            "system": "nervous",
+            "side": "midline",
+            "mappingStatus": "canonical",
+        },
+        "inputSource": "ai_inference",
+        "state": "confirmed",
+        "provenance": "clinical_ai_inferred",
+        "clinicalReasoning": "상지 저림 및 하지 위약감에 따른 경추 신경근 연관통 추론",
+        "recordedAt": "2026-09-10T12:00:00Z",
+    }
+
+    event = AnatomyEvent.model_validate(raw_payload)
+    assert event.input_source == "ai_inference"
+    assert event.provenance == "clinical_ai_inferred"
+    assert event.clinical_reasoning == "상지 저림 및 하지 위약감에 따른 경추 신경근 연관통 추론"
+    assert event.concept.canonical_concept_id == "cervical_spine"

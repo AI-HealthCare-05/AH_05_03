@@ -28,78 +28,111 @@ const SUPPORTED_ORGANS: OrganDefinition[] = [
     label: "폐",
     system: "respiratory",
     defaultMeshName: "VH_O_lung",
-    keywords: ["폐", "lung", "기관지", "흉막", "가슴 속"],
+    keywords: ["폐암", "폐렴", "기관지", "흉막", "가슴 속", "lung", "폐"],
   },
   {
     key: "liver",
     label: "간",
     system: "digestive",
     defaultMeshName: "VH_O_liver",
-    keywords: ["간", "liver", "간장", "간경변", "간기능"],
+    keywords: ["간암", "간경변", "간기능", "간염", "간장", "liver", "간"],
   },
   {
     key: "stomach",
     label: "위",
     system: "digestive",
     defaultMeshName: "VH_O_stomach",
-    keywords: ["위", "stomach", "위염", "위궤양", "위식도"],
+    keywords: ["위암", "위궤양", "위염", "위장", "위식도", "위 통증", "위통", "위경련", "위산", "위벽", "위내시경", "속쓰림", "stomach", "위"],
   },
   {
     key: "colon",
     label: "대장",
     system: "digestive",
     defaultMeshName: "VH_O_colon",
-    keywords: ["대장", "colon", "결장", "직장", "대장염", "bowel"],
+    keywords: ["대장암", "대장염", "대장", "결장", "직장", "colon", "bowel"],
   },
   {
     key: "heart",
     label: "심장",
     system: "circulatory",
     defaultMeshName: "VH_O_heart",
-    keywords: ["심장", "heart", "심근", "심혈관", "관상동맥", "부정맥"],
+    keywords: ["심근경색", "심혈관", "관상동맥", "부정맥", "심근", "심장", "heart"],
   },
   {
     key: "kidney",
     label: "신장",
     system: "urinary",
     defaultMeshName: "VH_O_kidney",
-    keywords: ["신장", "콩팥", "kidney", "사구체", "신부전"],
+    keywords: ["신장암", "신부전", "사구체", "콩팥", "신장", "kidney"],
   },
   {
     key: "pancreas",
     label: "췌장",
     system: "digestive",
     defaultMeshName: "VH_O_pancreas",
-    keywords: ["췌장", "pancreas", "췌장염"],
+    keywords: ["췌장암", "췌장염", "췌장", "pancreas"],
   },
   {
     key: "gallbladder",
     label: "담낭",
     system: "digestive",
     defaultMeshName: "VH_O_gallbladder",
-    keywords: ["담낭", "쓸개", "gallbladder", "담석"],
+    keywords: ["담낭암", "담석", "쓸개", "담낭", "gallbladder"],
   },
   {
     key: "brain",
     label: "뇌",
     system: "nervous",
     defaultMeshName: "VH_O_brain",
-    keywords: ["뇌", "brain", "뇌경색", "뇌출혈", "뇌졸중"],
+    keywords: ["뇌경색", "뇌출혈", "뇌졸중", "뇌종양", "뇌암", "brain", "뇌"],
+  },
+  {
+    key: "cervical_spine",
+    label: "경추(목뼈)",
+    system: "skeletal",
+    defaultMeshName: "skeleton-cervical-vertebra",
+    keywords: ["목디스크", "경추 디스크", "경추", "목뼈", "cervical"],
+  },
+  {
+    key: "nervous",
+    label: "신경계",
+    system: "nervous",
+    defaultMeshName: "nervous-system",
+    keywords: ["신경계", "말초신경", "신경근", "척수신경", "nervous"],
   },
 ];
 
 function detectOrganFromText(text: string): OrganDefinition | undefined {
   const lower = text.toLowerCase();
+
+  // 1글자 단어의 비장기적 접미/파생어 오탐 방지 (예: '간헐적 복통'의 '간', '어깨 부위'의 '위' 오탐 방지)
+  const sanitized = lower
+    .replace(/간헐[적|히]?/g, "")
+    .replace(/(시간|기간|순간|공간|중간|야간|주간|월간|년간|인간|간격|사이)/g, "")
+    .replace(/(부위[에|의|별|를|가|도]?|통증부위|환부|위험|위해|위치|위약|범위|지위|단위|상위|하위|포위|주위|분위기|가위|위쪽|위아래)/g, "")
+    .replace(/(폐기|폐쇄|폐지)/g, "");
+
+  // 더 길고 구체적인 키워드 우선 매칭
+  let bestMatch: { organ: OrganDefinition; keywordLength: number } | undefined;
+
   for (const organ of SUPPORTED_ORGANS) {
-    if (organ.keywords.some((kw) => lower.includes(kw))) {
-      return organ;
+    for (const kw of organ.keywords) {
+      const isMatched = kw.length === 1
+        ? new RegExp(`(?:^|[^가-힣a-z0-9])${kw}(?:가|이|는|은|에|도|를|을|의|로|으로|와|과|만|뿐)?(?=[^가-힣a-z0-9]|$)`, "i").test(sanitized)
+        : sanitized.includes(kw);
+
+      if (isMatched) {
+        if (!bestMatch || kw.length > bestMatch.keywordLength) {
+          bestMatch = { organ, keywordLength: kw.length };
+        }
+      }
     }
   }
-  return undefined;
+  return bestMatch?.organ;
 }
 
 const CANCER_SERIOUS_KEYWORDS = [
-  "암", "전이", "악성", "종양", "판정", "진단", "말기", "cancer", "carcinoma", "metastasis", "tumor",
+  "암", "전이", "악성", "종양", "판정", "진단", "확진", "말기", "cancer", "carcinoma", "metastasis", "tumor",
 ];
 
 function isSeriousCondition(text: string): boolean {
@@ -190,6 +223,36 @@ function extractHealthEvents(records: HealthRecord[]): HealthEvent[] {
       const organ = detectOrganFromText(fullText);
       const isSerious = isSeriousCondition(fullText);
 
+      // AI Agent 임상 추론 (연관통 및 원인 해부학 구조 분석 결과) 우선 채택
+      const isAiInferred =
+        anatomy?.provenance === "clinical_ai_inferred" ||
+        Boolean(payload.clinicalReasoning) ||
+        (Array.isArray(payload.suspectedAnatomyIds) && (payload.suspectedAnatomyIds as string[]).length > 0);
+
+      if (isAiInferred) {
+        const suspectedIds = (payload.suspectedAnatomyIds as string[]) || (concept.canonicalConceptId ? [String(concept.canonicalConceptId)] : []);
+        const suspectedKey = suspectedIds.length > 0 ? suspectedIds.join(",") : "cervical_spine,nervous";
+        const reasoningText = String(payload.clinicalReasoning || anatomy?.uncertainty || anatomy?.clinicalReasoning || "");
+        const eventTitle = `연관통 추정: ${concept.label || "경추 및 신경계"} (${rawLabel} 분석)`;
+
+        events.push({
+          id: `pain-inferred-${r.id}`,
+          profileId: r.profileId,
+          category: "symptom",
+          title: eventTitle,
+          organKey: suspectedKey,
+          organLabel: String(concept.label || "경추 및 신경계"),
+          meshName: String(concept.sourceMeshId || "skeleton-cervical-vertebra"),
+          observedAt,
+          recordedAt,
+          provenance: "clinical_ai_inferred",
+          sourceSentence: noteStr || sensation,
+          severityTone: "warning",
+          detailNote: reasoningText || "임상 AI Agent가 복합 증상(상지 저림·악력 저하·하지 위약감)을 분석하여 경추 신경근 연관통으로 추론한 부위입니다.",
+        });
+        continue;
+      }
+
       const organKey = organ?.key;
       const organLabel = organ
         ? isSerious
@@ -255,36 +318,65 @@ export function FamilyIntegratedMonitoring({
 }: FamilyIntegratedMonitoringProps) {
   const [activeTab, setActiveTab] = useState<MonitoringViewTab>("records");
   const [selectedEventId, setSelectedEventId] = useState<string>();
+  const [dateOffsetDays, setDateOffsetDays] = useState(0);
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
 
-  // 날짜 범위: 최근 7일 타임라인 블록
+  // 날짜 범위: dateOffsetDays 기준 7일 동적 타임라인 블록
   const timelineDates = useMemo(() => {
     const dates: string[] = [];
-    const now = new Date();
+    const base = new Date();
+    base.setDate(base.getDate() + dateOffsetDays);
     for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
+      const d = new Date(base);
       d.setDate(d.getDate() - i);
       dates.push(d.toISOString().slice(0, 10));
     }
     return dates;
-  }, []);
+  }, [dateOffsetDays]);
 
   const allEvents = useMemo(() => extractHealthEvents(records), [records]);
 
-  // 선택된 특정 이벤트
-  const selectedEvent = useMemo(() => {
-    if (!selectedEventId) {
-      // 기본적으로 가장 최근 진단 또는 기록 선택
-      return allEvents.find((e) => e.category === "diagnosis") || allEvents[0];
-    }
-    return allEvents.find((e) => e.id === selectedEventId);
-  }, [allEvents, selectedEventId]);
+  // 현재 선택된 날짜 및 선택된 가족 구성원의 이벤트 목록
+  const currentMemberDateEvents = useMemo(() => {
+    const targetProfileId = selectedProfileId || profiles[0]?.id;
+    return allEvents.filter(
+      (e) =>
+        e.profileId === targetProfileId &&
+        (e.observedAt.startsWith(selectedDate) || e.recordedAt.startsWith(selectedDate)),
+    );
+  }, [allEvents, selectedProfileId, profiles, selectedDate]);
 
-  // 선택된 이벤트의 장기를 3D 뷰어로 통보
-  useEffect(() => {
-    if (selectedEvent?.organKey && onSelectOrgan) {
-      onSelectOrgan(selectedEvent.organKey, selectedEvent.organLabel || "");
+  // 선택된 특정 이벤트 (우선순위: 명시적 selectedEventId -> 현재 날짜 이벤트 중 첫 번째 -> 전체 중 첫 번째)
+  const selectedEvent = useMemo(() => {
+    if (selectedEventId) {
+      const found = allEvents.find((e) => e.id === selectedEventId);
+      if (found) return found;
     }
-  }, [selectedEvent?.organKey, selectedEvent?.organLabel, onSelectOrgan]);
+    if (currentMemberDateEvents.length > 0) {
+      return currentMemberDateEvents[0];
+    }
+    return undefined;
+  }, [allEvents, selectedEventId, currentMemberDateEvents]);
+
+  // 선택된 날짜의 모든 위험 장기를 3D 뷰어로 통보 (단일 이벤트 선택 시 해당 장기, 기본은 해당 날짜의 모든 위험 장기 동시 발광)
+  useEffect(() => {
+    if (!onSelectOrgan) return;
+    const dateOrgans = currentMemberDateEvents.filter((ev) => ev.organKey);
+    if (dateOrgans.length > 0) {
+      if (selectedEventId) {
+        const specificEvent = dateOrgans.find((e) => e.id === selectedEventId);
+        if (specificEvent?.organKey) {
+          onSelectOrgan(specificEvent.organKey, specificEvent.organLabel || "");
+          return;
+        }
+      }
+      const uniqueKeys = Array.from(new Set(dateOrgans.map((ev) => ev.organKey!)));
+      const uniqueLabels = Array.from(new Set(dateOrgans.map((ev) => ev.organLabel!)));
+      onSelectOrgan(uniqueKeys.join(","), uniqueLabels.join(", "));
+    } else {
+      onSelectOrgan("", "");
+    }
+  }, [currentMemberDateEvents, selectedEventId, onSelectOrgan]);
 
   return (
     <section className="family-monitoring-workspace" aria-labelledby="family-monitoring-heading">
@@ -324,11 +416,41 @@ export function FamilyIntegratedMonitoring({
 
       {/* 2. 가족별 타임블록라인 (Family TimeBlockLine) */}
       <div className="family-timeline-container">
-        <div className="timeline-legend">
-          <span className="legend-item"><span className="legend-dot dot-diagnosis" /> 진단 기록 (빨강: 중요 진단 연결 장기)</span>
-          <span className="legend-item"><span className="legend-dot dot-pain" /> 통증/증상 보고</span>
-          <span className="legend-item"><span className="legend-dot dot-test" /> 검사/수치</span>
-          <span className="legend-item"><span className="legend-dot dot-empty" /> 기록 없음 (정상 아님)</span>
+        <div className="timeline-top-bar">
+          <div className="timeline-legend">
+            <span className="legend-item"><span className="legend-dot dot-diagnosis" /> 진단 기록 (빨강: 중요 진단 장기)</span>
+            <span className="legend-item"><span className="legend-dot dot-pain" /> 통증/증상</span>
+            <span className="legend-item"><span className="legend-dot dot-test" /> 검사/수치</span>
+            <span className="legend-item"><span className="legend-dot dot-empty" /> 기록 없음 (정상 아님)</span>
+          </div>
+
+          <div className="timeline-nav-controls" role="group" aria-label="타임라인 날짜 이동">
+            <button
+              type="button"
+              className="timeline-nav-btn"
+              onClick={() => setDateOffsetDays((prev) => prev - 7)}
+              title="과거 7일 이동"
+            >
+              ◀ 이전 7일
+            </button>
+            <button
+              type="button"
+              className={`timeline-nav-btn ${dateOffsetDays === 0 ? "active-nav" : ""}`}
+              onClick={() => setDateOffsetDays(0)}
+              title="최신 7일로 복귀"
+            >
+              오늘
+            </button>
+            <button
+              type="button"
+              className="timeline-nav-btn"
+              disabled={dateOffsetDays >= 0}
+              onClick={() => setDateOffsetDays((prev) => Math.min(prev + 7, 0))}
+              title="다음 7일 이동"
+            >
+              다음 7일 ▶
+            </button>
+          </div>
         </div>
 
         <div className="timeline-grid">
@@ -336,8 +458,13 @@ export function FamilyIntegratedMonitoring({
             <div className="timeline-member-col">가족 구성원</div>
             <div className="timeline-dates-row">
               {timelineDates.map((date) => (
-                <div key={date} className="timeline-date-cell">
-                  {date.slice(5)}
+                <div
+                  key={date}
+                  className={`timeline-date-cell ${date === selectedDate ? "selected-date-cell" : ""}`}
+                  onClick={() => setSelectedDate(date)}
+                >
+                  <span>{date.slice(5)}</span>
+                  {date === selectedDate ? <span className="active-dot" /> : null}
                 </div>
               ))}
             </div>
@@ -345,13 +472,15 @@ export function FamilyIntegratedMonitoring({
 
           {profiles.map((profile) => {
             const memberEvents = allEvents.filter((e) => e.profileId === profile.id);
-            const isSelected = profile.id === selectedProfileId;
+            const isSelectedMember = profile.id === (selectedProfileId || profiles[0]?.id);
 
             return (
               <div
                 key={profile.id}
-                className={`timeline-member-row ${isSelected ? "selected-member-row" : ""}`}
-                onClick={() => onSelectProfile(profile.id)}
+                className={`timeline-member-row ${isSelectedMember ? "selected-member-row" : ""}`}
+                onClick={() => {
+                  onSelectProfile(profile.id);
+                }}
               >
                 <div className="timeline-member-info">
                   <strong>{profile.displayName}</strong>
@@ -370,22 +499,41 @@ export function FamilyIntegratedMonitoring({
                     else if (hasPain) blockClass = "timeline-block-pain";
                     else if (hasTest) blockClass = "timeline-block-test";
 
+                    const isSelectedDate = isSelectedMember && date === selectedDate;
+
                     return (
                       <div
                         key={date}
-                        className={`timeline-block ${blockClass}`}
+                        className={`timeline-block ${blockClass} ${isSelectedDate ? "is-selected-block" : ""}`}
                         title={
                           dayEvents.length > 0
-                            ? dayEvents.map((e) => `[${PROVENANCE_BADGES[e.provenance].label}] ${e.title}`).join("\n")
+                            ? `[${date}] ${profile.displayName}\n` +
+                              dayEvents.map((e) => `• [${PROVENANCE_BADGES[e.provenance].label}] ${e.title}`).join("\n")
                             : `${date}: 기록 없음 (정상 아님)`
                         }
                         onClick={(e) => {
                           e.stopPropagation();
                           onSelectProfile(profile.id);
+                          setSelectedDate(date);
                           if (dayEvents.length > 0) {
-                            setSelectedEventId(dayEvents[0].id);
-                            if (dayEvents[0].organKey && onSelectOrgan) {
-                              onSelectOrgan(dayEvents[0].organKey, dayEvents[0].organLabel || "");
+                            if (dayEvents.length > 1) {
+                              setSelectedEventId(undefined);
+                              const dayOrgans = dayEvents.filter((ev) => Boolean(ev.organKey));
+                              const keys = Array.from(new Set(dayOrgans.map((ev) => ev.organKey!)));
+                              const labels = Array.from(new Set(dayOrgans.map((ev) => ev.organLabel!).filter(Boolean)));
+                              if (keys.length > 0 && onSelectOrgan) {
+                                onSelectOrgan(keys.join(","), labels.join(", "));
+                              }
+                            } else {
+                              setSelectedEventId(dayEvents[0].id);
+                              if (dayEvents[0].organKey && onSelectOrgan) {
+                                onSelectOrgan(dayEvents[0].organKey, dayEvents[0].organLabel || "");
+                              }
+                            }
+                          } else {
+                            setSelectedEventId(undefined);
+                            if (onSelectOrgan) {
+                              onSelectOrgan("", "");
                             }
                           }
                         }}
@@ -418,11 +566,55 @@ export function FamilyIntegratedMonitoring({
             {selectedEvent.organLabel ? (
               <div className="organ-alert-tag">
                 <span className="organ-pin">📍</span>
-                연결 장기: <strong>{selectedEvent.organLabel}</strong>
+                연결 장기: <strong>
+                  {selectedEventId === undefined && currentMemberDateEvents.length > 1
+                    ? Array.from(new Set(currentMemberDateEvents.map((e) => e.organLabel).filter(Boolean))).join(", ") + " (동시 투시 모드)"
+                    : selectedEvent.organLabel}
+                </strong>
                 <small>(빨간색 표시: 중요 진단 기록이 연결된 장기이며, 손상률이나 응급도가 아닙니다)</small>
               </div>
             ) : null}
           </div>
+
+          {/* 해당 날짜에 여러 건의 기록이 있을 때 선택 칩 목록 */}
+          {currentMemberDateEvents.length > 1 ? (
+            <div className="same-day-events-bar" role="tablist" aria-label="해당 날짜 기록 목록">
+              <span className="same-day-label">{selectedDate} 기록 목록 ({currentMemberDateEvents.length}건):</span>
+              <button
+                type="button"
+                className={`same-day-chip ${selectedEventId === undefined ? "active-chip" : ""}`}
+                onClick={() => {
+                  setSelectedEventId(undefined);
+                  const dateOrgans = currentMemberDateEvents.filter((ev) => ev.organKey);
+                  const uniqueKeys = Array.from(new Set(dateOrgans.map((ev) => ev.organKey!)));
+                  const uniqueLabels = Array.from(new Set(dateOrgans.map((ev) => ev.organLabel!).filter(Boolean)));
+                  if (uniqueKeys.length > 0 && onSelectOrgan) {
+                    onSelectOrgan(uniqueKeys.join(","), uniqueLabels.join(", "));
+                  }
+                }}
+              >
+                🔴 전체 위험 장기 동시 보기 (간 + 폐)
+              </button>
+              {currentMemberDateEvents.map((ev) => (
+                <button
+                  key={ev.id}
+                  type="button"
+                  className={`same-day-chip ${selectedEventId === ev.id ? "active-chip" : ""}`}
+                  onClick={() => {
+                    setSelectedEventId(ev.id);
+                    if (ev.organKey && onSelectOrgan) {
+                      onSelectOrgan(ev.organKey, ev.organLabel || "");
+                    } else if (onSelectOrgan) {
+                      onSelectOrgan("", "");
+                    }
+                  }}
+                >
+                  {ev.category === "diagnosis" ? "🔴 " : ev.category === "symptom" ? "🔵 " : "⚪ "}
+                  {ev.title}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <div className="detail-panel-body">
             <div className="detail-time-grid">
@@ -433,7 +625,7 @@ export function FamilyIntegratedMonitoring({
               <div className="time-item">
                 <span className="time-label">시스템 입력·확인 시점</span>
                 <strong className="time-val">{selectedEvent.recordedAt.slice(0, 10)}</strong>
-                {selectedEvent.observedAt !== selectedEvent.recordedAt ? (
+                {selectedEvent.observedAt.slice(0, 10) !== selectedEvent.recordedAt.slice(0, 10) ? (
                   <small className="delayed-input-note">(사후 입력 기록)</small>
                 ) : null}
               </div>
@@ -460,7 +652,19 @@ export function FamilyIntegratedMonitoring({
             ) : null}
           </div>
         </div>
-      ) : null}
+      ) : (
+        <div className="monitoring-empty-panel">
+          <div className="empty-panel-icon">📅</div>
+          <div className="empty-panel-content">
+            <h4>{selectedDate} 관찰 기록 없음</h4>
+            <p>
+              선택한 시점에는 해당 가족 구성원의 관찰·검진·진단 기록이 존재하지 않습니다.
+              <br />
+              <small>(※ 기록이 없다는 사실은 '정상'이나 '완치'를 의미하지 않으며, 단지 기록되지 않은 상태를 뜻합니다.)</small>
+            </p>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

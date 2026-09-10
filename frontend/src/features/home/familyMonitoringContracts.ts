@@ -19,7 +19,8 @@ export type HealthEventProvenance =
   | "family_history"        // 다른 가족의 병력 (본인 장기에 연결 금지)
   | "past_history"          // 과거 병력 (현재 진행형과 구분)
   | "suspected"             // 의심 소견
-  | "negated";              // 질환 배제 (아님)
+  | "negated"              // 질환 배제 (아님)
+  | "clinical_ai_inferred"; // 임상 AI 추론 (복합 증상·연관통 분석)
 
 export type HealthEventCategory =
   | "diagnosis"    // 암, 만성질환 등 확정/보고 진단
@@ -102,5 +103,10 @@ export const PROVENANCE_BADGES: Record<HealthEventProvenance, { label: string; t
     label: "배제(아님)",
     tone: "negated",
     description: "검사 결과 해당 질환이 아님으로 확인되었습니다.",
+  },
+  clinical_ai_inferred: {
+    label: "AI 임상 추론 (연관통)",
+    tone: "ai-inferred",
+    description: "복합 증상 양상을 분석하여 연관 분절/원인 해부학 구조를 추론한 결과입니다.",
   },
 };

@@ -8777,13 +8777,59 @@ main {
   margin-bottom: 1.25rem;
 }
 
+.timeline-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
 .timeline-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
   font-size: 0.75rem;
   color: #64748b;
-  margin-bottom: 0.75rem;
+}
+
+.timeline-nav-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  padding: 3px 5px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+}
+
+.timeline-nav-btn {
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: #475569;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.timeline-nav-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.timeline-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.timeline-nav-btn.active-nav {
+  background: #e0f2fe;
+  color: #0284c7;
+  font-weight: 600;
 }
 
 .legend-item {
@@ -8835,6 +8881,29 @@ main {
 .timeline-date-cell {
   flex: 1;
   text-align: center;
+  cursor: pointer;
+  padding: 2px 0;
+  border-radius: 4px;
+  position: relative;
+  transition: background 0.15s ease;
+}
+
+.timeline-date-cell:hover {
+  background: rgba(226, 232, 240, 0.6);
+}
+
+.timeline-date-cell.selected-date-cell {
+  color: #0284c7;
+  font-weight: 700;
+}
+
+.timeline-date-cell .active-dot {
+  display: block;
+  width: 4px;
+  height: 4px;
+  background: #0284c7;
+  border-radius: 50%;
+  margin: 2px auto 0;
 }
 
 .timeline-member-row {
@@ -8884,11 +8953,18 @@ main {
   font-size: 0.75rem;
   font-weight: 700;
   color: #ffffff;
-  transition: transform 0.1s ease;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+  cursor: pointer;
 }
 
 .timeline-block:hover {
   transform: scale(1.05);
+}
+
+.timeline-block.is-selected-block {
+  outline: 2px solid #0284c7;
+  outline-offset: 2px;
+  box-shadow: 0 0 8px rgba(2, 132, 199, 0.45);
 }
 
 .timeline-block-diag { background: #ef4444; }
@@ -8898,6 +8974,78 @@ main {
   background: #e2e8f0;
   color: #94a3b8;
   background-image: repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0, 0, 0, 0.04) 2px, rgba(0, 0, 0, 0.04) 4px);
+}
+
+.same-day-events-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin: 10px 0 14px;
+}
+
+.same-day-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-right: 4px;
+}
+
+.same-day-chip {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  border-radius: 9999px;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.same-day-chip:hover {
+  border-color: #0284c7;
+  color: #0284c7;
+}
+
+.same-day-chip.active-chip {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.monitoring-empty-panel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 10px;
+  color: #64748b;
+  margin-top: 1rem;
+}
+
+.empty-panel-icon {
+  font-size: 2rem;
+}
+
+.empty-panel-content h4 {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.empty-panel-content p {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.4;
 }
 
 /* Detail Panel */
@@ -8931,6 +9079,7 @@ main {
 .badge-past { background: #f1f5f9; color: #475569; }
 .badge-suspected { background: #ffedd5; color: #c2410c; }
 .badge-negated { background: #e2e8f0; color: #334155; }
+.badge-ai-inferred { background: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe; }
 
 .organ-alert-tag {
   background: #fef2f2;

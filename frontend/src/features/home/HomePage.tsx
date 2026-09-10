@@ -366,6 +366,11 @@ export function HomePage() {
   );
 
   useEffect(() => {
+    setHighlightOrganKey(undefined);
+    setBodyRecord(undefined);
+  }, [selectedProfile?.id]);
+
+  useEffect(() => {
     if (!runtime || !routeRecordId) return;
     void runtime.healthRecords.get(routeRecordId).then((result) => {
       if (result.ok && !result.value.deletedAt) setEditingRecord(result.value);
@@ -638,6 +643,8 @@ export function HomePage() {
                 aria-pressed={profile.id === selectedProfile?.id}
                 onClick={() => {
                   setSelectedProfileId(profile.id);
+                  setHighlightOrganKey(undefined);
+                  setBodyRecord(undefined);
                   void navigate(`/members/${profile.id}`);
                 }}
               >
@@ -702,14 +709,17 @@ export function HomePage() {
               selectedProfileId={selectedProfile.id}
               onSelectProfile={(id) => {
                 setSelectedProfileId(id);
+                setHighlightOrganKey(undefined);
+                setBodyRecord(undefined);
                 void navigate(`/members/${id}`);
               }}
               records={records}
-              onSelectOrgan={(key) => setHighlightOrganKey(key)}
+              onSelectOrgan={(key) => setHighlightOrganKey(key || undefined)}
             />
 
             <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
               <VanatomeBodyMap
+                key={`${selectedProfile.id}-${selectedProfile.gender}`}
                 profileName={selectedProfile.displayName}
                 gender={selectedProfile.gender}
                 risks={bodyRisks}

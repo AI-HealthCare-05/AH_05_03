@@ -5,6 +5,7 @@ from typing import Any, cast
 
 from app.dtos.health_assistant import (
     HealthAssistantChatRequest,
+    HealthAssistantLlmResponse,
     HealthAssistantResponse,
     ProfileContext,
     UserLocation,
@@ -1002,18 +1003,20 @@ class HealthAssistantService:
             res_tuple = await client_any.generate_structured_response_with_tools(
                 system_instruction=system_instruction,
                 messages=request.messages,
-                response_schema=HealthAssistantResponse,
+                response_schema=HealthAssistantLlmResponse,
                 tools=tools,
                 tool_executor=tool_executor,
             )
-            response, tool_result = res_tuple
+            llm_res, tool_result = res_tuple
+            response = HealthAssistantResponse.model_validate(llm_res.model_dump())
             self._attach_tool_result_to_response(response, tool_result)
         else:
-            response = await self.llm_client.generate_structured_response(
+            llm_res = await self.llm_client.generate_structured_response(
                 system_instruction=system_instruction,
                 messages=request.messages,
-                response_schema=HealthAssistantResponse,
+                response_schema=HealthAssistantLlmResponse,
             )
+            response = HealthAssistantResponse.model_validate(llm_res.model_dump())
 
         if outdoor_conditions and not response.outdoor_conditions:
             response.outdoor_conditions = outdoor_conditions
@@ -1037,7 +1040,7 @@ class HealthAssistantService:
             return await client_any.stream_structured_response_with_tools(
                 system_instruction=system_instruction,
                 messages=request.messages,
-                response_schema=HealthAssistantResponse,
+                response_schema=HealthAssistantLlmResponse,
                 tools=tools,
                 tool_executor=tool_executor,
             )
@@ -1045,7 +1048,7 @@ class HealthAssistantService:
             self.llm_client.stream_structured_response(
                 system_instruction=system_instruction,
                 messages=request.messages,
-                response_schema=HealthAssistantResponse,
+                response_schema=HealthAssistantLlmResponse,
             ),
             None,
         )
@@ -1223,7 +1226,8 @@ class HealthAssistantService:
                 yield "delta", {"text": fresh}
 
         try:
-            parsed = HealthAssistantResponse.model_validate_json(raw)
+            llm_parsed = HealthAssistantLlmResponse.model_validate_json(raw)
+            parsed = HealthAssistantResponse.model_validate(llm_parsed.model_dump())
             parsed = self._enrich_parsed_response(parsed, tool_result, outdoor_conditions)
         except Exception as ex:
             raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex

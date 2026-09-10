@@ -24,6 +24,18 @@ from app.integrations.llm.protocol import LLMClientProtocol
 T = TypeVar("T", bound=BaseModel)
 
 
+def _format_gemini_error(prefix: str, ex: Exception) -> str:
+    code = getattr(ex, "code", None)
+    msg = getattr(ex, "message", None) or str(ex)
+    if code == 429 or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+        return f"{prefix}: Gemini 무료 호출 한도(분당 15회)를 초과했습니다. 약 30~50초 후 다시 시도해 주세요."
+    if code == 400:
+        clean_msg = msg.strip().split("\n")[0]
+        return f"{prefix} (인자 오류): {clean_msg}"
+    clean_msg = msg.strip().split("\n")[0] if msg else type(ex).__name__
+    return f"{prefix}: {clean_msg}"
+
+
 class GeminiLLMClient(LLMClientProtocol):
     """구조화 JSON 출력을 강제하는 Gemini 클라이언트."""
 
@@ -107,7 +119,7 @@ class GeminiLLMClient(LLMClientProtocol):
                     if chunk.text:
                         yield chunk.text
             except Exception as ex:
-                raise LlmProviderFailedError(f"Gemini 스트리밍 실패: {type(ex).__name__}") from ex
+                raise LlmProviderFailedError(_format_gemini_error("Gemini 스트리밍 실패", ex)) from ex
 
         return _stream()
 
@@ -242,7 +254,7 @@ class GeminiLLMClient(LLMClientProtocol):
         except asyncio.TimeoutError as ex:
             raise LlmTimeoutError() from ex
         except Exception as ex:
-            raise LlmProviderFailedError(f"Gemini 도구 판별 스트림 실패: {type(ex).__name__}") from ex
+            raise LlmProviderFailedError(_format_gemini_error("Gemini 도구 판별 스트림 실패", ex)) from ex
 
         function_calls = getattr(first_turn, "function_calls", None)
         if function_calls:
@@ -286,6 +298,6 @@ class GeminiLLMClient(LLMClientProtocol):
 
                 return _stream_chunks(), tool_result
             except Exception as ex:
-                raise LlmProviderFailedError(f"Gemini 도구 실행 후 스트리밍 실패: {type(ex).__name__}") from ex
+                raise LlmProviderFailedError(_format_gemini_error("Gemini 도구 실행 후 스트리밍 실패", ex)) from ex
 
         return self.stream_structured_response(system_instruction, messages, response_schema), None

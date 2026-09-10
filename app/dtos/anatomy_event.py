@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 AnatomyBodySide = Literal["left", "right", "midline", "bilateral", "unknown"]
-AnatomyInputSource = Literal["tap", "brush", "depth", "dental", "search"]
+AnatomyInputSource = Literal["tap", "brush", "depth", "dental", "search", "ai_inference"]
 AnatomyConfirmationState = Literal["surface_report", "geometric_candidate", "confirmed"]
 AnatomyMappingStatus = Literal["canonical", "source_fallback", "unmapped"]
 
@@ -68,4 +68,6 @@ class AnatomyEvent(BaseModel):
     state: AnatomyConfirmationState = Field(default="confirmed")
     coverage: AnatomyBrushCoverage | None = None
     uncertainty: str | None = Field(default=None, max_length=500)
+    provenance: str | None = Field(default=None, max_length=100)
+    clinical_reasoning: str | None = Field(default=None, max_length=2000, alias="clinicalReasoning")
     recorded_at: datetime = Field(alias="recordedAt")

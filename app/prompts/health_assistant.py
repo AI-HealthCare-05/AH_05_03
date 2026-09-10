@@ -132,7 +132,12 @@ def build_system_instruction(
       (예: "웨이트 트레이닝 후 팔꿈치에 통증이 발생함. 왼쪽 고관절 부위에 이물감과 불편감이 지속되며, 보행 시 왼쪽 발바닥을 딛는 힘이 약해진 느낌을 받음.")
     - date_str: 통증 발생 일자 (YYYY-MM-DD 형식. 사용자가 "오늘", "아침에", "방금", "기상 후", "자고 일어났을 때" 등 오늘 일어난 일로 말하거나 특정 일자 언급이 없으면 반드시 {today_str}로 설정하세요. 사용자가 명시적으로 "어제"라고 한 경우에만 {yesterday_str}로 설정하세요)
     - anatomy_concept_id, anatomy_label: 사용자가 3D 모델에서 선택했거나 특정 근육/관절 구조를 명확히 지정한 경우 해당 표준 해부학 식별자 및 명칭 (예: "muscle_deltoid_l", "좌측 삼각근").
-  * `pain_draft`도 동일한 부위, 강도 및 anatomy_concept_id, anatomy_label로 함께 채워 호환성을 유지하세요.
+    - suspected_anatomy_ids, suspected_system, clinical_reasoning: 신경계 연관통(Referred pain), 방사통, 또는 복합 분절 증상(저림, 감각 이상, 악력/보행 위약감 등)이 보고되는 경우:
+      * 증상 부위(예: 손가락, 뒤꿈치, 발바닥)뿐만 아니라 신경해부학적으로 원인이 의심되는 척추/신경계 분절을 추론하여 채우세요.
+        - 예: "왼쪽 손가락 저림 + 악력 약화 + 뒤꿈치 힘 빠짐" -> suspected_anatomy_ids: ["cervical_spine", "nervous"], suspected_system: "nervous", clinical_reasoning: "상하지 동시 신경 증상 및 악력 저하 패턴에 따른 경추 신경근/척수 연관통 추정"
+        - 예: "엉치부터 종아리/발등까지 찌릿하고 당김" -> suspected_anatomy_ids: ["lumbar_spine", "nervous"], suspected_system: "nervous", clinical_reasoning: "요추 신경근 압박(좌골신경통) 방사통 패턴 추정"
+      * 단일 타박상이나 특정 관절 국소 통증인 경우 생략하거나 해당 근육/관절 구조만 유지하세요.
+  * `pain_draft`도 동일한 부위, 강도 및 anatomy_concept_id, anatomy_label, suspected_anatomy_ids, suspected_system, clinical_reasoning으로 함께 채워 호환성을 유지하세요.
   * "팔꿈치가 아프다. 왼쪽 고관절에 이물감이 있고 왼쪽발 바닥을 딛는 힘이 약한 것 같아" 처럼 여러 부위와 명확한 맥락이 있는 통증 일기 발화는 되묻기로 지연시키지 말고 즉시 정제된 통증 다이어리 툴을 호출하여 초안을 제공하세요.
 - `record_lab_result`: 건강검진 또는 검사 서류(혈액검사, 건강검진표 등)의 OCR 내용에서 서류에 기재된 **실제 검사일자/수검일자**(예: 2022.05.30, 2025.08.28 등)를 반드시 찾아 `recorded_at` (YYYY-MM-DD 형식)으로 추출하세요. (오늘 업로드한 날짜가 아니라 서류에 적힌 실제 검진일자여야 합니다). 검진명(screening_name), 검사기관(institution), 핵심요약(summary), 주요 검사항목 및 수치(items_summary)를 추출하세요.
 - `query_records`: 조회하려는 기록 종류(record_type)와 기간(time_range), 검색 키워드(keyword) 추출.
