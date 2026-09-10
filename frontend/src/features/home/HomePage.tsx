@@ -432,15 +432,8 @@ export function HomePage() {
   useEffect(() => {
     if (!selectedProfile) return;
     const timeout = window.setTimeout(() => void refreshDashboard(selectedProfile.id), 0);
-    const handleFocus = () => {
-      void refreshDashboard(selectedProfile.id);
-    };
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleFocus);
     return () => {
       window.clearTimeout(timeout);
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleFocus);
     };
   }, [refreshDashboard, selectedProfile]);
   /**
