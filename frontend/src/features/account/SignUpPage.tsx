@@ -28,10 +28,13 @@ import { type FormEvent, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 
 import { useAuth } from "../../app/authContext";
+import { useDocumentTitle } from "../../app/useRouteTitle";
 import { AuthCard } from "./AuthCard";
 import { invitationEmail } from "./invitation";
 
 export function SignUpPage() {
+  // `RootLayout` 밖이고 내비에도 없는 화면이라 제목을 직접 정한다.
+  useDocumentTitle("가입");
   const { status, signIn } = useAuth();
   const location = useLocation();
   const [working, setWorking] = useState(false);
@@ -83,8 +86,8 @@ export function SignUpPage() {
 
         <h1>이어봄 시작하기</h1>
         <p className="signin-lead">
-          이메일과 비밀번호만 있으면 됩니다. 건강정보는 계정이 아니라 이 브라우저에
-          암호화해 보관합니다.
+          이메일과 비밀번호만 있으면 됩니다. 건강기록은 계정에 저장되고, 나와 가족
+          구성원만 열람합니다.
         </p>
 
         {error ? (
@@ -108,10 +111,13 @@ export function SignUpPage() {
           }
         />
 
+        {/* 세 줄 전부 ADR-011 이전의 약속이었다. 지금은 건강기록도 서버 정본이므로
+            "서버에는 계정만" 은 틀리고, 대신 실제로 성립하는 것을 적는다 — 어디에
+            저장되는지, 누가 볼 수 있는지, 원본 서류는 어떻게 되는지. */}
         <ul className="signin-notes">
-          <li>서버에는 계정·구독·가족 연결만 남습니다.</li>
-          <li>건강기록·검진표·판정 결과는 이 기기의 암호화 보관함에 있습니다.</li>
-          <li>로그아웃해도 이 브라우저의 건강정보는 지워지지 않습니다.</li>
+          <li>건강기록·프로필·판정 결과는 로그인한 계정에 저장됩니다.</li>
+          <li>검진표 원본은 보관하지 않고, 읽어 들이는 동안에만 씁니다.</li>
+          <li>같은 가정 구성원 외에는 열람할 수 없습니다.</li>
         </ul>
       </div>
     </div>

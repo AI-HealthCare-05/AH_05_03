@@ -314,6 +314,14 @@ export async function listChatMessages(sessionId: string): Promise<ChatMessageDa
   return serverApiClient.listChatMessages(sessionId);
 }
 
+export async function createChatMessage(
+  sessionId: string,
+  role: "user" | "assistant",
+  content: string,
+): Promise<ChatMessageData> {
+  return serverApiClient.createChatMessage(sessionId, role, content);
+}
+
 export async function updateChatSession(sessionId: string, title: string): Promise<ChatSessionData> {
   return serverApiClient.updateChatSession(sessionId, title);
 }

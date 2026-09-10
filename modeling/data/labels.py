@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pandas as pd
+from schema import INCIDENCE_HORIZONS_YEARS, INCIDENCE_SOURCES, incidence_label
 
 
 @dataclass(frozen=True)
@@ -348,35 +349,92 @@ def add_extended_labels(frame: pd.DataFrame, thresholds: Thresholds = DEFAULT) -
     return result
 
 
+def _incidence_pairs(
+    result: pd.DataFrame,
+    source_column: str,
+    subject_column: str,
+    wave_column: str,
+) -> pd.DataFrame:
+    """(기준 행, 그 사람의 이후 파동) 쌍과 사이 간격(년).
+
+    지평 라벨은 한 행만 보고는 만들 수 없다 — "H년 안에 진단이 떴는가" 와 "H년까지
+    관측이 있는가" 를 둘 다 봐야 검열을 음성으로 세지 않는다. 그래서 사람 단위로
+    자기 결합을 한 번 하고, 지평마다 그 쌍을 걸러 쓴다.
+    """
+    left = result[["_row", subject_column, wave_column]]
+    right = result[[subject_column, wave_column, source_column]].rename(
+        columns={wave_column: "_later_wave", source_column: "_later_told"}
+    )
+    pairs = left.merge(right, on=subject_column, how="left")
+    pairs["_later_told"] = pairs["_later_told"].astype("boolean")
+    pairs["_gap"] = pd.to_numeric(pairs["_later_wave"], errors="coerce") - pd.to_numeric(
+        pairs[wave_column], errors="coerce"
+    )
+    return pairs[pairs["_gap"] > 0]
+
+
 def add_incidence_labels(
     frame: pd.DataFrame,
     *,
     subject_column: str = "subject_id",
     wave_column: str = "survey_year",
+    horizons_years: tuple[int, ...] = INCIDENCE_HORIZONS_YEARS,
 ) -> pd.DataFrame:
-    """Attach incident labels from consecutive panel waves.
+    """Attach incident labels from panel waves — unbounded and per horizon.
 
-    A row is labelled 1 when the subject reports no diagnosis in this wave and
-    reports one in any later wave. Subjects already diagnosed at the wave are
-    labelled NA — they are not at risk, and keeping them as negatives is the
-    most common way panel incidence models get quietly wrong.
+    두 종류가 나간다.
+
+    ``label_<c>_incident``
+        지평 없는 "언제든" 라벨. 이후 **어느** 파동에서든 진단이 뜨면 1 이다.
+        양성이 가장 많아 표본이 크지만 "언제" 를 답하지 못한다.
+
+    ``label_<c>_incident_<H>y``
+        H년 지평 라벨. `schema.incidence_label` 이 이름을 만든다.
+
+    지평 라벨의 세 값이 이렇게 갈린다. 자가보고 진단은 **한 번 들으면 취소되지
+    않는다**(monotone) 는 성질을 쓴다.
+
+    * 1 — 간격이 ``0 < gap <= H`` 인 파동에서 진단을 들었다
+    * 0 — 간격이 ``gap >= H`` 인 파동에서 **아직 못 들었다**. 그 시점에 안 들었으면
+      그보다 이른 H 시점에도 안 들은 것이라, 파동이 H 를 건너뛰어도 음성이 확정된다
+    * NA — 둘 다 아니다. **모르는 것을 0 으로 세지 않는다.** 패널 발병 모델이 조용히
+      틀리는 가장 흔한 자리가 여기다 — 추적이 짧아 아직 안 걸린 사람을 음성으로
+      세면 발병률이 통째로 내려간다
+
+    기준 시점에 이미 진단받은 사람은 **위험군이 아니므로** 전부 NA 다. 양성과 음성이
+    동시에 걸리는 모순된 자가보고(2년째 들었다 → 6년째 못 들었다)는 양성으로 둔다.
+
+    조사 연도 단위로 간격을 재므로 **지평이 파동 간격보다 촘촘하면 대부분 NA** 다.
+    2년 주기 패널에서 1년 지평은 거의 비고, 그것은 결함이 아니라 사실이다.
     """
     result = frame.sort_values([subject_column, wave_column]).copy()
+    result["_row"] = range(len(result))
 
-    for condition in ("dm", "htn"):
-        source_column = "dx_diabetes" if condition == "dm" else "dx_hypertension"
+    for condition, source_column in INCIDENCE_SOURCES.items():
+        names = [f"label_{condition}_incident", *(incidence_label(condition, h) for h in horizons_years)]
         if source_column not in result.columns:
-            result[f"label_{condition}_incident"] = pd.NA
+            for name in names:
+                result[name] = pd.NA
             continue
 
         told = result[source_column].astype("boolean")
-        grouped = told.groupby(result[subject_column])
-        # Did a diagnosis appear in any strictly later wave?
-        future_positive = grouped.transform(lambda s: s[::-1].cummax()[::-1].shift(-1)).astype("boolean")
         at_risk = told.eq(False)
-        result[f"label_{condition}_incident"] = future_positive.where(at_risk)
 
-    return result
+        grouped = told.groupby(result[subject_column])
+        ever = grouped.transform(lambda s: s[::-1].cummax()[::-1].shift(-1)).astype("boolean")
+        result[f"label_{condition}_incident"] = ever.where(at_risk)
+
+        ahead = _incidence_pairs(result, source_column, subject_column, wave_column)
+        for horizon in horizons_years:
+            onset = ahead.loc[(ahead["_gap"] <= horizon) & ahead["_later_told"].eq(True), "_row"]
+            clear = ahead.loc[(ahead["_gap"] >= horizon) & ahead["_later_told"].eq(False), "_row"]
+            label = pd.Series(pd.NA, index=result.index, dtype="boolean")
+            label[result["_row"].isin(set(clear))] = False
+            # 양성을 뒤에 쓴다 — 모순된 자가보고에서 양성이 이긴다(위 독스트링).
+            label[result["_row"].isin(set(onset))] = True
+            result[incidence_label(condition, horizon)] = label.where(at_risk)
+
+    return result.drop(columns=["_row"])
 
 
 def label_summary(frame: pd.DataFrame) -> pd.DataFrame:

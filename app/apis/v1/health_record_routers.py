@@ -10,8 +10,10 @@ from app.dtos.health_records import (
     HealthRecordCreateRequest,
     HealthRecordData,
     HealthRecordListData,
+    HealthRecordPrefillData,
     HealthRecordSyncRequest,
     HealthRecordUpdateRequest,
+    HealthRecordValuesData,
 )
 from app.models.service_accounts import ServiceAccount
 from app.services.health_records import HealthRecordService
@@ -71,6 +73,57 @@ async def list_records(
 ) -> ApiResponse[HealthRecordListData]:
     data = await service.list_records(account, profile_id, record_type=record_type, limit=limit, offset=offset)
     return ApiResponse(data=data, message="건강 기록 목록을 조회했습니다.")
+
+
+@health_record_router.get(
+    # **`/{record_id}` 보다 위에 있어야 한다.** 아래에 두면 FastAPI 가 `prefill` 을
+    # `record_id` 로 먼저 잡아 UUID 파싱에서 422 를 낸다 — 라우트가 겹칠 때 먼저
+    # 선언된 쪽이 이긴다.
+    "/prefill",
+    response_model=ApiResponse[HealthRecordPrefillData],
+    responses=error_responses(
+        *_AUTH_ERRORS,
+        ErrorCode.PROFILE_NOT_FOUND,
+        ErrorCode.HOUSEHOLD_MEMBERSHIP_REQUIRED,
+    ),
+    summary="남긴 기록으로 판정 폼 채우기",
+)
+async def prefill_from_records(
+    profile_id: Annotated[uuid.UUID, Query(description="프로필 ID")],
+    account: Annotated[ServiceAccount, Depends(require_active_account)],
+    service: Annotated[HealthRecordService, Depends(HealthRecordService)],
+) -> ApiResponse[HealthRecordPrefillData]:
+    """혈압·혈당·체성분·검사값 기록을 판정 폼 입력으로 옮긴다.
+
+    옮기는 규칙과 관문은 `app/services/record_prefill.py` 한 곳에 있다. 통증 다이어리와
+    판정 스냅샷은 여기로 오지 않는다(그 모듈 머리말 참조).
+    """
+    data = await service.build_prefill(account, profile_id)
+    return ApiResponse(data=data, message="기록에서 판정 입력을 만들었습니다.")
+
+
+@health_record_router.get(
+    "/{record_id}/values",
+    response_model=ApiResponse[HealthRecordValuesData],
+    responses=error_responses(
+        *_AUTH_ERRORS,
+        ErrorCode.HEALTH_RECORD_NOT_FOUND,
+        ErrorCode.HOUSEHOLD_MEMBERSHIP_REQUIRED,
+    ),
+    summary="기록 하나의 판정 칸 값 조회",
+)
+async def read_record_values(
+    record_id: uuid.UUID,
+    account: Annotated[ServiceAccount, Depends(require_active_account)],
+    service: Annotated[HealthRecordService, Depends(HealthRecordService)],
+) -> ApiResponse[HealthRecordValuesData]:
+    """검진표에서 읽은 행을 판정 칸 이름으로 풀어 준다.
+
+    표기 100개를 판정 칸 20개에 잇는 사전은 `app/services/ocr_measurements.py` 에만
+    있다. 클라이언트가 직접 풀면 같은 판단이 두 곳에 살게 된다 — 그래서 이 길이 있다.
+    """
+    data = await service.record_values(account, record_id)
+    return ApiResponse(data=data, message="기록의 판정 칸 값을 조회했습니다.")
 
 
 @health_record_router.get(

@@ -26,7 +26,7 @@ import type {
 } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 import type { AssessmentSummaryData, DiseaseRisk, DiseaseVerdict } from "./contracts";
-import { toRequestBody } from "./fields";
+import { IDENTITY_FIELDS, toRequestBody } from "./fields";
 
 export type Snapshot = HealthRecord<AssessmentSnapshotPayload>;
 
@@ -153,6 +153,14 @@ export async function saveSnapshot(
   source: "manual" | "ocr" = "manual",
   /** 이 판정을 채운 검진표. 있으면 기록에 매달아 나중에 원본을 열 수 있게 한다. */
   sourceDocumentId?: string,
+  /**
+   * 이 판정이 쓴 **수치 기록**의 id.
+   *
+   * 판정은 수치에서 나온 것이므로 목록에 둘이 나란히 서면 같은 일이 두 줄로 보인다.
+   * 이 고리가 있으면 목록은 수치 기록만 세우고, 판정은 그 기록의 자세히에서 열린다.
+   * 고리가 없는 판정은 갈 곳이 없으므로 목록에 그대로 남는다 — 숨기면 사라진다.
+   */
+  sourceRecordId?: string,
 ): Promise<SaveOutcome> {
   const payload: AssessmentSnapshotPayload = {
     inputs: toRequestBody(values) as AssessmentSnapshotPayload["inputs"],
@@ -166,6 +174,7 @@ export async function saveSnapshot(
     // 실제로 읽은 근거·엔진·밀려난 확률이 전부 사라진다.
     verdicts: result.verdicts.map(storeVerdict),
     matrix: Object.values(result.disease_risks ?? {}).map(storeRisk),
+    ...(sourceRecordId ? { sourceRecordId } : {}),
   };
 
   // **입력이 같으면 새 기록을 만들지 않는다.** 기록 하나가 곧 입력값 한 벌이다.
@@ -351,4 +360,56 @@ export async function listLatestByProfile(
     if (found) summaries[profileId] = found;
   }
   return summaries;
+}
+
+/**
+ * 손으로 채운 판정 값을 **수치 기록으로** 남긴다. 판정에 매달 고리를 돌려준다.
+ *
+ * 검진표에서 읽은 값은 문서를 붙인 그 자리에서 이미 `health_screening` 으로 남는다
+ * (`AssessmentPage.saveScreening`). 손으로 채운 값에는 그런 기록이 없어서, 판정만
+ * 남고 그 판정이 쓴 수치는 판정 안(`payload.inputs`)에만 갇혀 있었다.
+ *
+ * 그래서 두 경로가 갈렸다 — 추이 그래프와 판정 채우기는 수치 기록을 읽는데, 손으로
+ * 채운 값은 그 목록에 안 나온다. **같은 모양으로 남긴다**(`payload.values`, 판정 칸
+ * 이름 → 값). 서버 `record_prefill.fields_for` 가 그 칸을 정본으로 읽는다.
+ *
+ * `sex` 처럼 숫자가 아닌 칸은 담지 않는다 — 수치 기록이 아니라 사람의 속성이고,
+ * 프로필이 이미 들고 있다.
+ */
+export async function saveTypedValues(
+  runtime: LocalDomainRuntime,
+  profileId: string,
+  values: Record<string, string>,
+): Promise<string | undefined> {
+  const numeric: Record<string, number> = {};
+  for (const [field, raw] of Object.entries(values)) {
+    if (raw === "" || raw === undefined) continue;
+    // 나이·성별은 측정값이 아니다. 실어 두면 나중에 이 기록을 골라 쓸 때
+    // **그때의 나이가 오늘 판정에 덮인다**(`IDENTITY_FIELDS` 머리말).
+    if (IDENTITY_FIELDS.has(field)) continue;
+    // 참·거짓 칸은 폼이 문자열로 들고 있다. 판정이 읽는 모양(1/0)으로 되돌린다.
+    if (raw === "true" || raw === "false") {
+      numeric[field] = raw === "true" ? 1 : 0;
+      continue;
+    }
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) numeric[field] = parsed;
+  }
+  if (Object.keys(numeric).length === 0) return undefined;
+
+  const created = await runtime.healthRecords.create({
+    householdId: PRIMARY_HOUSEHOLD_ID,
+    profileId,
+    recordType: "health_screening",
+    recordedAt: new Date().toISOString(),
+    source: "manual",
+    payload: {
+      type: "health_screening",
+      screeningName: "직접 입력한 수치",
+      values: numeric,
+      note: `판정 화면에서 ${Object.keys(numeric).length}개 수치를 직접 넣었습니다.`,
+    },
+  });
+  if (!created.ok) throw new Error(created.error.message);
+  return created.value.id;
 }

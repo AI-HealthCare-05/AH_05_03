@@ -36,6 +36,11 @@ import {
   ServerApiError,
   serverApiClient,
 } from "../../shared/api/serverApiClient";
+import type { PrefilledField, RecordPrefillData } from "../../shared/api/contracts";
+import { recordValues } from "../../shared/local/recordSummary";
+import { RecordCard } from "../home/RecordCard";
+import { RecordValueDetail } from "../health-data/ValueSheet";
+import type { HealthRecord } from "../../shared/local/domainContracts";
 import type { LocalDocument } from "../../shared/local/domainContracts";
 import type { AssessmentSummaryData, RiskLevel } from "./contracts";
 import { LEVEL_ORDER } from "./contracts";
@@ -44,9 +49,11 @@ import { DocumentPane, type DocumentReading } from "./DocumentPane";
 import type { ModelSpec } from "./Evidence";
 import { ASSESSMENT_PRESETS, type AssessmentPreset, presetValues } from "./presets";
 import { SuspectPanel } from "./SuspectPanel";
+import { briefList, objectParticle, sharedRefining } from "./precision";
 import { LevelBadge, MatrixCard, VerdictCard } from "./VerdictCards";
 import {
   calculateAgeFromBirthDate,
+  FIELD_BY_NAME,
   FIELD_GROUPS,
   FIELD_LABELS,
   LAB_FIELDS,
@@ -62,6 +69,7 @@ import {
   buildSeries,
   listSnapshots,
   saveSnapshot,
+  saveTypedValues,
   TREND_WINDOW,
   type Snapshot,
 } from "./snapshots";
@@ -87,6 +95,28 @@ function shortDateTime(iso: string): string {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+
+/**
+ * 지난 판정 칩의 시각 라벨. **겹칠 때만 초를 붙인다.**
+ *
+ * 분 단위 라벨은 한 칸에 두 판정이 들어오면 완전히 같아진다 — 실측으로
+ * `13:23:52` 와 `13:23:02` 가 둘 다 "9월 8일 오후 01:23" 이었고, 입력 칸 수와 BMI
+ * 까지 같아서 어느 칩을 누르는지 알 수 없었다(2026-09-10). 판정은 폼을 조금 고쳐
+ * 다시 돌리는 일이 흔해서 같은 분에 둘이 남는 것이 예외가 아니다.
+ *
+ * 그렇다고 전부 초를 붙이면 안 겹치는 칩까지 시끄러워진다. 겹치는 것만 늘린다.
+ */
+function disambiguatedTimes(isoList: string[]): string[] {
+  const base = isoList.map(shortDateTime);
+  const seen = new Map<string, number>();
+  for (const label of base) seen.set(label, (seen.get(label) ?? 0) + 1);
+  return base.map((label, index) => {
+    if ((seen.get(label) ?? 0) < 2) return label;
+    const seconds = new Date(isoList[index]).getSeconds();
+    return `${label}:${String(seconds).padStart(2, "0")}`;
   });
 }
 
@@ -163,6 +193,40 @@ export function AssessmentPage() {
    * 는 표시로만 남아 저장 출처(`ocr`)를 가른다.
    */
   const [document, setDocument] = useState<LocalDocument>();
+  /**
+   * 보관함에 저장된 검진표를 **ref 로도** 들고 있는다.
+   *
+   * `DocumentPane` 은 문서를 먼저 저장하고 곧바로 인식을 시작한다. 인식이 끝나
+   * `onRead` 가 불릴 때 `document` state 는 아직 이 렌더에 반영되지 않았을 수 있고,
+   * 그러면 기록이 원본 고리를 잃은 채 저장된다 — 검진 이력에서 서류를 열 방법이 없다.
+   */
+  const documentRef = useRef<LocalDocument>(undefined);
+  /** 방금 검진표에서 몇 칸을 기록으로 남겼는가. 화면이 그 사실을 말해야 한다. */
+  const [screeningSaved, setScreeningSaved] = useState<number>();
+  /**
+   * 지금 폼에 든 값이 **어느 수치 기록에서 왔는가.**
+   *
+   * 판정을 저장할 때 이 고리를 같이 남긴다. 그러면 최근 기록 목록은 수치 기록만
+   * 세우고 판정은 그 기록의 자세히에서 열린다 — 같은 일이 두 줄로 서지 않는다.
+   * 손으로 채운 경우에는 비어 있고, 그때는 저장 직전에 수치 기록을 만들어 잇는다.
+   */
+  const [sourceRecordId, setSourceRecordId] = useState<string>();
+  /**
+   * 목록에 세울 **수치 기록**. 가족 홈과 같은 카드로 그리고, 눌러서 전체 수치를 본다.
+   *
+   * 예전에는 서버가 준 칸 목록(`recordPrefill.items`)을 평평하게 늘어놓았다. 값마다
+   * 잰 날이 붙어 있어도 그것이 몇 건의 검진에서 온 것인지 읽히지 않았고, 원본을 열
+   * 길도 없었다. 기록 자체를 들고 있으면 카드를 눌러 `RecordValueDetail` 로 전체
+   * 수치와 원본을 보고, 그 자리에서 폼으로 옮길 수 있다.
+   */
+  const [valueRecords, setValueRecords] = useState<HealthRecord[]>([]);
+  /** 카드를 눌러 펼쳐 본 기록. */
+  const [openValueRecord, setOpenValueRecord] = useState<HealthRecord>();
+
+  const rememberDocument = useCallback((next: LocalDocument | undefined) => {
+    documentRef.current = next;
+    setDocument(next);
+  }, []);
   const cameForDocument = useMemo(
     () => Boolean((location.state as { withDocument?: boolean } | null)?.withDocument),
     [location.state],
@@ -263,6 +327,21 @@ export function AssessmentPage() {
     setSnapshots(await listSnapshots(runtime, activeProfileId));
   }, [runtime, activeProfileId]);
 
+  const reloadValueRecords = useCallback(async () => {
+    if (!runtime || !activeProfileId) return;
+    const found = await runtime.healthRecords.query({ profileId: activeProfileId });
+    if (!found.ok) return;
+    // 판정 스냅샷은 옆 줄("지난 판정에서")이 맡는다. 수치를 든 기록만 세운다.
+    setValueRecords(
+      found.value.filter((record) => record.recordType !== "assessment" && recordValues(record).length > 0),
+    );
+  }, [runtime, activeProfileId]);
+
+  useEffect(() => {
+    void reloadValueRecords();
+  }, [reloadValueRecords, screeningSaved]);
+
+
   // 취소 깃발을 두는 이유가 둘이다. 하나, 프로필을 빠르게 바꾸면 먼저 띄운 조회가
   // 늦게 돌아와 **다른 사람의 스냅샷을 덮어쓸** 수 있다. 둘, 조기 반환에서 setState 를
   // 동기로 부르면 연쇄 렌더가 된다(`react-hooks/set-state-in-effect`).
@@ -292,6 +371,12 @@ export function AssessmentPage() {
   // 차이로 나란히 선 두 점은 그래프에서 뜻이 없고, 지우는 화면도 아직 없다.
   const keep = useCallback(async () => {
     if (!runtime || !activeProfileId || !result || keeping) return;
+    // 자동 저장과 **같은 규칙**을 쓴다. 한쪽만 막으면 프리셋으로 판정한 뒤 이 버튼을
+    // 누르는 길로 테스트 값이 그대로 들어온다 — 막으려던 것이 문을 하나 더 찾는다.
+    if (preset) {
+      setSaved("테스트 값이라 기록에 남기지 않아요. 내 수치로 남기려면 '테스트 값 비우기' 를 누르고 직접 채워 주세요.");
+      return;
+    }
     setSaved(undefined);
     setKeeping(true);
     try {
@@ -321,7 +406,7 @@ export function AssessmentPage() {
     } finally {
       setKeeping(false);
     }
-  }, [runtime, activeProfileId, result, values, reloadSnapshots, keeping, readFields, hasDocument, cameForDocument, document]);
+  }, [runtime, activeProfileId, result, values, reloadSnapshots, keeping, readFields, hasDocument, cameForDocument, document, preset]);
 
   // 최근 창만 그린다. 이유는 `TREND_WINDOW` 설명 참조 — 보관함에는 다 남아 있다.
   const recent = useMemo(() => snapshots.slice(-TREND_WINDOW), [snapshots]);
@@ -414,6 +499,65 @@ export function AssessmentPage() {
   }, []);
 
   /**
+   * 읽은 검진표를 **그 자리에서 건강검진 기록으로 남긴다.**
+   *
+   * 예전에는 판정 버튼을 눌러야 기록이 생겼다. 그래서 서류를 올려 수치를 확인만
+   * 하고 화면을 떠나면 읽은 것이 전부 사라졌다 — 인식에 7~20초가 걸리는데 그 결과가
+   * 아무 데도 안 남는다. 판정은 별개의 일이고, 서류를 올린 것은 그것만으로 기록이다.
+   *
+   * 판정 스냅샷과 **다른 기록**이다. 이쪽은 "그 검진표에 무엇이 적혀 있었나" 이고
+   * 판정은 "그 값으로 오늘 무엇을 판정했나" 다. 하나로 합치면 판정을 지울 때 검진
+   * 수치가 같이 사라진다.
+   *
+   * 실패해도 화면을 막지 않는다. 폼에는 값이 이미 들어갔고, 사용자가 지금 하려는
+   * 일은 판정이다.
+   */
+  const saveScreening = useCallback(
+    async (reading: DocumentReading, document?: LocalDocument) => {
+      if (!runtime || !activeProfile) return;
+      const values = Object.fromEntries(
+        Object.entries(reading.values).filter(([, value]) => Number.isFinite(value)),
+      );
+      if (Object.keys(values).length === 0) return;
+      try {
+        const created = await runtime.healthRecords.create({
+          householdId: activeProfile.householdId,
+          profileId: activeProfile.id,
+          recordType: "health_screening",
+          recordedAt: new Date().toISOString(),
+          source: "ocr",
+          sourceDocumentId: document?.id,
+          payload: {
+            type: "health_screening",
+            screeningName: "건강검진",
+            // 판정이 바로 읽는 정본 모양. 화면·서버가 같은 칸 이름을 본다.
+            values,
+            // 관문을 못 넘어 폼에 안 들어간 행. 기록에는 남긴다 — 원본에 무엇이
+            // 적혀 있었는지는 나중에 손으로 고칠 때 필요하다.
+            review: reading.review,
+            note: `검진표에서 ${Object.keys(values).length}개 수치를 읽었습니다.`,
+          },
+        });
+        if (!created.ok) throw new Error(created.error.message);
+        setScreeningSaved(Object.keys(values).length);
+        setSourceRecordId(created.value.id);
+      } catch (caught) {
+        console.warn("검진 기록 저장 실패 (폼에는 값이 들어갔습니다):", caught);
+      }
+    },
+    [runtime, activeProfile],
+  );
+
+  /** 문서를 읽으면 폼을 채우고 **동시에** 기록으로 남긴다. */
+  const handleReading = useCallback(
+    (reading: DocumentReading) => {
+      applyReading(reading);
+      void saveScreening(reading, documentRef.current);
+    },
+    [applyReading, saveScreening],
+  );
+
+  /**
    * 테스트 프로필로 폼을 채운다. **덮어쓴다** — 비어 있는 칸만 채우는 방식이면
    * 프로필을 바꿔 눌렀을 때 앞 프로필의 값이 남아 섞인 사람이 만들어진다.
    *
@@ -421,9 +565,29 @@ export function AssessmentPage() {
    * 이 기능의 쓸모인데, 자동으로 돌면 고치기 전 결과가 먼저 떠서 헷갈린다.
    * 예측 데모(`app/apis/demo_routers.py` 의 `applyProfile`)가 같은 이유로 그랬다.
    */
+  /**
+   * 테스트 값을 통째로 비운다. **프리셋 표시만 떼지 않는다.**
+   *
+   * 표시만 떼면 예시 수치가 "내가 넣은 값" 으로 둔갑해 기록에 들어간다 — 막으려던
+   * 것이 이름만 바꿔 통과하는 셈이다. 폼을 비워 처음부터 채우게 하는 것이 유일하게
+   * 안전한 탈출구다.
+   */
+  const clearPreset = useCallback(() => {
+    setValues({});
+    setPreset(undefined);
+    setSourceRecordId(undefined);
+    setReadFields(new Set());
+    setResult(undefined);
+    setError(undefined);
+    setRejected({});
+    setAttempted(false);
+    setSaved(undefined);
+  }, []);
+
   const applyPreset = useCallback((chosen: AssessmentPreset) => {
     setValues(presetValues(chosen));
     setPreset(chosen.key);
+    setSourceRecordId(undefined);
     // 프리셋 값은 사람이 넣은 것도 문서에서 읽은 것도 아니다. 문서 표시를 지운다 —
     // 안 지우면 "검진표에서 읽음" 배지가 프리셋 값에 붙는다.
     setReadFields(new Set());
@@ -475,8 +639,24 @@ export function AssessmentPage() {
         // **판정과 기록을 한 번에 남긴다.** 나눠 두면 사용자가 판정만 보고 나가서
         // 추이 그래프가 영영 비어 있다 — 이 화면의 값은 검진표에서 온 것이라
         // 다시 모을 방법도 없다. 실패해도 판정 결과는 지키려고 따로 감싼다.
-        if (runtime && activeProfileId) {
+        // **테스트 값은 기록에 남기지 않는다.** 프리셋은 학회 기준 예시 수치라
+        // 사용자의 실제 몸이 아니고, 그대로 남으면 추이 그래프와 "지난 판정으로
+        // 채우기" 목록이 시연용 점으로 오염된다. 그러면 그 목록에서 자기 기록을
+        // 골라내지 못하고, 그래프의 오르내림도 사실이 아니게 된다.
+        //
+        // 판정 자체는 그대로 보여 준다 — 프리셋의 쓸모가 "몇 칸을 고치면 무엇이
+        // 움직이나" 를 보는 것이므로, 결과를 안 내면 기능이 사라진다.
+        // 프리셋을 **먼저** 본다. 저장을 막는 이유는 런타임이 아니라 값의 출처이므로,
+        // 런타임 조건 안에 넣으면 보관함이 없을 때 안내가 통째로 사라진다.
+        if (preset) {
+          setSaved("테스트 값이라 기록에 남기지 않았어요. 내 수치로 남기려면 아래 '테스트 값 비우기' 를 누르고 직접 채워 주세요.");
+        } else if (runtime && activeProfileId) {
           try {
+            // **판정에는 반드시 수치 기록이 딸린다.** 목록은 수치 기록만 세우므로,
+            // 고리가 없으면 그 판정은 어디에서도 열 수 없다. 손으로 채운 값도
+            // 검진표에서 읽은 값과 **같은 모양**(`payload.values`)으로 남긴다 —
+            // 그래야 추이 그래프·판정 채우기·챗봇이 한 곳만 읽는다.
+            const linked = sourceRecordId ?? (await saveTypedValues(runtime, activeProfileId, values));
             const outcome = await saveSnapshot(
               runtime,
               activeProfileId,
@@ -486,8 +666,10 @@ export function AssessmentPage() {
               // 검진표에서 한 칸이라도 읽어 왔으면 그 기록의 출처는 사람이 아니다.
               readFields.size > 0 || hasDocument || cameForDocument ? "ocr" : "manual",
               document?.id,
+              linked,
             );
             await reloadSnapshots();
+            await reloadValueRecords();
             setSaved(
               outcome.kind === "created"
                 ? "판정 결과와 수치를 기록에 남겼어요."
@@ -547,6 +729,9 @@ export function AssessmentPage() {
       cameForDocument,
       document,
       markSignedOut,
+      preset,
+      sourceRecordId,
+      reloadValueRecords,
     ],
   );
 
@@ -563,6 +748,74 @@ export function AssessmentPage() {
         : [],
     [result],
   );
+  /**
+   * 남긴 기록에서 만든 판정 입력. **매핑은 서버가 한다**(`record_prefill`).
+   *
+   * 값이 판정 폼에 들어오는 길이 사실상 검진표 OCR 하나였다 — 혈압·혈당·체성분·검사값을
+   * 남겨도 여기서 같은 수치를 손으로 다시 쳐야 했다. 기록 종류가 열넷인데 판정으로
+   * 가는 것은 판정 스냅샷뿐이었기 때문이다.
+   */
+  const [recordPrefill, setRecordPrefill] = useState<RecordPrefillData>();
+
+  useEffect(() => {
+    if (!activeProfileId) {
+      setRecordPrefill(undefined);
+      return;
+    }
+    let cancelled = false;
+    void serverApiClient
+      .prefillFromRecords(activeProfileId)
+      // 실패해도 판정은 되어야 한다. 이 블록만 조용히 빠진다 —
+      // 판정을 막으면 "기록으로 채우기" 를 만든 대가로 판정을 잃는다.
+      .then((data) => {
+        if (!cancelled) setRecordPrefill(data);
+      })
+      .catch(() => {
+        if (!cancelled) setRecordPrefill(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProfileId]);
+
+  /** 기록 값을 폼에 붓는다. **비어 있는 칸만** 채운다 — 손으로 넣은 값을 덮지 않는다. */
+  const applyRecordPrefill = useCallback((only?: PrefilledField[], overwrite = false) => {
+    const items = only ?? recordPrefill?.items;
+    if (!items || items.length === 0) return;
+    // 카드 하나에서 가져왔으면 그 기록이 출처다. 여러 건을 섞어 가져오면 어느
+    // 하나를 출처라 할 수 없으므로 비워 둔다(저장할 때 새로 만든다).
+    const from = new Set(items.map((item) => item.record_id ?? ""));
+    setSourceRecordId(from.size === 1 ? ([...from][0] || undefined) : undefined);
+    setValues((prev) => {
+      const next = { ...prev };
+      for (const item of items) {
+        // **골라서 가져온 것은 덮는다.** 카드를 눌러 "이 수치 사용하기" 를 누른 것은
+        // 그 검진을 쓰겠다는 명시적인 선택이다. 비어 있는 칸만 채우면 프리셋이나
+        // 앞서 친 값이 남아 있을 때 아무 일도 안 일어난 것처럼 보인다.
+        if (!overwrite && next[item.field] !== undefined && next[item.field] !== "") continue;
+        // **참·거짓 칸은 숫자로 담을 수 없다.** 폼은 `bool` 칸을 `"true"`/`"false"`
+        // 문자열로 들고 있고(`toRequestBody` 가 `raw === "true"` 로 되돌린다),
+        // 서버는 그 값을 1.0 으로 실어 보낸다. `"1"` 을 넣으면 select 에 없는 값이라
+        // **아무 오류 없이 빈칸으로 남는다** — 실측으로 `is_fasting` 이 그랬다.
+        const spec = FIELD_BY_NAME[item.field];
+        next[item.field] = spec?.kind === "bool" ? (item.value ? "true" : "false") : String(item.value);
+      }
+      return next;
+    });
+    setResult(undefined);
+    setSaved(undefined);
+    setError(undefined);
+    setRejected({});
+    setAttempted(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [recordPrefill]);
+
+
+  // 카드 여럿에 똑같이 걸린 정밀화 입력. 카드 위에서 한 번만 적고 카드에서는 뺀다.
+  const sharedInputs = useMemo(
+    () => sharedRefining(verdicts, values, models),
+    [verdicts, values, models],
+  );
 
   return (
     // **공용 셸을 같이 쓴다.** 이 화면만 `.product-page` 를 빠뜨려서 좌우 여백 없이
@@ -570,16 +823,24 @@ export function AssessmentPage() {
     // `.product-page` 가 `width: min(1240px, 100% - 48px)` 와 위아래 여백을 준다
     // (`AccountPage`·`DataManagementPage` 와 같은 방식).
     <section className="product-page assess-page">
-      <header className="assess-intro">
-        <h1>만성질환 위험 판정</h1>
-        <p>
-          기본 정보와 혈압·공복혈당을 채우면 판정이 나옵니다. 나머지 검진결과지
-          수치를 넣을수록 답하는 칸이 늘고,{" "}
-          <strong>
-            넣은 값이 있는 질환은 추정이 아니라 학회 기준 대조로 넘어갑니다.
-          </strong>
-        </p>
-      </header>
+      {/* **가족 홈·건강 데이터와 같은 머리말 틀이다**(`dashboard-heading` ·
+          `page-kicker`). 예전에는 이 화면만 `<header className="assess-intro">`
+          로 따로 놀아서 제목 글자 크기가 다른 화면 h1 의 2/3 정도였고, 위에
+          붙는 작은 이름표(`page-kicker`)도 없었다 — 다른 화면과 나란히 두면
+          "여기만 다른 앱" 처럼 보였다. */}
+      <section className="dashboard-heading">
+        <div>
+          <p className="page-kicker">위험 판정</p>
+          <h1>만성질환 위험 판정</h1>
+          <p>
+            기본 정보와 혈압·공복혈당을 채우면 판정이 나옵니다. 나머지 검진결과지
+            수치를 넣을수록 답하는 칸이 늘고,{" "}
+            <strong>
+              넣은 값이 있는 질환은 추정이 아니라 학회 기준 대조로 넘어갑니다.
+            </strong>
+          </p>
+        </div>
+      </section>
 
       {Object.keys(prefilled).length > 0 && (
         <p className="form-notice assess-prefilled">
@@ -608,8 +869,8 @@ export function AssessmentPage() {
             householdId={activeProfile.householdId}
             profileId={activeProfile.id}
             profileName={activeProfile.displayName}
-            onRead={applyReading}
-            onDocument={setDocument}
+            onRead={handleReading}
+            onDocument={rememberDocument}
           />
         ) : null}
 
@@ -618,14 +879,75 @@ export function AssessmentPage() {
               예전에는 가족 홈으로 돌아가 기록을 열고 "이 값으로 다시 판정" 을 눌러야
               여기로 왔다. 수치 하나만 바꿔 다시 돌려 보는 것이 이 화면에서 가장 자주
               하는 일인데, 그때마다 화면을 두 번 옮겨야 했다. */}
-          {snapshots.length > 0 && (
-            <section className="assess-history" aria-labelledby="assess-history-heading">
-              <h3 id="assess-history-heading">지난 판정으로 채우기</h3>
-              <p className="assess-muted">
-                누르면 그날 넣은 값이 폼에 들어와요. 수치를 고쳐 다시 판정하면 새 기록으로 남습니다.
-              </p>
-              <ul className="assess-history-list">
-                {[...snapshots].reverse().slice(0, 8).map((snapshot) => {
+          {/* **채우는 문을 한 곳으로 모았다.**
+              예전에는 "남긴 기록으로 채우기" 와 "지난 판정으로 채우기" 가 따로 서 있었다.
+              각각 다른 때에 만들어져 모양도 달랐고(하나는 값 목록, 하나는 칩), 사용자
+              입장에서는 **같은 일**을 하는 문이 둘이라 어느 쪽을 눌러야 하는지 알 수 없었다.
+
+              둘의 차이는 남겨야 한다 — 뜻이 다르다.
+                기록에서   혈압·혈당·검사값 기록을 **칸 단위로** 모은 것. 값마다 잰 날이 다르다.
+                지난 판정   그날 폼에 넣었던 값 **한 벌**. 한 시점의 스냅샷이다.
+              그래서 한 섹션 안에 두 줄로 두고, 각각이 무엇인지 한 문장으로 적는다. */}
+          {/* **자동 저장은 말해 주지 않으면 안 된 것과 같다.** 검진표를 올리면 판정
+              버튼을 누르기 전에 이미 기록이 남는데, 그 사실을 화면이 밝히지 않으면
+              사용자는 판정을 눌러야 저장되는 줄 알고 같은 서류를 다시 올린다. */}
+          {screeningSaved ? (
+            <p className="assess-saved-note" role="status">
+              검진표에서 읽은 <strong>{screeningSaved}개</strong> 수치를 건강기록으로 저장했어요. 판정하지 않고
+              나가도 남아 있습니다.
+            </p>
+          ) : null}
+
+          {(valueRecords.length > 0 || snapshots.length > 0) && (
+            <section className="assess-fill" aria-labelledby="assess-fill-heading">
+              <h3 id="assess-fill-heading">값을 불러와 채우기</h3>
+
+              {valueRecords.length > 0 && (
+                <div className="assess-fill-row">
+                  <div className="assess-fill-copy">
+                    <strong>남긴 건강검진에서</strong>
+                    <small>
+                      카드를 누르면 그 검진의 전체 수치와 원본을 볼 수 있어요. 확인한 뒤 "이 수치 사용하기" 를
+                      누르면 폼으로 옮깁니다.
+                    </small>
+                  </div>
+                  {/* **가족 홈과 같은 카드다**(`RecordCard`). 같은 기록을 화면마다 다른
+                      모양으로 그리면 사용자가 같은 것을 두 번 배워야 한다. 예전에는
+                      여기가 칸 이름과 숫자를 평평하게 늘어놓아서, 그 값들이 몇 건의
+                      검진에서 온 것인지도 원본이 무엇인지도 읽히지 않았다. */}
+                  <ul className="record-list">
+                    {valueRecords.slice(0, 6).map((record) => (
+                      <RecordCard
+                        key={record.id}
+                        record={record}
+                        pressed={openValueRecord?.id === record.id}
+                        onOpen={() => setOpenValueRecord(record)}
+                      />
+                    ))}
+                  </ul>
+                  {/* 칸마다 가장 최근 값을 한 번에 모으는 문. 여러 검진에 흩어져 있을
+                      때 쓴다(서버 `record_prefill.build` 가 그렇게 고른다). */}
+                  {recordPrefill && recordPrefill.items.length > 0 && valueRecords.length > 1 ? (
+                    <button type="button" className="secondary-button" onClick={() => applyRecordPrefill()}>
+                      최근 값 전부 가져오기 ({recordPrefill.items.length}칸)
+                    </button>
+                  ) : null}
+                </div>
+              )}
+
+              {snapshots.length > 0 && (
+                <div className="assess-fill-row">
+                  <div className="assess-fill-copy">
+                    <strong>지난 판정에서</strong>
+                    <small>그날 넣은 값 한 벌이 그대로 들어와요. 고쳐 다시 판정하면 새 기록으로 남습니다.</small>
+                  </div>
+                  <ul className="assess-history-list">
+                  {(() => {
+                  // 라벨을 목록 단위로 먼저 만든다 — 초를 붙일지는 **다른 칩과 겹치는지**
+                  // 로 정해지므로 칩 하나만 보고는 알 수 없다.
+                  const shown = [...snapshots].reverse().slice(0, 8);
+                  const labels = disambiguatedTimes(shown.map((item) => item.recordedAt));
+                  return shown.map((snapshot, index) => {
                   const restored = valuesFromInputs(snapshot.payload.inputs ?? {});
                   const level = snapshot.payload.highestLevel as RiskLevel;
                   return (
@@ -644,7 +966,7 @@ export function AssessmentPage() {
                           window.scrollTo({ top: 0, behavior: "smooth" });
                         }}
                       >
-                        <time dateTime={snapshot.recordedAt}>{shortDateTime(snapshot.recordedAt)}</time>
+                        <time dateTime={snapshot.recordedAt}>{labels[index]}</time>
                         <LevelBadge level={level} />
                         <small>
                           입력 {Object.keys(restored).length}칸 · BMI {snapshot.payload.bmi}
@@ -652,10 +974,26 @@ export function AssessmentPage() {
                       </button>
                     </li>
                   );
-                })}
-              </ul>
+                  });
+                })()}
+                  </ul>
+                </div>
+              )}
+
             </section>
           )}
+
+          {/* **섹션 밖에 둔다.** 위 섹션은 채울 것이 있을 때만 서므로, 안에 두면
+              "옮길 수치가 없다" 는 말이 영영 뜨지 않는다 — 실제로 그랬다.
+              기록이 아예 없는 경우와 있어도 수치가 없는 경우는 다른 상황이고,
+              후자는 "수치 기록을 남기면 여기가 채워진다" 를 말할 자리다. */}
+          {recordPrefill && recordPrefill.items.length === 0 && recordPrefill.scanned > 0 && (
+            <p className="assess-muted assess-records-empty">
+              남긴 기록 {recordPrefill.scanned}건에는 판정에 쓸 수치가 없었어요. 혈압·혈당·체성분이나 검사
+              결과를 기록으로 남기면 다음 판정에서 이 자리가 채워집니다.
+            </p>
+          )}
+
 
           {flagged.length > 0 && (
             <div
@@ -743,9 +1081,20 @@ export function AssessmentPage() {
               ))}
             </div>
             {preset && (
-              <p className="assess-preset-note">
-                {ASSESSMENT_PRESETS.find((item) => item.key === preset)?.note}
-              </p>
+              <>
+                <p className="assess-preset-note">
+                  {ASSESSMENT_PRESETS.find((item) => item.key === preset)?.note}
+                </p>
+                {/* **판정은 되지만 기록에는 안 남는다는 것을 미리 말한다.** 판정을
+                    돌린 뒤에야 알려 주면 사용자는 저장이 실패한 줄 안다. */}
+                <p className="assess-preset-note is-warning">
+                  <strong>이 값으로 판정해도 기록에는 남지 않아요.</strong> 학회 기준 예시 수치라 실제 몸의
+                  기록이 아니기 때문입니다.
+                </p>
+                <button type="button" className="secondary-button" onClick={clearPreset}>
+                  테스트 값 비우기
+                </button>
+              </>
             )}
           </section>
 
@@ -938,9 +1287,12 @@ export function AssessmentPage() {
                   <button type="button" onClick={keep} disabled={keeping}>
                     {keeping ? "저장 중…" : "이 구성원의 기록으로 다시 남기기"}
                   </button>
+                  {/* "기기 안 암호화 보관함에 남기고 서버로 동기화" 였다. 앞 절이
+                      옛 구조다 — 로그인 상태에서는 서버 런타임이 정본이고 보관함은
+                      레거시 이전용으로만 열린다(`LocalDomainProvider`). 두 곳에
+                      남는다고 적으면 사용자가 기기를 지우면 기록이 사라진다고 읽는다. */}
                   <p className="assess-muted">
-                    입력값과 등급을 <strong>기기 안 암호화 보관함</strong>에 남기고,
-                    로그인한 계정의 <strong>서버 기록</strong>으로 동기화합니다 (ADR-011).
+                    입력값과 등급을 <strong>로그인한 계정</strong>에 남깁니다 (ADR-011).
                     같은 계정이면 다른 기기에서도 같은 기록을 봅니다.
                   </p>
                 </>
@@ -954,6 +1306,17 @@ export function AssessmentPage() {
           <h2 className="assess-axis-title">
             질환별 결과 <span className="assess-muted">지금 내 몸의 상태</span>
           </h2>
+          {/* **여러 카드가 같은 값을 기다린다면 그 말은 한 번만 한다.**
+              카드마다 적던 때 "앉아 있는 시간을 넣으면 예측이 정밀해져요" 가 한 화면에
+              14번 나왔다(2026-09-10 실측). 같은 한 칸을 채우면 그 카드들이 동시에
+              정밀해지니 정보는 하나뿐이고, 열네 번 반복되면 정보가 아니라 배경이 된다.
+              세 장 이상에 걸린 것만 올린다 — `sharedRefining` 의 문턱 참조. */}
+          {sharedInputs.length > 0 ? (
+            <p className="assess-axis-note assess-shared-need">
+              <strong>{briefList(sharedInputs)}</strong>
+              {objectParticle(briefList(sharedInputs))} 채우면 여러 카드의 예측이 함께 정밀해져요.
+            </p>
+          ) : null}
           <div className="assess-cards">
             {verdicts.map((verdict) => (
               <VerdictCard
@@ -961,6 +1324,7 @@ export function AssessmentPage() {
                 verdict={verdict}
                 values={values}
                 models={models}
+                sharedRefining={sharedInputs}
               />
             ))}
           </div>
@@ -1023,6 +1387,33 @@ export function AssessmentPage() {
       {openDetail && result ? (
         <DetailReport result={result} values={values} models={models} onClose={() => setOpenDetail(false)} />
       ) : null}
+
+      {/* **카드를 눌러 펼친 모습.** 기록 화면의 자세히와 **같은 컴포넌트**다 —
+          같은 기록을 여기서만 다르게 보여 줄 이유가 없다. 확인한 뒤 "이 수치
+          사용하기" 를 누르면 폼으로 옮기고, 그 기록이 이 판정의 출처가 된다. */}
+      {openValueRecord ? (
+        <RecordValueDetail
+          record={openValueRecord}
+          onClose={() => setOpenValueRecord(undefined)}
+          onUse={(picked) => {
+            const items: PrefilledField[] = Object.entries(picked).map(([field, value]) => ({
+              field,
+              value,
+              measured_at: openValueRecord.recordedAt,
+              record_type: openValueRecord.recordType,
+              record_id: openValueRecord.id,
+            }));
+            applyRecordPrefill(items, true);
+            setSourceRecordId(openValueRecord.id);
+            // 예시 수치 위에 실제 수치를 올렸으면 프리셋 표시를 떼야 한다 — 안 떼면
+            // 기록에 남기지 않는 쪽으로 걸러진다.
+            setPreset(undefined);
+            setReadFields(new Set());
+            setOpenValueRecord(undefined);
+          }}
+        />
+      ) : null}
     </section>
   );
 }
+

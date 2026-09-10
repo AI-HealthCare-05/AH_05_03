@@ -11,6 +11,14 @@ export interface NotionMarkdownEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  /**
+   * 이 에디터의 접근 이름을 담은 요소의 id.
+   *
+   * `contenteditable` 이라 `label htmlFor` 로 못 잇는다 — 화면에 라벨이 보여도
+   * 낭독기에는 이름 없는 편집 영역으로 들린다. 부르는 쪽이 이미 그 문구를 그리고
+   * 있으므로 문구를 복제하지 않고 id 로 가리킨다.
+   */
+  ariaLabelledBy?: string;
 }
 
 export function NotionMarkdownEditor({
@@ -18,6 +26,7 @@ export function NotionMarkdownEditor({
   onChange,
   placeholder = "통증의 증상이나 불편함을 자유롭게 적어보세요. ('#' 제목, '-' 불릿, '[]' 체크리스트 지원)",
   disabled = false,
+  ariaLabelledBy,
 }: NotionMarkdownEditorProps) {
   const editor = useEditor({
     extensions: [
@@ -190,7 +199,16 @@ export function NotionMarkdownEditor({
       </div>
 
       {/* 에디터 본문 영역 */}
-      <EditorContent editor={editor} className="notion-editor-content" />
+      {/* tiptap 은 `role="textbox"` 를 스스로 붙이지 않는다. 편집 영역이라는 것과
+          그 이름을 여기서 같이 준다 — 둘 중 하나만 주면 낭독기가 "편집 가능" 만
+          알리고 무엇을 적는 칸인지는 말하지 못한다. */}
+      <EditorContent
+        editor={editor}
+        className="notion-editor-content"
+        role="textbox"
+        aria-multiline="true"
+        aria-labelledby={ariaLabelledBy}
+      />
 
       {/* 폼 시리얼라이제이션 및 접근성을 위한 숨김 textarea */}
       <textarea
