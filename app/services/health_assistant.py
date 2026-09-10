@@ -27,6 +27,7 @@ from app.services.food_nutrition_tools import (
     execute_food_nutrition_tool,
     get_food_nutrition_tools,
 )
+from app.services.health_assistant_boundary import HealthAssistantBoundaryService
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.health_record_tools import (
     QUERY_HEALTH_RECORDS_TOOL_NAME,
@@ -286,6 +287,7 @@ class HealthAssistantService:
         self,
         llm_client: LLMClientProtocol | None = None,
         safety_service: HealthAssistantSafetyService | None = None,
+        boundary_service: HealthAssistantBoundaryService | None = None,
         facility_client: MedicalFacilityClient | None = None,
         record_repo: HealthRecordRepository | None = None,
         chat_session_repo: ChatSessionRepository | None = None,
@@ -298,6 +300,7 @@ class HealthAssistantService:
     ):
         self._llm_client = llm_client
         self.safety_service = safety_service or HealthAssistantSafetyService()
+        self.boundary_service = boundary_service or HealthAssistantBoundaryService()
         self.facility_client = facility_client or MedicalFacilityClient()
         self.health_record_service = health_record_service
         self.record_repo = record_repo or getattr(health_record_service, "record_repo", None)
@@ -941,6 +944,12 @@ class HealthAssistantService:
         if safety_check:
             return safety_check
 
+        boundary = await self.boundary_service.check_request(self.llm_client, request)
+        if boundary.response:
+            return boundary.response
+        assert boundary.request is not None
+        request = boundary.request
+
         needs_health_query = self._needs_health_record_query_tool(request)
         if needs_health_query and (
             request.profile_context is None
@@ -967,6 +976,13 @@ class HealthAssistantService:
         )
 
         tools = self._get_tools(request)
+        if boundary.decision.requires_authoritative_evidence and not tools and not outdoor_conditions:
+            return self.boundary_service.enforce_grounding(
+                boundary.decision,
+                HealthAssistantResponse(intent="health_advice", assistant_message=""),
+                tool_result=None,
+                outdoor_conditions=None,
+            )
         response: HealthAssistantResponse
         client_any = cast(Any, self.llm_client)
 
@@ -978,6 +994,7 @@ class HealthAssistantService:
                 profile_id=self._parse_profile_id(profile_context.profile_id) if profile_context else None,
             )
 
+        tool_result: Any | None = None
         if tools and hasattr(client_any, "generate_structured_response_with_tools"):
             res_tuple = await client_any.generate_structured_response_with_tools(
                 system_instruction=system_instruction,
@@ -998,7 +1015,12 @@ class HealthAssistantService:
         if outdoor_conditions and not response.outdoor_conditions:
             response.outdoor_conditions = outdoor_conditions
         validated_response = self.safety_service.validate_response(response)
-        return validated_response
+        return self.boundary_service.enforce_grounding(
+            boundary.decision,
+            validated_response,
+            tool_result=tool_result,
+            outdoor_conditions=outdoor_conditions,
+        )
 
     async def _get_stream_generator(
         self,
@@ -1063,6 +1085,14 @@ class HealthAssistantService:
             yield "result", safety_check.model_dump(mode="json")
             return
 
+        boundary = await self.boundary_service.check_request(self.llm_client, request)
+        if boundary.response:
+            yield "delta", {"text": boundary.response.assistant_message}
+            yield "result", boundary.response.model_dump(mode="json")
+            return
+        assert boundary.request is not None
+        request = boundary.request
+
         needs_health_query = self._needs_health_record_query_tool(request)
         if needs_health_query and (
             request.profile_context is None
@@ -1095,6 +1125,17 @@ class HealthAssistantService:
 
         tools = self._get_tools(request)
 
+        if boundary.decision.requires_authoritative_evidence and not tools and not outdoor_conditions:
+            response = self.boundary_service.enforce_grounding(
+                boundary.decision,
+                HealthAssistantResponse(intent="health_advice", assistant_message=""),
+                tool_result=None,
+                outdoor_conditions=None,
+            )
+            yield "delta", {"text": response.assistant_message}
+            yield "result", response.model_dump(mode="json")
+            return
+
         async def tool_executor(name: str, args: dict[str, Any]) -> Any:
             return await self._execute_tool(
                 name,
@@ -1109,6 +1150,21 @@ class HealthAssistantService:
             tools,
             tool_executor,
         )
+
+        if boundary.decision.requires_authoritative_evidence and not self.boundary_service.has_required_evidence(
+            boundary.decision,
+            tool_result,
+            outdoor_conditions,
+        ):
+            response = self.boundary_service.enforce_grounding(
+                boundary.decision,
+                HealthAssistantResponse(intent="health_advice", assistant_message=""),
+                tool_result=tool_result,
+                outdoor_conditions=outdoor_conditions,
+            )
+            yield "delta", {"text": response.assistant_message}
+            yield "result", response.model_dump(mode="json")
+            return
 
         if tool_result is not None:
             from app.dtos.food_nutrition import FoodNutritionSearchResult
@@ -1126,7 +1182,14 @@ class HealthAssistantService:
                     health_record_query_result=tool_result,
                     outdoor_conditions=outdoor_conditions,
                 )
-                yield "result", self.safety_service.validate_response(res_obj).model_dump(mode="json")
+                validated = self.safety_service.validate_response(res_obj)
+                validated = self.boundary_service.enforce_grounding(
+                    boundary.decision,
+                    validated,
+                    tool_result=tool_result,
+                    outdoor_conditions=outdoor_conditions,
+                )
+                yield "result", validated.model_dump(mode="json")
                 return
             elif isinstance(tool_result, MedicationSearchResult):
                 yield "medication", payload
@@ -1140,7 +1203,14 @@ class HealthAssistantService:
                     facility_search_draft=tool_result,
                     outdoor_conditions=outdoor_conditions,
                 )
-                yield "result", self.safety_service.validate_response(res_obj).model_dump(mode="json")
+                validated = self.safety_service.validate_response(res_obj)
+                validated = self.boundary_service.enforce_grounding(
+                    boundary.decision,
+                    validated,
+                    tool_result=tool_result,
+                    outdoor_conditions=outdoor_conditions,
+                )
+                yield "result", validated.model_dump(mode="json")
                 return
 
         async for piece in stream_gen:
@@ -1155,4 +1225,11 @@ class HealthAssistantService:
         except Exception as ex:
             raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex
 
-        yield "result", self.safety_service.validate_response(parsed).model_dump(mode="json")
+        validated = self.safety_service.validate_response(parsed)
+        validated = self.boundary_service.enforce_grounding(
+            boundary.decision,
+            validated,
+            tool_result=tool_result,
+            outdoor_conditions=outdoor_conditions,
+        )
+        yield "result", validated.model_dump(mode="json")

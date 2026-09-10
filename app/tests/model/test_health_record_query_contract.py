@@ -6,7 +6,13 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
-from app.dtos.health_assistant import ChatMessage, HealthAssistantChatRequest, HealthAssistantResponse, ProfileContext
+from app.dtos.health_assistant import (
+    ChatMessage,
+    HealthAssistantChatRequest,
+    HealthAssistantResponse,
+    HealthAssistantScopeDecision,
+    ProfileContext,
+)
 from app.dtos.health_record_query import (
     HealthRecordQueryArguments,
     HealthRecordQueryMatch,
@@ -146,6 +152,9 @@ class _FakeRecordService:
 
 
 class _FakeToolClient:
+    async def generate_structured_response(self, **_kwargs: Any) -> HealthAssistantScopeDecision:
+        return HealthAssistantScopeDecision(scope="health", requires_authoritative_evidence=False)
+
     async def stream_structured_response_with_tools(
         self,
         *,

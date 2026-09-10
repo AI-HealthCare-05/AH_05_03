@@ -10,6 +10,7 @@ from app.dtos.health_assistant import (
     CurrentLocation,
     HealthAssistantChatRequest,
     HealthAssistantResponse,
+    HealthAssistantScopeDecision,
     ProfileContext,
 )
 from app.dtos.outdoor_conditions import AirQualityConditions, OutdoorConditionsResult, WeatherConditions
@@ -29,6 +30,11 @@ class MockLLMClient:
         self.fake_json = fake_json
 
     async def generate_structured_response(self, *args, **kwargs):
+        if kwargs.get("response_schema") is HealthAssistantScopeDecision:
+            return HealthAssistantScopeDecision(
+                scope="health",
+                requires_authoritative_evidence=False,
+            )
         return HealthAssistantResponse.model_validate_json(self.fake_json)
 
     async def stream_structured_response(self, *args, **kwargs):
@@ -47,6 +53,14 @@ class CapturingLLMClient:
         response_schema: type[T],
     ) -> T:
         self.system_instruction = system_instruction
+        if response_schema is HealthAssistantScopeDecision:
+            return response_schema.model_validate(
+                {
+                    "scope": "health",
+                    "requires_authoritative_evidence": True,
+                    "required_evidence_types": ["outdoor"],
+                }
+            )
         return response_schema.model_validate({"intent": "health_advice", "assistant_message": "확인했습니다."})
 
     async def stream_structured_response(
@@ -475,7 +489,7 @@ async def test_health_assistant_service_handles_emergency_notice() -> None:
 
 
 @pytest.mark.asyncio
-async def test_health_assistant_service_advises_on_alcohol_with_medication_context() -> None:
+async def test_health_assistant_blocks_alcohol_advice_without_official_evidence() -> None:
     fake_json = """{
         "intent": "health_advice",
         "assistant_message": "최근 8월 31일에 타이레놀(아세트아미노펜) 복약 기록이 있습니다. 타이레놀 복용 중 알코올을 섭취하면 간 손상 위험이 급격히 증가하므로 음주를 피하시는 것이 안전합니다.",
@@ -504,8 +518,8 @@ async def test_health_assistant_service_advises_on_alcohol_with_medication_conte
     response = await service.respond(request)
 
     assert response.intent == "health_advice"
-    assert "타이레놀" in response.assistant_message
-    assert "간 손상" in response.assistant_message or "간" in response.assistant_message
+    assert "타이레놀" not in response.assistant_message
+    assert "근거 없이 건강정보를 안내하지 않겠습니다" in response.assistant_message
     assert response.needs_confirmation is False
 
 
@@ -680,11 +694,11 @@ async def test_medication_tool_stream_preserves_llm_answer() -> None:
     """의약품 도구 실행 후에도 조기 return 없이 LLM의 자연어 스트리밍 답변이 유지된다."""
     from unittest.mock import AsyncMock
 
-    from app.dtos.medication import MedicationSearchResult
+    from app.dtos.medication import DrugInfo, MedicationSearchResult
 
     fake_json = """{
         "intent": "health_advice",
-        "assistant_message": "타이레놀과 피임약은 병용이 가능하지만 진통 효과가 다소 줄어들 수 있습니다.",
+        "assistant_message": "식약처 조회 결과에 따라 다른 약과 복용하기 전 전문가와 상의해 주세요.",
         "exercise_draft": null,
         "blood_pressure_draft": null,
         "blood_glucose_draft": null,
@@ -704,13 +718,20 @@ async def test_medication_tool_stream_preserves_llm_answer() -> None:
     mock_med_result = MedicationSearchResult(
         query="타이레놀",
         message="[식약처 정보] 아세트아미노펜",
-        items=[],
+        items=[DrugInfo(item_name="타이레놀정500밀리그람", intrc_qesitm="다른 약과 복용 전 전문가와 상의")],
     )
 
     async def fake_chunks():
         yield fake_json
 
     mock_llm = AsyncMock()
+    mock_llm.generate_structured_response = AsyncMock(
+        return_value=HealthAssistantScopeDecision(
+            scope="health",
+            requires_authoritative_evidence=True,
+            required_evidence_types=["medication"],
+        )
+    )
     mock_llm.stream_structured_response_with_tools = AsyncMock(return_value=(fake_chunks(), mock_med_result))
 
     service = HealthAssistantService(llm_client=mock_llm)
@@ -727,7 +748,7 @@ async def test_medication_tool_stream_preserves_llm_answer() -> None:
 
     # final result 객체에 medication_search_result가 포함되어 있고 assistant_message는 LLM 답변임
     result_event = next(e[1] for e in events if e[0] == "result")
-    assert "타이레놀과 피임약은 병용이 가능하지만" in result_event["assistant_message"]
+    assert "식약처 조회 결과" in result_event["assistant_message"]
     assert result_event["medication_search_result"] is not None
 
 

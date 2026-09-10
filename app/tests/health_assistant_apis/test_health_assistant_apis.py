@@ -2,6 +2,7 @@ from httpx import AsyncClient
 from starlette import status
 
 from app.core import config
+from app.dtos.health_assistant import HealthAssistantScopeDecision
 
 
 class TestHealthAssistantApi:
@@ -33,6 +34,12 @@ class TestHealthAssistantApi:
 
         class FakeModels:
             async def generate_content(self, *args, **kwargs):
+                if kwargs["config"].response_schema is HealthAssistantScopeDecision:
+                    return type(
+                        "ScopeResponse",
+                        (),
+                        {"text": '{"scope":"health","requires_authoritative_evidence":false}'},
+                    )()
                 return FakeResponse()
 
         class FakeAio:
