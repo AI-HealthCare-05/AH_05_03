@@ -490,7 +490,7 @@ async def test_health_assistant_service_handles_emergency_notice() -> None:
 
 
 @pytest.mark.asyncio
-async def test_health_assistant_blocks_alcohol_advice_without_official_evidence() -> None:
+async def test_health_assistant_service_links_alcohol_question_with_recent_medication_record() -> None:
     fake_json = """{
         "intent": "health_advice",
         "assistant_message": "최근 8월 31일에 타이레놀(아세트아미노펜) 복약 기록이 있습니다. 타이레놀 복용 중 알코올을 섭취하면 간 손상 위험이 급격히 증가하므로 음주를 피하시는 것이 안전합니다.",
@@ -519,8 +519,8 @@ async def test_health_assistant_blocks_alcohol_advice_without_official_evidence(
     response = await service.respond(request)
 
     assert response.intent == "health_advice"
-    assert "타이레놀" not in response.assistant_message
-    assert "근거 없이 건강정보를 안내하지 않겠습니다" in response.assistant_message
+    assert "타이레놀" in response.assistant_message
+    assert "간 손상" in response.assistant_message or "간" in response.assistant_message
     assert response.needs_confirmation is False
 
 

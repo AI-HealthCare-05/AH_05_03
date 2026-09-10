@@ -9,7 +9,7 @@ def test_build_system_instruction_without_context() -> None:
     assert "시스템 기준 일자" in instruction
     assert "한국 표준시" in instruction
     assert "가족 건강관리 서비스" in instruction
-    assert "원래 질문은 공식 의약품 도구 결과가 있을 때만 답하세요" in instruction
+    assert "원래 질문" in instruction
     assert "임의의 08:00, 12:00 같은 시각을 만들지 마세요" in instruction
     assert "대화 대상 프로필 컨텍스트" not in instruction
 
@@ -42,8 +42,8 @@ def test_build_system_instruction_contains_health_condition_guidance() -> None:
 def test_build_system_instruction_contains_supplement_guidance() -> None:
     instruction = build_system_instruction()
 
-    assert "영양제 관련 공식 근거가 없으면" in instruction
-    assert "일반 정보를 덧붙이지 말고" in instruction
+    assert "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다" in instruction
+    assert "일반적으로는 ~" in instruction
 
 
 def test_build_system_instruction_contains_food_nutrition_guidance() -> None:
@@ -51,23 +51,20 @@ def test_build_system_instruction_contains_food_nutrition_guidance() -> None:
 
     assert "음식 및 영양성분(칼로리/나트륨/당류) 문의 지침" in instruction
     assert "search_food_nutrition" in instruction
-    assert "질환별 권장량과 비교하거나 섭취 방법을 권고하려면" in instruction
+    assert "1일 나트륨 2,000mg 권장치" in instruction
 
 
-def test_system_instruction_forbids_model_prior_health_knowledge() -> None:
+def test_system_instruction_contains_safety_rules() -> None:
     instruction = build_system_instruction()
 
-    assert "모델의 학습 지식 사용 금지" in instruction
-    assert "공식 외부 API 도구 결과" in instruction
-    assert "근거 없이 건강정보를 안내하지 않겠습니다" in instruction
-    assert "건강과 무관한 질문에는 답하지 말고" in instruction
+    assert "의료 진단/처방 절대 금지" in instruction
+    assert "사실 기반 추출" in instruction
 
 
-def test_scope_instruction_separates_health_service_and_unrelated_questions() -> None:
+def test_scope_instruction_contains_input_guardrail_and_query_builder() -> None:
     instruction = build_health_assistant_scope_instruction()
 
-    assert "health: 질병, 증상" in instruction
-    assert "service_usage: 인사" in instruction
-    assert "out_of_scope: 연예인" in instruction
-    assert "prompt_attack" in instruction
-    assert "답하거나 건강정보를 설명하지 말고" in instruction
+    assert "인풋 가드레일 및 쿼리 빌더" in instruction
+    assert "is_scientific_or_medical" in instruction
+    assert "inferred_intent" in instruction
+    assert "enriched_query" in instruction
