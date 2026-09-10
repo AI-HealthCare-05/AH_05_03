@@ -211,15 +211,25 @@ export function VanatomeBodyMap({
       attempts++;
       // 모니터링 투시 모드: 뼈(skeletal) 없이 신체 피부(integumentary)만 보여주기
       setHiddenSystems((prev) => {
+        let changed = false;
         const next = new Set(prev);
         ANATOMY_SYSTEM_LAYERS.forEach((layer) => {
           if (layer.id !== "integumentary") {
-            next.add(layer.id);
+            if (!next.has(layer.id)) {
+              next.add(layer.id);
+              changed = true;
+            }
           }
         });
-        next.delete("integumentary");
-        setHiddenSystemsRef.current(next);
-        return next;
+        if (next.has("integumentary")) {
+          next.delete("integumentary");
+          changed = true;
+        }
+        if (changed) {
+          setHiddenSystemsRef.current(next);
+          return next;
+        }
+        return prev;
       });
       const success = selectDangerOrganRef.current(highlightOrganKey);
       if (!success && attempts < maxAttempts) {
@@ -1788,12 +1798,47 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
 
   const dangerPulsingMeshes = new Set<THREE.Mesh>();
   let dangerPulseFrameId: number | undefined;
+  let dangerPulseStartTime: number | undefined;
+  let dangerPulseLastRenderTime = 0;
+  const DANGER_PULSE_DURATION_MS = 4800; // 2주기 (약 4.8초) 동안만 부드럽게 깜빡인 후 정적 강조로 수렴
+  const DANGER_PULSE_FPS_INTERVAL = 1000 / 30; // 펄스 애니메이션 중 30fps로 스로틀하여 4K GPU 부하 대폭 절감
 
   const updateDangerPulse = (now: number) => {
     if (dangerPulsingMeshes.size === 0) {
       dangerPulseFrameId = undefined;
+      dangerPulseStartTime = undefined;
       return;
     }
+
+    if (dangerPulseStartTime === undefined) {
+      dangerPulseStartTime = now;
+    }
+
+    const elapsed = now - dangerPulseStartTime;
+
+    // 지속시간 경과 시 최종 강조 상태로 안정화하고 렌더 루프 완전 종료 (GPU 유휴 상태 복귀)
+    if (elapsed >= DANGER_PULSE_DURATION_MS) {
+      dangerPulsingMeshes.forEach((mesh) => {
+        materialsOf(mesh.material).forEach((mat) => {
+          if (mat instanceof THREE.MeshStandardMaterial) {
+            mat.emissiveIntensity = 0.95;
+            mat.opacity = 0.82;
+          }
+        });
+      });
+      renderScene();
+      dangerPulseFrameId = undefined;
+      dangerPulseStartTime = undefined;
+      return;
+    }
+
+    // 30fps 스로틀: 120Hz/60Hz 불필요한 고주사율 풀 렌더 차단
+    if (now - dangerPulseLastRenderTime < DANGER_PULSE_FPS_INTERVAL) {
+      dangerPulseFrameId = window.requestAnimationFrame(updateDangerPulse);
+      return;
+    }
+    dangerPulseLastRenderTime = now;
+
     // 약 2.4초 주기의 부드러운 불빛 펄스 (emissiveIntensity 0.5 ~ 1.45, opacity 0.70 ~ 0.88)
     const t = now * 0.0026;
     const pulseFactor = (Math.sin(t) + 1) * 0.5;
@@ -1816,6 +1861,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   const startDangerPulse = (meshes: THREE.Mesh | THREE.Mesh[]) => {
     const list = Array.isArray(meshes) ? meshes : [meshes];
     list.forEach((m) => dangerPulsingMeshes.add(m));
+    dangerPulseStartTime = performance.now();
     if (dangerPulseFrameId === undefined) {
       dangerPulseFrameId = window.requestAnimationFrame(updateDangerPulse);
     }
@@ -1826,6 +1872,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       window.cancelAnimationFrame(dangerPulseFrameId);
       dangerPulseFrameId = undefined;
     }
+    dangerPulseStartTime = undefined;
     dangerPulsingMeshes.clear();
   };
 
@@ -4449,6 +4496,15 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   };
   canvas.addEventListener("pointerleave", handlePointerLeave);
 
+  const handleVisibilityChange = () => {
+    if (document.hidden) {
+      stopDangerPulse();
+    } else {
+      requestRender();
+    }
+  };
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
   const handlePointerMove = (event: PointerEvent) => {
     if (!pointerGesture || pointerGesture.pointerId !== event.pointerId) {
       if (!pointerGesture && !isPainting) {
@@ -4691,6 +4747,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     // 빼먹으면 핸들러가 쌓이고, 낡은 핸들러가 이미 dispose 한 씬의 renderScene 과
     // 재질 맵을 계속 붙잡는다.
     canvas.removeEventListener("pointerleave", handlePointerLeave);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
     canvas.removeEventListener("webglcontextlost", handleContextLost);
     canvas.style.cursor = "";
     controls.removeEventListener("change", requestRender);
@@ -4700,6 +4757,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     if (handleControlsEnd) controls.removeEventListener("end", handleControlsEnd);
     if (focusAnimationFrame !== undefined) window.cancelAnimationFrame(focusAnimationFrame);
     if (poseAnimationFrame !== undefined) window.cancelAnimationFrame(poseAnimationFrame);
+    stopDangerPulse();
     clearSelectedMaterial();
     pelvicOrganFocusRef.current = () => undefined;
     setHiddenSystemsRef.current = () => undefined;
