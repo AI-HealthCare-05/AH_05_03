@@ -156,6 +156,62 @@
   100% { background-position: -200% 0; }
 }
 
+/* 스켈레톤 카드는 진짜 카드의 자리를 대신 잡는 것이라 테두리·배경·높이를 그대로
+   물려받는다. 다른 것은 안에 든 것뿐이다 — 누를 수 없으니 hover 도 끈다. */
+.member-card.is-skeleton {
+  cursor: default;
+  pointer-events: none;
+}
+
+.member-card.is-skeleton:hover {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+/* 라우트 폴백(`PageSkeleton`)의 제목 자리. 진짜 제목과 같은 높이를 차지해
+   청크가 도착해도 본문이 위아래로 밀리지 않는다. */
+.skeleton-page-heading {
+  display: flex;
+  flex-direction: column;
+}
+
+.skeleton-section-title {
+  margin-top: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+/* 패널 안 목록 자리(최근 건강기록·검진 이력). */
+.skeleton-rows {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.skeleton-row-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

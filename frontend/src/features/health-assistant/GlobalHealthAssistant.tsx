@@ -184,10 +184,8 @@ export function GlobalHealthAssistant() {
   }, [contextLabel]);
 
   // 페이지(맥락)가 바뀔 때마다 이 화면에서 할 수 있는 일을 짧게 알려준다.
-  // NavBar 이동은 진짜 새로고침이라(`RootLayout.tsx` 의 `isNavItemActive` 참고)
-  // 컴포넌트가 통째로 다시 마운트되며 이 효과도 처음부터 다시 돈다 — 그래서 첫
-  // 진입과 이후 화면 안 이동(예: 챗봇이 직접 부르는 `navigate()`) 모두 같은
-  // 방식으로 안내된다.
+  // 주 메뉴·챗봇이 직접 부르는 `navigate()` 모두 `contextLabel` 을 바꾸므로, 이동
+  // 방식(SPA 전환이든 첫 진입이든)과 무관하게 같은 효과 하나로 안내된다.
   useEffect(() => {
     if (isOpenRef.current) return;
     setTooltipMessage((prev) => pickContextArrivalMessage(prev, contextLabel));

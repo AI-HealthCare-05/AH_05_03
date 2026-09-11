@@ -29,6 +29,31 @@ import {
 } from "./localDomainContext";
 import type { FamilyProfile } from "../shared/local/domainContracts";
 
+/**
+ * 옛 IndexedDB(`ieobom-local`) → 서버 마이그레이션을 가구별로 한 번만 돌게 하는 표시.
+ *
+ * 저장 자체가 막힌 환경(사파리 프라이빗 모드 등)에서는 읽기·쓰기가 모두 던진다.
+ * 그때는 "안 끝났다" 로 읽혀 예전처럼 매번 돌 뿐이라 기능은 그대로다 — 표시를
+ * 남기지 못한다고 마이그레이션을 막지는 않는다.
+ */
+const LEGACY_MIGRATION_KEY = "ieobom:legacy-migrated";
+
+function legacyMigrationDone(householdId: string): boolean {
+  try {
+    return window.localStorage.getItem(`${LEGACY_MIGRATION_KEY}:${householdId}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markLegacyMigrationDone(householdId: string): void {
+  try {
+    window.localStorage.setItem(`${LEGACY_MIGRATION_KEY}:${householdId}`, "1");
+  } catch {
+    // 저장이 막힌 환경. 다음 로드에서 한 번 더 도는 것 말고는 달라지지 않는다.
+  }
+}
+
 export function LocalDomainProvider({
   children,
   databaseName,
@@ -102,8 +127,14 @@ export function LocalDomainProvider({
         if (activeHouseholdId) {
           setHouseholdId(activeHouseholdId);
 
-          // 과거 브라우저(IndexedDB)에 저장된 데이터가 있다면 서버로 1회 안전 마이그레이션
-          if (typeof window !== "undefined" && window.indexedDB) {
+          // 과거 브라우저(IndexedDB)에 저장된 데이터가 있다면 서버로 1회 안전 마이그레이션.
+          //
+          // **"1회" 가 아니었다.** 표시를 남기지 않아 로그인·새로고침마다 다시 돌았고,
+          // 그때마다 `listProfiles` → `syncProfiles` → 프로필 재조회로 왕복 셋이
+          // 직렬로 더 붙었다(실측 ~900ms, 첫 화면이 뜨는 시각이 그만큼 밀린다).
+          // 옛 IndexedDB 는 지금 버전이 쓰지 않으므로 한 번 옮기고 나면 더 생기지
+          // 않는다 — 가구별로 끝났음을 남기고 다음부터는 건너뛴다.
+          if (typeof window !== "undefined" && window.indexedDB && !legacyMigrationDone(activeHouseholdId)) {
             try {
               const legacyRuntime = await createLocalDomainRuntime("ieobom-local").catch(() => undefined);
               if (legacyRuntime) {
@@ -113,8 +144,12 @@ export function LocalDomainProvider({
                 }
                 legacyRuntime.close();
               }
+              // 옮길 것이 없었어도 표시를 남긴다 — 없다는 사실을 확인하는 데도
+              // IndexedDB 를 열고 목록을 읽는 값이 든다.
+              markLegacyMigrationDone(activeHouseholdId);
             } catch {
-              // 마이그레이션 오류는 무시하고 계속 진행
+              // 마이그레이션 오류는 무시하고 계속 진행. 표시를 남기지 않으므로
+              // 다음 기회에 다시 시도한다.
             }
           }
           if (disposed) return;
