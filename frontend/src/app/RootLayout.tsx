@@ -47,7 +47,7 @@ function readResetToken(): boolean {
 }
 
 export function RootLayout() {
-  const { status, email, signOut } = useAuth();
+  const { status, email, signOut, signedOutNotice } = useAuth();
   const navigationRef = useRef<HTMLElement>(null);
   const { pathname } = useLocation();
 
@@ -128,7 +128,7 @@ export function RootLayout() {
   // 단, 비밀번호 재설정 링크(#reset_token=...)로 진입한 경우에는 로그인 상태와 무관하게
   // 재설정 관문을 우선 열어 준다.
   if (hasResetToken || status === "signed-out") {
-    return <SignInPage onResetComplete={() => setHasResetToken(false)} />;
+    return <SignInPage onResetComplete={() => setHasResetToken(false)} initialMessage={signedOutNotice} />;
   }
 
   return (

@@ -11,6 +11,7 @@ import {
   AssessmentPage,
   ChallengePage,
   ChallengeSetupPage,
+  DataManagementPage,
   HealthDataPage,
   PainDiaryPage,
   UiPreviewPage,
@@ -91,10 +92,13 @@ export const router = createBrowserRouter([
         element: <Navigate to="/health-data" replace />,
       },
       {
-        // 계정 화면으로 합쳤다. 주소는 살려 둔다 — 북마크와 지난 링크가 404 가
-        // 되면 사용자는 기능이 사라진 줄 안다.
+        // **2026-09-11 계정 화면으로 합쳤다가 도로 뺐다.** 백업·복구·건강자료
+        // 관리가 계정 화면 안에 얹히니 그 화면 하나가 너무 길고 무거워졌다
+        // (구독·가정·초대·연결·탈퇴 사이에 다른 무게의 화면이 끼어든 셈).
+        // 자기 주소로 되돌린다 — `lazyRoutes.ts` 의 지연 로드는 합칠 때도
+        // 지우지 않아 그대로 남아 있었다.
         path: "data",
-        element: <Navigate to="/account" replace />,
+        element: <DataManagementPage />,
       },
       {
         path: "account",

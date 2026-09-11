@@ -22,14 +22,21 @@ function readResetToken(): { token: string; email?: string } | undefined {
   return { token, email: params.get("email") ?? undefined };
 }
 
-export function SignInPage({ onResetComplete }: { onResetComplete?: () => void } = {}) {
+export function SignInPage({
+  onResetComplete,
+  initialMessage,
+}: {
+  onResetComplete?: () => void;
+  /** 로그아웃·회원 탈퇴 직후 관문으로 넘어오며 실어 온 한 번짜리 안내문. */
+  initialMessage?: string;
+} = {}) {
   const { signIn } = useAuth();
   const [resetInfo, setResetInfo] = useState(readResetToken);
   const [resetEmail] = useState(() => readResetToken()?.email);
   const [mode, setMode] = useState<AuthMode>(() => (resetInfo ? "reset-password" : "signin"));
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string>();
-  const [message, setMessage] = useState<string>();
+  const [message, setMessage] = useState<string | undefined>(initialMessage);
   const [invited] = useState(invitationEmail);
 
   async function submit(event: FormEvent<HTMLFormElement>) {

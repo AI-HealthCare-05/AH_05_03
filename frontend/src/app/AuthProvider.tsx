@@ -16,6 +16,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("checking");
   const [email, setEmail] = useState<string>();
   const [accountId, setAccountId] = useState<string>();
+  const [signedOutNotice, setSignedOutNotice] = useState<string>();
 
   useEffect(() => {
     let cancelled = false;
@@ -73,12 +74,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setEmail(account.account.email);
     setAccountId(account.account.id);
     setStatus("signed-in");
+    // 다음 로그인은 이전 안내문과 무관한 시도다 — 지난 탈퇴·로그아웃 알림이
+    // 새로 로그인한 화면에 다시 뜨면 안 된다.
+    setSignedOutNotice(undefined);
   }, []);
 
-  const markSignedOut = useCallback(() => {
+  const markSignedOut = useCallback((message?: string) => {
     setEmail(undefined);
     setAccountId(undefined);
     setStatus("signed-out");
+    setSignedOutNotice(message);
   }, []);
 
   const updateAccount = useCallback((newEmail: string, newAccountId?: string) => {
@@ -98,8 +103,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [markSignedOut]);
 
   const value = useMemo(
-    () => ({ status, email, accountId, signIn, signOut, markSignedOut, updateAccount }),
-    [status, email, accountId, signIn, signOut, markSignedOut, updateAccount],
+    () => ({ status, email, accountId, signIn, signOut, markSignedOut, signedOutNotice, updateAccount }),
+    [status, email, accountId, signIn, signOut, markSignedOut, signedOutNotice, updateAccount],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

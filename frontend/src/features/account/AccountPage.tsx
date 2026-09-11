@@ -1,6 +1,5 @@
 import { type FormEvent, type MouseEvent, useCallback, useEffect, useState } from "react";
 
-import { DataManagementPage } from "../data/DataManagementPage";
 import { useAuth } from "../../app/authContext";
 import { useLocalDomain } from "../../app/localDomainContext";
 import type {
@@ -370,14 +369,15 @@ export function AccountPage() {
         const closeRes = await serverApiClient.closeAccount(purgeHealthData);
         serverApiClient.clearAccessToken();
         clearAccountState();
-        // 로그아웃과 같은 이유로 관문에도 알린다 — 종료한 계정으로 화면이 남으면
-        // 누르는 것마다 401 이 된다.
-        markSignedOut();
-        setMessage(
-          closeRes.health_data_purged
-            ? "서비스 계정을 종료하고 서버의 건강정보를 영구 폐기했습니다."
-            : "서비스 계정을 종료했습니다. 건강정보는 보존됩니다.",
-        );
+        const resultMessage = closeRes.health_data_purged
+          ? "회원 탈퇴가 완료되었습니다. 서버에 저장된 건강정보도 영구 폐기했습니다."
+          : "회원 탈퇴가 완료되었습니다. 건강정보는 보존됩니다.";
+        // **`setMessage` 가 아니라 `markSignedOut` 에 문구를 실어 보낸다.** 관문에
+        // 알리는 순간 `RootLayout` 이 이 화면을 로그인 화면으로 바꿔치기한다 —
+        // 이 컴포넌트는 다음 줄로 넘어가기도 전에 unmount 될 수 있어서, 여기서
+        // `setMessage` 만 부르면 아무도 못 보는 토스트가 된다("버튼을 눌러도
+        // 반응이 없다"의 실제 원인). 로그인 화면이 이 문구를 이어받아 보여 준다.
+        markSignedOut(resultMessage);
       }
       setConfirmation(undefined);
       if (confirmation.kind !== "close-account") {
@@ -399,9 +399,10 @@ export function AccountPage() {
       await serverApiClient.logout();
       clearAccountState();
       // 관문에도 알린다. 안 알리면 레이아웃은 아직 로그인 상태라고 믿어서,
-      // 로그아웃한 사용자에게 메뉴와 화면이 그대로 남는다.
-      markSignedOut();
-      setMessage("로그아웃했습니다. 건강기록은 계정에 남아 다시 로그인하면 그대로 보입니다.");
+      // 로그아웃한 사용자에게 메뉴와 화면이 그대로 남는다. 문구는 `setMessage`
+      // 가 아니라 여기에 실어 보낸다 — 알리는 순간 이 화면은 로그인 화면으로
+      // 바뀌어 사라지므로, `setMessage` 는 아무도 못 보는 토스트가 된다.
+      markSignedOut("로그아웃했습니다. 건강기록은 계정에 남아 다시 로그인하면 그대로 보입니다.");
     });
   }
 
@@ -474,14 +475,16 @@ export function AccountPage() {
           />
           <InvitationCard households={households} profiles={profiles} invitations={invitations} working={working} onSend={sendInvitation} onAccept={acceptAndLink} onDecline={declineInvitation} onCancel={(invitation) => setConfirmation({ kind: "cancel-invitation", invitation })} linkRecovery={linkRecovery} onRetry={retryProfileLink} />
           <section className="account-card account-wide"><p className="section-kicker">서비스 계정 연결</p><h2>연결된 프로필 참조</h2>{links.filter((item) => item.status === "active").length === 0 ? <p className="account-empty">활성 연결이 없습니다.</p> : links.filter((item) => item.status === "active").map((link) => <div className="profile-link-row" key={link.id}><code>{link.local_profile_ref.slice(0, 12)}…</code><span>계정 연결 완료 · 기기 연결 대기</span><button className="secondary-button" type="button" disabled={working} onClick={() => setConfirmation({ kind: "unlink-profile", link })}>연결 해제</button></div>)}</section>
-          <section className="account-card account-wide danger-zone"><p className="section-kicker">계정 종료</p><h2>서비스 계정 닫기</h2><p>인증·구독·서버 연결 상태를 종료합니다. 기기에 저장된 건강정보는 삭제되지 않습니다.</p><button className="danger-button" type="button" onClick={() => setConfirmation({ kind: "close-account" })}>계정 종료</button></section>
+          <section className="account-card account-wide danger-zone"><p className="section-kicker">회원 탈퇴</p><h2>이어봄에서 탈퇴하기</h2><p>인증·구독·서버 연결 상태를 종료합니다. 기기에 저장된 건강정보는 삭제되지 않습니다.</p><button className="danger-button" type="button" onClick={() => setConfirmation({ kind: "close-account" })}>회원 탈퇴</button></section>
         </div>
       )}
+
       {confirmation ? (
         <ConfirmationDialog
           confirmation={confirmation}
           email={account?.account.email}
           working={working}
+          error={error}
           onCancel={() => setConfirmation(undefined)}
           onConfirm={confirmAction}
           onExportBackup={exportBackup}
@@ -768,6 +771,7 @@ function ConfirmationDialog({
   confirmation,
   email,
   working,
+  error,
   onCancel,
   onConfirm,
   onExportBackup,
@@ -775,6 +779,7 @@ function ConfirmationDialog({
   confirmation: Confirmation;
   email?: string;
   working: boolean;
+  error?: string;
   onCancel: () => void;
   onConfirm: (event?: FormEvent<HTMLFormElement>) => Promise<void>;
   onExportBackup?: () => Promise<void>;
@@ -793,6 +798,15 @@ function ConfirmationDialog({
           </button>
         </div>
         <p className="confirmation-copy">{content.description}</p>
+        {/* **모달이 열려 있는 동안 실패는 여기서 보여야 한다.** `AccountPage` 본문의
+            `error-alert` 는 이 모달의 반투명·블러 배경(`.modal-backdrop`) 뒤에
+            깔려 있어서 시각적으로 가려진다 — 이메일을 잘못 입력해 확인에 실패해도
+            아무 반응이 없는 것처럼 보이던 원인 중 하나다. */}
+        {error ? (
+          <p className="alert error-alert" role="alert">
+            {error}
+          </p>
+        ) : null}
         <form className="product-form" onSubmit={(event) => void onConfirm(event)}>
           {confirmation.kind === "close-account" ? (
             <>
@@ -827,11 +841,6 @@ function ConfirmationDialog({
           </div>
         </form>
       </section>
-
-      {/* **데이터 관리를 계정 안으로 들였다.** 백업·복구·삭제는 계정에 딸린 일이라
-          메뉴를 하나 더 둘 무게가 아니었고, 사용자는 "내 데이터를 어떻게 하나" 를
-          계정에서 먼저 찾는다. `/data` 주소는 살려서 이리로 보낸다. */}
-      <DataManagementPage embedded />
     </div>
   );
 }
@@ -859,7 +868,7 @@ function confirmationCopy(confirmation: Confirmation) {
       action: "확인",
     };
   }
-  return { title: "서비스 계정을 종료할까요?", description: "구독과 서버 연결을 종료합니다. 마스터인 경우 다른 가족에게 마스터 권한이 자동 승계됩니다. 확인을 위해 현재 계정 이메일을 입력하세요.", action: "계정 종료" };
+  return { title: "회원 탈퇴하시겠어요?", description: "구독과 서버 연결을 종료합니다. 마스터인 경우 다른 가족에게 마스터 권한이 자동 승계됩니다. 확인을 위해 현재 계정 이메일을 입력하세요.", action: "회원 탈퇴" };
 }
 
 function createOpaqueReference(): string {
