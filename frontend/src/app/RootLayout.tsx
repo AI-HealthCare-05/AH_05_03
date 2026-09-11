@@ -29,8 +29,8 @@ import { useRouteTitle } from "./useRouteTitle";
 
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
-  { to: "/pain-diary", label: "통증 다이어리", end: false },
   { to: "/assessment", label: "위험 판정", end: false },
+  { to: "/pain-diary", label: "통증 다이어리", end: false },
   { to: "/health-data", label: "건강 데이터", end: false },
 ] as const;
 
@@ -170,13 +170,6 @@ export function RootLayout() {
               "계정" 이 있어서 같은 곳으로 가는 문이 둘이었다. 헤더에서 실제로 필요한
               것은 **지금 누구로 들어와 있는가** 와 나가는 문이다. */}
           <div className="header-status">
-            {/* **"기기 로컬" 이었다.** ADR-011 로 건강기록 정본이 PostgreSQL 로 옮겨
-                갔는데(2026-09-04) 이 배지만 남아서, 서버에서 읽어 온 숫자를 보여주는
-                화면이 헤더에서는 "기기 로컬" 이라고 말하고 있었다. 배지가 답해야 하는
-                것은 **지금 이 기록이 어디에 있는가** 다. */}
-            <span title="건강기록은 로그인한 계정에 저장되고, 기기를 바꿔도 같은 기록을 봅니다.">
-              <i aria-hidden="true" /> 계정 동기화
-            </span>
             {email ? (
               <NavLink
                 to="/account"
@@ -205,7 +198,8 @@ export function RootLayout() {
       <footer className="site-footer">
         <div>
           <strong>이어봄</strong>
-          {/* 같은 이유로 고쳤다 — 위 배지 주석 참조. 이 줄이 모든 화면 아래에 있어서
+          {/* **"기기 안에만" 이었다.** ADR-011 로 건강기록 정본이 PostgreSQL 로 옮겨
+              갔는데(2026-09-04) 이 문구만 남아 있었다. 이 줄이 모든 화면 아래에 있어서
               틀린 약속이 가장 넓게 퍼지던 자리다. */}
           <span>건강기록은 내 계정에, 나와 가족만 열람</span>
         </div>

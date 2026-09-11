@@ -261,23 +261,6 @@ main {
   gap: 12px;
 }
 
-.header-status > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--safe-text);
-  font-size: 0.85rem;
-  font-weight: 750;
-}
-
-.header-status i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #21b987;
-  box-shadow: 0 0 0 4px #e4f8f0;
-}
-
 .header-status button,
 .header-status > a {
   border: 1px solid var(--line);
@@ -3296,8 +3279,6 @@ main:focus {
   .primary-navigation {
     justify-content: flex-start;
   }
-
-  .header-status > span { display: none; }
 
   .member-list,
   .capability-list {
