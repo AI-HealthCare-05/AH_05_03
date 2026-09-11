@@ -14,6 +14,7 @@
 
 | 영역 | 문서 |
 |---|---|
+| 설계·아키텍처 | `SYSTEM_DESIGN.md` (클린 아키텍처·Tidy First·타이핑) |
 | ML·서빙 | 19 · 21 · 23 · 27 · 30 · 41 · 42 · ADR-009 |
 | 판정 중재 | 22 · 31 · `app/services/assessment.py` 머리말 |
 | 챗봇·RAG | **43** |
@@ -32,6 +33,8 @@
 8. **번들 재export 는 사후 주입물을 지운다.** `rule_anchor` 는 `bundle_io`, `trajectory.json` 의 `evidence` 는 `fit_trajectory` 가 승계한다.
 9. **`.env`·`*.pem`·`*.key` 는 열지도 출력하지도 않는다.** 키 이름 유무만 `grep -c` 로 본다.
 10. **`git checkout -- .` 을 쓰지 않는다.** 되돌릴 것만 경로로 지정한다. 2026-09-03 에 이것 하나로 그날 작업 전체가 날아갔다.
+11. **구조 변경과 기능 추가를 한 커밋에 섞지 않는다(Tidy First).** 리팩토링은 `refactor:`, 기능은 `feat:`, 수정은 `fix:`로 원자적 분리.
+12. **파이썬 타이핑은 3.10+ 내장 구문 준수.** `int | None`, `list[T]` 네이티브 제네릭 사용. `typing.Optional`/`Union`/`List` 및 3.12+ 전용 PEP 695 금지.
 
 ## 검증 — 같은 순서로, 숫자로
 
