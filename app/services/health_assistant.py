@@ -60,7 +60,14 @@ from app.services.outdoor_conditions_client import (
     OutdoorConditionsClientProtocol,
     resolve_sido_coordinates,
 )
-from app.services.outdoor_conditions_tools import execute_outdoor_conditions_tool
+from app.services.health_knowledge_tools import (
+    execute_health_knowledge_tool,
+    get_health_knowledge_tools,
+)
+from app.services.outdoor_conditions_tools import (
+    execute_outdoor_conditions_tool,
+    get_outdoor_conditions_tools,
+)
 from app.services.outdoor_topic import OUTDOOR_ACTIVITY_KEYWORDS, OUTDOOR_ENVIRONMENT_KEYWORDS
 
 logger = logging.getLogger(__name__)
@@ -316,14 +323,13 @@ class HealthAssistantService:
             return [], None
 
         required = set(decision.required_evidence_types)
-        if not required & {"health_knowledge", "health_records"}:
+        if not required & {"health_records"}:
             return [], None
 
         query = request.messages[-1].content
         results: list[Any] = []
         snapshot_lines: list[str] = []
-        knowledge_lines: list[str] = []
-
+        
         # 개인 건강기록 스냅샷은 아직 음주 주제만 구현돼 있다. 다른 주제의 개인기록
         # 스냅샷이 생기면 여기에 분기를 추가하면 된다.
         if "health_records" in required and is_alcohol_topic(query):
@@ -331,22 +337,10 @@ class HealthAssistantService:
             results.append(snapshot)
             snapshot_lines = ["[개인 건강기록 스냅샷]", snapshot.model_dump_json(exclude_none=True)]
 
-        if "health_knowledge" in required:
-            knowledge = await self.health_knowledge_client.search(query)
-            # 카탈로그에 아직 없는 주제는 items가 빈 채로 돌아온다. 그걸 그대로 results에
-            # 넣으면 "근거를 하나도 못 채웠다"는 사전 차단 게이트(``not preloaded_results``)가
-            # 빈 결과도 "뭔가 채워졌다"고 착각해서, 실제로는 근거가 없는데도 메인 LLM 호출까지
-            # 새어나간다. 빈 결과는 근거가 아니므로 넣지 않는다.
-            if knowledge.items:
-                results.append(knowledge)
-                knowledge_lines.append("[질병관리청 국가건강정보포털 근거]")
-                for item in knowledge.items:
-                    knowledge_lines.append(f"- {item.title}: {item.summary} (출처: {item.url})")
-
         if not results:
             return [], None
 
-        lines = snapshot_lines + knowledge_lines
+        lines = snapshot_lines
         return results, "\n".join(lines) if lines else None
 
     @classmethod
@@ -859,6 +853,10 @@ class HealthAssistantService:
             )
         if name == "search_medication_info":
             return await execute_medication_tool(name, args, self.medication_client)
+        if name == "get_outdoor_health_conditions":
+            return await execute_outdoor_conditions_tool(name, args, self.outdoor_conditions_client)
+        if name == "search_health_knowledge":
+            return await execute_health_knowledge_tool(name, args, self.health_knowledge_client)
         return await execute_facility_tool(name, args, self.facility_client)
 
     def _get_tools(self, request: HealthAssistantChatRequest) -> list[Any] | None:
@@ -872,6 +870,12 @@ class HealthAssistantService:
             tools.extend(get_medication_tools())
         if self._needs_food_nutrition(request):
             tools.extend(get_food_nutrition_tools())
+        if self._needs_outdoor_conditions(request):
+            tools.extend(get_outdoor_conditions_tools())
+        
+        # Add health knowledge tools if required by boundary or globally
+        tools.extend(get_health_knowledge_tools())
+
         return tools if tools else None
 
     @staticmethod

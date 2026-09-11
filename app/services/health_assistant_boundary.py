@@ -288,8 +288,8 @@ class HealthAssistantBoundaryService:
         if has_alcohol and has_alcohol_intent:
             return HealthAssistantScopeDecision(
                 scope="health",
-                requires_authoritative_evidence=True,
-                required_evidence_types=["health_knowledge", "health_records"],
+                requires_authoritative_evidence=False,
+                required_evidence_types=["health_knowledge"],
             )
 
         # 의약품 / 식품 / 시설
@@ -303,7 +303,7 @@ class HealthAssistantBoundaryService:
         ) and mentions_medication(compact):
             return HealthAssistantScopeDecision(
                 scope="health",
-                requires_authoritative_evidence=True,
+                requires_authoritative_evidence=False,
                 required_evidence_types=["medication"],
             )
 
@@ -313,7 +313,7 @@ class HealthAssistantBoundaryService:
         ):
             return HealthAssistantScopeDecision(
                 scope="health",
-                requires_authoritative_evidence=True,
+                requires_authoritative_evidence=False,
                 required_evidence_types=["food_nutrition"],
             )
 
@@ -323,7 +323,7 @@ class HealthAssistantBoundaryService:
         if any(k in compact for k in FACILITY_KEYWORDS) and any(k in compact for k in FACILITY_SEARCH_KEYWORDS):
             return HealthAssistantScopeDecision(
                 scope="health",
-                requires_authoritative_evidence=True,
+                requires_authoritative_evidence=False,
                 required_evidence_types=["facility"],
             )
 
@@ -355,7 +355,7 @@ class HealthAssistantBoundaryService:
             if not any(k in compact for k in ("고혈압", "당뇨", "심장", "신장", "천식", "협심증", "관절염")):
                 return HealthAssistantScopeDecision(
                     scope="health",
-                    requires_authoritative_evidence=True,
+                    requires_authoritative_evidence=False,
                     required_evidence_types=["outdoor"],
                 )
 

@@ -921,8 +921,21 @@ export function HealthAssistantDrawer({
         needs_confirmation: false,
         suggested_quick_replies: [],
       });
-      const applyDelta = (delta: string) => {
-        streamed += delta;
+      // 타자기 효과 (Typewriter effect)를 위한 큐
+      let pendingDelta = "";
+      let isTyping = false;
+      const typeNextChar = () => {
+        if (!pendingDelta) {
+          isTyping = false;
+          return;
+        }
+        
+        // 플래시 모델이 너무 빨라 한 번에 많이 들어올 때는 청크 단위로 조금씩 빼냄
+        const chunkSize = Math.max(1, Math.floor(pendingDelta.length / 5));
+        const chunk = pendingDelta.slice(0, chunkSize);
+        pendingDelta = pendingDelta.slice(chunkSize);
+        streamed += chunk;
+        
         setMessages((prev) => prev.map((message) => (
           message.id === streamingId
             ? {
@@ -932,6 +945,16 @@ export function HealthAssistantDrawer({
               }
             : message
         )));
+        
+        requestAnimationFrame(typeNextChar);
+      };
+
+      const applyDelta = (delta: string) => {
+        pendingDelta += delta;
+        if (!isTyping) {
+          isTyping = true;
+          requestAnimationFrame(typeNextChar);
+        }
       };
       const applyFacilityResult = (facility: FacilitySearchResult) => {
         streamedFacility = facility;
@@ -2358,6 +2381,7 @@ export function HealthAssistantDrawer({
               clearSelectedImage();
             }}
             onConfirm={(updatedDraft, updatedItems) => void handleConfirmOcrModalSave(updatedDraft, updatedItems)}
+            onRetry={() => fileInputRef.current?.click()}
           />
         )}
       </div>
@@ -2401,6 +2425,7 @@ export function HealthAssistantDrawer({
             clearSelectedImage();
           }}
           onConfirm={(updatedDraft, updatedItems) => void handleConfirmOcrModalSave(updatedDraft, updatedItems)}
+          onRetry={() => fileInputRef.current?.click()}
         />
       )}
     </div>
@@ -2420,6 +2445,7 @@ function OcrReviewModal({
   working,
   onClose,
   onConfirm,
+  onRetry,
 }: {
   profileName: string;
   imageUrl: string;
@@ -2430,6 +2456,7 @@ function OcrReviewModal({
   working: boolean;
   onClose: () => void;
   onConfirm: (draft: LabResultDraft, items: OcrReviewItem[]) => void;
+  onRetry?: () => void;
 }) {
   const [recordedAt, setRecordedAt] = useState(draft?.recorded_at ?? new Date().toISOString().slice(0, 10));
   const [screeningName, setScreeningName] = useState(draft?.screening_name ?? "국가건강검진");
@@ -2473,7 +2500,10 @@ function OcrReviewModal({
               <div className="ocr-modal-error" role="alert">
                 <strong>서류를 분석하지 못했습니다.</strong>
                 <p>{error}</p>
-                <button className="secondary-button" type="button" onClick={onClose}>다른 파일 선택하기</button>
+                <button className="secondary-button" type="button" onClick={() => {
+                  onClose();
+                  if (onRetry) onRetry();
+                }}>다른 파일 선택하기</button>
               </div>
             ) : working && !draft ? (
               <div className="ocr-modal-loading">

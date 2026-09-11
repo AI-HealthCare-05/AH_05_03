@@ -85,9 +85,53 @@ export interface RecognizeOptions {
   signal?: AbortSignal;
 }
 
+async function compressImage(file: Blob, maxWidth = 1600, quality = 0.8): Promise<Blob> {
+  if (file.type === "application/pdf") return file;
+  
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxWidth || height > maxWidth) {
+        if (width > height) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        } else {
+          width = Math.round((width * maxWidth) / height);
+          height = maxWidth;
+        }
+      }
+      
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return resolve(file);
+      
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (blob) resolve(blob);
+          else resolve(file);
+        },
+        "image/jpeg",
+        quality
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+    img.src = url;
+  });
+}
+
 export class GeminiOcrAdapter {
   async recognize(file: Blob, fileName: string, options: RecognizeOptions = {}): Promise<GeminiOcrResult> {
-    const accepted = await serverApiClient.enqueueDocumentJob<JobAccepted>(file, fileName);
+    const compressedFile = await compressImage(file);
+    const accepted = await serverApiClient.enqueueDocumentJob<JobAccepted>(compressedFile, fileName);
 
     if (options.onProgress) {
       const streamed = await this.stream(accepted.job_id, options);

@@ -121,6 +121,9 @@ class KdcaHealthInfoClient:
 
         try:
             items = await self._search_live(token, query)
+            if not items:
+                logger.debug("질병관리청 API 결과 없음 — 수작업 카탈로그 폴백")
+                return await self._fallback.search(query)
         except Exception as ex:
             logger.warning("질병관리청 건강정보 API 호출 실패(%s) — 수작업 카탈로그로 대체", type(ex).__name__)
             return await self._fallback.search(query)
