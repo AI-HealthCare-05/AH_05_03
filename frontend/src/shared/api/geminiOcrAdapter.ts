@@ -89,9 +89,23 @@ async function compressImage(file: Blob, maxWidth = 1600, quality = 0.8): Promis
   if (file.type === "application/pdf") return file;
   
   return new Promise((resolve) => {
+    let handled = false;
     const url = URL.createObjectURL(file);
     const img = new Image();
+    
+    // JSDOM 등 테스트 환경에서 onload가 안 불리는 경우를 대비한 타임아웃
+    const fallbackTimer = setTimeout(() => {
+      if (!handled) {
+        handled = true;
+        URL.revokeObjectURL(url);
+        resolve(file);
+      }
+    }, 1000);
+
     img.onload = () => {
+      if (handled) return;
+      handled = true;
+      clearTimeout(fallbackTimer);
       URL.revokeObjectURL(url);
       let { width, height } = img;
       if (width > maxWidth || height > maxWidth) {
@@ -108,7 +122,7 @@ async function compressImage(file: Blob, maxWidth = 1600, quality = 0.8): Promis
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext("2d");
-      if (!ctx) return resolve(file);
+      if (!ctx || !canvas.toBlob) return resolve(file);
       
       ctx.drawImage(img, 0, 0, width, height);
       canvas.toBlob(
@@ -121,6 +135,9 @@ async function compressImage(file: Blob, maxWidth = 1600, quality = 0.8): Promis
       );
     };
     img.onerror = () => {
+      if (handled) return;
+      handled = true;
+      clearTimeout(fallbackTimer);
       URL.revokeObjectURL(url);
       resolve(file);
     };
