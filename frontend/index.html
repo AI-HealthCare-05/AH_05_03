@@ -7,9 +7,84 @@
          붙기 전 한순간만 보이므로 특정 화면 이름을 적지 않는다 — "건강기록 작성"
          이었는데 일곱 라우트 전부 그 제목으로 남아 있었다. -->
     <title>이어봄</title>
+    <!-- NavBar 가 SPA 전환이 아니라 진짜 새로고침을 내보내므로(`RootLayout.tsx` 의
+         `isNavItemActive` 참고), 매번 문서를 새로 받는 동안 흰 화면이 뜬다. React 가
+         마운트되며 `#root` 내용을 통째로 갈아 끼우기 전까지만 보일 골격이라, 번들
+         CSS 로딩 여부와 무관하게 항상 뜨도록 여기 인라인으로 둔다. -->
+    <style>
+      .app-boot-skeleton {
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        background: #f5f7fb;
+      }
+      .app-boot-skeleton-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 14px 24px;
+        background: #ffffff;
+        border-bottom: 1px solid #e8edf5;
+      }
+      .app-boot-skeleton-brand,
+      .app-boot-skeleton-pill,
+      .app-boot-skeleton-body span {
+        background: linear-gradient(90deg, #edf1f7, #f8faff, #edf1f7);
+        background-size: 200% 100%;
+        animation: app-boot-shimmer 1.4s infinite linear;
+        border-radius: 10px;
+      }
+      .app-boot-skeleton-brand {
+        width: 96px;
+        height: 26px;
+        margin-right: 12px;
+      }
+      .app-boot-skeleton-pill {
+        width: 64px;
+        height: 30px;
+        border-radius: 999px;
+      }
+      .app-boot-skeleton-body {
+        flex: 1;
+        padding: 28px 24px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 16px;
+        align-content: start;
+      }
+      .app-boot-skeleton-body span {
+        height: 120px;
+      }
+      @keyframes app-boot-shimmer {
+        to {
+          background-position: -200% 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .app-boot-skeleton-brand,
+        .app-boot-skeleton-pill,
+        .app-boot-skeleton-body span {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="app-boot-skeleton" aria-hidden="true">
+        <div class="app-boot-skeleton-header">
+          <span class="app-boot-skeleton-brand"></span>
+          <span class="app-boot-skeleton-pill"></span>
+          <span class="app-boot-skeleton-pill"></span>
+          <span class="app-boot-skeleton-pill"></span>
+        </div>
+        <div class="app-boot-skeleton-body">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

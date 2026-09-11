@@ -8,9 +8,9 @@ import { LocalDomainProvider } from "../../app/LocalDomainProvider";
 import { PRIMARY_HOUSEHOLD_ID, useLocalDomain } from "../../app/localDomainContext";
 import { HealthDataPage } from "./HealthDataPage";
 
-/** 운영에서는 `AppProviders` 가 항상 감싼다. `/insights` 를 이 화면으로 합치며
- *  붙은 `ChallengeDashboardCard` 가 서버 상태를 읽으므로 이 하네스에도 필요하다
- *  (`HomePage.test.tsx` 의 같은 코멘트 참조). */
+/** 운영에서는 `AppProviders` 가 항상 감싼다. 이 화면은 더 이상 서버 상태를 읽는
+ *  컴포넌트를 직접 렌더링하지 않지만(2026-09-11, 대시보드 챌린지 카드 제거),
+ *  하네스 자체는 그대로 둔다 — 다시 필요해질 때 매 테스트를 고치지 않도록. */
 function newQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } } });
 }

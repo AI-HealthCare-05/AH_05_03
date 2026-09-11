@@ -15,6 +15,7 @@ from app.exceptions import (
     ProfileLinkNotFoundError,
     ProfileLinkStateConflictError,
     ProfileRefAlreadyClaimedError,
+    VersionMismatchError,
 )
 from app.models.family_invitations import InvitationStatus
 from app.models.households import ProfileLink, ProfileLinkStatus
@@ -80,12 +81,16 @@ class ProfileLinkService:
         links = await self.profile_link_repo.list_for_account(account.id)
         return ProfileLinkListData(items=[ProfileLinkData.model_validate(item) for item in links])
 
-    async def unlink(self, link_id: uuid.UUID, account: ServiceAccount) -> ProfileLinkData:
+    async def unlink(
+        self, link_id: uuid.UUID, account: ServiceAccount, *, expected_version: int | None = None
+    ) -> ProfileLinkData:
         link = await self.profile_link_repo.get_for_update(link_id)
         if link is None or link.account_id != account.id:
             raise ProfileLinkNotFoundError()
         if link.status is not ProfileLinkStatus.ACTIVE:
             raise ProfileLinkStateConflictError()
+        if expected_version is not None and link.row_version != expected_version:
+            raise VersionMismatchError()
         link.status = ProfileLinkStatus.UNLINKED
         link.unlinked_at = datetime.now(tz=timezone.utc)
         link.row_version += 1

@@ -34,6 +34,20 @@ interface RequestOptions extends RequestInit {
   retryAfterRefresh?: boolean;
 }
 
+/**
+ * 가정·구독·초대·프로필연결·계정폐쇄 재시도 중복 방지 (docs/03_api_spec.md §2.4).
+ * 매 호출마다 새로 만든다 — 같은 키를 두 번 쓰는 것은 "같은 시도의 재전송"이라는 뜻이라,
+ * 새 사용자 조작이라면 항상 새 키가 맞다.
+ */
+function newIdempotencyKey(): string {
+  return crypto.randomUUID();
+}
+
+/** `If-Match` 헤더 형식. 서버는 `"<row_version>"` 형태만 받는다 (docs/03 §2.5). */
+function ifMatchHeader(rowVersion: number): string {
+  return `"${rowVersion}"`;
+}
+
 export class ServerApiError extends Error {
   public constructor(
     public readonly status: number,
@@ -120,7 +134,11 @@ export class ServerApiClient {
 
   public closeAccount(purgeHealthData: boolean = false): Promise<AccountCloseData> {
     const query = purgeHealthData ? "?purge_health_data=true" : "";
-    return this.request(`/account${query}`, { method: "DELETE", authenticated: true });
+    return this.request(`/account${query}`, {
+      method: "DELETE",
+      authenticated: true,
+      headers: { "Idempotency-Key": newIdempotencyKey() },
+    });
   }
 
   public getSubscription(): Promise<SubscriptionData> {
@@ -537,12 +555,17 @@ export class ServerApiClient {
     return this.request("/subscription/change", {
       method: "POST",
       authenticated: true,
+      headers: { "Idempotency-Key": newIdempotencyKey() },
       body: JSON.stringify({ plan }),
     });
   }
 
   public createHousehold(): Promise<HouseholdData> {
-    return this.request("/households", { method: "POST", authenticated: true });
+    return this.request("/households", {
+      method: "POST",
+      authenticated: true,
+      headers: { "Idempotency-Key": newIdempotencyKey() },
+    });
   }
 
   public async listHouseholds(): Promise<HouseholdData[]> {
@@ -579,10 +602,11 @@ export class ServerApiClient {
     });
   }
 
-  public closeHousehold(householdId: string): Promise<void> {
+  public closeHousehold(householdId: string, rowVersion: number): Promise<void> {
     return this.request(`/households/${encodeURIComponent(householdId)}`, {
       method: "DELETE",
       authenticated: true,
+      headers: { "Idempotency-Key": newIdempotencyKey(), "If-Match": ifMatchHeader(rowVersion) },
     });
   }
 
@@ -601,6 +625,7 @@ export class ServerApiClient {
     return this.request("/family-invitations", {
       method: "POST",
       authenticated: true,
+      headers: { "Idempotency-Key": newIdempotencyKey() },
       body: JSON.stringify({
         household_id: input.householdId,
         invitee_email: input.inviteeEmail,
@@ -613,18 +638,23 @@ export class ServerApiClient {
     return this.request("/family-invitations", { authenticated: true });
   }
 
-  public acceptInvitation(invitationId: string, token: string): Promise<FamilyInvitationData> {
-    return this.transitionInvitation(invitationId, "accept", token);
+  public acceptInvitation(invitationId: string, token: string, rowVersion: number): Promise<FamilyInvitationData> {
+    return this.transitionInvitation(invitationId, "accept", rowVersion, token);
   }
 
-  public declineInvitation(invitationId: string, token?: string): Promise<FamilyInvitationData> {
-    return this.transitionInvitation(invitationId, "decline", token);
+  public declineInvitation(
+    invitationId: string,
+    rowVersion: number,
+    token?: string,
+  ): Promise<FamilyInvitationData> {
+    return this.transitionInvitation(invitationId, "decline", rowVersion, token);
   }
 
-  public cancelInvitation(invitationId: string): Promise<FamilyInvitationData> {
+  public cancelInvitation(invitationId: string, rowVersion: number): Promise<FamilyInvitationData> {
     return this.request(`/family-invitations/${encodeURIComponent(invitationId)}/cancel`, {
       method: "POST",
       authenticated: true,
+      headers: { "Idempotency-Key": newIdempotencyKey(), "If-Match": ifMatchHeader(rowVersion) },
     });
   }
 
@@ -632,6 +662,7 @@ export class ServerApiClient {
     return this.request("/profile-links", {
       method: "POST",
       authenticated: true,
+      headers: { "Idempotency-Key": newIdempotencyKey() },
       body: JSON.stringify({ invitation_id: invitationId, local_profile_ref: localProfileRef }),
     });
   }
@@ -643,10 +674,11 @@ export class ServerApiClient {
     return result.items;
   }
 
-  public unlinkProfileLink(linkId: string): Promise<ProfileLinkData> {
+  public unlinkProfileLink(linkId: string, rowVersion: number): Promise<ProfileLinkData> {
     return this.request(`/profile-links/${encodeURIComponent(linkId)}/unlink`, {
       method: "POST",
       authenticated: true,
+      headers: { "Idempotency-Key": newIdempotencyKey(), "If-Match": ifMatchHeader(rowVersion) },
     });
   }
 
@@ -657,11 +689,13 @@ export class ServerApiClient {
   private transitionInvitation(
     invitationId: string,
     action: "accept" | "decline",
+    rowVersion: number,
     token?: string,
   ): Promise<FamilyInvitationData> {
     return this.request(`/family-invitations/${encodeURIComponent(invitationId)}/${action}`, {
       method: "POST",
       authenticated: true,
+      headers: { "Idempotency-Key": newIdempotencyKey(), "If-Match": ifMatchHeader(rowVersion) },
       body: token ? JSON.stringify({ token }) : undefined,
     });
   }

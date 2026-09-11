@@ -29,8 +29,8 @@ import { useRouteTitle } from "./useRouteTitle";
 
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
+  { to: "/assessment", label: "질환 예측", end: false },
   { to: "/pain-diary", label: "통증 다이어리", end: false },
-  { to: "/assessment", label: "위험 판정", end: false },
   { to: "/health-data", label: "건강 데이터", end: false },
 ] as const;
 
@@ -46,8 +46,16 @@ function readResetToken(): boolean {
   return Boolean(params.get("reset_token"));
 }
 
+// 주 메뉴는 일부러 `NavLink` 를 쓰지 않는다 — 눌렀을 때 SPA 전환이 아니라 진짜
+// 브라우저 새로고침이 나가야 해서, 가로채는 `<Link>` 대신 일반 `<a href>` 로 둔다.
+// 그래서 "현재 위치" 표시(`.active` 클래스·`aria-current`)를 여기서 직접 계산한다.
+function isNavItemActive(pathname: string, item: { to: string; end: boolean }): boolean {
+  if (item.end) return pathname === item.to;
+  return pathname === item.to || pathname.startsWith(`${item.to}/`);
+}
+
 export function RootLayout() {
-  const { status, email, signOut } = useAuth();
+  const { status, email, signOut, signedOutNotice } = useAuth();
   const navigationRef = useRef<HTMLElement>(null);
   const { pathname } = useLocation();
 
@@ -120,7 +128,16 @@ export function RootLayout() {
   // 갱신 토큰으로 세션을 되살리는 동안 아무것도 그리지 않는다. 로그인 화면을 먼저
   // 띄우면 **이미 로그인한 사용자에게 로그인 화면이 한 번 깜빡인다.**
   if (status === "checking") {
-    return <div className="route-loading">불러오는 중…</div>;
+    return (
+      <div className="route-loading">
+        불러오는 중…
+        <div className="route-loading-skeleton" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
+    );
   }
 
   // 리다이렉트가 아니라 `Outlet` 자리를 대신 채운다. 주소가 그대로 남아서 로그인하면
@@ -128,7 +145,7 @@ export function RootLayout() {
   // 단, 비밀번호 재설정 링크(#reset_token=...)로 진입한 경우에는 로그인 상태와 무관하게
   // 재설정 관문을 우선 열어 준다.
   if (hasResetToken || status === "signed-out") {
-    return <SignInPage onResetComplete={() => setHasResetToken(false)} />;
+    return <SignInPage onResetComplete={() => setHasResetToken(false)} initialMessage={signedOutNotice} />;
   }
 
   return (
@@ -159,24 +176,25 @@ export function RootLayout() {
             aria-label="주 메뉴"
             ref={navigationRef}
           >
-            {NAVIGATION.map((item) => (
-              <NavLink key={`${item.to}-${item.label}`} to={item.to} end={item.end}>
-                {item.label}
-              </NavLink>
-            ))}
+            {NAVIGATION.map((item) => {
+              const active = isNavItemActive(pathname, item);
+              return (
+                <a
+                  key={`${item.to}-${item.label}`}
+                  href={item.to}
+                  className={active ? "active" : undefined}
+                  aria-current={active ? "page" : undefined}
+                >
+                  {item.label}
+                </a>
+              );
+            })}
           </nav>
 
           {/* 예전에는 여기가 `/account` 로 가는 "내 계정" 링크였는데, 주 메뉴에 이미
               "계정" 이 있어서 같은 곳으로 가는 문이 둘이었다. 헤더에서 실제로 필요한
               것은 **지금 누구로 들어와 있는가** 와 나가는 문이다. */}
           <div className="header-status">
-            {/* **"기기 로컬" 이었다.** ADR-011 로 건강기록 정본이 PostgreSQL 로 옮겨
-                갔는데(2026-09-04) 이 배지만 남아서, 서버에서 읽어 온 숫자를 보여주는
-                화면이 헤더에서는 "기기 로컬" 이라고 말하고 있었다. 배지가 답해야 하는
-                것은 **지금 이 기록이 어디에 있는가** 다. */}
-            <span title="건강기록은 로그인한 계정에 저장되고, 기기를 바꿔도 같은 기록을 봅니다.">
-              <i aria-hidden="true" /> 계정 동기화
-            </span>
             {email ? (
               <NavLink
                 to="/account"
@@ -196,8 +214,22 @@ export function RootLayout() {
 
       <main id="main-content" tabIndex={-1}>
         {/* 라우트가 lazy 라 청크를 받는 동안 잠깐 빈다. 폴백을 안 두면 React 가
-            "A component suspended while responding to synchronous input" 으로 던진다. */}
-        <Suspense fallback={<div className="route-loading">불러오는 중…</div>}>
+            "A component suspended while responding to synchronous input" 으로 던진다.
+            NavBar 가 이제 진짜 새로고침을 내보내므로(위 `isNavItemActive` 참고), 이
+            폴백이 화면을 다시 그리는 매 이동마다 한 번씩은 보인다 — 그래서 텍스트뿐
+            아니라 스켈레톤을 얹어 로딩을 덜 느리게 보이게 한다. */}
+        <Suspense
+          fallback={
+            <div className="route-loading">
+              불러오는 중…
+              <div className="route-loading-skeleton" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+            </div>
+          }
+        >
           <Outlet />
         </Suspense>
       </main>
@@ -205,7 +237,8 @@ export function RootLayout() {
       <footer className="site-footer">
         <div>
           <strong>이어봄</strong>
-          {/* 같은 이유로 고쳤다 — 위 배지 주석 참조. 이 줄이 모든 화면 아래에 있어서
+          {/* **"기기 안에만" 이었다.** ADR-011 로 건강기록 정본이 PostgreSQL 로 옮겨
+              갔는데(2026-09-04) 이 문구만 남아 있었다. 이 줄이 모든 화면 아래에 있어서
               틀린 약속이 가장 넓게 퍼지던 자리다. */}
           <span>건강기록은 내 계정에, 나와 가족만 열람</span>
         </div>

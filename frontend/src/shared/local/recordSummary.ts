@@ -195,7 +195,7 @@ const TYPE_LABEL: Partial<Record<HealthRecordType, string>> = {
   sleep: "수면",
   daily_condition: "컨디션",
   vaccination: "예방접종",
-  assessment: "위험 판정",
+  assessment: "질환 예측",
   note: "메모",
 };
 

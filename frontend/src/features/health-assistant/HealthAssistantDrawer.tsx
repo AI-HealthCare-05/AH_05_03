@@ -64,6 +64,7 @@ import {
 } from "./healthAssistantLogic";
 import { FoodNutritionCard } from "./FoodNutritionCard";
 import { MedicationCard } from "./MedicationCard";
+import bomiChickIcon from "./assets/bomi-chick.png";
 import "./healthAssistantDrawer.css";
 
 /**
@@ -1750,7 +1751,9 @@ export function HealthAssistantDrawer({
               ⠿
             </span>
           )}
-          <span className="assistant-avatar" aria-hidden="true">봄</span>
+          <span className="assistant-avatar" aria-hidden="true">
+            <img src={bomiChickIcon} alt="" className="assistant-avatar-mascot" />
+          </span>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <h3>봄이 · 건강 비서</h3>
@@ -1966,7 +1969,9 @@ export function HealthAssistantDrawer({
           {messages.map((msg) => (
             <div key={msg.id} className={`assistant-message-row ${msg.role}`}>
               {msg.role === "assistant" && (
-                <span className="msg-avatar" aria-hidden="true">봄</span>
+                <span className="msg-avatar" aria-hidden="true">
+                  <img src={bomiChickIcon} alt="" className="msg-avatar-mascot" />
+                </span>
               )}
               <div className="msg-bubble-wrap">
                 {/* 첨부 이미지 썸네일 (사용자가 이미지를 전송한 경우) */}

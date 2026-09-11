@@ -44,16 +44,28 @@
   box-shadow: 0 8px 20px rgba(23, 32, 51, 0.3);
 }
 
-.channel-talk-launcher-btn svg {
+.channel-talk-launcher-btn svg,
+.channel-talk-launcher-btn img {
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
 }
 
-.channel-talk-launcher-btn.is-open svg.icon-chat {
+.channel-talk-launcher-btn.is-open .icon-chat {
   display: none;
 }
 
-.channel-talk-launcher-btn:not(.is-open) svg.icon-close {
+.channel-talk-launcher-btn:not(.is-open) .icon-close {
   display: none;
+}
+
+.icon-chat-mascot {
+  width: 40px;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.28));
+}
+
+.channel-talk-launcher-btn:hover .icon-chat-mascot {
+  transform: scale(1.05);
 }
 
 /* 런처 상단 펄스 알림 뱃지 */

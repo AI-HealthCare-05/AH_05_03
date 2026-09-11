@@ -86,14 +86,24 @@ class TestDeleteAccount:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     async def test_closed_account_cannot_login(self, client: AsyncClient) -> None:
+        """해지 사실을 익명 로그인 시도자에게 알리지 않는다.
+
+        예전에는 403 `ACCOUNT_CLOSED` 였다 — 그 이메일이 실제로 가입돼 있고
+        지금 해지 상태라는 것을 로그인 실패 응답이 그대로 확인해 줬다.
+        `test_login_api.py::test_wrong_password_and_unknown_email_look_identical`
+        가 지키려던 것과 같은 경계인데 계정 상태 축만 비어 있었다. 지금은
+        오답 로그인과 구분되지 않는다.
+        """
         email = "post_close_login@example.com"
         tokens = await _login(client, email)
         await client.delete("/api/v1/account", headers={"Authorization": f"Bearer {tokens['access_token']}"})
 
-        response = await client.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
+        closed_login = await client.post("/api/v1/auth/login", json={"email": email, "password": "Password123!"})
+        wrong_password = await client.post("/api/v1/auth/login", json={"email": email, "password": "WrongPassword123!"})
 
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert response.json()["error_code"] == "ACCOUNT_CLOSED"
+        assert closed_login.status_code == status.HTTP_401_UNAUTHORIZED
+        assert closed_login.json()["error_code"] == "CREDENTIALS_INVALID"
+        assert closed_login.json() == wrong_password.json()
 
     async def test_closed_email_cannot_re_signup(self, client: AsyncClient) -> None:
         """의도된 귀결: 재가입을 여는 별도 엔드포인트는 스펙에 없어 만들지
