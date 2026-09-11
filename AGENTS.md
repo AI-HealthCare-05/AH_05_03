@@ -14,7 +14,7 @@
 
 | 영역 | 문서 |
 |---|---|
-| 설계·아키텍처 | `SYSTEM_DESIGN.md` (클린 아키텍처·Tidy First·타이핑) |
+| 설계·아키텍처 | `SYSTEM_DESIGN.md` (클린 아키텍처·Tidy First·타이핑·RESTful/로깅) · `.agents/skills/rest-api-design/` |
 | ML·서빙 | 19 · 21 · 23 · 27 · 30 · 41 · 42 · ADR-009 |
 | 판정 중재 | 22 · 31 · `app/services/assessment.py` 머리말 |
 | 챗봇·RAG | **43** |
@@ -35,6 +35,7 @@
 10. **`git checkout -- .` 을 쓰지 않는다.** 되돌릴 것만 경로로 지정한다. 2026-09-03 에 이것 하나로 그날 작업 전체가 날아갔다.
 11. **구조 변경과 기능 추가를 한 커밋에 섞지 않는다(Tidy First).** 리팩토링은 `refactor:`, 기능은 `feat:`, 수정은 `fix:`로 원자적 분리.
 12. **파이썬 타이핑은 3.10+ 내장 구문 준수.** `int | None`, `list[T]` 네이티브 제네릭 사용. `typing.Optional`/`Union`/`List` 및 3.12+ 전용 PEP 695 금지.
+13. **RESTful API & 관측성 표준 준수.** 백엔드 라우터/엔드포인트 작성 시 `SYSTEM_DESIGN.md` 8번 섹션 및 `.agents/skills/rest-api-design/` 준수. 동사 배제·복수형 명사 컬렉션, 상태 코드(201+Location, 202, 204), RFC 7807 에러 포맷(`application/problem+json`), `X-Request-ID` 전파, 로그 내 의료 민감정보(PHI) 마스킹 필수.
 
 ## 검증 — 같은 순서로, 숫자로
 

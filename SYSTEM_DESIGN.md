@@ -111,3 +111,49 @@ Kent Beck의 **Tidy First** 철학을 저장소의 Conventional Commit 체계와
 
 - **네트워크 격리 (격리도 100%)**: 단위 테스트(`app/tests/model/`, 프론트엔드 유닛테스트)는 외부 네트워크 호출이 0이어야 한다. 모든 외부 API 클라이언트는 `Protocol`을 기반으로 Mocking/Fake 객체를 주입한다.
 - **DB 불필요 테스트 우선 실행**: 모델 채점 및 순수 로직 테스트(`app/tests/model`)를 DB 통합 테스트보다 항상 먼저 수행하여 빠른 피드백 루프를 유지한다.
+
+---
+
+## 8. RESTful API & 관측성(로깅) 설계 표준
+
+모든 백엔드 엔드포인트와 HTTP 통신 인터페이스는 **Microsoft REST API Guidelines**의 리소스 설계 모델과 **Zalando RESTful Guidelines**의 국제 표준(RFC 7807 및 분산 추적)을 결합한 하이브리드 표준을 따른다. 상세 구현 지침과 자동화 체크리스트는 [`.agents/skills/rest-api-design/SKILL.md`](.agents/skills/rest-api-design/SKILL.md)를 단일 진실 원천으로 삼는다.
+
+### ① RESTful 리소스 설계 최소 규칙 (Resource-Oriented)
+- **URI 명명**: 소문자, 케밥 케이스(`kebab-case`), 복수형 명사 컬렉션을 기본으로 한다 (`/users`, `/households/{id}/members`, `/health-records`).
+- **행위(동사) 배제**: URI 경로에 `get`, `create`, `update`, `delete`, `run` 등의 동사를 포함하지 않는다. 행위는 표준 HTTP 메서드로 표현한다:
+  - `GET`: 리소스 또는 컬렉션 단건/다건 조회 (멱등성 보장, 본문 없음)
+  - `POST`: 신규 리소스 생성 또는 복잡한 계산 트리거
+  - `PUT`: 리소스 전체 교체 (멱등성 보장)
+  - `PATCH`: 리소스 부분 수정
+  - `DELETE`: 리소스 삭제 (멱등성 보장)
+- **HTTP 상태 코드 계약 (Status Code Contract)**:
+  - `200 OK`: 일반 조회 및 본문이 포함된 수정 완료
+  - `201 Created`: 신규 리소스 생성 완료 (반드시 `Location` 헤더에 생성된 리소스 URI 포함)
+  - `202 Accepted`: 비동기 연산/백그라운드 잡 접수 완료 (상태 조회 URI 또는 Job DTO 반환)
+  - `204 No Content`: 본문 없는 성공적인 처리 (삭제 완료 등)
+  - `400 Bad Request`: 요청 문법 오류 / 지원되지 않는 쿼리 파라미터
+  - `401 Unauthorized` / `403 Forbidden`: 인증 실패 / 인가 및 권한 부족
+  - `404 Not Found`: 존재하지 않는 리소스
+  - `409 Conflict`: 리소스 상태 충돌 (중복 키, 버전 충돌 등)
+  - `422 Unprocessable Entity`: 유효성 검증 실패 (Pydantic ValidationError, 의학적 범위를 벗어난 비정상 수치)
+  - `500 Internal Server Error` / `503 Service Unavailable`: 서버 내부 오류 / 외부 연동 서비스 장애
+
+### ② 국제 표준 에러 규격 (RFC 7807 Problem Details)
+모든 에러 응답은 `application/problem+json` 포맷을 따르며, 임의의 텍스트나 일회성 딕셔너리(`{"detail": "..."}`)를 직접 반환하지 않는다:
+```json
+{
+  "type": "https://api.ieobom.com/errors/invalid-biometrics",
+  "title": "Invalid Biometrics Value",
+  "status": 422,
+  "detail": "수축기 혈압(sbp)은 40~300 mmHg 사이여야 합니다.",
+  "instance": "/api/v1/predictions/assessments",
+  "request_id": "req-9b1deb4d-3b47-4f21"
+}
+```
+
+### ③ 관측성(Observability) & 로깅 규격
+- **요청 추적 ID (`X-Request-ID`)**: 모든 인바운드 HTTP 요청에 대해 상관 ID(Correlation ID)를 발행하거나 수신하며, 응답 헤더 및 모든 연계 비동기 워커(`ai-worker`) 작업 컨텍스트로 전파한다.
+- **구조화 JSON 로깅**: 운영 로그는 정형 JSON(`timestamp`, `level`, `request_id`, `method`, `path`, `status`, `duration_ms`)으로 출력한다.
+- **의료 개인정보(PHI) 보호**: 로그 본문에 주민등록번호, 환자 실명, 상세 혈액 수치 원본 등 개인 식별/건강 정보를 평문으로 남기지 않고 식별자(ID) 수준으로 마스킹한다.
+- **외부 연동 지연 모니터링**: 기상청, 에어코리아, 식약처 등 외부 API 호출 시 요청 지연시간(latency) 및 실패 여부를 구조화 로그로 반드시 기록한다.
+
