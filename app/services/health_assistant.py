@@ -57,26 +57,14 @@ from app.services.outdoor_conditions_client import (
     resolve_sido_coordinates,
 )
 from app.services.outdoor_conditions_tools import execute_outdoor_conditions_tool
+from app.services.outdoor_topic import (
+    OUTDOOR_ACTIVITY_KEYWORDS,
+    OUTDOOR_ENVIRONMENT_KEYWORDS,
+)
 
 logger = logging.getLogger(__name__)
 
 
-_OUTDOOR_ENVIRONMENT_KEYWORDS = ("날씨", "미세먼지", "초미세먼지", "대기질")
-_OUTDOOR_ACTIVITY_KEYWORDS = (
-    "산책",
-    "조깅",
-    "러닝",
-    "달리기",
-    "유산소",
-    "자전거",
-    "라이딩",
-    "걷기",
-    "운동추천",
-    "운동할",
-    "야외",
-    "밖에서",
-    "외출",
-)
 _FACILITY_KEYWORDS = (
     "응급실",
     "병원",
@@ -653,14 +641,14 @@ class HealthAssistantService:
         if not request.messages:
             return False
         message = request.messages[-1].content.replace(" ", "")
-        if any(keyword in message for keyword in _OUTDOOR_ENVIRONMENT_KEYWORDS):
+        if any(keyword in message for keyword in OUTDOOR_ENVIRONMENT_KEYWORDS):
             return True
         if any(
             keyword in message
             for keyword in ("했어", "완료", "기록해", "기록할", "기록하기", "달렸어", "뛰었어", "걸었어", "탔어")
         ):
             return False
-        if any(keyword in message for keyword in _OUTDOOR_ACTIVITY_KEYWORDS) or (
+        if any(keyword in message for keyword in OUTDOOR_ACTIVITY_KEYWORDS) or (
             "운동" in message and any(k in message for k in ("추천", "할까", "할건", "할거", "예정", "계획", "뭐"))
         ):
             return True

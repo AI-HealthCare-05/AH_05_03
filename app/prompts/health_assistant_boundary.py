@@ -52,6 +52,7 @@ def build_health_assistant_scope_instruction() -> str:
 - '안녕, 뭘 할 수 있어?' → service_usage, false, []
 - '고혈압에 좋은 운동 알려줘' → health, true, [health_knowledge]
 - '라면 나트륨 알려줘' → health, true, [food_nutrition]
+- '오늘 유산소 뭐 추천해?' → health, true, [outdoor]
 - '고혈압인데 라면 먹어도 돼?' → health, true, [health_knowledge, food_nutrition]
 - '요즘 저녁마다 소주를 한 병씩 마시고 있어 걱정이야' → health, true, [health_knowledge, health_records]
 - '오늘 혈압 130에 80 나왔어' → health, false, []

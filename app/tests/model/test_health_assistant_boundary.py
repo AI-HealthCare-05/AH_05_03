@@ -278,3 +278,21 @@ def test_fast_path_detects_service_usage_and_record_without_llm() -> None:
     # Ambiguous or complex question returns None to fallback to LLM classifier
     ambiguous = boundary._fast_path_decision([ChatMessage(role="user", content="고혈압에 좋은 운동이 뭐야?")])
     assert ambiguous is None
+
+
+def test_fast_path_detects_aerobic_recommendation_request_as_outdoor() -> None:
+    """ "오늘 유산소 추천" 같은 문구는 실제로 챗봇이 막혔던 회귀 사례다.
+
+    fast-path의 활동/의도 키워드가 health_assistant.py의 `_needs_outdoor_conditions`
+    (날씨 API 호출 여부)와 따로 관리돼서, "유산소"·"추천"이 fast-path 목록에는
+    없었다. 그러면 LLM 판정기로 넘어가는데 그 프롬프트엔 outdoor 예시가 없어서
+    보통 health_knowledge로 잘못 판정했고, 실제로 채워진 근거(outdoor)와 어긋나
+    항상 차단됐다."""
+    boundary = HealthAssistantBoundaryService()
+
+    for message in ("오늘 유산소 추천", "오늘 유산소 할 건데 추천 좀"):
+        decision = boundary._fast_path_decision([ChatMessage(role="user", content=message)])
+        assert decision is not None, f"{message!r} should hit the fast path, not fall through to the LLM classifier"
+        assert decision.scope == "health"
+        assert decision.requires_authoritative_evidence is True
+        assert decision.required_evidence_types == ["outdoor"]

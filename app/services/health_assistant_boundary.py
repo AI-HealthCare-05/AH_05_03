@@ -20,6 +20,7 @@ from app.dtos.outdoor_conditions import OutdoorConditionsResult
 from app.integrations.llm.protocol import LLMClientProtocol
 from app.prompts.health_assistant_boundary import build_health_assistant_scope_instruction
 from app.services.health_knowledge_catalog import is_alcohol_topic
+from app.services.outdoor_topic import OUTDOOR_ACTIVITY_KEYWORDS
 
 HEALTH_ONLY_MESSAGE = (
     "저는 건강 관리를 돕는 건강비서예요. 질병, 증상, 식단, 운동, 의약품, 검사, "
@@ -275,10 +276,7 @@ class HealthAssistantBoundaryService:
             )
 
         # 야외 활동 / 러닝 / 운동 / 날씨 / 대기질 질의
-        has_outdoor_activity = any(
-            k in compact
-            for k in ("러닝", "조깅", "달리기", "자전거", "라이딩", "산책", "걷기", "외출", "야외", "밖에서", "한강")
-        )
+        has_outdoor_activity = any(k in compact for k in OUTDOOR_ACTIVITY_KEYWORDS) or "한강" in compact
         has_outdoor_intent = any(
             k in compact
             for k in (
@@ -295,6 +293,10 @@ class HealthAssistantBoundaryService:
                 "미세먼지",
                 "뛸까",
                 "갈까",
+                "추천",
+                "뭐할까",
+                "계획",
+                "예정",
             )
         )
         if has_outdoor_activity and has_outdoor_intent:
