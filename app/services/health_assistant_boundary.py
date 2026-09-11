@@ -11,14 +11,18 @@ from app.dtos.health_assistant import (
     HealthAssistantResponse,
     HealthAssistantScopeDecision,
     HealthIntent,
-    QueryAnalyst,
 )
-from app.dtos.health_record_query import HealthRecordQueryResult
+from app.dtos.health_knowledge import HealthKnowledgeSearchResult
+from app.dtos.health_record_query import AlcoholConsultationSnapshot, HealthRecordQueryResult
 from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.medication import MedicationSearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
 from app.integrations.llm.protocol import LLMClientProtocol
 from app.prompts.health_assistant_boundary import build_health_assistant_scope_instruction
+from app.services.facility_topic import FACILITY_KEYWORDS, FACILITY_SEARCH_KEYWORDS
+from app.services.health_knowledge_catalog import is_alcohol_topic
+from app.services.medication_topic import mentions_medication
+from app.services.outdoor_topic import OUTDOOR_ACTIVITY_KEYWORDS
 
 HEALTH_ONLY_MESSAGE = (
     "저는 건강 관리를 돕는 건강비서예요. 질병, 증상, 식단, 운동, 의약품, 검사, "
@@ -31,6 +35,9 @@ SERVICE_USAGE_MESSAGE = (
 MISSING_EVIDENCE_MESSAGE = (
     "현재 연결된 공식 정보에서 답변 근거를 확인하지 못했습니다. "
     "근거 없이 건강정보를 안내하지 않겠습니다. 질문을 조금 더 구체적으로 작성해 주세요."
+)
+CLASSIFICATION_FAILED_MESSAGE = (
+    "질문을 정확히 이해하지 못했습니다. 건강과 관련된 내용을 조금 더 구체적으로 말씀해 주세요."
 )
 
 
@@ -80,7 +87,7 @@ def hard_rule_filter(user_input: str) -> tuple[bool, str | None]:
         return False, "입력 내용이 너무 짧습니다. 2자 이상의 구체적인 질문을 입력해 주세요."
 
     # 단순 자음/모음만으로 구성된 무의미한 입력 (예: ㅋㅋ, ㅎㅎ, ㅠㅠ, ㅇㅇ)
-    if re.fullmatch(r"[\u3131-\u318E\s]+", stripped):
+    if re.fullmatch(r"[ㄱ-ㆎ\s]+", stripped):
         return False, "유효한 질문을 입력해 주세요."
 
     return True, None
@@ -133,11 +140,15 @@ _SERVICE_USAGE_EXACT = {
 
 
 class HealthAssistantBoundaryService:
-    """인풋 가드레일 & 쿼리 인리치먼트 파이프라인.
+    """서비스 범위와 건강정보 근거 사용을 코드에서 강제한다.
 
     1. 하드 규칙 필터 (비속어, 초단문, 프롬프트 인젝션 등 0.001초 차단)
-    2. 패스트패스 (일상 인사, 정형 기록 입력 등 LLM 비용 절감)
-    3. 맥락 추론 및 쿼리 빌더 (QueryAnalyst: 숨겨진 의도 추론, 건강 여부 분류, 부실한 질문 풍부화)
+    2. 패스트패스 (일상 인사, 정형 기록 입력, 명확한 도구 질의 등 LLM 비용 절감)
+    3. 애매한 경우에만 LLM 판정기(HealthAssistantScopeDecision)를 호출해 서비스 범위·
+       근거 필요 여부·쿼리 보강을 한 번에 받는다.
+
+    모델은 분류와 표현만 담당한다. 허용되지 않은 주제를 차단하고 공식 도구 결과가
+    없는 건강 사실 답변을 폐기하는 결정은 이 서비스가 수행한다(``enforce_grounding``).
     """
 
     @classmethod
@@ -169,7 +180,7 @@ class HealthAssistantBoundaryService:
                 requires_authoritative_evidence=False,
             )
 
-        # 3. 명확한 건강 기록 입력 (혈압/혈당/복약/운동 수치 등록)
+        # 3. 명확한 건강 기록 입력 및 단순 조회 (혈압/혈당/복약/운동 수치 등록 및 기록/차트 조회)
         has_record_keyword = any(
             k in compact
             for k in (
@@ -203,16 +214,100 @@ class HealthAssistantBoundaryService:
                 required_evidence_types=[],
             )
 
-        # 4. 명확한 단일 도구 질의 (의약품 / 식품 / 시설)
+        # 건강기록 단순 조회 / 차트 조회 (의학적 권고/원인/치료 문의가 아닌 단순 기록 열람)
+        has_record_query_kw = any(
+            k in compact for k in ("조회", "보여줘", "확인해줘", "그래프", "추이", "트렌드", "내역", "기록목록")
+        )
+        has_metric_kw = any(
+            k in compact
+            for k in (
+                "혈압",
+                "혈당",
+                "간수치",
+                "간기능",
+                "ast",
+                "alt",
+                "ggt",
+                "콜레스테롤",
+                "검진",
+                "몸무게",
+                "체중",
+                "기록",
+            )
+        )
+        has_medical_advice_kw = any(
+            k in compact
+            for k in (
+                "어때",
+                "어떻게",
+                "원인",
+                "치료",
+                "위험",
+                "좋은",
+                "나쁜",
+                "낮추",
+                "높이",
+                "관리법",
+                "왜",
+                "위험해",
+                "괜찮아",
+            )
+        )
+        if has_record_query_kw and has_metric_kw and not has_medical_advice_kw:
+            return HealthAssistantScopeDecision(
+                scope="health",
+                requires_authoritative_evidence=False,
+                required_evidence_types=[],
+            )
+
+        # 4. 명확한 단일/복합 도구 질의
+        # 음주 상담 질의
+        # NOTE: 주제 키워드는 health_knowledge_catalog.is_alcohol_topic() 하나로 모아뒀다.
+        # 이 목록을 health_assistant.py가 따로 복사해 갖고 있으면, 한쪽만 고쳤을 때
+        # 판정과 근거 로딩이 어긋날 위험이 있다.
+        has_alcohol = is_alcohol_topic(compact)
+        has_alcohol_intent = any(
+            k in compact
+            for k in (
+                "마셔",
+                "먹어",
+                "될까",
+                "되나",
+                "돼",
+                "되려나",
+                "해도",
+                "괜찮",
+                "가능",
+                "어때",
+                "마실",
+                "먹을",
+                "금주",
+                "절주",
+            )
+        )
+        if has_alcohol and has_alcohol_intent:
+            return HealthAssistantScopeDecision(
+                scope="health",
+                requires_authoritative_evidence=True,
+                required_evidence_types=["health_knowledge", "health_records"],
+            )
+
+        # 의약품 / 식품 / 시설
+        # 식약처 의약품 / DUR 질의
+        # NOTE: 의약품 여부 판정은 medication_topic.mentions_medication() 하나로 모아뒀다.
+        # "약"을 부분 문자열로만 보면 "제약회사"도 걸려서, 근거는 필수라고 판정해놓고
+        # 실제 도구는 안 붙는 사고(health_assistant.py._needs_medication_info와 기준이
+        # 다름)가 났었다.
         if any(
             k in compact for k in ("효능", "부작용", "용법", "용량", "주의사항", "같이먹", "함께먹", "병용")
-        ) and any(k in compact for k in ("약", "타이레놀", "아스피린", "노바스크", "이지엔", "판콜", "게보린", "탁센")):
+        ) and mentions_medication(compact):
             return HealthAssistantScopeDecision(
                 scope="health",
                 requires_authoritative_evidence=True,
                 required_evidence_types=["medication"],
             )
 
+        # 식품 영양성분 질의
         if any(k in compact for k in ("칼로리", "열량", "나트륨", "당류", "영양성분")) and any(
             k in compact for k in ("라면", "짜장", "짬뽕", "찌개", "음식", "밥", "고기", "치킨", "피자")
         ):
@@ -222,26 +317,60 @@ class HealthAssistantBoundaryService:
                 required_evidence_types=["food_nutrition"],
             )
 
-        if any(k in compact for k in ("응급실", "병원", "약국", "내과", "이비인후과", "소아과", "정형외과")) and any(
-            k in compact for k in ("찾아", "근처", "주변", "어디", "문연", "진료중", "영업중", "위치")
-        ):
+        # 주변 의료시설 / 응급실 / 약국 질의
+        # NOTE: 키워드는 facility_topic 모듈 하나로 모아뒀다 — "영업중"이 여기만 있고
+        # health_assistant.py의 실제 도구 연결 목록엔 없어서 조용히 차단된 적이 있다.
+        if any(k in compact for k in FACILITY_KEYWORDS) and any(k in compact for k in FACILITY_SEARCH_KEYWORDS):
             return HealthAssistantScopeDecision(
                 scope="health",
                 requires_authoritative_evidence=True,
                 required_evidence_types=["facility"],
             )
 
+        # 야외 활동 / 러닝 / 운동 / 날씨 / 대기질 질의
+        has_outdoor_activity = any(k in compact for k in OUTDOOR_ACTIVITY_KEYWORDS) or "한강" in compact
+        has_outdoor_intent = any(
+            k in compact
+            for k in (
+                "어때",
+                "어대",
+                "괜찮",
+                "할건",
+                "할거",
+                "할까",
+                "해도돼",
+                "해도되",
+                "좋아",
+                "날씨",
+                "미세먼지",
+                "뛸까",
+                "갈까",
+                "추천",
+                "뭐할까",
+                "계획",
+                "예정",
+            )
+        )
+        if has_outdoor_activity and has_outdoor_intent:
+            if not any(k in compact for k in ("고혈압", "당뇨", "심장", "신장", "천식", "협심증", "관절염")):
+                return HealthAssistantScopeDecision(
+                    scope="health",
+                    requires_authoritative_evidence=True,
+                    required_evidence_types=["outdoor"],
+                )
+
+        # 5. 그 외 복잡/혼합/애매한 질문은 LLM 판정기로 위임 (None 반환)
         return None
 
-    async def check_request(  # noqa: C901
+    async def check_request(
         self,
         llm_client: LLMClientProtocol,
         request: HealthAssistantChatRequest,
     ) -> HealthAssistantBoundaryResult:
         latest_user_message = self._latest_user_message(request.messages)
 
-        # Step 1: 하드 규칙 필터 (비속어, 길이, 인젝션)
-        passed, reason = hard_rule_filter(latest_user_message)
+        # Step 1: 하드 규칙 필터 (비속어, 길이, 인젝션) — 0.001초, LLM 호출 없음
+        passed, _reason = hard_rule_filter(latest_user_message)
         if not passed:
             return HealthAssistantBoundaryResult(
                 request=None,
@@ -252,116 +381,63 @@ class HealthAssistantBoundaryService:
                 response=self._fixed_response(HEALTH_ONLY_MESSAGE),
             )
 
-        # Step 1.5: 룰 기반 패스트패스
+        # Step 2: 룰 기반 패스트패스 — 명확한 패턴은 LLM 호출 없이 즉시 판정
         decision = self._fast_path_decision(request.messages)
-        if decision is not None:
-            if decision.scope == "service_usage":
+
+        # Step 3: 애매한 경우에만 LLM 판정 모델 호출
+        if decision is None:
+            try:
+                decision = await llm_client.generate_structured_response(
+                    system_instruction=build_health_assistant_scope_instruction(),
+                    messages=request.messages,
+                    response_schema=HealthAssistantScopeDecision,
+                )
+            except Exception:
+                # 판정 실패 시 무조건 통과(fail-open)시키면, 이 판정이 걸러야 할 위험을
+                # 그대로 흘려보낸다. 실패는 차단(fail-closed)하고 재질문을 유도한다.
                 return HealthAssistantBoundaryResult(
                     request=None,
-                    decision=decision,
-                    response=self._fixed_response(SERVICE_USAGE_MESSAGE),
+                    decision=HealthAssistantScopeDecision(
+                        scope="unrecognized",
+                        requires_authoritative_evidence=False,
+                    ),
+                    response=self._fixed_response(CLASSIFICATION_FAILED_MESSAGE),
                 )
-            if decision.scope == "prompt_attack":
-                return HealthAssistantBoundaryResult(
-                    request=None,
-                    decision=decision,
-                    response=self._fixed_response(HEALTH_ONLY_MESSAGE),
-                )
-            # 패스트패스 통과된 건강 요청
-            enriched_req = request.model_copy(
-                update={
-                    "inferred_intent": "건강 기록 또는 건강 정보 질의",
-                    "enriched_query": latest_user_message,
-                }
-            )
-            return HealthAssistantBoundaryResult(request=enriched_req, decision=decision)
 
-        # Step 2 & 3: LLM 기반 맥락 추론 및 쿼리 빌더
-        raw_result: Any
-        try:
-            raw_result = await llm_client.generate_structured_response(
-                system_instruction=build_health_assistant_scope_instruction(),
-                messages=request.messages,
-                response_schema=QueryAnalyst,
-            )
-        except (AssertionError, TypeError):
-            # 기존 ScopeOnlyClient 등 HealthAssistantScopeDecision 전용 모의 객체 호환
-            raw_result = await llm_client.generate_structured_response(
-                system_instruction=build_health_assistant_scope_instruction(),
-                messages=request.messages,
-                response_schema=HealthAssistantScopeDecision,
-            )
-        except Exception:
-            raw_result = QueryAnalyst(
-                is_scientific_or_medical=True,
-                inferred_intent="사용자 건강 질의",
-                enriched_query=latest_user_message,
-            )
-
-        if isinstance(raw_result, HealthAssistantScopeDecision):
-            if raw_result.scope == "service_usage":
-                return HealthAssistantBoundaryResult(
-                    request=None,
-                    decision=raw_result,
-                    response=self._fixed_response(SERVICE_USAGE_MESSAGE),
-                )
-            if raw_result.scope in {"out_of_scope", "prompt_attack", "unrecognized"}:
-                return HealthAssistantBoundaryResult(
-                    request=None,
-                    decision=raw_result,
-                    response=self._fixed_response(HEALTH_ONLY_MESSAGE),
-                )
-            if raw_result.scope == "mixed":
-                allowed = (raw_result.allowed_health_request or "").strip()
-                if not allowed or allowed not in latest_user_message:
-                    return HealthAssistantBoundaryResult(
-                        request=None,
-                        decision=raw_result,
-                        response=self._fixed_response(HEALTH_ONLY_MESSAGE),
-                    )
-                request = request.model_copy(update={"messages": [ChatMessage(role="user", content=allowed)]})
-                return HealthAssistantBoundaryResult(request=request, decision=raw_result)
-
-            analyst = QueryAnalyst(
-                is_scientific_or_medical=True,
-                inferred_intent=raw_result.inferred_intent or "사용자 건강 질의",
-                enriched_query=raw_result.enriched_query or latest_user_message,
-            )
-        elif isinstance(raw_result, QueryAnalyst):
-            analyst = raw_result
-        else:
-            analyst = QueryAnalyst(
-                is_scientific_or_medical=True,
-                inferred_intent="사용자 건강 질의",
-                enriched_query=latest_user_message,
-            )
-
-        if not analyst.is_scientific_or_medical:
-            rejection_reason = f"{HEALTH_ONLY_MESSAGE} (추론된 의도: {analyst.inferred_intent})"
+        if decision.scope == "service_usage":
             return HealthAssistantBoundaryResult(
                 request=None,
-                decision=HealthAssistantScopeDecision(
-                    scope="out_of_scope",
-                    requires_authoritative_evidence=False,
-                    inferred_intent=analyst.inferred_intent,
-                ),
-                response=self._fixed_response(rejection_reason),
+                decision=decision,
+                response=self._fixed_response(SERVICE_USAGE_MESSAGE),
             )
 
-        # 허용 질문 통과: 풍부해진 enriched_query와 inferred_intent 주입
-        enriched_request = request.model_copy(
-            update={
-                "inferred_intent": analyst.inferred_intent,
-                "enriched_query": analyst.enriched_query,
-            }
-        )
-        scope_decision = HealthAssistantScopeDecision(
-            scope="health",
-            requires_authoritative_evidence=False,
-            inferred_intent=analyst.inferred_intent,
-            enriched_query=analyst.enriched_query,
-        )
-        return HealthAssistantBoundaryResult(request=enriched_request, decision=scope_decision)
+        if decision.scope in {"out_of_scope", "unrecognized", "prompt_attack"}:
+            return HealthAssistantBoundaryResult(
+                request=None,
+                decision=decision,
+                response=self._fixed_response(HEALTH_ONLY_MESSAGE),
+            )
+
+        if decision.scope == "mixed":
+            allowed = (decision.allowed_health_request or "").strip()
+            if not allowed or allowed not in latest_user_message:
+                return HealthAssistantBoundaryResult(
+                    request=None,
+                    decision=decision,
+                    response=self._fixed_response(HEALTH_ONLY_MESSAGE),
+                )
+            request = request.model_copy(update={"messages": [ChatMessage(role="user", content=allowed)]})
+            return HealthAssistantBoundaryResult(request=request, decision=decision)
+
+        if decision.inferred_intent or decision.enriched_query:
+            request = request.model_copy(
+                update={
+                    "inferred_intent": decision.inferred_intent,
+                    "enriched_query": decision.enriched_query,
+                }
+            )
+
+        return HealthAssistantBoundaryResult(request=request, decision=decision)
 
     def enforce_grounding(
         self,
@@ -371,7 +447,17 @@ class HealthAssistantBoundaryService:
         tool_result: Any | None,
         outdoor_conditions: OutdoorConditionsResult | None,
     ) -> HealthAssistantResponse:
-        """아웃풋 차단하지 않고 정상 통과 (원상 복구)."""
+        """건강 사실·권고가 승인된 근거 없이 사용자에게 나가는 것을 막는다."""
+        if response.emergency_notice:
+            return response
+
+        requires_evidence = (
+            decision.requires_authoritative_evidence
+            or response.intent == "health_advice"
+            or response.challenge_draft is not None
+        )
+        if requires_evidence and not self.has_required_evidence(decision, tool_result, outdoor_conditions):
+            return self._fixed_response(MISSING_EVIDENCE_MESSAGE, intent="health_advice")
         return response
 
     @classmethod
@@ -387,7 +473,7 @@ class HealthAssistantBoundaryService:
         return required.issubset(cls.available_evidence_types(tool_result, outdoor_conditions))
 
     @classmethod
-    def available_evidence_types(
+    def available_evidence_types(  # noqa: C901
         cls,
         tool_result: Any | None,
         outdoor_conditions: OutdoorConditionsResult | None,
@@ -402,12 +488,15 @@ class HealthAssistantBoundaryService:
         if isinstance(tool_result, FoodNutritionSearchResult):
             if tool_result.items:
                 available.add("food_nutrition")
+        if isinstance(tool_result, HealthKnowledgeSearchResult):
+            if tool_result.items:
+                available.add("health_knowledge")
         if isinstance(tool_result, MedicationSearchResult):
             if tool_result.items or tool_result.interaction_items:
                 available.add("medication")
         if isinstance(tool_result, FacilitySearchResult):
             available.add("facility")
-        if isinstance(tool_result, HealthRecordQueryResult):
+        if isinstance(tool_result, (HealthRecordQueryResult, AlcoholConsultationSnapshot)):
             available.add("health_records")
         return available
 

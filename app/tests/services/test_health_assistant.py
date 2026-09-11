@@ -1,6 +1,7 @@
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any, TypeVar
+from datetime import datetime, timezone
+from typing import Any, TypeVar, cast
 
 import pytest
 from pydantic import BaseModel
@@ -13,9 +14,12 @@ from app.dtos.health_assistant import (
     HealthAssistantScopeDecision,
     ProfileContext,
 )
+from app.dtos.health_knowledge import HealthKnowledgeItem, HealthKnowledgeSearchResult
 from app.dtos.outdoor_conditions import AirQualityConditions, OutdoorConditionsResult, WeatherConditions
 from app.models.households import HouseholdStatus
+from app.models.service_accounts import ServiceAccount
 from app.services.health_assistant import HealthAssistantService
+from app.services.health_records import HealthRecordService
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -491,6 +495,12 @@ async def test_health_assistant_service_handles_emergency_notice() -> None:
 
 @pytest.mark.asyncio
 async def test_health_assistant_service_links_alcohol_question_with_recent_medication_record() -> None:
+    """음주 질문은 health_records 근거가 필요해, 인증된 프로필이 있어야 답한다.
+
+    이 근거는 클라이언트가 보낸 ``recent_records_summary``(검증되지 않은 텍스트)가
+    아니라 서버가 인증된 프로필로 직접 조회한 스냅샷이어야 한다 — 그래서
+    account/profile_id/health_record_service가 모두 있어야 통과한다.
+    """
     fake_json = """{
         "intent": "health_advice",
         "assistant_message": "최근 8월 31일에 타이레놀(아세트아미노펜) 복약 기록이 있습니다. 타이레놀 복용 중 알코올을 섭취하면 간 손상 위험이 급격히 증가하므로 음주를 피하시는 것이 안전합니다.",
@@ -508,15 +518,59 @@ async def test_health_assistant_service_links_alcohol_question_with_recent_medic
         "safety_disclaimer": "본 답변은 의학적 진단을 대신하지 않으며, 약물 복용 중 음주는 전문의 또는 약사와 상담하세요."
     }"""
     mock_client = MockLLMClient(fake_json)
-    service = HealthAssistantService(llm_client=mock_client)
+
+    class FakeHealthRecordService:
+        async def get_alcohol_consultation_snapshot(self, account: Any, profile_id: uuid.UUID) -> Any:
+            from app.dtos.health_record_query import AlcoholConsultationSnapshot, ConsultationMedication
+
+            return AlcoholConsultationSnapshot(
+                recent_medications=[
+                    ConsultationMedication(
+                        name="타이레놀",
+                        dosage=None,
+                        recorded_at=datetime(2026, 8, 31, 8, 0, tzinfo=timezone.utc),
+                    )
+                ],
+                message="최근 복약 기록 1건을 확인했습니다.",
+            )
+
+    class FakeHealthKnowledgeClient:
+        """실제 질병관리청 API 대신 이 테스트에서만 쓰는 고정 결과 — 네트워크와 무관하게
+        "개인기록 + 공식정보 둘 다 있으면 통과한다"만 검증한다."""
+
+        async def search(self, query: str) -> HealthKnowledgeSearchResult:
+            return HealthKnowledgeSearchResult(
+                query=query,
+                items=[
+                    HealthKnowledgeItem(
+                        title="음주",
+                        url="https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=5297",
+                        summary="과도한 음주는 혈압을 상승시키고 약물 대사에 영향을 줄 수 있습니다.",
+                        topics=["alcohol"],
+                    )
+                ],
+                retrieved_at=datetime.now(timezone.utc),
+                message="질병관리청 국가건강정보포털 공식 문서 1건을 확인했습니다.",
+            )
+
+    account = ServiceAccount(id=uuid.uuid4(), email="alcohol-test@example.com", password_hash="hash")
+    profile_id = str(uuid.uuid4())
+    service = HealthAssistantService(
+        llm_client=mock_client,
+        health_record_service=cast(HealthRecordService, FakeHealthRecordService()),
+        health_knowledge_client=FakeHealthKnowledgeClient(),
+    )
 
     request = HealthAssistantChatRequest(
         messages=[ChatMessage(role="user", content="나 오늘 술마셔도 됨?")],
         profile_context=ProfileContext(
-            profile_name="다원", relationship="본인", recent_records_summary="[2026-08-31 복약] 타이레놀 1알"
+            profile_id=profile_id,
+            profile_name="다원",
+            relationship="본인",
+            recent_records_summary="[2026-08-31 복약] 타이레놀 1알",
         ),
     )
-    response = await service.respond(request)
+    response = await service.respond(request, account=account)
 
     assert response.intent == "health_advice"
     assert "타이레놀" in response.assistant_message

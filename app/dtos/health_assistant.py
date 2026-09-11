@@ -4,7 +4,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.dtos.food_nutrition import FoodNutritionSearchResult
-from app.dtos.health_record_query import HealthRecordQueryResult
+from app.dtos.health_knowledge import HealthKnowledgeSearchResult
+from app.dtos.health_record_query import AlcoholConsultationSnapshot, HealthRecordQueryResult
 from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.medication import MedicationSearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
@@ -214,18 +215,6 @@ AuthoritativeEvidenceType = Literal[
 ]
 
 
-class QueryAnalyst(BaseModel):
-    """인풋 가드레일: 맥락 추론 및 쿼리 빌더 결과 DTO."""
-
-    is_scientific_or_medical: bool = Field(
-        description="질문의 본질과 맥락이 과학, 의학, 보건, 건강, 신체 증상, 질병, 약물, 영양, 식단, 운동, 의료기관, 일상 건강관리 또는 건강비서 서비스 사용법에 해당하는지 여부"
-    )
-    inferred_intent: str = Field(description="사용자가 질문을 통해 진짜 알고 싶어하는 숨겨진 맥락 추론")
-    enriched_query: str = Field(
-        description="원문이 부실할 경우, 지식 DB 검색 및 도구 활용이 가능하도록 의학/과학적 키워드를 추가하여 풍부하게 재작성한 쿼리"
-    )
-
-
 class HealthAssistantScopeDecision(BaseModel):
     """메인 답변 전에 실행하는 서비스 범위 판정 및 쿼리 인리치먼트 결과."""
 
@@ -322,6 +311,14 @@ class HealthAssistantResponse(HealthAssistantLlmResponse):
     health_record_query_result: HealthRecordQueryResult | None = Field(
         default=None,
         description="PostgreSQL이 계산한 장기 건강기록 조건별 집계 결과",
+    )
+    alcohol_consultation_snapshot: AlcoholConsultationSnapshot | None = Field(
+        default=None,
+        description="음주 상담을 위해 인증된 PostgreSQL에서 조회한 개인 건강기록 스냅샷",
+    )
+    health_knowledge_search_result: HealthKnowledgeSearchResult | None = Field(
+        default=None,
+        description="질병관리청 국가건강정보포털에서 확인한 공식 건강정보",
     )
     outdoor_conditions: OutdoorConditionsResult | None = Field(
         default=None,

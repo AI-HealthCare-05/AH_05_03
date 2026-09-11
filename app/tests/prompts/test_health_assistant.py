@@ -61,10 +61,11 @@ def test_system_instruction_contains_safety_rules() -> None:
     assert "사실 기반 추출" in instruction
 
 
-def test_scope_instruction_contains_input_guardrail_and_query_builder() -> None:
+def test_scope_instruction_contains_scope_evidence_and_query_builder() -> None:
     instruction = build_health_assistant_scope_instruction()
 
-    assert "인풋 가드레일 및 쿼리 빌더" in instruction
-    assert "is_scientific_or_medical" in instruction
+    assert "서비스 범위 판정기" in instruction
+    assert "requires_authoritative_evidence" in instruction
+    assert "required_evidence_types" in instruction
     assert "inferred_intent" in instruction
     assert "enriched_query" in instruction

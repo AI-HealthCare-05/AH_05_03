@@ -1,3 +1,4 @@
+import logging
 import re
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -7,9 +8,11 @@ from app.dtos.health_assistant import (
     HealthAssistantChatRequest,
     HealthAssistantLlmResponse,
     HealthAssistantResponse,
+    HealthAssistantScopeDecision,
     ProfileContext,
     UserLocation,
 )
+from app.dtos.health_record_query import AlcoholConsultationSnapshot
 from app.exceptions import LlmProviderFailedError
 from app.integrations.llm.chain import shared_chat_client
 from app.integrations.llm.protocol import LLMClientProtocol
@@ -20,6 +23,11 @@ from app.repositories.chat_session_repository import ChatSessionRepository
 from app.repositories.health_record_repository import HealthRecordRepository
 from app.repositories.household_repository import HouseholdRepository
 from app.repositories.profile_repository import ProfileRepository
+from app.services.facility_topic import (
+    FACILITY_HISTORY_OR_ADVICE_KEYWORDS,
+    FACILITY_KEYWORDS,
+    FACILITY_SEARCH_KEYWORDS,
+)
 from app.services.food_nutrition_client import (
     FoodNutritionClient,
     FoodNutritionClientProtocol,
@@ -30,12 +38,14 @@ from app.services.food_nutrition_tools import (
 )
 from app.services.health_assistant_boundary import HealthAssistantBoundaryService
 from app.services.health_assistant_safety import HealthAssistantSafetyService
+from app.services.health_knowledge_catalog import HealthKnowledgeClientProtocol, is_alcohol_topic
 from app.services.health_record_tools import (
     QUERY_HEALTH_RECORDS_TOOL_NAME,
     execute_health_record_tool,
     get_health_record_tools,
 )
 from app.services.health_records import HealthRecordService
+from app.services.kdca_health_info_client import KdcaHealthInfoClient
 from app.services.medical_facility_client import MedicalFacilityClient
 from app.services.medical_facility_tools import (
     execute_facility_tool,
@@ -43,6 +53,7 @@ from app.services.medical_facility_tools import (
 )
 from app.services.medication_client import MedicationClient, MedicationClientProtocol
 from app.services.medication_tools import execute_medication_tool, get_medication_tools
+from app.services.medication_topic import mentions_medication
 from app.services.ocr_partial import PartialJsonTextReader
 from app.services.outdoor_conditions_client import (
     OutdoorConditionsClient,
@@ -50,151 +61,9 @@ from app.services.outdoor_conditions_client import (
     resolve_sido_coordinates,
 )
 from app.services.outdoor_conditions_tools import execute_outdoor_conditions_tool
+from app.services.outdoor_topic import OUTDOOR_ACTIVITY_KEYWORDS, OUTDOOR_ENVIRONMENT_KEYWORDS
 
-_OUTDOOR_ENVIRONMENT_KEYWORDS = ("날씨", "미세먼지", "초미세먼지", "대기질")
-_OUTDOOR_ACTIVITY_KEYWORDS = (
-    "산책",
-    "조깅",
-    "러닝",
-    "달리기",
-    "유산소",
-    "자전거",
-    "라이딩",
-    "걷기",
-    "운동추천",
-    "운동할",
-    "야외",
-    "밖에서",
-    "외출",
-)
-_FACILITY_KEYWORDS = (
-    "응급실",
-    "병원",
-    "의원",
-    "약국",
-    "당직의료",
-    "당번약국",
-    "야간약국",
-    "야간진료",
-    "응급의료",
-    "내과",
-    "외과",
-    "이비인후과",
-    "소아과",
-    "소아청소년과",
-    "신경과",
-    "정신과",
-    "정신건강의학과",
-    "정형외과",
-    "신경외과",
-    "성형외과",
-    "산부인과",
-    "안과",
-    "피부과",
-    "비뇨의학과",
-    "비뇨기과",
-    "영상의학과",
-    "마취통증의학과",
-    "통증의학과",
-    "재활의학과",
-    "가정의학과",
-    "응급의학과",
-    "치과",
-    "한방",
-    "한의원",
-    "진료소",
-    "보건소",
-    "의료원",
-)
-_FACILITY_SEARCH_KEYWORDS = (
-    "찾아",
-    "검색",
-    "조회",
-    "알려",
-    "추천",
-    "가까운",
-    "가까이",
-    "근처",
-    "주변",
-    "위치",
-    "어디",
-    "문 연",
-    "문연",
-    "진료 중",
-    "진료중",
-    "운영 중",
-    "운영중",
-    "가야",
-    "갈 수",
-    "전화번호",
-    "지도",
-)
-_FACILITY_HISTORY_OR_ADVICE_KEYWORDS = (
-    "다녀",
-    "갔다",
-    "왔어",
-    "받았",
-    "진료받",
-    "처방받",
-    "기록해",
-    "복용",
-    "먹어도",
-    "부작용",
-)
-
-# `약` 한 글자를 부분 문자열로 찾으면 약간·약속·요약·계약·예약·절약·만약·약해요가
-# 전부 의약품 질문이 된다. 홀로 쓰인 `약`(뒤에 조사까지만)에만 맞춘다 —
-# "이 약 효능이 뭐야", "약을 먹어도 되나요". 혈압약·감기약 같은 합성어는 아래
-# 키워드 목록이 따로 잡으므로 잃는 것이 없다.
-_STANDALONE_MEDICINE_WORD = re.compile(r"(?<![가-힣])약[은는이가을를도만에의과와로]?(?![가-힣])")
-
-_MEDICATION_KEYWORDS = (
-    "약품",
-    "약물",
-    "복약",
-    "복용",
-    "부작용",
-    "병용",
-    "같이 먹",
-    "같이먹",
-    "함께 먹",
-    "함께먹",
-    "먹어도 돼",
-    "먹어도돼",
-    "먹어도 되",
-    "먹어도되",
-    "복용해도 돼",
-    "복용해도돼",
-    "금기",
-    "처방",
-    "성분",
-    "DUR",
-    "dur",
-    "혈압약",
-    "당뇨약",
-    "혈당약",
-    "타이레놀",
-    "판콜",
-    "아스피린",
-    "노바스크",
-    "메트포르민",
-    "이지엔",
-    "게보린",
-    "탁센",
-    "피임약",
-    "감기약",
-    "소화제",
-    "진통제",
-    "소염진통제",
-    "항생제",
-    "위장약",
-    "스테로이드",
-    "영양제",
-    "비타민",
-    "마그네슘",
-    "오메가",
-    "유산균",
-)
+logger = logging.getLogger(__name__)
 
 _FOOD_NUTRITION_KEYWORDS = (
     "칼로리",
@@ -295,6 +164,7 @@ class HealthAssistantService:
         outdoor_conditions_client: OutdoorConditionsClientProtocol | None = None,
         medication_client: MedicationClientProtocol | None = None,
         food_nutrition_client: FoodNutritionClientProtocol | None = None,
+        health_knowledge_client: HealthKnowledgeClientProtocol | None = None,
         profile_repo: ProfileRepository | None = None,
         household_repo: HouseholdRepository | None = None,
         health_record_service: HealthRecordService | None = None,
@@ -309,6 +179,7 @@ class HealthAssistantService:
         self.outdoor_conditions_client = outdoor_conditions_client or OutdoorConditionsClient()
         self.medication_client: MedicationClientProtocol = medication_client or MedicationClient()
         self.food_nutrition_client: FoodNutritionClientProtocol = food_nutrition_client or FoodNutritionClient()
+        self.health_knowledge_client: HealthKnowledgeClientProtocol = health_knowledge_client or KdcaHealthInfoClient()
         self.profile_repo = profile_repo
         self.household_repo = household_repo
 
@@ -388,6 +259,96 @@ class HealthAssistantService:
         has_day_count = any(word in message for word in ("며칠", "몇일", "몇번", "몇회", "날이", "날은"))
         return "혈압" in message and has_period and has_threshold and has_day_count
 
+    @staticmethod
+    def _needs_personal_record_evidence(
+        request: HealthAssistantChatRequest,
+        decision: HealthAssistantScopeDecision,
+    ) -> bool:
+        """개인 건강기록 스냅샷 조회 전에 프로필 선택을 요구할지 판단한다.
+
+        바운더리(fast-path 또는 LLM 판정기)가 이미 health_records 근거가
+        필요하다고 판단했고, 그 주제가 음주(현재 유일하게 개인기록 스냅샷이
+        구현된 주제)일 때만 프로필이 필요하다."""
+        if "health_records" not in decision.required_evidence_types:
+            return False
+        if not request.messages:
+            return False
+        return is_alcohol_topic(request.messages[-1].content)
+
+    async def _fetch_alcohol_snapshot(
+        self,
+        *,
+        account: ServiceAccount | None,
+        profile_context: ProfileContext | None,
+    ) -> AlcoholConsultationSnapshot:
+        """음주 상담용 개인 건강기록 스냅샷을 조회한다. 조회 실패·데이터 없음도 정직하게 반환한다."""
+        snapshot: AlcoholConsultationSnapshot | None = None
+        if account is not None and profile_context is not None and self.health_record_service is not None:
+            profile_id = self._parse_profile_id(profile_context.profile_id)
+            if profile_id is not None:
+                try:
+                    snapshot = await self.health_record_service.get_alcohol_consultation_snapshot(account, profile_id)
+                except Exception as ex:
+                    logger.warning("음주 상담 스냅샷 조회 실패: %s", ex)
+
+        if snapshot is None:
+            snapshot = AlcoholConsultationSnapshot(
+                message="현재 프로필에서 음주 상담에 활용할 최근 기록을 찾지 못했습니다.",
+                missing_sections=["blood_pressure", "liver_tests", "recent_medications"],
+            )
+        return snapshot
+
+    async def _load_authoritative_evidence(
+        self,
+        request: HealthAssistantChatRequest,
+        decision: HealthAssistantScopeDecision,
+        *,
+        account: ServiceAccount | None,
+        profile_context: ProfileContext | None,
+    ) -> tuple[list[Any], str | None]:
+        """바운더리 판정이 요구한 근거 종류를 실제로 채운다.
+
+        바운더리가 이미 내린 판정(``decision.required_evidence_types``)을 그대로
+        신뢰해서 근거를 채운다 — 여기서 같은 판단을 별도 키워드로 다시 하면,
+        판정과 근거 로딩이 서로 다른 기준으로 어긋날 수 있다.
+        """
+        if not decision.requires_authoritative_evidence or not request.messages:
+            return [], None
+
+        required = set(decision.required_evidence_types)
+        if not required & {"health_knowledge", "health_records"}:
+            return [], None
+
+        query = request.messages[-1].content
+        results: list[Any] = []
+        snapshot_lines: list[str] = []
+        knowledge_lines: list[str] = []
+
+        # 개인 건강기록 스냅샷은 아직 음주 주제만 구현돼 있다. 다른 주제의 개인기록
+        # 스냅샷이 생기면 여기에 분기를 추가하면 된다.
+        if "health_records" in required and is_alcohol_topic(query):
+            snapshot = await self._fetch_alcohol_snapshot(account=account, profile_context=profile_context)
+            results.append(snapshot)
+            snapshot_lines = ["[개인 건강기록 스냅샷]", snapshot.model_dump_json(exclude_none=True)]
+
+        if "health_knowledge" in required:
+            knowledge = await self.health_knowledge_client.search(query)
+            # 카탈로그에 아직 없는 주제는 items가 빈 채로 돌아온다. 그걸 그대로 results에
+            # 넣으면 "근거를 하나도 못 채웠다"는 사전 차단 게이트(``not preloaded_results``)가
+            # 빈 결과도 "뭔가 채워졌다"고 착각해서, 실제로는 근거가 없는데도 메인 LLM 호출까지
+            # 새어나간다. 빈 결과는 근거가 아니므로 넣지 않는다.
+            if knowledge.items:
+                results.append(knowledge)
+                knowledge_lines.append("[질병관리청 국가건강정보포털 근거]")
+                for item in knowledge.items:
+                    knowledge_lines.append(f"- {item.title}: {item.summary} (출처: {item.url})")
+
+        if not results:
+            return [], None
+
+        lines = snapshot_lines + knowledge_lines
+        return results, "\n".join(lines) if lines else None
+
     @classmethod
     def _needs_medication_info(cls, request: HealthAssistantChatRequest) -> bool:
         """의약품 허가정보(효능·부작용·주의사항) 조회가 실제로 필요한 질문인지 판별한다.
@@ -399,7 +360,7 @@ class HealthAssistantService:
             return False
         last_msg = cls._get_eval_text(request)
         # 1) 의약품 키워드가 반드시 있어야 함
-        if not (_STANDALONE_MEDICINE_WORD.search(last_msg) or any(k in last_msg for k in _MEDICATION_KEYWORDS)):
+        if not mentions_medication(last_msg):
             return False
 
         # 2) 병용 가능 여부 질문("같이 먹어도 돼?", "함께 복용해도 되나요?")은 최우선 검색
@@ -496,8 +457,8 @@ class HealthAssistantService:
             k in last_msg for k in ("병원", "약국", "응급실", "의원")
         ):
             return False
-        has_facility = any(k in last_msg for k in _FACILITY_KEYWORDS)
-        has_search_intent = any(k in last_msg for k in _FACILITY_SEARCH_KEYWORDS)
+        has_facility = any(k in last_msg for k in FACILITY_KEYWORDS)
+        has_search_intent = any(k in last_msg for k in FACILITY_SEARCH_KEYWORDS)
         if has_facility and has_search_intent:
             return True
         # "강남응급실", "서울 내과"처럼 짧은 검색어만 입력한 경우는 허용하되,
@@ -505,7 +466,7 @@ class HealthAssistantService:
         if (
             has_facility
             and len(compact_msg) <= 15
-            and not any(k in last_msg for k in _FACILITY_HISTORY_OR_ADVICE_KEYWORDS)
+            and not any(k in last_msg for k in FACILITY_HISTORY_OR_ADVICE_KEYWORDS)
         ):
             return True
         if any(k in last_msg for k in ("어디 가야", "어디로 가")):
@@ -554,14 +515,14 @@ class HealthAssistantService:
         if not request.messages:
             return False
         message = request.messages[-1].content.replace(" ", "")
-        if any(keyword in message for keyword in _OUTDOOR_ENVIRONMENT_KEYWORDS):
+        if any(keyword in message for keyword in OUTDOOR_ENVIRONMENT_KEYWORDS):
             return True
         if any(
             keyword in message
             for keyword in ("했어", "완료", "기록해", "기록할", "기록하기", "달렸어", "뛰었어", "걸었어", "탔어")
         ):
             return False
-        if any(keyword in message for keyword in _OUTDOOR_ACTIVITY_KEYWORDS) or (
+        if any(keyword in message for keyword in OUTDOOR_ACTIVITY_KEYWORDS) or (
             "운동" in message and any(k in message for k in ("추천", "할까", "할건", "할거", "예정", "계획", "뭐"))
         ):
             return True
@@ -914,19 +875,28 @@ class HealthAssistantService:
         return tools if tools else None
 
     @staticmethod
-    def _attach_tool_result_to_response(
+    def _attach_tool_result_to_response(  # noqa: C901
         response: HealthAssistantResponse,
         tool_result: Any,
     ) -> None:
         if tool_result is None:
             return
+        if isinstance(tool_result, (list, tuple)):
+            for item in tool_result:
+                HealthAssistantService._attach_tool_result_to_response(response, item)
+            return
         from app.dtos.food_nutrition import FoodNutritionSearchResult
-        from app.dtos.health_record_query import HealthRecordQueryResult
+        from app.dtos.health_knowledge import HealthKnowledgeSearchResult
+        from app.dtos.health_record_query import AlcoholConsultationSnapshot, HealthRecordQueryResult
         from app.dtos.medication import MedicationSearchResult
 
         if isinstance(tool_result, FoodNutritionSearchResult):
             if not response.food_nutrition_search_result:
                 response.food_nutrition_search_result = tool_result
+        elif isinstance(tool_result, HealthKnowledgeSearchResult):
+            response.health_knowledge_search_result = tool_result
+        elif isinstance(tool_result, AlcoholConsultationSnapshot):
+            response.alcohol_consultation_snapshot = tool_result
         elif isinstance(tool_result, HealthRecordQueryResult):
             response.intent = "query_records"
             response.health_record_query_result = tool_result
@@ -963,7 +933,9 @@ class HealthAssistantService:
         assert boundary.request is not None
         request = boundary.request
 
-        needs_health_query = self._needs_health_record_query_tool(request)
+        needs_health_query = self._needs_health_record_query_tool(request) or self._needs_personal_record_evidence(
+            request, boundary.decision
+        )
         if needs_health_query and (
             request.profile_context is None
             or request.profile_context.profile_id is None
@@ -978,6 +950,12 @@ class HealthAssistantService:
             account_id=account_id,
             request=request,
         )
+        preloaded_results, authoritative_evidence_context = await self._load_authoritative_evidence(
+            request,
+            boundary.decision,
+            account=account,
+            profile_context=profile_context,
+        )
         loc = await self._resolve_request_location(request)
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
@@ -986,9 +964,25 @@ class HealthAssistantService:
             outdoor_conditions_context=self._format_outdoor_conditions_context(outdoor_conditions, loc is not None)
             if self._needs_outdoor_conditions(request)
             else None,
+            authoritative_evidence_context=authoritative_evidence_context,
         )
 
         tools = self._get_tools(request)
+        if (
+            boundary.decision.requires_authoritative_evidence
+            and not tools
+            and not outdoor_conditions
+            and not preloaded_results
+        ):
+            # 근거가 필요한 질문인데 도구도, 야외 조건도, 사전로딩된 근거도 없다 —
+            # 메인 LLM을 불러도 근거 없이 자기 지식으로 답할 뿐이니 아예 부르지 않는다.
+            return self.boundary_service.enforce_grounding(
+                boundary.decision,
+                HealthAssistantResponse(intent="health_advice", assistant_message=""),
+                tool_result=None,
+                outdoor_conditions=None,
+            )
+
         response: HealthAssistantResponse
         client_any = cast(Any, self.llm_client)
 
@@ -1000,7 +994,7 @@ class HealthAssistantService:
                 profile_id=self._parse_profile_id(profile_context.profile_id) if profile_context else None,
             )
 
-        tool_result: Any | None = None
+        tool_result: Any | None = preloaded_results or None
         if tools and hasattr(client_any, "generate_structured_response_with_tools"):
             res_tuple = await client_any.generate_structured_response_with_tools(
                 system_instruction=system_instruction,
@@ -1009,7 +1003,9 @@ class HealthAssistantService:
                 tools=tools,
                 tool_executor=tool_executor,
             )
-            llm_res, tool_result = res_tuple
+            llm_res, generated_tool_result = res_tuple
+            if generated_tool_result is not None:
+                tool_result = [*preloaded_results, generated_tool_result]
             response = HealthAssistantResponse.model_validate(llm_res.model_dump())
             self._attach_tool_result_to_response(response, tool_result)
         else:
@@ -1019,6 +1015,7 @@ class HealthAssistantService:
                 response_schema=HealthAssistantLlmResponse,
             )
             response = HealthAssistantResponse.model_validate(llm_res.model_dump())
+            self._attach_tool_result_to_response(response, tool_result)
 
         if outdoor_conditions and not response.outdoor_conditions:
             response.outdoor_conditions = outdoor_conditions
@@ -1061,23 +1058,7 @@ class HealthAssistantService:
         tool_result: Any,
         outdoor_conditions: Any,
     ) -> HealthAssistantResponse:
-        if tool_result:
-            from app.dtos.food_nutrition import FoodNutritionSearchResult
-            from app.dtos.health_record_query import HealthRecordQueryResult
-            from app.dtos.medication import MedicationSearchResult
-
-            if isinstance(tool_result, FoodNutritionSearchResult):
-                if not parsed.food_nutrition_search_result:
-                    parsed.food_nutrition_search_result = tool_result
-            elif isinstance(tool_result, HealthRecordQueryResult):
-                parsed.intent = "query_records"
-                parsed.health_record_query_result = tool_result
-                parsed.assistant_message = tool_result.message
-            elif isinstance(tool_result, MedicationSearchResult):
-                if not parsed.medication_search_result:
-                    parsed.medication_search_result = tool_result
-            elif not parsed.facility_search_draft:
-                parsed.facility_search_draft = tool_result
+        HealthAssistantService._attach_tool_result_to_response(parsed, tool_result)
         if outdoor_conditions and not parsed.outdoor_conditions:
             parsed.outdoor_conditions = outdoor_conditions
         return parsed
@@ -1101,7 +1082,9 @@ class HealthAssistantService:
         assert boundary.request is not None
         request = boundary.request
 
-        needs_health_query = self._needs_health_record_query_tool(request)
+        needs_health_query = self._needs_health_record_query_tool(request) or self._needs_personal_record_evidence(
+            request, boundary.decision
+        )
         if needs_health_query and (
             request.profile_context is None
             or request.profile_context.profile_id is None
@@ -1119,6 +1102,12 @@ class HealthAssistantService:
             account_id=account_id,
             request=request,
         )
+        preloaded_results, authoritative_evidence_context = await self._load_authoritative_evidence(
+            request,
+            boundary.decision,
+            account=account,
+            profile_context=profile_context,
+        )
         loc = await self._resolve_request_location(request)
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
@@ -1127,11 +1116,28 @@ class HealthAssistantService:
             outdoor_conditions_context=self._format_outdoor_conditions_context(outdoor_conditions, loc is not None)
             if self._needs_outdoor_conditions(request)
             else None,
+            authoritative_evidence_context=authoritative_evidence_context,
         )
         reader = PartialJsonTextReader("assistant_message")
         raw = ""
 
         tools = self._get_tools(request)
+
+        if (
+            boundary.decision.requires_authoritative_evidence
+            and not tools
+            and not outdoor_conditions
+            and not preloaded_results
+        ):
+            response = self.boundary_service.enforce_grounding(
+                boundary.decision,
+                HealthAssistantResponse(intent="health_advice", assistant_message=""),
+                tool_result=None,
+                outdoor_conditions=None,
+            )
+            yield "delta", {"text": response.assistant_message}
+            yield "result", response.model_dump(mode="json")
+            return
 
         async def tool_executor(name: str, args: dict[str, Any]) -> Any:
             return await self._execute_tool(
@@ -1141,27 +1147,49 @@ class HealthAssistantService:
                 profile_id=self._parse_profile_id(profile_context.profile_id) if profile_context else None,
             )
 
-        stream_gen, tool_result = await self._get_stream_generator(
+        stream_gen, generated_tool_result = await self._get_stream_generator(
             request,
             system_instruction,
             tools,
             tool_executor,
         )
+        tool_result: Any | None = preloaded_results or None
+        if generated_tool_result is not None:
+            tool_result = [*preloaded_results, generated_tool_result]
 
-        if tool_result is not None:
+        if boundary.decision.requires_authoritative_evidence and not self.boundary_service.has_required_evidence(
+            boundary.decision,
+            tool_result,
+            outdoor_conditions,
+        ):
+            response = self.boundary_service.enforce_grounding(
+                boundary.decision,
+                HealthAssistantResponse(intent="health_advice", assistant_message=""),
+                tool_result=tool_result,
+                outdoor_conditions=outdoor_conditions,
+            )
+            yield "delta", {"text": response.assistant_message}
+            yield "result", response.model_dump(mode="json")
+            return
+
+        if generated_tool_result is not None:
             from app.dtos.food_nutrition import FoodNutritionSearchResult
             from app.dtos.health_record_query import HealthRecordQueryResult
             from app.dtos.medication import MedicationSearchResult
 
-            payload = tool_result.model_dump(mode="json") if hasattr(tool_result, "model_dump") else tool_result
-            if isinstance(tool_result, FoodNutritionSearchResult):
+            payload = (
+                generated_tool_result.model_dump(mode="json")
+                if hasattr(generated_tool_result, "model_dump")
+                else generated_tool_result
+            )
+            if isinstance(generated_tool_result, FoodNutritionSearchResult):
                 yield "food_nutrition", payload
-            elif isinstance(tool_result, HealthRecordQueryResult):
-                yield "delta", {"text": tool_result.message}
+            elif isinstance(generated_tool_result, HealthRecordQueryResult):
+                yield "delta", {"text": generated_tool_result.message}
                 res_obj = HealthAssistantResponse(
                     intent="query_records",
-                    assistant_message=tool_result.message,
-                    health_record_query_result=tool_result,
+                    assistant_message=generated_tool_result.message,
+                    health_record_query_result=generated_tool_result,
                     outdoor_conditions=outdoor_conditions,
                 )
                 validated = self.safety_service.validate_response(res_obj)
@@ -1173,16 +1201,16 @@ class HealthAssistantService:
                 )
                 yield "result", validated.model_dump(mode="json")
                 return
-            elif isinstance(tool_result, MedicationSearchResult):
+            elif isinstance(generated_tool_result, MedicationSearchResult):
                 yield "medication", payload
             else:
                 yield "facility", payload
-                summary_msg = getattr(tool_result, "message", None) or "주변 의료시설을 조회했습니다."
+                summary_msg = getattr(generated_tool_result, "message", None) or "주변 의료시설을 조회했습니다."
                 yield "delta", {"text": summary_msg}
                 res_obj = HealthAssistantResponse(
                     intent="search_facility",
                     assistant_message=summary_msg,
-                    facility_search_draft=tool_result,
+                    facility_search_draft=generated_tool_result,
                     outdoor_conditions=outdoor_conditions,
                 )
                 validated = self.safety_service.validate_response(res_obj)

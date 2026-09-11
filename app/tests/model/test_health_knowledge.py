@@ -3,11 +3,13 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from app.core import config
 from app.dtos.health_assistant import ChatMessage, HealthAssistantResponse
 from app.dtos.health_knowledge import HealthKnowledgeItem, HealthKnowledgeSearchResult
 from app.dtos.health_record_query import AlcoholConsultationSnapshot
 from app.services.health_assistant_boundary import HealthAssistantBoundaryService
 from app.services.health_knowledge_catalog import HealthKnowledgeCatalogClient, is_alcohol_topic
+from app.services.kdca_health_info_client import KdcaHealthInfoClient
 
 
 @pytest.mark.asyncio
@@ -84,6 +86,28 @@ async def test_catalog_returns_curated_hypertension_sources() -> None:
     assert all(item.url.startswith("https://health.kdca.go.kr/") for item in hypertension.items)
     # 아직 큐레이션 안 된 주제는 지어내지 말고 정직하게 빈 목록을 돌려줘야 한다.
     assert diabetes.items == []
+
+
+@pytest.mark.skipif(
+    not config.KDCA_HEALTH_INFO_API_KEY, reason="KDCA_HEALTH_INFO_API_KEY 미설정 — 실제 API 통합 테스트 생략"
+)
+@pytest.mark.asyncio
+async def test_kdca_health_info_client_hits_the_real_api() -> None:
+    """가짜로 대체한 단위 테스트는 내부 로직만 검증하고, 실제 질병관리청 API가 지금도
+    이 형태로 응답하는지는 검증하지 못한다 — 그건 이 테스트가 진짜 네트워크로 확인한다.
+
+    포털이 마크업을 바꾸면(HTML 스크레이핑이라 정식 계약이 없다) 이 테스트가
+    가장 먼저, 그리고 유일하게 잡아낸다. 키가 없는 환경(CI 등)에서는 조용히
+    건너뛴다 — 실패가 아니라 생략이다."""
+    client = KdcaHealthInfoClient()
+
+    result = await client.search("고혈압")
+
+    assert len(result.items) > 0, "실제 KDCA API에서 '고혈압' 검색 결과가 비었다 — 포털 응답 형식이 바뀌었을 수 있다"
+    first = result.items[0]
+    assert first.title
+    assert first.url.startswith("https://health.kdca.go.kr/")
+    assert len(first.summary) > 10
 
 
 def test_is_alcohol_topic_catches_statement_form_that_fast_path_intent_check_misses() -> None:
