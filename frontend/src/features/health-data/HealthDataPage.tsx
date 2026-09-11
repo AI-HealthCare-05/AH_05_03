@@ -7,11 +7,6 @@ import { CHECKUP_FIELDS, FIELD_LABELS, FIELD_UNITS } from "../assessment/fields"
 import { Modal } from "../../shared/ui/Modal";
 import { ValueSheet, useCanonicalValues } from "./ValueSheet";
 import { FamilyProfileSidebar } from "../family/FamilyProfileSidebar";
-// **2026-09-10 `/insights` 를 이 화면으로 합치며 옮겨 왔다.** 챌린지와 수치를 같이
-// 보여 주는 것이 원래 뜻이었다 — 오늘 물을 줬는지와 체중이 내렸는지는 같이 봐야
-// 뜻이 생긴다(행동과 결과라서). 그 화면에만 있던 유일한 자리였으므로 지우지 않고
-// 옮겼다 — 안 옮기면 챌린지 달성 요약이 앱 어디에도 없어진다.
-import { ChallengeDashboardCard } from "../challenge/ChallengeDashboardCard";
 
 type PeriodKey = "1m" | "3m" | "6m" | "1y" | "all";
 type ChartPoint = { date: string; value: number };
@@ -160,8 +155,6 @@ export function HealthDataPage() {
       <div className="health-data-layout">
         <div className="health-data-main">
           <HealthInsight periodLabel={periodLabel} weight={weightPoints} systolic={systolicPoints} diastolic={diastolicPoints} glucose={glucosePoints} />
-
-          <ChallengeDashboardCard />
 
           <section className="health-summary-grid" aria-label={`${periodLabel} 건강 요약`}>
             <SummaryCard title="체중" unit="kg" points={weightPoints} />
