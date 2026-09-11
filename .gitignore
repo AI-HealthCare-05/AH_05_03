@@ -54,3 +54,16 @@ modeling/**/__pycache__/
 modeling/artifacts/models_ensemble/
 .agents/hooks.json
 .cursor/hooks.json
+
+# 드리프트·튜닝 실험의 결과 덤프와 실행 로그. 재현 스크립트(modeling/eda_drift.py ·
+# modeling/tune_requested.py)를 같이 담으므로 결과물은 저장소에 두지 않는다.
+# drift_base/drift_drop 은 둘이 1.2MB 다. 위 artifacts/*.json 101개와 달리 배포에
+# 쓰이지 않고 문서 한 편(docs/52)의 근거로만 쓰인다.
+modeling/artifacts/*.log
+modeling/artifacts/drift_base.json
+modeling/artifacts/drift_drop.json
+modeling/artifacts/eda_drift.json
+modeling/artifacts/tune_requested.json
+
+# tsc -b 의 증분 빌드 캐시. 빌드할 때마다 바뀌어 diff 만 늘린다.
+frontend/*.tsbuildinfo

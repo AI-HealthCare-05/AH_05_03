@@ -185,6 +185,39 @@ export interface RiskContributor {
   causal: boolean | null;
 }
 
+/** 이 질환이 그대로 이어질 때 뒤따르는 것 하나. `RiskContributor` 와 같은 모양이다. */
+export interface Complication {
+  label: string;
+  organ: string;
+  detail: string;
+  effect: string;
+  source: string;
+  causal: boolean | null;
+}
+
+/**
+ * 이미 기준을 넘었거나 경계에 있는 질환 하나의 앞날.
+ *
+ * **`DiseaseVerdict` 의 뒤쪽이다.** 판정이 "지금 어떤가" 에서 끝나는 자리에 "그대로
+ * 두면 무엇이 뒤따르나" 를 붙인다. 이 자리가 비어 있던 이유가 있다 — 발병 궤적은
+ * 이미 기준을 넘은 칸에서 지워지므로(`assessment.present_targets`), 판정이 높게 나온
+ * 사람일수록 그다음에 읽을 것이 없었다.
+ *
+ * **질환별 사전이라 수치로 계산하지 않는다.** 수치가 정하는 것은 어떤 질환이 목록에
+ * 오르는가 하나뿐이고, 무엇이 딸려 오는지는 지침과 코호트가 정한다. 그래서 확률이
+ * 붙지 않는다 — "5년 안에 망막병증이 생깁니다" 를 말할 근거가 이 서비스에 없다.
+ */
+export interface ComplicationOutlook {
+  key: string;
+  name: string;
+  risk_level: "CAUTION" | "HIGH" | "VERY_HIGH";
+  lead: string;
+  summary: string;
+  caveat: string | null;
+  complications: Complication[];
+  monitoring: string[];
+}
+
 export interface DiseaseRisk {
   category: string;
   risk_level: RiskLevel;
@@ -224,6 +257,8 @@ export interface AssessmentSummaryData {
   summary: AssessmentSummary;
   verdicts: DiseaseVerdict[];
   disease_risks: Record<string, DiseaseRisk>;
+  /** 급한 등급 순. `CAUTION` 미만인 판정은 아예 오지 않는다. 옛 저장본에는 없다. */
+  complication_outlooks?: ComplicationOutlook[];
   top_suspects: SuspectCard[];
   disclaimers: string[];
   inputs_provided: number;
@@ -246,6 +281,26 @@ export const ENGINE_SHORT: Record<EngineCode, string> = {
   E1: "규칙 엔진",
   E2: "ML 예측",
   E3: "공개 공식",
+};
+
+/**
+ * 같은 셋을 **사용자 말**로 옮긴 것. 카드 앞면과 목록이 이것을 쓴다.
+ *
+ * `ENGINE_SHORT` 는 우리가 만든 것의 이름이지 사용자가 알아야 할 것의 이름이
+ * 아니다 — "규칙 엔진"·"ML 예측"·"공개 공식" 은 검진표를 들고 온 사람의 어휘가
+ * 아니고, 그 셋의 차이를 알아도 화면에서 할 수 있는 일이 달라지지 않는다.
+ *
+ * 사용자에게 실제로 다른 것은 **"이 판정에 내 검사값이 쓰였는가"** 하나다.
+ * 쓰였으면 숫자를 믿을 근거가 있고, 안 쓰였으면 검사를 받는 것이 다음 할 일이다.
+ * 그래서 셋을 그 물음의 답으로 적는다.
+ *
+ * `ENGINE_SHORT` 는 지우지 않는다 — `판정 근거 자세히` 안에서는 어느 엔진이
+ * 답했는지를 설명과 함께 보여 주므로 거기서는 본래 이름이 맞다.
+ */
+export const ENGINE_PLAIN: Record<EngineCode, string> = {
+  E1: "검사값으로 판정",
+  E2: "검사 없이 추정",
+  E3: "학회 공식으로 계산",
 };
 
 /**

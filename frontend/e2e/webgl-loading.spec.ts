@@ -28,7 +28,8 @@ test("남녀 핵심 인체를 먼저 표시하고 세부 레이어와 재방문 
   });
 
   await page.goto(appUrl);
-  await page.getByRole("button", { name: "첫 구성원 등록" }).click();
+  // 첫 실행 화면은 폼을 바로 편다. 예전에는 "첫 구성원 등록" 버튼이 모달을 띄웠다.
+  await expect(page.getByRole("heading", { name: "첫 구성원 만들기" })).toBeVisible();
   await page.getByRole("textbox", { name: "이름 또는 호칭" }).fill("WebGL 진단");
   await page.getByRole("combobox", { name: "관계" }).selectOption("본인");
   await page.getByRole("button", { name: "프로필 저장" }).click();

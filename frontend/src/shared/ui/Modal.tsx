@@ -21,6 +21,7 @@
  */
 
 import { type ReactNode, useEffect, useId, useRef } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * 열려 있는 모달 스택. **Escape 는 맨 위 하나만 닫아야 한다.**
@@ -77,7 +78,31 @@ export function Modal({
     };
   }, [onClose]);
 
-  return (
+  /**
+   * **`document.body` 로 내보낸다(포털).**
+   *
+   * 2026-09-11 버그. 판정 카드의 "판정 근거 자세히" 를 누르면 모달이 **세로로
+   * 길쭉한** 모양(실측 239px)으로 떴다가, 마우스를 브라우저 밖으로 빼면 제 폭
+   * (880px)으로 돌아왔다.
+   *
+   * 원인은 모달도 CSS 폭도 아니었다. 이 컴포넌트가 **호출한 자리에 그대로** 그려져
+   * 왔고, 판정 카드에는 이런 규칙이 있다.
+   *
+   *     .assess-card:hover { transform: translateY(-1px); }
+   *
+   * `transform` 이 걸린 요소는 **`position: fixed` 자손의 컨테이닝 블록**이 된다.
+   * 그래서 마우스가 카드 위에 있는 동안 `.modal-backdrop { position: fixed; inset: 0 }`
+   * 의 기준이 뷰포트가 아니라 **카드**가 됐다 — 카드 폭이 268px 남짓이라 모달이
+   * 그 안에 갇혀 좁고 길어진 것이다. 마우스를 빼면 `:hover` 가 풀리고 `transform`
+   * 이 사라지니 기준이 뷰포트로 돌아온다. "마우스를 밖으로 옮겨야 고쳐진다" 가
+   * 그 뜻이었다.
+   *
+   * 카드의 `transform` 을 지우는 것으로도 이 한 자리는 막히지만, 같은 함정이
+   * `filter`·`perspective`·`contain`·`will-change` 로도 생긴다. 모달을 몸통으로
+   * 내보내면 조상이 무엇을 하든 상관이 없어진다 — 이 컴포넌트를 쓰는 모든 화면이
+   * 한 번에 안전해진다.
+   */
+  return createPortal(
     // `mousedown` 으로 잡는다. `click` 이면 패널 안에서 누르고 배경에서 뗀 드래그가
     // 닫기로 읽힌다 — 글자를 끌어 선택할 때 실제로 그렇게 된다.
     <div
@@ -106,6 +131,7 @@ export function Modal({
         </div>
         {children}
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

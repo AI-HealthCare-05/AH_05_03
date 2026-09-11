@@ -2,8 +2,9 @@ import { lazy, Suspense, type FormEvent, useCallback, useEffect, useMemo, useSta
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
-import { BirthDateInput } from "../../shared/ui/BirthDateInput";
 import { Modal } from "../../shared/ui/Modal";
+import { ProfileFields } from "./ProfileFields";
+import { ServicePoints } from "../account/servicePoints";
 // 모달은 눌러야 뜬다. 정적으로 두면 판정 카드 일체가 홈의 첫 청크에 실린다.
 const RecordDetail = lazy(() => import("./RecordDetail").then((m) => ({ default: m.RecordDetail })));
 import { RecordSummary } from "./RecordSummary";
@@ -47,8 +48,6 @@ const RECORD_TYPES: HealthRecordType[] = [
   "vaccination",
   "note",
 ];
-
-const RELATIONSHIPS = ["본인", "배우자", "자녀", "부모", "형제·자매", "기타"];
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -495,7 +494,8 @@ export function HomePage() {
         {!loading && profiles.length === 0 ? (
           <EmptyHousehold
             disabled={!localStorageReady}
-            onCreate={() => setProfileDialogOpen(true)}
+            saving={saving}
+            onSubmit={submitProfile}
           />
         ) : null}
         {profiles.length > 0 ? (
@@ -656,29 +656,16 @@ export function HomePage() {
       ) : null}
 
       {profileDialogOpen ? (
-        <Modal kicker="이 기기에 저장" title="가족 구성원 로컬 프로필 만들기" onClose={() => setProfileDialogOpen(false)}>
+        /* **꼬리표와 고지를 사실로 되돌렸다.** 예전에는 "이 기기에 저장" ·
+           "로컬 프로필" · "이 브라우저에 암호화해 저장하며 서버로 보내지 않습니다"
+           였는데, ADR-011 이후로 셋 다 틀렸다. 이 폼의 제출은
+           `createProfile` → `serverDomainRuntime.create` → `POST /api/v1/profiles` 로
+           간다. 사용자가 이름·관계·성별·생년을 넣는 바로 그 화면에서 틀린 약속을
+           하고 있었다. */
+        <Modal kicker="우리 가정" title="가족 구성원 프로필 만들기" onClose={() => setProfileDialogOpen(false)}>
           <form className="product-form" onSubmit={submitProfile}>
-            <p className="form-notice">입력한 정보는 이 브라우저에 암호화해 저장하며 서버로 보내지 않습니다.</p>
-            <label>
-              이름 또는 호칭
-              <input name="displayName" maxLength={100} required placeholder="예: 나, 엄마, 민준" autoFocus />
-            </label>
-            <label>
-              관계
-              <select name="relationship" required defaultValue="">
-                <option value="" disabled>관계를 선택하세요</option>
-                {RELATIONSHIPS.map((relationship) => <option key={relationship}>{relationship}</option>)}
-              </select>
-            </label>
-            <label>
-              성별
-              <select name="gender" defaultValue="">
-                <option value="" disabled>남성 또는 여성</option>
-                <option value="male">남성</option>
-                <option value="female">여성</option>
-              </select>
-            </label>
-            <BirthDateInput />
+            <p className="form-notice">입력한 정보는 로그인한 계정에 저장되고, 같은 가정 구성원만 열람할 수 있습니다.</p>
+            <ProfileFields autoFocus />
             <div className="form-actions">
               <button className="secondary-button" type="button" onClick={() => setProfileDialogOpen(false)}>취소</button>
               <button className="primary-button" type="submit" disabled={saving}>{saving ? "저장 중…" : "프로필 저장"}</button>
@@ -911,34 +898,12 @@ export function HomePage() {
       ) : null}
 
       {profileEditDialogOpen && selectedProfile ? (
-        <Modal kicker="이 기기에 저장" title={`${selectedProfile.displayName} 프로필 관리`} onClose={() => setProfileEditDialogOpen(false)}>
+        /* 생성 모달과 같은 이유로 꼬리표·고지를 고쳤다. "계속 이 브라우저에만
+           저장됩니다" 는 ADR-011 이후로 성립하지 않는다. */
+        <Modal kicker="우리 가정" title={`${selectedProfile.displayName} 프로필 관리`} onClose={() => setProfileEditDialogOpen(false)}>
           <form className="product-form" onSubmit={submitProfileUpdate}>
-            <p className="form-notice">프로필 정보와 건강기록은 계속 이 브라우저에만 저장됩니다.</p>
-            <label>
-              이름 또는 호칭
-              <input
-                name="displayName"
-                maxLength={100}
-                required
-                defaultValue={selectedProfile.displayName}
-                autoFocus
-              />
-            </label>
-            <label>
-              관계
-              <select name="relationship" required defaultValue={selectedProfile.relationship}>
-                {RELATIONSHIPS.map((relationship) => <option key={relationship}>{relationship}</option>)}
-              </select>
-            </label>
-            <label>
-              성별
-              <select name="gender" defaultValue={selectedProfile.gender ?? ""}>
-                <option value="" disabled>남성 또는 여성</option>
-                <option value="male">남성</option>
-                <option value="female">여성</option>
-              </select>
-            </label>
-            <BirthDateInput defaultValue={selectedProfile.birthDate ?? ""} />
+            <p className="form-notice">프로필과 건강기록은 로그인한 계정에 저장되고, 같은 가정 구성원만 열람할 수 있습니다.</p>
+            <ProfileFields profile={selectedProfile} autoFocus />
             {selectedProfile.accountEmail ? (
               <label>
                 연동 계정 (Google)
@@ -1075,22 +1040,60 @@ function MemberVerdict({ summary }: { summary?: LatestSummary }) {
   );
 }
 
-function EmptyHousehold({ disabled, onCreate }: { disabled: boolean; onCreate: () => void }) {
+/**
+ * 가입 직후 첫 화면. **이 자리가 곧 온보딩이다** — 프로필이 0개일 때만 그려진다.
+ *
+ * 무엇이 바뀌었나
+ * ---------------
+ * 예전에는 "첫 구성원 등록" 버튼이 모달을 띄웠고, 그 옆에 3단계 목록(프로필 →
+ * 건강기록 → 백업)이 있었다. 셋 다 문제였다.
+ *
+ * 1. **모달을 한 단계 거쳤다.** 방금 가입한 사람이 할 일은 입력 하나뿐인데 클릭이
+ *    먼저 있었다. 폼을 바로 편다.
+ * 2. **3단계가 서비스 설명이 아니라 할 일 목록이었다.** 그중 백업은 ADR-007 이
+ *    대체돼 사라진 기능이다. 방금 가입한 사람에게 세 번째로 시킬 일이 백업일 수도
+ *    없다. 자리를 "이어봄이 하는 일" 세 줄에 준다 — 관문·가입과 같은 문장이다.
+ * 3. **"로컬 프로필" 이라고 적었다.** ADR-011 이후로 서버 저장이다.
+ */
+function EmptyHousehold({
+  disabled,
+  saving,
+  onSubmit,
+}: {
+  disabled: boolean;
+  saving: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
   return (
-    <div className="empty-household">
-      <div className="empty-household-copy">
+    <div className="first-run">
+      <div className="first-run-head">
         <span className="empty-step">첫 단계</span>
-        <h3>가족 구성원 프로필을 만들어 시작하세요.</h3>
-        <p>별도 로그인 없이 건강기록의 대상을 구분하는 로컬 프로필입니다.</p>
-        <button className="primary-button" type="button" disabled={disabled} onClick={onCreate}>
-          첫 구성원 등록
-        </button>
+        <h3>이어봄에 오신 것을 환영합니다</h3>
+        <p>건강기록을 남길 첫 구성원을 만들어 주세요. 나중에 더 추가할 수 있습니다.</p>
       </div>
-      <ol className="onboarding-steps">
-        <li><span>1</span><div><strong>프로필 만들기</strong><small>이름·관계·생년 정보</small></div></li>
-        <li><span>2</span><div><strong>건강기록 남기기</strong><small>검진·통증·건강 메모</small></div></li>
-        <li><span>3</span><div><strong>백업 파일 보관</strong><small>암호화해 직접 내보내기</small></div></li>
-      </ol>
+
+      <div className="first-run-body">
+        <section className="first-run-form" aria-labelledby="first-run-form-heading">
+          <h4 id="first-run-form-heading">첫 구성원 만들기</h4>
+          <form className="product-form" onSubmit={onSubmit}>
+            <ProfileFields autoFocus />
+            <div className="form-actions">
+              <button className="primary-button" type="submit" disabled={disabled || saving}>
+                {saving ? "저장 중…" : "프로필 저장"}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section className="first-run-intro" aria-labelledby="first-run-intro-heading">
+          <h4 id="first-run-intro-heading">이어봄이 하는 일</h4>
+          <ServicePoints />
+        </section>
+      </div>
+
+      <p className="first-run-notice">
+        건강기록·프로필·판정 결과는 로그인한 계정에 저장되고, 같은 가정 구성원만 열람할 수 있습니다.
+      </p>
     </div>
   );
 }

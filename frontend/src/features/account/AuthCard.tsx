@@ -185,13 +185,18 @@ export function AuthCard({
     <section className="account-card auth-card">
       <p className="section-kicker">{invitationEmail ? "가족 초대" : "서비스 계정"}</p>
       <h2>{signup ? "서비스 계정 만들기" : "로그인"}</h2>
-      <p>
-        {invitationEmail
-          ? `${invitationEmail} 주소로 초대받았습니다. 이 이메일로 ${signup ? "가입하세요" : "로그인하세요"}.`
-          : signup
-            ? "계정 하나로 건강기록·가족 연결·구독을 함께 관리합니다."
-            : "가입하신 이메일로 로그인하세요."}
-      </p>
+      {/* **`signin` 은 문단을 두지 않는다.** 예전에는 "가입하신 이메일로
+          로그인하세요." 가 있었는데, 꼬리표("서비스 계정")와 제목("로그인") 바로
+          아래에서 같은 말을 세 번째로 했고 관문의 리드 문장과도 겹쳤다. 한 화면에
+          제목 둘·설명 둘이 쌓여서 어느 것도 첫 줄로 읽히지 않았다.
+
+          초대받은 경우는 이메일이 사람마다 다르니 남긴다. 가입도 남긴다 — 계정
+          하나로 무엇을 하는지는 위 리드가 말하지 않는다. */}
+      {invitationEmail ? (
+        <p>{`${invitationEmail} 주소로 초대받았습니다. 이 이메일로 ${signup ? "가입하세요" : "로그인하세요"}.`}</p>
+      ) : signup ? (
+        <p>계정 하나로 건강기록·가족 연결·구독을 함께 관리합니다.</p>
+      ) : null}
 
       <form className="product-form" onSubmit={(event) => void onSubmit(event)}>
         <label>

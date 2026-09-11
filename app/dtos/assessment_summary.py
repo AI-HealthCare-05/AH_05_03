@@ -190,6 +190,61 @@ class DiseaseVerdictOut(BaseSerializerModel):
     disclaimer: str
 
 
+class Complication(BaseSerializerModel):
+    """이 질환이 그대로 이어질 때 뒤따르는 것 하나.
+
+    `DiseaseRiskAssessment.contributors` 와 **같은 모양**이다(설명·효과·출처·인과).
+    저쪽이 "무엇이 이 질환을 가리켰나" 라면 이쪽은 "이 질환이 무엇을 부르나" 이고,
+    같은 문법으로 읽히는 편이 맞다.
+    """
+
+    label: str
+    organ: str = Field(description="어느 장기·계통의 이야기인가. 목록이 길 때 묶어 읽을 손잡이")
+    detail: str
+    effect: str = Field(description="크기. 숫자를 못 대는 고리는 지침 문구만 적고 크기를 말하지 않는다")
+    source: str
+    causal: bool | None = Field(
+        default=None,
+        description=(
+            "`null` 은 인과를 따로 따져본 적이 없다는 뜻, `false` 는 따져봤더니 아니었다는 "
+            "뜻이다 — 완전히 다른 말이라 화면이 구분해 적는다"
+        ),
+    )
+
+
+class ComplicationOutlook(BaseSerializerModel):
+    """이미 기준을 넘었거나 경계에 있는 질환 하나의 앞날.
+
+    **`verdicts` 의 뒤쪽이다.** 판정이 "지금 어떤가" 에서 끝나는 반면 이쪽은 "그대로
+    두면 무엇이 뒤따르나" 를 답한다. 궤적(`onset_trajectory`)이 이미 넘은 칸에서
+    지워지기 때문에(ADR-009 §4), 판정이 높게 나온 사람일수록 그다음에 읽을 것이
+    없었다 — 이 목록이 그 자리를 채운다.
+
+    **환자별 계산이 아니라 질환별 사전이다.** 입력 수치가 정하는 것은 어떤 질환이
+    목록에 오르는가 하나뿐이고, 무엇이 딸려 오는지는 지침과 코호트가 정한다.
+    """
+
+    key: str = Field(description="`verdicts[].key` 와 같다")
+    name: str = Field(description="`verdicts[].name` 과 같다. 이름의 정본은 판정 쪽 하나다")
+    risk_level: Literal["CAUTION", "HIGH", "VERY_HIGH"] = Field(
+        description="이 전망이 붙은 판정 등급. `NORMAL`·`INSUFFICIENT_DATA` 는 목록에 오지 않는다"
+    )
+    lead: str = Field(description="첫 줄. 넘은 것과 경계에 있는 것은 다른 문장으로 말한다")
+    summary: str
+    caveat: str | None = Field(
+        default=None,
+        description=(
+            "이 질환을 합병증 틀로 말하면 안 되는 이유. 낮은 HDL 처럼 중재시험이 실패한 "
+            "고리는 `complications` 가 비고 이 줄만 선다"
+        ),
+    )
+    complications: list[Complication] = []
+    monitoring: list[str] = Field(
+        default=[],
+        description="지금 무엇을 언제 확인하는가. 합병증은 대개 증상이 없어서 이 줄이 없으면 읽고 할 일이 남지 않는다",
+    )
+
+
 class AssessmentSummary(BaseSerializerModel):
     evaluated: int
     total: int
@@ -216,6 +271,16 @@ class AssessmentSummaryData(BaseSerializerModel):
             "**심혈관질환은 이 축에만 있다** — 규칙 엔진에도 ML 번들에도 심혈관 타깃이 없다. "
             "각 항목의 `contributors` 가 어떤 값이 왜 위험을 올렸는지와 그 효과크기·출처·"
             "인과 여부를 담는다."
+        ),
+    )
+    complication_outlooks: list[ComplicationOutlook] = Field(
+        default=[],
+        description=(
+            "**`verdicts` 중 `CAUTION` 이상인 칸에만 붙는 앞날이다.** `disease_risks` 가 "
+            "'아직 안 걸렸는데 향하고 있는가' 를 답한다면 이쪽은 '이미 걸린 것이 무엇을 "
+            "부르는가' 를 답한다. 급한 등급 순으로 정렬돼 있다.\n\n"
+            "질환별 사전이라 입력 수치에 따라 내용이 달라지지 않는다 — 수치가 정하는 것은 "
+            "어떤 질환이 목록에 오르는지 하나뿐이다. 그래서 확률을 붙이지 않는다."
         ),
     )
     top_suspects: list[SuspectCard] = Field(

@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends
-from pydantic import EmailStr
 from sqlalchemy.exc import IntegrityError
 
 from app.core.db.session import SessionDep
@@ -66,16 +65,31 @@ class AuthService:
         self.jwt_service = JwtService()
 
     async def signup(self, data: SignUpRequest) -> ServiceAccount:
-        await self.check_email_exists(data.email)
+        existing = await self.account_repo.get_by_email(str(data.email))
+        # CLOSED(탈퇴)만 재가입 대상이다. ACTIVE·SUSPENDED와 부딪히면 여전히 409 —
+        # 정지 계정이 재가입으로 정지를 우회하게 두지 않는다.
+        if existing is not None and existing.status is not ServiceAccountStatus.CLOSED:
+            raise EmailAlreadyRegisteredError()
 
-        account = await self.account_repo.create(
-            email=str(data.email),
-            # 스레드로 뺀다 — 동기로 부르면 206ms 동안 이 워커 전체가 멈춘다.
-            password_hash=await hash_password_async(data.password),
-        )
-        # 같은 트랜잭션에서 기본 구독을 만든다. 그래야 SUBSCRIPTION_NOT_FOUND가
-        # 신규 계정의 정상 상태가 아니라 진짜 불변식 위반이 된다.
-        await self.subscription_repo.create_default(account.id)
+        # 스레드로 뺀다 — 동기로 부르면 206ms 동안 이 워커 전체가 멈춘다.
+        password_hash = await hash_password_async(data.password)
+
+        if existing is None:
+            account = await self.account_repo.create(email=str(data.email), password_hash=password_hash)
+            # 같은 트랜잭션에서 기본 구독을 만든다. 그래야 SUBSCRIPTION_NOT_FOUND가
+            # 신규 계정의 정상 상태가 아니라 진짜 불변식 위반이 된다.
+            await self.subscription_repo.create_default(account.id)
+        else:
+            # email이 unique라 탈퇴 계정과 같은 이메일로는 새 행을 못 만든다.
+            # 기존 행을 덮어써 되살린다 — 비밀번호와 구독 모두 신규 가입과 같은
+            # 상태(ACTIVE·FREE)로 돌아간다.
+            account = await self.account_repo.reactivate(existing, password_hash)
+            subscription = await self.subscription_repo.get_by_account_id(account.id)
+            if subscription is None:
+                # 불변식 방어: signup은 항상 구독을 만들어 뒀어야 한다.
+                await self.subscription_repo.create_default(account.id)
+            else:
+                await self.subscription_repo.reactivate_default(subscription)
 
         # session.begin()을 쓰면 안 된다. autobegin=True라 위 SELECT가 이미
         # 트랜잭션을 열어놨고, begin()은 InvalidRequestError를 낸다.
@@ -84,7 +98,7 @@ class AuthService:
         except IntegrityError as err:
             await self.session.rollback()
             # 사전 검사와 유니크 인덱스 둘 다 남긴다. 앞은 메시지가 좋고,
-            # 뒤는 TOCTOU 경쟁을 실제로 막는다.
+            # 뒤는 신규 이메일 경쟁의 TOCTOU를 실제로 막는다.
             raise EmailAlreadyRegisteredError() from err
 
         return account
@@ -153,10 +167,6 @@ class AuthService:
                 pass
 
         await self.token_store.deny_access(str(access_payload["jti"]), exp=access_payload.get("exp"))
-
-    async def check_email_exists(self, email: str | EmailStr) -> None:
-        if await self.account_repo.exists_by_email(str(email)):
-            raise EmailAlreadyRegisteredError()
 
     @staticmethod
     def _pair_data(access, refresh) -> IssuedTokens:

@@ -102,19 +102,37 @@ export function LocalDomainProvider({
         if (activeHouseholdId) {
           setHouseholdId(activeHouseholdId);
 
-          // 과거 브라우저(IndexedDB)에 저장된 데이터가 있다면 서버로 1회 안전 마이그레이션
-          if (typeof window !== "undefined" && window.indexedDB) {
+          // 과거 브라우저(IndexedDB)에 저장된 데이터가 있다면 서버로 1회 안전 마이그레이션.
+          // **계정별로 한 번만 시도한다.** `migrateLocalDataToPostgres`는 옮긴 뒤 레거시
+          // IndexedDB를 지우지 않으므로(데이터 유실 방지), 플래그 없이는 로그인할 때마다
+          // 같은 프로필·기록을 `syncProfiles`/`syncHealthRecords`로 다시 밀어 올렸다 —
+          // 실제 사용자 수가 늘지 않는데도 페이지를 열 때마다 전체 로컬 데이터를
+          // 왕복시키는 무분별한 동기화였다.
+          const legacyMigrationFlag = authAccountId ? `ieobom:legacy-migrated:${authAccountId}` : undefined;
+          if (
+            typeof window !== "undefined" &&
+            window.indexedDB &&
+            legacyMigrationFlag &&
+            window.localStorage.getItem(legacyMigrationFlag) !== "done"
+          ) {
             try {
               const legacyRuntime = await createLocalDomainRuntime("ieobom-local").catch(() => undefined);
               if (legacyRuntime) {
                 const localList = await legacyRuntime.profiles.list(PRIMARY_HOUSEHOLD_ID);
                 if (localList.ok && localList.value.length > 0) {
-                  await migrateLocalDataToPostgres(legacyRuntime, serverApiClient, activeHouseholdId).catch(() => undefined);
+                  const migrated = await migrateLocalDataToPostgres(legacyRuntime, serverApiClient, activeHouseholdId)
+                    .then(() => true)
+                    .catch(() => false);
+                  // 실패했으면 플래그를 남기지 않는다 — 다음 로그인에서 다시 시도해야 한다.
+                  if (migrated) window.localStorage.setItem(legacyMigrationFlag, "done");
+                } else {
+                  // 옮길 레거시 데이터가 없었다. 다시 열어 확인할 이유가 없다.
+                  window.localStorage.setItem(legacyMigrationFlag, "done");
                 }
                 legacyRuntime.close();
               }
             } catch {
-              // 마이그레이션 오류는 무시하고 계속 진행
+              // 마이그레이션 오류는 무시하고 계속 진행. 플래그를 안 남겼으므로 다음 로그인에 재시도한다.
             }
           }
           if (disposed) return;

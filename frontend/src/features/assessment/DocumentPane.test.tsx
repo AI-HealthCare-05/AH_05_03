@@ -142,7 +142,7 @@ describe("DocumentPane", () => {
 
     await user.upload(screen.getByLabelText(/검진표 이미지나 PDF/), pickFile());
 
-    expect(await screen.findByText(/확인이 필요한 1개/)).toBeInTheDocument();
+    expect(await screen.findByText(/직접 확인이 필요한 항목 1개/)).toBeInTheDocument();
     expect(screen.getByText("참고치가 요소질소 범위입니다")).toBeInTheDocument();
     expect(screen.getByText(/요소질소 · 6.2 · mg\/dL · 8~20/)).toBeInTheDocument();
   });

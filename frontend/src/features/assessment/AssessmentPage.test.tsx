@@ -317,6 +317,12 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await retype(user, /공복혈당/, "113");
 }
 
+async function choosePreset(user: ReturnType<typeof userEvent.setup>, name: string) {
+  const summary = screen.getByText("예시로 체험하기");
+  if (!summary.closest("details")?.open) await user.click(summary);
+  await user.click(screen.getByRole("button", { name }));
+}
+
 describe("AssessmentPage", () => {
   it("필수 칸을 채우기 전에는 보내지 않는다", async () => {
     const user = userEvent.setup();
@@ -385,10 +391,12 @@ describe("AssessmentPage", () => {
     expect(card).not.toBeNull();
     // 훑을 때 보이는 것: 단계 이름과 등급 막대.
     expect(within(card).getByText("고혈압 1기")).toBeInTheDocument();
-    // 앞면의 두 엔진 칸에는 **어느 엔진인지만**. 같은 이름이 접이 안 근거표에도
-    // 있으므로 앞면 블록으로 좁혀서 본다.
-    const engines = card.querySelector(".assess-engines") as HTMLElement;
-    expect(within(engines).getByText("규칙 엔진")).toBeInTheDocument();
+    // 앞면 태그는 **사용자 말**로 적는다("규칙 엔진" 이 아니라). 같은 판정을
+    // 낸 엔진의 본래 이름은 근거 모달 안에 그대로 있으므로 앞면으로 좁혀서 본다.
+    const tag = card.querySelector(".assess-engine-tag") as HTMLElement;
+    expect(tag).toHaveTextContent("검사값으로 판정");
+    // 밀려난 ML 확률은 앞면에 없다 — 정본이 아닌 숫자를 훑는 자리에 두지 않는다.
+    expect(card.querySelector(".assess-chance")).toBeNull();
     // 사유는 열기 전에는 화면에 없다. 근거는 카드 위에 겹쳐 띄운다 — 격자에서
     // 카드 안으로 펼치면 같은 줄의 다른 카드까지 키가 늘고 아래가 통째로 밀린다.
     expect(screen.queryByText(/측정값이 있어 규칙 엔진이 정본입니다/)).not.toBeInTheDocument();
@@ -412,30 +420,28 @@ describe("AssessmentPage", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
-    const panel = (await screen.findByRole("region", { name: /만성질환 발병 예측/ })) as HTMLElement;
+    const panel = (await screen.findByRole("region", { name: /먼저 확인할 건강 신호/ })) as HTMLElement;
 
     // 1순위는 검사값으로 판정한 것이라 "측정" 이라고 적힌다.
     const first = within(panel).getByRole("heading", { name: /1순위 고혈압/ }).closest("article") as HTMLElement;
-    expect(within(first).getByText("측정")).toBeInTheDocument();
-    expect(within(first).getByText(/입력한 검사값으로/)).toBeInTheDocument();
+    expect(within(first).getByText("검사값 기준")).toBeInTheDocument();
+    // **패널에는 확률이 한 개도 없다.** 2026-09-11 에 숫자를 카드 한 곳으로 모았다 —
+    // 그전에는 같은 값(실측 대사증후군 56%/58%)이 이 패널의 접이, 아래 질환 카드,
+    // 맨 아래 "N년 뒤 건강 예측" 목록 **세 군데**에 있었다. 사용자는 셋이 같은
+    // 값인지 확인하려고 자리를 오갔다.
+    expect(within(panel).queryByText(/\d+%/)).toBeNull();
 
-    // 지평은 5·10년 둘. 곡선이 아니라 숫자로 읽힌다.
-    expect(within(first).getAllByText("5년 뒤").length).toBeGreaterThan(0);
-    expect(within(first).getAllByText("10년 뒤").length).toBeGreaterThan(0);
-    expect(within(first).getByText("42%")).toBeInTheDocument();
-    expect(within(first).getByText(/동년배 36%/)).toBeInTheDocument();
+    // 순위의 근거는 남긴다 — 이 값만은 다른 곳에 없다. 같은 "주의" 라도 신기능은
+    // 사망연계 C 0.84 이고 낮은 HDL 은 0.51 이다.
+    expect(within(first).getByText("장기 예측 근거")).toBeInTheDocument();
 
     // 2순위는 검사값 없이 추정한 것이다.
     const second = within(panel).getByRole("heading", { name: /2순위 빈혈/ }).closest("article") as HTMLElement;
     expect(within(second).getByText("추정")).toBeInTheDocument();
 
-    // 3순위는 의심이 아니라 자리를 채운 것이고, 예측이 없으면 그 사실을 적는다.
+    // 3순위는 의심이 아니라 자리를 채운 것이다. 자리를 비우지 않는다.
     const third = within(panel).getByRole("heading", { name: /3순위 만성콩팥병/ }).closest("article") as HTMLElement;
-    expect(within(third).getByText(/의심 신호는 없/)).toBeInTheDocument();
-    expect(within(third).getByText(/앞으로의 발병 확률을 낼 근거가 아직 없어요/)).toBeInTheDocument();
-
-    // 두 숫자의 뜻은 카드마다가 아니라 패널에 한 번만 적는다.
-    expect(within(panel).getAllByText(/그 나이에 기준을 넘고 있을 확률/)).toHaveLength(1);
+    expect(third).not.toBeNull();
   });
 
   it("급한 셋이 전부 이미 넘었어도 나머지 질환의 5년 뒤는 보여준다", async () => {
@@ -471,41 +477,27 @@ describe("AssessmentPage", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
-    const outlook = await screen.findByRole("region", { name: /년 뒤/ });
-    // **뜻이 다른 둘을 블록으로 가른다.** 한 줄로 정렬하면 동년배보다 낮은 발병
-    // 확률이 기준 초과 옆에 나란히 서고, 훑는 사람은 꼬리표보다 순서를 먼저 읽는다.
-    //
-    // 제목 요소로 좁혀서 본다. 블록 제목의 문구가 **다른 블록의 안내에서 상호참조**
-    // 되므로(“아래 기준을 넘고 있을 확률로 답합니다”) 본문 전체를 훑으면 같은 말이
-    // 두 번 잡힌다 — 그 중복은 결함이 아니라 두 블록을 잇는 장치다.
-    const blockTitles = Array.from(outlook.querySelectorAll(".outlook-block-title")).map(
-      (el) => el.textContent ?? "",
-    );
-    expect(blockTitles.some((t) => t.includes("새로 생길 확률"))).toBe(true);
-    expect(blockTitles.some((t) => t.includes("기준을 넘고 있을 확률"))).toBe(true);
+    // **앞날 숫자는 질환 카드가 맡는다.** 예전에는 패널 아래 "N년 뒤 건강 예측"
+    // 목록이 이 일을 했는데, 그 목록이 적는 값이 카드가 적는 값과 같았다. 목록을
+    // 걷어낸 대신 **카드가 그 몫을 그대로 한다는 것**을 여기서 못 박는다 —
+    // 급한 셋이 전부 이미 넘었어도 앞날이 화면에서 사라지면 안 된다.
+    const panel = (await screen.findByRole("region", { name: /먼저 확인할 건강 신호/ })) as HTMLElement;
+    expect(within(panel).queryByText(/\d+%/)).toBeNull();
 
-    // 두 블록이 왜 갈리는지 화면이 말한다. 없으면 "나머지 질환이 빠졌다" 로 읽힌다.
-    expect(within(outlook).getByText(/되돌아가지 않는 질환/)).toBeInTheDocument();
-
-    // 유병 줄은 **움직였을 때만** 변화폭을 적는다. 57% -> 66% 라 오른 줄이다.
-    const htn = within(outlook).getByText("고혈압").closest("li") as HTMLElement;
-    expect(htn).toHaveTextContent("66%");
-    expect(htn).toHaveTextContent(/지금 57% → ▲ 9%p/);
-    expect(htn.querySelector(".outlook-note.is-up")).not.toBeNull();
+    // 1순위는 이미 넘은 칸이다. 그래도 카드에는 앞날이 남아 있다(57% → 66%).
+    const htnCard = (await screen.findByRole("heading", { name: "고혈압" })).closest("article") as HTMLElement;
+    expect(htnCard).toHaveTextContent("66%");
+    expect(htnCard).toHaveTextContent("5년 뒤");
 
     // 발병 줄은 동년배와의 비교가 답이다 — 절대값만으로는 크고 작음을 못 읽는다.
-    const anemia = within(outlook).getByText("빈혈").closest("li") as HTMLElement;
-    expect(anemia).toHaveTextContent(/동년배 \d+%(보다|와)/);
+    const anemiaCard = (await screen.findByRole("heading", { name: "빈혈" })).closest("article") as HTMLElement;
+    expect(anemiaCard).toHaveTextContent(/동년배 \d+%/);
 
-    // 곡선이 없는 칸도 자리를 지우지 않고 왜 없는지 적는다.
-    // 이미 넘은 것은 줄마다 반복하지 않고 한 줄로 묶는다.
-    const settledRow = outlook.querySelector(".outlook-settled") as HTMLElement;
-    expect(settledRow).toHaveTextContent("앞날 숫자를 내지 않은 1가지");
-    expect(settledRow).toHaveTextContent("고콜레스테롤혈증");
-    // 그 줄에는 숫자를 적지 않는다 — 라벨 검사값이 ML 입력에서 차단돼 모델이 낮은
-    // 값을 내므로, "높음" 배지 밑에 놓으면 어느 쪽을 믿어야 하는지 알 수 없다.
-    expect(settledRow.querySelector(".outlook-value")).toBeNull();
-    expect(within(outlook).queryAllByText("고콜레스테롤혈증").length).toBe(1);
+    // 서버가 곡선을 지운 칸은 카드가 그 사실을 적는다. 자리를 비우지 않는다.
+    const settledCard = (await screen.findByRole("heading", { name: "고콜레스테롤혈증" })).closest(
+      "article",
+    ) as HTMLElement;
+    expect(settledCard).not.toBeNull();
   });
 
   it("서버가 지운 곡선을 화면이 되살리지 않는다 — 판단은 한 곳이다", async () => {
@@ -539,19 +531,41 @@ describe("AssessmentPage", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
-    const panel = (await screen.findByRole("region", { name: /만성질환 발병 예측/ })) as HTMLElement;
+    const panel = (await screen.findByRole("region", { name: /먼저 확인할 건강 신호/ })) as HTMLElement;
     const card = within(panel).getByRole("heading", { name: /이상지질혈증/ }).closest("article") as HTMLElement;
     expect(within(card).getByText("정상 범위")).toBeInTheDocument();
     expect(within(card).queryByText("74%")).not.toBeInTheDocument();
-    expect(within(card).getByText(/검사값이 기준 안에 있어/)).toBeInTheDocument();
+    expect(within(card).getByText(/현재 검사값은 정상 범위/)).toBeInTheDocument();
   });
 
   it("서버가 보낸 곡선은 확진 카드에서도 그대로 그린다", async () => {
     const user = userEvent.setup();
     // 이미 넘은 카드라도 모델이 같은 방향을 가리키면 5년 숫자가 배지와 다투지
     // 않는다. 실측으로 비만 91% · 지방간 66% · 대사증후군 58% 가 그 자리다.
+    const curve = {
+      horizons_years: [1, 2, 3, 4, 5],
+      prevalence_probability: [0.91, 0.91, 0.91, 0.91, 0.91],
+      current_probability: 0.91,
+      direction: "유지",
+      conditional_on: "지금의 수치가 유지된다는 가정",
+      irreversible: false,
+      truncated_at_age: null,
+      caveats: ["지금 넘었는지와 무관합니다.", "치료 시작 때문입니다.", "NHANES 기준입니다."],
+    };
+    // 곡선을 그리는 쪽이 패널에서 카드로 옮겨 갔으므로(2026-09-11) 같은 질환의
+    // **판정 카드**도 같이 실어야 계약을 잴 수 있다. 예전에는 `top_suspects` 만
+    // 갈아 끼웠고, 그때는 패널이 곡선을 그렸으니 그것으로 충분했다.
+    const obesity = structuredClone(RESPONSE.verdicts[0]) as unknown as Record<string, unknown>;
+    obesity.key = "obesity";
+    obesity.name = "비만";
+    obesity.risk_level = "HIGH";
+    const reference = obesity.reference as Record<string, unknown>;
+    delete reference.trajectory;
+    reference.prevalence_trajectory = curve;
+
     const confirmed = {
       ...RESPONSE,
+      verdicts: [...RESPONSE.verdicts, obesity],
       top_suspects: [
         {
           ...RESPONSE.top_suspects[0],
@@ -563,16 +577,7 @@ describe("AssessmentPage", () => {
           risk_level: "HIGH",
           onset_trajectory: null,
           onset_status: "not_applicable",
-          prevalence_trajectory: {
-            horizons_years: [1, 2, 3, 4, 5],
-            prevalence_probability: [0.91, 0.91, 0.91, 0.91, 0.91],
-            current_probability: 0.91,
-            direction: "유지",
-            conditional_on: "지금의 수치가 유지된다는 가정",
-            irreversible: false,
-            truncated_at_age: null,
-            caveats: ["지금 넘었는지와 무관합니다.", "치료 시작 때문입니다.", "NHANES 기준입니다."],
-          },
+          prevalence_trajectory: curve,
         },
       ],
     };
@@ -581,11 +586,15 @@ describe("AssessmentPage", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
-    const panel = (await screen.findByRole("region", { name: /만성질환 발병 예측/ })) as HTMLElement;
-    const card = within(panel).getByRole("heading", { name: /비만/ }).closest("article") as HTMLElement;
-    expect(within(card).getAllByText("91%").length).toBeGreaterThan(0);
-    // 숫자를 보여주더라도 "지금 넘었다" 는 사실과 다음 행동은 같이 적는다.
-    expect(within(card).getByText(/재측정과 진료 상담/)).toBeInTheDocument();
+    // **곡선은 질환 카드가 그린다.** 이미 기준을 넘은 칸이라고 해서 화면이 값을
+    // 지우지 않는다 — 지울지 말지는 서버가 한 곳에서 정한다
+    // (`assessment.model_contradicts_measurement`).
+    const card = (await screen.findByRole("heading", { name: "비만" })).closest("article") as HTMLElement;
+    expect(within(card).getAllByText(/91%/).length).toBeGreaterThan(0);
+
+    // "지금 넘었다" 는 사실과 다음 행동은 패널이 맡는다. 숫자와 자리를 나눴다.
+    const panel = (await screen.findByRole("region", { name: /먼저 확인할 건강 신호/ })) as HTMLElement;
+    expect(within(panel).getAllByText(/재측정 후 의료기관과 상담/).length).toBeGreaterThan(0);
   });
 
   it("발병 궤적이 있는 카드는 앞면에 한 줄, 접이에 동년배와 나란한 표를 그린다", async () => {
@@ -597,7 +606,7 @@ describe("AssessmentPage", () => {
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
     const anemia = (await screen.findByRole("heading", { name: "빈혈" })).closest("article") as HTMLElement;
-    // **앞면은 5년 뒤 한 점만 적는다.** 카드 위 `ML 예측 X% → 판정` 이 이미 "지금" 을
+    // **앞면은 5년 뒤 한 점만 적는다.** 카드 위 등급 배지가 이미 "지금" 을
     // 말하므로 이 줄은 앞날만 맡는다. 해마다의 값은 아래 접이 표가 다 그린다.
     //
     // 이 붙임값은 지평이 `[5, 10]` 인 낡은 모양이다. 일부러 남겨 뒀다 — 여기서는
@@ -615,7 +624,10 @@ describe("AssessmentPage", () => {
     expect(htn.querySelector(".assess-trajectory-line")).toBeNull();
 
     await user.click(within(anemia).getByText(/빈혈 판정 근거 자세히/));
-    const block = anemia.querySelector("section.assess-trajectory") as HTMLElement;
+    // 모달은 `document.body` 로 나간다(포털). 카드 안에서 찾으면 못 찾는다 —
+    // `.assess-card:hover` 의 `transform` 이 fixed 백드롭의 기준을 카드로 바꾸던
+    // 버그를 막으려고 2026-09-11 에 옮겼다(`shared/ui/Modal.tsx` 머리말).
+    const block = (await screen.findByRole("dialog")).querySelector("section.assess-trajectory") as HTMLElement;
     expect(within(block).getByText(/앞으로의 발병 가능성/)).toBeInTheDocument();
     expect(within(block).getByText(/동년배의 1\.8배/)).toBeInTheDocument();
     expect(within(block).getByRole("img", { name: /누적 발병 확률/ })).toBeInTheDocument();
@@ -732,20 +744,26 @@ describe("AssessmentPage", () => {
 
     // 규칙이 정본이라 밀려난 칸.
     const htn = (await screen.findByRole("heading", { name: "고혈압" })).closest("article") as HTMLElement;
+    // 모달은 포털로 `document.body` 에 그려지므로 카드가 아니라 대화상자에서 찾는다.
+    // 둘을 겹쳐 열지 않고 하나씩 닫는다 — 안 닫으면 대화상자가 둘이 되어 어느 쪽을
+    // 보는지 알 수 없다.
     await user.click(within(htn).getByText(/고혈압 판정 근거 자세히/));
-    expect(within(htn).getByText(/밀린 ML 예측/)).toBeInTheDocument();
-    expect(bigNumberIn(htn, "80.0%")).toBeInTheDocument();
+    const htnDialog = await screen.findByRole("dialog");
+    expect(within(htnDialog).getByText(/밀린 ML 예측/)).toBeInTheDocument();
+    expect(bigNumberIn(htnDialog, "80.0%")).toBeInTheDocument();
     // AUROC 를 "정확도"로 읽지 않게 하는 문구가 확률 있는 칸마다 붙는다.
-    expect(within(htn).getByText(/100명 중 몇 명을 맞힌다/)).toBeInTheDocument();
+    expect(within(htnDialog).getByText(/100명 중 몇 명을 맞힌다/)).toBeInTheDocument();
     // 경보 적중률이 AUROC 옆에 같이 나온다 — 사용자가 실제로 겪는 값이다.
-    expect(within(htn).getByText(/71%/)).toBeInTheDocument();
+    expect(within(htnDialog).getByText(/71%/)).toBeInTheDocument();
+    await user.click(within(htnDialog).getByRole("button", { name: "닫기" }));
 
     // ML 이 정본인 칸은 "밀려난" 이라고 적지 않는다. 그 한 단어가 "이 숫자를 읽어도
     // 되는가" 를 가르므로, 두 경우의 문구가 섞이면 안 된다.
     const anemia = screen.getByRole("heading", { name: "빈혈" }).closest("article") as HTMLElement;
     await user.click(within(anemia).getByText(/빈혈 판정 근거 자세히/));
-    expect(within(anemia).getByText(/ML 시드 앙상블/)).toBeInTheDocument();
-    expect(within(anemia).queryByText(/밀린 ML 예측/)).not.toBeInTheDocument();
+    const anemiaDialog = await screen.findByRole("dialog");
+    expect(within(anemiaDialog).getByText(/ML 시드 앙상블/)).toBeInTheDocument();
+    expect(within(anemiaDialog).queryByText(/밀린 ML 예측/)).not.toBeInTheDocument();
   });
 
   it("구성원이 없으면 기록 대신 등록을 안내한다", async () => {
@@ -776,6 +794,13 @@ describe("AssessmentPage", () => {
 
     // 저장 안내가 남아 있으면 방금 판정한 것이 저장된 줄로 읽힌다.
     expect(screen.queryByText(/기록에 남겼습니다/)).not.toBeInTheDocument();
+
+    // **판정이 나오면 폼은 접힌다.** 결과가 폼 아래에 서므로, 안 접으면 방금 채운
+    // 서른여섯 칸을 스크롤해 지나가야 결과가 보인다. 값을 고치러 돌아오는 길은
+    // 한 번 눌러 여는 것으로 남겨 둔다.
+    expect(screen.queryByRole("spinbutton", { name: /나이/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /값 고치기/ }));
+
     await user.clear(screen.getByRole("spinbutton", { name: /나이/ }));
     await user.type(screen.getByRole("spinbutton", { name: /나이/ }), "61");
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
@@ -790,7 +815,7 @@ describe("AssessmentPage", () => {
     await fillRequired(user);
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
-    expect(await screen.findByRole("heading", { name: /수치가 가리키는 앞날/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /앞으로의 건강 위험/ })).toBeInTheDocument();
     // 심혈관질환은 열세 칸에 없고 이 축에만 있다.
     expect(screen.getByRole("heading", { name: "심혈관질환" })).toBeInTheDocument();
     expect(screen.getByText("혈압 140/90 이상")).toBeInTheDocument();
@@ -826,6 +851,7 @@ describe("AssessmentPage", () => {
     renderPage();
     await fillRequired(user);
     await user.type(screen.getByRole("spinbutton", { name: /^당화혈색소/ }), "6.1");
+    await user.click(screen.getByText("간 · 신장 · 혈액", { selector: "summary > span" }));
     await user.type(screen.getByRole("spinbutton", { name: /^혈색소/ }), "14.5");
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
@@ -850,6 +876,7 @@ describe("AssessmentPage", () => {
     renderPage();
     await fillRequired(user);
     await user.type(screen.getByRole("spinbutton", { name: /^당화혈색소/ }), "61");
+    await user.click(screen.getByText("간 · 신장 · 혈액", { selector: "summary > span" }));
     await user.type(screen.getByRole("spinbutton", { name: /^혈색소/ }), "145");
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
@@ -886,6 +913,7 @@ describe("AssessmentPage", () => {
     renderPage();
     await fillRequired(user);
     await user.type(screen.getByRole("spinbutton", { name: /^당화혈색소/ }), "61");
+    await user.click(screen.getByText("간 · 신장 · 혈액", { selector: "summary > span" }));
     await user.type(screen.getByRole("spinbutton", { name: /^혈색소/ }), "145");
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
@@ -1012,7 +1040,7 @@ describe("테스트 프로필과 자세히 보기", () => {
     const call = vi.spyOn(serverApiClient, "assessSummary");
     renderPage();
 
-    await user.click(screen.getByRole("button", { name: "당뇨" }));
+    await choosePreset(user, "당뇨");
 
     expect(screen.getByRole("spinbutton", { name: /나이/ })).toHaveValue(52);
     expect(screen.getByRole("combobox", { name: /성별/ })).toHaveValue("M");
@@ -1145,9 +1173,9 @@ describe("테스트 프로필과 자세히 보기", () => {
     const save = vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE as never);
     renderPage();
 
-    await user.click(screen.getByRole("button", { name: "당뇨" }));
+    await choosePreset(user, "당뇨");
     // 판정을 돌리기 전에 이미 알려 준다 — 돌린 뒤에 말하면 저장 실패로 읽힌다.
-    expect(screen.getByText(/기록에는 남지 않아요/)).toBeInTheDocument();
+    expect(screen.getByText(/예시 결과는 건강기록에 저장되지 않아요/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
@@ -1160,13 +1188,13 @@ describe("테스트 프로필과 자세히 보기", () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole("button", { name: "당뇨" }));
+    await choosePreset(user, "당뇨");
     expect(screen.getByRole("spinbutton", { name: /공복혈당/ })).toHaveValue(148);
 
     await user.click(screen.getByRole("button", { name: "테스트 값 비우기" }));
 
     // 표시만 떼면 예시 수치가 "내가 넣은 값" 으로 둔갑해 기록에 들어간다.
-    expect(screen.queryByText(/기록에는 남지 않아요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/예시 수치가 입력되어 있어요/)).not.toBeInTheDocument();
     expect(screen.getByRole("spinbutton", { name: /나이/ })).not.toHaveValue(52);
   });
 
@@ -1174,10 +1202,10 @@ describe("테스트 프로필과 자세히 보기", () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole("button", { name: "당뇨" }));
+    await choosePreset(user, "당뇨");
     expect(screen.getByRole("spinbutton", { name: /공복혈당/ })).toHaveValue(148);
 
-    await user.click(screen.getByRole("button", { name: "고혈압" }));
+    await choosePreset(user, "고혈압");
     // 고혈압 프로필은 혈당을 건드리지 않는다 → 기본값으로 되돌아가야 한다.
     expect(screen.getByRole("spinbutton", { name: /공복혈당/ })).toHaveValue(92);
     expect(screen.getByRole("spinbutton", { name: /수축기/ })).toHaveValue(158);
@@ -1187,7 +1215,7 @@ describe("테스트 프로필과 자세히 보기", () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole("button", { name: "고혈압" }));
+    await choosePreset(user, "고혈압");
 
     expect(screen.getByText(/혈압은 고혈압 라벨을 정의하므로 ML 입력에서 차단/)).toBeInTheDocument();
   });
@@ -1220,9 +1248,14 @@ describe("테스트 프로필과 자세히 보기", () => {
     // 정확도 줄 — AUROC 한 숫자만 두지 않는다
     expect(within(dialog).getByText(/상위 10% 경보 적중/)).toBeInTheDocument();
     expect(within(dialog).getByText(/AUROC 는 "100명 중 몇 명을 맞힌다"가 아닙니다/)).toBeInTheDocument();
-    // 학회 기준 대조 (rule_anchor). `medical.basis` 도 같은 학회명을 쓰므로
-    // 앵커에만 있는 문구로 찾는다.
-    expect(within(dialog).getByText(/실제로 검사했을 때/)).toBeInTheDocument();
+    // **학회 기준 대조는 한 줄이다.** `medical` 과 `rule_anchor` 는 앵커가 정본일 때
+    // 서버에서 같은 값이라(`risk.py` 의 `medical_band()` 가 `interpret()` 의
+    // `rule_positive_rate` 를 자기 `rate` 로 쓴다), 예전에는 68·50·1.36 이 글자까지
+    // 같은 문단이 둘 떴다. 하나로 합쳤으므로 하나여야 한다 — 개수를 세지 않으면
+    // 되살아나도 통과한다.
+    const anchored = within(dialog).getAllByText(/실제로 검사하면/);
+    expect(anchored).toHaveLength(1);
+    expect(anchored[0]).toHaveTextContent("대한고혈압학회");
     // 등급 코드를 그대로 띄우지 않는다.
     expect(within(dialog).queryByText(/CAUTION/)).not.toBeInTheDocument();
 
@@ -1313,7 +1346,7 @@ describe("카드와 자세히 보기가 같은 것을 보여준다", () => {
     // 접이 때와 **같은 컴포넌트 넷**을 그린다. 자리만 카드 위로 옮겼다.
     const modal = await screen.findByRole("dialog");
     expect(within(modal).getByText(/이 점수대의/)).toBeInTheDocument();
-    expect(within(modal).getByText(/실제로 검사했을 때/)).toBeInTheDocument();
+    expect(within(modal).getAllByText(/실제로 검사하면/)).toHaveLength(1);
     expect(within(modal).getByText(/상위 10% 경보 적중/)).toBeInTheDocument();
   });
 
@@ -1359,18 +1392,19 @@ describe("카드와 자세히 보기가 같은 것을 보여준다", () => {
     await user.click(screen.getByRole("button", { name: "판정하기" }));
     await screen.findByText("판정 요약");
 
-    // 접이 안 근거표에도 같은 엔진 이름이 있으므로 앞면 블록으로 좁혀서 본다.
+    // 사용자에게 실제로 다른 것은 "내 검사값이 쓰였는가" 하나다. 태그가 그 답을
+    // 적는다 — 엔진의 본래 이름("규칙 엔진"·"ML 예측")은 근거 모달 안에만 있다.
     const card = screen.getByRole("heading", { name: "고혈압", level: 3 }).closest("article") as HTMLElement;
-    const engines = card.querySelector(".assess-engines") as HTMLElement;
-    expect(within(engines).getByText("규칙 엔진")).toBeInTheDocument();
+    expect(card.querySelector(".assess-engine-tag")).toHaveTextContent("검사값으로 판정");
     const anemia = screen.getByRole("heading", { name: "빈혈", level: 3 }).closest("article") as HTMLElement;
-    const anemiaEngines = anemia.querySelector(".assess-engines") as HTMLElement;
-    // ML 이 정본인 칸에서는 엔진 이름을 두 번 쓰지 않는다 — 왼쪽이 이미 "ML 예측"
-    // 이라 `ML 예측 8% → ML 예측 …` 이 됐다. 오른쪽은 "판정" 하나다.
-    expect(within(anemiaEngines).getAllByText("ML 예측")).toHaveLength(1);
-    expect(within(anemiaEngines).getByText("판정")).toBeInTheDocument();
-    // 확률이 카드 앞면에 보인다 — 접이를 열지 않아도 모델이 무엇을 말했는지 안다.
-    expect(within(anemiaEngines).getByText("8%")).toBeInTheDocument();
+    expect(anemia.querySelector(".assess-engine-tag")).toHaveTextContent("검사 없이 추정");
+
+    // **검사 없이 추정한 칸만 숫자를 앞면에 둔다. 그것도 % 가 아니라 자연빈도로.**
+    // 규칙 엔진이 정본인 칸(고혈압)에 ML 확률을 같이 세우면 "정상 범위 · 77%" 처럼
+    // 서로 다투는 두 숫자가 나란히 선다 — 사용자는 어느 쪽을 믿을지 모른다.
+    expect(within(anemia).getByText("100명 중 8명")).toBeInTheDocument();
+    expect(anemia.querySelector(".assess-chance")).toHaveTextContent("이 기준을 넘어요");
+    expect(within(anemia).queryByText("8%")).not.toBeInTheDocument();
   });
 });
 

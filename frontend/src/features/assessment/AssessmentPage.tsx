@@ -21,6 +21,7 @@
  */
 
 import {
+  type ReactNode,
   type FormEvent,
   useCallback,
   useEffect,
@@ -50,7 +51,7 @@ import type { ModelSpec } from "./Evidence";
 import { ASSESSMENT_PRESETS, type AssessmentPreset, presetValues } from "./presets";
 import { SuspectPanel } from "./SuspectPanel";
 import { briefList, objectParticle, sharedRefining } from "./precision";
-import { LevelBadge, MatrixCard, VerdictCard } from "./VerdictCards";
+import { LevelBadge, MatrixCard, OutlookCard, VerdictCard } from "./VerdictCards";
 import {
   calculateAgeFromBirthDate,
   FIELD_BY_NAME,
@@ -74,6 +75,38 @@ import {
   type Snapshot,
 } from "./snapshots";
 import { TrendChart } from "./TrendChart";
+import "./assessmentPage.css";
+
+function InputGroup({ title, note, optional, filled, children }: {
+  title: string;
+  note?: string;
+  optional: boolean;
+  filled: number;
+  children: ReactNode;
+}) {
+  if (optional) {
+    return (
+      <details className="assess-extra-group" open={filled > 0 || undefined}>
+        <summary>
+          <span>{title}</span>
+          <span className="assess-group-tag">{filled > 0 ? `${filled}개 입력` : "선택"}</span>
+        </summary>
+        <fieldset className="assess-group">
+          <legend className="visually-hidden">{title}</legend>
+          {note && <p className="assess-group-note">{note}</p>}
+          {children}
+        </fieldset>
+      </details>
+    );
+  }
+  return (
+    <fieldset className="assess-group">
+      <legend>{title}</legend>
+      {note && <p className="assess-group-note">{note}</p>}
+      {children}
+    </fieldset>
+  );
+}
 
 function byLevel<T>(items: T[], level: (item: T) => RiskLevel): T[] {
   return [...items].sort(
@@ -148,6 +181,9 @@ function revealField(
   element: HTMLInputElement | HTMLSelectElement | null | undefined,
 ) {
   if (!element) return;
+  // 접어 둔 추가 항목도 오류가 있으면 펼친 뒤 초점을 옮긴다.
+  const section = element.closest("details");
+  if (section) section.open = true;
   element.focus({ preventScroll: true });
   const reduceMotion = window.matchMedia(
     "(prefers-reduced-motion: reduce)",
@@ -265,6 +301,20 @@ export function AssessmentPage() {
   }, [values]);
   const [result, setResult] = useState<AssessmentSummaryData>();
   const [error, setError] = useState<string>();
+  /**
+   * 판정이 나온 뒤 입력 폼을 접는다.
+   *
+   * **결과는 폼 아래에 선다.** 그래서 판정을 누르고 나면 사용자가 방금 다 채운
+   * 서른여섯 칸을 처음부터 다시 스크롤해 지나가야 결과가 나왔다 — 값을 하나 고쳐
+   * 다시 돌려 보는 것이 이 화면에서 가장 자주 하는 일이라, 그 왕복이 매번이다.
+   *
+   * 폼을 지우지는 않는다. 고치러 돌아오는 길이 이 화면의 본체라서, 접어 두고
+   * 한 번 누르면 그 자리에 그대로 펼친다(값은 `values` 에 남아 있으므로 접었다
+   * 펴도 아무것도 잃지 않는다).
+   */
+  const [formOpen, setFormOpen] = useState(true);
+  /** 판정 직후 결과로 데려가는 자리. 접는 것만으로는 시선이 안 옮겨진다. */
+  const resultRef = useRef<HTMLElement | null>(null);
   // 서버가 되돌려준 칸. 값을 고치는 즉시 그 칸만 풀린다 — 다시 눌러 봐야
   // 빨간색이 사라지면 사용자는 자기가 고친 게 맞는지 알 수 없다.
   const [rejected, setRejected] = useState<Record<string, string>>({});
@@ -636,6 +686,13 @@ export function AssessmentPage() {
           toRequestBody(values),
         );
         setResult(data);
+        // 폼을 접고 결과로 데려간다. 접기만 하면 화면은 짧아지되 시선은 여전히
+        // 폼 자리에 있어서, 사용자는 "눌렀는데 아무 일도 안 일어났다" 로 읽는다.
+        setFormOpen(false);
+        // 접히는 것이 먼저 그려져야 스크롤 대상의 위치가 맞는다.
+        requestAnimationFrame(() => {
+          resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
         // **판정과 기록을 한 번에 남긴다.** 나눠 두면 사용자가 판정만 보고 나가서
         // 추이 그래프가 영영 비어 있다 — 이 화면의 값은 검진표에서 온 것이라
         // 다시 모을 방법도 없다. 실패해도 판정 결과는 지키려고 따로 감싼다.
@@ -741,6 +798,32 @@ export function AssessmentPage() {
     () => (result ? byLevel(result.verdicts, (v) => v.risk_level) : []),
     [result],
   );
+  /**
+   * 손볼 것과 기준 안에 있는 것을 가른다.
+   *
+   * **열세 장이 전부 같은 크기로 선다.** 카드 하나가 접힌 상태로도 428px 이라
+   * (`--assess-cards` 의 `grid-auto-rows`), 폰에서는 이 구역만 스크롤 열 화면이
+   * 넘는다. 그런데 그중 대부분은 보통 `정상 범위` 다 — 손볼 것이 없다는 말을
+   * 하는 데 손볼 것이 있다는 말과 똑같은 자리를 쓰고 있었다.
+   *
+   * 기준 안에 있는 것을 **지우지는 않는다.** "내 이상지질혈증은 어떻게 나왔지" 를
+   * 물으러 오는 사람이 있고, 그 답이 화면에 없으면 판정을 안 한 것으로 읽힌다.
+   * 접어 두고 이름은 접힌 채로도 보이게 한다.
+   */
+  const concerning = useMemo(
+    () =>
+      verdicts.filter(
+        (v) => v.risk_level !== "NORMAL" && v.risk_level !== "INSUFFICIENT_DATA",
+      ),
+    [verdicts],
+  );
+  const settledVerdicts = useMemo(
+    () =>
+      verdicts.filter(
+        (v) => v.risk_level === "NORMAL" || v.risk_level === "INSUFFICIENT_DATA",
+      ),
+    [verdicts],
+  );
   const matrix = useMemo(
     () =>
       result
@@ -748,6 +831,15 @@ export function AssessmentPage() {
         : [],
     [result],
   );
+  /**
+   * 기준을 넘었거나 경계에 있는 질환의 앞날. **정렬은 서버가 해서 보낸다** —
+   * 등급 순이 곧 급한 순이고, 그 판단을 화면이 다시 내리면 두 곳이 된다.
+   *
+   * 옛 저장본에는 이 칸이 없다(`complication_outlooks` 는 선택 필드다). 그런 기록은
+   * 이 블록을 통째로 접는다 — 그날 본 화면을 남기는 것이 스냅샷의 존재 이유라,
+   * 지금 사전으로 채워 넣으면 그 기록이 가리키던 화면이 아니게 된다.
+   */
+  const outlooks = result?.complication_outlooks ?? [];
   /**
    * 남긴 기록에서 만든 판정 입력. **매핑은 서버가 한다**(`record_prefill`).
    *
@@ -833,11 +925,8 @@ export function AssessmentPage() {
           <p className="page-kicker">질환 예측</p>
           <h1>만성질환 예측</h1>
           <p>
-            기본 정보와 혈압·공복혈당을 채우면 판정이 나옵니다. 나머지 검진결과지
-            수치를 넣을수록 답하는 칸이 늘고,{" "}
-            <strong>
-              넣은 값이 있는 질환은 추정이 아니라 학회 기준 대조로 넘어갑니다.
-            </strong>
+            기본 정보와 검진 수치로 건강 상태를 확인하세요.
+            검진표를 올리거나 직접 입력할 수 있어요.
           </p>
         </div>
       </section>
@@ -859,7 +948,34 @@ export function AssessmentPage() {
         </p>
       )}
 
-      <div className={hasDocument ? "assess-workspace has-document" : "assess-workspace"}>
+      {/* 접힌 폼을 대신하는 한 줄. **버튼 하나로 둔다** — 접힌 상태에서 사용자가
+          하고 싶은 일은 "값 고치기" 하나뿐이라, 펼치기와 고치기를 따로 두면 문이
+          둘이 된다. */}
+      {result && !formOpen ? (
+        <button
+          type="button"
+          className="assess-form-reopen"
+          onClick={() => setFormOpen(true)}
+          aria-expanded={false}
+          aria-controls="assess-workspace"
+        >
+          <span className="assess-form-reopen-main">
+            {/* 값을 "칸" 으로 세지 않는다 — 세는 단위는 칸이고, 칸의 개수다. */}
+            채운 칸 <strong>{Object.values(values).filter((v) => v !== "" && v !== undefined).length}개</strong>
+            <small>판정에 쓴 수치입니다</small>
+          </span>
+          <span className="assess-form-reopen-cta">값 고치기</span>
+        </button>
+      ) : null}
+
+      {/* **감추되 지우지 않는다.** `hidden` 은 DOM 을 남기므로 접었다 펴도
+          `DocumentPane` 이 들고 있는 검진표와 읽던 진행 상태가 그대로다. 조건부
+          렌더로 바꾸면 접는 순간 그것들이 사라진다. */}
+      <div
+        id="assess-workspace"
+        hidden={Boolean(result) && !formOpen}
+        className={hasDocument ? "assess-workspace has-document" : "assess-workspace"}
+      >
         {/* **언제 들어와도 올릴 수 있다.** 문서가 없으면 폼 위에 얇게 앉고, 붙으면
             왼쪽으로 펼쳐져 원본과 폼을 나란히 본다 — 화면을 가르는 것은 진입
             경로가 아니라 문서 유무다(위 `hasDocument` 머리말). */}
@@ -1061,11 +1177,10 @@ export function AssessmentPage() {
 
               **필수 다섯 칸이 어느 프로필에서나 채워진다**(`presets.test.ts` 가 고정).
               그래서 프리셋을 누르면 곧바로 판정할 수 있다. */}
-          <section className="assess-presets" aria-labelledby="assess-presets-heading">
-            <h3 id="assess-presets-heading">테스트로 돌려보기</h3>
+          <details className="assess-presets" open={preset !== undefined || undefined}>
+            <summary>예시로 체험하기 <span>검진표가 없어도 둘러볼 수 있어요</span></summary>
             <p className="assess-group-note">
-              학회 기준에 맞춘 예시 수치로 폼을 한 번에 채웁니다. 채운 뒤 몇 칸을 고쳐 보면 무엇이 판정을 움직이는지
-              보입니다. <strong>채우기만 하고 판정은 하지 않습니다.</strong>
+              예시를 고른 뒤 ‘판정하기’를 눌러 보세요. 예시 결과는 건강기록에 저장되지 않아요.
             </p>
             <div className="assess-preset-buttons">
               {ASSESSMENT_PRESETS.map((item) => (
@@ -1088,23 +1203,34 @@ export function AssessmentPage() {
                 {/* **판정은 되지만 기록에는 안 남는다는 것을 미리 말한다.** 판정을
                     돌린 뒤에야 알려 주면 사용자는 저장이 실패한 줄 안다. */}
                 <p className="assess-preset-note is-warning">
-                  <strong>이 값으로 판정해도 기록에는 남지 않아요.</strong> 학회 기준 예시 수치라 실제 몸의
-                  기록이 아니기 때문입니다.
+                  <strong>예시 수치가 입력되어 있어요.</strong> 내 건강을 확인하려면 테스트 값을 비워 주세요.
                 </p>
                 <button type="button" className="secondary-button" onClick={clearPreset}>
                   테스트 값 비우기
                 </button>
               </>
             )}
-          </section>
+          </details>
 
           <form className="assess-form" onSubmit={submit} noValidate>
+            <div className="assess-input-heading">
+              <div>
+                <h2>건강 정보 입력</h2>
+                <p><span className="assess-required-star">*</span> 필수 항목을 채워 주세요. 나머지는 아는 값만 입력하세요.</p>
+              </div>
+              <div className="assess-progress">
+                <span>필수 입력 <strong>{REQUIRED_FIELDS.length - missingRequired.length} / {REQUIRED_FIELDS.length}</strong></span>
+                <progress aria-label="필수 입력 진행률" max={REQUIRED_FIELDS.length} value={REQUIRED_FIELDS.length - missingRequired.length} />
+              </div>
+            </div>
             {FIELD_GROUPS.map((group) => (
-              <fieldset key={group.key} className="assess-group">
-                <legend>{group.title}</legend>
-                {group.note && (
-                  <p className="assess-group-note">{group.note}</p>
-                )}
+              <InputGroup
+                key={group.key}
+                title={group.title}
+                note={group.note}
+                optional={!group.fields.some((field) => field.required)}
+                filled={group.fields.filter((field) => Boolean(values[field.name])).length}
+              >
                 <div className="assess-fields">
                   {group.fields.map((field) => {
                     const blank = flagged.includes(field.name);
@@ -1179,7 +1305,7 @@ export function AssessmentPage() {
                             required={field.required}
                             aria-invalid={blank || Boolean(outOfRange) || undefined}
                           >
-                            <option value="">선택 안 함</option>
+                            <option value="">{field.required ? "선택해 주세요" : "모름 / 선택 안 함"}</option>
                             {field.options?.map((option) => (
                               <option key={option.value} value={option.value}>
                                 {option.label}
@@ -1220,7 +1346,7 @@ export function AssessmentPage() {
                     );
                   })}
                 </div>
-              </fieldset>
+              </InputGroup>
             ))}
 
             <div className="assess-submit">
@@ -1228,11 +1354,14 @@ export function AssessmentPage() {
               <button type="submit" disabled={working}>
                 {working ? "판정 중…" : "판정하기"}
               </button>
-              <p className="assess-muted">
-                {missingRequired.length > 0
-                  ? `필수 ${missingRequired.length}개가 남았습니다.`
-                  : `검사값 ${labsFilled}개를 넣었습니다.`}
-              </p>
+              <div>
+                <p className="assess-submit-status">
+                  {missingRequired.length > 0
+                    ? `필수 항목 ${missingRequired.length}개를 더 입력해 주세요`
+                    : `입력 완료 · 검사값 ${labsFilled}개로 확인할 수 있어요`}
+                </p>
+                <p className="assess-muted">결과는 건강 참고 정보이며, 의료 진단을 대신하지 않아요.</p>
+              </div>
             </div>
           </form>
         </div>
@@ -1245,7 +1374,7 @@ export function AssessmentPage() {
       )}
 
       {result && (
-        <section className="assess-result">
+        <section className="assess-result" ref={resultRef}>
           <header className="assess-summary">
             <h2>판정 요약</h2>
             {/* **예측 근거 전체를 여는 한 곳.** 카드마다 있는 "판정 근거" 는 질환
@@ -1292,8 +1421,7 @@ export function AssessmentPage() {
                       레거시 이전용으로만 열린다(`LocalDomainProvider`). 두 곳에
                       남는다고 적으면 사용자가 기기를 지우면 기록이 사라진다고 읽는다. */}
                   <p className="assess-muted">
-                    입력값과 등급을 <strong>로그인한 계정</strong>에 남깁니다 (ADR-011).
-                    같은 계정이면 다른 기기에서도 같은 기록을 봅니다.
+                  입력값과 결과는 내 계정에 저장되어 다른 기기에서도 볼 수 있어요.
                   </p>
                 </>
               )}
@@ -1301,7 +1429,7 @@ export function AssessmentPage() {
             </div>
           </header>
 
-          <SuspectPanel suspects={result.top_suspects ?? []} verdicts={result.verdicts ?? []} />
+          <SuspectPanel suspects={result.top_suspects ?? []} />
 
           <h2 className="assess-axis-title">
             질환별 결과 <span className="assess-muted">지금 내 몸의 상태</span>
@@ -1317,24 +1445,85 @@ export function AssessmentPage() {
               {objectParticle(briefList(sharedInputs))} 채우면 여러 카드의 예측이 함께 정밀해져요.
             </p>
           ) : null}
-          <div className="assess-cards">
-            {verdicts.map((verdict) => (
-              <VerdictCard
-                key={verdict.key}
-                verdict={verdict}
-                values={values}
-                models={models}
-                sharedRefining={sharedInputs}
-              />
-            ))}
-          </div>
+          {concerning.length > 0 ? (
+            <div className="assess-cards">
+              {concerning.map((verdict) => (
+                <VerdictCard
+                  key={verdict.key}
+                  verdict={verdict}
+                  values={values}
+                  models={models}
+                  sharedRefining={sharedInputs}
+                />
+              ))}
+            </div>
+          ) : (
+            // 하나도 안 걸렸을 때. 이 자리를 비워 두면 판정이 안 된 것으로 읽힌다.
+            <p className="assess-all-clear">
+              넣은 수치로는 <strong>기준을 넘은 질환이 없어요.</strong> 아래에서 각 질환이 어떻게 나왔는지
+              볼 수 있어요.
+            </p>
+          )}
+
+          {/* 기준 안에 있는 것은 접는다. 접힌 줄에 **이름을 그대로 적어** 무엇이
+              접혀 있는지 열어 보지 않아도 알게 한다 — 개수만 적으면 자기가 궁금한
+              질환이 그 안에 있는지 확인하려고 매번 열어야 한다. */}
+          {settledVerdicts.length > 0 ? (
+            <details className="assess-settled">
+              <summary>
+                <span className="assess-settled-head">
+                  기준 안에 있는 {settledVerdicts.length}가지
+                </span>
+                <span className="assess-settled-names">
+                  {settledVerdicts.map((v) => v.name).join(" · ")}
+                </span>
+              </summary>
+              <div className="assess-cards">
+                {settledVerdicts.map((verdict) => (
+                  <VerdictCard
+                    key={verdict.key}
+                    verdict={verdict}
+                    values={values}
+                    models={models}
+                    sharedRefining={sharedInputs}
+                  />
+                ))}
+              </div>
+            </details>
+          ) : null}
+
+          {/* **판정(질환별 결과)의 바로 다음 물음에 답한다 — "이게 이대로 가면 뭘
+              부르나".** 발병 궤적은 이미 기준을 넘은 칸에서 지워지므로
+              (`present_targets`), 판정이 "매우 높음" 으로 나온 사람일수록 그다음
+              읽을 것이 화면에 없었다 — 등급과 재측정 권고에서 끝났다.
+
+              그래서 이 섹션은 위 판정 카드 바로 아래, 아래쪽 "앞으로의 건강 위험"
+              (수치 하나 → 아직 안 걸린 네 질환) 보다 앞에 둔다. 순서가 다른 물음이다
+              — 이쪽은 "이미 걸린 것이 무엇을 부르나", 저쪽은 "아직 안 걸린 것이
+              어디로 가나". 판정을 막 읽은 사람에게는 이쪽이 먼저다. */}
+          {outlooks.length > 0 && (
+            <>
+              <h2 className="assess-axis-title">
+                기준을 넘으면 생기는 일 <span className="assess-muted">{outlooks.length}가지가 부르는 것</span>
+              </h2>
+              <p className="assess-axis-note">
+                위 판정에서 <strong>주의 이상</strong>으로 나온 질환을 그대로 두면 무엇이 뒤따르는지 모았어요.
+                학회 지침과 코호트 연구가 말하는 <strong>질환의 앞날</strong>이지, 이 수치로 계산한 개인 예측이
+                아닙니다. 그래서 확률을 붙이지 않았어요.
+              </p>
+              <div className="assess-outlook-grid">
+                {outlooks.map((outlook) => (
+                  <OutlookCard key={outlook.key} outlook={outlook} />
+                ))}
+              </div>
+            </>
+          )}
 
           <h2 className="assess-axis-title">
-            수치가 가리키는 앞날 <span className="assess-muted">이 값이 무엇을 예고하는가</span>
+            앞으로의 건강 위험 <span className="assess-muted">입력한 수치로 살펴봐요</span>
           </h2>
           <p className="assess-axis-note">
-            위가 "지금 어떤가"라면 여기는 "이 값이 앞으로 무엇을 부르는가"입니다. 같은 질환이 양쪽에 나올 수
-            있어요 — 예를 들어 γ-GTP 는 간 수치이면서 당뇨 발생도 예고합니다.
+            검진 수치와 관련된 향후 건강 위험을 보여 줍니다. 현재 상태를 보여 주는 위 결과와 함께 참고하세요.
           </p>
           {/* **판정 카드와 다른 격자를 쓴다.** 이쪽은 넷뿐인데 신호 목록이 붙어
               카드가 훨씬 길다. 같은 격자에 두면 판정 카드용 최소 행 높이(15.5rem)와
@@ -1352,14 +1541,7 @@ export function AssessmentPage() {
                 <span className="assess-muted">같은 사람 · 다른 시점</span>
               </h2>
               <p className="assess-axis-note">
-                그래프의 확률은{" "}
-                <strong>
-                  발병 가능성이 아니라 "지금 재면 기준을 넘을 가능성"
-                </strong>
-                입니다. 그래서 여기서는 확률선을 그리지 않고{" "}
-                <strong>입력한 수치 자체</strong>와 <strong>등급의 변화</strong>
-                를 겹칩니다. 등급은 그날 계산한 값을 그대로 남긴 것입니다 —
-                나중에 재채점하면 그날 본 화면과 달라집니다.
+                날짜별 검진 수치와 당시의 결과를 비교할 수 있어요.
               </p>
               <TrendChart
                 series={series}

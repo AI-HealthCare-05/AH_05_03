@@ -8,6 +8,7 @@ import { useAuth } from "../../app/authContext";
 import { serverApiClient } from "../../shared/api/serverApiClient";
 import { AuthCard, type AuthMode } from "./AuthCard";
 import { getPendingInvitation, readAndPreserveInvitation } from "./invitationStorage";
+import { ServicePoints } from "./servicePoints";
 
 /** 초대 링크로 들어왔다면 그 이메일로만 수락할 수 있다. 관문에서 미리 채워 준다. */
 function invitationEmail(): string | undefined {
@@ -109,16 +110,19 @@ export function SignInPage({
   }[mode];
 
   return (
-    <div className="signin-shell">
-      <div className="signin-panel">
-        <div className="signin-brand">
-          <img className="brand-mark" src="/ieobom-icon.svg" alt="" aria-hidden="true" width={42} height={42} />
-          <div>
-            <strong>이어봄</strong>
-            <small>우리 가족 건강기록</small>
-          </div>
+    <div className="auth-shell">
+      {/* 셋(브랜드·인증·소개)을 형제로 둔다. 자리는 `grid-template-areas` 가 정한다 —
+          좁으면 브랜드 → 인증 → 소개, 넓으면 왼쪽에 브랜드·소개, 오른쪽에 인증.
+          브랜드를 소개 안에 넣으면 좁은 화면에서 맨 위로 못 올라온다. */}
+      <div className="signin-brand">
+        <img className="brand-mark" src="/ieobom-icon.svg" alt="" aria-hidden="true" width={42} height={42} />
+        <div>
+          <strong>이어봄</strong>
+          <small>우리 가족 건강기록</small>
         </div>
+      </div>
 
+      <div className="auth-main">
         <h1>{headingText}</h1>
         <p className="signin-lead">{leadText}</p>
 
@@ -149,13 +153,24 @@ export function SignInPage({
 
         {/* 세 줄 전부 ADR-011 이전의 약속이었다. 지금은 건강기록도 서버 정본이므로
             "서버에는 계정만" 은 틀리고, 대신 실제로 성립하는 것을 적는다 — 어디에
-            저장되는지, 누가 볼 수 있는지, 원본 서류는 어떻게 되는지. */}
+            저장되는지, 누가 볼 수 있는지, 원본 서류는 어떻게 되는지.
+
+            **카드 아래에 둔다.** 소개 칼럼으로 옮기면 글자가 더 커 보이지만, 이
+            세 줄은 가입 전에 하는 약속이라 제출 버튼과 같은 시선 흐름 안에 있어야
+            한다. */}
         <ul className="signin-notes">
           <li>건강기록·프로필·판정 결과는 로그인한 계정에 저장됩니다.</li>
           <li>검진표 원본은 보관하지 않고, 읽어 들이는 동안에만 씁니다.</li>
           <li>같은 가정 구성원 외에는 열람할 수 없습니다.</li>
         </ul>
       </div>
+
+      {/* 제목을 두지 않는다 — `h1`(위) 다음에 `h2`(카드)가 와야 단계가 바로 선다.
+          낭독기에는 `aria-label` 로 이름만 준다. */}
+      <aside className="auth-intro" aria-label="이어봄이 하는 일">
+        <p className="auth-pitch">검진 결과를 가족 단위로 이어 봅니다.</p>
+        <ServicePoints />
+      </aside>
     </div>
   );
 }

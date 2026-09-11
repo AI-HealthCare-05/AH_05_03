@@ -11,7 +11,7 @@
  * 빈 줄이 나가면 안 된다 — 있는 것 중 마지막을 적는다.
  *
  * 발병 줄에 "지금" 이 없는 것도 여기서 못 박는다. 누적 발병 확률은 t=0 에서
- * 정의상 0 이고, 카드의 "지금" 은 이 줄 위의 `ML 예측 X%` 가 맡는다.
+ * 정의상 0 이고, 카드의 "지금" 은 이 줄 위의 등급 배지가 맡는다.
  */
 
 import { cleanup, render, screen } from "@testing-library/react";
@@ -78,7 +78,7 @@ describe("TrajectoryLine", () => {
     render(<TrajectoryLine verdict={verdictWith(TRAJECTORY)} />);
 
     expect(screen.queryByText("지금")).toBeNull();
-    // 카드의 "지금" 은 이 줄 위의 `ML 예측 X%` 가 맡는다(`VerdictCards` 앞면).
+    // 카드의 "지금" 은 이 줄 위의 등급 배지가 맡는다(`VerdictCards` 앞면).
     expect(screen.getByText("새로 생길 확률")).toBeInTheDocument();
   });
 

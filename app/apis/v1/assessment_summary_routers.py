@@ -34,12 +34,14 @@ from app.dtos.assessment_summary import (
     AssessmentSummary,
     AssessmentSummaryData,
     AssessmentSummaryRequest,
+    ComplicationOutlook,
     DiseaseVerdictOut,
 )
 from app.dtos.envelope import ApiResponse, error_responses
 from app.dtos.rule_assessment import DiseaseRiskAssessment
 from app.models import ServiceAccount
 from app.services.assessment import assess
+from app.services.disease_complications import outlooks_for
 from app.services.prediction import DISCLAIMERS
 from app.services.rate_limit import RateLimiter
 from app.services.risk import RiskModelRegistry, registry
@@ -72,6 +74,9 @@ def get_registry() -> RiskModelRegistry:
         "담는다. AUROC 는 정확도가 아니므로 경보 적중률·발견율을 같이 낸다.\n"
         "- `disease_risks` 는 `verdicts` 의 **전치**다. 저쪽이 '여러 수치 → 이 장기의 현재 "
         "상태'라면 이쪽은 '수치 하나 → 여러 질환의 앞날'이다. **심혈관질환은 이 축에만 있다.**\n"
+        "- `complication_outlooks` 는 `verdicts` 중 `CAUTION` 이상인 칸의 **뒤쪽**이다. 판정이 "
+        "'지금 어떤가'에서 끝나는 자리에 '그대로 두면 무엇이 뒤따르나'를 붙인다. 질환별 사전이라 "
+        "입력 수치가 정하는 것은 어떤 질환이 목록에 오르는지 하나뿐이고, 확률은 붙이지 않는다.\n"
         "- 요청 본문은 응답 생성 후 폐기한다. DB·Redis·로그에 남기지 않는다."
     ),
 )
@@ -104,6 +109,7 @@ async def assess_summary(
             summary=AssessmentSummary(**summary),
             verdicts=[DiseaseVerdictOut(**vars(v)) for v in verdicts],
             disease_risks={name: DiseaseRiskAssessment(**result) for name, result in disease_risks.items()},
+            complication_outlooks=[ComplicationOutlook(**entry) for entry in outlooks_for(verdicts)],
             top_suspects=top_suspects,
             disclaimers=disclaimers,
             inputs_provided=provided,

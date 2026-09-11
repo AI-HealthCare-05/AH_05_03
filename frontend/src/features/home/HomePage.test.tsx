@@ -19,7 +19,8 @@ describe("HomePage", () => {
     expect(
       screen.getByRole("heading", { name: "가족의 건강 흐름을 한곳에서 이어보세요" }),
     ).toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: "첫 구성원 등록" }));
+    // 첫 실행 화면은 폼을 바로 편다. 예전에는 "첫 구성원 등록" 버튼이 모달을 띄웠다.
+    await screen.findByRole("heading", { name: "첫 구성원 만들기" });
 
     await user.type(screen.getByRole("textbox", { name: "이름 또는 호칭" }), "나");
     await user.selectOptions(screen.getByRole("combobox", { name: "관계" }), "본인");
@@ -52,7 +53,7 @@ describe("HomePage", () => {
     const user = userEvent.setup();
     renderHomePage();
 
-    await user.click(await screen.findByRole("button", { name: "첫 구성원 등록" }));
+    await screen.findByRole("heading", { name: "첫 구성원 만들기" });
     await user.type(screen.getByRole("textbox", { name: "이름 또는 호칭" }), "엄마");
     await user.selectOptions(screen.getByRole("combobox", { name: "관계" }), "부모");
     await user.selectOptions(screen.getByRole("combobox", { name: /성별/ }), "여성");
@@ -71,7 +72,8 @@ describe("HomePage", () => {
     await user.click(screen.getByRole("button", { name: "목록에서 숨기기" }));
     await user.click(screen.getByRole("button", { name: "프로필 숨기기" }));
 
-    expect(await screen.findByRole("button", { name: "첫 구성원 등록" })).toBeInTheDocument();
+    // 구성원이 0이 되면 첫 실행 화면으로 돌아간다 — 이제 버튼이 아니라 폼이다.
+    expect(await screen.findByRole("heading", { name: "첫 구성원 만들기" })).toBeInTheDocument();
     expect(screen.queryByText("엄마")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "숨긴 프로필 1명" }));
@@ -271,14 +273,20 @@ describe("HomePage", () => {
     expect(within(modal).queryByText(/이 기록에는 등급만 남아 있어요/)).not.toBeInTheDocument();
 
     // 카드의 근거를 펼치면 그날의 엔진 사유와 밀려난 ML 확률까지 남아 있다.
-    // 카드마다 있던 근거 모달은 없앴다 — 카드 안 접이가 같은 것을 그린다.
+    //
+    // **여기는 모달 위에 모달이 겹치는 자리다** — 기록 모달 안의 질환 카드에서
+    // 근거 모달을 연다. 둘 다 포털로 `document.body` 에 그려지므로(2026-09-11,
+    // `shared/ui/Modal.tsx` 머리말) 카드 안에서는 찾을 수 없고, 나중에 열린
+    // **마지막** 대화상자가 근거 모달이다.
     const card = within(modal).getByRole("heading", { name: "고혈압" }).closest("article") as HTMLElement;
     await user.click(within(card).getByText(/고혈압 판정 근거 자세히/));
-    expect(within(card).getByText(/측정값이 있어 규칙 엔진이 정본입니다/)).toBeInTheDocument();
-    expect(within(card).getByText(/밀린 ML 예측/)).toBeInTheDocument();
+    const dialogs = await screen.findAllByRole("dialog");
+    const evidence = dialogs[dialogs.length - 1];
+    expect(within(evidence).getByText(/측정값이 있어 규칙 엔진이 정본입니다/)).toBeInTheDocument();
+    expect(within(evidence).getByText(/밀린 ML 예측/)).toBeInTheDocument();
     // 큰 숫자는 소수부를 `<small>` 로 쪼개 그린다(`Evidence.tsx`). 내용으로 찾는다.
     expect(
-      within(card).getByText(
+      within(evidence).getByText(
         (_, element) => element?.tagName === "STRONG" && element.textContent === "80.0%",
       ),
     ).toBeInTheDocument();
@@ -365,7 +373,7 @@ async function createProfile(
   displayName: string,
   relationship: string,
 ) {
-  await user.click(await screen.findByRole("button", { name: "첫 구성원 등록" }, { timeout: 5000 }));
+  await screen.findByRole("heading", { name: "첫 구성원 만들기" }, { timeout: 5000 });
   await user.type(screen.getByRole("textbox", { name: "이름 또는 호칭" }), displayName);
   await user.selectOptions(screen.getByRole("combobox", { name: "관계" }), relationship);
   await user.click(screen.getByRole("button", { name: "프로필 저장" }));

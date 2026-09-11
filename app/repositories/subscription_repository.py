@@ -30,3 +30,11 @@ class SubscriptionRepository:
         subscription.status = status
         await self.session.flush()
         return subscription
+
+    async def reactivate_default(self, subscription: Subscription) -> Subscription:
+        """탈퇴로 CANCELLED 됐던 구독을 재가입 시 신규 가입과 같은 FREE/ACTIVE로 되돌린다."""
+        subscription.plan = SubscriptionPlan.FREE
+        subscription.status = SubscriptionStatus.ACTIVE
+        subscription.renewed_at = None
+        await self.session.flush()
+        return subscription

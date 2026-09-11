@@ -15,8 +15,8 @@
 import { useState } from "react";
 
 import { Modal } from "../../shared/ui/Modal";
-import type { DiseaseRisk, DiseaseVerdict, OnsetTrajectory, RiskLevel } from "./contracts";
-import { ENGINE_SHORT, LEVEL_LABEL } from "./contracts";
+import type { ComplicationOutlook, DiseaseRisk, DiseaseVerdict, OnsetTrajectory, RiskLevel } from "./contracts";
+import { ENGINE_PLAIN, ENGINE_SHORT, LEVEL_LABEL } from "./contracts";
 import { Evidence, type ModelSpec } from "./Evidence";
 import { DISEASE_MEASURES, FIELD_LABELS, FIELD_UNITS, readableField, readableSentence } from "./fields";
 import { briefList, objectParticle, precisionGains } from "./precision";
@@ -148,7 +148,7 @@ export function TrajectoryBlock({ verdict }: { verdict: DiseaseVerdict }) {
  * 카드 앞면의 앞날 한 칸. **열세 장 전부에 있다.**
  *
  * **앞면이 적는 것은 "지금" 과 "5년 뒤" 둘이다.** 다만 둘이 같은 줄에 있지 않다 —
- * 지금은 이 줄 위의 `ML 예측 X% → 판정` 이 말하고, 이 줄은 5년 뒤만 맡는다.
+ * 지금은 이 줄 위의 등급 배지와 `sub_status` 줄이 말하고, 이 줄은 5년 뒤만 맡는다.
  *
  * 지평을 여럿 적어 본 이력이 있다. 10년 하나 → 양 끝(1·5년) 둘 → 1·3·5년 셋 →
  * 지금의 5년 하나다. 앞면에 점을 늘리면 줄이 길어져 카드 폭에서 줄바꿈되고
@@ -175,7 +175,7 @@ export function TrajectoryLine({ verdict }: { verdict: DiseaseVerdict }) {
     //
     // 이 줄에 "현재" 를 적지 않는 것은 자리를 아껴서가 아니다. 누적 발병 확률은
     // t=0 에서 **정의상 0** 이라 적을 값이 자체적으로 없다. 그리고 카드가 이미
-    // 현재를 말하고 있다 — 이 줄 바로 위의 `ML 예측 X% → 판정` 이 그것이다.
+    // 현재를 말하고 있다 — 헤더의 등급 배지와 그 아래 `sub_status` 줄이 그것이다.
     // 그래서 카드 앞면은 (위) 지금 · (아래) 5년 뒤 두 층으로 읽힌다.
     //
     // 1·3년을 같이 적어 본 적이 있는데 되돌렸다. 해마다의 값과 곡선은 근거 모달의
@@ -399,10 +399,13 @@ export function VerdictFacts({ verdict }: { verdict: DiseaseVerdict }) {
             <dd>{verdict.recommendation}</dd>
           </>
         ) : null}
+        {/* 출처 표기는 `is-citation` 으로 한 단 내린다. 지침 제목·판·분류 체계가 통째로
+            들어와서 네 줄이 되는데, 그 네 줄이 위 셋과 같은 무게로 앉으면 정작 읽을
+            답("무엇을 보고" · "권하는 것")이 묻힌다. */}
         {verdict.criteria_reference ? (
           <>
             <dt>기준 출처</dt>
-            <dd>{verdict.criteria_reference}</dd>
+            <dd className="is-citation">{verdict.criteria_reference}</dd>
           </>
         ) : null}
       </dl>
@@ -426,26 +429,49 @@ export function ReferenceBlock({ verdict }: { verdict: DiseaseVerdict }) {
     // 모달 안이라 접지 않는다. 여기까지 들어온 사람은 근거를 보러 온 것이고,
     // 좁은 카드에서 자리를 아끼려고 접었던 이유가 사라진다.
     <section className="assess-reference">
+      {/* **2026-09-11 통계 용어를 사용자 말로 옮겼다.** 이 블록은 "백분위"·"중간값
+          대비"·"판별력"·"상위 10% 경보 적중률" 로 이루어져 있었다. 근거를 보러
+          들어온 사람이라 해도 통계를 배우고 온 것은 아니다.
+          숫자는 하나도 지우지 않았다 — 말만 바꾸고 순서를 바꿨다. */}
       <h4>
-        {verdict.superseded_by ? "밀려난 ML 예측 " : "ML 예측 근거 "}
+        {/* 밀렸다는 사실은 남긴다 — 그 숫자를 왜 안 쓰는지가 여기서 답할 물음이다. */}
+        {verdict.superseded_by ? "검사값이 대신한 추정 " : "검사 없이 추정한 값 "}
         <strong>{percent}%</strong>
         {ref.peer_percentile !== null && ref.peer_percentile !== undefined && (
           <span className="assess-muted">
             {" "}
-            · {ref.peer_group} 백분위 {Math.round(ref.peer_percentile)}
+            · {ref.peer_group} 100명 중 {Math.round(ref.peer_percentile)}명보다 높아요
           </span>
         )}
       </h4>
       <dl>
         {ref.peer_ratio ? (
           <>
-            <dt>동년배 중간값 대비</dt>
+            <dt>또래 한가운데 사람과 견주면</dt>
             <dd>{ref.peer_ratio}배</dd>
           </>
         ) : null}
         {accuracy ? (
           <>
-            <dt>판별력</dt>
+            {/* **겪게 되는 숫자를 먼저 놓는다.** 예전에는 AUROC 가 맨 위였는데,
+                그 값은 사용자가 화면에서 겪는 것과 관계가 없다(아래 잔글씨 참조).
+                경보가 맞을 확률이 실제로 이 화면이 사람에게 하는 약속이다. */}
+            {accuracy.alert_ppv !== null && (
+              <>
+                <dt>경보가 맞을 확률</dt>
+                <dd>
+                  위험하다고 알린 <strong>100명 중 {(accuracy.alert_ppv * 100).toFixed(0)}명</strong>이 실제로 해당했습니다
+                  {accuracy.alert_sensitivity !== null && (
+                    <span className="assess-muted">
+                      {" "}
+                      · 실제 해당하는 100명 중{" "}
+                      {(accuracy.alert_sensitivity * 100).toFixed(0)}명을 찾아냅니다
+                    </span>
+                  )}
+                </dd>
+              </>
+            )}
+            <dt>전체 판별 성능</dt>
             <dd>
               AUROC {accuracy.headline_auroc} · {accuracy.grade}
               <span className="assess-muted">
@@ -453,29 +479,17 @@ export function ReferenceBlock({ verdict }: { verdict: DiseaseVerdict }) {
                 ({accuracy.measured_on} 기준)
               </span>
             </dd>
-            {accuracy.alert_ppv !== null && (
-              <>
-                <dt>상위 10% 경보 적중률</dt>
-                <dd>
-                  {(accuracy.alert_ppv * 100).toFixed(0)}%
-                  {accuracy.alert_sensitivity !== null && (
-                    <span className="assess-muted">
-                      {" "}
-                      · 실제 해당자 중{" "}
-                      {(accuracy.alert_sensitivity * 100).toFixed(0)}% 를
-                      잡아낸다
-                    </span>
-                  )}
-                </dd>
-              </>
-            )}
           </>
         ) : null}
       </dl>
       <p className="assess-fineprint">
-        AUROC 는 "100명 중 몇 명을 맞힌다"가 아니다. 위험한 사람과 아닌 사람을
-        한 명씩 뽑았을 때 위험한 쪽에 더 높은 점수를 줄 확률이다. 사용자가
-        실제로 겪는 값은 경보 적중률 쪽이다.
+        {/* 어미를 셋 다 `-습니다` 로 맞춘다. 앞서 `아닙니다 / 확률이에요 / 쪽입니다`
+            로 갈려 있었다. 그리고 "실제로 겪게 되는 것은 ~ 쪽입니다" 는 영어
+            (what you actually experience is…) 구조 그대로다 — 한국어는 명사구를
+            주어로 세우는 대신 주어를 사람으로 돌린다. */}
+        AUROC 는 "100명 중 몇 명을 맞히나"가 아닙니다. 위험한 사람과 그렇지 않은
+        사람을 한 명씩 뽑아 견주면, 위험한 쪽에 더 높은 점수를 매길 확률입니다.
+        정작 내가 겪는 쪽은 위에 적은 <strong>경보가 맞을 확률</strong>입니다.
       </p>
     </section>
   );
@@ -599,6 +613,10 @@ export function VerdictCard({
   const enough = verdict.risk_level !== "INSUFFICIENT_DATA";
   const probability = verdict.reference?.probability;
   const hasEvidence = probability !== null && probability !== undefined;
+  // 근거 모달의 곁칸에 실릴 것이 있나. 없으면 두 칸으로 가르지 않는다.
+  const hasSide = Boolean(
+    verdict.reference?.trajectory || verdict.reference?.prevalence_trajectory || hasEvidence,
+  );
 
   return (
     <article className={`assess-card ${LEVEL_CLASS[verdict.risk_level]}`}>
@@ -609,52 +627,44 @@ export function VerdictCard({
 
       {enough ? <LevelBar level={verdict.risk_level} /> : null}
 
-      {/* **앞면은 정본 엔진의 답만 싣는다.** 어느 엔진이 답했는지를 등급 옆에 붙여야
-          아래 접이의 ML 확률과 혼동되지 않는다. 예전에는 이 태그가 "판정 근거" 버튼
-          안에 있어서, 카드를 훑는 동안 무엇이 이 등급을 정했는지 알 수 없었다. */}
-      {/* **두 엔진을 나란히 놓는다.** ML 이 먼저 열 질환을 훑어 확률을 내고,
-          검사값이 있는 칸은 규칙 엔진이 그 위에서 단계까지 확정한다. 예전에는
-          확률이 접이 안에만 있어서, 카드를 보는 동안 모델이 무엇을 말했는지
-          알 수 없었다 — 두 엔진이 같이 도는데 하나만 보였다. */}
-      <div className="assess-engines">
-        {/* **ML 이 정본이 아닐 때는 무게를 낮춘다.**
-            실측에서 "이상지질혈증 · 정상 범위 · ML 예측 77%" 와 "당뇨병 · 매우 높음 ·
-            ML 예측 15%" 가 같은 크기로 나란히 섰다(2026-09-10). 둘 다 모델이 고장난
-            것이 아니라 **라벨 정의 수치를 입력으로 못 받기 때문**이고(doc 45 §3.3 —
-            `low_hdl` 모델은 HDL 을 못 본다), 검사값이 있으면 규칙 엔진이 정본이 되어
-            그 확률은 참고로 내려간다. 화살표만으로는 그 내림이 안 보여서, 정본이
-            아닌 칸에 `is-superseded` 를 붙여 눈에도 뒤로 물러나게 한다.
-            숫자를 지우지는 않는다 — 두 엔진이 같이 돌았다는 사실은 남아야 한다. */}
-        {probability !== null && probability !== undefined ? (
-          <span
-            className={`assess-engine-step is-ml${verdict.engine === "E2" ? "" : " is-superseded"}`}
-            title={
-              verdict.engine === "E2"
-                ? undefined
-                : "검사값이 있어 규칙 엔진 판정이 정본입니다. 이 확률은 참고값이에요."
-            }
-          >
-            <small>ML 예측</small>
-            <b>{percent(probability)}</b>
-          </span>
-        ) : (
-          <span className="assess-engine-step is-ml is-none">
-            <small>ML 예측</small>
-            <b>—</b>
-          </span>
-        )}
-        <span className="assess-engine-arrow" aria-hidden="true">
-          →
-        </span>
-        <span className={`assess-engine-step is-verdict engine-${verdict.engine.toLowerCase()}`}>
-          {/* ML 이 정본인 칸에서는 엔진 이름을 두 번 쓰지 않는다. 왼쪽이 이미
-              "ML 예측" 이라 `ML 예측 19% → ML 예측 기준 이내` 가 됐다(실측).
-              오른쪽 칸이 답하는 것은 "누가 정했나" 이고, 같은 엔진이면 그 자리에
-              필요한 말은 "판정" 하나다. */}
-          <small>{verdict.engine === "E2" ? "판정" : ENGINE_SHORT[verdict.engine]}</small>
-          <b>{readableSentence(short)}</b>
-        </span>
-      </div>
+      {/* **2026-09-11 엔진 두 칸을 걷어냈다.** 여기는 `ML 예측 77% → 판정 정상 범위`
+          였고, 두 가지가 한꺼번에 잘못돼 있었다.
+
+          하나, **말이 우리 말이지 사용자 말이 아니다.** "ML 예측"·"규칙 엔진"·
+          "공개 공식" 은 이 화면을 만든 사람의 어휘다. 게다가 그 셋을 구분해 봐야
+          사용자가 화면에서 할 수 있는 일은 달라지지 않는다.
+
+          둘, **정본이 아닌 숫자를 정본 앞에 세웠다.** 바로 아래 옛 주석이 적어 둔
+          실측이 그 증거다 — "이상지질혈증 · 정상 범위 · ML 예측 77%". 정상이라고
+          해 놓고 77% 를 나란히 보여 주면 사용자는 둘 중 무엇을 믿을지 모른다.
+          `is-superseded` 로 흐리는 것으로는 안 풀린다. 흐린 숫자도 읽히고, 읽히면
+          묻게 된다. 무시해도 되는 값이면 훑는 자리에 두지 않는 것이 답이다.
+
+          지우지 않고 **옮겼다.** 두 엔진이 같이 돌았다는 사실과 밀려난 확률은
+          `판정 근거 자세히`(`VerdictFacts`) 안에 그대로 있다 — 거기에는 나란히
+          놓을 자리와 설명이 같이 있다. 앞면에는 정본이 말하는 것만 남긴다. */}
+      {verdict.sub_status ? (
+        // 등급 배지는 "얼마나" 를 말하고 이 줄은 "무엇이" 를 말한다. `sub_status`
+        // 가 없을 때 `LEVEL_LABEL` 로 떨어뜨리지 않는 이유는 그러면 배지와 같은
+        // 말을 두 번 하기 때문이다.
+        <p className="assess-substatus">{readableSentence(verdict.sub_status)}</p>
+      ) : null}
+
+      {/* 검사값 없이 추정한 칸에만 숫자를 앞면에 둔다. **확률(%)이 아니라 자연빈도**
+          로 적는다 — 같은 번역을 `Evidence` 가 이미 쓰고 있는데("이 점수대의 100명
+          중 N명") 그게 모달 안에만 있어서, 정작 카드를 훑는 자리에는 % 만 있었다.
+          좋은 표기를 숨기고 나쁜 표기를 내놓고 있었던 셈이다. */}
+      {verdict.engine === "E2" && probability !== null && probability !== undefined ? (
+        <p className="assess-chance">
+          나와 수치가 비슷한 <b>100명 중 {Math.round(probability * 100)}명</b>이 이 기준을 넘어요
+        </p>
+      ) : null}
+
+      {/* 어느 쪽이 답했는지는 한 칸으로 족하다. 사용자에게 실제로 다른 것은
+          "내 검사값이 쓰였는가" 하나이므로 그 답을 적는다(`ENGINE_PLAIN`). */}
+      <span className={`assess-engine-tag engine-${verdict.engine.toLowerCase()}`}>
+        {ENGINE_PLAIN[verdict.engine]}
+      </span>
       <KeyFigures verdict={verdict} values={values} />
       <TrajectoryLine verdict={verdict} />
 
@@ -682,10 +692,25 @@ export function VerdictCard({
             <LevelBadge level={verdict.risk_level} />
             <strong>{readableSentence(short)}</strong>
           </div>
-          <VerdictFacts verdict={verdict} />
-          <TrajectoryBlock verdict={verdict} />
-          <PrevalenceBlock verdict={verdict} />
-          {hasEvidence ? <Evidence verdict={verdict} values={values} models={models} /> : null}
+          {/* **넓은 화면에서는 두 칸으로 읽는다.** 근거는 문장이고 궤적·참고는
+              숫자라 읽는 방식이 다르다. 한 줄로 쌓아 두면 모달이 세로로 길어져
+              스크롤 없이는 둘을 같이 못 본다 — "왜 이 등급인가" 와 "그래서 앞으로
+              어떻게 되나" 는 나란히 놓고 봐야 하는 물음이다.
+
+              곁칸에 담을 것이 없으면 한 칸으로 둔다. 빈 칸을 만들면 본문이 절반
+              폭으로 쪼그라들어 오히려 좁아 보인다. */}
+          <div className={hasSide ? "verdict-modal-body has-side" : "verdict-modal-body"}>
+            <div className="verdict-modal-main">
+              <VerdictFacts verdict={verdict} />
+            </div>
+            {hasSide ? (
+              <div className="verdict-modal-side">
+                <TrajectoryBlock verdict={verdict} />
+                <PrevalenceBlock verdict={verdict} />
+                {hasEvidence ? <Evidence verdict={verdict} values={values} models={models} /> : null}
+              </div>
+            ) : null}
+          </div>
         </Modal>
       ) : null}
     </article>
@@ -786,6 +811,76 @@ export function MatrixCard({ risk }: { risk: DiseaseRisk }) {
       )}
       {risk.recommendation && (
         <p className="assess-recommend">{risk.recommendation}</p>
+      )}
+    </article>
+  );
+}
+
+/**
+ * 이미 걸린 질환이 앞으로 무엇을 부르는가.
+ *
+ * **`MatrixCard` 와 방향이 반대다.** 저쪽은 "이 수치들이 이 질환을 가리킨다"(들어오는
+ * 화살표)이고 이쪽은 "이 질환이 저것들을 부른다"(나가는 화살표)다. 그래서 목록의
+ * 생김새는 일부러 닮게 두고 — 이름·설명·크기·출처에 인과 표시까지 같다 — 방향만
+ * 제목과 첫 줄로 가른다. 두 벌의 문법을 새로 배우게 할 이유가 없다.
+ *
+ * **확률을 붙이지 않는다.** 서버가 안 주기 때문이고, 안 주는 이유는 "당신은 5년 안에
+ * 망막병증이 생깁니다" 를 말할 근거가 이 서비스에 없기 때문이다. 여기 있는 것은
+ * 지침과 코호트가 말하는 **질환의 앞날**이지 이 사람의 예측이 아니다.
+ */
+export function OutlookCard({ outlook }: { outlook: ComplicationOutlook }) {
+  return (
+    <article className={`assess-card assess-outlook ${LEVEL_CLASS[outlook.risk_level]}`}>
+      <header>
+        <h3>{outlook.name}</h3>
+        <LevelBadge level={outlook.risk_level} />
+      </header>
+      <p className="assess-outlook-lead">{outlook.lead}</p>
+      <p className="assess-outlook-summary">{outlook.summary}</p>
+
+      {/* 낮은 HDL 처럼 **합병증 틀로 말하면 안 되는 칸**이 있다. 목록을 비우고 왜
+          비웠는지를 적는다 — 빈 카드를 세우면 "아직 안 채운 화면" 으로 읽힌다. */}
+      {outlook.caveat ? <p className="assess-outlook-caveat">{outlook.caveat}</p> : null}
+
+      {outlook.complications.length > 0 && (
+        <ul className="assess-complications">
+          {outlook.complications.map((c) => (
+            <li key={c.label}>
+              <span className="assess-contrib-head">
+                <span className="assess-contrib-label">{c.label}</span>
+                {/* 장기 이름. 목록이 여섯 줄까지 가는 카드(비만)에서 눈이 묶어 읽을
+                    손잡이가 된다. 색이 아니라 글자라 구분이 어려운 사람에게도 남는다. */}
+                <span className="assess-organ">{c.organ}</span>
+              </span>
+              <span className="assess-contrib-detail">{c.detail}</span>
+              <span className="assess-contrib-effect">{c.effect}</span>
+              <details className="assess-contrib-source">
+                <summary>
+                  근거
+                  {c.causal === true && <b className="assess-causal is-causal">인과</b>}
+                  {c.causal === false && <b className="assess-causal is-marker">지표</b>}
+                </summary>
+                <span>
+                  {c.source}
+                  {c.causal === false && " — 따져봤더니 원인이 아니라 동반 지표였다"}
+                </span>
+              </details>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* **무엇이 생기나만 적고 끝내지 않는다.** 합병증은 대개 증상이 없어서, 읽고
+          나서 할 일이 남지 않으면 카드가 겁주기로만 끝난다. */}
+      {outlook.monitoring.length > 0 && (
+        <div className="assess-outlook-watch">
+          <strong>지금 확인할 것</strong>
+          <ul>
+            {outlook.monitoring.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
       )}
     </article>
   );

@@ -44,8 +44,8 @@ const SELF_RATED = [
 export const FIELD_GROUPS: FieldGroup[] = [
   {
     key: "basic",
-    title: "기본",
-    note: "나이·성별·키·체중·전반적 건강은 반드시 채웁니다.",
+    title: "기본 정보",
+    note: "현재 기준으로 입력해 주세요. 허리둘레는 선택 항목이에요.",
     fields: [
       { name: "age", label: "나이", kind: "number", unit: "세", min: 19, max: 100, required: true },
       {
@@ -78,10 +78,10 @@ export const FIELD_GROUPS: FieldGroup[] = [
     // 이 화면의 값은 대부분 검진결과지에서 옮겨 적는 것이라 혈압은 거의 항상 손에
     // 있고, 있는 값을 안 받고 추정으로 답하면 학회 기준 대조를 스스로 포기하는 셈이다.
     // 수축기·이완기 둘 다 받는다 — 한쪽만으로는 어느 구간인지 정해지지 않는다.
-    note: "고혈압을 추정이 아니라 학회 기준으로 판정하는 데 씁니다. 두 값이 다 필요합니다.",
+    note: "검진표에 적힌 두 숫자를 입력하세요. 예: 120 / 80",
     fields: [
-      { name: "sbp", label: "수축기", kind: "number", unit: "mmHg", min: 60, max: 260, required: true },
-      { name: "dbp", label: "이완기", kind: "number", unit: "mmHg", min: 30, max: 200, required: true },
+      { name: "sbp", label: "수축기", kind: "number", unit: "mmHg", min: 60, max: 260, required: true, hint: "혈압의 위 숫자" },
+      { name: "dbp", label: "이완기", kind: "number", unit: "mmHg", min: 30, max: 200, required: true, hint: "혈압의 아래 숫자" },
     ],
   },
   {
@@ -89,38 +89,39 @@ export const FIELD_GROUPS: FieldGroup[] = [
     title: "혈당",
     // 공복혈당만 필수다. 당화혈색소·경구당부하는 검진결과지에 없는 경우가 흔해서
     // 필수로 걸면 값이 없는 사람이 판정 자체를 못 받는다.
-    note: "공복혈당은 반드시 채웁니다. 당화혈색소와 경구당부하는 있으면 넣습니다.",
+    note: "공복혈당은 필수예요. 다른 검사값은 검진표에 있을 때만 입력하세요.",
     fields: [
-      { name: "fasting_glucose", label: "공복혈당", kind: "number", unit: "mg/dL", min: 20, max: 800, required: true },
-      { name: "hba1c", label: "당화혈색소", kind: "number", unit: "%", min: 2, max: 20, step: 0.1 },
-      { name: "ogtt_2h", label: "경구당부하 2시간", kind: "number", unit: "mg/dL", min: 21, max: 600 },
+      { name: "fasting_glucose", label: "공복혈당", kind: "number", unit: "mg/dL", min: 20, max: 800, required: true, hint: "8시간 이상 굶고 잰 혈당" },
+      { name: "hba1c", label: "당화혈색소", kind: "number", unit: "%", min: 2, max: 20, step: 0.1, hint: "최근 2~3개월 혈당 평균" },
+      { name: "ogtt_2h", label: "경구당부하 2시간", kind: "number", unit: "mg/dL", min: 21, max: 600, hint: "포도당 물을 마시고 2시간 뒤에 잰 혈당" },
       { name: "is_fasting", label: "공복 측정이었나", kind: "bool" },
     ],
   },
   {
     key: "lipid",
-    title: "지질",
+    title: "콜레스테롤 · 중성지방",
+    note: "검진표의 지질 검사 수치를 입력하세요.",
     fields: [
-      { name: "total_chol", label: "총콜레스테롤", kind: "number", unit: "mg/dL", min: 50, max: 600 },
-      { name: "hdl", label: "HDL", kind: "number", unit: "mg/dL", min: 5, max: 200 },
-      { name: "ldl", label: "LDL", kind: "number", unit: "mg/dL", min: 5, max: 500 },
-      { name: "triglyceride", label: "중성지방", kind: "number", unit: "mg/dL", min: 10, max: 3000 },
+      { name: "total_chol", label: "총콜레스테롤", kind: "number", unit: "mg/dL", min: 50, max: 600, hint: "핏속 콜레스테롤 전체" },
+      { name: "hdl", label: "HDL", kind: "number", unit: "mg/dL", min: 5, max: 200, hint: "좋은 콜레스테롤 — 높을수록 좋아요" },
+      { name: "ldl", label: "LDL", kind: "number", unit: "mg/dL", min: 5, max: 500, hint: "나쁜 콜레스테롤 — 낮을수록 좋아요" },
+      { name: "triglyceride", label: "중성지방", kind: "number", unit: "mg/dL", min: 10, max: 3000, hint: "핏속 지방. 술과 탄수화물에 잘 오릅니다" },
       { name: "non_hdl_c", label: "비HDL", kind: "number", unit: "mg/dL", min: 1, max: 1000, hint: "비우면 총콜레스테롤에서 HDL 을 빼 계산합니다" },
     ],
   },
   {
     key: "organ",
     title: "간 · 신장 · 혈액",
-    note: "크레아티닌은 콩팥, AST·ALT·γ-GTP 는 간, 혈색소는 빈혈을 봅니다.",
+    note: "검진표에 있는 항목만 입력하세요.",
     fields: [
-      { name: "ast", label: "AST(SGOT)", kind: "number", unit: "IU/L", min: 1, max: 2000 },
-      { name: "alt", label: "ALT(SGPT)", kind: "number", unit: "IU/L", min: 1, max: 2000 },
-      { name: "ggt", label: "감마지티피", kind: "number", unit: "IU/L", min: 1, max: 2000 },
-      { name: "uric_acid", label: "요산", kind: "number", unit: "mg/dL", min: 0.5, max: 30, step: 0.1 },
-      { name: "creatinine", label: "크레아티닌", kind: "number", unit: "mg/dL", min: 0.1, max: 20, step: 0.01 },
-      { name: "hemoglobin", label: "혈색소", kind: "number", unit: "g/dL", min: 3, max: 25, step: 0.1 },
-      { name: "albumin", label: "알부민", kind: "number", unit: "g/dL", min: 1, max: 7, step: 0.1 },
-      { name: "urine_acr", label: "요알부민/크레아티닌비", kind: "number", unit: "mg/g", min: 0, max: 20000 },
+      { name: "ast", label: "AST(SGOT)", kind: "number", unit: "IU/L", min: 1, max: 2000, hint: "간세포가 상하면 새어 나오는 효소입니다" },
+      { name: "alt", label: "ALT(SGPT)", kind: "number", unit: "IU/L", min: 1, max: 2000, hint: "같은 간 효소. AST 와 짝지어 읽습니다" },
+      { name: "ggt", label: "감마지티피", kind: "number", unit: "IU/L", min: 1, max: 2000, hint: "간·쓸개길 효소. 술에 특히 민감합니다" },
+      { name: "uric_acid", label: "요산", kind: "number", unit: "mg/dL", min: 0.5, max: 30, step: 0.1, hint: "많이 쌓이면 통풍이 생깁니다" },
+      { name: "creatinine", label: "크레아티닌", kind: "number", unit: "mg/dL", min: 0.1, max: 20, step: 0.01, hint: "콩팥이 걸러 내는 노폐물. 얼마나 잘 걸러 내는지 봅니다" },
+      { name: "hemoglobin", label: "혈색소", kind: "number", unit: "g/dL", min: 3, max: 25, step: 0.1, hint: "피가 산소를 나르는 성분. 낮으면 빈혈입니다" },
+      { name: "albumin", label: "알부민", kind: "number", unit: "g/dL", min: 1, max: 7, step: 0.1, hint: "핏속 단백질. 영양과 간 상태를 봅니다" },
+      { name: "urine_acr", label: "요알부민/크레아티닌비", kind: "number", unit: "mg/g", min: 0, max: 20000, hint: "소변으로 새는 단백질 양. 콩팥 손상을 일찍 잡습니다" },
       {
         name: "crp",
         label: "고감도 CRP",
@@ -129,13 +130,14 @@ export const FIELD_GROUPS: FieldGroup[] = [
         min: 0.01,
         max: 500,
         step: 0.01,
-        hint: "국가건강검진에는 없고 종합검진에서 나옵니다. 없으면 비워 두세요 — 모델이 대신 추정합니다",
+        hint: "검진표에 없으면 비워 두세요",
       },
     ],
   },
   {
     key: "lifestyle",
     title: "생활습관",
+    note: "평소 생활을 기준으로 입력하세요.",
     fields: [
       {
         name: "smoking_status",
@@ -147,11 +149,11 @@ export const FIELD_GROUPS: FieldGroup[] = [
           { value: "current", label: "현재 피움" },
         ],
       },
-      { name: "alcohol_days_per_year", label: "연간 음주일", kind: "number", unit: "일", min: 0, max: 365 },
-      { name: "moderate_min_per_week", label: "중강도 운동", kind: "number", unit: "분/주", min: 0, max: 5000 },
-      { name: "vigorous_min_per_week", label: "고강도 운동", kind: "number", unit: "분/주", min: 0, max: 5000 },
-      { name: "sedentary_min_per_day", label: "앉아 있는 시간", kind: "number", unit: "분/일", min: 0, max: 1440 },
-      { name: "sleep_hours", label: "수면", kind: "number", unit: "시간", min: 0, max: 24, step: 0.5 },
+      { name: "alcohol_days_per_year", label: "연간 음주일", kind: "number", unit: "일", min: 0, max: 365, hint: "1년 동안 술을 마신 날수" },
+      { name: "moderate_min_per_week", label: "중강도 운동", kind: "number", unit: "분/주", min: 0, max: 5000, hint: "숨이 조금 차는 정도 — 빠르게 걷기 등" },
+      { name: "vigorous_min_per_week", label: "고강도 운동", kind: "number", unit: "분/주", min: 0, max: 5000, hint: "숨이 많이 차는 정도 — 달리기 등" },
+      { name: "sedentary_min_per_day", label: "앉아 있는 시간", kind: "number", unit: "분/일", min: 0, max: 1440, hint: "하루 평균 앉거나 누워 보낸 시간" },
+      { name: "sleep_hours", label: "수면", kind: "number", unit: "시간", min: 0, max: 24, step: 0.5, hint: "하루 평균 잠든 시간" },
       // `education_level` 은 2026-09-03 에 뺐다. 건강 앱이 학력을 묻는 것이
       // 사용자에게 어떻게 읽히는지가 이유고, 정확도 손실은 재서 받아들였다 —
       // 200명 표본에서 확률 평균 |Δ| 0.005, 등급이 바뀐 칸 1.5%(29/2000).
@@ -160,12 +162,12 @@ export const FIELD_GROUPS: FieldGroup[] = [
   },
   {
     key: "history",
-    title: "진단 이력",
-    note: "이미 진단받은 질환은 위험도를 다시 매기지 않습니다.",
+    title: "진단받은 질환",
+    note: "의사에게 진단받은 적이 있는지 알려 주세요.",
     fields: [
       { name: "has_hypertension", label: "고혈압 진단", kind: "bool" },
       { name: "has_diabetes", label: "당뇨 진단", kind: "bool" },
-      { name: "has_ascvd_history", label: "심혈관질환 병력", kind: "bool" },
+      { name: "has_ascvd_history", label: "심혈관질환 병력", kind: "bool", hint: "심근경색·협심증·뇌졸중을 겪은 적이 있나요" },
     ],
   },
 ];
@@ -207,9 +209,33 @@ export const REQUIRED_FIELDS = FIELD_GROUPS.flatMap((g) => g.fields.filter((f) =
  * 경고문이 "필수 1개가 남았습니다"에서 멈추면 사용자는 서른여섯 칸을 눈으로 훑어야
  * 한다. **어느 칸인지 이름으로 말하려면** 이 표가 필요하다.
  */
-export const FIELD_LABELS: Record<string, string> = Object.fromEntries(
-  FIELD_GROUPS.flatMap((g) => g.fields.map((f) => [f.name, f.label] as const)),
-);
+/**
+ * 입력칸이 아닌 **모델 특징**의 이름표.
+ *
+ * `reference.top_factors` 는 모델이 실제로 쓴 특징 이름을 그대로 보낸다. 그 중에는
+ * 화면에 입력칸이 없는 것이 섞여 있다 — 두 값을 나눠 만든 파생(`waist_height_ratio`
+ * 는 허리÷키)과 합쳐 만든 값(`bmi` 는 키·몸무게)이다. 이름표가 없으면 아래 표의
+ * `?? name` 으로 떨어져 화면에 `waist_height_ratio` 가 영문 그대로 뜬다. 실측에서
+ * 고혈압 모달의 "기여가 큰 항목" 둘째 줄이 그랬다.
+ *
+ * 서버 쪽 정본은 `app/services/risk.py` 의 `DERIVED_RATIOS` 와 `modeling/targets.py`
+ * 의 `ENABLED_INDICES` 다. 거기서 켜지지 않은 지수는 여기에도 넣지 않는다 — 화면에
+ * 올라올 일이 없는 이름을 미리 적어 두면 둘이 어긋났을 때 알 길이 없다.
+ */
+const DERIVED_LABELS: Record<string, string> = {
+  bmi: "체질량지수(BMI)",
+  waist_height_ratio: "허리·키 비율",
+  tg_hdl_ratio: "중성지방·HDL 비율",
+  non_hdl: "non-HDL 콜레스테롤",
+  ast_alt_ratio: "AST·ALT 비율",
+  pulse_pressure: "맥압",
+  mean_arterial_pressure: "평균동맥압",
+};
+
+export const FIELD_LABELS: Record<string, string> = {
+  ...Object.fromEntries(FIELD_GROUPS.flatMap((g) => g.fields.map((f) => [f.name, f.label] as const))),
+  ...DERIVED_LABELS,
+};
 
 /**
  * 화면 상태(전부 문자열)를 요청 본문으로 바꾼다.

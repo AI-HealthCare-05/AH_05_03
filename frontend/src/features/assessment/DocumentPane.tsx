@@ -193,8 +193,9 @@ export function DocumentPane({
     <aside className="checkup-pane" aria-label="올린 검진표">
       <div className="checkup-pane-head">
         <div>
-          <p className="section-kicker">검진표</p>
-          <h2>{profileName}님의 검진결과지</h2>
+          <p className="section-kicker">{profileName}님의 건강 정보</p>
+          <h2>검진표로 간편하게 입력</h2>
+          <p className="checkup-intro">수치를 자동으로 읽어 입력해 드려요.</p>
         </div>
         {preview && preview.pages.length > 0 ? (
           <div className="checkup-zoom" role="group" aria-label="확대">
@@ -222,21 +223,22 @@ export function DocumentPane({
         onDragLeave={() => setDragging(false)}
         onDrop={drop}
       >
-        <input type="file" accept="image/*,.pdf,application/pdf" onChange={pick} />
+        <input type="file" aria-label="검진표 이미지나 PDF 선택" accept="image/*,.pdf,application/pdf" onChange={pick} />
         <span>
           {dragging
             ? "여기에 놓으면 읽어 옵니다"
             : document
-              ? "다른 검진표 고르기 · 끌어다 놓아도 됩니다"
-              : "검진표 이미지나 PDF 고르기 · 끌어다 놓아도 됩니다"}
+              ? "다른 검진표 선택"
+              : "검진표 선택"}
         </span>
+        <small>이미지·PDF 선택 또는 끌어다 놓기</small>
       </label>
 
       {/* 위 `save` 가 `if (runtime?.documents)` 안에 있고 서버 런타임은 그 칸을 들지
           않는다(`serverDomainRuntime.ts` 의 `documents: undefined`). 그래서 "이 브라우저에
           암호화해 둔다" 는 옛 문구는 사실이 아니었다. 실제 동작은 아래가 맞다. */}
       <p className="checkup-privacy">
-        원본은 어디에도 보관하지 않아요. 읽어 들이는 동안에만 쓰고, 확정한 수치만 내 계정에 남습니다.
+        원본은 저장하지 않아요. 인식한 수치만 내 계정에 저장됩니다.
       </p>
 
       {job ? (
@@ -260,14 +262,14 @@ export function DocumentPane({
         <div className="checkup-reading">
           <p className={filled > 0 ? "checkup-filled" : "form-notice"}>
             {filled > 0
-              ? `표에서 수치 ${filled}개를 읽어 오른쪽 폼에 채웠어요. 원본과 맞는지 확인하고 고쳐 주세요.`
-              : "표에서 판정에 쓸 수치를 찾지 못했어요. 오른쪽 폼에 직접 넣어 주세요."}
+              ? `수치 ${filled}개를 읽어 입력했어요. 검진표와 맞는지 확인해 주세요.`
+              : "수치를 찾지 못했어요. 검진표를 보며 직접 입력해 주세요."}
           </p>
 
           {reading.review.length > 0 ? (
             <details className="checkup-review" open>
-              <summary>확인이 필요한 {reading.review.length}개 — 폼에는 넣지 않았어요</summary>
-              <p>검사명을 잘못 읽었을 수 있어서 뺐습니다. 원본의 해당 줄과 맞으면 오른쪽 폼에 직접 넣어 주세요.</p>
+              <summary>직접 확인이 필요한 항목 {reading.review.length}개</summary>
+              <p>정확히 읽지 못해 자동 입력에서 제외했어요. 원본을 확인한 뒤 직접 입력해 주세요.</p>
               <ul>
                 {reading.review.map((row, index) => (
                   <li key={`${row.field}-${index}`}>

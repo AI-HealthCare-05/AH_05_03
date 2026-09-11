@@ -31,6 +31,7 @@ import { useAuth } from "../../app/authContext";
 import { useDocumentTitle } from "../../app/useRouteTitle";
 import { AuthCard } from "./AuthCard";
 import { invitationEmail } from "./invitation";
+import { ServicePoints } from "./servicePoints";
 
 export function SignUpPage() {
   // `RootLayout` 밖이고 내비에도 없는 화면이라 제목을 직접 정한다.
@@ -72,16 +73,18 @@ export function SignUpPage() {
   }
 
   return (
-    <div className="signin-shell">
-      <div className="signin-panel">
-        <div className="signin-brand">
-          <img className="brand-mark" src="/ieobom-icon.svg" alt="" aria-hidden="true" width={42} height={42} />
-          <div>
-            <strong>이어봄</strong>
-            <small>우리 가족 건강기록</small>
-          </div>
+    <div className="auth-shell">
+      {/* 관문(`SignInPage`)과 **같은 껍데기**를 쓴다. 두 화면이 다르게 생기면 전환
+          링크를 눌렀을 때 다른 서비스로 넘어온 것처럼 보인다. */}
+      <div className="signin-brand">
+        <img className="brand-mark" src="/ieobom-icon.svg" alt="" aria-hidden="true" width={42} height={42} />
+        <div>
+          <strong>이어봄</strong>
+          <small>우리 가족 건강기록</small>
         </div>
+      </div>
 
+      <div className="auth-main">
         <h1>이어봄 시작하기</h1>
         <p className="signin-lead">
           이메일과 비밀번호만 있으면 됩니다. 건강기록은 계정에 저장되고, 나와 가족
@@ -118,6 +121,13 @@ export function SignUpPage() {
           <li>같은 가정 구성원 외에는 열람할 수 없습니다.</li>
         </ul>
       </div>
+
+      {/* 가입 화면에 이 칼럼이 있는 것이 특히 중요하다. 계정을 만드는 바로 그
+          자리에서 무엇을 하는 서비스인지 읽힌다. */}
+      <aside className="auth-intro" aria-label="이어봄이 하는 일">
+        <p className="auth-pitch">검진 결과를 가족 단위로 이어 봅니다.</p>
+        <ServicePoints />
+      </aside>
     </div>
   );
 }

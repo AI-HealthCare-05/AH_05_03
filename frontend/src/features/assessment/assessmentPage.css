@@ -1,0 +1,111 @@
+/* 입력의 우선순위: 필수 정보 → 선택 검사 → 결과 확인. */
+.assess-page.product-page {
+  max-width: 1160px;
+  gap: 1.5rem;
+}
+
+.assess-page .dashboard-heading h1 { font-size: clamp(1.8rem, 3vw, 2.25rem); }
+.assess-page .dashboard-heading > div > p:last-child { max-width: none; line-height: 1.7; }
+.assess-page .assess-form-column { min-width: 0; }
+
+.assess-page .checkup-pane {
+  box-shadow: none;
+  border-radius: 18px;
+}
+.assess-page .assess-workspace:not(.has-document) .checkup-pane {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 0.6rem 2rem;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  background: var(--blue-50);
+}
+.assess-page .checkup-intro { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.9rem; }
+.assess-page .checkup-picker { padding: 1rem; background: white; border-radius: 12px; }
+.assess-page .checkup-picker::before { content: none; }
+.assess-page .checkup-picker span { font-size: 1rem; }
+.assess-page .checkup-picker small { color: var(--muted); font-size: 0.8rem; font-weight: 400; }
+.assess-page .checkup-privacy { margin: 0; line-height: 1.6; }
+.assess-page .assess-workspace:not(.has-document) .checkup-privacy { grid-column: 1 / -1; }
+.assess-page .checkup-viewer,
+.assess-page .checkup-reading,
+.assess-page .checkup-pane > .alert,
+.assess-page .checkup-pane > .ocr-progress { grid-column: 1 / -1; min-width: 0; }
+
+.assess-page .assess-presets {
+  padding: 0;
+  margin: 0 0 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: none;
+  background: white;
+}
+.assess-page .assess-presets > summary,
+.assess-page .assess-extra-group > summary {
+  min-height: 56px;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+.assess-page .assess-presets > summary span {
+  margin-left: 0.75rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+.assess-page .assess-presets > :not(summary) { margin-left: 1.25rem; margin-right: 1.25rem; }
+.assess-page .assess-presets > :last-child { margin-bottom: 1rem; }
+.assess-page .assess-preset { min-height: 44px; }
+.assess-page summary:focus-visible { outline: 3px solid var(--blue-500); outline-offset: 3px; border-radius: 10px; }
+
+.assess-page .assess-form { gap: 1rem; }
+.assess-page .assess-input-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 0.25rem; }
+.assess-page .assess-input-heading h2 { margin: 0; font-size: 1.2rem; }
+.assess-page .assess-input-heading p { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.85rem; }
+.assess-page .assess-required-star { color: var(--danger); }
+.assess-page .assess-progress { display: grid; gap: 0.5rem; min-width: 155px; font-size: 0.8rem; color: var(--muted); }
+.assess-page .assess-progress strong { float: right; color: var(--blue-700); font-variant-numeric: tabular-nums; }
+.assess-page .assess-progress progress { width: 100%; height: 6px; border: none; border-radius: 10px; overflow: hidden; background: var(--blue-100); accent-color: var(--blue-600); }
+.assess-page progress::-webkit-progress-bar { background: var(--blue-100); }
+.assess-page progress::-webkit-progress-value { background: var(--blue-600); border-radius: 10px; }
+.assess-page .assess-group { margin: 0; min-width: 0; padding: 1.25rem 1.5rem; border-radius: 16px; box-shadow: none; }
+.assess-page .assess-group legend { font-size: 1rem; }
+.assess-page .assess-group-note { max-width: none; margin-bottom: 1rem; font-size: 0.85rem; }
+.assess-page .assess-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem 1.25rem; }
+.assess-page .assess-field { min-width: 0; }
+.assess-page .assess-field-label { font-weight: 600; font-size: 0.9rem; }
+.assess-page .assess-field input,
+.assess-page .assess-field select { width: 100%; min-width: 0; min-height: 46px; background: white; border-radius: 9px; }
+.assess-page .assess-hint { font-size: 0.8rem; line-height: 1.5; }
+.assess-page .assess-extra-group { border: 1px solid var(--line); border-radius: 14px; background: white; }
+.assess-page .assess-extra-group > summary { padding: 1.1rem 1.5rem; }
+.assess-page .assess-group-tag { float: right; color: var(--muted); font-size: 0.8rem; font-weight: 400; }
+.assess-page .assess-extra-group .assess-group { border: none; padding-top: 0; }
+.assess-page .assess-extra-group legend.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); }
+.assess-page .assess-extra-group[open] > summary { border-bottom: 1px solid var(--line); margin-bottom: 1rem; }
+.assess-page .assess-submit { padding: 1.25rem 0 0.25rem; gap: 1.25rem; }
+.assess-page .assess-submit button { min-height: 50px; min-width: 180px; border-radius: 12px; font-size: 1rem; }
+.assess-page .assess-submit-status { margin: 0 0 0.25rem; color: var(--ink); font-size: 0.9rem; font-weight: 600; }
+.assess-page .assess-submit .assess-muted { margin: 0; font-size: 0.8rem; }
+.assess-page .has-document .assess-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 760px) {
+  .assess-page .assess-workspace:not(.has-document) .checkup-pane { grid-template-columns: 1fr; gap: 1rem; padding: 1.25rem; }
+  .assess-page .assess-input-heading { align-items: stretch; flex-direction: column; }
+  .assess-page .assess-progress { max-width: 240px; }
+  .assess-page .assess-fields,
+  .assess-page .has-document .assess-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .assess-page .assess-group { padding: 1.25rem; }
+  .assess-page .assess-presets > summary span { display: block; margin: 0.35rem 0 0 1rem; }
+}
+
+@media (max-width: 480px) {
+  .assess-page .assess-fields,
+  .assess-page .has-document .assess-fields { grid-template-columns: 1fr; }
+  .assess-page .assess-submit { flex-direction: column; align-items: stretch; }
+  .assess-page .assess-submit button { width: 100%; }
+  .assess-page .assess-extra-group > summary { padding: 1rem; }
+}

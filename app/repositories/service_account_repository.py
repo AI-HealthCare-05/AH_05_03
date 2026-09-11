@@ -2,7 +2,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import exists, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.service_accounts import ServiceAccount, ServiceAccountStatus
@@ -24,9 +24,6 @@ class ServiceAccountRepository:
     async def get_by_email(self, email: str) -> ServiceAccount | None:
         return await self.session.scalar(select(ServiceAccount).where(ServiceAccount.email == email))
 
-    async def exists_by_email(self, email: str) -> bool:
-        return bool(await self.session.scalar(select(exists().where(ServiceAccount.email == email))))
-
     async def create(self, email: str, password_hash: str) -> ServiceAccount:
         account = ServiceAccount(email=email, password_hash=password_hash)
         self.session.add(account)
@@ -44,6 +41,17 @@ class ServiceAccountRepository:
         account.status = status
         if closed_at is not None:
             account.closed_at = closed_at
+        await self.session.flush()
+        return account
+
+    async def reactivate(self, account: ServiceAccount, password_hash: str) -> ServiceAccount:
+        """탈퇴(CLOSED)한 계정에 같은 이메일로 재가입하면 이 행을 되살린다.
+
+        email이 unique라 새 행을 만들 수 없어 기존 행을 덮어쓰는 것이 유일한 길이다.
+        """
+        account.status = ServiceAccountStatus.ACTIVE
+        account.closed_at = None
+        account.password_hash = password_hash
         await self.session.flush()
         return account
 

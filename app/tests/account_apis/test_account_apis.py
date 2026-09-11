@@ -105,16 +105,24 @@ class TestDeleteAccount:
         assert closed_login.json()["error_code"] == "CREDENTIALS_INVALID"
         assert closed_login.json() == wrong_password.json()
 
-    async def test_closed_email_cannot_re_signup(self, client: AsyncClient) -> None:
-        """의도된 귀결: 재가입을 여는 별도 엔드포인트는 스펙에 없어 만들지
-        않았다. 이메일은 유예기간 동안 점유된 채로 남는다."""
+    async def test_closed_email_can_re_signup_and_reactivates_account(self, client: AsyncClient) -> None:
+        """결정 번복: 예전에는 이메일이 유예기간 동안 점유된 채로 남아 409였다
+        (`test_closed_email_cannot_re_signup`). 재가입을 막아 둘 이유가 없다는
+        판단으로 뒤집었다 — 같은 이메일로 재가입하면 새 행이 아니라 이 행을
+        덮어써 되살린다. 상세한 비밀번호·구독 리셋 검증은
+        `test_signup_api.py::test_signup_reactivates_closed_account` 참조."""
         email = "occupied@example.com"
         tokens = await _login(client, email)
-        await client.delete("/api/v1/account", headers={"Authorization": f"Bearer {tokens['access_token']}"})
+        close_res = await client.delete(
+            "/api/v1/account", headers={"Authorization": f"Bearer {tokens['access_token']}"}
+        )
+        closed_account_id = close_res.json()["data"]["account_id"]
 
-        response = await client.post("/api/v1/auth/signup", json={"email": email, "password": "Password123!"})
+        response = await client.post("/api/v1/auth/signup", json={"email": email, "password": "NewPassword456!"})
 
-        assert response.status_code == status.HTTP_409_CONFLICT
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.json()["data"]["account_id"] == closed_account_id
+        assert response.json()["data"]["status"] == "active"
 
     async def test_requires_auth(self, client: AsyncClient) -> None:
         response = await client.delete("/api/v1/account")

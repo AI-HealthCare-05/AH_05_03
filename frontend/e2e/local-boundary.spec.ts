@@ -22,7 +22,8 @@ test("프로필과 건강기록은 서버 API(PostgreSQL)를 통해 등록·조�
   const state = await setupE2eServerMocks(page);
 
   await page.goto("/");
-  await page.getByRole("button", { name: "첫 구성원 등록" }).click();
+  // 첫 실행 화면은 폼을 바로 편다. 예전에는 "첫 구성원 등록" 버튼이 모달을 띄웠다.
+  await expect(page.getByRole("heading", { name: "첫 구성원 만들기" })).toBeVisible();
   await page.getByRole("textbox", { name: "이름 또는 호칭" }).fill("테스트 가족");
   await page.getByRole("combobox", { name: "관계" }).selectOption("본인");
   await page.getByRole("button", { name: "프로필 저장" }).click();

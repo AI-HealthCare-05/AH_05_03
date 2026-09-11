@@ -173,6 +173,8 @@ RETURNING *;
 
 응답은 `201 ServiceAccountResponse`이며 비밀번호 해시를 반환하지 않는다. 서비스 가입에 이름, 가족관계, 성별, 생년, 전화번호와 건강정보를 요구하지 않는다.
 
+탈퇴(`CLOSED`)한 계정과 같은 이메일로 재가입하면 새 행을 만들지 않고 기존 행을 덮어써 되살린다 — 비밀번호는 새로 제출한 값으로, 구독은 신규 가입과 같은 `FREE`·`ACTIVE`로 되돌아간다. `ACTIVE`·`SUSPENDED` 상태와 겹치면 여전히 `409 EMAIL_ALREADY_REGISTERED`다.
+
 ### 3.2 `POST /auth/login`
 
 요청은 `email`, `password`이며 응답은 다음과 같다.

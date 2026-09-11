@@ -41,6 +41,8 @@
 |---|---|---|
 | 피처 결측·표본 충분성(EPV) | [`audit_features.py`](audit_features.py) | 홀드아웃에 커버리지 0 인 특징. 성능표에는 안 보인다 |
 | 분포·결측 구조·동반이환 | [`eda.py`](eda.py) | 센티널이 값으로 남은 것. 로더 버그 둘을 여기서 잡았다 |
+| **주기 드리프트 — 조사 설계 변화** | [`eda_drift.py`](eda_drift.py) | 홀드아웃 주기에서 **못 재는** 변수(기여도가 0 으로 찍힌다), 설문·기기 형식이 바뀌어 값이 옮겨간 특징 |
+| **지정 하이퍼파라미터 맞대결** | [`tune_requested.py`](tune_requested.py) | 학습률만 낮추고 라운드를 안 늘려 생기는 과소적합. 보정(ECE)이 먼저 깨진다 |
 | 미사용 입력·임상 지수의 기여도 | [`experiment_features.py`](experiment_features.py) | 짝지은 부트스트랩. 유의하지 않은 개선을 개선이라 부르는 것 |
 | **위험도의 전향 타당도** | [`validate_mortality.py`](validate_mortality.py) | 같은 시점 라벨만 잘 맞히고 미래와는 무관한 모델 |
 | 합성 증강·서빙 픽스처 | [`synthetic.py`](synthetic.py) | 실제 데이터로 못 만드는 입력에서 채점기가 죽는 것 |

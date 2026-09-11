@@ -93,12 +93,15 @@ describe("RecordValueDetail", () => {
   });
 
   it("수정을 누르면 같은 칸이 입력칸으로 바뀐다", async () => {
-    const { container } = show(screening({ values: { sbp: 145 } }));
+    show(screening({ values: { sbp: 145 } }));
     const edit = await screen.findByRole("button", { name: "수정" });
     edit.click();
 
+    // 이 화면은 모달 안에서 그려지고, 모달은 `document.body` 로 나간다(포털).
+    // render container 안에서 찾으면 못 찾는다 — 2026-09-11 에 옮겼다
+    // (`shared/ui/Modal.tsx` 머리말: 조상의 `transform` 이 fixed 백드롭을 가둔다).
     await vi.waitFor(() => {
-      expect(container.querySelectorAll(".value-sheet-field input").length).toBeGreaterThan(0);
+      expect(document.body.querySelectorAll(".value-sheet-field input").length).toBeGreaterThan(0);
     });
   });
 
@@ -117,10 +120,11 @@ describe("RecordValueDetail", () => {
 
   it("검진 기록의 자세히와 검진 수치 수정이 같은 칸 이름을 쓴다", async () => {
     // 두 화면이 갈라져 있던 자리다. 이제 한 컴포넌트를 쓰므로 라벨이 같다.
-    const { container } = show(screening({ values: { sbp: 145 } }));
+    show(screening({ values: { sbp: 145 } }));
     await screen.findByText("145");
     // 라벨은 이름과 단위가 한 span 안에 있다("수축기 mmHg"). 이름으로 찾는다.
-    const labels = [...container.querySelectorAll(".value-sheet-label")].map((el) => el.textContent ?? "");
+    // 모달이 포털로 나가므로 render container 가 아니라 `document.body` 에서 본다.
+    const labels = [...document.body.querySelectorAll(".value-sheet-label")].map((el) => el.textContent ?? "");
     expect(labels.some((text) => text.startsWith("수축기"))).toBe(true);
   });
 

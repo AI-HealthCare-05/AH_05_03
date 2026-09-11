@@ -39,19 +39,6 @@ export function medTone(level: string): string {
   return `lv${Math.max(0, MED_LEVELS.indexOf(level as (typeof MED_LEVELS)[number]))}`;
 }
 
-/**
- * 규칙 엔진 5단계의 한글 이름. 서버는 `CAUTION` 처럼 코드로 보낸다.
- *
- * 화면에 코드를 그대로 띄우면 배지에 쓰는 "주의" 와 같은 값인지 알 수 없다.
- */
-const LEVEL_NAME: Record<string, string> = {
-  INSUFFICIENT_DATA: "판정 불가",
-  NORMAL: "정상",
-  CAUTION: "주의",
-  HIGH: "높음",
-  VERY_HIGH: "매우 높음",
-};
-
 /** 큰 숫자의 소수점 아래를 작게 — 자릿수가 흔들려도 시선이 정수부에 머문다. */
 export function BigNumber({ value }: { value: number }) {
   const [whole, fraction] = (value * 100).toFixed(1).split(".");
@@ -98,69 +85,83 @@ export function Gauge({ medical }: { medical: MedicalRisk }) {
 /**
  * 이 카드의 숫자를 얼마나 믿어도 되는가. 카드마다 다르다 — 같은 화면에 AUROC
  * 0.87 짜리와 0.70 짜리가 나란히 있는데 그 사실을 안 적으면 둘이 같아 보인다.
+ *
+ * **숫자 줄과 해설을 갈라 놓았다.** 예전에는 둘이 한 조각이라 정확도 0.733 뒤에
+ * 네 줄짜리 AUROC 강의가 반드시 따라붙었다. 숫자는 훑는 것이고 해설은 한 번
+ * 읽으면 되는 것이라 머무는 시간이 다르다 — 지금은 숫자만 남기고 해설은 아래
+ * 접이(`EvidenceMethod`)로 내린다. 지우지는 않는다.
  */
 function AccuracyLine({ verdict }: { verdict: DiseaseVerdict }) {
   const a = verdict.reference?.accuracy;
   if (!a) return null;
   const tone = a.headline_auroc >= 0.8 ? "good" : a.headline_auroc >= 0.7 ? "ok" : "weak";
   return (
-    <>
-      <div className="detail-acc">
-        <span className="k">정확도</span>
-        <span className="n">{a.headline_auroc.toFixed(3)}</span>
-        <span className={`assess-badge ${tone}`}>{a.grade}</span>
-        <span>{a.measured_on === "미진단자" ? "미진단자 기준" : "전체 기준"} AUROC</span>
-        {a.alert_ppv !== null && a.alert_ppv !== undefined ? (
-          <>
-            <span className="sep">|</span>
-            <span>
-              상위 10% 경보 적중 <strong>{Math.round(a.alert_ppv * 100)}%</strong>
-              {a.alert_sensitivity !== null && a.alert_sensitivity !== undefined ? (
-                <>
-                  {" "}
-                  · 실제 해당자 <strong>{Math.round(a.alert_sensitivity * 100)}%</strong> 발견
-                </>
-              ) : null}
-            </span>
-          </>
-        ) : null}
-      </div>
-      <p className="detail-cite">
-        AUROC 는 "100명 중 몇 명을 맞힌다"가 아닙니다. 해당자와 비해당자를 한 명씩 뽑았을 때 해당자에게 더 높은
-        점수를 줄 확률입니다.
-        {a.auroc_undiagnosed !== null && a.auroc_undiagnosed !== undefined ? (
-          <> 이미 진단받은 사람을 맞히는 건 쉬우므로 그들을 뺀 값을 씁니다 (라벨 전체 기준은 {a.auroc.toFixed(3)}).</>
-        ) : null}{" "}
-        {a.holdout_cycle ?? ""} 주기
-        {a.holdout_n ? ` ${a.holdout_n.toLocaleString()}명` : ""} 홀드아웃 측정.
-      </p>
-    </>
+    <div className="detail-acc">
+      <span className="k">정확도</span>
+      <span className="n">{a.headline_auroc.toFixed(3)}</span>
+      <span className={`assess-badge ${tone}`}>{a.grade}</span>
+      <span>{a.measured_on === "미진단자" ? "미진단자 기준" : "전체 기준"} AUROC</span>
+      {a.alert_ppv !== null && a.alert_ppv !== undefined ? (
+        <>
+          <span className="sep">|</span>
+          <span>
+            상위 10% 경보 적중 <strong>{Math.round(a.alert_ppv * 100)}%</strong>
+            {a.alert_sensitivity !== null && a.alert_sensitivity !== undefined ? (
+              <>
+                {" "}
+                · 실제 해당자 <strong>{Math.round(a.alert_sensitivity * 100)}%</strong> 발견
+              </>
+            ) : null}
+          </span>
+        </>
+      ) : null}
+    </div>
   );
 }
 
-/** 확률을 읽을 자 — 이 확률대를 실제로 검사하면 학회 기준으로 몇 %가 넘었는가. */
-function AnchorLine({ verdict }: { verdict: DiseaseVerdict }) {
-  const a = verdict.reference?.rule_anchor;
-  if (!a) {
-    return (
-      <p className="detail-cite">
-        이 질환은 규칙 엔진에 대응 영역이 없어 학회 기준 대조를 붙이지 못했습니다. 위 비율로만 읽으십시오.
-      </p>
-    );
-  }
-  const people = Math.round(a.rule_positive_rate * 100);
-  const average =
-    a.overall_rate === null || a.overall_rate === undefined ? undefined : Math.round(a.overall_rate * 100);
-  const tone =
-    a.lift === null || a.lift === undefined ? "low" : a.lift >= 1.3 ? "high" : a.lift >= 1.05 ? "moderate" : "low";
+/**
+ * 이 확률대를 실제로 검사하면 학회 기준으로 몇 명이 넘는가 — **한 줄로 합쳤다.**
+ *
+ * ## 같은 문장이 두 번 있었다
+ *
+ * 고혈압 모달 실측(2026-09-11)에서 곁칸에 이렇게 떴다.
+ *
+ *     이 점수대의 100명 중 68명이 대한고혈압학회 기준 '주의' 이상입니다.
+ *     같은 검사를 받은 사람 전체는 55명 · 1.23배
+ *     …
+ *     이 확률대의 100명을 실제로 검사했을 때 68명이 대한고혈압학회 기준
+ *     '주의' 이상이었습니다. (같은 검사를 받은 사람 전체 평균 55명 · 1.23배)
+ *
+ * 세 숫자(68 · 55 · 1.23)가 글자 하나까지 같다. 우연이 아니라 **서버에서 한
+ * 값이기 때문이다** — `risk.py` 의 `medical_band()` 가 `interpret()` 를 불러
+ * `rule_positive_rate` 를 자기 `rate` 로 쓰고 `overall_rate` 를 자기 `baseline`
+ * 으로 쓴다. 화면이 그 하나를 `medical` 과 `rule_anchor` 두 이름으로 받아 두 번
+ * 그리고 있었다. 읽는 사람에게는 "숫자가 두 개인가, 같은 건가" 만 남는다.
+ *
+ * 그래서 앵커가 정본인 경우(`anchored_on_rule_engine`)에는 문장을 하나만 낸다.
+ * 버리는 쪽에서 좋았던 것 둘은 가져온다 — "실제로 검사하면" 이라는 구체적인
+ * 표현과, 평균 대비 배수를 색으로 말하는 배지다.
+ */
+function MedicalLine({ medical }: { medical: MedicalRisk }) {
+  const people = Math.round(medical.rate * 100);
+  const baseline =
+    medical.baseline === null || medical.baseline === undefined ? undefined : Math.round(medical.baseline * 100);
+  const lift = medical.lift;
+  const tone = lift === null || lift === undefined ? "low" : lift >= 1.3 ? "high" : lift >= 1.05 ? "moderate" : "low";
   return (
     <p className="detail-peer">
-      이 확률대의 <strong>100명</strong>을 실제로 검사했을 때 <span className={`assess-badge ${tone}`}>{people}명</span>
-      이 {a.society} 기준 '{LEVEL_NAME[a.positive_from] ?? a.positive_from}' 이상이었습니다.
-      {average !== undefined && a.lift !== null && a.lift !== undefined ? (
+      이 점수대의 <strong>100명</strong>을 실제로 검사하면 <span className={`assess-badge ${tone}`}>{people}명</span>이{" "}
+      {medical.basis}입니다.
+      {baseline !== undefined ? (
         <span className="assess-muted">
           {" "}
-          (같은 검사를 받은 사람 전체 평균 {average}명 · <strong>{a.lift}배</strong>)
+          같은 검사를 받은 사람 전체는 {baseline}명
+          {lift !== null && lift !== undefined ? (
+            <>
+              {" "}
+              · <strong>{lift}배</strong>
+            </>
+          ) : null}
         </span>
       ) : null}
     </p>
@@ -236,23 +237,25 @@ export function Evidence({
   // 카드 키가 아니라 **번들 타깃**으로 찾는다. `liver` 카드는 `liver_enzyme_high`
   // 번들이 답하므로 카드 키로 찾으면 이 블록이 조용히 빈다.
   const ignored = ignoredInputs(ref.model_target ?? verdict.key, ref.tier, values, models);
-  const percentile = ref.peer_percentile;
   const superseded = Boolean(verdict.superseded_by);
 
   return (
     <div className="assess-evidence">
+      {/* **한 문장으로 줄였다.** 예전에는 세 문장이었는데("…위 판정은 측정값으로
+          나왔고, 이 확률은 검사 전 선별용이라 같은 뜻이 아닙니다"), "위 판정은
+          측정값으로 나왔다" 는 바로 옆 근거 카드가 이미 두 번 말한다 — 엔진 태그와
+          "어느 엔진이 왜". 여기서 답할 것은 **이 숫자를 어떻게 읽느냐** 하나다. */}
       <p className="detail-meta">
         {superseded ? (
           <>
-            아래는 <strong>규칙 엔진에 밀린 ML 예측</strong>입니다. 위 판정은 측정값으로 나왔고, 이 확률은 검사 전 선별용이라
-            같은 뜻이 아닙니다.
+            <strong>규칙 엔진에 밀린 ML 예측</strong>입니다 — 검사 전 선별용이라 위 판정과 같은 뜻이 아닙니다.
           </>
         ) : (
           <>
             <strong>ML 시드 앙상블</strong> 예측입니다 — 발병 예측이 아니라 지금 검사받으면 기준을 넘을 가능성입니다.
           </>
         )}
-        {ref.tier === "lab" ? " 검사값을 써서 정밀형으로 채점했습니다." : " 검사값 없이 일반형으로 채점했습니다."}
+        {ref.tier === "lab" ? " 검사값으로 채점한 정밀형." : " 검사값 없이 채점한 일반형."}
       </p>
 
       <div className="detail-risk">
@@ -265,62 +268,15 @@ export function Evidence({
       {medical ? (
         <>
           <Gauge medical={medical} />
-          <p className="detail-peer">
-            이 점수대의 <strong>100명</strong> 중 <strong>{Math.round(medical.rate * 100)}명</strong>이 {medical.basis}
-            입니다.
-            {medical.baseline !== null && medical.baseline !== undefined ? (
-              <span className="assess-muted">
-                {" "}
-                같은 검사를 받은 사람 전체는 {Math.round(medical.baseline * 100)}명
-                {medical.lift !== null && medical.lift !== undefined ? (
-                  <>
-                    {" "}
-                    · <strong>{medical.lift}배</strong>
-                  </>
-                ) : null}
-              </span>
-            ) : null}
-          </p>
-          <p className="detail-cite">
-            {medical.anchored_on_rule_engine
-              ? "규칙 엔진(국내 학회 임계값)을 같은 확률대의 NHANES 응답자에게 실제로 돌려서 센 값입니다. 이 사람의 측정값이 아니라 같은 점수를 받은 집단의 비율입니다."
-              : "모델 확률 자체가 그 비율입니다 — 라벨이 곧 의학 기준이고 보정을 거쳤습니다."}
-          </p>
+          <MedicalLine medical={medical} />
         </>
       ) : null}
 
-      {percentile !== null && percentile !== undefined ? (
-        <p className="detail-meta">
-          {ref.peer_group} 중 상위 {(100 - percentile).toFixed(0)}%
-          {ref.peer_ratio !== null && ref.peer_ratio !== undefined ? ` (동년배 평균의 ${ref.peer_ratio}배)` : ""} —
-          나이가 많을수록 유병률이 오르므로 이 값으로 안심하면 안 됩니다. 그래서 등급에는 쓰지 않습니다.
-        </p>
-      ) : null}
-
-      <AnchorLine verdict={verdict} />
       <AccuracyLine verdict={verdict} />
 
-      {ref.top_factors && ref.top_factors.length > 0 ? (
-        <>
-          <p className="detail-meta">기여가 큰 항목 (로그오즈)</p>
-          <ul className="detail-factors">
-            {ref.top_factors.map((factor) => (
-              <li key={factor.feature}>
-                {FIELD_LABELS[factor.feature] ?? factor.feature}{" "}
-                <span className="num">
-                  {factor.contribution > 0 ? "+" : ""}
-                  {factor.contribution.toFixed(2)}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="detail-cite">
-            개선 조언으로 그대로 읽으면 안 됩니다 — 단면 데이터에서는 금연·절주가 위험을 올리는 방향으로 나옵니다
-            (이미 아픈 사람이 끊었기 때문입니다).
-          </p>
-        </>
-      ) : null}
-
+      {/* 넣고도 안 쓰인 입력은 접지 않는다. 나머지와 달리 이건 **사용자가 지금 할 수
+          있는 일**에 대한 답이라("혈압을 더 넣으면 이 확률이 정확해지나"), 접어 두면
+          묻는 자리에 답이 없다. */}
       {ignored.length > 0 ? (
         <p className="detail-ignored">
           <strong>
@@ -330,6 +286,98 @@ export function Evidence({
           {ignored.join(" · ")} — 값을 넣어도 이 확률에는 반영되지 않습니다.
         </p>
       ) : null}
+
+      <EvidenceMethod verdict={verdict} />
     </div>
+  );
+}
+
+/**
+ * "이 숫자는 어떻게 나왔나" — 방법과 단서를 접어 두는 자리.
+ *
+ * ## 왜 접는가
+ *
+ * 여기 있던 문장은 하나하나 옳고 지울 수 없는 것들이다. 문제는 **같이 놓였을 때**
+ * 였다. 곁칸이 이렇게 흘렀다 — 문장 · 큰 숫자 · 게이지 · 문장 · 잔글씨 · 잔글씨 ·
+ * 문장 · 숫자 줄 · 잔글씨 · 목록 · 잔글씨 · 잔글씨. 열넷 중 여덟이 회색 잔글씨라
+ * 어느 것이 답이고 어느 것이 주석인지 굵기로 갈리지 않았고, 스크롤 두 번이면 정작
+ * 위의 확률과 게이지가 화면 밖으로 나갔다.
+ *
+ * 그래서 **읽는 시간이 다른 것을 갈랐다.** 밖에 남는 것은 훑는 값이고(확률 ·
+ * 게이지 · 비율 한 줄 · 정확도 · 안 쓴 입력), 안으로 들어가는 것은 한 번 읽으면
+ * 되는 방법 설명이다. 지우는 것이 아니다 — ADR-009 §4 는 밀려난 값을 **내리라**고
+ * 했지 없애라고 하지 않았고, 접이는 그 "내린다" 의 한 단이다.
+ *
+ * `<details>` 라서 Ctrl+F 와 스크린 리더 훑기에는 그대로 걸린다. 카드 쪽 접이를
+ * 없앤 결정과 부딪히지 않는 이유도 이것이다 — 그때 접혀 있던 것은 **숫자 전체**
+ * 였고 여기서 접는 것은 그 숫자의 **주석**이다.
+ */
+function EvidenceMethod({ verdict }: { verdict: DiseaseVerdict }) {
+  const ref = verdict.reference;
+  if (!ref) return null;
+  const medical = ref.medical;
+  const accuracy = ref.accuracy;
+  const percentile = ref.peer_percentile;
+  const factors = ref.top_factors;
+  const hasPercentile = percentile !== null && percentile !== undefined;
+  if (!medical && !accuracy && !hasPercentile && !(factors && factors.length > 0)) return null;
+
+  return (
+    <details className="detail-how">
+      <summary>이 숫자는 어떻게 나왔나요</summary>
+
+      {medical ? (
+        <p className="detail-cite">
+          <b>비율</b> ·{" "}
+          {medical.anchored_on_rule_engine
+            ? "규칙 엔진(국내 학회 임계값)을 같은 확률대의 NHANES 응답자에게 실제로 돌려서 센 값입니다. 이 사람의 측정값이 아니라 같은 점수를 받은 집단의 비율입니다."
+            : "모델 확률 자체가 그 비율입니다 — 라벨이 곧 의학 기준이고 보정을 거쳤습니다."}
+        </p>
+      ) : null}
+
+      {hasPercentile ? (
+        <p className="detail-cite">
+          <b>또래 비교</b> · {ref.peer_group} 중 상위 {(100 - (percentile as number)).toFixed(0)}%
+          {ref.peer_ratio !== null && ref.peer_ratio !== undefined ? ` (동년배 평균의 ${ref.peer_ratio}배)` : ""}. 나이가
+          많을수록 유병률이 오르므로 이 값으로 안심하면 안 됩니다. 그래서 등급에는 쓰지 않습니다.
+        </p>
+      ) : null}
+
+      {accuracy ? (
+        <p className="detail-cite">
+          <b>정확도</b> · AUROC 는 "100명 중 몇 명을 맞힌다"가 아닙니다. 해당자와 비해당자를 한 명씩 뽑았을 때
+          해당자에게 더 높은 점수를 줄 확률입니다.
+          {accuracy.auroc_undiagnosed !== null && accuracy.auroc_undiagnosed !== undefined ? (
+            <>
+              {" "}
+              이미 진단받은 사람을 맞히는 건 쉬우므로 그들을 뺀 값을 씁니다 (라벨 전체 기준은{" "}
+              {accuracy.auroc.toFixed(3)}).
+            </>
+          ) : null}{" "}
+          {accuracy.holdout_cycle ?? ""} 주기
+          {accuracy.holdout_n ? ` ${accuracy.holdout_n.toLocaleString()}명` : ""} 홀드아웃 측정.
+        </p>
+      ) : null}
+
+      {factors && factors.length > 0 ? (
+        <>
+          <p className="detail-cite">
+            <b>기여가 큰 항목</b> · 로그오즈입니다. 개선 조언으로 그대로 읽으면 안 됩니다 — 단면 데이터에서는
+            금연·절주가 위험을 올리는 방향으로 나옵니다 (이미 아픈 사람이 끊었기 때문입니다).
+          </p>
+          <ul className="detail-factors">
+            {factors.map((factor) => (
+              <li key={factor.feature}>
+                {FIELD_LABELS[factor.feature] ?? factor.feature}{" "}
+                <span className="num">
+                  {factor.contribution > 0 ? "+" : ""}
+                  {factor.contribution.toFixed(2)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </details>
   );
 }
