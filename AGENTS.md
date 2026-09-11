@@ -36,6 +36,7 @@
 11. **구조 변경과 기능 추가를 한 커밋에 섞지 않는다(Tidy First).** 리팩토링은 `refactor:`, 기능은 `feat:`, 수정은 `fix:`로 원자적 분리.
 12. **파이썬 타이핑은 3.10+ 내장 구문 준수.** `int | None`, `list[T]` 네이티브 제네릭 사용. `typing.Optional`/`Union`/`List` 및 3.12+ 전용 PEP 695 금지.
 13. **RESTful API & 관측성 표준 준수.** 백엔드 라우터/엔드포인트 작성 시 `SYSTEM_DESIGN.md` 8번 섹션 및 `.agents/skills/rest-api-design/` 준수. 동사 배제·복수형 명사 컬렉션, 상태 코드(201+Location, 202, 204), RFC 7807 에러 포맷(`application/problem+json`), `X-Request-ID` 전파, 로그 내 의료 민감정보(PHI) 마스킹 필수.
+14. **프런트엔드 작업 시 `DESIGN.md` 단일 진실 원천(SSOT) 준수.** 프런트엔드(UI/UX·컴포넌트·스타일·타이포그래피) 수정 시 반드시 `DESIGN.md`를 먼저 확인한다. 임의의 폰트/인라인 색상/새 키 컬러 추가 금지. 2색 이하 키 컬러(Primary Blue `#1d4fb8`, Secondary Slate `#5b687e`), 타이포그래피 스케일(Inter/Pretendard, 32/24/18/16/14/12/11px), 스켈레톤 UI 표준, 터치 타깃 44px을 엄격 준수한다.
 
 ## 검증 — 같은 순서로, 숫자로
 

@@ -1,5 +1,24 @@
 # 이어봄 프론트엔드
 
+## 디자인 시스템 준수 규칙 (DESIGN.md SSOT)
+
+프론트엔드 작업(컴포넌트, 스타일, 레이아웃, UI/UX) 시 루트의 [`DESIGN.md`](../DESIGN.md)를 **단일 진실 원천(SSOT)**으로 준수한다.
+
+1. **키 컬러 2개 이하 유지**:
+   - Primary Blue: `#1d4fb8` (`--blue-700`), hover `#173d8f` (`--blue-800`), light `#eaf1ff` (`--blue-100`), container `#f4f7ff` (`--blue-50`)
+   - Secondary Slate: `#5b687e` (`--muted`), strong `#45536c` (`--muted-strong`)
+   - Neutral/Ink: `#172033` (`--ink`), Surface: `#ffffff`, Background: `#f5f7fb`
+   - 상태 색상(초록/주황/빨강)은 의학적 선별 판정과 차트에만 제한 사용하며 일반 장식/버튼/UI에 혼용 금지.
+2. **타이포그래피 통일**:
+   - `Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
+   - 스케일 8단계: Headline(32/24/18px), Body(16/14/12px), Label(13/11px). 임의의 폰트/사이즈 정의 금지.
+3. **스켈레톤 UI 표준**:
+   - 단순 텍스트("불러오는 중")나 스피너 대신 전역 `Skeleton` 컴포넌트 및 쉬머 애니메이션을 적용한다.
+4. **접근성 터치 타깃**:
+   - 모든 대화형 요소는 최소 `44px × 44px` 조작 영역 확보.
+
+---
+
 ## 건강기록 등록
 
 Manyfast의 `F-HTRDKQ 건강 기록 등록`과 상세 명세 4개를 구현한 첫 로컬 도메인 화면이다.
