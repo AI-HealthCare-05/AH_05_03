@@ -114,7 +114,7 @@
   gap: 4px;
   border: 0;
   border-radius: 8px;
-  background: #10b981;
+  background: var(--blue-700, #1d4fb8);
   color: white;
   padding: 8px 10px;
   font-size: 12px;
@@ -124,7 +124,7 @@
 }
 
 .new-chat-button span { font-size: 17px; line-height: 12px; }
-.new-chat-button:hover { background: #059669; }
+.new-chat-button:hover { background: var(--blue-800, #173d8f); }
 
 .chat-session-list ul {
   list-style: none;
@@ -312,13 +312,13 @@
   font-weight: 600;
   border: 0;
   border-radius: 6px;
-  background: #059669;
+  background: var(--blue-700, #1d4fb8);
   color: #ffffff;
   cursor: pointer;
 }
 
 .rename-save-btn:hover {
-  background: #047857;
+  background: var(--blue-800, #173d8f);
 }
 
 .rename-cancel-btn {
@@ -368,9 +368,9 @@
 .assistant-avatar {
   font-size: 15px;
   font-weight: 700;
-  color: #065f46;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+  color: var(--blue-700, #1d4fb8);
+  background: var(--blue-50, #f4f7ff);
+  border: 1px solid var(--blue-100, #eaf1ff);
   border-radius: 50%;
   width: 38px;
   height: 38px;
@@ -399,8 +399,8 @@
 }
 
 .target-profile-pill {
-  background-color: #e0e7ff;
-  color: #3730a3;
+  background-color: var(--blue-100, #eaf1ff);
+  color: var(--blue-700, #1d4fb8);
   padding: 2px 7px;
   border-radius: 4px;
   font-size: 11px;
@@ -441,9 +441,9 @@
 }
 
 .assistant-new-chat-header-btn {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  color: #047857;
+  background: var(--blue-50, #f4f7ff);
+  border: 1px solid var(--blue-100, #eaf1ff);
+  color: var(--blue-700, #1d4fb8);
   font-size: 12px;
   font-weight: 600;
   padding: 5px 10px;
@@ -454,8 +454,8 @@
 }
 
 .assistant-new-chat-header-btn:hover {
-  background: #059669;
-  border-color: #059669;
+  background: var(--blue-700, #1d4fb8);
+  border-color: var(--blue-700, #1d4fb8);
   color: #ffffff;
 }
 
@@ -513,12 +513,12 @@
 .msg-avatar {
   font-size: 13px;
   font-weight: 700;
-  color: #065f46;
+  color: var(--blue-700, #1d4fb8);
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background-color: #ecfdf5;
-  border: 1px solid #a7f3d0;
+  background-color: var(--blue-50, #f4f7ff);
+  border: 1px solid var(--blue-100, #eaf1ff);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -542,7 +542,7 @@
 }
 
 .user .msg-bubble {
-  background: #047857;
+  background: var(--blue-700, #1d4fb8);
   color: #ffffff;
   border-bottom-right-radius: 4px;
 }
@@ -567,7 +567,7 @@
 .loading-dots {
   display: flex;
   gap: 4px;
-  color: #10b981;
+  color: var(--blue-600, #2463eb);
   font-size: 20px;
   line-height: 1;
 }
@@ -610,10 +610,10 @@
 /* 확인 카드 (Draft Confirmation Cards) */
 .draft-confirm-card {
   background-color: #ffffff;
-  border: 1.5px solid #10b981;
+  border: 1.5px solid var(--blue-600, #2463eb);
   border-radius: 12px;
   padding: 14px;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1);
+  box-shadow: 0 4px 12px rgba(29, 79, 184, 0.08);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -688,7 +688,7 @@
 
 .card-inputs input:focus,
 .card-inputs textarea:focus {
-  border-color: #10b981;
+  border-color: var(--blue-600, #2463eb);
 }
 
 .pain-tool-grid {
@@ -718,7 +718,7 @@
 .confirm-save-btn {
   width: 100%;
   box-sizing: border-box;
-  background-color: #10b981;
+  background-color: var(--blue-700, #1d4fb8);
   color: #ffffff;
   border: none;
   padding: 10px;
@@ -730,7 +730,7 @@
 }
 
 .confirm-save-btn:hover:not(:disabled) {
-  background-color: #059669;
+  background-color: var(--blue-800, #173d8f);
 }
 
 .confirm-save-btn:disabled {
@@ -903,9 +903,9 @@
 }
 
 .assistant-attach-btn:hover:not(:disabled) {
-  background-color: #ecfdf5;
-  border-color: #10b981;
-  color: #065f46;
+  background-color: var(--blue-50, #f4f7ff);
+  border-color: var(--blue-600, #2463eb);
+  color: var(--blue-700, #1d4fb8);
 }
 
 .assistant-attach-btn:disabled {
@@ -989,11 +989,11 @@
 }
 
 .assistant-input-form input:focus {
-  border-color: #10b981;
+  border-color: var(--blue-600, #2463eb);
 }
 
 .assistant-send-btn {
-  background-color: #10b981;
+  background-color: var(--blue-700, #1d4fb8);
   color: #ffffff;
   border: none;
   padding: 0 18px;
@@ -1006,7 +1006,7 @@
 }
 
 .assistant-send-btn:hover:not(:disabled) {
-  background-color: #059669;
+  background-color: var(--blue-800, #173d8f);
 }
 
 .assistant-send-btn:disabled {
@@ -1382,7 +1382,7 @@
 
 .ocr-edit-fields input:focus,
 .ocr-edit-fields textarea:focus {
-  border-color: #10b981;
+  border-color: var(--blue-600, #2463eb);
 }
 
 .compact-row {
@@ -1441,7 +1441,7 @@
 .trend-chart-kicker {
   font-size: 11px;
   font-weight: 700;
-  color: #10b981;
+  color: var(--blue-700, #1d4fb8);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -2178,8 +2178,8 @@
 
 /* 식품영양성분 카드 스타일 */
 .food-nutrition-card {
-  border-left: 4px solid #10b981;
-  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+  border-left: 4px solid var(--blue-700, #1d4fb8);
+  background: linear-gradient(135deg, var(--blue-50, #f4f7ff) 0%, #ffffff 100%);
   border-radius: 12px;
   padding: 16px;
   margin-top: 10px;
@@ -2205,8 +2205,8 @@
 }
 
 .food-nutrition-badge {
-  background: #d1fae5;
-  color: #065f46;
+  background: var(--blue-100, #eaf1ff);
+  color: var(--blue-700, #1d4fb8);
   font-size: 11px;
   font-weight: 700;
   padding: 3px 8px;
@@ -2257,8 +2257,8 @@
 }
 
 .food-nutrition-tab-btn.active {
-  background: #10b981;
-  border-color: #10b981;
+  background: var(--blue-700, #1d4fb8);
+  border-color: var(--blue-700, #1d4fb8);
   color: #ffffff;
 }
 

@@ -231,13 +231,14 @@ export function HomePage() {
   const familyHistoryDialogVisible = familyHistoryDialogOpen
     || Boolean(routeProfileId && location.pathname.endsWith("/family-history"));
 
+  const activeProfileId = selectedProfile?.id;
   useEffect(() => {
-    if (!selectedProfile) return;
-    const timeout = window.setTimeout(() => void refreshDashboard(selectedProfile.id), 0);
+    if (!activeProfileId) return;
+    const timeout = window.setTimeout(() => void refreshDashboard(activeProfileId), 0);
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [refreshDashboard, selectedProfile]);
+  }, [refreshDashboard, activeProfileId]);
   /**
    * 다른 탭·다른 기기에서 바뀐 것을 **돌아왔을 때** 따라잡는다.
    *

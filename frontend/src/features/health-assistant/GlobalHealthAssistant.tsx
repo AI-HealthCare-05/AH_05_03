@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import { LocalDomainContext } from "../../app/localDomainContext";
 import type { FamilyProfile } from "../../shared/local/domainContracts";
+import { ChatLoadingSkeleton } from "../../shared/ui/Skeleton";
 import { HealthAssistantDrawer } from "./HealthAssistantDrawer";
 import bomiChickIcon from "./assets/bomi-chick.png";
 import "./globalHealthAssistant.css";
@@ -268,7 +269,7 @@ export function GlobalHealthAssistant() {
           </div>
 
           {/* 챗봇 메신저 본체 */}
-          <Suspense fallback={<div className="assistant-loading-card">봄이 대화를 준비하는 중…</div>}>
+          <Suspense fallback={<ChatLoadingSkeleton />}>
             <HealthAssistantDrawer
               key={activeProfile.id}
               profile={activeProfile}
