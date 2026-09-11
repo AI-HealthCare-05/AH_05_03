@@ -163,7 +163,7 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.LLM_PROVIDER_FAILED: "대화 응답을 받지 못했습니다. 잠시 후 다시 시도해 주세요.",
     ErrorCode.LLM_TIMEOUT: "응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.",
     ErrorCode.AUTH_REQUIRED: "로그인이 필요합니다.",
-    ErrorCode.CREDENTIALS_INVALID: "이메일 또는 비밀번호가 올바르지 않습니다.",
+    ErrorCode.CREDENTIALS_INVALID: "로그인에 실패하였습니다. 이메일이나 비밀번호를 다시 확인해주세요.",
     ErrorCode.EMAIL_ALREADY_REGISTERED: "이미 사용중인 이메일입니다.",
     ErrorCode.TOKEN_INVALID: "유효하지 않은 토큰입니다.",
     ErrorCode.TOKEN_EXPIRED: "토큰이 만료되었습니다. 다시 로그인해 주세요.",
