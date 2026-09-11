@@ -314,7 +314,7 @@ describe("AccountPage", () => {
     await user.click(await screen.findByRole("button", { name: "초대 수락" }));
 
     expect(await screen.findByText("초대를 수락하고 서비스 계정을 연결했습니다. 건강정보를 받으려면 기기 연결이 필요합니다.")).toBeInTheDocument();
-    expect(accept).toHaveBeenCalledWith(receivedInvitation.id, token);
+    expect(accept).toHaveBeenCalledWith(receivedInvitation.id, token, receivedInvitation.row_version);
     expect(createLink).toHaveBeenCalledWith(receivedInvitation.id, receivedInvitation.target_profile_ref);
   });
 
@@ -375,7 +375,7 @@ describe("AccountPage", () => {
     // 새 가정으로 이동 및 수락 클릭
     await user.click(within(dialog).getByRole("button", { name: "새 가정으로 이동 및 수락" }));
 
-    expect(accept).toHaveBeenCalledWith(receivedInvitation.id, token);
+    expect(accept).toHaveBeenCalledWith(receivedInvitation.id, token, receivedInvitation.row_version);
     expect(await screen.findByText("초대를 수락하고 새 가족 가정으로 이동했습니다.")).toBeInTheDocument();
   });
 
@@ -463,7 +463,7 @@ describe("AccountPage", () => {
     renderAccountPage();
     await user.click(await screen.findByRole("button", { name: "거절" }));
 
-    expect(declineSpy).toHaveBeenCalledWith("invitation-id", undefined);
+    expect(declineSpy).toHaveBeenCalledWith("invitation-id", receivedInvitation.row_version, undefined);
     expect(await screen.findByText("초대를 거절했습니다.")).toBeInTheDocument();
   });
 

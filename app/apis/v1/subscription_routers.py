@@ -1,12 +1,16 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import Response
 
 from app.core.errors import ErrorCode
+from app.dependencies.concurrency import IdempotencyKeyHeader, check_idempotency, remember_idempotent
 from app.dependencies.security import require_active_account
+from app.dependencies.services import get_idempotency_store
 from app.dtos.envelope import ApiResponse, error_responses
 from app.dtos.subscriptions import PlanChangeData, PlanChangeRequest, SubscriptionData
 from app.models.service_accounts import ServiceAccount
+from app.services.idempotency import IdempotencyStore
 from app.services.subscriptions import SubscriptionService
 
 subscription_router = APIRouter(tags=["subscription"])
@@ -45,6 +49,7 @@ async def get_subscription(
         ErrorCode.SUBSCRIPTION_NOT_FOUND,
         ErrorCode.SUBSCRIPTION_INACTIVE,
         ErrorCode.PLAN_CHANGE_NOT_ALLOWED,
+        ErrorCode.IDEMPOTENCY_KEY_REUSED,
     ),
     summary="플랜 변경 요청",
     description="결제 연동은 범위 밖이다. 요청 즉시 상태를 반영한다.",
@@ -53,8 +58,24 @@ async def change_subscription(
     request: PlanChangeRequest,
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     subscription_service: Annotated[SubscriptionService, Depends(SubscriptionService)],
-) -> ApiResponse[PlanChangeData]:
-    return ApiResponse(
+    idem_store: Annotated[IdempotencyStore, Depends(get_idempotency_store)],
+    idempotency_key: IdempotencyKeyHeader = None,
+) -> ApiResponse[PlanChangeData] | Response:
+    payload = request.model_dump(mode="json")
+    cached = await check_idempotency(idem_store, account.id, "subscription.change", idempotency_key, payload)
+    if cached is not None:
+        return cached
+    response = ApiResponse(
         data=await subscription_service.request_plan_change(account.id, request),
         message="구독 플랜이 변경되었습니다.",
     )
+    await remember_idempotent(
+        idem_store,
+        account.id,
+        "subscription.change",
+        idempotency_key,
+        payload,
+        status_code=status.HTTP_200_OK,
+        body=response.model_dump(mode="json"),
+    )
+    return response

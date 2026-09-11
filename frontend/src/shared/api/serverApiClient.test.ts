@@ -112,7 +112,30 @@ describe("ServerApiClient", () => {
     const client = new ServerApiClient(fetcher);
     await client.login("member@example.com", "Password123!");
 
-    await expect(client.closeHousehold("household-id")).resolves.toBeUndefined();
+    await expect(client.closeHousehold("household-id", 1)).resolves.toBeUndefined();
+  });
+
+  it("가정 폐쇄·초대 취소는 Idempotency-Key와 If-Match를 함께 보낸다", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(success({ access_token: "access", token_type: "bearer", expires_in: 900 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(success({ id: "invitation-id", status: "cancelled" }));
+    const client = new ServerApiClient(fetcher);
+    await client.login("member@example.com", "Password123!");
+
+    await client.closeHousehold("household-id", 3);
+    const closeHeaders = new Headers(fetcher.mock.calls[1]?.[1]?.headers);
+    expect(closeHeaders.get("If-Match")).toBe('"3"');
+    expect(closeHeaders.get("Idempotency-Key")).toBeTruthy();
+
+    await client.cancelInvitation("invitation-id", 7);
+    const cancelHeaders = new Headers(fetcher.mock.calls[2]?.[1]?.headers);
+    expect(cancelHeaders.get("If-Match")).toBe('"7"');
+    expect(cancelHeaders.get("Idempotency-Key")).toBeTruthy();
+
+    // 매 호출마다 새 키를 만든다 — 같은 키 재사용은 "재시도"라는 별개 의미다.
+    expect(closeHeaders.get("Idempotency-Key")).not.toBe(cancelHeaders.get("Idempotency-Key"));
   });
 
   it("프로필 및 건강 기록 CRUD 요청을 Bearer 인증과 함께 올바른 경로로 전달한다", async () => {

@@ -222,7 +222,7 @@ export function AccountPage() {
     isTransfer = false,
   ) {
     await run(async () => {
-      await serverApiClient.acceptInvitation(invitationId, token);
+      await serverApiClient.acceptInvitation(invitationId, token, invitation.row_version);
       try {
         await linkAcceptedInvitation(invitationId, invitation.target_profile_ref);
       } catch (caught) {
@@ -279,8 +279,10 @@ export function AccountPage() {
     const form = new FormData(formElement);
     const invitationId = String(form.get("invitationId"));
     const token = String(form.get("token") || "").trim();
+    const invitation = invitations.received.find((item) => item.id === invitationId);
+    if (!invitation) return;
     await run(async () => {
-      await serverApiClient.declineInvitation(invitationId, token || undefined);
+      await serverApiClient.declineInvitation(invitationId, invitation.row_version, token || undefined);
       await loadAccountData();
       clearInvitationFragment();
       setMessage("초대를 거절했습니다.");
@@ -336,7 +338,7 @@ export function AccountPage() {
         await serverApiClient.leaveHousehold(confirmation.household.id);
         setMessage("가정에서 나왔습니다. 이 가정 구성원과의 연결이 해제되었습니다.");
       } else if (confirmation.kind === "close-household") {
-        await serverApiClient.closeHousehold(confirmation.household.id);
+        await serverApiClient.closeHousehold(confirmation.household.id, confirmation.household.row_version);
         setMessage("가정을 종료했습니다. 구성원의 로컬 건강정보는 삭제되지 않습니다.");
       } else if (confirmation.kind === "transfer-master") {
         await serverApiClient.transferHouseholdMaster(confirmation.household.id, confirmation.targetMember.account_id);
@@ -345,7 +347,7 @@ export function AccountPage() {
         await serverApiClient.deleteHouseholdMembership(confirmation.household.id, confirmation.targetMember.id);
         setMessage("구성원 이력을 삭제했습니다.");
       } else if (confirmation.kind === "cancel-invitation") {
-        await serverApiClient.cancelInvitation(confirmation.invitation.id);
+        await serverApiClient.cancelInvitation(confirmation.invitation.id, confirmation.invitation.row_version);
         if (runtime) {
           const profile = profiles.find((item) => item.opaqueServerRef === confirmation.invitation.target_profile_ref);
           if (profile) await runtime.profiles.setServerReference(profile.id, null, "retired");
@@ -353,7 +355,7 @@ export function AccountPage() {
         }
         setMessage("보낸 초대를 취소했습니다.");
       } else if (confirmation.kind === "unlink-profile") {
-        await serverApiClient.unlinkProfileLink(confirmation.link.id);
+        await serverApiClient.unlinkProfileLink(confirmation.link.id, confirmation.link.row_version);
         setMessage("서비스 계정 연결을 해제했습니다. 프로필과 건강기록 자체는 지우지 않았습니다.");
       } else if (confirmation.kind === "switch-household-on-accept") {
         if (confirmation.isSolo) {

@@ -1,13 +1,71 @@
-import { Suspense, useContext, useEffect, useMemo, useState } from "react";
+import { Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { LocalDomainContext } from "../../app/localDomainContext";
 import type { FamilyProfile } from "../../shared/local/domainContracts";
 import { HealthAssistantDrawer } from "./HealthAssistantDrawer";
+import bomiChickIcon from "./assets/bomi-chick.png";
 import "./globalHealthAssistant.css";
 
 const ASSISTANT_STORAGE_KEY = "ieobom:global-assistant-open";
 const PROFILE_STORAGE_KEY = "ieobom:selected-profile-id";
+
+// 말풍선 툴팁은 처음 뜬 뒤 이 주기(3분)마다 다른 말을 걸며 다시 나타난다.
+const TOOLTIP_REPEAT_MS = 3 * 60 * 1000;
+const TOOLTIP_VISIBLE_MS = 8000;
+
+const TOOLTIP_MESSAGES = [
+  "봄이에게 무엇이든 물어보세요!",
+  "오늘 혈압 재셨다면 숫자만 알려주세요.",
+  "복약하셨다면 편하게 말씀해 주세요, 기록해 둘게요.",
+  "운동한 종류랑 횟수만 툭 던져주셔도 돼요.",
+  "검진표나 서류 사진 있으면 올려보세요.",
+  "궁금한 증상이 있으면 언제든 물어보세요.",
+];
+
+// 페이지 맥락별로, 그 화면에서 실제로 할 수 있는 일을 짧게 안내하는 말.
+// 각 화면의 실제 버튼·기능(구성원 추가, 검진표 인식, 3D 모델 통증 표시 등)에 맞춰 둔다.
+const CONTEXT_TOOLTIP_MESSAGES: Record<string, string[]> = {
+  "가족 홈": [
+    "새 가족 구성원을 추가하거나 프로필을 눌러 전환해보세요.",
+    "건강기록 작성으로 직접 입력하거나 검진표를 올려보세요.",
+  ],
+  "통증 다이어리": [
+    "오늘 통증 부위와 강도를 기록해보세요.",
+    "3D 모델에서 부위를 짚어 표시할 수도 있어요.",
+  ],
+  "질환 예측": [
+    "검진표 사진을 올리면 수치를 자동으로 읽어 채워드려요.",
+    "판정하기를 누르면 질환별 예측 결과를 볼 수 있어요.",
+  ],
+  "건강 데이터": [
+    "기간을 골라 체중·혈압·혈당 변화 그래프를 확인해보세요.",
+    "지난 검진 이력에서 원본을 보거나 수치를 고쳐 다시 판정할 수 있어요.",
+  ],
+  "계정 관리": [
+    "가족을 이메일로 초대하거나 구독 플랜을 확인해보세요.",
+    "건강기록 백업 파일을 내려받을 수 있어요.",
+  ],
+};
+
+// 3분 주기의 심심풀이 말걸기: 페이지 맥락 + 일반 안내를 섞어 다양하게 고른다.
+function pickTooltipMessage(prevMessage: string, contextLabel: string | undefined): string {
+  const pool = contextLabel && CONTEXT_TOOLTIP_MESSAGES[contextLabel]
+    ? [...TOOLTIP_MESSAGES, ...CONTEXT_TOOLTIP_MESSAGES[contextLabel]]
+    : TOOLTIP_MESSAGES;
+  const candidates = pool.filter((message) => message !== prevMessage);
+  return candidates[Math.floor(Math.random() * candidates.length)] ?? pool[0];
+}
+
+// 페이지 도착 직후 말걸기: "여기서 뭘 할 수 있는지" 를 우선 알려준다 — 이 화면
+// 전용 안내가 있으면 그 안에서만 고르고, 없는 화면(예: 개발용 라우트)에서는
+// 일반 안내로 대신한다.
+function pickContextArrivalMessage(prevMessage: string, contextLabel: string | undefined): string {
+  const contextPool = contextLabel ? CONTEXT_TOOLTIP_MESSAGES[contextLabel] : undefined;
+  const pool = contextPool && contextPool.length > 0 ? contextPool : TOOLTIP_MESSAGES;
+  const candidates = pool.filter((message) => message !== prevMessage);
+  return candidates[Math.floor(Math.random() * candidates.length)] ?? pool[0];
+}
 
 export function GlobalHealthAssistant() {
   const localDomain = useContext(LocalDomainContext);
@@ -27,6 +85,7 @@ export function GlobalHealthAssistant() {
 
   const [hasUnread, setHasUnread] = useState(true);
   const [showTooltip, setShowTooltip] = useState(true);
+  const [tooltipMessage, setTooltipMessage] = useState(TOOLTIP_MESSAGES[0]);
 
   // 현재 선택된 프로필 (가족 홈이나 다른 화면과 동기화)
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(() => {
@@ -96,7 +155,7 @@ export function GlobalHealthAssistant() {
     if (!isOpen && showTooltip) {
       const timer = setTimeout(() => {
         setShowTooltip(false);
-      }, 8000);
+      }, TOOLTIP_VISIBLE_MS);
       return () => clearTimeout(timer);
     }
   }, [isOpen, showTooltip]);
@@ -112,6 +171,37 @@ export function GlobalHealthAssistant() {
     return undefined;
   }, [location.pathname]);
 
+  // 대화창이 닫혀 있는 동안 3분마다 다른 말을 걸며 다시 말풍선을 띄운다.
+  const isOpenRef = useRef(isOpen);
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  const contextLabelRef = useRef(contextLabel);
+  useEffect(() => {
+    contextLabelRef.current = contextLabel;
+  }, [contextLabel]);
+
+  // 페이지(맥락)가 바뀔 때마다 이 화면에서 할 수 있는 일을 짧게 알려준다.
+  // NavBar 이동은 진짜 새로고침이라(`RootLayout.tsx` 의 `isNavItemActive` 참고)
+  // 컴포넌트가 통째로 다시 마운트되며 이 효과도 처음부터 다시 돈다 — 그래서 첫
+  // 진입과 이후 화면 안 이동(예: 챗봇이 직접 부르는 `navigate()`) 모두 같은
+  // 방식으로 안내된다.
+  useEffect(() => {
+    if (isOpenRef.current) return;
+    setTooltipMessage((prev) => pickContextArrivalMessage(prev, contextLabel));
+    setShowTooltip(true);
+  }, [contextLabel]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (isOpenRef.current) return;
+      setTooltipMessage((prev) => pickTooltipMessage(prev, contextLabelRef.current));
+      setShowTooltip(true);
+    }, TOOLTIP_REPEAT_MS);
+    return () => clearInterval(interval);
+  }, []);
+
   if (!runtime || !activeProfile) {
     return null;
   }
@@ -122,7 +212,7 @@ export function GlobalHealthAssistant() {
       <div className="channel-talk-launcher">
         {showTooltip && !isOpen && (
           <div className="channel-talk-tooltip" role="status">
-            <span>봄이에게 무엇이든 물어보세요!</span>
+            <span>{tooltipMessage}</span>
           </div>
         )}
         <button
@@ -132,24 +222,8 @@ export function GlobalHealthAssistant() {
           aria-label={isOpen ? "건강 비서 닫기" : "건강 비서 봄이와 대화하기"}
           title={isOpen ? "닫기" : "봄이 · 건강 비서"}
         >
-          {/* 봄이 챗 버블 아이콘 */}
-          <svg
-            className="icon-chat"
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 0 1-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            <circle cx="8.5" cy="12" r="1.1" fill="currentColor" stroke="none" />
-            <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none" />
-            <circle cx="15.5" cy="12" r="1.1" fill="currentColor" stroke="none" />
-          </svg>
+          {/* 봄이 마스코트 아이콘 */}
+          <img src={bomiChickIcon} alt="" className="icon-chat icon-chat-mascot" aria-hidden="true" />
 
           {/* 닫기 X 아이콘 */}
           <svg

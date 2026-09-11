@@ -63,6 +63,10 @@ class Config(BaseSettings):
     REDIS_SOCKET_TIMEOUT: float = 5.0
     REDIS_SOCKET_CONNECT_TIMEOUT: float = 0.5
 
+    # docs/03_api_spec.md §2.4 — 가정·구독·초대·프로필연결·계정폐쇄 재시도 중복 방지.
+    # 헤더가 없어도 요청은 그대로 처리된다(선택 헤더) — 있을 때만 재생·충돌 검사를 한다.
+    IDEMPOTENCY_TTL_SECONDS: int = 24 * 60 * 60
+
     JWT_ALGORITHM: str = "HS256"
     # docs/05_tech_architecture.md 7절 "Access Token은 짧게 유지".
     # Redis 장애 시 fail-open 브레이크글래스의 노출 창을 15분으로 묶는 값이기도 하다.
