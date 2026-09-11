@@ -19,7 +19,7 @@
 | 판정 중재 | 22 · 31 · `app/services/assessment.py` 머리말 |
 | 챗봇·RAG | **43** |
 | OCR·저장 | 24 · 40 · **44** · ADR-010 |
-| 프런트 | `frontend/README.md` · `DESIGN.md` · `.agents/skills/ui-ux-pro-max/` · `features/assessment/contracts.ts`(서버 DTO 손 사본) |
+| 프런트 | `frontend/README.md` · `DESIGN.md` · `.agents/skills/ui-ux-pro-max/` · `.agents/skills/browser-testing/` · `features/assessment/contracts.ts`(서버 DTO 손 사본) |
 
 ## 어기면 조용히 틀리는 것
 
