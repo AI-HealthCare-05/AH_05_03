@@ -54,3 +54,5 @@ modeling/**/__pycache__/
 modeling/artifacts/models_ensemble/
 .agents/hooks.json
 .cursor/hooks.json
+.gemini/
+*.tsbuildinfo
