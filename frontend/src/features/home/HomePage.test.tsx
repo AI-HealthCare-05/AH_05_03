@@ -17,7 +17,7 @@ describe("HomePage", () => {
     renderHomePage();
 
     expect(
-      screen.getByRole("heading", { name: "가족의 건강 흐름을 한곳에서 이어보세요" }),
+      screen.getByRole("heading", { name: "우리 가족의 건강기록" }),
     ).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "첫 구성원 등록" }));
 

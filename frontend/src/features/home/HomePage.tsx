@@ -467,10 +467,35 @@ export function HomePage() {
 
   return (
     <div className="product-page">
+      {/* **머리말 틀을 여기서만 반만 쓰고 있었다.** 나머지 네 화면
+          (`HealthDataPage` · `DataManagementPage` · `AccountPage` ·
+          `AssessmentPage`)은 `page-kicker` · `h1` · 설명 한 줄을 다 쓰는데
+          홈만 설명줄을 빼고 슬로건 한 줄로 서 있었다 — 그 자리를 받으려고
+          `.dashboard-heading > div > p:last-child` 가 이미 styles.css 에 있다.
+          문장도 이 화면만 랜딩 카피였다("…이어보세요"). 다른 h1 은 전부 그
+          화면이 하는 일을 평서로 말한다("구독과 가족 연결을 관리하세요",
+          "{이름}님의 건강 변화"). 앱 안에 랜딩이 한 장 끼어 있는 것처럼
+          보이던 이유가 글자 크기가 아니라 이 어투였다.
+
+          **인원수는 적지 않는다.** 바로 아래 구성원 카드가 곧 그 수다 —
+          머리말에 또 적으면 같은 것을 두 번 세는 자리가 된다.
+
+          **"이 기기에만 저장" 도 쓰지 않는다.** ADR-011 이후 기록은 계정에
+          저장된다. 아래 문장은 이 파일 안에서 이미 고쳐 둔 표현을 그대로
+          쓴다(기록 작성 폼의 `form-notice`). */}
       <section className="dashboard-heading">
         <div>
-          <p className="page-kicker">우리 가족 건강 홈</p>
-          <h1>가족의 건강 흐름을 한곳에서 이어보세요</h1>
+          <p className="page-kicker">가족 홈</p>
+          <h1>우리 가족의 건강기록</h1>
+          {/* 빈 가정에 "구성원을 고르면" 이라고 할 수 없다. 다만 **받는 동안에는
+              말하지 않는다** — `loading` 중의 `profiles.length === 0` 은 "없다"
+              가 아니라 "아직 모른다" 다. */}
+          <p>
+            {(!loading && profiles.length === 0
+              ? "가족 구성원을 등록하면 그 사람의 기록과 판정이 여기에 쌓입니다."
+              : "구성원을 고르면 그 사람의 기록과 판정이 아래로 이어집니다.") +
+              " 기록은 내 계정에 저장되고, 같은 가정 구성원만 볼 수 있습니다."}
+          </p>
         </div>
       </section>
 
