@@ -46,13 +46,15 @@ describe("FamilyIntegratedMonitoring (#122)", () => {
     expect(recordsTab).toHaveAttribute("aria-selected", "false");
   });
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   it("2. 간암 진단 사례: 중요 진단 기록 연결 장기 배지와 출처(문서 근거)를 정확히 표시한다", () => {
     const liverRecord = {
       id: "rec-liver-1",
       householdId: "hh-1",
       profileId: "profile-self",
       recordType: "health_screening" as const,
-      recordedAt: "2026-09-10T10:00:00Z",
+      recordedAt: `${todayStr}T10:00:00Z`,
       source: "ocr" as const,
       payload: {
         note: "간기능 정밀 검사 결과 간암 소견 확인됨",
@@ -75,9 +77,9 @@ describe("FamilyIntegratedMonitoring (#122)", () => {
     expect(screen.getByText("문서 근거 확인")).toBeInTheDocument();
     expect(screen.getByText("간암 진단 기록")).toBeInTheDocument();
 
-    // 실제 관찰 시점(2026-09-08)과 시스템 입력 시점(2026-09-10) 분리 표시 확인
+    // 실제 관찰 시점(2026-09-08)과 시스템 입력 시점(todayStr) 분리 표시 확인
     expect(screen.getByText("2026-09-08")).toBeInTheDocument();
-    expect(screen.getByText("2026-09-10")).toBeInTheDocument();
+    expect(screen.getByText(todayStr)).toBeInTheDocument();
     expect(screen.getByText("(사후 입력 기록)")).toBeInTheDocument();
 
     // 장기 강조 문구: 손상률이나 응급도가 아님을 명시
@@ -90,7 +92,7 @@ describe("FamilyIntegratedMonitoring (#122)", () => {
       householdId: "hh-1",
       profileId: "profile-self",
       recordType: "note" as const,
-      recordedAt: "2026-09-10T10:00:00Z",
+      recordedAt: `${todayStr}T10:00:00Z`,
       source: "manual" as const,
       payload: {
         note: "아버지가 과거 간암 치료를 받으셨음",
@@ -136,7 +138,7 @@ describe("FamilyIntegratedMonitoring (#122)", () => {
       householdId: "hh-1",
       profileId: "profile-self",
       recordType: "pain" as const,
-      recordedAt: "2026-09-10T14:00:00Z",
+      recordedAt: `${todayStr}T14:00:00Z`,
       source: "manual" as const,
       payload: {
         bodyArea: "가슴/폐",
@@ -351,7 +353,6 @@ describe("FamilyIntegratedMonitoring (#122)", () => {
 
   it("10. 손가락 저림·뒤꿈치 위약감 복합 증상 시 AI Agent가 추론한 anatomyEvent(경추 및 신경계 연관통)가 우선 채택되어 3D 뷰어에 cervical_spine,nervous 전달 및 AI 임상 추론 배지가 표시된다", () => {
     const onSelectOrgan = vi.fn();
-    const todayStr = new Date().toISOString().slice(0, 10);
 
     const referredPainRecord = {
       id: "rec-referred-pain-ai",
