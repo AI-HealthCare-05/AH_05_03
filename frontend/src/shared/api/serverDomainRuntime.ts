@@ -200,6 +200,8 @@ export class ServerProfileService {
 }
 
 export class ServerHealthRecordService {
+  private inFlightQueries = new Map<string, Promise<HealthRecordServerData[]>>();
+
   public constructor(
     private readonly client: ServerApiClient,
     private readonly householdId: string,
@@ -239,10 +241,21 @@ export class ServerHealthRecordService {
     includeDeleted?: boolean;
   }): Promise<LocalResult<HealthRecord[]>> {
     try {
-      const serverRecords = await this.client.listHealthRecords(input.profileId, {
-        recordType: input.recordType,
-        limit: 500,
-      });
+      const cacheKey = `${input.profileId}:${input.recordType ?? "all"}`;
+      let fetchPromise = this.inFlightQueries.get(cacheKey);
+      if (!fetchPromise) {
+        fetchPromise = this.client
+          .listHealthRecords(input.profileId, {
+            recordType: input.recordType,
+            limit: 500,
+          })
+          .finally(() => {
+            this.inFlightQueries.delete(cacheKey);
+          });
+        this.inFlightQueries.set(cacheKey, fetchPromise);
+      }
+
+      const serverRecords = await fetchPromise;
 
       let results = serverRecords.map((r) => toClientHealthRecord(r, this.householdId));
 
