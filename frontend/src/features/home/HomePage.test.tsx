@@ -156,7 +156,9 @@ describe("HomePage", () => {
     renderHomePage();
     await createProfile(user, "엄마", "부모");
 
-    await user.click(screen.getByRole("button", { name: "첫 기록 작성하기" }));
+    // "아직 없다" 는 기록을 다 받아본 뒤에만 하는 말이라, 받는 동안에는 빈 상태 대신
+    // 줄 스켈레톤이 서 있다(`HomePage` 의 `dashboardLoading` 참고). 그래서 기다린다.
+    await user.click(await screen.findByRole("button", { name: "첫 기록 작성하기" }));
 
     // 갈림길이 먼저 뜬다 — 곧장 기록 폼이 열리지 않는다.
     expect(screen.getByRole("heading", { name: "엄마님의 기록을 어떻게 남길까요?" })).toBeInTheDocument();
@@ -355,7 +357,8 @@ function renderHomePage() {
 
 /** 기록 폼은 갈림길을 한 번 지나서 열린다. 갈림길 자체는 아래 전용 테스트가 본다. */
 async function openRecordForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: "첫 기록 작성하기" }));
+  // 기록을 받는 동안에는 빈 상태 대신 줄 스켈레톤이 서 있으므로 기다렸다 누른다.
+  await user.click(await screen.findByRole("button", { name: "첫 기록 작성하기" }));
   await user.click(screen.getByRole("button", { name: /직접 작성/ }));
   await screen.findByRole("combobox", { name: "기록 종류" });
 }

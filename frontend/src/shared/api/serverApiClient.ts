@@ -746,6 +746,31 @@ export class ServerApiClient {
   }
 
   private async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    // **같은 GET 이 동시에 두 번 나갔다.** 화면 여럿이 각자 필요해서 부르는데
+    // (예: 부트스트랩과 마이그레이션이 같은 프로필 목록을 각자 조회) 서로를 모르니
+    // 같은 순간에 같은 요청이 겹쳤다 — 실측으로 `/profiles?...include_hidden=true` 가
+    // 같은 밀리초에 둘, `/profile-links` 도 둘이었다. 아직 답이 오지 않은 GET 이라면
+    // 새로 보내지 않고 **그 약속을 같이 기다린다.** 응답을 보관하지는 않으므로
+    // (끝나면 바로 지운다) 다음 호출은 늘 새로 물어본다 — 오래된 값이 남지 않는다.
+    const method = (options.method ?? "GET").toUpperCase();
+    if (method !== "GET") {
+      return this.sendAndParse<T>(path, options);
+    }
+
+    const inFlight = this.inFlightGets.get(path);
+    if (inFlight) return inFlight as Promise<T>;
+
+    const pending = this.sendAndParse<T>(path, options).finally(() => {
+      this.inFlightGets.delete(path);
+    });
+    this.inFlightGets.set(path, pending as Promise<unknown>);
+    return pending;
+  }
+
+  /** 답이 오기를 기다리는 GET. 키는 경로(질의 문자열 포함)다. */
+  private readonly inFlightGets = new Map<string, Promise<unknown>>();
+
+  private async sendAndParse<T>(path: string, options: RequestOptions): Promise<T> {
     const response = await this.send(path, options);
 
     if (response.status === 204) {

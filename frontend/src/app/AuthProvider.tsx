@@ -33,7 +33,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void serverApiClient
       .refresh()
-      .then(() => serverApiClient.getAccount())
+      .then(() => {
+        // **가구 목록을 계정 조회와 나란히 출발시킨다.** 둘 다 토큰만 있으면 되는데,
+        // 예전에는 `refresh → account → (signed-in) → households` 로 줄을 서서 왕복
+        // 셋이 직렬이었다(실측 ~950ms). 여기서 미리 보내 두면 `LocalDomainProvider`
+        // 가 잠시 뒤 같은 요청을 부를 때 새로 보내지 않고 이 응답을 같이 받는다
+        // (`serverApiClient` 의 in-flight GET 합치기) — 호출 수는 그대로, 대기만 준다.
+        // 실패하면 합칠 약속이 사라질 뿐이라 그쪽이 알아서 다시 묻는다.
+        void serverApiClient.listHouseholds().catch(() => undefined);
+        return serverApiClient.getAccount();
+      })
       .then((account) => {
         if (!cancelled) {
           setEmail(account.account.email);
