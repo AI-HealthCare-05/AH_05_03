@@ -1,9 +1,18 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FamilyProfile, HealthRecord } from "../../shared/local/domainContracts";
 import { FamilyIntegratedMonitoring } from "./FamilyIntegratedMonitoring";
 
 describe("FamilyIntegratedMonitoring (#122)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-10T12:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   const mockProfiles = [
     {
       id: "profile-self",

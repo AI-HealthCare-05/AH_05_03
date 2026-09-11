@@ -92,8 +92,7 @@ describe("GlobalHealthAssistant (채널톡 스타일 전역 연속형 건강 비
     // 팝오버 메신저와 현재 페이지 맥락 태그 표시 확인
     expect(screen.getByTestId("mock-health-assistant")).toBeInTheDocument();
     expect(screen.getAllByText(/통증 다이어리/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("가족 대표")).toBeInTheDocument();
-    expect(screen.getByText(/님 대화 중/i)).toBeInTheDocument();
+    expect(screen.getByText(/가족 대표/)).toBeInTheDocument();
 
     // 닫기 동작
     const closeBtn = screen.getByRole("button", { name: /창닫기/i });

@@ -234,6 +234,8 @@ export function HealthAssistantDrawer({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isInitialScrollRef = useRef(true);
+  const popoverContainerRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // 건강 서류 상세 검토 및 저장 모달 상태
   const [ocrModalOpen, setOcrModalOpen] = useState(false);
@@ -460,6 +462,17 @@ export function HealthAssistantDrawer({
     scrollToBottom("auto");
   }
 
+  /** 대화 화면 → 목록 화면. 헤더 뒤로가기 버튼과 스와이프 제스처가 같이 쓴다. */
+  function goToSessionList() {
+    setShowSessionList(true);
+    if (profile) {
+      saveChatViewMode(profile.id, "list");
+      void listChatSessions(profile.id)
+        .then((sessions) => setChatSessions(sessions))
+        .catch(() => undefined);
+    }
+  }
+
   /**
    * 대화 삭제. 서버가 지운 뒤에만 목록에서 뺀다 — 먼저 지우면 실패했을 때
    * 화면에서만 사라진 대화가 새로고침에 되살아난다.
@@ -516,28 +529,6 @@ export function HealthAssistantDrawer({
     }
   }
 
-  async function handleDeleteSession(sessionId: string, event?: React.MouseEvent) {
-    event?.stopPropagation();
-    if (!window.confirm("이 대화를 삭제하시겠습니까? 삭제된 대화는 복구할 수 없습니다.")) {
-      return;
-    }
-    try {
-      await deleteChatSession(sessionId);
-      setChatSessions((previous) => previous.filter((s) => s.id !== sessionId));
-      if (activeSessionIdRef.current === sessionId) {
-        activeSessionIdRef.current = null;
-        setActiveSessionId(null);
-        if (profile) {
-          setMessages([createWelcomeMessage(profile.displayName)]);
-        }
-      }
-    } catch (err) {
-      console.warn("대화 삭제 실패:", err);
-      setError("대화를 삭제하지 못했습니다. 다시 시도해 주세요.");
-    } finally {
-      setOpenMenuSessionId(null);
-    }
-  }
 
   async function handleSaveSessionTitle(sessionId: string, newTitle: string) {
     const trimmed = newTitle.trim();
@@ -578,6 +569,22 @@ export function HealthAssistantDrawer({
       if (sourcePreviewModal) URL.revokeObjectURL(sourcePreviewModal.url);
     };
   }, [imagePreview, sourcePreviewModal]);
+
+  // 팝오버 바깥을 누르면 닫는다. popover 변형에서만 의미가 있다(embedded/모달은
+  // 각자의 배경 클릭 처리가 따로 있다).
+  useEffect(() => {
+    if (variant !== "popover" || !isOpen) return;
+    function handleOutsideClick(e: MouseEvent) {
+      if (popoverContainerRef.current && !popoverContainerRef.current.contains(e.target as Node)) {
+        (onMinimize ?? handleAnimatedClose)();
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variant, isOpen, onMinimize]);
 
 
   // 닫을 때 오른쪽으로 슬라이드 아웃 후 부모 onClose 호출
@@ -1758,10 +1765,37 @@ export function HealthAssistantDrawer({
       className={`health-assistant-drawer ${isEmbedded ? "is-embedded" : ""} ${isClosing ? "closing" : ""}`}
       role={isEmbedded ? "region" : "dialog"}
       aria-label="AI 건강 비서 봄이"
+      onTouchStart={(e) => {
+        const touch = e.touches[0];
+        touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+      }}
+      onTouchEnd={(e) => {
+        const start = touchStartRef.current;
+        touchStartRef.current = null;
+        if (!start || showSessionList) return;
+        const touch = e.changedTouches[0];
+        const dx = touch.clientX - start.x;
+        const dy = touch.clientY - start.y;
+        // 오른쪽으로 크게, 세로 방향은 크지 않게 — 스크롤 제스처와 헷갈리지 않게 한다.
+        if (dx > 70 && Math.abs(dy) < 40) {
+          goToSessionList();
+        }
+      }}
     >
       {/* 헤더 */}
       <header className="assistant-header" {...dragHandleProps}>
         <div className="assistant-header-title">
+          {!showSessionList && (
+            <button
+              type="button"
+              className="assistant-back-btn"
+              onClick={goToSessionList}
+              aria-label="대화 목록"
+              title="대화 목록으로 돌아가기"
+            >
+              ‹
+            </button>
+          )}
           {isEmbedded && (
             <span
               className="sidebar-card-drag-grip"
@@ -1781,51 +1815,23 @@ export function HealthAssistantDrawer({
                 </span>
               )}
             </div>
-            {profile && variant === "popover" && (
-              <small style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
-                {profile.displayName}님의 건강 비서
-              </small>
-            )}
           </div>
         </div>
-        <div className="assistant-header-actions">
-          {showSessionList ? (
+        {/* popover 는 채널톡 스타일 런처의 X 버튼이 이미 닫기를 맡는다 — 여기서 또
+            닫기 버튼을 두면 같은 동작이 두 군데에 중복된다. */}
+        {variant !== "popover" && (
+          <div className="assistant-header-actions">
             <button
-              className="assistant-new-chat-header-btn"
+              className="assistant-minimize-btn"
               type="button"
-              onClick={() => void handleCreateChat()}
-              aria-label="새 대화"
+              onClick={onMinimize ?? (isEmbedded ? onClose : handleAnimatedClose)}
+              aria-label="창 닫기"
+              title="창 닫기"
             >
-              + 새 대화
+              −
             </button>
-          ) : (
-            <button
-              className="assistant-clear-btn"
-              type="button"
-              onClick={() => {
-                setShowSessionList(true);
-                if (profile) {
-                  saveChatViewMode(profile.id, "list");
-                  void listChatSessions(profile.id)
-                    .then((sessions) => setChatSessions(sessions))
-                    .catch(() => undefined);
-                }
-              }}
-              aria-label="대화 목록"
-            >
-              대화 목록
-            </button>
-          )}
-          <button
-            className="assistant-minimize-btn"
-            type="button"
-            onClick={onMinimize ?? (isEmbedded ? onClose : handleAnimatedClose)}
-            aria-label="창 닫기"
-            title="창 닫기"
-          >
-            −
-          </button>
-        </div>
+          </div>
+        )}
       </header>
 
         {showSessionList && (
@@ -1918,6 +1924,8 @@ export function HealthAssistantDrawer({
                             >
                               ···
                             </button>
+                            {/* 삭제는 옆의 휴지통 아이콘 하나로 충분하다 — 여기 또 넣으면 같은
+                                동작이 두 군데(휴지통, 이 메뉴)에 중복된다. */}
                             {openMenuSessionId === session.id && (
                               <div
                                 className="chat-session-menu-popover"
@@ -1937,7 +1945,11 @@ export function HealthAssistantDrawer({
                                 <button
                                   type="button"
                                   className="chat-session-menu-item danger"
-                                  onClick={(e) => void handleDeleteSession(session.id, e)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenMenuSessionId(null);
+                                    setPendingDeleteSessionId(session.id);
+                                  }}
                                 >
                                   대화 삭제
                                 </button>
@@ -2292,12 +2304,27 @@ export function HealthAssistantDrawer({
             </button>
           </form>
         </footer>
+
+        {showSessionList && (
+          <button
+            type="button"
+            className="assistant-fab-new-chat"
+            onClick={() => void handleCreateChat()}
+            aria-label="새 대화"
+            title="새 대화 시작"
+          >
+            + 새 대화
+          </button>
+        )}
       </aside>
   );
 
   if (isEmbedded || variant === "popover") {
     return (
-      <div className={isEmbedded ? "health-assistant-embedded-container" : "health-assistant-popover-container"}>
+      <div
+        className={isEmbedded ? "health-assistant-embedded-container" : "health-assistant-popover-container"}
+        ref={popoverContainerRef}
+      >
         {drawerContent}
 
         {/* 원본 서류 이미지 크게 보기 모달 */}

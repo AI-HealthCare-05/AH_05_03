@@ -77,7 +77,7 @@
   inset: 71px 0 0;
   overflow-y: auto;
   background: #ffffff;
-  padding: 12px 16px;
+  padding: 12px 16px 64px;
   animation: listFadeIn 0.2s ease-out;
 }
 
@@ -448,6 +448,48 @@
   background: #059669;
   border-color: #059669;
   color: #ffffff;
+}
+
+.assistant-back-btn {
+  background: none;
+  border: none;
+  font-size: 26px;
+  line-height: 1;
+  color: #475569;
+  cursor: pointer;
+  padding: 2px 6px 4px;
+  border-radius: 6px;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.assistant-back-btn:hover {
+  color: #0f172a;
+  background-color: #e2e8f0;
+}
+
+/* 어디서든(목록/대화 화면 공통) 항상 떠있는 새 대화 버튼 */
+.assistant-fab-new-chat {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 5;
+  background: #059669;
+  border: none;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+  white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.assistant-fab-new-chat:hover {
+  transform: translateX(-50%) translateY(-1px);
+  box-shadow: 0 6px 18px rgba(5, 150, 105, 0.42);
 }
 
 .assistant-close-btn,
@@ -2409,7 +2451,7 @@
 }
 
 .drug-pill {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 4px;
@@ -2426,7 +2468,7 @@
 }
 
 .interaction-vs {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   color: #dc2626;
 }
@@ -2436,7 +2478,6 @@
   border: 1px solid #ffedd5;
   border-radius: 4px;
   padding: 5px 8px;
-  font-size: 11px;
   margin-bottom: 6px;
   display: flex;
   flex-direction: column;
@@ -2446,20 +2487,21 @@
 .reason-label {
   color: #c2410c;
   font-weight: 700;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .reason-text {
   color: #1e293b;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.5;
+  font-size: 13.5px;
 }
 
 .interaction-ingredients {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .ingredient-tag {
@@ -2470,11 +2512,11 @@
 }
 
 .interaction-warning-notice {
-  font-size: 11px;
+  font-size: 12px;
   color: #b91c1c;
   font-weight: 600;
   margin: 4px 0 0;
-  line-height: 1.35;
+  line-height: 1.5;
 }
 
 .interaction-safe-content {
@@ -2482,21 +2524,20 @@
   border: 1px solid #e0f2fe;
   border-radius: 6px;
   padding: 8px 10px;
-  font-size: 12px;
 }
 
 .interaction-safe-message {
   margin: 0;
   color: #0369a1;
-  line-height: 1.4;
-  font-size: 12px;
+  line-height: 1.5;
+  font-size: 13.5px;
 }
 
 .interaction-safe-subtext {
   margin: 3px 0 0;
   font-size: 11px;
   color: #64748b;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 .medication-bottom-bar {
@@ -2517,7 +2558,7 @@
   background: #f8fafc;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #475569;
   cursor: pointer;
@@ -2550,7 +2591,7 @@
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   padding: 3px 8px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #475569;
   cursor: pointer;
@@ -2573,7 +2614,7 @@
 
 .medication-item-name {
   margin: 0;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 700;
   color: #0f172a;
 }
@@ -2584,7 +2625,7 @@
 }
 
 .medication-class-name {
-  font-size: 10px;
+  font-size: 11px;
   color: #0284c7;
   font-weight: 600;
 }
@@ -2592,22 +2633,22 @@
 .medication-info-fields {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 11px;
+  gap: 8px;
 }
 
 .medication-field .field-label {
   font-weight: 700;
   color: #475569;
-  font-size: 10px;
-  margin-bottom: 1px;
+  font-size: 11px;
+  margin-bottom: 2px;
   display: block;
 }
 
 .medication-field .field-content {
   margin: 0;
   color: #334155;
-  line-height: 1.35;
+  font-size: 13.5px;
+  line-height: 1.55;
 }
 
 .medication-field .warn-text {
@@ -2624,7 +2665,7 @@
   background: #fef2f2;
   color: #b91c1c;
   border: 1px solid #fecaca;
-  font-size: 10px;
+  font-size: 11px;
   padding: 1px 5px;
   border-radius: 3px;
 }
@@ -2635,6 +2676,6 @@
 }
 
 .medication-source-text {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--muted);
 }

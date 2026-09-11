@@ -6,8 +6,34 @@ interface MedicationCardProps {
   children?: React.ReactNode;
 }
 
+/** 효능·용법·주의사항이 전부 같으면 브랜드만 다른 같은 제품군으로 본다. */
+function contentSignature(drug: DrugInfo): string {
+  return [drug.efcy_qesitm, drug.use_method_qesitm, drug.atpn_warn_qesitm || drug.atpn_qesitm]
+    .map((field) => (field ?? "").trim())
+    .join("|");
+}
+
+/** items를 정보 내용이 같은 그룹으로 묶는다. 탭은 항목 수가 아니라 그룹 수만큼만 나온다. */
+function groupByContent(items: DrugInfo[]): DrugInfo[][] {
+  const groups: DrugInfo[][] = [];
+  const signatureToGroup = new Map<string, DrugInfo[]>();
+  for (const drug of items) {
+    const signature = contentSignature(drug);
+    const existing = signatureToGroup.get(signature);
+    if (existing) {
+      existing.push(drug);
+    } else {
+      const group = [drug];
+      signatureToGroup.set(signature, group);
+      groups.push(group);
+    }
+  }
+  return groups;
+}
+
 export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, children }) => {
   const { items, interaction_items, has_interaction_danger, target_drug_name, query } = searchResult;
+  const groupedItems = React.useMemo(() => groupByContent(items ?? []), [items]);
   const [selectedDrugIndex, setSelectedDrugIndex] = useState(0);
 
   const isInteractionQuery = Boolean(target_drug_name || (interaction_items && interaction_items.length > 0));
@@ -104,11 +130,11 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, ch
       )}
 
       {/* 4. 개별 의약품 기본 정보 탭 및 세부 정보 (접기/펼치기 제어) */}
-      {showDetails && items && items.length > 0 && (
+      {showDetails && groupedItems.length > 0 && (
         <div className="medication-details-section">
-          {items.length > 1 && (
+          {groupedItems.length > 1 && (
             <div className="medication-tabs" role="tablist">
-              {items.map((drug, idx) => (
+              {groupedItems.map((group, idx) => (
                 <button
                   key={idx}
                   type="button"
@@ -117,14 +143,28 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, ch
                   className={`medication-tab-btn ${selectedDrugIndex === idx ? "active" : ""}`}
                   onClick={() => setSelectedDrugIndex(idx)}
                 >
-                  {drug.item_name.split("(")[0].trim()}
+                  {group[0].item_name.split("(")[0].trim()}
+                  {group.length > 1 ? ` 외 ${group.length - 1}` : ""}
                 </button>
               ))}
             </div>
           )}
 
           {(() => {
-            const currentDrug: DrugInfo = items[selectedDrugIndex] ?? items[0];
+            const currentGroup: DrugInfo[] = groupedItems[selectedDrugIndex] ?? groupedItems[0] ?? [];
+            const currentDrug: DrugInfo | undefined = currentGroup[0];
+            if (!currentDrug) {
+              return null;
+            }
+            const sameGroupOthers = currentGroup.slice(1);
+            const mergedDurItems = currentGroup
+              .flatMap((drug) => drug.dur_items ?? [])
+              .filter(
+                (item, idx, all) =>
+                  all.findIndex(
+                    (other) => other.prohibition_type === item.prohibition_type && other.ingredient_name === item.ingredient_name,
+                  ) === idx,
+              );
             return (
               <div className="medication-info-body">
                 <div className="medication-title-row">
@@ -136,6 +176,12 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, ch
                     <span className="medication-class-name">[{currentDrug.class_name}]</span>
                   )}
                 </div>
+
+                {sameGroupOthers.length > 0 && (
+                  <p className="medication-same-group-note">
+                    효능·용법·주의사항이 동일한 같은 성분 제품: {sameGroupOthers.map((drug) => drug.item_name).join(", ")}
+                  </p>
+                )}
 
                 <div className="medication-info-fields">
                   {currentDrug.efcy_qesitm && (
@@ -152,11 +198,11 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, ch
                     </div>
                   )}
 
-                  {currentDrug.dur_items && currentDrug.dur_items.length > 0 && (
+                  {mergedDurItems.length > 0 && (
                     <div className="medication-field dur-warnings">
                       <span className="field-label">DUR 주의</span>
                       <div className="dur-items-list">
-                        {currentDrug.dur_items.slice(0, 3).map((d, dIdx) => (
+                        {mergedDurItems.slice(0, 3).map((d, dIdx) => (
                           <span key={dIdx} className="dur-item-tag">
                             [{d.prohibition_type}] {d.ingredient_name || d.reason || ""}
                           </span>
