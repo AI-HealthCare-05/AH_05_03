@@ -193,7 +193,7 @@ export function HealthDataPage() {
 
           <section className="health-data-panel screening-history-panel">
             <div className="panel-heading"><div><p className="section-kicker">건강검진 이력</p><h2>저장된 검진 결과</h2><p>검진 요약을 확인하고 연결된 원본 서류를 열 수 있습니다.</p></div>{recordsLoading ? <span className="subtle-status">불러오는 중…</span> : null}</div>
-            {screenings.length === 0 ? <div className="compact-empty"><strong>아직 저장된 건강검진 결과가 없습니다.</strong><p>위험 판정 화면에서 검진표를 올리면 여기에 쌓입니다.</p></div> : (
+            {screenings.length === 0 ? <div className="compact-empty"><strong>아직 저장된 건강검진 결과가 없습니다.</strong><p>질환 예측 화면에서 검진표를 올리면 여기에 쌓입니다.</p></div> : (
               <div className="screening-history-list">
                 {screenings.map((record) => {
                   const payload = record.payload as Record<string, unknown>;

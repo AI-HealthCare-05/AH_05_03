@@ -29,7 +29,7 @@ import { useRouteTitle } from "./useRouteTitle";
 
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
-  { to: "/assessment", label: "위험 판정", end: false },
+  { to: "/assessment", label: "질환 예측", end: false },
   { to: "/pain-diary", label: "통증 다이어리", end: false },
   { to: "/health-data", label: "건강 데이터", end: false },
 ] as const;

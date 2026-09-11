@@ -106,7 +106,7 @@ export function GlobalHealthAssistant() {
     const p = location.pathname;
     if (p === "/") return "가족 홈";
     if (p.startsWith("/pain-diary")) return "통증 다이어리";
-    if (p.startsWith("/assessment")) return "위험 판정";
+    if (p.startsWith("/assessment")) return "질환 예측";
     if (p.startsWith("/health-data")) return "건강 데이터";
     if (p.startsWith("/account")) return "계정 관리";
     return undefined;
