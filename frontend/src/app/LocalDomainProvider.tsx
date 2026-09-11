@@ -140,40 +140,16 @@ export function LocalDomainProvider({
                   const profilesToCreate = activeMembers.map((m) => {
                     const isMe = m.account_id === authAccountId;
                     const isMaster = m.is_master ?? false;
-                    const email = m.masked_email.toLowerCase();
-
-                    let displayName: string;
-                    let relationship: string;
-                    let birthDate: string | null = null;
-                    let gender: "male" | "female" | null = null;
-
-                    if (email.includes("fabxoe.kor") || isMaster) {
-                      displayName = "오성민";
-                      relationship = isMe ? "본인" : "가족";
-                      birthDate = "1988-10-28";
-                      gender = "male";
-                    } else if (email.includes("fabxoe.se") || email.includes("fabxoe.usa")) {
-                      displayName = "오민재";
-                      relationship = isMe ? "본인" : "자녀";
-                      birthDate = "2000-01-29";
-                      gender = "male";
-                    } else if (email.includes("evophygene")) {
-                      displayName = "오공백";
-                      relationship = "배우자";
-                      birthDate = "1990-10-20";
-                      gender = "female";
-                    } else {
-                      displayName = isMaster ? "마스터" : (isMe ? "본인" : "가족 구성원");
-                      relationship = isMe ? "본인" : "가족";
-                    }
+                    const displayName = isMaster ? "가족 대표" : (isMe ? "본인" : "가족 구성원");
+                    const relationship = isMe ? "본인" : "가족";
 
                     return {
                       id: crypto.randomUUID(),
                       household_id: activeHouseholdId,
                       display_name: displayName,
                       relationship,
-                      birth_date: birthDate,
-                      gender,
+                      birth_date: null,
+                      gender: null,
                       account_email: m.masked_email,
                       status: "active" as const,
                       row_version: 1,
@@ -317,10 +293,20 @@ export function LocalDomainProvider({
   const updateHealthRecord = useCallback(
     async (recordId: string, input: UpdateHealthRecordInput) => {
       if (!runtime) throw new Error("저장소를 준비하는 중입니다.");
+      // **payload 를 통째로 보내면 안 된다.** 서버는 `record.payload = req.payload` 로
+      // 교체하므로, 예전처럼 `{ note }` 만 보내면 혈압·혈당 수치가 함께 지워졌다.
+      // 기존 payload 를 읽어 덧쓴다 — 한 번의 추가 조회로 값 손실을 막는다.
+      const current = await runtime.healthRecords.get(recordId);
+      if (!current.ok) throw new Error(current.error.message);
+      const merged = {
+        ...(current.value.payload as Record<string, unknown>),
+        ...(input.payload ?? {}),
+        note: input.note.trim(),
+      };
       const result = await runtime.healthRecords.update(recordId, {
         recordType: input.recordType,
         recordedAt: input.recordedAt,
-        payload: { note: input.note.trim() },
+        payload: merged,
         expectedVersion: input.expectedVersion,
       });
       if (!result.ok) throw new Error(result.error.message);

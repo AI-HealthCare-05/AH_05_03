@@ -111,5 +111,50 @@ describe("depthPicker", () => {
     // 장경인대는 12cm 떨어져 있어도 deep/mid 대신 shallow로 올바르게 보정됨
     expect(["surface", "shallow"]).toContain(itCandidate?.depthLevel);
   });
+
+  it("P0-8: 광선 진행 방향과 법선 내적을 평가하여 진출면 및 반대편 신체 과관통을 차단한다", () => {
+    const meshFront = new THREE.Mesh();
+    meshFront.name = "muscle_front";
+
+    const meshExit = new THREE.Mesh();
+    meshExit.name = "muscle_exit_back";
+
+    const meshOpposite = new THREE.Mesh();
+    meshOpposite.name = "opposite_limb";
+
+    const rayDir = new THREE.Vector3(0, 0, -1); // -Z 방향으로 진행하는 광선
+
+    const rawHits: THREE.Intersection[] = [
+      // 진입면: 광선(-Z)과 법선(+Z)이 마주봄 -> dot = -1 <= 0.1
+      {
+        distance: 1.0,
+        point: new THREE.Vector3(0, 0, -1.0),
+        object: meshFront,
+        face: { normal: new THREE.Vector3(0, 0, 1), a: 0, b: 1, c: 2, materialIndex: 0 },
+      },
+      // 진출면: 광선(-Z)과 법선(-Z)이 같은 방향 -> dot = +1 > 0.4
+      {
+        distance: 1.28,
+        point: new THREE.Vector3(0, 0, -1.28),
+        object: meshExit,
+        face: { normal: new THREE.Vector3(0, 0, -1), a: 0, b: 1, c: 2, materialIndex: 0 },
+      },
+      // 반대편 사지: 진출면 뒤에 발생한 추가 hit -> 차단되어야 함
+      {
+        distance: 1.32,
+        point: new THREE.Vector3(0, 0, -1.32),
+        object: meshOpposite,
+        face: { normal: new THREE.Vector3(0, 0, 1), a: 0, b: 1, c: 2, materialIndex: 0 },
+      },
+    ];
+
+    const candidates = collectDepthHitCandidates(rawHits, {
+      maxPenetrationDistance: 0.35,
+      rayDirection: rayDir,
+    });
+
+    expect(candidates.map((c) => c.meshName)).toContain("muscle_front");
+    expect(candidates.map((c) => c.meshName)).not.toContain("opposite_limb");
+  });
 });
 

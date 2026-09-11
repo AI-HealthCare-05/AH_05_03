@@ -60,6 +60,11 @@ export interface PainDraft {
   sensation?: string | null;
   onset_at?: string | null;
   note?: string | null;
+  anatomy_concept_id?: string | null;
+  anatomy_label?: string | null;
+  suspected_anatomy_ids?: string[] | null;
+  suspected_system?: string | null;
+  clinical_reasoning?: string | null;
 }
 
 export interface PainDiaryToolCall {
@@ -70,6 +75,11 @@ export interface PainDiaryToolCall {
   aggravating_factors?: string | null;
   formatted_diary: string;
   date_str?: string | null;
+  anatomy_concept_id?: string | null;
+  anatomy_label?: string | null;
+  suspected_anatomy_ids?: string[] | null;
+  suspected_system?: string | null;
+  clinical_reasoning?: string | null;
 }
 
 export interface LabResultDraft {
@@ -340,6 +350,14 @@ export async function listChatSessions(profileId?: string): Promise<ChatSessionD
 
 export async function listChatMessages(sessionId: string): Promise<ChatMessageData[]> {
   return serverApiClient.listChatMessages(sessionId);
+}
+
+export async function createChatMessage(
+  sessionId: string,
+  role: "user" | "assistant",
+  content: string,
+): Promise<ChatMessageData> {
+  return serverApiClient.createChatMessage(sessionId, role, content);
 }
 
 export async function updateChatSession(sessionId: string, title: string): Promise<ChatSessionData> {

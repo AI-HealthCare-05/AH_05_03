@@ -8,6 +8,7 @@ import { GeminiOcrAdapter } from "../../shared/api/geminiOcrAdapter";
 
 import {
   streamHealthAssistantMessage,
+  createChatMessage,
   createChatSession,
   deleteChatSession,
   listChatSessions,
@@ -26,6 +27,7 @@ import {
   type FacilitySearchResult,
   type UserLocation,
 } from "./healthAssistantClient";
+import { createAnatomyEvent, type AnatomyEvent } from "../home/anatomyEventContracts";
 import { selectContextRecordTypes } from "./healthAssistantContext";
 import {
   containsNewMedicationRecord,
@@ -172,7 +174,8 @@ interface HealthAssistantDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onMinimize?: () => void;
-  variant?: "drawer" | "embedded";
+  variant?: "drawer" | "embedded" | "popover";
+  contextLabel?: string;
   onRecordSaved?: () => Promise<void> | void;
   onChallengeSaved?: () => Promise<void> | void;
   onNavigateToRecords?: () => void;
@@ -187,6 +190,7 @@ export function HealthAssistantDrawer({
   onClose,
   onMinimize,
   variant = "drawer",
+  contextLabel,
   onRecordSaved,
   onNavigateToRecords,
   onNavigateToDiary,
@@ -239,6 +243,14 @@ export function HealthAssistantDrawer({
   const [ocrModalError, setOcrModalError] = useState<string>();
   const [ocrImageFile, setOcrImageFile] = useState<File | null>(null);
   const [ocrImagePreviewUrl, setOcrImagePreviewUrl] = useState<string | null>(null);
+  /**
+   * 인식기가 준 **판정 칸 이름 → 값** 맵.
+   *
+   * `ocrReviewItems` 는 사람이 읽는 행(검사명·값·단위)이고, 이쪽은 판정이 바로 쓰는
+   * 모양이다. 예전에는 행만 저장해서, 기록에는 21개 항목이 보이는데 판정 화면에서는
+   * 한 칸도 안 채워졌다 — 두 모양을 같이 남긴다.
+   */
+  const [ocrValues, setOcrValues] = useState<Record<string, number>>({});
 
   // 질문에 직접 필요한 종류의 최근 기록만 AI 컨텍스트로 구성한다.
   async function fetchRecentRecordsSummary(recordTypes: HealthRecordType[]): Promise<string | undefined> {
@@ -609,6 +621,7 @@ export function HealthAssistantDrawer({
       const ocrAdapter = new GeminiOcrAdapter();
       const ocrResult = await ocrAdapter.recognize(file, file.name);
       const items = extractReviewItems(ocrResult.tables);
+      setOcrValues(ocrResult.measurements?.values ?? {});
       const structuredText = reviewItemsToText(items);
       const extractedText = ocrResult.text.trim() || structuredText;
       if (!extractedText) throw new Error("서류에서 확인할 수 있는 글자나 검사 항목을 찾지 못했습니다. 더 선명한 이미지를 선택해 주세요.");
@@ -635,6 +648,43 @@ export function HealthAssistantDrawer({
     setSelectedImage(null);
     setImagePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  /** 이 프로필의 서버 대화 세션을 확보한다. 없으면 만든다.
+   *
+   * **두 곳이 쓴다** — 봄이에게 말을 걸 때(`handleSend`)와 서류를 확정 저장할 때
+   * (`handleConfirmOcrModalSave`). 전에는 이 판단이 `handleSend` 안에만 있어서,
+   * 문서만 올려 기록한 대화는 세션이 없어 서버에 한 줄도 남지 않았다.
+   *
+   * 세션 생성이 실패해도 대화 자체는 막지 않는다. 저장은 못 하더라도 화면에서
+   * 주고받는 것은 계속돼야 한다. */
+  async function ensureChatSession(profileId: string): Promise<string | null> {
+    let sessionId = activeSessionIdRef.current;
+    if (!sessionId && sessionSyncPromiseRef.current) {
+      sessionId = await sessionSyncPromiseRef.current;
+    }
+    // 초기 동기화가 실패했더라도 온라인 요청이 가능한 시점이면 세션을 다시 만든다.
+    if (!sessionId && activeProfileIdRef.current === profileId) {
+      try {
+        const newSession = await createChatSession(profileId);
+        sessionId = newSession.id;
+        activeSessionIdRef.current = sessionId;
+        setActiveSessionId(sessionId);
+        // **만든 세션을 동기화 약속에도 승계한다.** 안 하면 다음 호출이 여전히
+        // 빈 약속을 기다렸다가 세션을 또 만든다(#120 의 "대화 누적").
+        sessionSyncPromiseRef.current = Promise.resolve(sessionId);
+        // 같은 세션이 목록에 두 번 서지 않게 걸러 낸다.
+        setChatSessions((previous) => [
+          newSession,
+          ...previous.filter((item) => item.id !== newSession.id),
+        ]);
+      } catch (sessionError) {
+        // 세션 저장 장애가 기존 챗봇 자체를 막아서는 안 된다. 대화는 계속하고
+        // sessionStorage 캐시로 복구하며 다음 요청에서 다시 서버 세션을 시도한다.
+        console.warn("대화 세션 생성 실패 (로컬 캐시로 계속):", sessionError);
+      }
+    }
+    return sessionId;
   }
 
   // 모달에서 서류 확정 저장 핸들러
@@ -675,6 +725,9 @@ export function HealthAssistantDrawer({
           summary: draft.summary ?? "",
           itemsSummary: draft.items_summary ?? "",
           items,
+          // 판정이 바로 읽는 정본 모양. 서버 `record_prefill.fields_for` 에서
+          // 읽은 행보다 이쪽이 이긴다(사용자가 고친 값이 여기 쌓인다).
+          values: ocrValues,
           note: finalNote || draft.summary || "건강검진 결과",
         },
       });
@@ -701,6 +754,20 @@ export function HealthAssistantDrawer({
       };
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
+
+      // **화면에만 넣고 끝내던 자리다.** 여기서 남기지 않으면 새로고침 한 번에
+      // 그 대화가 사라지고, 세션이 없으면 대화 목록에도 아예 안 뜬다.
+      const sessionId = await ensureChatSession(profile.id);
+      if (sessionId) {
+        try {
+          await createChatMessage(sessionId, "user", userMsg.content);
+          await createChatMessage(sessionId, "assistant", assistantMsg.content);
+        } catch (messageError) {
+          // 기록은 이미 저장됐다. 대화 한 줄을 못 남긴 것으로 되돌리지 않는다.
+          console.warn("대화 저장 실패 (기록은 저장됨):", messageError);
+        }
+      }
+
       setOcrModalOpen(false);
       clearSelectedImage();
 
@@ -875,25 +942,8 @@ export function HealthAssistantDrawer({
         )));
       };
       setMessages((prev) => [...prev, { id: streamingId, role: "assistant", content: "" }]);
-      let sessionId = activeSessionIdRef.current;
-      if (!sessionId && sessionSyncPromiseRef.current) {
-        sessionId = await sessionSyncPromiseRef.current;
-      }
-      // 세션이 없으면(새 대화 모드이거나 초기 세션이 없는 경우) 서버에 새 대화 세션을 생성한다.
-      if (!sessionId && activeProfileIdRef.current === profile.id) {
-        try {
-          const newSession = await createChatSession(profile.id);
-          sessionId = newSession.id;
-          activeSessionIdRef.current = sessionId;
-          setActiveSessionId(sessionId);
-          sessionSyncPromiseRef.current = Promise.resolve(sessionId);
-          setChatSessions((previous) => [newSession, ...previous.filter((s) => s.id !== newSession.id)]);
-        } catch (sessionError) {
-          // 세션 저장 장애가 기존 챗봇 자체를 막아서는 안 된다. 대화는 계속하고
-          // sessionStorage 캐시로 복구하며 다음 요청에서 다시 서버 세션을 시도한다.
-          console.warn("대화 세션 생성 실패 (로컬 캐시로 계속):", sessionError);
-        }
-      }
+      const sessionId = await ensureChatSession(profile.id);
+
 
       const finalLocation = userLocation ?? currentLocation ?? undefined;
       const res = await streamHealthAssistantMessage(
@@ -1449,6 +1499,51 @@ export function HealthAssistantDrawer({
     if (!runtime || !profile || !draft.body_area) return false;
     setLoading(true);
     try {
+      let anatomyEvent: AnatomyEvent | undefined;
+      const suspectedIds = draft.suspected_anatomy_ids || [];
+      if (suspectedIds.length > 0) {
+        const primaryId = suspectedIds[0];
+        const primaryLabel =
+          primaryId === "cervical_spine"
+            ? "경추 (C1~C7) 및 신경근"
+            : primaryId === "nervous"
+            ? "중추 및 말초 신경계"
+            : draft.body_area || "원인 의심 해부학 부위";
+        try {
+          anatomyEvent = createAnatomyEvent({
+            atlas: {
+              id: "vanatome-human-atlas",
+              version: "1.0",
+              referenceSex: profile.gender === "male" ? "male" : "female",
+            },
+            concept: {
+              canonicalConceptId: primaryId,
+              sourceKey: `inferred:${primaryId}`,
+              sourceMeshId: primaryId === "cervical_spine" ? "skeleton-cervical-vertebra" : primaryId,
+              label: primaryLabel,
+              system: draft.suspected_system || "nervous",
+              mappingStatus: "canonical",
+            },
+            relatedConcepts: suspectedIds.slice(1).map((id) => ({
+              canonicalConceptId: id,
+              sourceKey: `inferred:${id}`,
+              sourceMeshId: id === "nervous" ? "nervous-system" : id,
+              label: id === "nervous" ? "신경계 및 척수근" : id,
+              system: draft.suspected_system || "nervous",
+              side: "midline",
+              mappingStatus: "canonical",
+            })),
+            inputSource: "ai_inference",
+            state: "confirmed",
+            uncertainty: draft.clinical_reasoning || undefined,
+            provenance: "clinical_ai_inferred",
+            clinicalReasoning: draft.clinical_reasoning || undefined,
+          });
+        } catch (err) {
+          console.warn("[HealthAssistantDrawer] createAnatomyEvent failed:", err);
+        }
+      }
+
       const summaryText = `통증: ${draft.body_area} (강도 ${draft.intensity}/10)${draft.sensation ? ` - ${draft.sensation}` : ""}`;
       const result = await runtime.healthRecords.create({
         householdId: PRIMARY_HOUSEHOLD_ID,
@@ -1463,6 +1558,10 @@ export function HealthAssistantDrawer({
           sensation: draft.sensation ?? undefined,
           onsetAt: draft.onset_at ?? undefined,
           note: draft.note || summaryText,
+          suspectedAnatomyIds: draft.suspected_anatomy_ids,
+          suspectedSystem: draft.suspected_system,
+          clinicalReasoning: draft.clinical_reasoning,
+          anatomyEvent,
         },
       });
 
@@ -1493,6 +1592,51 @@ export function HealthAssistantDrawer({
         ? new Date(`${tool.date_str}T12:00:00`).toISOString()
         : new Date().toISOString();
 
+      let anatomyEvent: AnatomyEvent | undefined;
+      const suspectedIds = tool.suspected_anatomy_ids || [];
+      if (suspectedIds.length > 0) {
+        const primaryId = suspectedIds[0];
+        const primaryLabel =
+          primaryId === "cervical_spine"
+            ? "경추 (C1~C7) 및 신경근"
+            : primaryId === "nervous"
+            ? "중추 및 말초 신경계"
+            : tool.body_area || "원인 의심 해부학 부위";
+        try {
+          anatomyEvent = createAnatomyEvent({
+            atlas: {
+              id: "vanatome-human-atlas",
+              version: "1.0",
+              referenceSex: profile.gender === "male" ? "male" : "female",
+            },
+            concept: {
+              canonicalConceptId: primaryId,
+              sourceKey: `inferred:${primaryId}`,
+              sourceMeshId: primaryId === "cervical_spine" ? "skeleton-cervical-vertebra" : primaryId,
+              label: primaryLabel,
+              system: tool.suspected_system || "nervous",
+              mappingStatus: "canonical",
+            },
+            relatedConcepts: suspectedIds.slice(1).map((id) => ({
+              canonicalConceptId: id,
+              sourceKey: `inferred:${id}`,
+              sourceMeshId: id === "nervous" ? "nervous-system" : id,
+              label: id === "nervous" ? "신경계 및 척수근" : id,
+              system: tool.suspected_system || "nervous",
+              side: "midline",
+              mappingStatus: "canonical",
+            })),
+            inputSource: "ai_inference",
+            state: "confirmed",
+            uncertainty: tool.clinical_reasoning || undefined,
+            provenance: "clinical_ai_inferred",
+            clinicalReasoning: tool.clinical_reasoning || undefined,
+          });
+        } catch (err) {
+          console.warn("[HealthAssistantDrawer] createAnatomyEvent failed:", err);
+        }
+      }
+
       const result = await runtime.healthRecords.create({
         householdId: PRIMARY_HOUSEHOLD_ID,
         profileId: profile.id,
@@ -1506,6 +1650,10 @@ export function HealthAssistantDrawer({
           sensation: tool.sensation || undefined,
           aggravatingFactors: tool.aggravating_factors || undefined,
           note: tool.formatted_diary,
+          suspectedAnatomyIds: tool.suspected_anatomy_ids,
+          suspectedSystem: tool.suspected_system,
+          clinicalReasoning: tool.clinical_reasoning,
+          anatomyEvent,
         },
       });
 
@@ -1625,9 +1773,19 @@ export function HealthAssistantDrawer({
           )}
           <span className="assistant-avatar" aria-hidden="true">봄</span>
           <div>
-            <h3>
-              봄이 · 건강 비서
-            </h3>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <h3>봄이 · 건강 비서</h3>
+              {contextLabel && (
+                <span className="channel-talk-context-tag" title="현재 화면 연동">
+                  {contextLabel}
+                </span>
+              )}
+            </div>
+            {profile && variant === "popover" && (
+              <small style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
+                {profile.displayName}님의 건강 비서
+              </small>
+            )}
           </div>
         </div>
         <div className="assistant-header-actions">
@@ -1662,21 +1820,11 @@ export function HealthAssistantDrawer({
             className="assistant-minimize-btn"
             type="button"
             onClick={onMinimize ?? (isEmbedded ? onClose : handleAnimatedClose)}
-            aria-label="최소화"
-            title="최소화"
+            aria-label="창 닫기"
+            title="창 닫기"
           >
             −
           </button>
-          {!isEmbedded && (
-            <button
-              className="assistant-close-btn"
-              type="button"
-              onClick={handleAnimatedClose}
-              aria-label="닫기"
-            >
-              ×
-            </button>
-          )}
         </div>
       </header>
 
@@ -2128,6 +2276,9 @@ export function HealthAssistantDrawer({
             <input
               type="text"
               placeholder={selectedImage ? "서류에 대해 추가할 메모나 질문을 적어주세요..." : "건강정보를 입력하거나 질문하세요..."}
+              // **placeholder 는 접근 가능한 이름이 아니다.** 글자를 넣기 시작하면
+              // 사라지므로 화면 낭독기가 읽을 것이 없어진다. 이름은 따로 붙인다.
+              aria-label="봄이에게 보낼 메시지"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={loading || !profile}
@@ -2144,9 +2295,9 @@ export function HealthAssistantDrawer({
       </aside>
   );
 
-  if (isEmbedded) {
+  if (isEmbedded || variant === "popover") {
     return (
-      <div className="health-assistant-embedded-container">
+      <div className={isEmbedded ? "health-assistant-embedded-container" : "health-assistant-popover-container"}>
         {drawerContent}
 
         {/* 원본 서류 이미지 크게 보기 모달 */}
@@ -3581,7 +3732,7 @@ function PainDiaryToolCard({
           className="button button-outline view-diary-btn"
           onClick={() => onNavigateToDiary(diaryDate)}
         >
-          📅 통증 다이어리 캘린더에서 확인하기
+          통증 다이어리 캘린더에서 확인하기
         </button>
       </div>
     );
@@ -3591,7 +3742,7 @@ function PainDiaryToolCard({
     <div className="draft-confirm-card pain-tool-card">
       <div className="card-header">
         <div className="tool-badge-row">
-          <span className="tool-calling-badge">🛠️ [Tool Calling] format_pain_diary</span>
+          <span className="tool-calling-badge">[Tool Calling] format_pain_diary</span>
           <span className="tool-name">AI 맞춤법 교정 &amp; 구조화</span>
         </div>
         <small>맞춤법을 교정하고 정리한 일기입니다. 확인 후 저장해 주세요.</small>
@@ -3664,6 +3815,7 @@ function PainDiaryToolCard({
         disabled={!bodyArea.trim() || !formattedDiary.trim()}
         onClick={() =>
           onSave({
+            ...toolCall,
             tool_name: "format_pain_diary",
             date_str: diaryDate,
             body_area: bodyArea.trim(),

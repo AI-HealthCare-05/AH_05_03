@@ -29,6 +29,15 @@ export interface UpdateHealthRecordInput {
   recordedAt: string;
   note: string;
   expectedVersion: number;
+  /**
+   * payload 에 **덧쓸** 칸들. 통째로 바꾸는 것이 아니다.
+   *
+   * 예전에는 이 칸이 없고 `LocalDomainProvider` 가 `payload: { note }` 를 보냈다 —
+   * 서버는 `record.payload = req.payload` 로 **통째로 교체**하므로, 메모만 고쳐도
+   * 혈압·혈당 수치가 지워졌다. 화면에는 "수정했습니다" 만 뜨고 값이 사라진다.
+   * 지금은 기존 payload 를 읽어 병합한다.
+   */
+  payload?: Record<string, unknown>;
 }
 
 export interface LocalDomainContextValue {

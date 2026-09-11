@@ -13,6 +13,8 @@ import {
   createRegionalBoundaryMaterial,
   createSelectedMaterials,
   createSelectedTransparentMaterials,
+  createDangerOrganHighlightMaterials,
+  createDangerOrganHoverMaterials,
   createStructuredFlowShellFillMaterials,
   INTERNALS_READABILITY_STYLE,
   shouldReturnToFullBody,
@@ -368,6 +370,27 @@ describe("calculateAdaptiveSprayMetrics (스프레이 브러시 확대 적응형
     expect(agDecay1).toBeLessThan(ag3);
     expect(agDecay2).toBeLessThan(agDecay1); // 점차 스무스하게 감소
   });
+
+  it("중요 진단 장기(간암 등)는 붉은색 투시 하이라이트 및 호버 시 강렬한 붉은빛 피드백을 적용한다", () => {
+    const source = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+
+    // 1. 기본 위험 장기 투시 머티리얼
+    const dangerMat = createDangerOrganHighlightMaterials(source) as THREE.MeshStandardMaterial;
+    expect(dangerMat.color.getHex()).toBe(0xf43f5e); // Rose red
+    expect(dangerMat.emissive.getHex()).toBe(0xe11d48);
+    expect(dangerMat.transparent).toBe(true);
+    expect(dangerMat.opacity).toBeCloseTo(0.78);
+    expect(dangerMat.depthWrite).toBe(false);
+
+    // 2. 위험 장기 마우스 호버 머티리얼 (일반 노란색이 아닌 강렬한 붉은색 네온 피드백)
+    const hoverMat = createDangerOrganHoverMaterials(source) as THREE.MeshStandardMaterial;
+    expect(hoverMat.color.getHex()).toBe(0xff2d55);
+    expect(hoverMat.emissive.getHex()).toBe(0xff0033);
+    expect(hoverMat.emissiveIntensity).toBeCloseTo(1.3);
+    expect(hoverMat.transparent).toBe(true);
+    expect(hoverMat.opacity).toBeCloseTo(0.9);
+  });
 });
+
 
 

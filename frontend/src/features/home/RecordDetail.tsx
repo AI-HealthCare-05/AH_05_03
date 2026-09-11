@@ -21,6 +21,7 @@ import { LEVEL_TONE, levelLabel, snapshot } from "./recordSummaryData";
 import type { DiseaseRisk, DiseaseVerdict } from "../assessment/contracts";
 import { MatrixCard, VerdictCard } from "../assessment/VerdictCards";
 import { FIELD_LABELS, FIELD_UNITS } from "../assessment/fields";
+import { RecordValueDetail } from "../health-data/ValueSheet";
 import type { HealthRecord } from "../../shared/local/domainContracts";
 import { Modal } from "../../shared/ui/Modal";
 
@@ -34,8 +35,55 @@ import { Modal } from "../../shared/ui/Modal";
  * 그때는 남아 있는 등급만 보여 주고, 대신 **그날 넣은 값으로 다시 판정**하는 길을
  * 열어 준다. 다시 판정한 결과는 오늘 기준이라는 것을 문구로 밝힌다.
  */
-export function RecordDetail({ record, onClose }: { record: HealthRecord; onClose: () => void }) {
+export function RecordDetail({
+  record,
+  onClose,
+  onEdit,
+  onDelete,
+  linkedAssessment,
+  onViewPrediction,
+}: {
+  record: HealthRecord;
+  onClose: () => void;
+  /**
+   * 고치기·지우기를 **카드 안에서** 한다.
+   *
+   * 예전에는 목록 한 줄에 `수정`·`삭제` 버튼이 있었다. 목록은 훑는 자리인데 그 자리에
+   * 되돌릴 수 없는 동작이 있으면 훑다가 잘못 누르는 것이 삭제가 되고, 무엇을 고치는지
+   * 보기 전에 고치기 버튼을 먼저 만난다. 내용을 본 뒤 고르게 한다.
+   *
+   * 판정 기록에는 넘기지 않는다 — 그날 화면에 뜬 값을 그대로 남긴 것이라 손으로
+   * 고치면 그날 본 것과 어긋난다. 그쪽은 "이 수치로 다시 판정하기" 가 답이다.
+   */
+  onEdit?: () => void;
+  onDelete?: () => void;
+  /** 이 기록에서 나온 판정. 검진 기록에서 "예측 결과 보기" 로 이어진다. */
+  linkedAssessment?: HealthRecord;
+  onViewPrediction?: (assessment: HealthRecord) => void;
+}) {
   const navigate = useNavigate();
+
+  /**
+   * **판정이 아닌 기록은 다른 화면이다.**
+   *
+   * 이 컴포넌트가 읽는 것은 `payload.inputs`·`levels`·`verdicts` 뿐이고 그 칸은
+   * 판정 스냅샷에만 있다. 검진표를 저장한 기록을 여기로 보내면 21개 항목이 담겨
+   * 있는데도 "그날 넣은 값 0개 · 남아 있는 등급이 없습니다" 가 떴다 — 사용자가
+   * 챗봇으로 서류를 올린 뒤 본 화면이 그것이다(2026-09-10).
+   */
+  if (record.recordType !== "assessment") {
+    return (
+      <RecordValueDetail
+        record={record}
+        onClose={onClose}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        linkedAssessment={linkedAssessment}
+        onViewPrediction={onViewPrediction}
+      />
+    );
+  }
+
   const payload = snapshot(record);
 
   const inputs = Object.entries(payload.inputs ?? {}).filter(
@@ -159,6 +207,16 @@ export function RecordDetail({ record, onClose }: { record: HealthRecord; onClos
           >
             이 수치로 다시 판정하기
           </button>
+          {onEdit ? (
+            <button className="secondary-button" type="button" onClick={onEdit}>
+              수정
+            </button>
+          ) : null}
+          {onDelete ? (
+            <button className="danger-button" type="button" onClick={onDelete}>
+              삭제
+            </button>
+          ) : null}
         </div>
 
         <p className="assess-fineprint">

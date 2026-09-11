@@ -23,6 +23,8 @@ import type {
   SignUpData,
   SubscriptionBrief,
   SubscriptionData,
+  RecordPrefillData,
+  RecordValuesData,
 } from "./contracts";
 
 type FetchLike = typeof fetch;
@@ -282,6 +284,21 @@ export class ServerApiClient {
     });
   }
 
+  /** 대화 한 줄을 서버에 남긴다.
+   *
+   * 봄이와 주고받는 대화는 서버가 알아서 기록하지만, **서류를 확정 저장하는 경로는
+   * LLM 을 거치지 않아** 아무것도 남지 않았다. 그 경로가 이 메서드로 직접 남긴다. */
+  public createChatMessage(
+    sessionId: string,
+    role: "user" | "assistant",
+    content: string,
+  ): Promise<ChatMessageData> {
+    return this.request<ChatMessageData>(
+      `/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
+      { method: "POST", authenticated: true, body: JSON.stringify({ role, content }) },
+    );
+  }
+
   public async listChatMessages(sessionId: string): Promise<ChatMessageData[]> {
     const res = await this.request<ChatMessageListData>(
       `/chat-sessions/${encodeURIComponent(sessionId)}/messages`,
@@ -384,6 +401,32 @@ export class ServerApiClient {
       authenticated: true,
       body: JSON.stringify(body),
     });
+  }
+
+  /**
+   * 남긴 기록으로 판정 폼을 채운다.
+   *
+   * **매핑을 클라이언트에서 하지 않는 이유.** 검사명을 판정 칸에 잇는 판단이 이미
+   * 서버에 있다(`app/services/ocr_measurements.py` — 표기 100개, 관문 셋). 사전을
+   * 여기 복사하면 검진표 경로와 손기록 경로가 서로 다른 사전을 갖게 되고, 한쪽에서만
+   * 막히는 오독이 생긴다.
+   */
+  public async prefillFromRecords(profileId: string): Promise<RecordPrefillData> {
+    const params = new URLSearchParams({ profile_id: profileId });
+    return this.request<RecordPrefillData>(`/health-records/prefill?${params.toString()}`, {
+      authenticated: true,
+    });
+  }
+
+  /** 검진표에서 읽은 행을 판정 칸 이름으로 풀어 받는다.
+   *
+   * 표기 100개를 판정 칸 20개에 잇는 사전은 **서버에만** 있다. 여기서 직접 풀면
+   * 같은 판단이 두 곳에 살고 한쪽만 고쳐진다(AGENTS.md §2-5). */
+  public async readRecordValues(recordId: string): Promise<RecordValuesData> {
+    return this.request<RecordValuesData>(
+      `/health-records/${encodeURIComponent(recordId)}/values`,
+      { authenticated: true },
+    );
   }
 
   public async listHealthRecords(

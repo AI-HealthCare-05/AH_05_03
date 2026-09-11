@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -5,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AuthContext, type AuthContextValue } from "../../app/authContext";
 import { LocalDomainProvider } from "../../app/LocalDomainProvider";
+import { PRIMARY_HOUSEHOLD_ID, useLocalDomain } from "../../app/localDomainContext";
 import { ServerApiError, serverApiClient } from "../../shared/api/serverApiClient";
 import { AssessmentPage } from "./AssessmentPage";
 import type { AssessmentSummaryData } from "./contracts";
@@ -233,6 +235,56 @@ function bigNumberIn(scope: HTMLElement, text: string) {
   );
 }
 
+/**
+ * 기록을 먼저 심고 판정 화면을 그린다.
+ *
+ * "남긴 건강검진에서" 줄은 **실제 기록**에서 카드를 만든다(서버가 준 칸 목록이
+ * 아니다). `payload.values` 를 직접 담아 두면 `useCanonicalValues` 가 서버에
+ * 묻지 않으므로, 이 테스트는 사전 매핑이 아니라 화면 흐름만 본다.
+ */
+function renderWithRecords(
+  seeds: Array<{ recordType: string; recordedAt: string; payload: Record<string, unknown> }>,
+  state?: unknown,
+) {
+  function Seeded() {
+    const { runtime } = useLocalDomain();
+    const started = useRef(false);
+    // **기록을 다 심은 뒤에 화면을 그린다.** 실제로도 기록은 화면보다 먼저 있다.
+    // 마운트 뒤에 심으면 화면은 이미 빈 목록을 읽은 상태라 카드가 서지 않는다.
+    const [ready, setReady] = useState(false);
+
+    useEffect(() => {
+      if (!runtime || started.current) return;
+      started.current = true;
+      void (async () => {
+        for (const seed of seeds) {
+          await runtime.healthRecords.create({
+            householdId: PRIMARY_HOUSEHOLD_ID,
+            profileId: "p-1",
+            recordType: seed.recordType as never,
+            recordedAt: seed.recordedAt,
+            source: "manual",
+            payload: seed.payload,
+          });
+        }
+        setReady(true);
+      })();
+    }, [runtime]);
+
+    return ready ? <AssessmentPage /> : null;
+  }
+
+  return render(
+    <MemoryRouter initialEntries={[{ pathname: "/assessment", state }]}>
+      <AuthContext.Provider value={authValue()}>
+        <LocalDomainProvider databaseName={`ieobom-assess-test-${crypto.randomUUID()}`}>
+          <Seeded />
+        </LocalDomainProvider>
+      </AuthContext.Provider>
+    </MemoryRouter>,
+  );
+}
+
 function renderPage(state?: unknown) {
   return render(
     <MemoryRouter initialEntries={[{ pathname: "/assessment", state }]}>
@@ -422,8 +474,18 @@ describe("AssessmentPage", () => {
     const outlook = await screen.findByRole("region", { name: /년 뒤/ });
     // **뜻이 다른 둘을 블록으로 가른다.** 한 줄로 정렬하면 동년배보다 낮은 발병
     // 확률이 기준 초과 옆에 나란히 서고, 훑는 사람은 꼬리표보다 순서를 먼저 읽는다.
-    expect(within(outlook).getByText(/새로 생길 확률/)).toBeInTheDocument();
-    expect(within(outlook).getByText(/기준을 넘고 있을 확률/)).toBeInTheDocument();
+    //
+    // 제목 요소로 좁혀서 본다. 블록 제목의 문구가 **다른 블록의 안내에서 상호참조**
+    // 되므로(“아래 기준을 넘고 있을 확률로 답합니다”) 본문 전체를 훑으면 같은 말이
+    // 두 번 잡힌다 — 그 중복은 결함이 아니라 두 블록을 잇는 장치다.
+    const blockTitles = Array.from(outlook.querySelectorAll(".outlook-block-title")).map(
+      (el) => el.textContent ?? "",
+    );
+    expect(blockTitles.some((t) => t.includes("새로 생길 확률"))).toBe(true);
+    expect(blockTitles.some((t) => t.includes("기준을 넘고 있을 확률"))).toBe(true);
+
+    // 두 블록이 왜 갈리는지 화면이 말한다. 없으면 "나머지 질환이 빠졌다" 로 읽힌다.
+    expect(within(outlook).getByText(/되돌아가지 않는 질환/)).toBeInTheDocument();
 
     // 유병 줄은 **움직였을 때만** 변화폭을 적는다. 57% -> 66% 라 오른 줄이다.
     const htn = within(outlook).getByText("고혈압").closest("li") as HTMLElement;
@@ -535,15 +597,19 @@ describe("AssessmentPage", () => {
     await user.click(screen.getByRole("button", { name: /판정하기/ }));
 
     const anemia = (await screen.findByRole("heading", { name: "빈혈" })).closest("article") as HTMLElement;
-    // **5년과 10년을 둘 다** 적는다. 마지막 하나만 적으면 "당장은 어떤가" 를 물어볼
-    // 자리가 없고 두 숫자 사이의 기울기도 사라진다.
-    // 같은 숫자가 접이 안 표에도 있으므로 앞면 한 줄로 좁혀서 본다.
+    // **앞면은 5년 뒤 한 점만 적는다.** 카드 위 `ML 예측 X% → 판정` 이 이미 "지금" 을
+    // 말하므로 이 줄은 앞날만 맡는다. 해마다의 값은 아래 접이 표가 다 그린다.
+    //
+    // 이 붙임값은 지평이 `[5, 10]` 인 낡은 모양이다. 일부러 남겨 뒀다 — 여기서는
+    // **5년이 마지막 지평이 아닐 때도 5년을 고르는지**를 본다(인덱스를 박으면
+    // 10년을 적게 된다). 5년이 아예 없을 때의 대체는 `VerdictCards.test.tsx` 가 본다.
     const line = anemia.querySelector(".assess-trajectory-line") as HTMLElement;
     expect(within(line).getByText("새로 생길 확률")).toBeInTheDocument();
     expect(within(line).getByText("12%")).toBeInTheDocument();
-    expect(within(line).getByText("27%")).toBeInTheDocument();
     expect(within(line).getByText(/5년 뒤/)).toHaveTextContent("동년배 7%");
-    expect(within(line).getByText(/10년 뒤/)).toHaveTextContent("동년배 15%");
+    // 10년은 앞면에 없다. 접이 안 표에는 있다(아래).
+    expect(within(line).queryByText(/10년 뒤/)).toBeNull();
+    expect(within(line).queryByText("27%")).toBeNull();
     // 궤적이 없는 카드에는 그 칸이 없다 — 규칙 엔진이 이미 HIGH 로 판정한 고혈압.
     const htn = screen.getByRole("heading", { name: "고혈압" }).closest("article") as HTMLElement;
     expect(htn.querySelector(".assess-trajectory-line")).toBeNull();
@@ -958,6 +1024,150 @@ describe("테스트 프로필과 자세히 보기", () => {
     // 필수를 다 채웠어도 서버를 부르지 않는다.
     expect(call).not.toHaveBeenCalled();
     expect(screen.queryByText("판정 요약")).not.toBeInTheDocument();
+  });
+
+  /**
+   * **테스트 값은 기록에 남지 않는다.**
+   *
+   * 프리셋은 학회 기준 예시 수치라 사용자의 실제 몸이 아니다. 그대로 저장되면
+   * 추이 그래프와 "지난 판정으로 채우기" 목록이 시연용 점으로 오염되고, 그러면
+   * 그 목록에서 자기 기록을 골라낼 수 없다. 실제로 그렇게 쌓였다.
+   *
+   * 저장 지점이 **둘**이라 둘 다 본다 — 판정 직후 자동 저장과 결과 아래
+   * "기록에 남기기" 버튼. 한쪽만 막으면 다른 문으로 그대로 들어온다.
+   */
+  /**
+   * **남긴 기록으로 채우는 입구.**
+   *
+   * 값이 판정 폼에 들어오는 길이 사실상 검진표 OCR 하나였다 — 혈압·혈당을 기록으로
+   * 남겨도 여기서 손으로 다시 쳐야 했다. 매핑은 서버가 하고(`record_prefill`) 이
+   * 화면은 그 결과를 붓는 것만 한다. 화면 쪽에서 틀릴 자리가 둘이다.
+   *
+   * 하나. **직접 넣은 값을 덮으면 안 된다.** 덮으면 사용자가 방금 고친 수치가
+   * 조용히 되돌아가고, 그건 화면에서 구별되지 않는다.
+   *
+   * 둘. **잰 시각이 보여야 한다.** 석 달 전 혈압으로 오늘 판정하면 오늘의 답이 아니다.
+   */
+  it("카드를 열어 전체 수치를 보고 사용하기로 폼에 옮긴다", async () => {
+    // **카드가 곧 검진 한 건이다.** 예전에는 칸 이름과 숫자가 평평하게 늘어서서,
+    // 그 값들이 몇 건의 검진에서 온 것인지도 원본이 무엇인지도 읽히지 않았다.
+    const user = userEvent.setup();
+    renderWithRecords(
+      [
+        {
+          recordType: "health_screening",
+          recordedAt: "2026-09-10T10:00:00+09:00",
+          payload: { values: { sbp: 128, weight_kg: 78.4 } },
+        },
+      ],
+      { profileId: "p-1" },
+    );
+
+    const panel = await screen.findByRole("region", { name: "값을 불러와 채우기" }, { timeout: 5000 });
+    // 잰 날은 카드에 적힌다. 석 달 전 혈압으로 오늘 판정하면 오늘의 답이 아니다.
+    expect(panel).toHaveTextContent("9월 10일");
+
+    await user.click(within(panel).getByRole("button", { name: "자세히 보기" }));
+    // 펼친 카드에는 그 검진의 값이 다 보인다.
+    const card = await screen.findByRole("dialog", {}, { timeout: 5000 });
+    expect(within(card).getByText("128")).toBeInTheDocument();
+
+    await user.click(within(card).getByRole("button", { name: "이 수치 사용하기" }));
+
+    expect(screen.getByRole("spinbutton", { name: /수축기/ })).toHaveValue(128);
+    expect(screen.getByRole("spinbutton", { name: /체중/ })).toHaveValue(78.4);
+  });
+
+  it("참·거짓 칸은 숫자가 아니라 예/아니오로 채운다", async () => {
+    // 서버는 `is_fasting` 을 `1.0` 으로 실어 보낸다. 그걸 그대로 `"1"` 로 넣으면
+    // select 에 없는 값이라 **아무 오류 없이 빈칸으로 남는다** — 실측으로 그랬다.
+    const user = userEvent.setup();
+    renderWithRecords(
+      [
+        {
+          recordType: "health_screening",
+          recordedAt: "2026-09-08T07:00:00+09:00",
+          payload: { values: { fasting_glucose: 104, is_fasting: 1 } },
+        },
+      ],
+      { profileId: "p-1" },
+    );
+
+    const panel = await screen.findByRole("region", { name: "값을 불러와 채우기" }, { timeout: 5000 });
+    await user.click(within(panel).getByRole("button", { name: "자세히 보기" }));
+    const card = await screen.findByRole("dialog", {}, { timeout: 5000 });
+    await user.click(within(card).getByRole("button", { name: "이 수치 사용하기" }));
+
+    expect(screen.getByRole("spinbutton", { name: /공복혈당/ })).toHaveValue(104);
+    expect(screen.getByRole("combobox", { name: /공복 측정이었나/ })).toHaveValue("true");
+  });
+
+  it("한 번에 모아 오는 길은 직접 넣은 값을 덮지 않는다", async () => {
+    // 카드를 골라 "사용하기" 를 누른 것은 그 검진을 쓰겠다는 **명시적 선택**이라
+    // 덮는다. 반면 "최근 값 전부 가져오기" 는 칸마다 다른 날짜에서 값을 긁어 오는
+    // 것이므로, 사용자가 방금 친 값을 조용히 되돌리면 안 된다.
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "prefillFromRecords").mockResolvedValue({
+      items: [{ field: "sbp", value: 128, measured_at: "2026-09-10T10:00:00+09:00", record_type: "blood_pressure" }],
+      scanned: 3,
+    } as never);
+    renderWithRecords(
+      [
+        { recordType: "blood_pressure", recordedAt: "2026-09-10T10:00:00+09:00", payload: { values: { sbp: 128 } } },
+        { recordType: "body_measurement", recordedAt: "2026-06-08T08:00:00+09:00", payload: { values: { weight_kg: 78.4 } } },
+      ],
+      { profileId: "p-1" },
+    );
+
+    // 기록을 심은 뒤에 화면이 뜬다. 폼이 설 때까지 기다린 다음 손으로 넣는다.
+    const panel = await screen.findByRole("region", { name: "값을 불러와 채우기" }, { timeout: 5000 });
+    const sbp = screen.getByRole("spinbutton", { name: /수축기/ });
+    await user.clear(sbp);
+    await user.type(sbp, "145");
+
+    await user.click(within(panel).getByRole("button", { name: /최근 값 전부 가져오기/ }));
+
+    // 방금 넣은 145 가 남아야 한다. 128 로 되돌아가면 사용자는 이유를 알 수 없다.
+    expect(sbp).toHaveValue(145);
+  });
+
+  it("기록은 있는데 옮길 수치가 없으면 그 사실을 말한다", async () => {
+    vi.spyOn(serverApiClient, "prefillFromRecords").mockResolvedValue({ items: [], scanned: 7 } as never);
+    renderPage({ profileId: "p-1" });
+
+    // "기록이 없다" 와 "옮길 수치가 없다" 는 다른 상황이라 문구가 달라야 한다.
+    expect(await screen.findByText(/남긴 기록 7건에는 판정에 쓸 수치가 없었어요/)).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "값을 불러와 채우기" })).toBeNull();
+  });
+
+  it("프리셋으로 판정하면 결과는 나오지만 기록에는 남기지 않는다", async () => {
+    const user = userEvent.setup();
+    const save = vi.spyOn(serverApiClient, "assessSummary").mockResolvedValue(RESPONSE as never);
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "당뇨" }));
+    // 판정을 돌리기 전에 이미 알려 준다 — 돌린 뒤에 말하면 저장 실패로 읽힌다.
+    expect(screen.getByText(/기록에는 남지 않아요/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /판정하기/ }));
+
+    // 판정 자체는 그대로 된다. 프리셋의 쓸모가 결과를 보는 것이므로 막으면 안 된다.
+    expect(save).toHaveBeenCalled();
+    expect(await screen.findByText(/테스트 값이라 기록에 남기지 않았어요/)).toBeInTheDocument();
+  });
+
+  it("테스트 값 비우기는 폼을 통째로 비운다 — 표시만 떼지 않는다", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "당뇨" }));
+    expect(screen.getByRole("spinbutton", { name: /공복혈당/ })).toHaveValue(148);
+
+    await user.click(screen.getByRole("button", { name: "테스트 값 비우기" }));
+
+    // 표시만 떼면 예시 수치가 "내가 넣은 값" 으로 둔갑해 기록에 들어간다.
+    expect(screen.queryByText(/기록에는 남지 않아요/)).not.toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: /나이/ })).not.toHaveValue(52);
   });
 
   it("프리셋은 앞 프리셋의 값을 남기지 않는다 — 섞인 사람이 만들어지면 안 된다", async () => {

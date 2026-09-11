@@ -12,7 +12,6 @@ import {
   ChallengePage,
   ChallengeSetupPage,
   HealthDataPage,
-  InsightsPage,
   PainDiaryPage,
   UiPreviewPage,
 } from "./lazyRoutes";
@@ -78,16 +77,18 @@ export const router = createBrowserRouter([
         element: <ChallengePage />,
       },
       {
-        // 챌린지와 판정 수치를 모아 보는 곳. 가족 홈이 "관리", 여기가 "현황" 이다.
-        path: "insights",
-        element: <InsightsPage />,
-      },
-      {
-        // 건강기록 자체를 기간별로 훑는 곳. `insights` 와 겹쳐 보이지만 원천이 다르다 —
-        // 여기는 기기 안 `healthRecords`, `insights` 는 판정 스냅샷이다. 한쪽을 지우면
-        // 검사 지표 추이나 챌린지 달성 둘 중 하나가 갈 곳을 잃는다.
+        // **2026-09-10 `insights` 를 여기로 합쳤다.** 판정 스냅샷 추이와 기기 안
+        // `healthRecords` 추이가 화면 둘로 갈려 있었다 — 검사 수치를 보려면 어느
+        // 화면에 있는지 먼저 알아야 했다. 챌린지 카드(`ChallengeDashboardCard`)는
+        // `insights` 에만 있던 유일한 자리라 같이 옮겼다.
         path: "health-data",
         element: <HealthDataPage />,
+      },
+      {
+        // 옛 주소. 북마크·지난 링크가 404 가 되면 사용자는 기능이 사라진 줄 안다
+        // (아래 `/data` 와 같은 이유).
+        path: "insights",
+        element: <Navigate to="/health-data" replace />,
       },
       {
         // 계정 화면으로 합쳤다. 주소는 살려 둔다 — 북마크와 지난 링크가 404 가

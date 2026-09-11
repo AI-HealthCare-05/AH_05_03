@@ -232,8 +232,11 @@ export function DocumentPane({
         </span>
       </label>
 
+      {/* 위 `save` 가 `if (runtime?.documents)` 안에 있고 서버 런타임은 그 칸을 들지
+          않는다(`serverDomainRuntime.ts` 의 `documents: undefined`). 그래서 "이 브라우저에
+          암호화해 둔다" 는 옛 문구는 사실이 아니었다. 실제 동작은 아래가 맞다. */}
       <p className="checkup-privacy">
-        원본은 이 브라우저에 암호화해 두고, 읽는 동안에만 서버를 거칩니다. 서버 데이터베이스에는 남지 않아요.
+        원본은 어디에도 보관하지 않아요. 읽어 들이는 동안에만 쓰고, 확정한 수치만 내 계정에 남습니다.
       </p>
 
       {job ? (

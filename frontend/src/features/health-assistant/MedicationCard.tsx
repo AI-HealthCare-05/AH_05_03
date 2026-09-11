@@ -32,7 +32,7 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, ch
                 has_interaction_danger ? "badge-danger" : "badge-safe"
               }`}
             >
-              {has_interaction_danger ? "🚨 식약처 DUR 병용금기 주의" : "ℹ️ 식약처 DUR 병용 안전 확인"}
+              {has_interaction_danger ? "식약처 DUR 병용금기 주의" : "식약처 DUR 병용 안전 확인"}
             </span>
             <span className="medication-query-text">{query}</span>
           </div>

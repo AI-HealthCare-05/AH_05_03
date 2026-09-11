@@ -123,7 +123,7 @@ export function UiPreviewPage() {
     <div className="ui-preview-shell">
       <header className="ui-preview-header">
         <NavLink className="ui-preview-brand" to="/ui-preview">
-          <span aria-hidden="true">이</span>
+          <img src="/ieobom-icon.svg" alt="" aria-hidden="true" width={32} height={32} />
           <strong>이어봄</strong>
         </NavLink>
         <nav aria-label="미리보기 메뉴">

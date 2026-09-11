@@ -1,17 +1,14 @@
-import { lazy, Suspense, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
+import { lazy, Suspense, type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
 import { BirthDateInput } from "../../shared/ui/BirthDateInput";
 import { Modal } from "../../shared/ui/Modal";
 // 모달은 눌러야 뜬다. 정적으로 두면 판정 카드 일체가 홈의 첫 청크에 실린다.
 const RecordDetail = lazy(() => import("./RecordDetail").then((m) => ({ default: m.RecordDetail })));
-// 건강 비서. 3,000줄 + CSS 1,500줄이라 홈의 첫 청크에 넣지 않는다 — 대화를 한 번도
-// 열지 않는 사용자가 그걸 다 받아 갈 이유가 없다.
-const HealthAssistantDrawer = lazy(() =>
-  import("../health-assistant/HealthAssistantDrawer").then((m) => ({ default: m.HealthAssistantDrawer })),
-);
 import { RecordSummary } from "./RecordSummary";
+import { RecordCard } from "./RecordCard";
+import { recordTypeLabel } from "../../shared/local/recordSummary";
 import type {
   DashboardSummary,
   FamilyProfile,
@@ -19,36 +16,37 @@ import type {
   HealthRecord,
   HealthRecordType,
 } from "../../shared/local/domainContracts";
+import { recordSummary } from "../../shared/local/recordSummary";
 import { LEVEL_LABEL } from "../assessment/contracts";
 import type { RiskLevel } from "../assessment/contracts";
 import { type LatestSummary, listLatestByProfile } from "../assessment/snapshots";
 import { regionRisks, type RegionRisk } from "./bodyRisk";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
 
-import { DentalPickerModal } from "./DentalPickerModal";
-import type { ToothDefinition } from "./dentalPickerLogic";
-import type { StagingItem } from "./VanatomeBodyMap";
+import { FamilyIntegratedMonitoring } from "./FamilyIntegratedMonitoring";
 
 const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
   default: module.VanatomeBodyMap,
 })));
 
-const RECORD_LABELS: Record<HealthRecordType, string> = {
-  blood_pressure: "혈압",
-  blood_glucose: "혈당",
-  body_measurement: "신체 측정",
-  lab_result: "검사 결과",
-  vaccination: "예방접종",
-  health_screening: "건강검진",
-  pain: "통증 기록",
-  walking: "걷기",
-  exercise: "운동",
-  medication: "복약",
-  sleep: "수면",
-  daily_condition: "컨디션",
-  assessment: "위험 판정",
-  note: "건강 메모",
-};
+
+/** 기록 작성 폼의 종류 보기. **이름은 여기서 정하지 않는다** — `recordTypeLabel`
+ *  한 곳에서 온다. 예전에는 이 파일이 자기 이름표를 들고 있었고 이미 어긋나 있었다. */
+const RECORD_TYPES: HealthRecordType[] = [
+  "blood_pressure",
+  "blood_glucose",
+  "body_measurement",
+  "lab_result",
+  "health_screening",
+  "pain",
+  "walking",
+  "exercise",
+  "medication",
+  "sleep",
+  "daily_condition",
+  "vaccination",
+  "note",
+];
 
 const RELATIONSHIPS = ["본인", "배우자", "자녀", "부모", "형제·자매", "기타"];
 
@@ -76,6 +74,44 @@ export function HomePage() {
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [summary, setSummary] = useState<DashboardSummary>();
   const [records, setRecords] = useState<HealthRecord[]>([]);
+
+  // 전역 비서(채널톡)와 프로필 동기화
+  useEffect(() => {
+    if (selectedProfileId) {
+      try {
+        localStorage.setItem("ieobom:selected-profile-id", selectedProfileId);
+      } catch {
+        // ignore
+      }
+      window.dispatchEvent(new CustomEvent("ieobom:profile-changed", { detail: { profileId: selectedProfileId } }));
+    }
+  }, [selectedProfileId]);
+
+  /**
+   * 목록에 세울 기록. **판정은 자기 수치 기록에 매달려 있으면 빠진다.**
+   *
+   * 판정은 수치에서 나온 것이다. 둘을 나란히 두면 같은 일이 두 줄로 서고, 사용자가
+   * 어느 쪽을 열어야 하는지 매번 고르게 된다. 수치 기록 하나만 세우고 판정은 그
+   * 기록의 자세히에서 "예측 결과 보기" 로 연다.
+   *
+   * **고리가 없는 판정은 그대로 세운다.** 이 고리(`payload.sourceRecordId`)가 생기기
+   * 전에 남긴 판정이 있고, 그것까지 숨기면 **어디에서도 열 수 없다.** 목록에서
+   * 빼는 것과 데이터를 잃는 것은 다르다.
+   */
+  const listedRecords = useMemo(() => {
+    const docLinked = new Set(
+      records.filter((record) => record.recordType !== "assessment" && record.sourceDocumentId).map((r) => r.sourceDocumentId),
+    );
+    return records.filter((record) => {
+      if (record.recordType !== "assessment") return true;
+      const payload = record.payload as { sourceRecordId?: string };
+      // 수치 기록을 가리키고 그 기록이 실제로 남아 있으면 목록에서 뺀다.
+      if (payload.sourceRecordId && records.some((item) => item.id === payload.sourceRecordId)) return false;
+      // 같은 검진표에서 나온 수치 기록이 있으면 그쪽에서 열린다.
+      if (record.sourceDocumentId && docLinked.has(record.sourceDocumentId)) return false;
+      return true;
+    });
+  }, [records]);
   const [deletedRecords, setDeletedRecords] = useState<HealthRecord[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   // "건강기록 작성" 을 누르면 바로 폼이 아니라 갈림길이 먼저 뜬다. 손으로 적는 것과
@@ -88,208 +124,7 @@ export function HomePage() {
   // 3D 인체에 색을 입힐 판정. `openRecord` 와 따로 두는 이유는 모달을 닫아도 색은
   // 남아야 하기 때문이다 — 모달을 닫는 동작은 "그만 볼래" 지 "선택을 풀래" 가 아니다.
   const [bodyRecord, setBodyRecord] = useState<HealthRecord>();
-  const [assistantOpen, setAssistantOpen] = useState(true);
-  const [quickActionsMinimized, setQuickActionsMinimized] = useState(true);
-
-  type SidebarCardId = "quickActions" | "assistant" | "dentalPicker";
-  const [dentalPickerOpen, setDentalPickerOpen] = useState(true);
-  const [dentalPickerMinimized, setDentalPickerMinimized] = useState(true);
-  const [, setSelectedTooth] = useState<ToothDefinition>();
-  const [stagedItems, setStagedItems] = useState<StagingItem[]>([]);
-  const selectedDentalFdis = useMemo(() => {
-    const set = new Set<number>();
-    for (const item of stagedItems) {
-      if (item.id.startsWith("dental-fdi-")) {
-        const num = Number(item.id.replace("dental-fdi-", ""));
-        if (!isNaN(num)) set.add(num);
-      }
-    }
-    return set;
-  }, [stagedItems]);
-  const toothSelectRef = useRef<((toothCode: number, toothName: string, shouldSelect?: boolean) => void) | undefined>(undefined);
-
-  const [sidebarOrder, setSidebarOrder] = useState<SidebarCardId[]>(() => {
-    try {
-      const saved = localStorage.getItem("ieobom_sidebar_order");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const valid = parsed.filter(
-            (id): id is SidebarCardId =>
-              id === "quickActions" || id === "assistant" || id === "dentalPicker",
-          );
-          if (valid.includes("quickActions") && valid.includes("assistant")) {
-            if (!valid.includes("dentalPicker")) {
-              valid.push("dentalPicker");
-            }
-            return valid;
-          }
-        }
-      }
-    } catch {
-      // ignore
-    }
-    return ["quickActions", "assistant", "dentalPicker"];
-  });
-
-  const [draggingCard, setDraggingCard] = useState<SidebarCardId | null>(null);
-  const [dragOffsetY, setDragOffsetY] = useState(0);
-  const [dragStartIndex, setDragStartIndex] = useState<number | null>(null);
-  const [dragActiveCards, setDragActiveCards] = useState<SidebarCardId[]>([]);
-  const [previewTargetIndex, setPreviewTargetIndex] = useState<number | null>(null);
-  const [cardHeights, setCardHeights] = useState<Record<SidebarCardId, number>>({
-    quickActions: 240,
-    assistant: 840,
-    dentalPicker: 460,
-  });
-
-  const dragStartPosRef = useRef<{
-    y: number;
-    cardId: SidebarCardId;
-    startIndex: number;
-    activeCards: SidebarCardId[];
-  } | null>(null);
-
-  const quickActionsCardRef = useRef<HTMLDivElement>(null);
-  const assistantCardRef = useRef<HTMLDivElement>(null);
-  const dentalPickerCardRef = useRef<HTMLDivElement>(null);
-
-  const getActiveSidebarCards = useCallback((): SidebarCardId[] => {
-    return sidebarOrder.filter((id) => {
-      if (id === "quickActions") return !quickActionsMinimized;
-      if (id === "assistant") return assistantOpen;
-      if (id === "dentalPicker") return dentalPickerOpen && !dentalPickerMinimized;
-      return false;
-    });
-  }, [sidebarOrder, quickActionsMinimized, assistantOpen, dentalPickerOpen, dentalPickerMinimized]);
-
-  const handleCardDragStart = (cardId: SidebarCardId, e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest("button, a, input, select, textarea")) return;
-
-    const activeCards = getActiveSidebarCards();
-    if (activeCards.length < 2) return;
-
-    e.preventDefault();
-    const currentTarget = e.currentTarget as HTMLElement;
-    if (typeof currentTarget.setPointerCapture === "function") {
-      currentTarget.setPointerCapture(e.pointerId);
-    }
-
-    setCardHeights({
-      quickActions: quickActionsCardRef.current?.offsetHeight || 240,
-      assistant: assistantCardRef.current?.offsetHeight || 840,
-      dentalPicker: dentalPickerCardRef.current?.offsetHeight || 460,
-    });
-
-    const startIndex = activeCards.indexOf(cardId);
-    dragStartPosRef.current = { y: e.clientY, cardId, startIndex, activeCards };
-    setDraggingCard(cardId);
-    setDragOffsetY(0);
-    setDragStartIndex(startIndex);
-    setDragActiveCards(activeCards);
-    setPreviewTargetIndex(startIndex);
-  };
-
-  const handleCardDragMove = (e: React.PointerEvent) => {
-    if (!dragStartPosRef.current) return;
-    const deltaY = e.clientY - dragStartPosRef.current.y;
-    setDragOffsetY(deltaY);
-
-    const { startIndex, activeCards } = dragStartPosRef.current;
-    const stepThreshold = 70;
-    let targetIdx = startIndex;
-
-    if (deltaY > 0) {
-      const steps = Math.floor((deltaY + stepThreshold / 2) / stepThreshold);
-      targetIdx = Math.min(activeCards.length - 1, startIndex + steps);
-    } else if (deltaY < 0) {
-      const steps = Math.floor((-deltaY + stepThreshold / 2) / stepThreshold);
-      targetIdx = Math.max(0, startIndex - steps);
-    }
-
-    setPreviewTargetIndex(targetIdx);
-  };
-
-  const handleCardDragEnd = (e: React.PointerEvent) => {
-    if (!dragStartPosRef.current) return;
-    try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch {
-      // ignore
-    }
-
-    const { startIndex, activeCards } = dragStartPosRef.current;
-    const targetIdx = previewTargetIndex ?? startIndex;
-
-    if (targetIdx !== startIndex && targetIdx >= 0 && targetIdx < activeCards.length) {
-      const newActive = [...activeCards];
-      const [moved] = newActive.splice(startIndex, 1);
-      newActive.splice(targetIdx, 0, moved);
-
-      setSidebarOrder((prev) => {
-        const inactive = prev.filter((id) => !newActive.includes(id));
-        const nextOrder = [...newActive, ...inactive];
-        try {
-          localStorage.setItem("ieobom_sidebar_order", JSON.stringify(nextOrder));
-        } catch {
-          // ignore
-        }
-        return nextOrder;
-      });
-    }
-
-    dragStartPosRef.current = null;
-    setDraggingCard(null);
-    setDragOffsetY(0);
-    setDragStartIndex(null);
-    setDragActiveCards([]);
-    setPreviewTargetIndex(null);
-  };
-
-  const getCardStyle = (cardId: SidebarCardId): React.CSSProperties => {
-    const isDragging = draggingCard === cardId;
-    const gap = 20;
-
-    if (isDragging) {
-      return {
-        transform: `translateY(${dragOffsetY}px)`,
-        zIndex: 10,
-        boxShadow: "0 18px 40px rgba(35, 61, 112, 0.18)",
-        transition: "none",
-      };
-    }
-
-    if (draggingCard && dragStartIndex !== null && previewTargetIndex !== null) {
-      const origIdx = dragActiveCards.indexOf(cardId);
-      const targetIdx = previewTargetIndex;
-      const draggedHeight = cardHeights[draggingCard] || 300;
-
-      if (origIdx !== -1) {
-        if (targetIdx > dragStartIndex) {
-          if (origIdx > dragStartIndex && origIdx <= targetIdx) {
-            return {
-              transform: `translateY(-${draggedHeight + gap}px)`,
-              transition: "transform 0.28s cubic-bezier(0.2, 0, 0, 1)",
-              zIndex: 1,
-            };
-          }
-        } else if (targetIdx < dragStartIndex) {
-          if (origIdx >= targetIdx && origIdx < dragStartIndex) {
-            return {
-              transform: `translateY(${draggedHeight + gap}px)`,
-              transition: "transform 0.28s cubic-bezier(0.2, 0, 0, 1)",
-              zIndex: 1,
-            };
-          }
-        }
-      }
-    }
-
-    return {
-      transform: "translateY(0)",
-      transition: "transform 0.28s cubic-bezier(0.2, 0, 0, 1)",
-    };
-  };
+  const [highlightOrganKey, setHighlightOrganKey] = useState<string>();
   // 영구 삭제를 물어볼 대상. **한 번 더 누르게 한다** — 되돌릴 수 없는데 복원 버튼
   // 바로 옆이라, 한 번에 지워지면 누르려던 것과 다른 것이 사라진다.
   const [purgingRecord, setPurgingRecord] = useState<HealthRecord>();
@@ -326,9 +161,27 @@ export function HomePage() {
       } finally {
         setDashboardLoading(false);
       }
+
+      // **판정 요약(구성원 카드의 "매우 높음 주의 N개" 배지)도 같이 새로 읽는다.**
+      // 예전에는 이 배지가 구성원 목록이 바뀔 때만 갱신됐다 — "판정 화면에서
+      // 돌아오면 라우트가 갈리면서 다시 서니까" 라는 전제였는데, 그 전제가
+      // 여기서는 깨진다. 봄이 대화는 이 페이지 **안에** 있어서 라우트가 안
+      // 갈린다. 같은 페이지에서 대화로 판정을 남기면(문서 업로드 등) 기록
+      // 목록은 새로 읽히는데 배지만 그대로였다.
+      //
+      // **`await` 하지 않는다.** 이걸 `refreshDashboard` 의 반환 Promise 에
+      // 묶으면, 기록을 저장·수정·삭제하는 모든 호출부가 이 여분의 왕복까지
+      // 끝나야 자기 할 일(모달 닫기 등)을 마친 것으로 친다 — 배지 하나 때문에
+      // 본 동작이 늦어진다. 배지는 늦게 와도 된다.
+      void listLatestByProfile(runtime, [profileId])
+        .then((latest) => setVerdicts((prev) => ({ ...prev, ...latest })))
+        .catch(() => {
+          // 배지 하나 못 읽은 것으로 방금 갱신한 대시보드를 에러로 덮지 않는다.
+        });
     },
     [runtime, setActionError],
   );
+
 
   /**
    * 인체에 색을 입힐 판정 **한 장**.
@@ -364,6 +217,11 @@ export function HomePage() {
   );
 
   useEffect(() => {
+    setHighlightOrganKey(undefined);
+    setBodyRecord(undefined);
+  }, [selectedProfile?.id]);
+
+  useEffect(() => {
     if (!runtime || !routeRecordId) return;
     void runtime.healthRecords.get(routeRecordId).then((result) => {
       if (result.ok && !result.value.deletedAt) setEditingRecord(result.value);
@@ -376,7 +234,31 @@ export function HomePage() {
   useEffect(() => {
     if (!selectedProfile) return;
     const timeout = window.setTimeout(() => void refreshDashboard(selectedProfile.id), 0);
-    return () => window.clearTimeout(timeout);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [refreshDashboard, selectedProfile]);
+  /**
+   * 다른 탭·다른 기기에서 바뀐 것을 **돌아왔을 때** 따라잡는다.
+   *
+   * 정본은 PostgreSQL 이다(ADR-011). 이 탭이 열려 있는 동안 다른 탭이나 다른
+   * 기기에서 기록을 남기면, 이 탭은 그 변화를 알 방법이 없다 — 소켓도 폴링도
+   * 없다. `visibilitychange` 는 가장 값싼 절충이다: 사용자가 다른 창을 보다가
+   * 이 탭으로 돌아오는 그 순간에만 다시 읽는다. 눈에 보이지 않을 때는 아무것도
+   * 하지 않으므로 배터리·요청 비용이 거의 없다.
+   */
+  useEffect(() => {
+    if (!selectedProfile) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshDashboard(selectedProfile.id);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    // 탭 전환 없이 다른 앱 창에 있다가 돌아오는 경우도 있다 — `focus` 도 같이 듣는다.
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
   }, [refreshDashboard, selectedProfile]);
 
   // 판정 요약은 구성원 목록이 바뀔 때만 다시 읽는다. 판정 화면에서 돌아오면 라우트가
@@ -627,6 +509,8 @@ export function HomePage() {
                 aria-pressed={profile.id === selectedProfile?.id}
                 onClick={() => {
                   setSelectedProfileId(profile.id);
+                  setHighlightOrganKey(undefined);
+                  setBodyRecord(undefined);
                   void navigate(`/members/${profile.id}`);
                 }}
               >
@@ -649,7 +533,7 @@ export function HomePage() {
               <span className="add-member-mark" aria-hidden="true">+</span>
               <span className="member-card-copy">
                 <strong>구성원 추가</strong>
-                <small>이 브라우저에 새 프로필 만들기</small>
+                <small>우리 가정에 새 프로필 만들기</small>
               </span>
             </button>
           </div>
@@ -671,8 +555,12 @@ export function HomePage() {
                 }}>
                   프로필 관리
                 </button>
-                <button className="primary-button" type="button" onClick={() => setRecordChoiceOpen(true)}>
-                  건강기록 작성
+                <button className="secondary-button" type="button" onClick={() => {
+                  setActionError(undefined);
+                  setFamilyHistoryDialogOpen(true);
+                  void navigate(`/members/${selectedProfile.id}/family-history`);
+                }}>
+                  가족력 관리
                 </button>
               </div>
             </div>
@@ -686,19 +574,27 @@ export function HomePage() {
               <MetricCard label="프로필 상태" value="안전" tone="safe" />
             </div>
 
+            <FamilyIntegratedMonitoring
+              profiles={profiles}
+              selectedProfileId={selectedProfile.id}
+              onSelectProfile={(id) => {
+                setSelectedProfileId(id);
+                setHighlightOrganKey(undefined);
+                setBodyRecord(undefined);
+                void navigate(`/members/${id}`);
+              }}
+              records={records}
+              onSelectOrgan={(key) => setHighlightOrganKey(key || undefined)}
+            />
+
             <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
               <VanatomeBodyMap
+                key={`${selectedProfile.id}-${selectedProfile.gender}`}
                 profileName={selectedProfile.displayName}
                 gender={selectedProfile.gender}
                 risks={bodyRisks}
                 risksAt={activeBodyRecord ? formatDateTime(activeBodyRecord.recordedAt) : undefined}
-                isDentalOpen={dentalPickerOpen}
-                onDentalOpenChange={(open) => {
-                  setDentalPickerOpen(open);
-                  if (open) setDentalPickerMinimized(false);
-                }}
-                onToothSelectRef={toothSelectRef}
-                onStagingChange={setStagedItems}
+                highlightOrganKey={highlightOrganKey}
               />
             </Suspense>
 
@@ -732,177 +628,29 @@ export function HomePage() {
                 </div>
               ) : (
                 <ul className="record-list">
-                  {records.slice(0, 5).map((record) => (
-                    <li key={record.id}>
-                      <span className="record-type-mark" aria-hidden="true">{recordMark(record.recordType)}</span>
-                      <div>
-                        <strong>{RECORD_LABELS[record.recordType]}</strong>
-                        <RecordSummary record={record} />
-                      </div>
-                      <time dateTime={record.recordedAt}>{formatDateTime(record.recordedAt)}</time>
-                      <div className="record-row-actions">
-                        {/* 판정은 그날 화면에 뜬 값을 그대로 남긴 것이라 고칠 것이 아니다.
-                            손으로 고치면 그날 본 것과 기록이 어긋난다. 그래서 열어 보기만 한다. */}
-                        {record.recordType === "assessment" ? (
-                          <button
-                            type="button"
-                            aria-pressed={activeBodyRecord?.id === record.id}
-                            onClick={() => {
-                              setBodyRecord(record);
-                              setOpenRecord(record);
-                            }}
-                          >
-                            자세히
-                          </button>
-                        ) : (
-                          <button type="button" onClick={() => {
-                            setActionError(undefined);
-                            setEditingRecord(record);
-                            void navigate(`/members/${selectedProfile.id}/records/${record.id}`);
-                          }}>수정</button>
-                        )}
-                        <button type="button" onClick={() => {
-                          setActionError(undefined);
-                          setDeletingRecord(record);
-                        }}>삭제</button>
-                      </div>
-                    </li>
+                  {/* **판정은 여기 서지 않는다.** 판정은 수치에서 나온 것이라, 수치
+                      기록과 나란히 두면 같은 일이 두 줄로 보인다. 수치 기록의 자세히
+                      안에서 "예측 결과 보기" 로 연다(`RecordValueDetail`).
+
+                      고리가 없는 옛 판정은 그대로 세운다 — 숨기면 열 방법이 없다. */}
+                  {listedRecords.slice(0, 5).map((record) => (
+                    <RecordCard
+                      key={record.id}
+                      record={record}
+                      pressed={activeBodyRecord?.id === record.id}
+                      summary={record.recordType === "assessment" ? <RecordSummary record={record} /> : undefined}
+                      onOpen={() => {
+                        setActionError(undefined);
+                        // 판정 기록은 3D 인체에 색도 입힌다. 다른 종류는 그 값이 없어
+                        // 색을 바꾸지 않는다(`bodyRisks` 가 종류를 본다).
+                        if (record.recordType === "assessment") setBodyRecord(record);
+                        setOpenRecord(record);
+                      }}
+                    />
                   ))}
                 </ul>
               )}
             </div>
-          </div>
-
-          <div className="member-dashboard-sidebar">
-            {sidebarOrder.map((cardId) => {
-              if (cardId === "quickActions") {
-                if (quickActionsMinimized) return null;
-                return (
-                  <div
-                    key="quickActions"
-                    ref={quickActionsCardRef}
-                    className={`sidebar-reorder-card ${draggingCard === "quickActions" ? "is-dragging" : ""}`}
-                    style={getCardStyle("quickActions")}
-                  >
-                    <aside className="quick-actions-panel">
-                      <div
-                        className="quick-actions-header-row"
-                        onPointerDown={(e) => handleCardDragStart("quickActions", e)}
-                        onPointerMove={handleCardDragMove}
-                        onPointerUp={handleCardDragEnd}
-                        onPointerCancel={handleCardDragEnd}
-                        title="드래그하여 위치 변경"
-                      >
-                        <div className="quick-actions-header-title-wrap">
-                          <span
-                            className="sidebar-card-drag-grip"
-                            aria-hidden="true"
-                            title="드래그하여 위치 변경"
-                          >
-                            ⠿
-                          </span>
-                          <div>
-                            <p className="section-kicker">빠른 작업</p>
-                            <h2>무엇을 기록할까요?</h2>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          className="quick-actions-minimize-btn"
-                          onClick={() => setQuickActionsMinimized(true)}
-                          aria-label="빠른 작업 최소화"
-                          title="빠른 작업 최소화"
-                        >
-                          −
-                        </button>
-                      </div>
-                      <button type="button" onClick={() => setRecordChoiceOpen(true)}>
-                        <strong>건강기록 작성</strong>
-                        <small>직접 적거나, 검진표를 올려 판정까지</small>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFamilyHistoryDialogOpen(true);
-                          void navigate(`/members/${selectedProfile.id}/family-history`);
-                        }}
-                      >
-                        <strong>가족력 관리</strong>
-                        <small>구성원별 질환·친족 정보</small>
-                      </button>
-                      <NavLink to="/data">
-                        <strong>암호화 백업</strong>
-                        <small>파일로 내보내기·가져오기</small>
-                      </NavLink>
-                    </aside>
-                  </div>
-                );
-              }
-
-              if (cardId === "assistant") {
-                if (!selectedProfile || !runtime || !assistantOpen) return null;
-                return (
-                  <div
-                    key="assistant"
-                    ref={assistantCardRef}
-                    className={`sidebar-reorder-card ${draggingCard === "assistant" ? "is-dragging" : ""}`}
-                    style={getCardStyle("assistant")}
-                  >
-                    <Suspense fallback={<div className="assistant-loading-card">봄이 대화를 준비하는 중…</div>}>
-                      <HealthAssistantDrawer
-                        key={selectedProfile.id}
-                        profile={selectedProfile}
-                        runtime={runtime}
-                        isOpen={assistantOpen}
-                        variant="embedded"
-                        onMinimize={() => setAssistantOpen(false)}
-                        onClose={() => setAssistantOpen(false)}
-                        onRecordSaved={() => refreshDashboard(selectedProfile.id)}
-                        onNavigateToRecords={() => setDeletedRecordsDialogOpen(false)}
-                        onNavigateToDiary={(dateKey) => navigate(`/pain-diary?date=${dateKey}`)}
-                        dragHandleProps={{
-                          onPointerDown: (e) => handleCardDragStart("assistant", e),
-                          onPointerMove: handleCardDragMove,
-                          onPointerUp: handleCardDragEnd,
-                          onPointerCancel: handleCardDragEnd,
-                          title: "드래그하여 위치 변경",
-                        }}
-                      />
-                    </Suspense>
-                  </div>
-                );
-              }
-
-              if (cardId === "dentalPicker") {
-                if (!dentalPickerOpen || dentalPickerMinimized) return null;
-                return (
-                  <div
-                    key="dentalPicker"
-                    ref={dentalPickerCardRef}
-                    className={`sidebar-reorder-card ${draggingCard === "dentalPicker" ? "is-dragging" : ""}`}
-                    style={getCardStyle("dentalPicker")}
-                  >
-                    <DentalPickerModal
-                      isOpen={dentalPickerOpen}
-                      mode="embedded"
-                      selectedFdis={selectedDentalFdis}
-                      onClose={() => setDentalPickerMinimized(true)}
-                      onMinimize={() => setDentalPickerMinimized(true)}
-                      onSelectTooth={(tooth, shouldSelect) => {
-                        setSelectedTooth(tooth);
-                        toothSelectRef.current?.(tooth.fdiNumber, tooth.koreanName, shouldSelect);
-                      }}
-                      onPointerDown={(e) => handleCardDragStart("dentalPicker", e)}
-                      onPointerMove={handleCardDragMove}
-                      onPointerUp={handleCardDragEnd}
-                      onPointerCancel={handleCardDragEnd}
-                    />
-                  </div>
-                );
-              }
-
-              return null;
-            })}
           </div>
         </section>
       ) : null}
@@ -941,7 +689,46 @@ export function HomePage() {
 
       {openRecord ? (
         <Suspense fallback={null}>
-          <RecordDetail record={openRecord} onClose={() => setOpenRecord(undefined)} />
+          <RecordDetail
+            record={openRecord}
+            onClose={() => setOpenRecord(undefined)}
+            /* 이 검진표에서 나온 판정. 같은 원본 서류를 가리키는 판정 기록이 있으면
+               "예측하기" 대신 "예측 결과 보기" 가 선다 — 이미 판정한 것을 다시
+               판정하게 만들면 같은 서류로 기록이 둘씩 쌓인다. */
+            linkedAssessment={
+              openRecord.recordType === "assessment"
+                ? undefined
+                : records.find(
+                    (item) =>
+                      item.recordType === "assessment" &&
+                      // 수치 기록을 직접 가리키는 판정이 우선이다. 검진표 고리는
+                      // 그 고리가 생기기 전에 남긴 기록을 위한 뒷문이다.
+                      ((item.payload as { sourceRecordId?: string }).sourceRecordId === openRecord.id ||
+                        (Boolean(openRecord.sourceDocumentId) &&
+                          item.sourceDocumentId === openRecord.sourceDocumentId)),
+                  )
+            }
+            onViewPrediction={(assessment) => setOpenRecord(assessment)}
+            // 판정 기록은 고치지 않는다 — 그날 본 값을 그대로 남긴 것이다.
+            // 그래서 그 종류에는 `onEdit` 을 넘기지 않고, 카드가 버튼을 안 그린다.
+            onEdit={
+              openRecord.recordType === "assessment"
+                ? undefined
+                : () => {
+                    const target = openRecord;
+                    setOpenRecord(undefined);
+                    setActionError(undefined);
+                    setEditingRecord(target);
+                    if (selectedProfile) void navigate(`/members/${selectedProfile.id}/records/${target.id}`);
+                  }
+            }
+            onDelete={() => {
+              const target = openRecord;
+              setOpenRecord(undefined);
+              setActionError(undefined);
+              setDeletingRecord(target);
+            }}
+          />
         </Suspense>
       ) : null}
 
@@ -988,7 +775,12 @@ export function HomePage() {
               type="button"
               onClick={() => {
                 setRecordChoiceOpen(false);
-                setAssistantOpen(true);
+                try {
+                  localStorage.setItem("ieobom:global-assistant-open", "true");
+                } catch {
+                  // ignore
+                }
+                window.dispatchEvent(new CustomEvent("ieobom:open-assistant"));
               }}
             >
               <strong>봄이와 대화로</strong>
@@ -999,21 +791,29 @@ export function HomePage() {
               <span className="record-choice-meta">운동 · 혈압 · 혈당 · 복약 · 통증</span>
             </button>
           </div>
+          {/* **양쪽 다 틀렸던 문구다.** "이 브라우저에 암호화해 보관" 도 사실이 아니다 —
+              서버 런타임은 `documents: undefined` 로 문서 저장소를 아예 들지 않고
+              (`serverDomainRuntime.ts`), `DocumentPane` 의 저장은 `if (runtime?.documents)`
+              안에 있어서 실행되지 않는다. 원본은 브라우저에도 서버 DB에도 남지 않는다.
+              고친 문구가 예전보다 오히려 강한 약속인데, 그것이 지금의 실제 동작이다. */}
           <p className="form-notice">
-            검진표 원본은 이 브라우저에 암호화해 보관합니다. 읽는 동안에만 서버를 거치고, 서버 데이터베이스에는
-            남지 않습니다.
+            검진표 원본은 어디에도 보관하지 않습니다. 읽어 들이는 동안에만 쓰고, 확정한 수치만 내 계정에
+            남습니다.
           </p>
         </Modal>
       ) : null}
 
       {recordDialogOpen && selectedProfile ? (
-        <Modal kicker="이 기기에 저장" title={`${selectedProfile.displayName}님의 건강기록 작성`} onClose={() => setRecordDialogOpen(false)}>
+        <Modal kicker="내 계정에 저장" title={`${selectedProfile.displayName}님의 건강기록 작성`} onClose={() => setRecordDialogOpen(false)}>
           <form className="product-form" onSubmit={submitHealthRecord}>
-            <p className="form-notice">이 기록은 서버 API를 거치지 않고 현재 브라우저에 바로 암호화됩니다.</p>
+            {/* **"서버 API를 거치지 않고" 는 사실이 아니었다.** 이 폼은 `createHealthRecord`
+                → `runtime.healthRecords.create` → 서버 API 로 간다(ADR-011). 문구만
+                ADR-011 이전에 머물러 있었다. */}
+            <p className="form-notice">기록은 내 계정에 저장되고, 같은 가정 구성원만 볼 수 있습니다.</p>
             <label>
               기록 종류
               <select name="recordType" defaultValue="note" required>
-                {Object.entries(RECORD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                {RECORD_TYPES.map((value) => <option key={value} value={value}>{recordTypeLabel(value)}</option>)}
               </select>
             </label>
             <label>
@@ -1041,7 +841,7 @@ export function HomePage() {
             <label>
               기록 종류
               <select name="recordType" defaultValue={editingRecord.recordType} required>
-                {Object.entries(RECORD_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                {RECORD_TYPES.map((value) => <option key={value} value={value}>{recordTypeLabel(value)}</option>)}
               </select>
             </label>
             <label>
@@ -1086,7 +886,7 @@ export function HomePage() {
             <div className="hidden-profile-list">
               {deletedRecords.map((record) => (
                 <article className="hidden-profile-row" key={record.id}>
-                  <div><strong>{RECORD_LABELS[record.recordType]}</strong><small>{formatDateTime(record.recordedAt)} · {recordNote(record)}</small></div>
+                  <div><strong>{recordTypeLabel(record.recordType)}</strong><small>{formatDateTime(record.recordedAt)} · {recordNote(record)}</small></div>
                   {purgingRecord?.id === record.id ? (
                     <div className="record-purge-confirm">
                       <span>되돌릴 수 없어요.</span>
@@ -1242,47 +1042,7 @@ export function HomePage() {
         }} />
       ) : null}
 
-      {/* 우측 하단 플로팅 버튼 (봄이 대화 및 빠른 작업 최소화 시 표시) */}
-      {selectedProfile && (
-        <div className="floating-launchers-stack">
-          {!assistantOpen && runtime ? (
-            <button
-              type="button"
-              className="health-assistant-launcher-btn"
-              onClick={() => setAssistantOpen(true)}
-              aria-label="건강 비서 봄이 열기"
-              title="건강 비서 봄이 열기"
-            >
-              <span className="launcher-icon" aria-hidden="true">봄</span>
-              <span>봄이 대화</span>
-            </button>
-          ) : null}
-          {quickActionsMinimized ? (
-            <button
-              type="button"
-              className="quick-actions-floating-btn"
-              onClick={() => setQuickActionsMinimized(false)}
-              aria-label="빠른 작업 열기"
-              title="빠른 작업 열기"
-            >
-              <span className="launcher-icon" aria-hidden="true">⚡</span>
-              <span>빠른 작업</span>
-            </button>
-          ) : null}
-          {dentalPickerOpen && dentalPickerMinimized ? (
-            <button
-              type="button"
-              className="dental-picker-floating-btn"
-              onClick={() => setDentalPickerMinimized(false)}
-              aria-label="치아 선택 열기"
-              title="치아 선택 열기"
-            >
-              <span className="launcher-icon" aria-hidden="true">🦷</span>
-              <span>치아 선택</span>
-            </button>
-          ) : null}
-        </div>
-      )}
+
     </div>
   );
 }
@@ -1389,14 +1149,14 @@ function toLocalDateTime(value: string): string {
   return local.toISOString().slice(0, 16);
 }
 
+/**
+ * 목록에 적는 한 줄.
+ *
+ * **예전에는 `note` 가 없으면 "저장된 건강기록" 이라고 적었다.** 혈압 128/82 를
+ * 남겨도 목록에는 아무 수치가 없었고, 같은 기록이 건강기록 화면에서는 값으로
+ * 보여서 두 화면이 서로 다른 말을 했다. 읽는 방법은 `recordSummary` 한 곳에 있다.
+ */
 function recordNote(record: HealthRecord): string {
-  const note = record.payload.note;
-  return typeof note === "string" ? note : "저장된 건강기록";
+  return recordSummary(record);
 }
 
-function recordMark(type: HealthRecordType): string {
-  if (type === "health_screening" || type === "lab_result") return "검";
-  if (type === "pain") return "통";
-  if (type === "blood_pressure" || type === "blood_glucose") return "수";
-  return "기";
-}

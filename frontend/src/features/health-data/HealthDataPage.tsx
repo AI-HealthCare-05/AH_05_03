@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { useLocalDomain } from "../../app/localDomainContext";
 import type { HealthRecord } from "../../shared/local/domainContracts";
 import { CHECKUP_FIELDS, FIELD_LABELS, FIELD_UNITS } from "../assessment/fields";
+import { Modal } from "../../shared/ui/Modal";
+import { ValueSheet, useCanonicalValues } from "./ValueSheet";
 import { FamilyProfileSidebar } from "../family/FamilyProfileSidebar";
+// **2026-09-10 `/insights` 를 이 화면으로 합치며 옮겨 왔다.** 챌린지와 수치를 같이
+// 보여 주는 것이 원래 뜻이었다 — 오늘 물을 줬는지와 체중이 내렸는지는 같이 봐야
+// 뜻이 생긴다(행동과 결과라서). 그 화면에만 있던 유일한 자리였으므로 지우지 않고
+// 옮겼다 — 안 옮기면 챌린지 달성 요약이 앱 어디에도 없어진다.
+import { ChallengeDashboardCard } from "../challenge/ChallengeDashboardCard";
 
 type PeriodKey = "1m" | "3m" | "6m" | "1y" | "all";
 type ChartPoint = { date: string; value: number };
@@ -18,7 +26,10 @@ const PERIODS: Array<{ key: PeriodKey; label: string; days?: number }> = [
 ];
 
 export function HealthDataPage() {
+  const navigate = useNavigate();
   const { runtime, profiles, loading } = useLocalDomain();
+  /** 수치를 고치는 중인 검진·검사 기록. 판정 기록은 여기 오지 않는다(등급이 딸려 있다). */
+  const [editingScreening, setEditingScreening] = useState<HealthRecord>();
   const [selectedProfileId, setSelectedProfileId] = useState("");
   const [period, setPeriod] = useState<PeriodKey>("3m");
   const [records, setRecords] = useState<HealthRecord[]>([]);
@@ -91,7 +102,18 @@ export function HealthDataPage() {
         .filter(
           (record) =>
             record.recordType === "health_screening" ||
-            (record.recordType === "assessment" && Boolean(record.sourceDocumentId)),
+            // **`sourceDocumentId` 를 조건으로 걸면 이 칸이 다시 비어 버린다.**
+            // 그 id 는 원본 파일을 보관했을 때만 붙는데, 서버 런타임은 문서 저장소를
+            // 아예 들지 않는다(`serverDomainRuntime.ts` 의 `documents: undefined`,
+            // OPFS 폐지). `DocumentPane` 의 저장이 `if (runtime?.documents)` 안에
+            // 있어서 실행되지 않고, 그래서 판정 화면에서 검진표를 올려도 여기에
+            // 한 건도 남지 않았다 — 2026-09-10 에 보고된 그 증상이다.
+            //
+            // 물어야 하는 것은 "원본 파일이 남아 있나" 가 아니라 **"이 판정이
+            // 검진표에서 왔나"** 다. 그 답은 `source` 가 들고 있다 — 판정을 저장할 때
+            // 검진표에서 한 칸이라도 읽었으면 `ocr` 로 적힌다(`AssessmentPage`).
+            (record.recordType === "assessment" &&
+              (record.source === "ocr" || Boolean(record.sourceDocumentId))),
         )
         .sort(sortNewest),
     [filteredRecords],
@@ -138,6 +160,8 @@ export function HealthDataPage() {
       <div className="health-data-layout">
         <div className="health-data-main">
           <HealthInsight periodLabel={periodLabel} weight={weightPoints} systolic={systolicPoints} diastolic={diastolicPoints} glucose={glucosePoints} />
+
+          <ChallengeDashboardCard />
 
           <section className="health-summary-grid" aria-label={`${periodLabel} 건강 요약`}>
             <SummaryCard title="체중" unit="kg" points={weightPoints} />
@@ -190,7 +214,46 @@ export function HealthDataPage() {
                   return (
                     <article key={record.id}>
                       <div><time dateTime={record.recordedAt}>{formatDate(record.recordedAt)}</time><strong>{title}</strong><p>{summary}</p></div>
-                      <button type="button" className="secondary-button" disabled={!record.sourceDocumentId || !runtime?.documents} onClick={() => void openOriginal(record)}>원본 서류 보기</button>
+                      {/* **영구히 눌리지 않는 버튼을 두지 않는다.** 원본 파일은
+                          보관하지 않으므로(OPFS 폐지) 이 버튼은 항상 비활성이었고,
+                          사용자에게는 고장으로 보인다. 열 수 있을 때만 버튼을 두고,
+                          없으면 왜 없는지 한 줄로 적는다. */}
+                      <div className="screening-actions">
+                        {/* 원본을 열 수 있을 때만 버튼을 둔다. 없을 때 "원본은 보관하지
+                            않아요" 를 적어 봤는데 카드마다 반복되는 군말이었다 —
+                            사용자가 원본을 찾은 것이 아니라 수치를 보러 온 자리다. */}
+                        {record.sourceDocumentId && runtime?.documents ? (
+                          <button type="button" className="secondary-button" onClick={() => void openOriginal(record)}>
+                            원본 서류 보기
+                          </button>
+                        ) : null}
+                        {/* 수치를 고치는 자리. 판정 기록은 등급이 딸려 있어 값만 고치면
+                            그날의 등급과 어긋나므로, 고치는 대신 **다시 판정**으로 보낸다.
+                            검진·검사 기록은 등급이 없어 제자리에서 고칠 수 있다. */}
+                        {inputs ? (
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() =>
+                              void navigate("/assessment", {
+                                state: {
+                                  prefill: Object.fromEntries(
+                                    Object.entries(inputs).map(([name, value]) => [name, String(value)]),
+                                  ),
+                                  profileId: record.profileId,
+                                  prefillSource: "record",
+                                },
+                              })
+                            }
+                          >
+                            수치 고쳐 다시 판정
+                          </button>
+                        ) : (
+                          <button type="button" className="secondary-button" onClick={() => setEditingScreening(record)}>
+                            수치 수정
+                          </button>
+                        )}
+                      </div>
                     </article>
                   );
                 })}
@@ -203,7 +266,65 @@ export function HealthDataPage() {
           <FamilyProfileSidebar profiles={profiles} selectedProfileId={selectedProfile.id} onSelect={setSelectedProfileId} description="구성원을 선택하면 해당 가족의 건강 데이터로 전환됩니다." />
         ) : null}
       </div>
+
+      {editingScreening ? (
+        <ScreeningValueEditor
+          record={editingScreening}
+          onClose={() => setEditingScreening(undefined)}
+          onSaved={() => {
+            setEditingScreening(undefined);
+            void loadRecords();
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * 검진·검사 기록의 수치를 고친다.
+ *
+ * **판정 기록은 여기 오지 않는다.** 판정에는 그날 계산한 등급이 딸려 있어서, 값만
+ * 고치면 등급과 어긋난 기록이 남는다 — 화면은 그 불일치를 설명할 방법이 없다.
+ * 그래서 판정 쪽은 "수치 고쳐 다시 판정" 으로 보내 **새 기록**을 만든다.
+ *
+ * 여기서 고치는 것은 검진표에서 읽은 검사값처럼 **등급이 붙지 않은 사실**이다.
+ * OCR 오독(`요소질소` → `요산`)이나 손으로 잘못 적은 값을 되잡는 자리다.
+ */
+/**
+ * 검진 수치 수정. **판정 자세히와 같은 폼을 쓴다**(`ValueSheet`).
+ *
+ * 예전에는 여기가 OCR 이 읽은 **행 이름**으로 칸을 만들었다. 그래서 두 문제가 있었다 —
+ * 읽히지 않은 항목은 화면에 없어서 손으로 채울 수 없었고, 같은 기록을 기록 화면에서
+ * 열었을 때와 칸 이름·모양이 달랐다. 사용자가 "왜 두 개가 다른 방식으로 뜨는지
+ * 모르겠다" 고 한 자리다(2026-09-10).
+ */
+function ScreeningValueEditor({
+  record,
+  onClose,
+  onSaved,
+}: {
+  record: HealthRecord;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const { values, loading } = useCanonicalValues(record);
+
+  return (
+    <Modal
+      kicker="검진 수치 수정"
+      title="읽은 값을 고칩니다"
+      onClose={onClose}
+    >
+      <ValueSheet
+        record={record}
+        values={values}
+        loading={loading}
+        editable
+        onSaved={onSaved}
+        onCancel={onClose}
+      />
+    </Modal>
   );
 }
 

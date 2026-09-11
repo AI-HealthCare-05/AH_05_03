@@ -177,7 +177,7 @@ export function DataManagementPage({ embedded = false }: { embedded?: boolean } 
       if (!result.ok) throw new Error(result.error.message);
       await refreshDocuments();
       setDocumentFile(undefined);
-      setMessage("건강자료를 이 브라우저에 암호화해 저장했어요.");
+      setMessage("건강자료를 암호화해 저장했어요.");
     } catch (caught) {
       setError(errorMessage(caught, "건강자료를 저장하지 못했어요."));
     } finally {
@@ -385,7 +385,14 @@ export function DataManagementPage({ embedded = false }: { embedded?: boolean } 
           <div><p className="section-kicker">건강자료 관리</p><h2>건강자료를 올리고 기록으로 연결하세요</h2></div>
         </div>
         {!runtime?.documents ? (
-          <div className="alert error-alert">이 브라우저에서는 건강자료 파일을 저장할 수 없습니다.</div>
+          // **오류가 아니다.** 서버 런타임은 문서 저장소를 아예 들지 않는다
+          // (`serverDomainRuntime.ts` 의 `documents: undefined`, OPFS 폐지). 그런데
+          // `error-alert` 로 나가서 계정 화면에 빨간 배너가 상주했고, 문구가 "이
+          // 브라우저에서는" 이라 사용자가 브라우저를 바꾸면 될 일로 읽었다. 바꿔도
+          // 안 된다 — 제품이 파일 보관을 하지 않기로 한 것이다.
+          <div className="alert info-alert">
+            건강자료 파일은 보관하지 않습니다. 검진표는 위험 판정에서 올리면 수치만 기록으로 남습니다.
+          </div>
         ) : (
           <>
             <div className="document-upload-row">

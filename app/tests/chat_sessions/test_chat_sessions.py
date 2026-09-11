@@ -103,7 +103,10 @@ class TestChatSessionsApi:
         assert msg1.status_code == status.HTTP_200_OK
         assert msg1.json()["data"]["sequence_number"] == 1
 
-        spoofed_assistant = await authorized_client.post(
+        # **구조화 metadata 는 서버만 쓴다.** 이 단정이 지키는 것은 역할이 아니라
+        # metadata 다 — `extra="forbid"` 가 막는다. 예전에는 이 요청이 `role`
+        # 때문에 막히는 줄로 읽혔는데, metadata 를 빼면 통과했다.
+        spoofed_metadata = await authorized_client.post(
             f"/api/v1/chat-sessions/{session_id}/messages",
             json={
                 "role": "assistant",
@@ -111,13 +114,26 @@ class TestChatSessionsApi:
                 "metadata": {"intent": "general_chat"},
             },
         )
-        assert spoofed_assistant.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert spoofed_metadata.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+        # 어시스턴트 줄 자체는 받는다. 서류를 확정 저장하는 경로는 LLM 을 거치지 않고
+        # 확인 문장을 그 자리에서 만들기 때문에, 이 길이 막히면 그 대화가 반쪽만 남는다.
+        assistant_turn = await authorized_client.post(
+            f"/api/v1/chat-sessions/{session_id}/messages",
+            json={"role": "assistant", "content": "건강검진 결과를 저장했습니다."},
+        )
+        assert assistant_turn.status_code == status.HTTP_200_OK
+        assert assistant_turn.json()["data"]["sequence_number"] == 2
 
         list_res = await authorized_client.get(f"/api/v1/chat-sessions/{session_id}/messages")
         assert list_res.status_code == status.HTTP_200_OK
         items = list_res.json()["data"]["items"]
-        assert len(items) == 1
-        assert items[0]["sequence_number"] == 1
+        assert len(items) == 2
+        assert [item["role"] for item in items] == ["user", "assistant"]
+
+        # 제목은 첫 **사용자** 줄에서만 온다. 어시스턴트 줄이 제목을 덮지 않는다.
+        titled = await authorized_client.get(f"/api/v1/chat-sessions/{session_id}")
+        assert titled.json()["data"]["title"] == "메시지 테스트"
 
         for content in ("두 번째 질문", "세 번째 질문"):
             added = await authorized_client.post(
@@ -128,7 +144,7 @@ class TestChatSessionsApi:
 
         latest_res = await authorized_client.get(f"/api/v1/chat-sessions/{session_id}/messages?limit=2")
         latest_items = latest_res.json()["data"]["items"]
-        assert [item["sequence_number"] for item in latest_items] == [2, 3]
+        assert [item["sequence_number"] for item in latest_items] == [3, 4]
         assert [item["content"] for item in latest_items] == ["두 번째 질문", "세 번째 질문"]
 
     async def test_cross_account_isolation(self, authorized_client: AsyncClient) -> None:

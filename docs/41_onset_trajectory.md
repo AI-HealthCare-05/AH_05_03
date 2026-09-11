@@ -1,12 +1,13 @@
 # 41. 발병 궤적 — 1단계가 의심하면 2단계가 "앞으로 t년 안에 생길 확률" 을 낸다
 
-> 작성일: 2026-09-02
+> 작성일: 2026-09-02 · 갱신: 2026-09-10 (지평 5·10년 → 1~5년. 카드 앞면은 5년 뒤 한 점, 모달은 다섯 점 전부)
 > 선행: [19 다질환 결과](19_multi_disease_model_results.md) · [21 §7.4 다음 데이터](21_modeling_overview.md) · [27 사망연계 검증](27_eda_new_data_and_synthetic.md)
-> 코드: `app/services/trajectory.py` · `modeling/fit_trajectory.py` · `modeling/validate_trajectory.py` · `app/tests/model/test_trajectory.py`
+> 코드: `app/services/trajectory.py` · `modeling/fit_trajectory.py` · `modeling/validate_trajectory.py` · `app/tests/model/test_trajectory.py` · `frontend/src/features/assessment/VerdictCards.test.tsx`
 
 ## 0. 네 줄
 
-- 카드 열 장은 전부 **유병** 선별이었다. 이제 1단계가 의심한 **당뇨·고혈압·신기능** 카드에 "지금 없다면 5년·10년 안에 생길 확률" 이 붙는다(`trajectory`). 나머지 일곱 질환은 붙이지 않으며 그 이유가 상태값으로 나간다.
+- 카드 열 장은 전부 **유병** 선별이었다. 이제 1단계가 의심한 **당뇨·고혈압·신기능** 카드에 "지금 없다면 앞으로 t년 안에 생길 확률" 이 붙는다(`trajectory`). 나머지 일곱 질환은 붙이지 않으며 그 이유가 상태값으로 나간다.
+- **지평은 1·2·3·4·5년이다**(`trajectory.HORIZONS`). 처음에는 5·10년 둘이었는데 두 점으로는 "지금 손대면 얼마나 달라지나" 를 물어볼 자리가 없고, 10년은 이 서비스가 쓰는 근거의 사거리를 넘는다 — 기준 위험표는 NHANES 단면 역산이고 δ 는 7개 주기 사망연계다. 아래 §3 의 검증 숫자는 **10년 지평으로 잰 것**이고 그대로 둔다. 지평을 좁힌 것이 그 검증을 무르게 하지는 않는다.
 - 종단 자료가 없어서 **인구 기준 위험표 × 개인 상대위험** 구조로 만들었다. 표는 단면 NHANES 유병률을 illness-death 모형으로 뒤집고 사망연계 초과사망으로 보정한 것이고 진짜 코호트 발생률이 오면 **표만 갈아 끼운다**. 서빙 코드는 그대로다.
 - 검증 둘. 사망연계에서 10년 궤적은 1단계 확률과 **같은 순위 정보**를 유지한다(고혈압 C 0.773 vs 0.775, 연령대 안에서 셋 다 ±0.02). Framingham 코호트에서 10년 고혈압 발생을 관찰 0.359 대 예측 0.325 로 맞혔지만 **삼분위 퍼짐은 실제보다 넓다**(최하위 0.12 예측 / 0.22 관찰).
 - 첫 설계(개인마다 나이를 옮겨 1단계 모델을 다시 채점)는 **버렸다**. 순위를 잃었고(사망연계 C −0.06~−0.2) 10년 발생을 40% 과소추정했다. §5 에 왜 그런지 적었다.
@@ -167,9 +168,11 @@ i(a) = p'(a) / (1 − p(a)) + p(a) · δ(a),    δ = m1 − m0
 
 ```jsonc
 "trajectory": {
-  "horizons_years": [5, 10],
-  "onset_probability": [0.136, 0.262],            // 나
-  "population_onset_probability": [0.079, 0.156], // 동년배(R=1)
+  "horizons_years": [1, 2, 3, 4, 5],
+  // 나. 아래 동년배 곡선과 같은 사람이고, 5년 값은 예전 계약 예시의 그 값이다
+  // (지평을 좁히면서 사이를 한 살 간격으로 채웠다).
+  "onset_probability": [0.029, 0.057, 0.084, 0.110, 0.136],
+  "population_onset_probability": [0.016, 0.032, 0.048, 0.064, 0.079], // 동년배(R=1)
   "relative_hazard": 1.78,
   "reference_prevalence": 0.212,
   "conditional_on": "현재 이 질환이 없고, 지금의 수치·생활습관이 그대로 유지된다는 가정",
@@ -208,7 +211,13 @@ i(a) = p'(a) / (1 − p(a)) + p(a) · δ(a),    δ = m1 − m0
 
 ### 4.3 화면
 
-`frontend/src/features/assessment/VerdictCards.tsx` — 카드 앞면에 "10년 내 발병 가능성 27% · 동년배 15%" 한 줄, 근거 모달에 선 두 개(나·동년배)와 같은 내용의 표, 전제 문구. 차트 라이브러리를 쓰지 않는 이유는 `TrendChart.tsx` 머리말과 같다.
+`frontend/src/features/assessment/VerdictCards.tsx` — 카드 앞면(`TrajectoryLine`)에 **5년 뒤 한 점**, 근거 모달(`TrajectoryBlock`)에 선 두 개(나·동년배)와 지평 다섯 개가 다 든 표, 전제 문구. 차트 라이브러리를 쓰지 않는 이유는 `TrendChart.tsx` 머리말과 같다.
+
+**앞면이 적는 것은 "지금" 과 "5년 뒤" 둘인데 같은 줄에 있지 않다.** 지금은 궤적 줄 위의 `ML 예측 X% → 판정` 이 말하고, 궤적 줄은 5년 뒤만 맡는다. 궤적 줄에 "지금" 을 적지 않는 것은 자리를 아껴서가 아니라 **누적 발병 확률이 t=0 에서 정의상 0** 이라 적을 값이 없기 때문이다. 유병 곡선 줄은 사정이 달라서 `current_probability` 가 있고, 그래서 그쪽은 `지금 · 5년 뒤` 둘을 한 줄에 적는다.
+
+앞면에 점을 늘려 본 이력이 있다 — 10년 하나 → 양 끝(1·5년) 둘 → 1·3·5년 셋 → 지금의 5년 하나다. 점을 늘리면 `.assess-trajectory-values` 가 `flex-wrap: wrap` 이라 줄바꿈되고 카드 높이가 궤적 유무에 따라 제각각이 된다. 해마다의 값과 곡선은 모달이 다 그리므로 앞면에서 겹쳐 적을 이유가 없다.
+
+지평을 **값으로** 고르는 이유는 `HORIZONS` 가 바뀌는 날 화면이 조용히 다른 해를 적는 것을 막기 위해서고(상수는 `CARD_HORIZON_YEARS`), 나이 상한에 5년이 잘리면(78세는 1·2년만 남는다) 있는 것 중 마지막을 적는다. 그 규칙은 `VerdictCards.test.tsx` 가 고정한다.
 
 ---
 

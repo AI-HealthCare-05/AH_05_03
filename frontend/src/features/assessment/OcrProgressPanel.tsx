@@ -38,7 +38,9 @@ const STAGE_LABEL: Record<OcrStage, string> = {
 
 const STAGE_DETAIL: Record<OcrStage, string> = {
   opening: "파일을 미리보기로 펼치고 있어요.",
-  storing: "원본은 이 브라우저 안에만 둡니다.",
+  // 서버 런타임은 문서 저장소를 들지 않는다(`serverDomainRuntime.ts` 의
+  // `documents: undefined`). 이 단계는 저장이 아니라 인식에 넘길 준비다.
+  storing: "인식에 넘길 준비를 하고 있어요. 원본은 보관하지 않습니다.",
   queued: "인식 작업을 서버에 맡겼어요. 워커가 집을 때까지 잠깐 기다립니다.",
   reading: "글자가 들어오는 대로 아래에 보여 드려요.",
   matching: "읽은 표에서 판정에 쓸 수치를 골라내는 중이에요.",

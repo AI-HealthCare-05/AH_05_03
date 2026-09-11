@@ -155,6 +155,14 @@ export interface ChatMessageListData {
   items: ChatMessageData[];
 }
 
+/** 기록 **하나**의 판정 칸 값. `RecordPrefillData` 와 고르는 방식이 다르다 —
+ *  그쪽은 여러 기록에서 칸마다 가장 최근 것을 뽑고, 이쪽은 그 기록에 담긴 것만 준다. */
+export interface RecordValuesData {
+  record_id: string;
+  record_type: string;
+  values: Record<string, number>;
+}
+
 export interface ProfileServerData {
   id: string;
   household_id: string;
@@ -188,6 +196,24 @@ export interface HealthRecordServerData {
   row_version: number;
   created_at: string;
   updated_at: string;
+}
+
+/** 판정 폼 칸 하나와 그 값의 출처. 서버 `PrefilledFieldData` 의 손 사본. */
+export interface PrefilledField {
+  field: string;
+  value: number;
+  /** 그 값을 잰 시각. **화면이 반드시 같이 보여야 한다** — 석 달 전 혈압으로 오늘
+   *  판정하면 그것은 오늘의 답이 아니다. */
+  measured_at: string;
+  record_type: string;
+  record_id?: string | null;
+}
+
+export interface RecordPrefillData {
+  items: PrefilledField[];
+  /** 훑어본 기록 수. `0` 이면 "기록이 없다", `0` 이 아닌데 `items` 가 비면
+   *  "옮길 수치가 없다" 다 — 화면 문구가 달라야 한다. */
+  scanned: number;
 }
 
 export interface HealthRecordServerListData {

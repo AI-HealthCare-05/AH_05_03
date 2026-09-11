@@ -4,8 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.dtos.food_nutrition import FoodNutritionSearchResult
-from app.dtos.health_knowledge import HealthKnowledgeSearchResult
-from app.dtos.health_record_query import AlcoholConsultationSnapshot, HealthRecordQueryResult
+from app.dtos.health_record_query import HealthRecordQueryResult
 from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.medication import MedicationSearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
@@ -81,6 +80,13 @@ class PainDraft(BaseModel):
         default=None, description="표준 해부학 구조 식별자 (예: muscle_biceps_brachii_r)"
     )
     anatomy_label: str | None = Field(default=None, description="표준 해부학 한글/영문 명칭 (예: 우측 상완이두근)")
+    suspected_anatomy_ids: list[str] | None = Field(
+        default=None, description="신경계 연관통 및 방사통 의심 부위 식별자 목록 (예: ['cervical_spine', 'nervous'])"
+    )
+    suspected_system: str | None = Field(default=None, description="의심 해부학 계통 (예: nervous, skeletal 등)")
+    clinical_reasoning: str | None = Field(
+        default=None, description="신경해부학적 연관통 및 분절 증상 임상 추론 근거 요약"
+    )
 
 
 class PainDiaryToolCall(BaseModel):
@@ -103,6 +109,13 @@ class PainDiaryToolCall(BaseModel):
         default=None, description="표준 해부학 구조 식별자 (예: muscle_biceps_brachii_r)"
     )
     anatomy_label: str | None = Field(default=None, description="표준 해부학 한글/영문 명칭 (예: 우측 상완이두근)")
+    suspected_anatomy_ids: list[str] | None = Field(
+        default=None, description="신경계 연관통 및 방사통 의심 부위 식별자 목록 (예: ['cervical_spine', 'nervous'])"
+    )
+    suspected_system: str | None = Field(default=None, description="의심 해부학 계통 (예: nervous, skeletal 등)")
+    clinical_reasoning: str | None = Field(
+        default=None, description="신경해부학적 연관통 및 분절 증상 임상 추론 근거 요약"
+    )
 
 
 class LabResultDraft(BaseModel):
@@ -201,16 +214,25 @@ AuthoritativeEvidenceType = Literal[
 ]
 
 
-class HealthAssistantScopeDecision(BaseModel):
-    """메인 답변 전에 실행하는 서비스 범위 판정 결과.
+class QueryAnalyst(BaseModel):
+    """인풋 가드레일: 맥락 추론 및 쿼리 빌더 결과 DTO."""
 
-    Gemini는 여기서 주제를 분류할 뿐 건강 사실을 답하지 않는다. 실제 허용과
-    차단은 :mod:`app.services.health_assistant_boundary`가 이 값을 검증해 강제한다.
-    """
+    is_scientific_or_medical: bool = Field(
+        description="질문의 본질과 맥락이 과학, 의학, 보건, 건강, 신체 증상, 질병, 약물, 영양, 식단, 운동, 의료기관, 일상 건강관리 또는 건강비서 서비스 사용법에 해당하는지 여부"
+    )
+    inferred_intent: str = Field(description="사용자가 질문을 통해 진짜 알고 싶어하는 숨겨진 맥락 추론")
+    enriched_query: str = Field(
+        description="원문이 부실할 경우, 지식 DB 검색 및 도구 활용이 가능하도록 의학/과학적 키워드를 추가하여 풍부하게 재작성한 쿼리"
+    )
+
+
+class HealthAssistantScopeDecision(BaseModel):
+    """메인 답변 전에 실행하는 서비스 범위 판정 및 쿼리 인리치먼트 결과."""
 
     scope: HealthAssistantScope = Field(description="건강비서 서비스 범위 판정")
     requires_authoritative_evidence: bool = Field(
-        description="사용자에게 건강 사실·수치·권고를 답하려면 승인된 근거 조회가 필요한지 여부"
+        default=False,
+        description="사용자에게 건강 사실·수치·권고를 답하려면 승인된 근거 조회가 필요한지 여부",
     )
     required_evidence_types: list[AuthoritativeEvidenceType] = Field(
         default_factory=list,
@@ -220,6 +242,14 @@ class HealthAssistantScopeDecision(BaseModel):
         default=None,
         max_length=2000,
         description="혼합 질문에서 그대로 떼어 낸 건강 관련 원문 부분. 혼합 질문이 아니면 null",
+    )
+    inferred_intent: str | None = Field(
+        default=None,
+        description="사용자의 진짜 의도 및 맥락 추론 요약",
+    )
+    enriched_query: str | None = Field(
+        default=None,
+        description="도구 검색 및 메인 LLM 답변 품질을 극대화하기 위해 풍부하게 재구성된 쿼리",
     )
 
 
@@ -233,13 +263,25 @@ class HealthAssistantChatRequest(BaseModel):
         default=None, description="사용자 동의로 받은 이번 요청의 현재 좌표 (user_location과 호환)"
     )
     session_id: uuid.UUID | None = Field(default=None, description="대화 세션 ID (DB 영구 보존용)")
+    inferred_intent: str | None = Field(
+        default=None,
+        description="인풋 가드레일을 통해 추론된 사용자 의도 요약",
+    )
+    enriched_query: str | None = Field(
+        default=None,
+        description="인풋 가드레일 쿼리 빌더를 통해 의학/과학적 맥락이 보강된 질문 쿼리",
+    )
 
     @property
     def location(self) -> UserLocation | None:
         return self.user_location or self.current_location
 
 
-class HealthAssistantResponse(BaseModel):
+class HealthAssistantLlmResponse(BaseModel):
+    """Gemini 등 LLM이 직접 구조화 JSON으로 생성하는 코어 스키마.
+    외부 API·DB 조회 사후 주입 필드는 제외하여 Gemini의 OpenAPI 스키마 복잡도 한도(150개)를 넘지 않도록 경량화한다.
+    """
+
     intent: HealthIntent = Field(description="사용자의 자연어 의도 분류")
     assistant_message: str = Field(description="사용자에게 전달할 정갈하고 친절한 답변 (이모티콘 사용 금지)")
     exercise_draft: ExerciseDraft | None = Field(default=None, description="운동 기록 초안")
@@ -253,34 +295,7 @@ class HealthAssistantResponse(BaseModel):
     )
     lab_result_draft: LabResultDraft | None = Field(default=None, description="검사/검진 서류 결과 초안")
     query_draft: QueryDraft | None = Field(default=None, description="기록 조회 조건 초안")
-    health_record_query_result: HealthRecordQueryResult | None = Field(
-        default=None,
-        description="PostgreSQL이 계산한 장기 건강기록 조건별 집계 결과",
-    )
-    alcohol_consultation_snapshot: AlcoholConsultationSnapshot | None = Field(
-        default=None,
-        description="음주 상담을 위해 인증된 PostgreSQL에서 조회한 개인 건강기록 스냅샷",
-    )
-    health_knowledge_search_result: HealthKnowledgeSearchResult | None = Field(
-        default=None,
-        description="질병관리청 국가건강정보포털에서 확인한 공식 건강정보",
-    )
     challenge_draft: ChallengeDraft | None = Field(default=None, description="챌린지 생성·조정·완료 초안")
-    outdoor_conditions: OutdoorConditionsResult | None = Field(
-        default=None,
-        description="야외 활동 질문에서 조회한 실시간 날씨·대기질 결과",
-    )
-    facility_search_draft: FacilitySearchResult | None = Field(
-        default=None, description="주변 의료시설(응급실, 병원, 약국) 조회 결과"
-    )
-    medication_search_result: MedicationSearchResult | None = Field(
-        default=None,
-        description="식약처 e약은요·DUR 품목정보 API로 조회한 의약품 허가 정보",
-    )
-    food_nutrition_search_result: FoodNutritionSearchResult | None = Field(
-        default=None,
-        description="식약처 식품영양성분 데이터베이스로 조회한 식품 영양 정보",
-    )
     missing_fields: list[str] = Field(
         default_factory=list, description="초안 완성을 위해 사용자에게 추가 확인이 필요한 필드 목록"
     )
@@ -296,4 +311,30 @@ class HealthAssistantResponse(BaseModel):
     safety_disclaimer: str | None = Field(
         default="본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요.",
         description="비진단 안전 고지문구",
+    )
+
+
+class HealthAssistantResponse(HealthAssistantLlmResponse):
+    """프론트엔드에 전달되는 최종 건강 어시스턴트 응답 DTO.
+    LLM이 생성한 코어 응답에 백엔드가 실행한 도구 및 실시간 조회 결과(DB/외부 API)가 사후 주입된다.
+    """
+
+    health_record_query_result: HealthRecordQueryResult | None = Field(
+        default=None,
+        description="PostgreSQL이 계산한 장기 건강기록 조건별 집계 결과",
+    )
+    outdoor_conditions: OutdoorConditionsResult | None = Field(
+        default=None,
+        description="야외 활동 질문에서 조회한 실시간 날씨·대기질 결과",
+    )
+    facility_search_draft: FacilitySearchResult | None = Field(
+        default=None, description="주변 의료시설(응급실, 병원, 약국) 조회 결과"
+    )
+    medication_search_result: MedicationSearchResult | None = Field(
+        default=None,
+        description="식약처 e약은요·DUR 품목정보 API로 조회한 의약품 허가 정보",
+    )
+    food_nutrition_search_result: FoodNutritionSearchResult | None = Field(
+        default=None,
+        description="식약처 식품영양성분 데이터베이스로 조회한 식품 영양 정보",
     )

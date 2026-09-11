@@ -44,6 +44,48 @@ function isFlat(curve: { current_probability: number; prevalence_probability: nu
   return Math.max(...points) - Math.min(...points) < 0.005;
 }
 
+/**
+ * 같은 값이 이어지는 구간을 한 줄로 묶는다.
+ *
+ * **왜 필요한가.** 이 곡선은 모델이 둘이 아니다 — 질환마다 모델은 **하나**고, 특징을
+ * 고정한 채 `age` 만 옮겨 다시 채점한 것이다(`prediction.score_at`). GBDT 는 나이를
+ * 계단으로 쓰므로 몇 해가 같은 잎에 남으면 값이 글자 그대로 같다. 실측으로 어떤
+ * 프로필은 52~58세가 19.72% 로 평평하고 59세에서 계단이 생겼다.
+ *
+ * 그래서 `15% · 15% · 15% · 15% · 15% · 20%` 같은 줄이 나온다. 여섯 줄 중 다섯이
+ * 같은 숫자인데, 읽는 사람은 **다섯 번 읽고 나서** 하나만 다르다는 것을 안다.
+ * 값을 다듬지는 않는다 — 평평한 것이 모델의 답이므로 부드럽게 만들면 화면과 모델이
+ * 갈라진다(`trajectory.prevalence_curve` 머리말). 접는 것은 표시일 뿐이다.
+ *
+ * 기존 `isFlat` 은 **전부** 같을 때만 걸려서 이 경우를 놓쳤다.
+ */
+export function collapseRuns(
+  points: { years: number; value: number }[],
+): { years: number; value: number; when: string }[] {
+  const label = (y: number) => (y === 0 ? "지금" : `${y}년 뒤`);
+  const runs: { years: number; value: number; when: string }[] = [];
+  let start = 0;
+  for (let i = 1; i <= points.length; i++) {
+    const ended = i === points.length || Math.abs(points[i].value - points[start].value) >= 0.005;
+    if (!ended) continue;
+    const last = i - 1;
+    runs.push({
+      years: points[start].years,
+      value: points[start].value,
+      // 한 해뿐이면 그대로, 이어지면 범위로 적는다. 양쪽이 다 연수면 "뒤" 를 한 번만
+      // 쓴다 — `3년 뒤 ~ 4년 뒤` 는 같은 말을 두 번 읽게 한다.
+      when:
+        last === start
+          ? label(points[start].years)
+          : points[start].years === 0
+            ? `지금 ~ ${label(points[last].years)}`
+            : `${points[start].years} ~ ${points[last].years}년 뒤`,
+    });
+    start = i;
+  }
+  return runs;
+}
+
 /** 측정이 "기준 이내" 라고 이미 답했나. 그러면 모델 확률을 덧붙이지 않는다. */
 function isSettled(suspect: SuspectCard) {
   // `risk_level` 이 정본이고 `level` 은 옛 응답(스냅샷)을 위한 폴백이다 — 기록
@@ -71,11 +113,22 @@ function isConfirmed(suspect: SuspectCard) {
  * 남는다. 같은 track 위에 채움(나)과 눈금(동년배)을 두면 그 차이가 그냥 보인다.
  * 축은 0~100% 로 고정한다 — 카드마다 축이 다르면 카드 사이 비교가 거짓이 된다.
  */
-function OnsetRow({ years, value, peer }: { years: number; value: number; peer?: number }) {
+function OnsetRow({
+  years,
+  value,
+  peer,
+  when,
+}: {
+  years: number;
+  value: number;
+  peer?: number;
+  /** 시점 문구를 직접 정할 때. 같은 값이 이어지는 구간을 한 줄로 접을 때 쓴다. */
+  when?: string;
+}) {
   return (
     <li className="suspect-row">
       {/* 0 은 "지금" 이다. `0년 뒤` 라고 적으면 읽는 사람이 한 박자 멈춘다. */}
-      <span className="suspect-when">{years === 0 ? "지금" : `${years}년 뒤`}</span>
+      <span className="suspect-when">{when ?? (years === 0 ? "지금" : `${years}년 뒤`)}</span>
       <b className="suspect-value">{percent(value)}</b>
       <span className="suspect-gauge" aria-hidden="true">
         <span className="suspect-gauge-fill" style={{ width: `${Math.min(value * 100, 100)}%` }} />
@@ -188,9 +241,14 @@ function SuspectItem({ suspect }: { suspect: SuspectCard }) {
             </>
           ) : (
             <ul className="suspect-rows">
-              <OnsetRow years={0} value={showPrevalence.current_probability} />
-              {showPrevalence.horizons_years.map((year, i) => (
-                <OnsetRow key={year} years={year} value={showPrevalence.prevalence_probability[i]} />
+              {collapseRuns([
+                { years: 0, value: showPrevalence.current_probability },
+                ...showPrevalence.horizons_years.map((year, i) => ({
+                  years: year,
+                  value: showPrevalence.prevalence_probability[i],
+                })),
+              ]).map((run) => (
+                <OnsetRow key={run.years} years={run.years} value={run.value} when={run.when} />
               ))}
             </ul>
           )}
@@ -320,11 +378,34 @@ function ForwardOutlook({ verdicts, ranked }: { verdicts: DiseaseVerdict[]; rank
             새로 생길 확률{" "}
             <span className="assess-muted">지금은 없다고 보고 낸 값 · 위 세 가지 먼저, 나머지는 확률 높은 순</span>
           </p>
+          {/* **왜 몇 개뿐인지 화면이 말하지 않았다.** 이 블록에 둘, 아래 블록에 열둘이
+              서는데 그 갈림의 이유가 어디에도 없어서, 읽는 사람은 "나머지 질환은
+              빠졌다" 로 읽는다. 실제로 그 질문을 받았다.
+
+              갈림은 취향이 아니다. 이 곡선은 단면 유병률을 illness-death 모형으로
+              뒤집어 만드는데, 그 뒤집기가 **"한 번 생기면 없어지지 않는다"** 를 전제로
+              한다. 되돌아가는 수치에서는 순발생률이 아니라 순전이율이 나오고, 일부는
+              방향까지 뒤집힌다(낮은 HDL 사망연계 C 0.51 · 이상지질 65세+ 0.43 —
+              `trajectory.EXCLUDED_TARGETS`). 그래서 셋만 켜고 나머지는 다른 물음으로
+              답한다. 개수를 적지 않고 **규칙**을 적는다 — 이미 기준을 넘은 질환은
+              그 셋에서도 빠지므로 개수는 사람마다 다르다. */}
+          <p className="outlook-block-why assess-muted">
+            되돌아가지 않는 질환(당뇨·고혈압·신기능)에만 낼 수 있어요. 나머지는 수치가 오르내려서 "새로 생김"
+            이라는 말이 성립하지 않아, 아래 <b>기준을 넘고 있을 확률</b>로 답합니다.
+          </p>
           <ul className="suspect-outlook-list">
             {onsets.map((row) => (
               <li key={row.key} className="outlook-onset">
                 <span className="outlook-name">
-                  {ranked.has(row.key) && <b className="outlook-rank">{ranked.get(row.key)}</b>}
+                  {/* 숫자 대신 왕관. 순위는 바로 위 카드 셋이 이미 "1순위·2순위" 로 적으므로
+                      여기서는 **그 셋에 든다는 표시**만 필요하다. 숫자를 또 적으면 같은
+                      정보가 두 번 서고, 목록에서는 이름보다 숫자가 먼저 읽힌다.
+                      순위 자체는 낭독기와 마우스오버에 남긴다. */}
+                  {ranked.has(row.key) && (
+                    <b className="outlook-rank" title={`급한 순 ${ranked.get(row.key)}위`} aria-label={`급한 순 ${ranked.get(row.key)}위`}>
+                      👑
+                    </b>
+                  )}
                   {row.name}
                 </span>
                 <span className="outlook-bar" aria-hidden="true">
@@ -353,6 +434,12 @@ function ForwardOutlook({ verdicts, ranked }: { verdicts: DiseaseVerdict[]; rank
             기준을 넘고 있을 확률{" "}
             <span className="assess-muted">지금 넘었든 아니든 그때 재면 넘어 있을 가능성 · 위 세 가지 먼저, 나머지는 확률 높은 순</span>
           </p>
+          {/* 위 블록의 짝. 여기 있는 질환이 "빠진" 것이 아니라 **다른 물음으로 답한**
+              것임을 같이 적어야 갈림이 읽힌다. */}
+          <p className="outlook-block-why assess-muted">
+            위 블록에 없는 질환은 여기 있어요. 되돌아갈 수 있는 수치라 발병 시점을 말할 수 없고, 대신 그때
+            재면 넘어 있을 가능성을 냅니다.
+          </p>
           <ul className="suspect-outlook-list">
             {prevalences.map((row) => {
               const delta = row.now === undefined ? 0 : row.value - row.now;
@@ -360,7 +447,15 @@ function ForwardOutlook({ verdicts, ranked }: { verdicts: DiseaseVerdict[]; rank
               return (
                 <li key={row.key} className="outlook-prevalence">
                   <span className="outlook-name">
-                    {ranked.has(row.key) && <b className="outlook-rank">{ranked.get(row.key)}</b>}
+                    {/* 숫자 대신 왕관. 순위는 바로 위 카드 셋이 이미 "1순위·2순위" 로 적으므로
+                      여기서는 **그 셋에 든다는 표시**만 필요하다. 숫자를 또 적으면 같은
+                      정보가 두 번 서고, 목록에서는 이름보다 숫자가 먼저 읽힌다.
+                      순위 자체는 낭독기와 마우스오버에 남긴다. */}
+                  {ranked.has(row.key) && (
+                    <b className="outlook-rank" title={`급한 순 ${ranked.get(row.key)}위`} aria-label={`급한 순 ${ranked.get(row.key)}위`}>
+                      👑
+                    </b>
+                  )}
                     {row.name}
                   </span>
                   <span className="outlook-bar" aria-hidden="true">

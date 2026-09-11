@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1254"
+     height="1254"
+     viewBox="0 0 1254 1254"
+     role="img"
+     aria-labelledby="title description">
+  <title id="title">ieobom logo</title>
+  <desc id="description">A white three-node arch on an indigo, blue, and teal rounded-square gradient.</desc>
+
+  <defs>
+    <linearGradient id="ieobom-gradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4038E8"/>
+      <stop offset="0.46" stop-color="#2D7FD1"/>
+      <stop offset="1" stop-color="#1CC8B8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Areas outside the rounded rectangle remain transparent. -->
+  <rect width="1254" height="1254" rx="320" fill="url(#ieobom-gradient)"/>
+
+  <!-- Family health timeline mark. -->
+  <path d="M 372 852
+           C 427 797, 474 548, 625 418
+           C 776 548, 823 797, 878 852"
+        fill="none"
+        stroke="#FFFFFF"
+        stroke-width="54"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+
+  <circle cx="372" cy="852" r="41" fill="#FFFFFF"/>
+  <circle cx="625" cy="418" r="51" fill="#FFFFFF"/>
+  <circle cx="878" cy="852" r="41" fill="#FFFFFF"/>
+</svg>

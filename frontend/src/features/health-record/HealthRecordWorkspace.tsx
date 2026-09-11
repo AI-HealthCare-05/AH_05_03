@@ -2,6 +2,7 @@ import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { PRIMARY_HOUSEHOLD_ID } from "../../app/localDomainContext";
+import { recordSummary } from "../../shared/local/recordSummary";
 import type { FamilyProfile, HealthRecord, HealthRecordType } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 import { DevServerOcrAdapter } from "../../ocr/ocr-adapter";
@@ -118,10 +119,19 @@ function measurementInput(base: { householdId: string; profileId: string; record
   payload: Record<string, unknown>;
 } {
   const type = text(form, "measurementType");
-  if (type === "blood_glucose") return { ...base, recordType: "blood_glucose" as const, payload: { value: Number(form.get("glucose")), timing: text(form, "timing"), note } };
+  // **이름에 단위를 붙인다.** 예전에는 이 화면이 `{ systolic, diastolic }` · `{ value }` 로,
+  // 봄이 챗봇이 `{ systolicMmHg, diastolicMmHg }` · `{ valueMgDl }` 로 써서 **같은 값에
+  // 필드 이름이 둘**이었다. 읽는 쪽이 `p.systolic ?? p.systolicMmHg` 처럼 별칭을 훑어
+  // 버티고 있었는데, 새 화면이 세 번째 이름을 쓰는 날 조용히 빠진다 — 화면에는 "값이
+  // 없다" 로 보이고 사용자는 자기가 안 넣은 줄 안다.
+  //
+  // 단위를 붙인 쪽으로 통일한 이유는 `1.4` 가 mg/dL 인지 mmol/L 인지 이름이 답해야
+  // 하기 때문이다. 예전 이름으로 저장된 기록은 서버의 `record_prefill` 이 별칭으로
+  // 승계하므로 마이그레이션은 하지 않는다.
+  if (type === "blood_glucose") return { ...base, recordType: "blood_glucose" as const, payload: { valueMgDl: Number(form.get("glucose")), timing: text(form, "timing"), note } };
   if (type === "body_measurement") return { ...base, recordType: "body_measurement" as const, payload: { weightKg: Number(form.get("weight")), heightCm: optionalNumber(form, "height"), note } };
   if (type === "lab_result") return { ...base, recordType: "lab_result" as const, payload: { testName: text(form, "testName"), value: text(form, "value"), unit: optional(form, "unit"), note } };
-  return { ...base, recordType: "blood_pressure" as const, payload: { systolic: Number(form.get("systolic")), diastolic: Number(form.get("diastolic")), note } };
+  return { ...base, recordType: "blood_pressure" as const, payload: { systolicMmHg: Number(form.get("systolic")), diastolicMmHg: Number(form.get("diastolic")), note } };
 }
 
 export function HealthRecordHistoryDialog({
@@ -274,50 +284,6 @@ export function PainChatDialog({ profile, runtime, onClose, onSaved }: { profile
   return <div className="modal-backdrop" role="presentation"><section className="modal-panel health-pain-chat" role="dialog" aria-modal="true"><div className="modal-heading"><div><p className="section-kicker">대화형 입력</p><h2>{profile.displayName}님의 통증 기록</h2></div><button className="modal-close" type="button" onClick={onClose}>×</button></div><p className="form-notice">입력 내용은 기록 초안 생성을 위해 AI로 전송됩니다. 저장 전 직접 확인하세요.</p><div className="health-chat-messages">{messages.map((message, index) => <p key={index} className={message.role}>{message.content}</p>)}</div><form className="health-chat-form" onSubmit={(event) => void send(event)}><input value={input} onChange={(event) => setInput(event.target.value)} placeholder="예: 어제부터 오른쪽 무릎이 욱신거려요" /><button className="primary-button" disabled={working}>{working ? "정리 중…" : "보내기"}</button></form>{Object.keys(draft).length > 0 ? <div className="chat-draft"><h3>저장 전 확인</h3><label>통증 부위<input value={String(draft.body_area ?? "")} onChange={(event) => setDraft({ ...draft, body_area: event.target.value })} /></label><label>통증 정도<input type="number" min="0" max="10" value={typeof draft.intensity === "number" ? draft.intensity : ""} onChange={(event) => setDraft({ ...draft, intensity: Number(event.target.value) })} /></label>{missing.length > 0 ? <p>추가 확인: {missing.join(", ")}</p> : <button className="primary-button" type="button" disabled={working} onClick={() => void save()}>통증 기록으로 저장</button>}</div> : null}{error ? <div className="alert error-alert">{error}</div> : null}</section></div>;
 }
 
-function recordSummary(record: HealthRecord): string {
-  const p = record.payload as Record<string, unknown>;
-  if (typeof p.note === "string" && p.note.trim()) {
-    return p.note.trim();
-  }
-  if (record.recordType === "exercise" || p.exerciseName) {
-    const parts = [
-      p.exerciseName,
-      p.weightKg ? `${p.weightKg}kg` : "",
-      p.reps ? `${p.reps}회` : "",
-      p.sets ? `${p.sets}세트` : "",
-    ].filter(Boolean);
-    return parts.join(" ") || "운동 기록";
-  }
-  if (record.recordType === "blood_pressure" || p.systolic || p.systolicMmHg) {
-    const sys = p.systolic ?? p.systolicMmHg;
-    const dia = p.diastolic ?? p.diastolicMmHg;
-    const pulse = p.pulse ?? p.pulseBpm;
-    return `혈압 ${sys}/${dia} mmHg${pulse ? ` (맥박 ${pulse})` : ""}`;
-  }
-  if (record.recordType === "blood_glucose" || p.glucose || p.valueMgDl || p.value) {
-    const val = p.glucose ?? p.valueMgDl ?? p.value;
-    const timing = p.timing ? ` (${p.timing})` : "";
-    return `혈당 ${val} mg/dL${timing}`;
-  }
-  if (record.recordType === "medication" || p.medicationName) {
-    const name = p.medicationName;
-    const dosage = p.dosage ? ` ${p.dosage}` : "";
-    const taken = p.takenAt ? ` (${p.takenAt})` : "";
-    return `복약: ${name}${dosage}${taken}`;
-  }
-  if (record.recordType === "pain" || p.bodyArea) {
-    const area = p.bodyArea || "통증";
-    const intensity = p.intensity !== undefined ? ` (강도 ${p.intensity})` : "";
-    const sensation = p.sensation ? ` - ${p.sensation}` : "";
-    return `${area}${intensity}${sensation}`;
-  }
-  if (record.recordType === "health_screening" || record.recordType === "lab_result") {
-    const name = p.screeningName || p.testName || "건강검진";
-    const summary = p.summary || p.itemsSummary || "";
-    return `${name}${summary ? `: ${summary}` : ""}`.slice(0, 120);
-  }
-  return "세부 내용 없음";
-}
 function text(form: FormData, key: string) { return String(form.get(key) ?? "").trim(); }
 function optional(form: FormData, key: string) { const value = text(form, key); return value || undefined; }
 function optionalNumber(form: FormData, key: string) { const value = text(form, key); return value ? Number(value) : undefined; }

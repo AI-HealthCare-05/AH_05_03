@@ -265,5 +265,9 @@ class HealthRecordNotFoundError(AppError):
     error_code = ErrorCode.HEALTH_RECORD_NOT_FOUND
 
 
+class HealthRecordPayloadValidationError(AppError):
+    error_code = ErrorCode.VALIDATION_ERROR
+
+
 class ProfileAccessDeniedError(AppError):
     error_code = ErrorCode.PROFILE_ACCESS_DENIED

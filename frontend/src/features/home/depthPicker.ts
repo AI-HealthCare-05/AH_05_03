@@ -23,6 +23,8 @@ export interface CollectDepthHitsOptions {
   resolveSystem?: (mesh: THREE.Mesh) => { system: string; systemKorean: string };
   /** 제외할 메쉬 이름 집합 */
   ignoredMeshNames?: Set<string>;
+  /** 카메라 광선 진행 방향 벡터 (법선 내적을 통한 입구/출구 평가에 사용) */
+  rayDirection?: THREE.Vector3;
 }
 
 /**
@@ -64,6 +66,7 @@ export function collectDepthHitCandidates(
 
   const maxPenetration = options.maxPenetrationDistance ?? 0.35;
   const ignored = options.ignoredMeshNames;
+  const rayDir = options.rayDirection?.clone().normalize();
 
   // 1. 유효한 Mesh 객체만 필터링
   const validHits = rawHits.filter((hit): hit is THREE.Intersection<THREE.Mesh> => {
@@ -80,13 +83,25 @@ export function collectDepthHitCandidates(
 
   const surfaceDistance = validHits[0].distance;
 
-  // 3. 동일 메쉬 중복 제거 (첫 진입점만 유지) 및 최대 관통 거리 제한
+  // 3. 동일 메쉬 중복 제거 (첫 진입점만 유지), 법선 내적 검사 및 최대 관통 거리 제한
   const seenMeshes = new Set<string>();
   const uniqueHits: THREE.Intersection<THREE.Mesh>[] = [];
 
   for (const hit of validHits) {
     const meshName = hit.object.name || `mesh_${hit.object.id}`;
     if (seenMeshes.has(meshName)) continue;
+
+    // 광선 방향과 면 법선이 모두 주어진 경우:
+    // 광선과 마주보는 진입면(dot <= 0.1) 우선, 진출면 단독 hit는 신체 반대편 출구일 가능성 고려
+    if (rayDir && hit.face?.normal) {
+      const worldNormal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+      const dot = rayDir.dot(worldNormal);
+      // 이미 한 개 이상의 진입면을 만난 상태에서 dot > 0.4인 뚜렷한 진출면 뒤에
+      // 큰 거리 차이가 발생하면 관통 종료
+      if (dot > 0.4 && uniqueHits.length > 0 && hit.distance - surfaceDistance > maxPenetration * 0.7) {
+        break;
+      }
+    }
 
     // 표면 대비 침투 깊이가 최대치를 넘으면 반대편 신체로 간주하여 중단
     const penetration = hit.distance - surfaceDistance;
