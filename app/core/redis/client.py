@@ -54,3 +54,8 @@ async def get_redis(request: Request) -> Redis:
     """
     redis: Redis = request.app.state.redis
     return redis
+
+
+async def get_redis_optional(request: Request) -> Redis | None:
+    """테스트나 환경에 따라 redis 가 없을 수 있는 경우 안전하게 None 을 반환한다."""
+    return getattr(request.app.state, "redis", None)

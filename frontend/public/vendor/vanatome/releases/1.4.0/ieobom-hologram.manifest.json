@@ -65,7 +65,7 @@
     {
       "id": "complete-head",
       "label": "머리 전체 해부 구조",
-      "triggerFocus": ["full", "head"],
+      "triggerFocus": ["full", "head", "upper"],
       "assets": [
         {
           "url": "/vendor/vanatome/layers/official-32693313/vanatome-official-complete-head.glb",

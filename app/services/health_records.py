@@ -1,13 +1,18 @@
 import calendar
+import contextlib
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends
+from redis.asyncio import Redis
 
+from app.core import config
 from app.core.db.session import SessionDep
+from app.core.redis.client import get_redis_optional
 from app.dtos.anatomy_event import AnatomyEvent
 from app.dtos.health_record_query import (
     HealthRecordQueryArguments,
@@ -90,11 +95,31 @@ class HealthRecordService:
         record_repo: Annotated[HealthRecordRepository, Depends(get_health_record_repository)],
         profile_repo: Annotated[ProfileRepository, Depends(get_profile_repository)],
         household_repo: Annotated[HouseholdRepository, Depends(get_household_repository)],
+        redis: Annotated[Redis | None, Depends(get_redis_optional)] = None,
     ) -> None:
         self.session = session
         self.record_repo = record_repo
         self.profile_repo = profile_repo
         self.household_repo = household_repo
+        self.redis = redis
+
+    async def _publish_household_event(
+        self,
+        household_id: uuid.UUID,
+        event_name: str,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        if self.redis is None:
+            return
+        channel = f"{config.REDIS_KEY_PREFIX}:household:{household_id}:events"
+        payload = {
+            "event": event_name,
+            "household_id": str(household_id),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            **(extra or {}),
+        }
+        with contextlib.suppress(Exception):
+            await self.redis.publish(channel, json.dumps(payload))
 
     async def _verify_profile_access(self, profile_id: uuid.UUID, account: ServiceAccount) -> uuid.UUID:
         profile = await self.profile_repo.get(profile_id)
@@ -123,7 +148,7 @@ class HealthRecordService:
                 raise HealthRecordPayloadValidationError(f"유효하지 않은 3D 해부학 이벤트 규격입니다: {e}") from e
 
     async def create_record(self, account: ServiceAccount, req: HealthRecordCreateRequest) -> HealthRecordData:
-        await self._verify_profile_access(req.profile_id, account)
+        household_id = await self._verify_profile_access(req.profile_id, account)
         self._validate_record_payload(req.payload)
 
         record = HealthRecord(
@@ -141,6 +166,11 @@ class HealthRecordService:
         created = await self.record_repo.create(record)
         await self.session.commit()
         await self.session.refresh(created)
+        await self._publish_household_event(
+            household_id,
+            "record_saved",
+            {"profile_id": str(req.profile_id), "record_id": str(created.id)},
+        )
         return HealthRecordData.model_validate(created)
 
     async def list_records(
@@ -321,7 +351,7 @@ class HealthRecordService:
         record = await self.record_repo.get(record_id)
         if record is None or record.status == "deleted":
             raise HealthRecordNotFoundError()
-        await self._verify_profile_access(record.profile_id, account)
+        household_id = await self._verify_profile_access(record.profile_id, account)
 
         if req.record_type is not None:
             record.record_type = req.record_type
@@ -342,22 +372,34 @@ class HealthRecordService:
         record.row_version += 1
         await self.session.commit()
         await self.session.refresh(record)
+        await self._publish_household_event(
+            household_id,
+            "record_saved",
+            {"profile_id": str(record.profile_id), "record_id": str(record.id)},
+        )
         return HealthRecordData.model_validate(record)
 
     async def delete_record(self, account: ServiceAccount, record_id: uuid.UUID) -> None:
         record = await self.record_repo.get(record_id)
         if record is None or record.status == "deleted":
             raise HealthRecordNotFoundError()
-        await self._verify_profile_access(record.profile_id, account)
+        household_id = await self._verify_profile_access(record.profile_id, account)
 
         await self.record_repo.soft_delete(record)
         record.row_version += 1
         await self.session.commit()
+        await self._publish_household_event(
+            household_id,
+            "record_deleted",
+            {"profile_id": str(record.profile_id), "record_id": str(record.id)},
+        )
 
     async def sync_records(self, account: ServiceAccount, req: HealthRecordSyncRequest) -> HealthRecordListData:
         results: list[HealthRecordData] = []
+        affected_households: set[uuid.UUID] = set()
         for r in req.records:
-            await self._verify_profile_access(r.profile_id, account)
+            household_id = await self._verify_profile_access(r.profile_id, account)
+            affected_households.add(household_id)
             self._validate_record_payload(r.payload)
             model = HealthRecord(
                 id=r.id,
@@ -374,4 +416,6 @@ class HealthRecordService:
             saved = await self.record_repo.upsert(model)
             results.append(HealthRecordData.model_validate(saved))
         await self.session.commit()
+        for hid in affected_households:
+            await self._publish_household_event(hid, "record_saved")
         return HealthRecordListData(items=results, total=len(results))

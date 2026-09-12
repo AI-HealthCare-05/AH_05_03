@@ -378,15 +378,16 @@ export function LocalDomainProvider({
 
   const value = useMemo<LocalDomainContextValue>(
     () => ({
+      householdId,
       runtime,
       profiles,
       hiddenProfiles,
       loading,
       error,
       refreshProfiles,
-      createProfile,
-      updateProfile,
       hideProfile,
+      updateProfile,
+      createProfile,
       restoreProfile,
       deleteEmptyProfile,
       createHealthRecord,
@@ -396,6 +397,7 @@ export function LocalDomainProvider({
       purgeHealthRecord,
     }),
     [
+      householdId,
       createHealthRecord,
       createProfile,
       deleteEmptyProfile,

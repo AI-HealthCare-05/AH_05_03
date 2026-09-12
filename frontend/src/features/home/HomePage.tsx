@@ -24,6 +24,8 @@ import { regionRisks, type RegionRisk } from "./bodyRisk";
 import { FamilyHistoryManager } from "./FamilyHistoryManager";
 
 import { FamilyIntegratedMonitoring } from "./FamilyIntegratedMonitoring";
+import { serverApiClient } from "../../shared/api/serverApiClient";
+import { useHouseholdEventStream } from "../sync/useHouseholdEventStream";
 
 const VanatomeBodyMap = lazy(() => import("./VanatomeBodyMap").then((module) => ({
   default: module.VanatomeBodyMap,
@@ -56,6 +58,7 @@ export function HomePage() {
   const { profileId: routeProfileId, recordId: routeRecordId } = useParams();
   const {
     runtime,
+    householdId,
     profiles,
     hiddenProfiles,
     loading,
@@ -113,6 +116,7 @@ export function HomePage() {
     });
   }, [records]);
   const [deletedRecords, setDeletedRecords] = useState<HealthRecord[]>([]);
+  const [familyRecords, setFamilyRecords] = useState<HealthRecord[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   // "건강기록 작성" 을 누르면 바로 폼이 아니라 갈림길이 먼저 뜬다. 손으로 적는 것과
   // 검진표를 올리는 것은 하는 일이 전혀 달라서, 한 폼에 욱여넣으면 둘 다 어색해진다.
@@ -125,6 +129,8 @@ export function HomePage() {
   // 남아야 하기 때문이다 — 모달을 닫는 동작은 "그만 볼래" 지 "선택을 풀래" 가 아니다.
   const [bodyRecord, setBodyRecord] = useState<HealthRecord>();
   const [highlightOrganKey, setHighlightOrganKey] = useState<string>();
+  const [highlightPainIntensity, setHighlightPainIntensity] = useState<number>();
+  const [highlightOrganIntensities, setHighlightOrganIntensities] = useState<Record<string, number>>();
   // 영구 삭제를 물어볼 대상. **한 번 더 누르게 한다** — 되돌릴 수 없는데 복원 버튼
   // 바로 옆이라, 한 번에 지워지면 누르려던 것과 다른 것이 사라진다.
   const [purgingRecord, setPurgingRecord] = useState<HealthRecord>();
@@ -178,8 +184,40 @@ export function HomePage() {
         .catch(() => {
           // 배지 하나 못 읽은 것으로 방금 갱신한 대시보드를 에러로 덮지 않는다.
         });
+
+      // 가족 건강 통합 모니터링을 위해 전체 가족의 최신 기록도 함께 갱신한다.
+      if (profiles.length > 0) {
+        void Promise.all(
+          profiles.map((p) => runtime.healthRecords.query({ profileId: p.id, includeDeleted: false })),
+        )
+          .then((results) => {
+            const combined = results.flatMap((res) => (res.ok ? res.value : []));
+            setFamilyRecords(combined);
+          })
+          .catch((err) => {
+            console.warn("[HomePage] Failed to sync family records:", err);
+          });
+      }
     },
-    [runtime, setActionError],
+    [runtime, profiles, setActionError],
+  );
+
+  const refreshFamilyRecords = useCallback(
+    async (familyProfiles: FamilyProfile[]) => {
+      if (!runtime || familyProfiles.length === 0) return;
+      try {
+        const results = await Promise.all(
+          familyProfiles.map((p) =>
+            runtime.healthRecords.query({ profileId: p.id, includeDeleted: false }),
+          ),
+        );
+        const combined = results.flatMap((res) => (res.ok ? res.value : []));
+        setFamilyRecords(combined);
+      } catch (err) {
+        console.warn("[HomePage] Failed to load family records for monitoring:", err);
+      }
+    },
+    [runtime],
   );
 
 
@@ -239,6 +277,63 @@ export function HomePage() {
       window.clearTimeout(timeout);
     };
   }, [refreshDashboard, activeProfileId]);
+
+  // 가족 구성원 목록이 초기화되거나 변경되면 전체 가족 기록을 모니터링용으로 로드한다.
+  useEffect(() => {
+    if (profiles.length > 0) {
+      void refreshFamilyRecords(profiles);
+    }
+  }, [profiles, refreshFamilyRecords]);
+
+  /**
+   * 봄이(건강 비서 챗봇)나 다른 컴포넌트에서 기록이 저장되면 즉시 수신하여
+   * 현재 활성 대시보드와 가족 통합 모니터링 타임라인을 새로고침한다.
+   * (동일 탭 CustomEvent + 다른 브라우저 탭 BroadcastChannel 양방향 수신)
+   */
+  useEffect(() => {
+    const handleRecordSaved = (e: Event) => {
+      const customEvent = e as CustomEvent<{ profileId?: string }>;
+      const targetId = customEvent.detail?.profileId || selectedProfile?.id;
+      if (targetId) {
+        void refreshDashboard(targetId);
+      }
+      if (profiles.length > 0) {
+        void refreshFamilyRecords(profiles);
+      }
+    };
+    window.addEventListener("ieobom:record-saved", handleRecordSaved);
+
+    let channel: BroadcastChannel | undefined;
+    try {
+      channel = new BroadcastChannel("ieobom-sync");
+      channel.onmessage = (event) => {
+        if (event.data?.type === "record-saved") {
+          const targetId = event.data.profileId || selectedProfile?.id;
+          if (targetId) void refreshDashboard(targetId);
+          if (profiles.length > 0) void refreshFamilyRecords(profiles);
+        }
+      };
+    } catch {
+      // BroadcastChannel 미지원 환경 무시
+    }
+
+    return () => {
+      window.removeEventListener("ieobom:record-saved", handleRecordSaved);
+      channel?.close();
+    };
+  }, [refreshDashboard, refreshFamilyRecords, selectedProfile?.id, profiles]);
+
+  // 다른 가족 구성원의 기기(다른 PC/모바일)에서 작성된 기록을 실시간 SSE 스트림으로 수신
+  useHouseholdEventStream({
+    serverClient: serverApiClient,
+    householdId,
+    onRecordEvent: () => {
+      const targetId = selectedProfile?.id;
+      if (targetId) void refreshDashboard(targetId);
+      if (profiles.length > 0) void refreshFamilyRecords(profiles);
+    },
+  });
+
   /**
    * 다른 탭·다른 기기에서 바뀐 것을 **돌아왔을 때** 따라잡는다.
    *
@@ -251,7 +346,10 @@ export function HomePage() {
   useEffect(() => {
     if (!selectedProfile) return;
     const onVisible = () => {
-      if (document.visibilityState === "visible") void refreshDashboard(selectedProfile.id);
+      if (document.visibilityState === "visible") {
+        void refreshDashboard(selectedProfile.id);
+        if (profiles.length > 0) void refreshFamilyRecords(profiles);
+      }
     };
     document.addEventListener("visibilitychange", onVisible);
     // 탭 전환 없이 다른 앱 창에 있다가 돌아오는 경우도 있다 — `focus` 도 같이 듣는다.
@@ -260,7 +358,7 @@ export function HomePage() {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [refreshDashboard, selectedProfile]);
+  }, [refreshDashboard, refreshFamilyRecords, selectedProfile, profiles]);
 
   // 판정 요약은 구성원 목록이 바뀔 때만 다시 읽는다. 판정 화면에서 돌아오면 라우트가
   // 갈리면서 이 화면이 다시 서므로 최신값이 따라온다.
@@ -581,11 +679,17 @@ export function HomePage() {
               onSelectProfile={(id) => {
                 setSelectedProfileId(id);
                 setHighlightOrganKey(undefined);
+                setHighlightPainIntensity(undefined);
+                setHighlightOrganIntensities(undefined);
                 setBodyRecord(undefined);
                 void navigate(`/members/${id}`);
               }}
-              records={records}
-              onSelectOrgan={(key) => setHighlightOrganKey(key || undefined)}
+              records={familyRecords.length > 0 ? familyRecords : records}
+              onSelectOrgan={(key, _label, intensity, organIntensities) => {
+                setHighlightOrganKey(key || undefined);
+                setHighlightPainIntensity(intensity);
+                setHighlightOrganIntensities(organIntensities);
+              }}
             />
 
             <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
@@ -596,6 +700,8 @@ export function HomePage() {
                 risks={bodyRisks}
                 risksAt={activeBodyRecord ? formatDateTime(activeBodyRecord.recordedAt) : undefined}
                 highlightOrganKey={highlightOrganKey}
+                highlightPainIntensity={highlightPainIntensity}
+                highlightOrganIntensities={highlightOrganIntensities}
               />
             </Suspense>
 

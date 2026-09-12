@@ -2103,7 +2103,7 @@ main:focus {
   color: #ffffff;
 }
 
-.vanatome-viewer > div:not(.body-map-hint):not(.vanatome-monitoring-glow-pill) {
+.vanatome-viewer > div:not(.body-map-hint):not(.vanatome-monitoring-glow-pill):not(.vanatome-quick-search) {
   width: 100%;
   height: 100%;
 }
@@ -8855,6 +8855,166 @@ main:focus {
   background: #f8fafc;
 }
 
+/* 3D 뷰어 우측 상단 즉각형 부위 검색기 (Human Atlas 스타일) */
+.vanatome-quick-search {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 25;
+  width: 270px;
+  max-width: calc(100% - 24px);
+  font-family: inherit;
+  user-select: none;
+}
+
+.vanatome-quick-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.vanatome-quick-search-box:focus-within {
+  border-color: #38bdf8;
+  background: rgba(15, 23, 42, 0.94);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25), 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.vanatome-quick-search-icon {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.vanatome-quick-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f8fafc;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.vanatome-quick-search-input::placeholder {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.vanatome-quick-search-clear {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.vanatome-quick-search-clear:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.vanatome-quick-search-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vanatome-quick-search-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease;
+  width: 100%;
+}
+
+.vanatome-quick-search-item:hover,
+.vanatome-quick-search-item.is-active {
+  background: rgba(56, 189, 248, 0.16);
+}
+
+.vanatome-quick-search-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.vanatome-quick-search-item-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #f8fafc;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vanatome-quick-search-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.vanatome-quick-search-item-system {
+  font-size: 0.70rem;
+  font-weight: 600;
+  color: #94a3b8;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.vanatome-quick-search-item-canonical {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vanatome-quick-search-empty {
+  padding: 12px 10px;
+  text-align: center;
+  font-size: 0.76rem;
+  color: #64748b;
+}
+
 /* 해부학 부위 검색 드로어 (D6/D7) */
 .anatomy-search-backdrop {
   position: fixed;
@@ -9407,8 +9567,7 @@ main:focus {
 .dot-pain { background: #f97316; }
 .dot-test { background: #3b82f6; }
 .dot-empty {
-  background: #cbd5e1;
-  background-image: repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0, 0, 0, 0.1) 2px, rgba(0, 0, 0, 0.1) 4px);
+  background: #06b6d4;
 }
 
 .timeline-grid {
@@ -9530,11 +9689,16 @@ main:focus {
 
 .timeline-block-diag { background: #ef4444; }
 .timeline-block-pain { background: #f97316; }
+.timeline-block-pain.timeline-block-pain-normal { background: #06b6d4; }
+.timeline-block-pain.timeline-block-pain-reassuring { background: #10b981; }
+.timeline-block-pain.timeline-block-pain-mild { background: #84cc16; }
+.timeline-block-pain.timeline-block-pain-moderate { background: #eab308; }
+.timeline-block-pain.timeline-block-pain-severe { background: #f97316; }
+.timeline-block-pain.timeline-block-pain-extreme { background: #ef4444; }
 .timeline-block-test { background: #3b82f6; }
 .timeline-block-empty {
-  background: #e2e8f0;
-  color: #94a3b8;
-  background-image: repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(0, 0, 0, 0.04) 2px, rgba(0, 0, 0, 0.04) 4px);
+  background: #06b6d4;
+  color: #ffffff;
 }
 
 .same-day-events-bar {
@@ -9557,6 +9721,9 @@ main:focus {
 }
 
 .same-day-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 4px 10px;
   font-size: 0.75rem;
   font-weight: 500;

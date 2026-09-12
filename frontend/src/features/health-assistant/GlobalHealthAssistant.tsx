@@ -206,8 +206,15 @@ export function GlobalHealthAssistant() {
               onClose={handleClose}
               onMinimize={handleClose}
               onRecordSaved={() => {
-                // 저장 시 필요하면 데이터 갱신 이벤트 발생
+                // 동일 탭 및 다른 탭 간 실시간 데이터 갱신 이벤트 발생
                 window.dispatchEvent(new CustomEvent("ieobom:record-saved", { detail: { profileId: activeProfile.id } }));
+                try {
+                  const channel = new BroadcastChannel("ieobom-sync");
+                  channel.postMessage({ type: "record-saved", profileId: activeProfile.id });
+                  channel.close();
+                } catch {
+                  // BroadcastChannel 미지원 환경 무시
+                }
               }}
               onNavigateToRecords={() => navigate("/health-data")}
               onNavigateToDiary={(dateKey) => navigate(`/pain-diary?date=${dateKey}`)}

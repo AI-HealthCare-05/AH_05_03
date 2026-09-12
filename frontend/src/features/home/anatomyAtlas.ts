@@ -214,7 +214,11 @@ export function initiallyHiddenSystems(
  * 분리하더라도 GLB나 메타데이터를 재가공할 필요가 없다.
  */
 export function anatomyLayerSystem(system: string) {
-  return system === "mammary" ? "integumentary" : system;
+  if (system === "mammary") return "integumentary";
+  if (system === "arterial" || system === "venous" || system === "cardiac") return "cardiovascular";
+  if (system === "connective") return "joints";
+  if (system === "sensory") return "nervous";
+  return system;
 }
 
 export function adaptAnatomyMesh(

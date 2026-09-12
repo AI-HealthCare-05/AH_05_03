@@ -427,10 +427,69 @@ describe("FamilyIntegratedMonitoring (#122)", () => {
     // 임상 추론 근거 텍스트 노출 확인
     expect(screen.getByText(/경추 신경근 병증\(Cervical Radiculopathy\) 또는 척수증/)).toBeInTheDocument();
 
-    // 3D 뷰어에 cervical_spine,nervous 전달 확인
+    // 3D 뷰어에 cervical_spine,nervous 및 통증 강도(5) 전달 확인
     expect(onSelectOrgan).toHaveBeenCalledWith(
       "cervical_spine,nervous",
       expect.stringContaining("경추 (C1~C7) 및 신경근"),
+      5,
+    );
+  });
+
+  it("11. 같은 날짜에 서로 다른 통증 강도를 가진 복수 통증 기록(어깨 4점, 폐 10점)이 있을 때 각 칩에 통증 점수가 표시되고 동시 투시 모드 시 organIntensities 맵이 전달된다", () => {
+    const onSelectOrgan = vi.fn();
+    const shoulderPainRecord = {
+      id: "rec-pain-shoulder",
+      householdId: "hh-1",
+      profileId: "profile-self",
+      recordType: "pain" as const,
+      recordedAt: `${todayStr}T10:00:00Z`,
+      source: "manual" as const,
+      payload: {
+        bodyArea: "왼쪽 어깨",
+        note: "왼쪽 어깨 뻐근함",
+        intensity: 4,
+      },
+      version: 1,
+    } as unknown as HealthRecord;
+
+    const lungPainRecord = {
+      id: "rec-pain-lung",
+      householdId: "hh-1",
+      profileId: "profile-self",
+      recordType: "pain" as const,
+      recordedAt: `${todayStr}T11:00:00Z`,
+      source: "manual" as const,
+      payload: {
+        bodyArea: "폐",
+        note: "호흡 시 극심한 흉통",
+        intensity: 10,
+      },
+      version: 1,
+    } as unknown as HealthRecord;
+
+    render(
+      <FamilyIntegratedMonitoring
+        profiles={mockProfiles}
+        selectedProfileId="profile-self"
+        onSelectProfile={vi.fn()}
+        records={[shoulderPainRecord, lungPainRecord]}
+        onSelectOrgan={onSelectOrgan}
+      />,
+    );
+
+    // 각 기록 칩에 점수 및 통증 강도 배지 노출 확인
+    expect(screen.getByText("4점")).toBeInTheDocument();
+    expect(screen.getByText("10점")).toBeInTheDocument();
+
+    // 두 장기의 강도가 개별 매핑된 organIntensityMap 전달 확인
+    expect(onSelectOrgan).toHaveBeenCalledWith(
+      expect.stringContaining("shoulder"),
+      expect.anything(),
+      10, // maxIntensity
+      expect.objectContaining({
+        left_shoulder: 4,
+        lung: 10,
+      }),
     );
   });
 });

@@ -186,6 +186,10 @@ class HouseholdHasOtherMembersError(AppError):
     error_code = ErrorCode.ACTIVE_MEMBERS_REMAIN
 
 
+class HouseholdStreamUnavailableError(AppError):
+    error_code = ErrorCode.SERVICE_UNAVAILABLE
+
+
 class MembershipStateConflictError(AppError):
     error_code = ErrorCode.MEMBERSHIP_STATE_CONFLICT
 

@@ -99,7 +99,20 @@ export function resolveHealthRecordDateTime(
   const localNow = toLocalMinuteString(now);
   if (!extractedDateTime) return localNow;
 
-  const value = extractedDateTime.trim();
+  let value = extractedDateTime.trim();
+  const currentYear = now.getFullYear();
+
+  // 사용자가 명시적으로 4자리 연도(예: 2024년, 2025년)를 언급하지 않았는데
+  // LLM이 훈련 컷오프(2023/2025 등) 기본값으로 현재 연도(2026)와 다른 연도를 생성한 경우
+  // 기준 연도로 자동 보정한다 (예: 2025-09-10 -> 2026-09-10).
+  const hasExplicitYear = /\b(19\d\d|20\d\d)\s*년/.test(userMessage);
+  if (!hasExplicitYear && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const extractedYear = parseInt(value.slice(0, 4), 10);
+    if (extractedYear !== currentYear) {
+      value = `${currentYear}${value.slice(4)}`;
+    }
+  }
+
   const dateOnly = value.match(/^(\d{4}-\d{2}-\d{2})$/)?.[1];
   if (dateOnly === localNow.slice(0, 10)) return localNow;
 
