@@ -321,7 +321,6 @@ export function VanatomeBodyMap({
   const [activeHandPose, setActiveHandPose] = useState<HandPose>("Open Hand");
   const [webGlUnavailable, setWebGlUnavailable] = useState(false);
   const [sceneAttempt, setSceneAttempt] = useState(0);
-  const [modelSource, setModelSource] = useState<"vanatome" | "humanAtlas">("vanatome");
 
   // 정밀 해부학 UX 상태 (48번 지침)
   const [isDentalModalOpen, setIsDentalModalOpen] = useState(false);
@@ -592,7 +591,6 @@ export function VanatomeBodyMap({
         const nextCleanupScene = await createAnatomyScene({
           canvas,
           manifest: nextManifest,
-          modelSource,
           signal: sceneController.signal,
           isDisposed: () => disposed,
           onProgress: setLoadProgress,
@@ -714,7 +712,7 @@ export function VanatomeBodyMap({
       selectToothRef.current = () => undefined;
       if (onToothSelectRef) onToothSelectRef.current = undefined;
     };
-  }, [atlasId, isTestEnvironment, onToothSelectRef, sceneAttempt, modelSource]);
+  }, [atlasId, isTestEnvironment, onToothSelectRef, sceneAttempt]);
 
   if (isTestEnvironment || loadError || webGlUnavailable) {
     return (
@@ -747,87 +745,6 @@ export function VanatomeBodyMap({
 
   return (
     <section className="body-map-card vanatome-card" aria-label="인체 모니터">
-      {/* 3D 인체 엔진/모델 전환 상단 바 */}
-      <div
-        className="vanatome-model-switcher-bar"
-        style={{
-          gridColumn: "1 / -1",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "10px 16px",
-          background: "#f8fafc",
-          borderBottom: "1px solid #e2e8f0",
-          borderRadius: "12px 12px 0 0",
-          marginBottom: "4px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#1e293b" }}>3D 인체 모델 데이터셋</span>
-          <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
-            {modelSource === "vanatome"
-              ? "이어봄 통합 최적화 모델 (Z-Anatomy 기반 경량화 서빙)"
-              : "Human Atlas 모델 (BodyParts3D 2,234 파츠 전신 원본 · 외이/귀 포함)"}
-          </span>
-        </div>
-        <div
-          role="group"
-          aria-label="3D 인체 모델 선택"
-          style={{ display: "flex", gap: "4px", background: "#e2e8f0", padding: "3px", borderRadius: "8px" }}
-        >
-          <button
-            type="button"
-            onClick={() => setModelSource("vanatome")}
-            style={{
-              padding: "5px 12px",
-              fontSize: "0.78rem",
-              fontWeight: modelSource === "vanatome" ? 700 : 500,
-              background: modelSource === "vanatome" ? "#ffffff" : "transparent",
-              color: modelSource === "vanatome" ? "#1d4ed8" : "#475569",
-              border: "none",
-              borderRadius: "6px",
-              boxShadow: modelSource === "vanatome" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-              cursor: "pointer",
-              transition: "all 0.15s ease",
-            }}
-          >
-            이어봄 Vanatome (최적화)
-          </button>
-          <button
-            type="button"
-            onClick={() => setModelSource("humanAtlas")}
-            style={{
-              padding: "5px 12px",
-              fontSize: "0.78rem",
-              fontWeight: modelSource === "humanAtlas" ? 700 : 500,
-              background: modelSource === "humanAtlas" ? "#ffffff" : "transparent",
-              color: modelSource === "humanAtlas" ? "#0284c7" : "#475569",
-              border: "none",
-              borderRadius: "6px",
-              boxShadow: modelSource === "humanAtlas" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <span>Human Atlas (BodyParts3D)</span>
-            <span
-              style={{
-                fontSize: "0.64rem",
-                padding: "1px 5px",
-                borderRadius: "4px",
-                background: "#e0f2fe",
-                color: "#0369a1",
-                fontWeight: 700,
-              }}
-            >
-              2,234개
-            </span>
-          </button>
-        </div>
-      </div>
       <div className="body-map-copy">
         <p className="section-kicker">인체 모니터</p>
         <fieldset className="vanatome-system-layers">
@@ -1795,11 +1712,7 @@ export function VanatomeBodyMap({
           )}
         </div>
       </div>
-      {modelSource === "humanAtlas" ? (
-        <footer className="vanatome-attribution">
-          모델: Human Atlas · BodyParts3D 4.0 © DBCLS (CC BY 4.0) · 2,234 메쉬 전신 원본 (외이·안구 독립 분할)
-        </footer>
-      ) : manifest ? (
+      {manifest ? (
         <footer className="vanatome-attribution">
           모델: {manifest.shortLabel} ·{" "}
           <a href={manifest.attributionUrl} target="_blank" rel="noreferrer">
