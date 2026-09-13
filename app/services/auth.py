@@ -101,10 +101,15 @@ class AuthService:
         if not account or not password_ok:
             raise CredentialsInvalidError()
 
-        if account.status is ServiceAccountStatus.SUSPENDED:
-            raise AccountSuspendedError()
-        if account.status is ServiceAccountStatus.CLOSED:
-            raise AccountClosedError()
+        # **정지·해지 상태를 여기서 구분해 알리지 않는다.** `AccountSuspendedError`
+        # ·`AccountClosedError`는 401이 아니라 403이고 메시지도 다르다 — 익명
+        # 로그인 시도자에게 "이 이메일은 실제로 가입돼 있고 지금 해지·정지
+        # 상태다"를 그대로 확인해 주는 통로가 된다. `test_wrong_password_and_
+        # unknown_email_look_identical`이 지키려던 것과 같은 경계인데 그 계정
+        # 상태 축만 비어 있었다. 같은 계정으로 인증된 뒤(`refresh`)의 상태
+        # 확인은 다르다 — 그때는 호출자가 이미 그 계정임을 증명한 뒤다.
+        if account.status in (ServiceAccountStatus.SUSPENDED, ServiceAccountStatus.CLOSED):
+            raise CredentialsInvalidError()
 
         return account
 

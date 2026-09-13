@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useLocalDomain } from "../../app/localDomainContext";
 import { BirthDateInput } from "../../shared/ui/BirthDateInput";
 import { Modal } from "../../shared/ui/Modal";
+import { ListRowsSkeleton, MemberListSkeleton } from "../../shared/ui/Skeleton";
 // 모달은 눌러야 뜬다. 정적으로 두면 판정 카드 일체가 홈의 첫 청크에 실린다.
 const RecordDetail = lazy(() => import("./RecordDetail").then((m) => ({ default: m.RecordDetail })));
 import { RecordSummary } from "./RecordSummary";
@@ -118,6 +119,11 @@ export function HomePage() {
   const [deletedRecords, setDeletedRecords] = useState<HealthRecord[]>([]);
   const [familyRecords, setFamilyRecords] = useState<HealthRecord[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(false);
+  // **스켈레톤은 첫 한 번만.** `refreshDashboard` 는 기록을 쓰거나 봄이가 판정을
+  // 남길 때마다 다시 도는데, 그때마다 목록을 스켈레톤으로 바꾸면 이미 읽고 있던
+  // 화면이 깜빡인다(누르려던 버튼이 손밑에서 사라지기도 한다). 한 번 받아 본
+  // 뒤에는 **이전 목록을 그대로 두고** 새 값이 오면 조용히 갈아 끼운다.
+  const [loadedProfileId, setLoadedProfileId] = useState<string>();
   // "건강기록 작성" 을 누르면 바로 폼이 아니라 갈림길이 먼저 뜬다. 손으로 적는 것과
   // 검진표를 올리는 것은 하는 일이 전혀 달라서, 한 폼에 욱여넣으면 둘 다 어색해진다.
   const [recordChoiceOpen, setRecordChoiceOpen] = useState(false);
@@ -161,6 +167,7 @@ export function HomePage() {
         setSummary(summaryResult.value);
         setRecords(recordsResult.value.filter((record) => !record.deletedAt));
         setDeletedRecords(recordsResult.value.filter((record) => Boolean(record.deletedAt)));
+        setLoadedProfileId(profileId);
         setActionError(undefined);
       } catch (caught) {
         setActionError(messageFrom(caught, "건강 대시보드를 불러오지 못했습니다."));
@@ -586,10 +593,35 @@ export function HomePage() {
 
   return (
     <div className="product-page">
+      {/* **머리말 틀을 여기서만 반만 쓰고 있었다.** 나머지 네 화면
+          (`HealthDataPage` · `DataManagementPage` · `AccountPage` ·
+          `AssessmentPage`)은 `page-kicker` · `h1` · 설명 한 줄을 다 쓰는데
+          홈만 설명줄을 빼고 슬로건 한 줄로 서 있었다 — 그 자리를 받으려고
+          `.dashboard-heading > div > p:last-child` 가 이미 styles.css 에 있다.
+          문장도 이 화면만 랜딩 카피였다("…이어보세요"). 다른 h1 은 전부 그
+          화면이 하는 일을 평서로 말한다("구독과 가족 연결을 관리하세요",
+          "{이름}님의 건강 변화"). 앱 안에 랜딩이 한 장 끼어 있는 것처럼
+          보이던 이유가 글자 크기가 아니라 이 어투였다.
+
+          **인원수는 적지 않는다.** 바로 아래 구성원 카드가 곧 그 수다 —
+          머리말에 또 적으면 같은 것을 두 번 세는 자리가 된다.
+
+          **"이 기기에만 저장" 도 쓰지 않는다.** ADR-011 이후 기록은 계정에
+          저장된다. 아래 문장은 이 파일 안에서 이미 고쳐 둔 표현을 그대로
+          쓴다(기록 작성 폼의 `form-notice`). */}
       <section className="dashboard-heading">
         <div>
-          <p className="page-kicker">우리 가족 건강 홈</p>
-          <h1>가족의 건강 흐름을 한곳에서 이어보세요</h1>
+          <p className="page-kicker">가족 홈</p>
+          <h1>우리 가족의 건강기록</h1>
+          {/* 빈 가정에 "구성원을 고르면" 이라고 할 수 없다. 다만 **받는 동안에는
+              말하지 않는다** — `loading` 중의 `profiles.length === 0` 은 "없다"
+              가 아니라 "아직 모른다" 다. */}
+          <p>
+            {(!loading && profiles.length === 0
+              ? "가족 구성원을 등록하면 그 사람의 기록과 판정이 여기에 쌓입니다."
+              : "구성원을 고르면 그 사람의 기록과 판정이 아래로 이어집니다.") +
+              " 기록은 내 계정에 저장되고, 같은 가정 구성원만 볼 수 있습니다."}
+          </p>
         </div>
       </section>
 
@@ -614,7 +646,9 @@ export function HomePage() {
                 숨긴 프로필 {hiddenProfiles.length}명
               </button>
             ) : null}
-            <span className="section-count">{profiles.length}명</span>
+            {/* 인원 수 배지("N명")를 뺐다. 바로 아래 카드가 곧 그 수라서 같은 것을
+                두 번 세는 자리였다. `FamilyProfileSidebar` 는 카드가 접혀 있어
+                그쪽에는 남는다. */}
           </div>
         </div>
 
@@ -747,7 +781,14 @@ export function HomePage() {
                 {dashboardLoading ? <span className="subtle-status">불러오는 중…</span> : null}
               </div>
               </div>
-              {records.length === 0 ? (
+              {/* **"아직 없다" 가 먼저 떴다.** 기록을 받아오는 동안에도 `records` 는
+                  빈 배열이라, 기록이 있는 사람에게도 "아직 건강기록이 없습니다" 가
+                  한 번 스쳤다가 목록으로 바뀌었다. 없다는 말은 다 받아본 뒤에만
+                  할 수 있다 — 이 구성원의 기록을 아직 한 번도 못 받아 봤을 때만
+                  줄 자리를 잡아 두고, 그 뒤 갱신은 이전 목록을 둔 채로 한다. */}
+              {loadedProfileId !== selectedProfile.id && records.length === 0 ? (
+                <ListRowsSkeleton rows={3} label="최근 건강기록을 불러오는 중" />
+              ) : records.length === 0 ? (
                 <div className="compact-empty">
                   <strong>아직 건강기록이 없습니다.</strong>
                   <p>검진 결과, 통증 변화나 건강 메모부터 남겨보세요.</p>
@@ -1226,8 +1267,10 @@ function EmptyHousehold({ disabled, onCreate }: { disabled: boolean; onCreate: (
   );
 }
 
+// **3칸이었다.** 실제 `.member-list` 는 4칸이라 기록이 도착하는 순간 칸 수가 바뀌며
+// 화면이 한 번 튀었다. 같은 격자·같은 카드 높이로 그리면 자리가 미리 잡혀 튐이 없다.
 function DashboardSkeleton() {
-  return <div className="dashboard-skeleton" aria-label="로컬 프로필 불러오는 중"><span /><span /><span /></div>;
+  return <MemberListSkeleton />;
 }
 
 function MetricCard({ label, value, helper, tone }: { label: string; value: string; helper?: string; tone?: "safe" }) {

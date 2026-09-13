@@ -22,7 +22,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function renderSignIn(signIn = vi.fn().mockResolvedValue(undefined)) {
+function renderSignIn(signIn = vi.fn().mockResolvedValue(undefined), initialMessage?: string) {
   const value: AuthContextValue = {
     status: "signed-out",
     signIn,
@@ -31,7 +31,7 @@ function renderSignIn(signIn = vi.fn().mockResolvedValue(undefined)) {
   };
   render(
     <AuthContext.Provider value={value}>
-      <SignInPage />
+      <SignInPage initialMessage={initialMessage} />
     </AuthContext.Provider>,
   );
   return signIn;
@@ -99,6 +99,15 @@ describe("SignInPage", () => {
 
     await user.click(screen.getByRole("button", { name: "회원가입" }));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("로그아웃·회원 탈퇴 직후 관문으로 넘어온 안내문을 첫 화면에 보여준다", () => {
+    // **`AccountPage` 가 markSignedOut(message) 로 실어 보낸 문구가 실제로
+    // 여기서 뜨는지 확인한다.** 회원 탈퇴가 성공했는데도 화면이 곧장 로그인
+    // 화면으로 바뀌어 버려 아무 확인도 못 보던 결함의 수리 대상이다.
+    renderSignIn(vi.fn().mockResolvedValue(undefined), "회원 탈퇴가 완료되었습니다. 건강정보는 보존됩니다.");
+
+    expect(screen.getByRole("status")).toHaveTextContent("회원 탈퇴가 완료되었습니다. 건강정보는 보존됩니다.");
   });
 
   it("초대 링크로 들어오면 그 이메일을 미리 채운다", () => {

@@ -22,14 +22,21 @@ function readResetToken(): { token: string; email?: string } | undefined {
   return { token, email: params.get("email") ?? undefined };
 }
 
-export function SignInPage({ onResetComplete }: { onResetComplete?: () => void } = {}) {
+export function SignInPage({
+  onResetComplete,
+  initialMessage,
+}: {
+  onResetComplete?: () => void;
+  /** 로그아웃·회원 탈퇴 직후 관문으로 넘어오며 실어 온 한 번짜리 안내문. */
+  initialMessage?: string;
+} = {}) {
   const { signIn } = useAuth();
   const [resetInfo, setResetInfo] = useState(readResetToken);
   const [resetEmail] = useState(() => readResetToken()?.email);
   const [mode, setMode] = useState<AuthMode>(() => (resetInfo ? "reset-password" : "signin"));
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string>();
-  const [message, setMessage] = useState<string>();
+  const [message, setMessage] = useState<string | undefined>(initialMessage);
   const [invited] = useState(invitationEmail);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -95,7 +102,7 @@ export function SignInPage({ onResetComplete }: { onResetComplete?: () => void }
     // 계정이 아니라 이 브라우저에 암호화해 보관합니다" 였는데, ADR-011 로 정본이
     // PostgreSQL 로 옮겨간 뒤(2026-09-04) 사실이 아니다. 동의 직전 화면에서 틀린
     // 약속을 하는 것이 이 축에서 가장 무거운 결함이었다.
-    signin: "위험 판정과 검진표 인식은 서비스 계정이 있어야 씁니다. 건강기록은 계정에 저장되어 기기를 바꿔도 이어집니다.",
+    signin: "질환 예측과 검진표 인식은 서비스 계정이 있어야 씁니다. 건강기록은 계정에 저장되어 기기를 바꿔도 이어집니다.",
     signup: "이메일과 비밀번호만 있으면 됩니다. 건강기록은 계정에 저장되고, 나와 가족 구성원만 열람합니다.",
     "forgot-password": "가입하신 이메일로 비밀번호 재설정 링크를 받아 새 비밀번호를 설정할 수 있습니다.",
     "reset-password": "새로 사용할 비밀번호를 입력하여 계정 보안을 복원하세요.",

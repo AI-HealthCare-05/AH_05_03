@@ -275,3 +275,16 @@ class HealthRecordPayloadValidationError(AppError):
 
 class ProfileAccessDeniedError(AppError):
     error_code = ErrorCode.PROFILE_ACCESS_DENIED
+
+
+# --- 멱등성·낙관적 잠금 (docs/03_api_spec.md §2.4·§2.5) --------------------
+class IdempotencyKeyReusedError(AppError):
+    """같은 `Idempotency-Key` 로 이전과 다른 요청 본문이 들어왔다. 409."""
+
+    error_code = ErrorCode.IDEMPOTENCY_KEY_REUSED
+
+
+class VersionMismatchError(AppError):
+    """`If-Match` 의 row_version 이 현재 값과 다르다 — 그 사이 다른 곳에서 먼저 바꿨다는 뜻이다. 412."""
+
+    error_code = ErrorCode.VERSION_MISMATCH

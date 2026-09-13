@@ -1,0 +1,1261 @@
+{
+  "data": "C:\\Users\\kkmj1\\orca\\projects\\Team_project\\project\\modeling\\data\\processed\\nhanes_pooled.csv",
+  "rows": 48895,
+  "cycles": [
+    "2005_2006",
+    "2007_2008",
+    "2009_2010",
+    "2011_2012",
+    "2013_2014",
+    "2015_2016",
+    "2017_2018",
+    "2021_2023"
+  ],
+  "holdout": "2021_2023",
+  "smd_flag": 0.1,
+  "unmeasurable_on_holdout": [],
+  "coverage": [
+    {
+      "column": "ldl",
+      "by_cycle": {
+        "2005_2006": 0.4214,
+        "2007_2008": 0.4305,
+        "2009_2010": 0.4369,
+        "2011_2012": 0.43,
+        "2013_2014": 0.4353,
+        "2015_2016": 0.3886,
+        "2017_2018": 0.4235,
+        "2021_2023": 0.3875
+      },
+      "train_mean": 0.4237,
+      "holdout": 0.3875,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "triglyceride",
+      "by_cycle": {
+        "2005_2006": 0.4328,
+        "2007_2008": 0.441,
+        "2009_2010": 0.4445,
+        "2011_2012": 0.438,
+        "2013_2014": 0.4421,
+        "2015_2016": 0.3927,
+        "2017_2018": 0.4279,
+        "2021_2023": 0.3921
+      },
+      "train_mean": 0.4313,
+      "holdout": 0.3921,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "fasting_glucose",
+      "by_cycle": {
+        "2005_2006": 0.4374,
+        "2007_2008": 0.4425,
+        "2009_2010": 0.4485,
+        "2011_2012": 0.4436,
+        "2013_2014": 0.4455,
+        "2015_2016": 0.4279,
+        "2017_2018": 0.4356,
+        "2021_2023": 0.4091
+      },
+      "train_mean": 0.4401,
+      "holdout": 0.4091,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "alcohol_days_per_year",
+      "by_cycle": {
+        "2005_2006": 0.8285,
+        "2007_2008": 0.8573,
+        "2009_2010": 0.8346,
+        "2011_2012": 0.8458,
+        "2013_2014": 0.8842,
+        "2015_2016": 0.8685,
+        "2017_2018": 0.8755,
+        "2021_2023": 0.6705
+      },
+      "train_mean": 0.8563,
+      "holdout": 0.6705,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "alt",
+      "by_cycle": {
+        "2005_2006": 0.8822,
+        "2007_2008": 0.8937,
+        "2009_2010": 0.9128,
+        "2011_2012": 0.8785,
+        "2013_2014": 0.9215,
+        "2015_2016": 0.8992,
+        "2017_2018": 0.8789,
+        "2021_2023": 0.6928
+      },
+      "train_mean": 0.8953,
+      "holdout": 0.6928,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "ast",
+      "by_cycle": {
+        "2005_2006": 0.8822,
+        "2007_2008": 0.8937,
+        "2009_2010": 0.9129,
+        "2011_2012": 0.879,
+        "2013_2014": 0.9215,
+        "2015_2016": 0.8992,
+        "2017_2018": 0.8817,
+        "2021_2023": 0.6943
+      },
+      "train_mean": 0.8957,
+      "holdout": 0.6943,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "creatinine",
+      "by_cycle": {
+        "2005_2006": 0.8965,
+        "2007_2008": 0.8944,
+        "2009_2010": 0.9131,
+        "2011_2012": 0.8797,
+        "2013_2014": 0.9218,
+        "2015_2016": 0.899,
+        "2017_2018": 0.8818,
+        "2021_2023": 0.6949
+      },
+      "train_mean": 0.898,
+      "holdout": 0.6949,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "egfr",
+      "by_cycle": {
+        "2005_2006": 0.8965,
+        "2007_2008": 0.8944,
+        "2009_2010": 0.9131,
+        "2011_2012": 0.8797,
+        "2013_2014": 0.9218,
+        "2015_2016": 0.899,
+        "2017_2018": 0.8818,
+        "2021_2023": 0.6949
+      },
+      "train_mean": 0.898,
+      "holdout": 0.6949,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "ggt",
+      "by_cycle": {
+        "2005_2006": 0.8965,
+        "2007_2008": 0.8944,
+        "2009_2010": 0.9129,
+        "2011_2012": 0.8793,
+        "2013_2014": 0.9216,
+        "2015_2016": 0.8992,
+        "2017_2018": 0.8817,
+        "2021_2023": 0.6951
+      },
+      "train_mean": 0.8979,
+      "holdout": 0.6951,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "uric_acid",
+      "by_cycle": {
+        "2005_2006": 0.8965,
+        "2007_2008": 0.8942,
+        "2009_2010": 0.9129,
+        "2011_2012": 0.8793,
+        "2013_2014": 0.9215,
+        "2015_2016": 0.8989,
+        "2017_2018": 0.8815,
+        "2021_2023": 0.6953
+      },
+      "train_mean": 0.8978,
+      "holdout": 0.6953,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "albumin",
+      "by_cycle": {
+        "2005_2006": 0.8965,
+        "2007_2008": 0.8945,
+        "2009_2010": 0.9131,
+        "2011_2012": 0.8797,
+        "2013_2014": 0.9218,
+        "2015_2016": 0.8992,
+        "2017_2018": 0.882,
+        "2021_2023": 0.6995
+      },
+      "train_mean": 0.8981,
+      "holdout": 0.6995,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "hdl",
+      "by_cycle": {
+        "2005_2006": 0.8999,
+        "2007_2008": 0.8973,
+        "2009_2010": 0.9151,
+        "2011_2012": 0.8842,
+        "2013_2014": 0.9242,
+        "2015_2016": 0.9006,
+        "2017_2018": 0.8857,
+        "2021_2023": 0.7022
+      },
+      "train_mean": 0.901,
+      "holdout": 0.7022,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "total_chol",
+      "by_cycle": {
+        "2005_2006": 0.8999,
+        "2007_2008": 0.8973,
+        "2009_2010": 0.9151,
+        "2011_2012": 0.8842,
+        "2013_2014": 0.9242,
+        "2015_2016": 0.9006,
+        "2017_2018": 0.8857,
+        "2021_2023": 0.7022
+      },
+      "train_mean": 0.901,
+      "holdout": 0.7022,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "hba1c",
+      "by_cycle": {
+        "2005_2006": 0.9047,
+        "2007_2008": 0.9011,
+        "2009_2010": 0.9239,
+        "2011_2012": 0.9035,
+        "2013_2014": 0.9325,
+        "2015_2016": 0.9083,
+        "2017_2018": 0.9002,
+        "2021_2023": 0.7369
+      },
+      "train_mean": 0.9106,
+      "holdout": 0.7369,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "hemoglobin",
+      "by_cycle": {
+        "2005_2006": 0.9057,
+        "2007_2008": 0.9016,
+        "2009_2010": 0.9239,
+        "2011_2012": 0.9065,
+        "2013_2014": 0.9328,
+        "2015_2016": 0.9052,
+        "2017_2018": 0.902,
+        "2021_2023": 0.737
+      },
+      "train_mean": 0.9111,
+      "holdout": 0.737,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "waist_cm",
+      "by_cycle": {
+        "2005_2006": 0.9068,
+        "2007_2008": 0.9067,
+        "2009_2010": 0.9176,
+        "2011_2012": 0.8965,
+        "2013_2014": 0.9125,
+        "2015_2016": 0.8951,
+        "2017_2018": 0.8853,
+        "2021_2023": 0.738
+      },
+      "train_mean": 0.9029,
+      "holdout": 0.738,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "dbp",
+      "by_cycle": {
+        "2005_2006": 0.903,
+        "2007_2008": 0.91,
+        "2009_2010": 0.9272,
+        "2011_2012": 0.9112,
+        "2013_2014": 0.9316,
+        "2015_2016": 0.9269,
+        "2017_2018": 0.8943,
+        "2021_2023": 0.7509
+      },
+      "train_mean": 0.9149,
+      "holdout": 0.7509,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "sbp",
+      "by_cycle": {
+        "2005_2006": 0.9083,
+        "2007_2008": 0.9149,
+        "2009_2010": 0.9301,
+        "2011_2012": 0.9129,
+        "2013_2014": 0.9343,
+        "2015_2016": 0.9293,
+        "2017_2018": 0.8967,
+        "2021_2023": 0.7509
+      },
+      "train_mean": 0.9181,
+      "holdout": 0.7509,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "urine_acr",
+      "by_cycle": {
+        "2005_2006": 0.9302,
+        "2007_2008": 0.9313,
+        "2009_2010": 0.9536,
+        "2011_2012": 0.9358,
+        "2013_2014": 0.9478,
+        "2015_2016": 0.9351,
+        "2017_2018": 0.9198,
+        "2021_2023": 0.7569
+      },
+      "train_mean": 0.9362,
+      "holdout": 0.7569,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "bmi",
+      "by_cycle": {
+        "2005_2006": 0.9415,
+        "2007_2008": 0.9448,
+        "2009_2010": 0.9633,
+        "2011_2012": 0.9423,
+        "2013_2014": 0.9559,
+        "2015_2016": 0.9448,
+        "2017_2018": 0.928,
+        "2021_2023": 0.7643
+      },
+      "train_mean": 0.9458,
+      "holdout": 0.7643,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "height_cm",
+      "by_cycle": {
+        "2005_2006": 0.9434,
+        "2007_2008": 0.9465,
+        "2009_2010": 0.9644,
+        "2011_2012": 0.9444,
+        "2013_2014": 0.9576,
+        "2015_2016": 0.9467,
+        "2017_2018": 0.9298,
+        "2021_2023": 0.7677
+      },
+      "train_mean": 0.9475,
+      "holdout": 0.7677,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "sleep_hours",
+      "by_cycle": {
+        "2005_2006": 0.9979,
+        "2007_2008": 0.9987,
+        "2009_2010": 0.9981,
+        "2011_2012": 0.9976,
+        "2013_2014": 0.9985,
+        "2015_2016": 0.9945,
+        "2017_2018": 0.9918,
+        "2021_2023": 0.9859
+      },
+      "train_mean": 0.9967,
+      "holdout": 0.9859,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "sedentary_min_per_day",
+      "by_cycle": {
+        "2005_2006": 0.0,
+        "2007_2008": 0.9947,
+        "2009_2010": 0.9972,
+        "2011_2012": 0.9944,
+        "2013_2014": 0.9956,
+        "2015_2016": 0.9898,
+        "2017_2018": 0.9921,
+        "2021_2023": 0.9895
+      },
+      "train_mean": 0.852,
+      "holdout": 0.9895,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "moderate_min_per_week",
+      "by_cycle": {
+        "2005_2006": 0.0,
+        "2007_2008": 0.9987,
+        "2009_2010": 0.9992,
+        "2011_2012": 0.999,
+        "2013_2014": 0.9998,
+        "2015_2016": 0.9974,
+        "2017_2018": 0.9986,
+        "2021_2023": 0.9901
+      },
+      "train_mean": 0.8561,
+      "holdout": 0.9901,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "vigorous_min_per_week",
+      "by_cycle": {
+        "2005_2006": 0.0,
+        "2007_2008": 0.9989,
+        "2009_2010": 0.9998,
+        "2011_2012": 0.9993,
+        "2013_2014": 0.9998,
+        "2015_2016": 0.9988,
+        "2017_2018": 0.9993,
+        "2021_2023": 0.9921
+      },
+      "train_mean": 0.8566,
+      "holdout": 0.9921,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "smoking_status",
+      "by_cycle": {
+        "2005_2006": 0.9478,
+        "2007_2008": 0.9737,
+        "2009_2010": 0.974,
+        "2011_2012": 0.9706,
+        "2013_2014": 0.9997,
+        "2015_2016": 0.9981,
+        "2017_2018": 1.0,
+        "2021_2023": 0.9964
+      },
+      "train_mean": 0.9806,
+      "holdout": 0.9964,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "self_rated_health",
+      "by_cycle": {
+        "2005_2006": 0.999,
+        "2007_2008": 0.9995,
+        "2009_2010": 0.9997,
+        "2011_2012": 0.9997,
+        "2013_2014": 0.9992,
+        "2015_2016": 0.9983,
+        "2017_2018": 0.9988,
+        "2021_2023": 0.9996
+      },
+      "train_mean": 0.9992,
+      "holdout": 0.9996,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "age",
+      "by_cycle": {
+        "2005_2006": 1.0,
+        "2007_2008": 1.0,
+        "2009_2010": 1.0,
+        "2011_2012": 1.0,
+        "2013_2014": 1.0,
+        "2015_2016": 1.0,
+        "2017_2018": 1.0,
+        "2021_2023": 1.0
+      },
+      "train_mean": 1.0,
+      "holdout": 1.0,
+      "unmeasurable_on_holdout": false
+    },
+    {
+      "column": "sex",
+      "by_cycle": {
+        "2005_2006": 1.0,
+        "2007_2008": 1.0,
+        "2009_2010": 1.0,
+        "2011_2012": 1.0,
+        "2013_2014": 1.0,
+        "2015_2016": 1.0,
+        "2017_2018": 1.0,
+        "2021_2023": 1.0
+      },
+      "train_mean": 1.0,
+      "holdout": 1.0,
+      "unmeasurable_on_holdout": false
+    }
+  ],
+  "value_shift": [
+    {
+      "column": "moderate_min_per_week",
+      "train_mean": 86.218,
+      "holdout_mean": 226.259,
+      "smd": 0.4214,
+      "shifted": true
+    },
+    {
+      "column": "sleep_hours",
+      "train_mean": 7.09,
+      "holdout_mean": 7.731,
+      "smd": 0.4055,
+      "shifted": true
+    },
+    {
+      "column": "albumin",
+      "train_mean": 4.214,
+      "holdout_mean": 4.07,
+      "smd": -0.4054,
+      "shifted": true
+    },
+    {
+      "column": "dbp",
+      "train_mean": 70.297,
+      "holdout_mean": 74.596,
+      "smd": 0.3743,
+      "shifted": true
+    },
+    {
+      "column": "age",
+      "train_mean": 48.83,
+      "holdout_mean": 52.933,
+      "smd": 0.2248,
+      "shifted": true
+    },
+    {
+      "column": "uric_acid",
+      "train_mean": 5.436,
+      "holdout_mean": 5.159,
+      "smd": -0.1931,
+      "shifted": true
+    },
+    {
+      "column": "alt",
+      "train_mean": 25.389,
+      "holdout_mean": 22.535,
+      "smd": -0.1812,
+      "shifted": true
+    },
+    {
+      "column": "ast",
+      "train_mean": 24.925,
+      "holdout_mean": 21.71,
+      "smd": -0.1739,
+      "shifted": true
+    },
+    {
+      "column": "egfr",
+      "train_mean": 94.849,
+      "holdout_mean": 91.571,
+      "smd": -0.1463,
+      "shifted": true
+    },
+    {
+      "column": "alcohol_days_per_year",
+      "train_mean": 49.766,
+      "holdout_mean": 61.968,
+      "smd": 0.1305,
+      "shifted": true
+    },
+    {
+      "column": "ldl",
+      "train_mean": 112.811,
+      "holdout_mean": 108.301,
+      "smd": -0.1245,
+      "shifted": true
+    },
+    {
+      "column": "self_rated_health",
+      "train_mean": 2.766,
+      "holdout_mean": 2.637,
+      "smd": -0.1234,
+      "shifted": true
+    },
+    {
+      "column": "total_chol",
+      "train_mean": 192.321,
+      "holdout_mean": 187.609,
+      "smd": -0.1112,
+      "shifted": true
+    },
+    {
+      "column": "waist_cm",
+      "train_mean": 98.923,
+      "holdout_mean": 100.763,
+      "smd": 0.1099,
+      "shifted": true
+    },
+    {
+      "column": "hemoglobin",
+      "train_mean": 14.037,
+      "holdout_mean": 13.88,
+      "smd": -0.103,
+      "shifted": true
+    },
+    {
+      "column": "bmi",
+      "train_mean": 29.081,
+      "holdout_mean": 29.74,
+      "smd": 0.0918,
+      "shifted": false
+    },
+    {
+      "column": "hdl",
+      "train_mean": 53.119,
+      "holdout_mean": 54.471,
+      "smd": 0.0873,
+      "shifted": false
+    },
+    {
+      "column": "vigorous_min_per_week",
+      "train_mean": 55.69,
+      "holdout_mean": 72.444,
+      "smd": 0.0811,
+      "shifted": false
+    },
+    {
+      "column": "sbp",
+      "train_mean": 124.058,
+      "holdout_mean": 122.666,
+      "smd": -0.0754,
+      "shifted": false
+    },
+    {
+      "column": "triglyceride",
+      "train_mean": 126.554,
+      "holdout_mean": 120.068,
+      "smd": -0.0656,
+      "shifted": false
+    },
+    {
+      "column": "sedentary_min_per_day",
+      "train_mean": 352.079,
+      "holdout_mean": 362.134,
+      "smd": 0.0486,
+      "shifted": false
+    },
+    {
+      "column": "urine_acr",
+      "train_mean": 50.535,
+      "holdout_mean": 36.098,
+      "smd": -0.031,
+      "shifted": false
+    },
+    {
+      "column": "hba1c",
+      "train_mean": 5.746,
+      "holdout_mean": 5.777,
+      "smd": 0.0278,
+      "shifted": false
+    },
+    {
+      "column": "creatinine",
+      "train_mean": 0.904,
+      "holdout_mean": 0.895,
+      "smd": -0.0201,
+      "shifted": false
+    },
+    {
+      "column": "ggt",
+      "train_mean": 29.422,
+      "holdout_mean": 29.917,
+      "smd": 0.0109,
+      "shifted": false
+    },
+    {
+      "column": "height_cm",
+      "train_mean": 166.996,
+      "holdout_mean": 166.904,
+      "smd": -0.0091,
+      "shifted": false
+    },
+    {
+      "column": "fasting_glucose",
+      "train_mean": 109.385,
+      "holdout_mean": 109.526,
+      "smd": 0.004,
+      "shifted": false
+    }
+  ],
+  "label_prevalence": [
+    {
+      "target": "liver_enzyme_high",
+      "name": "간효소 상승",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 4629,
+          "prevalence": 0.1882
+        },
+        "2007_2008": {
+          "labelled": 5441,
+          "prevalence": 0.2169
+        },
+        "2009_2010": {
+          "labelled": 5827,
+          "prevalence": 0.2167
+        },
+        "2011_2012": {
+          "labelled": 5024,
+          "prevalence": 0.1819
+        },
+        "2013_2014": {
+          "labelled": 5457,
+          "prevalence": 0.1833
+        },
+        "2015_2016": {
+          "labelled": 5264,
+          "prevalence": 0.2038
+        },
+        "2017_2018": {
+          "labelled": 5020,
+          "prevalence": 0.1183
+        },
+        "2021_2023": {
+          "labelled": 5521,
+          "prevalence": 0.1333
+        }
+      },
+      "spread": 0.0986
+    },
+    {
+      "target": "low_hdl",
+      "name": "낮은 HDL 콜레스테롤",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 4082,
+          "prevalence": 0.1492
+        },
+        "2007_2008": {
+          "labelled": 4482,
+          "prevalence": 0.2091
+        },
+        "2009_2010": {
+          "labelled": 4806,
+          "prevalence": 0.2114
+        },
+        "2011_2012": {
+          "labelled": 4238,
+          "prevalence": 0.1704
+        },
+        "2013_2014": {
+          "labelled": 4526,
+          "prevalence": 0.1885
+        },
+        "2015_2016": {
+          "labelled": 4384,
+          "prevalence": 0.1857
+        },
+        "2017_2018": {
+          "labelled": 4127,
+          "prevalence": 0.1667
+        },
+        "2021_2023": {
+          "labelled": 4192,
+          "prevalence": 0.1152
+        }
+      },
+      "spread": 0.0962
+    },
+    {
+      "target": "hypertg",
+      "name": "고중성지방혈증",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 1961,
+          "prevalence": 0.1764
+        },
+        "2007_2008": {
+          "labelled": 2200,
+          "prevalence": 0.1341
+        },
+        "2009_2010": {
+          "labelled": 2333,
+          "prevalence": 0.1144
+        },
+        "2011_2012": {
+          "labelled": 2083,
+          "prevalence": 0.1128
+        },
+        "2013_2014": {
+          "labelled": 2156,
+          "prevalence": 0.1109
+        },
+        "2015_2016": {
+          "labelled": 1874,
+          "prevalence": 0.0971
+        },
+        "2017_2018": {
+          "labelled": 1984,
+          "prevalence": 0.0837
+        },
+        "2021_2023": {
+          "labelled": 2316,
+          "prevalence": 0.0868
+        }
+      },
+      "spread": 0.0927
+    },
+    {
+      "target": "mets",
+      "name": "대사증후군",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 4675,
+          "prevalence": 0.3429
+        },
+        "2007_2008": {
+          "labelled": 5495,
+          "prevalence": 0.432
+        },
+        "2009_2010": {
+          "labelled": 5773,
+          "prevalence": 0.4119
+        },
+        "2011_2012": {
+          "labelled": 5560,
+          "prevalence": 0.3561
+        },
+        "2013_2014": {
+          "labelled": 5807,
+          "prevalence": 0.3644
+        },
+        "2015_2016": {
+          "labelled": 5717,
+          "prevalence": 0.3881
+        },
+        "2017_2018": {
+          "labelled": 5562,
+          "prevalence": 0.4108
+        },
+        "2021_2023": {
+          "labelled": 7680,
+          "prevalence": 0.371
+        }
+      },
+      "spread": 0.0891
+    },
+    {
+      "target": "htn",
+      "name": "고혈압",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 5243,
+          "prevalence": 0.3677
+        },
+        "2007_2008": {
+          "labelled": 6087,
+          "prevalence": 0.4204
+        },
+        "2009_2010": {
+          "labelled": 6381,
+          "prevalence": 0.402
+        },
+        "2011_2012": {
+          "labelled": 5719,
+          "prevalence": 0.4069
+        },
+        "2013_2014": {
+          "labelled": 5922,
+          "prevalence": 0.4147
+        },
+        "2015_2016": {
+          "labelled": 5853,
+          "prevalence": 0.4141
+        },
+        "2017_2018": {
+          "labelled": 5712,
+          "prevalence": 0.4512
+        },
+        "2021_2023": {
+          "labelled": 7960,
+          "prevalence": 0.4193
+        }
+      },
+      "spread": 0.0835
+    },
+    {
+      "target": "dm",
+      "name": "당뇨",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 5247,
+          "prevalence": 0.1248
+        },
+        "2007_2008": {
+          "labelled": 6088,
+          "prevalence": 0.1707
+        },
+        "2009_2010": {
+          "labelled": 6384,
+          "prevalence": 0.1596
+        },
+        "2011_2012": {
+          "labelled": 5719,
+          "prevalence": 0.1679
+        },
+        "2013_2014": {
+          "labelled": 5922,
+          "prevalence": 0.1633
+        },
+        "2015_2016": {
+          "labelled": 5854,
+          "prevalence": 0.1915
+        },
+        "2017_2018": {
+          "labelled": 5712,
+          "prevalence": 0.2059
+        },
+        "2021_2023": {
+          "labelled": 7966,
+          "prevalence": 0.1741
+        }
+      },
+      "spread": 0.0811
+    },
+    {
+      "target": "obesity",
+      "name": "비만",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 4940,
+          "prevalence": 0.6828
+        },
+        "2007_2008": {
+          "labelled": 5752,
+          "prevalence": 0.7011
+        },
+        "2009_2010": {
+          "labelled": 6150,
+          "prevalence": 0.7127
+        },
+        "2011_2012": {
+          "labelled": 5389,
+          "prevalence": 0.6691
+        },
+        "2013_2014": {
+          "labelled": 5661,
+          "prevalence": 0.6909
+        },
+        "2015_2016": {
+          "labelled": 5531,
+          "prevalence": 0.7165
+        },
+        "2017_2018": {
+          "labelled": 5301,
+          "prevalence": 0.7351
+        },
+        "2021_2023": {
+          "labelled": 6091,
+          "prevalence": 0.7217
+        }
+      },
+      "spread": 0.066
+    },
+    {
+      "target": "hyperuricemia",
+      "name": "고요산혈증",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 4704,
+          "prevalence": 0.1652
+        },
+        "2007_2008": {
+          "labelled": 5444,
+          "prevalence": 0.1986
+        },
+        "2009_2010": {
+          "labelled": 5828,
+          "prevalence": 0.187
+        },
+        "2011_2012": {
+          "labelled": 5029,
+          "prevalence": 0.1794
+        },
+        "2013_2014": {
+          "labelled": 5457,
+          "prevalence": 0.1787
+        },
+        "2015_2016": {
+          "labelled": 5262,
+          "prevalence": 0.1729
+        },
+        "2017_2018": {
+          "labelled": 5035,
+          "prevalence": 0.1976
+        },
+        "2021_2023": {
+          "labelled": 5541,
+          "prevalence": 0.1357
+        }
+      },
+      "spread": 0.0629
+    },
+    {
+      "target": "dlp",
+      "name": "이상지질혈증",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 5018,
+          "prevalence": 0.4735
+        },
+        "2007_2008": {
+          "labelled": 5870,
+          "prevalence": 0.5254
+        },
+        "2009_2010": {
+          "labelled": 6195,
+          "prevalence": 0.5103
+        },
+        "2011_2012": {
+          "labelled": 5699,
+          "prevalence": 0.4782
+        },
+        "2013_2014": {
+          "labelled": 5922,
+          "prevalence": 0.497
+        },
+        "2015_2016": {
+          "labelled": 5851,
+          "prevalence": 0.4825
+        },
+        "2017_2018": {
+          "labelled": 5710,
+          "prevalence": 0.4771
+        },
+        "2021_2023": {
+          "labelled": 7962,
+          "prevalence": 0.4721
+        }
+      },
+      "spread": 0.0533
+    },
+    {
+      "target": "hyperchol",
+      "name": "고LDL콜레스테롤혈증",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 4082,
+          "prevalence": 0.1617
+        },
+        "2007_2008": {
+          "labelled": 4482,
+          "prevalence": 0.158
+        },
+        "2009_2010": {
+          "labelled": 4806,
+          "prevalence": 0.1484
+        },
+        "2011_2012": {
+          "labelled": 4238,
+          "prevalence": 0.1366
+        },
+        "2013_2014": {
+          "labelled": 4526,
+          "prevalence": 0.1213
+        },
+        "2015_2016": {
+          "labelled": 4384,
+          "prevalence": 0.1252
+        },
+        "2017_2018": {
+          "labelled": 4127,
+          "prevalence": 0.117
+        },
+        "2021_2023": {
+          "labelled": 4192,
+          "prevalence": 0.1376
+        }
+      },
+      "spread": 0.0447
+    },
+    {
+      "target": "anemia",
+      "name": "빈혈",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 4432,
+          "prevalence": 0.0772
+        },
+        "2007_2008": {
+          "labelled": 5439,
+          "prevalence": 0.086
+        },
+        "2009_2010": {
+          "labelled": 5833,
+          "prevalence": 0.09
+        },
+        "2011_2012": {
+          "labelled": 5132,
+          "prevalence": 0.1202
+        },
+        "2013_2014": {
+          "labelled": 5463,
+          "prevalence": 0.1047
+        },
+        "2015_2016": {
+          "labelled": 5239,
+          "prevalence": 0.1159
+        },
+        "2017_2018": {
+          "labelled": 5105,
+          "prevalence": 0.1044
+        },
+        "2021_2023": {
+          "labelled": 5836,
+          "prevalence": 0.1066
+        }
+      },
+      "spread": 0.043
+    },
+    {
+      "target": "inflammation",
+      "name": "만성염증",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 4173,
+          "prevalence": 0.3269
+        },
+        "2007_2008": {
+          "labelled": 4910,
+          "prevalence": 0.2902
+        },
+        "2009_2010": {
+          "labelled": 5300,
+          "prevalence": 0.2845
+        },
+        "2011_2012": {
+          "labelled": 0,
+          "prevalence": null
+        },
+        "2013_2014": {
+          "labelled": 0,
+          "prevalence": null
+        },
+        "2015_2016": {
+          "labelled": 4737,
+          "prevalence": 0.3004
+        },
+        "2017_2018": {
+          "labelled": 4619,
+          "prevalence": 0.31
+        },
+        "2021_2023": {
+          "labelled": 5284,
+          "prevalence": 0.3022
+        }
+      },
+      "spread": 0.0424
+    },
+    {
+      "target": "fatty_liver",
+      "name": "지방간",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 0,
+          "prevalence": null
+        },
+        "2007_2008": {
+          "labelled": 0,
+          "prevalence": null
+        },
+        "2009_2010": {
+          "labelled": 0,
+          "prevalence": null
+        },
+        "2011_2012": {
+          "labelled": 0,
+          "prevalence": null
+        },
+        "2013_2014": {
+          "labelled": 0,
+          "prevalence": null
+        },
+        "2015_2016": {
+          "labelled": 0,
+          "prevalence": null
+        },
+        "2017_2018": {
+          "labelled": 4626,
+          "prevalence": 0.4373
+        },
+        "2021_2023": {
+          "labelled": 5389,
+          "prevalence": 0.4001
+        }
+      },
+      "spread": 0.0372
+    },
+    {
+      "target": "ckd",
+      "name": "신기능 확인 필요",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 4949,
+          "prevalence": 0.1802
+        },
+        "2007_2008": {
+          "labelled": 5782,
+          "prevalence": 0.1845
+        },
+        "2009_2010": {
+          "labelled": 6150,
+          "prevalence": 0.1559
+        },
+        "2011_2012": {
+          "labelled": 5410,
+          "prevalence": 0.1719
+        },
+        "2013_2014": {
+          "labelled": 5696,
+          "prevalence": 0.1696
+        },
+        "2015_2016": {
+          "labelled": 5548,
+          "prevalence": 0.166
+        },
+        "2017_2018": {
+          "labelled": 5345,
+          "prevalence": 0.189
+        },
+        "2021_2023": {
+          "labelled": 6135,
+          "prevalence": 0.1736
+        }
+      },
+      "spread": 0.0331
+    },
+    {
+      "target": "egfr_low",
+      "name": "사구체여과율 저하",
+      "by_cycle": {
+        "2005_2006": {
+          "labelled": 4704,
+          "prevalence": 0.0935
+        },
+        "2007_2008": {
+          "labelled": 5445,
+          "prevalence": 0.0782
+        },
+        "2009_2010": {
+          "labelled": 5829,
+          "prevalence": 0.0763
+        },
+        "2011_2012": {
+          "labelled": 5031,
+          "prevalence": 0.0799
+        },
+        "2013_2014": {
+          "labelled": 5459,
+          "prevalence": 0.0786
+        },
+        "2015_2016": {
+          "labelled": 5263,
+          "prevalence": 0.072
+        },
+        "2017_2018": {
+          "labelled": 5037,
+          "prevalence": 0.0879
+        },
+        "2021_2023": {
+          "labelled": 5538,
+          "prevalence": 0.0861
+        }
+      },
+      "spread": 0.0215
+    }
+  ]
+}

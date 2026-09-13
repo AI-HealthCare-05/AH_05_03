@@ -49,6 +49,10 @@ afterEach(() => {
   window.localStorage?.clear();
   window.history.replaceState(null, "", "/");
   vi.restoreAllMocks();
+  // `AUTH_STUB` 은 모듈 하나를 모든 테스트가 나눠 쓴다. `restoreAllMocks` 는
+  // `vi.spyOn` 만 되돌리므로, 여기 만든 `vi.fn()` 은 따로 비워야 다음 테스트가
+  // 이전 호출 기록을 물려받지 않는다.
+  AUTH_STUB.markSignedOut.mockClear();
 });
 
 describe("AccountPage", () => {
@@ -66,7 +70,7 @@ describe("AccountPage", () => {
     expect(await screen.findByRole("heading", { name: "member@example.com" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "소속 가정" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "기존 로컬 프로필에 서비스 계정 초대" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "계정 종료" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "회원 탈퇴" })).toBeInTheDocument();
   });
 
   it("가정 구성원을 UUID 대신 현재 계정과 마스킹 이메일로 구분한다", async () => {
@@ -101,7 +105,7 @@ describe("AccountPage", () => {
     expect(screen.queryByText(/account-id/u)).not.toBeInTheDocument();
   });
 
-  it("계정 종료 전에 이메일 재확인을 요구하고 로컬 데이터 보존 결과를 알린다", async () => {
+  it("회원 탈퇴 전에 이메일 재확인을 요구하고, 로그인 화면에 로컬 데이터 보존 결과를 실어 보낸다", async () => {
     const user = userEvent.setup();
     vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
     vi.spyOn(serverApiClient, "closeAccount").mockResolvedValue({
@@ -115,17 +119,22 @@ describe("AccountPage", () => {
 
     renderAccountPage();
     await screen.findByRole("heading", { name: "member@example.com" });
-    await user.click(screen.getByRole("button", { name: "계정 종료" }));
-    const dialog = screen.getByRole("alertdialog", { name: "서비스 계정을 종료할까요?" });
+    await user.click(screen.getByRole("button", { name: "회원 탈퇴" }));
+    const dialog = screen.getByRole("alertdialog", { name: "회원 탈퇴하시겠어요?" });
     expect(dialog).toBeInTheDocument();
     await user.type(within(dialog).getByRole("textbox", { name: "계정 이메일 입력" }), "member@example.com");
-    await user.click(within(dialog).getByRole("button", { name: "계정 종료" }));
+    await user.click(within(dialog).getByRole("button", { name: "회원 탈퇴" }));
 
-    expect(await screen.findByText("서비스 계정을 종료했습니다. 건강정보는 보존됩니다.")).toBeInTheDocument();
+    // **이 화면 자신의 토스트가 아니라 관문으로 문구를 실어 보낸다.** 성공하는
+    // 순간 `markSignedOut` 이 레이아웃을 로그인 화면으로 바꿔치기하므로, 이 화면
+    // 이 스스로 띄우는 메시지는 그 전환 안에서 아무도 못 본다("버튼을 눌러도
+    // 반응이 없다"의 실제 원인이었다) — `SignInPage.test.tsx` 가 그 문구의
+    // 실제 노출을 검증한다.
+    await waitFor(() => expect(AUTH_STUB.markSignedOut).toHaveBeenCalledWith("회원 탈퇴가 완료되었습니다. 건강정보는 보존됩니다."));
     expect(serverApiClient.closeAccount).toHaveBeenCalledWith(false);
   });
 
-  it("계정 종료 시 건강정보 영구 폐기를 선택하면 purge=true로 닫고 폐기 완료 메시지를 보여준다", async () => {
+  it("회원 탈퇴 시 건강정보 영구 폐기를 선택하면 purge=true로 닫고, 폐기 완료 문구를 관문에 실어 보낸다", async () => {
     const user = userEvent.setup();
     vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
     const closeSpy = vi.spyOn(serverApiClient, "closeAccount").mockResolvedValue({
@@ -140,8 +149,8 @@ describe("AccountPage", () => {
 
     renderAccountPage();
     await screen.findByRole("heading", { name: "member@example.com" });
-    await user.click(screen.getByRole("button", { name: "계정 종료" }));
-    const dialog = screen.getByRole("alertdialog", { name: "서비스 계정을 종료할까요?" });
+    await user.click(screen.getByRole("button", { name: "회원 탈퇴" }));
+    const dialog = screen.getByRole("alertdialog", { name: "회원 탈퇴하시겠어요?" });
     expect(dialog).toBeInTheDocument();
 
     expect(within(dialog).getByRole("button", { name: ".ieobom 백업 다운로드" })).toBeInTheDocument();
@@ -150,10 +159,35 @@ describe("AccountPage", () => {
     await user.click(purgeCheckbox);
 
     await user.type(within(dialog).getByRole("textbox", { name: "계정 이메일 입력" }), "member@example.com");
-    await user.click(within(dialog).getByRole("button", { name: "계정 종료" }));
+    await user.click(within(dialog).getByRole("button", { name: "회원 탈퇴" }));
 
-    expect(await screen.findByText("서비스 계정을 종료하고 서버의 건강정보를 영구 폐기했습니다.")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(AUTH_STUB.markSignedOut).toHaveBeenCalledWith(
+        "회원 탈퇴가 완료되었습니다. 서버에 저장된 건강정보도 영구 폐기했습니다.",
+      ),
+    );
     expect(closeSpy).toHaveBeenCalledWith(true);
+  });
+
+  it("이메일을 잘못 입력해 회원 탈퇴 확인에 실패하면 모달 안에 바로 오류가 보인다", async () => {
+    // **회귀 방지.** `error` 상태가 계정 화면 본문에만 렌더되던 시절에는 이
+    // 오류가 모달의 반투명 배경 뒤에 깔려 안 보였다 — 버튼을 눌러도 반응이
+    // 없는 것처럼 보이던 원인 중 하나였다.
+    const user = userEvent.setup();
+    vi.spyOn(serverApiClient, "refresh").mockResolvedValue({ access_token: "access", token_type: "bearer", expires_in: 900 });
+    const closeSpy = vi.spyOn(serverApiClient, "closeAccount");
+    mockAccountReads();
+
+    renderAccountPage();
+    await screen.findByRole("heading", { name: "member@example.com" });
+    await user.click(screen.getByRole("button", { name: "회원 탈퇴" }));
+    const dialog = screen.getByRole("alertdialog", { name: "회원 탈퇴하시겠어요?" });
+    await user.type(within(dialog).getByRole("textbox", { name: "계정 이메일 입력" }), "wrong@example.com");
+    await user.click(within(dialog).getByRole("button", { name: "회원 탈퇴" }));
+
+    expect(await within(dialog).findByText("확인을 위해 현재 계정 이메일을 정확히 입력하세요.")).toBeInTheDocument();
+    expect(closeSpy).not.toHaveBeenCalled();
+    expect(dialog).toBeInTheDocument();
   });
 
   it("이미 활성 가정이 있으면 가정 만들기 버튼이 비활성화된다", async () => {
@@ -280,7 +314,7 @@ describe("AccountPage", () => {
     await user.click(await screen.findByRole("button", { name: "초대 수락" }));
 
     expect(await screen.findByText("초대를 수락하고 서비스 계정을 연결했습니다. 건강정보를 받으려면 기기 연결이 필요합니다.")).toBeInTheDocument();
-    expect(accept).toHaveBeenCalledWith(receivedInvitation.id, token);
+    expect(accept).toHaveBeenCalledWith(receivedInvitation.id, token, receivedInvitation.row_version);
     expect(createLink).toHaveBeenCalledWith(receivedInvitation.id, receivedInvitation.target_profile_ref);
   });
 
@@ -341,7 +375,7 @@ describe("AccountPage", () => {
     // 새 가정으로 이동 및 수락 클릭
     await user.click(within(dialog).getByRole("button", { name: "새 가정으로 이동 및 수락" }));
 
-    expect(accept).toHaveBeenCalledWith(receivedInvitation.id, token);
+    expect(accept).toHaveBeenCalledWith(receivedInvitation.id, token, receivedInvitation.row_version);
     expect(await screen.findByText("초대를 수락하고 새 가족 가정으로 이동했습니다.")).toBeInTheDocument();
   });
 
@@ -429,7 +463,7 @@ describe("AccountPage", () => {
     renderAccountPage();
     await user.click(await screen.findByRole("button", { name: "거절" }));
 
-    expect(declineSpy).toHaveBeenCalledWith("invitation-id", undefined);
+    expect(declineSpy).toHaveBeenCalledWith("invitation-id", receivedInvitation.row_version, undefined);
     expect(await screen.findByText("초대를 거절했습니다.")).toBeInTheDocument();
   });
 
@@ -559,7 +593,7 @@ const AUTH_STUB = {
   email: account.account.email,
   signIn: async () => {},
   signOut: async () => {},
-  markSignedOut: () => {},
+  markSignedOut: vi.fn(),
 };
 
 function renderAccountPage() {
