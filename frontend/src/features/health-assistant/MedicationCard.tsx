@@ -112,6 +112,7 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, ch
             aria-expanded={showDetails}
           >
             <span>식약처 상세 정보(효능·용법) {showDetails ? "접기 ▲" : "보기 ▼"}</span>
+            <span>식약처 상세 정보(효능·용법)<br/>{showDetails ? "접기 ▲" : "보기 ▼"}</span>
           </button>
           <span className="medication-source-text">출처: 식약처 e약은요 & DUR</span>
         </div>
@@ -124,6 +125,7 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, ch
             <div className="medication-title-row">
               <h4 className="medication-item-name">
                 {query ? `${query} 식약처 기준 정보` : "식약처 의약품 기준 정보"}
+                {query ? `${query}` : "식약처 의약품 기준 정보"}
               </h4>
               {representativeDrug.class_name && (
                 <span className="medication-class-name">[{representativeDrug.class_name}]</span>
@@ -148,6 +150,7 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, ch
               {mergedDurItems.length > 0 && (
                 <div className="medication-field dur-warnings">
                   <span className="field-label">DUR 주의</span>
+                  <span className="field-label warning">DUR 주의</span>
                   <div className="dur-items-list">
                     {mergedDurItems.slice(0, 3).map((d, dIdx) => (
                       <span key={dIdx} className="dur-item-tag">
@@ -161,6 +164,7 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, ch
               {(representativeDrug.atpn_warn_qesitm || representativeDrug.atpn_qesitm) && (
                 <div className="medication-field">
                   <span className="field-label">주의사항</span>
+                  <span className="field-label warning">주의사항</span>
                   <p className="field-content warn-text">
                     {representativeDrug.atpn_warn_qesitm || representativeDrug.atpn_qesitm}
                   </p>

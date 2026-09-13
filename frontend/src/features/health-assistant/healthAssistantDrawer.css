@@ -2555,6 +2555,7 @@
   align-items: center;
   justify-content: center;
   padding: 3px 8px;
+  padding: 6px 12px;
   background: #f8fafc;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
@@ -2565,6 +2566,7 @@
   transition: all 0.15s ease;
   width: auto;
   margin-top: 0;
+  text-align: center;
 }
 
 .medication-toggle-details-btn:hover {
@@ -2678,4 +2680,8 @@
 .medication-source-text {
   font-size: 11px;
   color: var(--muted);
+}
+
+.medication-field .field-label.warning {
+  color: #ef4444;
 }

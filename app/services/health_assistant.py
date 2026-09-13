@@ -39,6 +39,10 @@ from app.services.food_nutrition_tools import (
 from app.services.health_assistant_boundary import HealthAssistantBoundaryService
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.health_knowledge_catalog import HealthKnowledgeClientProtocol, is_alcohol_topic
+from app.services.health_knowledge_tools import (
+    execute_health_knowledge_tool,
+    get_health_knowledge_tools,
+)
 from app.services.health_record_tools import (
     QUERY_HEALTH_RECORDS_TOOL_NAME,
     execute_health_record_tool,
@@ -59,10 +63,6 @@ from app.services.outdoor_conditions_client import (
     OutdoorConditionsClient,
     OutdoorConditionsClientProtocol,
     resolve_sido_coordinates,
-)
-from app.services.health_knowledge_tools import (
-    execute_health_knowledge_tool,
-    get_health_knowledge_tools,
 )
 from app.services.outdoor_conditions_tools import (
     execute_outdoor_conditions_tool,
@@ -329,7 +329,7 @@ class HealthAssistantService:
         query = request.messages[-1].content
         results: list[Any] = []
         snapshot_lines: list[str] = []
-        
+
         # 개인 건강기록 스냅샷은 아직 음주 주제만 구현돼 있다. 다른 주제의 개인기록
         # 스냅샷이 생기면 여기에 분기를 추가하면 된다.
         if "health_records" in required and is_alcohol_topic(query):
@@ -872,7 +872,7 @@ class HealthAssistantService:
             tools.extend(get_food_nutrition_tools())
         if self._needs_outdoor_conditions(request):
             tools.extend(get_outdoor_conditions_tools())
-        
+
         # Add health knowledge tools if required by boundary or globally
         tools.extend(get_health_knowledge_tools())
 
