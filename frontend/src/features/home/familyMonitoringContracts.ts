@@ -45,6 +45,7 @@ export interface HealthEvent {
   sourceSentence?: string;
   detailNote?: string;
   severityTone?: "diagnosis_alert" | "warning" | "info" | "neutral";
+  intensity?: number;       // 통증 다이어리 등의 통증 강도 (1~10)
 }
 
 export interface TimeBlock {

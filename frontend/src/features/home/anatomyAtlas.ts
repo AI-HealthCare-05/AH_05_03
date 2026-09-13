@@ -1,6 +1,7 @@
 import type * as THREE from "three";
 
 import { fetchCachedAnatomyResource } from "./anatomyResourceCache";
+import { isOcularStructure } from "./holographicAnatomyStyle";
 
 export type AnatomyAtlasId =
   | "vanatome-male-reference"
@@ -214,7 +215,11 @@ export function initiallyHiddenSystems(
  * 분리하더라도 GLB나 메타데이터를 재가공할 필요가 없다.
  */
 export function anatomyLayerSystem(system: string) {
-  return system === "mammary" ? "integumentary" : system;
+  if (system === "mammary") return "integumentary";
+  if (system === "arterial" || system === "venous" || system === "cardiac") return "cardiovascular";
+  if (system === "connective") return "joints";
+  if (system === "sensory") return "nervous";
+  return system;
 }
 
 export function adaptAnatomyMesh(
@@ -251,6 +256,19 @@ function adaptVanatomeMesh(
   metadata: Map<string, AnatomyMetadata>,
 ): AdaptedAnatomyMesh | undefined {
   const anatomyId = String(mesh.userData.anatomyId ?? "");
+  const isEye = isOcularStructure(mesh.name);
+  const structure = metadata.get(anatomyId);
+  if (isEye) {
+    return {
+      anatomyId: anatomyId || slugify(mesh.name),
+      sourceKey: `vanatome:${manifest.id}:${manifest.version}:${anatomyId || mesh.name}`,
+      label: structure?.name ?? String(mesh.userData.label ?? readableStructureName(mesh.name)),
+      system: "nervous",
+      visualRole: "organ",
+      selectable: true,
+    };
+  }
+
   const system = String(mesh.userData.anatomySystem ?? "regional-anatomy");
   const shell = anatomyId === "body-shell";
   const visibleSystems = new Set([
@@ -259,7 +277,6 @@ function adaptVanatomeMesh(
   ]);
   if (!shell && !visibleSystems.has(system)) return undefined;
 
-  const structure = metadata.get(anatomyId);
   return {
     anatomyId: anatomyId || slugify(mesh.name),
     sourceKey: `vanatome:${manifest.id}:${manifest.version}:${anatomyId || mesh.name}`,

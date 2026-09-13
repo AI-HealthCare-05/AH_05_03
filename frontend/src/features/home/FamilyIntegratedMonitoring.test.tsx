@@ -1,9 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FamilyProfile, HealthRecord } from "../../shared/local/domainContracts";
 import { FamilyIntegratedMonitoring } from "./FamilyIntegratedMonitoring";
 
 describe("FamilyIntegratedMonitoring (#122)", () => {
+  afterEach(cleanup);
+
   const mockProfiles = [
     {
       id: "profile-self",
@@ -302,15 +304,19 @@ describe("FamilyIntegratedMonitoring (#122)", () => {
     // 동시 투시 모드 안내 문구 노출 확인
     expect(screen.getByText(/동시 투시 모드/)).toBeInTheDocument();
 
-    // 폐 개별 칩 클릭 시 폐만 선택
+    // 폐 개별 칩 클릭 시: 전체 표시 부위 집합(liver, lung)은 동일하게 유지되고 상세 포커스(arg 4)만 lung으로 전달됨 (Astra 2차 요구사항 5)
     fireEvent.click(screen.getByRole("button", { name: /폐 암\/전이 판정 기록/ }));
-    expect(onSelectOrgan).toHaveBeenLastCalledWith("lung", "폐 (폐 암/전이 판정)");
+    const focusedCall = onSelectOrgan.mock.calls[onSelectOrgan.mock.calls.length - 1];
+    expect(focusedCall[0]).toContain("liver");
+    expect(focusedCall[0]).toContain("lung");
+    expect(focusedCall[4]).toBe("lung");
 
-    // 다시 전체 보기 칩 클릭 시 둘 다 선택
+    // 다시 전체 보기 칩 클릭 시 둘 다 유지되고 상세 포커스는 초기화됨
     fireEvent.click(screen.getByText(/전체 위험 장기 동시 보기 \(간 \+ 폐\)/));
-    const lastCall = onSelectOrgan.mock.calls[onSelectOrgan.mock.calls.length - 1];
-    expect(lastCall[0]).toContain("liver");
-    expect(lastCall[0]).toContain("lung");
+    const allCall = onSelectOrgan.mock.calls[onSelectOrgan.mock.calls.length - 1];
+    expect(allCall[0]).toContain("liver");
+    expect(allCall[0]).toContain("lung");
+    expect(allCall[4]).toBeUndefined();
   });
 
   it("9. 다이어리/메모에 '대장암 확진' 추가 시 대장(colon)이 자동으로 중요 진단 장기로 추출되어 onSelectOrgan으로 전달된다", () => {
@@ -422,16 +428,389 @@ describe("FamilyIntegratedMonitoring (#122)", () => {
 
     // AI 임상 추론 배지 및 연관통 추정 타이틀 노출 확인
     expect(screen.getByText("AI 임상 추론 (연관통)")).toBeInTheDocument();
-    expect(screen.getByText(/연관통 추정: 경추 \(C1~C7\) 및 신경근/)).toBeInTheDocument();
+    expect(screen.getAllByText(/연관통 추정: 경추 \(C1~C7\) 및 신경근/).length).toBeGreaterThan(0);
 
     // 임상 추론 근거 텍스트 노출 확인
     expect(screen.getByText(/경추 신경근 병증\(Cervical Radiculopathy\) 또는 척수증/)).toBeInTheDocument();
 
-    // 3D 뷰어에 cervical_spine,nervous 전달 확인
-    expect(onSelectOrgan).toHaveBeenCalledWith(
-      "cervical_spine,nervous",
-      expect.stringContaining("경추 (C1~C7) 및 신경근"),
+    // 3D 뷰어에 cervical_spine,nervous 및 통증 강도(5) 전달 확인 (사용자 증상과 AI 추론 장기 모두 공존)
+    const calls = onSelectOrgan.mock.calls;
+    const aiCall = calls.find((c) => String(c[0]).includes("cervical_spine") && String(c[0]).includes("nervous"));
+    expect(aiCall).toBeDefined();
+    expect(aiCall![2]).toBe(5);
+  });
+
+  it("11. 같은 날짜에 서로 다른 통증 강도를 가진 복수 통증 기록(어깨 4점, 폐 10점)이 있을 때 각 칩에 통증 점수가 표시되고 동시 투시 모드 시 organIntensities 맵이 전달된다", () => {
+    const onSelectOrgan = vi.fn();
+    const shoulderPainRecord = {
+      id: "rec-pain-shoulder",
+      householdId: "hh-1",
+      profileId: "profile-self",
+      recordType: "pain" as const,
+      recordedAt: `${todayStr}T10:00:00Z`,
+      source: "manual" as const,
+      payload: {
+        bodyArea: "왼쪽 어깨",
+        note: "왼쪽 어깨 뻐근함",
+        intensity: 4,
+      },
+      version: 1,
+    } as unknown as HealthRecord;
+
+    const lungPainRecord = {
+      id: "rec-pain-lung",
+      householdId: "hh-1",
+      profileId: "profile-self",
+      recordType: "pain" as const,
+      recordedAt: `${todayStr}T11:00:00Z`,
+      source: "manual" as const,
+      payload: {
+        bodyArea: "폐",
+        note: "호흡 시 극심한 흉통",
+        intensity: 10,
+      },
+      version: 1,
+    } as unknown as HealthRecord;
+
+    render(
+      <FamilyIntegratedMonitoring
+        profiles={mockProfiles}
+        selectedProfileId="profile-self"
+        onSelectProfile={vi.fn()}
+        records={[shoulderPainRecord, lungPainRecord]}
+        onSelectOrgan={onSelectOrgan}
+      />,
     );
+
+    // 각 기록 칩에 점수 및 통증 강도 배지 노출 확인
+    expect(screen.getByText("4점")).toBeInTheDocument();
+    expect(screen.getByText("10점")).toBeInTheDocument();
+
+    // 두 장기의 강도가 개별 매핑된 organIntensityMap 전달 확인
+    expect(onSelectOrgan).toHaveBeenCalledWith(
+      expect.stringContaining("shoulder"),
+      expect.anything(),
+      10, // maxIntensity
+      expect.objectContaining({
+        left_shoulder: 4,
+        lung: 10,
+      }),
+    );
+  });
+
+  it("12. [Astra 반례 1] '손목 통증 없음' 입력 시 부정문이 fallback에 의해 hand/wrist 통증으로 부활하지 않아야 한다", () => {
+    const onSelectOrgan = vi.fn();
+    const negatedWristRecord = {
+      id: "rec-pain-negated-wrist",
+      householdId: "hh-1",
+      profileId: "profile-self",
+      recordType: "pain" as const,
+      recordedAt: `${todayStr}T10:00:00Z`,
+      source: "manual" as const,
+      payload: {
+        bodyArea: "손목",
+        note: "손목 통증 없음",
+        observedAt: `${todayStr}T10:00:00Z`,
+      },
+      version: 1,
+    } as unknown as HealthRecord;
+
+    render(
+      <FamilyIntegratedMonitoring
+        profiles={mockProfiles}
+        selectedProfileId="profile-self"
+        onSelectProfile={vi.fn()}
+        records={[negatedWristRecord]}
+        onSelectOrgan={onSelectOrgan}
+      />,
+    );
+
+    // 3D 뷰어에 hand나 wrist 키가 전달되지 않아야 함 (부정된 부위의 활성 통증 키 부활 방지)
+    const calls = onSelectOrgan.mock.calls;
+    const hasHandOrWrist = calls.some((c) => String(c[0]).includes("hand") || String(c[0]).includes("wrist"));
+    expect(hasHandOrWrist).toBe(false);
+  });
+
+  it("13. [Astra 반례 2] '간암 아님' 입력 시 암/전이 판정 기록으로 둔갑하지 않고 배제/음성 소견으로 분류되어야 한다", () => {
+    const onSelectOrgan = vi.fn();
+    const negatedCancerRecord = {
+      id: "rec-negated-cancer",
+      householdId: "hh-1",
+      profileId: "profile-self",
+      recordType: "pain" as const,
+      recordedAt: `${todayStr}T10:00:00Z`,
+      source: "manual" as const,
+      payload: {
+        bodyArea: "간",
+        note: "간암 아님",
+        observedAt: `${todayStr}T10:00:00Z`,
+      },
+      version: 1,
+    } as unknown as HealthRecord;
+
+    render(
+      <FamilyIntegratedMonitoring
+        profiles={mockProfiles}
+        selectedProfileId="profile-self"
+        onSelectProfile={vi.fn()}
+        records={[negatedCancerRecord]}
+        onSelectOrgan={onSelectOrgan}
+      />,
+    );
+
+    // '암/전이 판정 기록' 타이틀이 노출되지 않아야 함
+    expect(screen.queryByText(/간 암\/전이 판정 기록/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/암\/전이 판정/)).not.toBeInTheDocument();
+  });
+
+  it("14. [Astra 반례 3] bodyArea와 note의 복수 필드 결합 시 좌우가 오염되지 않고 독립된 키만 추출되어야 한다", () => {
+    const onSelectOrgan = vi.fn();
+    const multiFieldRecord = {
+      id: "rec-multi-field-side",
+      householdId: "hh-1",
+      profileId: "profile-self",
+      recordType: "pain" as const,
+      recordedAt: `${todayStr}T10:00:00Z`,
+      source: "manual" as const,
+      payload: {
+        bodyArea: "왼쪽 어깨 통증",
+        note: "오른쪽 무릎 통증",
+        observedAt: `${todayStr}T10:00:00Z`,
+      },
+      version: 1,
+    } as unknown as HealthRecord;
+
+    render(
+      <FamilyIntegratedMonitoring
+        profiles={mockProfiles}
+        selectedProfileId="profile-self"
+        onSelectProfile={vi.fn()}
+        records={[multiFieldRecord]}
+        onSelectOrgan={onSelectOrgan}
+      />,
+    );
+
+    const calls = onSelectOrgan.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const lastKeys = String(calls[calls.length - 1][0]).split(",").map((s) => s.trim());
+
+    // left_shoulder와 right_knee는 반드시 포함
+    expect(lastKeys).toContain("left_shoulder");
+    expect(lastKeys).toContain("right_knee");
+
+    // 필드 경계 오염으로 인한 무분별한 비측면성 키(단독 shoulder, 단독 knee)는 포함되지 않아야 함
+    expect(lastKeys).not.toContain("shoulder");
+    expect(lastKeys).not.toContain("knee");
+  });
+
+  it("15. [Astra 반례 4] AI 임상 추론 가설이 있더라도 사용자 원본 증상(Fact)과 AI 가설(Interpretation)이 동시에 보존되어야 한다", () => {
+    const onSelectOrgan = vi.fn();
+    const dualEventRecord = {
+      id: "rec-dual-fact-ai",
+      householdId: "hh-1",
+      profileId: "profile-self",
+      recordType: "pain" as const,
+      recordedAt: `${todayStr}T10:00:00Z`,
+      source: "manual" as const,
+      payload: {
+        bodyArea: "왼쪽 손가락",
+        note: "왼쪽 손가락 저림",
+        observedAt: `${todayStr}T10:00:00Z`,
+        anatomyEvent: {
+          concept: {
+            side: "unknown",
+            label: "신경계",
+            canonicalConceptId: "nervous",
+          },
+          provenance: "clinical_ai_inferred",
+          suspectedAnatomyIds: ["nervous"],
+          clinicalReasoning: "상지 말단 저림으로 신경계 이상 의심",
+        },
+      },
+      version: 1,
+    } as unknown as HealthRecord;
+
+    render(
+      <FamilyIntegratedMonitoring
+        profiles={mockProfiles}
+        selectedProfileId="profile-self"
+        onSelectProfile={vi.fn()}
+        records={[dualEventRecord]}
+        onSelectOrgan={onSelectOrgan}
+      />,
+    );
+
+    // 1. AI 임상 추론 가설 이벤트 노출 확인
+    expect(screen.getAllByText(/연관통 추정: 신경계/).length).toBeGreaterThan(0);
+
+    // 2. 사용자가 실제 입력한 원본 증상(Fact) 이벤트도 묵살되지 않고 동시에 노출 확인
+    expect(screen.getAllByText(/통증: 왼쪽 손가락/).length).toBeGreaterThan(0);
+
+    // 3. [Astra 2차 요구사항 3] 두 이벤트의 3D 키와 출처(provenance) 분리 검증
+    const calls = onSelectOrgan.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const dayKeys = String(calls[calls.length - 1][0]);
+    expect(dayKeys).toContain("nervous");
+    expect(dayKeys).toContain("left_hand");
+    // AI 임상 추론 배지 확인
+    expect(screen.getByText("AI 임상 추론 (연관통)")).toBeInTheDocument();
+  });
+
+  it("16. [Astra 2차 반례 1] '왼쪽 어깨 통증 / 오른쪽 어깨 통증 없음' 입력 시 우측 부정으로 인해 좌측 통증까지 삭제되지 않고 left_shoulder가 보존되어야 한다", () => {
+    const onSelectOrgan = vi.fn();
+    const unilateralRecord = {
+      id: "rec-unilateral-negation",
+      householdId: "hh-1",
+      profileId: "profile-self",
+      recordType: "pain" as const,
+      recordedAt: `${todayStr}T10:00:00Z`,
+      source: "manual" as const,
+      payload: {
+        bodyArea: "왼쪽 어깨 통증",
+        note: "오른쪽 어깨 통증 없음",
+        observedAt: `${todayStr}T10:00:00Z`,
+      },
+      version: 1,
+    } as unknown as HealthRecord;
+
+    render(
+      <FamilyIntegratedMonitoring
+        profiles={mockProfiles}
+        selectedProfileId="profile-self"
+        onSelectProfile={vi.fn()}
+        records={[unilateralRecord]}
+        onSelectOrgan={onSelectOrgan}
+      />,
+    );
+
+    // 1. 왼쪽 어깨 통증 타이틀이 정상 노출되어야 함 ('이상/통증 없음 소견'으로 오분류되지 않아야 함)
+    expect(screen.getAllByText(/통증: 왼쪽 어깨/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/왼쪽 어깨.*이상\/통증 없음/)).not.toBeInTheDocument();
+
+    // 2. 3D 뷰어에 left_shoulder가 반드시 전달되어야 함 (오른쪽 부정 때문에 왼쪽까지 삭제 방지)
+    const calls = onSelectOrgan.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const lastCallKeys = String(calls[calls.length - 1][0]).split(",").map((s) => s.trim());
+    expect(lastCallKeys).toContain("left_shoulder");
+    expect(lastCallKeys).not.toContain("right_shoulder");
+  });
+
+  it("17. [Astra 2차 반례 2] '간암 확진, 전이 없음' 입력 시 전이 부정이 간암 진단 자체를 취소시키지 않고 간암 진단 기록으로 보존되어야 한다", () => {
+    const onSelectOrgan = vi.fn();
+    const cancerMetastasisRecord = {
+      id: "rec-cancer-no-met",
+      householdId: "hh-1",
+      profileId: "profile-self",
+      recordType: "pain" as const,
+      recordedAt: `${todayStr}T10:00:00Z`,
+      source: "manual" as const,
+      payload: {
+        bodyArea: "간",
+        note: "간암 확진, 전이 없음",
+        observedAt: `${todayStr}T10:00:00Z`,
+      },
+      version: 1,
+    } as unknown as HealthRecord;
+
+    render(
+      <FamilyIntegratedMonitoring
+        profiles={mockProfiles}
+        selectedProfileId="profile-self"
+        onSelectProfile={vi.fn()}
+        records={[cancerMetastasisRecord]}
+        onSelectOrgan={onSelectOrgan}
+      />,
+    );
+
+    // '간암 확진'이 있으므로 중요 암 진단 기록으로 올바르게 노출되어야 함 ('전이 없음'에 의해 암 진단이 지워져 단순 '통증: 간'으로 격하되지 않음)
+    expect(screen.getAllByText(/간.*암.*기록|간암/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/^통증: 간$/)).not.toBeInTheDocument();
+  });
+
+  it("18. [Astra 2차 반례 3] AI 가설이 있더라도 사용자 원본 증상의 3D 키(left_hand)와 출처(user_report)가 유지되어야 한다", () => {
+    const onSelectOrgan = vi.fn();
+    const dualDetailRecord = {
+      id: "rec-dual-keys-provenance",
+      householdId: "hh-1",
+      profileId: "profile-self",
+      recordType: "pain" as const,
+      recordedAt: `${todayStr}T10:00:00Z`,
+      source: "manual" as const,
+      payload: {
+        bodyArea: "왼쪽 손가락",
+        note: "왼쪽 손가락 저림",
+        observedAt: `${todayStr}T10:00:00Z`,
+        anatomyEvent: {
+          concept: {
+            side: "unknown",
+            label: "신경계",
+            canonicalConceptId: "nervous",
+          },
+          provenance: "clinical_ai_inferred",
+          suspectedAnatomyIds: ["nervous"],
+          clinicalReasoning: "상지 말단 저림으로 신경계 이상 의심",
+        },
+      },
+      version: 1,
+    } as unknown as HealthRecord;
+
+    render(
+      <FamilyIntegratedMonitoring
+        profiles={mockProfiles}
+        selectedProfileId="profile-self"
+        onSelectProfile={vi.fn()}
+        records={[dualDetailRecord]}
+        onSelectOrgan={onSelectOrgan}
+      />,
+    );
+
+    // 1. 3D 뷰어에 AI 추론 부위(nervous)와 사용자 원본 증상 부위(left_hand)가 모두 연결 가능해야 함
+    const calls = onSelectOrgan.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const allArgs = calls.flatMap((c) => String(c[0]).split(",").map((s) => s.trim()));
+    expect(allArgs).toContain("nervous");
+    expect(allArgs).toContain("left_hand");
+
+    // 2. 사용자 원본 증상 버튼과 AI 추론 버튼이 각각 분리 노출됨
+    expect(screen.getByRole("button", { name: /통증: 왼쪽 손가락/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /연관통 추정: 신경계/ })).toBeInTheDocument();
+  });
+
+  it("19. [Astra 2차 요구사항 4] 통증 강도가 미상인 기록은 10점 fallback으로 왜곡되지 않고 undefined로 보존되어 0점/10점과 명확히 구분된다", () => {
+    const onSelectOrgan = vi.fn();
+    const unknownIntensityRecord = {
+      id: "rec-unknown-intensity",
+      householdId: "hh-1",
+      profileId: "profile-self",
+      recordType: "pain" as const,
+      recordedAt: `${todayStr}T10:00:00Z`,
+      source: "manual" as const,
+      payload: {
+        bodyArea: "어깨",
+        sensation: "뻐근함",
+        observedAt: `${todayStr}T10:00:00Z`,
+      },
+      version: 1,
+    } as unknown as HealthRecord;
+
+    render(
+      <FamilyIntegratedMonitoring
+        profiles={mockProfiles}
+        selectedProfileId="profile-self"
+        onSelectProfile={vi.fn()}
+        records={[unknownIntensityRecord]}
+        onSelectOrgan={onSelectOrgan}
+      />,
+    );
+
+    const calls = onSelectOrgan.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall[0]).toContain("shoulder");
+    // 10점이나 0점으로 강제 치환되지 않고 undefined 유지
+    expect(lastCall[2]).toBeUndefined();
+    // organIntensityMap도 미상 강도를 10점으로 조작하지 않음
+    expect(lastCall[3]).toBeUndefined();
   });
 });
 

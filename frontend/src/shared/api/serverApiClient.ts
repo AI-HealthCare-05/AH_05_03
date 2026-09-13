@@ -265,6 +265,28 @@ export class ServerApiClient {
     await readServerSentEvents(response.body, onEvent);
   }
 
+  /**
+   * 가구 내 건강기록 변경 등 실시간 이벤트를 SSE 로 구독한다.
+   *
+   * 가족 구성원 중 누군가 기록을 저장·수정·삭제하면 서버가 브로드캐스트하는
+   * `record_saved`, `record_deleted` 등의 이벤트를 수신하여 화면을 즉시 갱신한다.
+   */
+  public async streamHouseholdEvents(
+    householdId: string,
+    onEvent: (event: string, data: Record<string, unknown>) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const response = await this.send(`/households/${encodeURIComponent(householdId)}/events`, {
+      authenticated: true,
+      headers: { Accept: "text/event-stream" },
+      signal,
+    });
+    if (!response.body) {
+      throw new ServerApiError(response.status, "STREAM_UNSUPPORTED", "이 브라우저는 스트리밍을 지원하지 않습니다.");
+    }
+    await readServerSentEvents(response.body, onEvent);
+  }
+
   public createChatSession(profileId: string, title?: string): Promise<ChatSessionData> {
     return this.request<ChatSessionData>("/chat-sessions", {
       method: "POST",

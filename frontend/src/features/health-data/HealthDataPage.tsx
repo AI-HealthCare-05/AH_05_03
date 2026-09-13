@@ -57,6 +57,17 @@ export function HealthDataPage() {
     void loadRecords();
   }, [loadRecords]);
 
+  // 봄이(챗봇) 등에서 건강 기록이 저장되면 실시간으로 기록 목록을 갱신한다.
+  useEffect(() => {
+    const handleRecordSaved = () => {
+      void loadRecords();
+    };
+    window.addEventListener("ieobom:record-saved", handleRecordSaved);
+    return () => {
+      window.removeEventListener("ieobom:record-saved", handleRecordSaved);
+    };
+  }, [loadRecords]);
+
   const periodLabel = PERIODS.find((item) => item.key === period)?.label ?? "선택 기간";
   const filteredRecords = useMemo(() => filterByPeriod(records, period), [period, records]);
   const weightPoints = useMemo(

@@ -42,6 +42,7 @@ export interface UpdateHealthRecordInput {
 
 export interface LocalDomainContextValue {
   runtime?: LocalDomainRuntime;
+  householdId?: string;
   profiles: FamilyProfile[];
   hiddenProfiles: FamilyProfile[];
   loading: boolean;

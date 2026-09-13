@@ -9,6 +9,7 @@ from app.apis.v1.dev_ocr_routers import dev_ocr_router
 from app.apis.v1.family_invitation_routers import family_invitation_router
 from app.apis.v1.health_assistant_routers import health_assistant_router
 from app.apis.v1.health_record_routers import health_record_router
+from app.apis.v1.household_event_routers import household_event_router
 from app.apis.v1.household_routers import household_router
 from app.apis.v1.pain_chat_routers import pain_chat_router
 from app.apis.v1.prediction_job_routers import prediction_job_router
@@ -23,6 +24,7 @@ v1_routers.include_router(auth_router)
 v1_routers.include_router(account_router)
 v1_routers.include_router(subscription_router)
 v1_routers.include_router(household_router)
+v1_routers.include_router(household_event_router)
 v1_routers.include_router(profile_router)
 v1_routers.include_router(health_record_router)
 v1_routers.include_router(family_invitation_router)

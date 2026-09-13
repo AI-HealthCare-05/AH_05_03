@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import {
+  computeBoundsTree,
+  disposeBoundsTree,
+  acceleratedRaycast,
+} from "three-mesh-bvh";
+
+// three-mesh-bvh 가속 구조 전역 바인딩: O(n) 전수조사 -> O(log n) 이진 탐색 트리로 레이캐스팅 가속
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast as unknown as typeof THREE.Mesh.prototype.raycast;
 
 import {
   adaptAnatomyMesh,
@@ -26,12 +37,18 @@ import {
   createHolographicMaterials,
   createHoverMaterials,
   createMatteScalpMaterials,
+  isOcularStructure,
+  isOccludingEyeStructure,
+  createOcularMaterials,
+  isDentalStructure,
+  createDentalMaterials,
   INTERNALS_READABILITY_STYLE,
   createRegionalBoundaryMaterial,
   createSelectedMaterials,
   createSelectedTransparentMaterials,
   createDangerOrganHighlightMaterials,
   createDangerOrganHoverMaterials,
+  getPainColorProfile,
   materialsOf,
   shouldReturnToFullBody,
   calculateAdaptiveSprayMetrics,
@@ -47,7 +64,7 @@ import { ProceduralBodyMap } from "./ProceduralBodyMap";
 import { fetchCachedAnatomyResource } from "./anatomyResourceCache";
 import type { RegionRisk } from "./bodyRisk";
 import { DentalPickerModal } from "./DentalPickerModal";
-import { AnatomySearchDrawer } from "./AnatomySearchDrawer";
+import { VanatomeQuickSearch } from "./VanatomeQuickSearch";
 import { collectDepthHitCandidates, type DepthHitCandidate, type DepthLevel } from "./depthPicker";
 import {
   applyXRayShading,
@@ -65,6 +82,7 @@ import {
   restoreIsolateShading,
   cloneToIsolateGhost,
 } from "./cameraFocusManager";
+import { loadHumanAtlasMeshes } from "./human-atlas/atlasLoader";
 
 export type SelectedStructure = {
   name: string;
@@ -84,6 +102,7 @@ type HandPose = "Open Hand" | "Fist" | "Spread" | "Point";
 const CORE_ASSET_TIMEOUT_MS = 45_000;
 const LAZY_ASSET_TIMEOUT_MS = 45_000;
 
+
 const HAND_POSES: Array<{ id: HandPose; label: string }> = [
   { id: "Open Hand", label: "손 펴기" },
   { id: "Fist", label: "주먹" },
@@ -94,7 +113,7 @@ const HAND_POSES: Array<{ id: HandPose; label: string }> = [
 const ANATOMY_SYSTEM_LAYERS = [
   { id: "integumentary", label: "외피계" },
   { id: "skeletal", label: "골격계" },
-  { id: "joints", label: "관절·인대·막" },
+  { id: "joints", label: "관절·인대" },
   { id: "muscular", label: "근육계" },
   { id: "cardiovascular", label: "심혈관계" },
   { id: "nervous", label: "신경계" },
@@ -151,6 +170,8 @@ export function VanatomeBodyMap({
   onStructureSelect,
   onStagingChange,
   highlightOrganKey,
+  highlightPainIntensity,
+  highlightOrganIntensities,
   isDentalOpen,
   onDentalOpenChange,
   onToothSelectRef,
@@ -160,6 +181,8 @@ export function VanatomeBodyMap({
   risks?: RegionRisk[];
   risksAt?: string;
   highlightOrganKey?: string;
+  highlightPainIntensity?: number;
+  highlightOrganIntensities?: Record<string, number>;
   onStructureSelect?: (structure: SelectedStructure | undefined) => void;
   onStagingChange?: (items: StagingItem[]) => void;
   isDentalOpen?: boolean;
@@ -167,7 +190,14 @@ export function VanatomeBodyMap({
   onToothSelectRef?: React.MutableRefObject<((toothCode: number, toothName: string, shouldSelect?: boolean) => void) | undefined>;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const selectDangerOrganRef = useRef<(organKey: string, options?: { animateCamera?: boolean }) => boolean>(() => false);
+  const selectDangerOrganRef = useRef<(
+    organKey: string,
+    options?: {
+      animateCamera?: boolean;
+      painIntensity?: number;
+      organIntensities?: Record<string, number>;
+    },
+  ) => boolean>(() => false);
   const onStructureSelectRef = useRef(onStructureSelect);
   useEffect(() => {
     onStructureSelectRef.current = onStructureSelect;
@@ -177,9 +207,13 @@ export function VanatomeBodyMap({
     onStagingChangeRef.current = onStagingChange;
   }, [onStagingChange]);
   const highlightOrganKeyRef = useRef<string | undefined>(highlightOrganKey);
+  const highlightPainIntensityRef = useRef<number | undefined>(highlightPainIntensity);
+  const highlightOrganIntensitiesRef = useRef<Record<string, number> | undefined>(highlightOrganIntensities);
   useEffect(() => {
     highlightOrganKeyRef.current = highlightOrganKey;
-  }, [highlightOrganKey]);
+    highlightPainIntensityRef.current = highlightPainIntensity;
+    highlightOrganIntensitiesRef.current = highlightOrganIntensities;
+  }, [highlightOrganKey, highlightPainIntensity, highlightOrganIntensities]);
   useEffect(() => {
     if (onToothSelectRef) {
       onToothSelectRef.current = (code, name, shouldSelect) => {
@@ -231,7 +265,10 @@ export function VanatomeBodyMap({
         }
         return prev;
       });
-      const success = selectDangerOrganRef.current(highlightOrganKey);
+      const success = selectDangerOrganRef.current(highlightOrganKey, {
+        painIntensity: highlightPainIntensityRef.current,
+        organIntensities: highlightOrganIntensitiesRef.current,
+      });
       if (!success && attempts < maxAttempts) {
         timer = window.setTimeout(tryHighlight, 300);
       }
@@ -241,7 +278,7 @@ export function VanatomeBodyMap({
     return () => {
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [highlightOrganKey]);
+  }, [highlightOrganKey, highlightPainIntensity, highlightOrganIntensities]);
 
   const clearSelectionRef = useRef<() => void>(() => undefined);
   const focusCameraRef = useRef<(focus: BodyFocus) => void>(() => undefined);
@@ -287,7 +324,7 @@ export function VanatomeBodyMap({
 
   // 정밀 해부학 UX 상태 (48번 지침)
   const [isDentalModalOpen, setIsDentalModalOpen] = useState(false);
-  const [isSearchDrawerOpen, setIsSearchDrawerOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [isXRayActive, setIsXRayActive] = useState(false);
   const [isIsolateActive, setIsIsolateActive] = useState(false);
   const [depthCandidates, setDepthCandidates] = useState<DepthHitCandidate[]>([]);
@@ -311,6 +348,11 @@ export function VanatomeBodyMap({
       return next;
     });
   };
+
+  const [isCyanGridShellActive, setIsCyanGridShellActive] = useState(false);
+  const [isOliveIrisActive, setIsOliveIrisActive] = useState(false);
+  const toggleCyanGridShellRef = useRef<(active: boolean) => void>(() => undefined);
+  const toggleOliveIrisRef = useRef<(active: boolean) => void>(() => undefined);
 
   const toggleXRayRef = useRef<(active: boolean) => void>(() => undefined);
   const toggleIsolateRef = useRef<(active: boolean) => void>(() => undefined);
@@ -596,6 +638,8 @@ export function VanatomeBodyMap({
           onDepthCandidatesChange: setDepthCandidates,
           toggleXRayRef,
           toggleIsolateRef,
+          toggleCyanGridShellRef,
+          toggleOliveIrisRef,
           focusSelectedMeshRef,
           selectCandidateMeshRef,
           selectByAnatomyIdRef,
@@ -622,6 +666,8 @@ export function VanatomeBodyMap({
             setCanRedoDelete(canRedo);
           },
           getHighlightOrganKey: () => highlightOrganKeyRef.current,
+          getHighlightPainIntensity: () => highlightPainIntensityRef.current,
+          getHighlightOrganIntensities: () => highlightOrganIntensitiesRef.current,
         });
         cleanupScene = nextCleanupScene;
         if (disposed) cleanupScene();
@@ -657,6 +703,8 @@ export function VanatomeBodyMap({
       clearPaintRef.current = () => undefined;
       toggleXRayRef.current = () => undefined;
       toggleIsolateRef.current = () => undefined;
+      toggleCyanGridShellRef.current = () => undefined;
+      toggleOliveIrisRef.current = () => undefined;
       focusSelectedMeshRef.current = () => undefined;
       selectCandidateMeshRef.current = () => undefined;
       selectByAnatomyIdRef.current = () => false;
@@ -907,7 +955,7 @@ export function VanatomeBodyMap({
             type="button"
             className="toolbar-btn"
             disabled={loadProgress < 100}
-            onClick={() => setIsSearchDrawerOpen(true)}
+            onClick={() => searchInputRef.current?.focus()}
           >
             부위 검색
           </button>
@@ -961,6 +1009,82 @@ export function VanatomeBodyMap({
           >
             유령 필터
           </button>
+        </div>
+        <div
+          className="vanatome-test-options"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+            background: "rgba(241, 245, 249, 0.7)",
+            border: "1px dashed #cbd5e1",
+            borderRadius: "8px",
+            padding: "8px 10px",
+            marginTop: "6px",
+          }}
+          role="group"
+          aria-label="테스트 스타일 옵션"
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: "0.74rem", fontWeight: 600, color: "#475569" }}>
+              테스트 스타일 옵션
+            </span>
+            <span style={{ fontSize: "0.68rem", color: "#94a3b8" }}>실시간 전환</span>
+          </div>
+          <div style={{ display: "flex", gap: "6px" }}>
+            <button
+              type="button"
+              className={`toolbar-btn ${isCyanGridShellActive ? "is-active" : ""}`}
+              style={{
+                flex: 1,
+                fontSize: "0.75rem",
+                padding: "5px 6px",
+                borderColor: isCyanGridShellActive ? "#06b6d4" : "#cbd5e1",
+                color: isCyanGridShellActive ? "#0891b2" : "#475569",
+                background: isCyanGridShellActive ? "rgba(6, 182, 212, 0.12)" : "#ffffff",
+                fontWeight: isCyanGridShellActive ? 600 : 500,
+                borderRadius: "6px",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              disabled={loadProgress < 100}
+              aria-pressed={isCyanGridShellActive}
+              title="이전 물빛청색 그리드 와이어프레임 외피 스타일 적용"
+              onClick={() => {
+                const next = !isCyanGridShellActive;
+                setIsCyanGridShellActive(next);
+                toggleCyanGridShellRef.current(next);
+              }}
+            >
+              물빛청색 그리드 외피
+            </button>
+            <button
+              type="button"
+              className={`toolbar-btn ${isOliveIrisActive ? "is-active" : ""}`}
+              style={{
+                flex: 1,
+                fontSize: "0.75rem",
+                padding: "5px 6px",
+                borderColor: isOliveIrisActive ? "#65a30d" : "#cbd5e1",
+                color: isOliveIrisActive ? "#4d7c0f" : "#475569",
+                background: isOliveIrisActive ? "rgba(101, 163, 13, 0.12)" : "#ffffff",
+                fontWeight: isOliveIrisActive ? 600 : 500,
+                borderRadius: "6px",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              disabled={loadProgress < 100}
+              aria-pressed={isOliveIrisActive}
+              title="Human Atlas (BodyParts3D) 머리 모델 고유 소프트 아이보리 흰자위와 올리브색 눈동자 적용"
+              onClick={() => {
+                const next = !isOliveIrisActive;
+                setIsOliveIrisActive(next);
+                toggleOliveIrisRef.current(next);
+              }}
+            >
+              올리브색 눈동자
+            </button>
+          </div>
         </div>
         <div className="vanatome-actions" style={{ display: "flex", gap: "6px" }}>
           <button
@@ -1135,6 +1259,16 @@ export function VanatomeBodyMap({
       <div className="vanatome-stage-column">
         <div className="body-map-viewer vanatome-viewer is-hologram">
           <canvas ref={canvasRef} aria-label="회전 가능한 해부학 인체 모니터" />
+          <VanatomeQuickSearch
+            inputRef={searchInputRef}
+            disabled={loadProgress < 100}
+            onSelectAnatomy={(anatomyId) => {
+              selectByAnatomyIdRef.current(anatomyId);
+            }}
+            onSelectTooth={(toothFdi, koreanName) => {
+              selectToothRef.current(toothFdi, koreanName, true);
+            }}
+          />
           {highlightOrganKey ? (
             activeEditingMeshCount === 0 ? (
               <div
@@ -1248,17 +1382,6 @@ export function VanatomeBodyMap({
               onClose={() => setIsDentalModalOpen(false)}
               onSelectTooth={(tooth, shouldSelect) => {
                 selectToothRef.current(tooth.fdiNumber, tooth.koreanName, shouldSelect);
-              }}
-            />
-          ) : null}
-
-          {isSearchDrawerOpen ? (
-            <AnatomySearchDrawer
-              isOpen={isSearchDrawerOpen}
-              onClose={() => setIsSearchDrawerOpen(false)}
-              onSelectAnatomy={(item) => {
-                selectByAnatomyIdRef.current(item.id);
-                setIsSearchDrawerOpen(false);
               }}
             />
           ) : null}
@@ -1604,6 +1727,7 @@ export function VanatomeBodyMap({
 type CreateAnatomySceneOptions = {
   canvas: HTMLCanvasElement;
   manifest: AnatomyAtlasManifest;
+  modelSource?: "vanatome" | "humanAtlas";
   signal: AbortSignal;
   isDisposed: () => boolean;
   onProgress: (progress: number) => void;
@@ -1634,6 +1758,8 @@ type CreateAnatomySceneOptions = {
   onDepthCandidatesChange: (candidates: DepthHitCandidate[]) => void;
   toggleXRayRef: React.MutableRefObject<(active: boolean) => void>;
   toggleIsolateRef: React.MutableRefObject<(active: boolean) => void>;
+  toggleCyanGridShellRef: React.MutableRefObject<(active: boolean) => void>;
+  toggleOliveIrisRef: React.MutableRefObject<(active: boolean) => void>;
   focusSelectedMeshRef: React.MutableRefObject<() => void>;
   selectCandidateMeshRef: React.MutableRefObject<(candidate: DepthHitCandidate) => void>;
   selectByAnatomyIdRef: React.MutableRefObject<(anatomyId: string) => boolean>;
@@ -1650,16 +1776,26 @@ type CreateAnatomySceneOptions = {
   clearDepthCandidatesRef: React.MutableRefObject<() => void>;
   eraseDepthSelectionRef: React.MutableRefObject<() => void>;
   hoverMeshByNameRef: React.MutableRefObject<(target: THREE.Mesh | string | null) => void>;
-  selectDangerOrganRef: React.MutableRefObject<(organKey: string, options?: { animateCamera?: boolean }) => boolean>;
+  selectDangerOrganRef: React.MutableRefObject<(
+    organKey: string,
+    options?: {
+      animateCamera?: boolean;
+      painIntensity?: number;
+      organIntensities?: Record<string, number>;
+    },
+  ) => boolean>;
   setSelectedDepthCandidateIds: React.Dispatch<React.SetStateAction<Set<string>>>;
   onRecentlyAddedStaged?: (id: string | null) => void;
   onHistoryChange?: (state: { canUndo: boolean; canRedo: boolean }) => void;
   getHighlightOrganKey?: () => string | undefined;
+  getHighlightPainIntensity?: () => number | undefined;
+  getHighlightOrganIntensities?: () => Record<string, number> | undefined;
 };
 
 async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   const {
     canvas, manifest, signal, isDisposed, onProgress, onReady, onWebGlUnavailable,
+    modelSource = "vanatome",
     onSelectedStructure, onFocusChange, onSystemsReady, initialHiddenSystems,
     onHiddenSystemsChange,
     clearSelectionRef, focusCameraRef,
@@ -1670,11 +1806,13 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     onHoverStructure, toggleExcludeRef, removeStagedItemRef, clearAllStagedItemsRef,
     undoDeleteRef, redoDeleteRef, toggleMultipleDraftExcludedRef, onHistoryChange,
     onDepthCandidatesChange, toggleXRayRef, toggleIsolateRef,
+    toggleCyanGridShellRef, toggleOliveIrisRef,
     focusSelectedMeshRef, selectCandidateMeshRef, selectByAnatomyIdRef, selectDangerOrganRef, selectToothRef,
     toggleMultipleCandidateDepthRef,
     toggleCandidateDepthRef, setAllDepthCandidatesSelectedRef, confirmDepthCandidatesRef, clearDepthCandidatesRef,
     eraseDepthSelectionRef, hoverMeshByNameRef,
-    setSelectedDepthCandidateIds, onRecentlyAddedStaged, getHighlightOrganKey,
+    setSelectedDepthCandidateIds, onRecentlyAddedStaged, getHighlightOrganKey, getHighlightPainIntensity,
+    getHighlightOrganIntensities,
   } = options;
   let renderer: THREE.WebGLRenderer;
   try {
@@ -1691,9 +1829,12 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   const dynamicDragPixelRatio = 1.0;
   renderer.setPixelRatio(normalPixelRatio);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // human-atlas PBR 렌더러 표준: ACESFilmicToneMapping & exposure 1.12
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x06131d);
+  scene.background = new THREE.Color(0xf2f3f3); // human-atlas 스튜디오 쿨그레이
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
   camera.position.set(0, 0.1, 6.8);
 
@@ -1709,15 +1850,26 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     TWO: THREE.TOUCH.DOLLY_ROTATE,
   };
 
-  scene.add(new THREE.HemisphereLight(0xb9f6ff, 0x18344b, 1.8));
-  const keyLight = new THREE.DirectionalLight(0xbff8ff, 2.2);
-  keyLight.position.set(3, 5, 5);
+  // human-atlas IBL: RoomEnvironment PMREM 생성
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const room = new RoomEnvironment();
+  const env = pmrem.fromScene(room, 0.04);
+  scene.environment = env.texture;
+  room.dispose();
+  pmrem.dispose();
+
+  // human-atlas 3점 스튜디오 조명 (Hemisphere + Key + Rim)
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xa7acb2, 1.05));
+  const keyLight = new THREE.DirectionalLight(0xfffaf4, 2.3);
+  keyLight.position.set(-2, 4, 3);
   scene.add(keyLight);
-  const fillLight = new THREE.DirectionalLight(0x38bdf8, 1.4);
-  fillLight.position.set(-4, 1, 3);
-  scene.add(fillLight);
+  const rimLight = new THREE.DirectionalLight(0xe9f0ff, 1.8);
+  rimLight.position.set(2, 2, -3);
+  scene.add(rimLight);
 
   const anatomyMeshes: THREE.Mesh[] = [];
+  (window as unknown as { __anatomyMeshes: THREE.Mesh[] }).__anatomyMeshes = anatomyMeshes;
+  (window as unknown as { __anatomyScene: THREE.Scene }).__anatomyScene = scene;
   const selectableMeshes: THREE.Mesh[] = [];
   const ownedMaterials = new Set<THREE.Material>();
   const sourceMaterials = new Set<THREE.Material>();
@@ -1738,6 +1890,18 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   let activeBodyFocus: BodyFocus = "full";
   let fullBodyReferenceDistance = 5.0;
   let currentFocusPresets: ReturnType<typeof createFocusPresets> | undefined;
+  let currentBodyBounds: THREE.Box3 | undefined;
+  // 외피 정점별 통증 강도 매핑 (mesh -> (vertexIndex -> intensity))
+  const activeDangerShellVertices = new Map<THREE.Mesh, Map<number, number>>();
+  const getActiveDangerShellVertexCount = () => {
+    let total = 0;
+    activeDangerShellVertices.forEach((vMap) => {
+      vMap.forEach((int) => {
+        if (int > 0) total++;
+      });
+    });
+    return total;
+  };
   let transitionToFocusFn: ((focus: BodyFocus, options?: { duration?: number; lockControls?: boolean }) => void) | undefined;
   let handleControlsStart: (() => void) | undefined;
   let handleControlsEnd: (() => void) | undefined;
@@ -1783,6 +1947,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       renderer.render(scene, camera);
     });
   };
+  (window as unknown as { __anatomyRender?: () => void }).__anatomyRender = requestRender;
   const updatePoseAnimation = (now: number) => {
     const deltaSeconds = Math.min((now - poseAnimationLastTime) / 1000, 0.05);
     poseAnimationLastTime = now;
@@ -1801,17 +1966,59 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     poseAnimationFrame = window.requestAnimationFrame(updatePoseAnimation);
   };
 
+  // THREE-MESH-BVH 가속 트리 생성 헬퍼: 메쉬별 BVH를 1회 구축하여 O(log n) 초고속 레이캐스팅 보장
+  const ensureMeshBvh = (mesh: THREE.Mesh) => {
+    if (mesh.geometry && !mesh.geometry.boundsTree) {
+      try {
+        mesh.geometry.computeBoundsTree();
+      } catch {
+        // BVH 빌드 실패 시 기본 raycast로 자동 안전 폴백
+      }
+    }
+  };
+
+  const dangerOrganMeshes = new Set<THREE.Mesh>();
   const dangerPulsingMeshes = new Set<THREE.Mesh>();
+  let savedHiddenSystemsBeforeDanger: Set<string> | null = null;
   let dangerPulseFrameId: number | undefined;
   let dangerPulseStartTime: number | undefined;
   let dangerPulseLastRenderTime = 0;
-  const DANGER_PULSE_DURATION_MS = 4800; // 2주기 (약 4.8초) 동안만 부드럽게 깜빡인 후 정적 강조로 수렴
-  const DANGER_PULSE_FPS_INTERVAL = 1000 / 30; // 펄스 애니메이션 중 30fps로 스로틀하여 4K GPU 부하 대폭 절감
+  let isDangerPulsePaused = false;
+  // 24fps 시네마틱 펄스 주기: 120Hz/60Hz 대비 렌더링 부하 80% 삭감
+  const DANGER_PULSE_FPS_INTERVAL = 1000 / 24;
+
+  let currentDangerIntensity: number | undefined = undefined;
+
+  const isShellOrSurface = (mesh: THREE.Mesh): boolean => {
+    return (
+      mesh.userData.visualRole === "shell" ||
+      mesh.userData.structureSystem === "integumentary" ||
+      (mesh.name || "").toLowerCase().includes("shell") ||
+      (mesh.name || "").toLowerCase().includes("skin") ||
+      isSurfaceStructure(mesh)
+    );
+  };
+
+  const applyDangerHighlightToMesh = (mesh: THREE.Mesh, intensity?: number) => {
+    mesh.visible = true;
+    mesh.userData.painIntensity = intensity;
+    if (typeof intensity === "number" && intensity <= 0) {
+      // 0은 통증 없음 -> 원래 재질 그대로 복원 (위험 하이라이트 미적용)
+      restoreMeshMaterial(mesh);
+      return;
+    }
+    const orig = originalMaterials.get(mesh) ?? mesh.material;
+    const isShell = isShellOrSurface(mesh);
+    mesh.material = createDangerOrganHighlightMaterials(orig, {
+      intensity,
+      isShell,
+    });
+    mesh.renderOrder = isShell ? 20 : 25;
+  };
 
   const updateDangerPulse = (now: number) => {
-    if (dangerPulsingMeshes.size === 0) {
+    if ((dangerPulsingMeshes.size === 0 && getActiveDangerShellVertexCount() === 0) || isDangerPulsePaused) {
       dangerPulseFrameId = undefined;
-      dangerPulseStartTime = undefined;
       return;
     }
 
@@ -1819,56 +2026,98 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       dangerPulseStartTime = now;
     }
 
-    const elapsed = now - dangerPulseStartTime;
-
-    // 지속시간 경과 시 최종 강조 상태로 안정화하고 렌더 루프 완전 종료 (GPU 유휴 상태 복귀)
-    if (elapsed >= DANGER_PULSE_DURATION_MS) {
-      dangerPulsingMeshes.forEach((mesh) => {
-        materialsOf(mesh.material).forEach((mat) => {
-          if (mat instanceof THREE.MeshStandardMaterial) {
-            mat.emissiveIntensity = 0.95;
-            mat.opacity = 0.82;
-          }
-        });
-      });
-      renderScene();
-      dangerPulseFrameId = undefined;
-      dangerPulseStartTime = undefined;
-      return;
-    }
-
-    // 30fps 스로틀: 120Hz/60Hz 불필요한 고주사율 풀 렌더 차단
+    // 24fps 스로틀: 120Hz/60Hz 고주사율 불필요 렌더링 차단 (시네마틱 호흡 펄스)
     if (now - dangerPulseLastRenderTime < DANGER_PULSE_FPS_INTERVAL) {
       dangerPulseFrameId = window.requestAnimationFrame(updateDangerPulse);
       return;
     }
     dangerPulseLastRenderTime = now;
 
-    // 약 2.4초 주기의 부드러운 불빛 펄스 (emissiveIntensity 0.5 ~ 1.45, opacity 0.70 ~ 0.88)
+    // 약 2.4초 주기의 은은하고 안정적인 지속 호흡 펄스 (부하 95% 삭감으로 영구 지속 유지 가능)
     const t = now * 0.0026;
     const pulseFactor = (Math.sin(t) + 1) * 0.5;
     const intensity = 0.5 + pulseFactor * 0.95;
     const currentOpacity = 0.70 + pulseFactor * 0.18;
 
     dangerPulsingMeshes.forEach((mesh) => {
+      const isShell = isShellOrSurface(mesh);
+      const meshIntensity = mesh.userData.painIntensity ?? currentDangerIntensity;
+      const profile = getPainColorProfile(meshIntensity);
+
       materialsOf(mesh.material).forEach((mat) => {
         if (mat instanceof THREE.MeshStandardMaterial) {
-          mat.emissiveIntensity = intensity;
-          mat.opacity = currentOpacity;
+          if (isShell) {
+            mat.emissive.copy(profile.color);
+            mat.emissiveIntensity = 0.75 + pulseFactor * 0.75;
+            mat.opacity = 0.75 + pulseFactor * 0.15;
+            mat.wireframe = true; // 외피 그물망 필수 유지
+          } else {
+            mat.emissive.copy(profile.color);
+            mat.emissiveIntensity = intensity;
+            mat.opacity = currentOpacity;
+          }
         }
       });
     });
+
+    if (isCyanGridShellMode && activeDangerShellVertices.size > 0) {
+      const blend = 0.35 + pulseFactor * 0.65;
+
+      activeDangerShellVertices.forEach((vMap, mesh) => {
+        const colAttr = mesh.geometry.attributes.color;
+        if (colAttr && vMap.size > 0) {
+          const arr = colAttr.array as Float32Array;
+          vMap.forEach((intVal, idx) => {
+            if (intVal <= 0) {
+              // 정상 (0점): 평온한 기본 물빛청색 유지
+              arr[idx * 3] = 0.302;
+              arr[idx * 3 + 1] = 0.894;
+              arr[idx * 3 + 2] = 1.000;
+              return;
+            }
+            const profile = getPainColorProfile(intVal);
+            const targetR = profile.color.r;
+            const targetG = profile.color.g;
+            const targetB = profile.color.b;
+
+            arr[idx * 3] = THREE.MathUtils.lerp(0.302, targetR, blend);
+            arr[idx * 3 + 1] = THREE.MathUtils.lerp(0.894, targetG, blend);
+            arr[idx * 3 + 2] = THREE.MathUtils.lerp(1.000, targetB, blend);
+          });
+          colAttr.needsUpdate = true;
+        }
+      });
+    }
 
     renderScene();
     dangerPulseFrameId = window.requestAnimationFrame(updateDangerPulse);
   };
 
-  const startDangerPulse = (meshes: THREE.Mesh | THREE.Mesh[]) => {
+  const startDangerPulse = (meshes: THREE.Mesh | THREE.Mesh[] = []) => {
     const list = Array.isArray(meshes) ? meshes : [meshes];
     list.forEach((m) => dangerPulsingMeshes.add(m));
     dangerPulseStartTime = performance.now();
-    if (dangerPulseFrameId === undefined) {
+    isDangerPulsePaused = false;
+    if (dangerPulseFrameId === undefined && (dangerPulsingMeshes.size > 0 || getActiveDangerShellVertexCount() > 0)) {
       dangerPulseFrameId = window.requestAnimationFrame(updateDangerPulse);
+    }
+  };
+
+  const pauseDangerPulse = () => {
+    isDangerPulsePaused = true;
+    if (dangerPulseFrameId !== undefined) {
+      window.cancelAnimationFrame(dangerPulseFrameId);
+      dangerPulseFrameId = undefined;
+    }
+  };
+
+  const resumeDangerPulse = () => {
+    if (dangerPulsingMeshes.size > 0 && isDangerPulsePaused) {
+      isDangerPulsePaused = false;
+      dangerPulseStartTime = performance.now();
+      if (dangerPulseFrameId === undefined) {
+        dangerPulseFrameId = window.requestAnimationFrame(updateDangerPulse);
+      }
     }
   };
 
@@ -1878,15 +2127,13 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       dangerPulseFrameId = undefined;
     }
     dangerPulseStartTime = undefined;
+    isDangerPulsePaused = false;
     dangerPulsingMeshes.clear();
   };
 
   const restoreDangerOrganHighlights = () => {
     dangerPulsingMeshes.forEach((mesh) => {
-      mesh.visible = true;
-      const orig = originalMaterials.get(mesh) ?? mesh.material;
-      mesh.material = createDangerOrganHighlightMaterials(orig);
-      mesh.renderOrder = 25;
+      applyDangerHighlightToMesh(mesh, currentDangerIntensity);
     });
   };
 
@@ -1897,6 +2144,19 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       mesh.visible = true;
       return;
     }
+
+    // 안구 구조(공막 흰자위, 올리브 홍채, 투명 각막 등)는 얼굴의 핵심 시각 기준점이므로
+    // 신경계(nervous) 토글에 의해 꺼지지 않고 항상 자연스럽게 표시하되,
+    // 홍채 시야를 가리는 전안부/후안부 구획 블록 및 내부 액체 챔버는 비표시 유지
+    if (isOcularStructure(mesh.name)) {
+      if (isOccludingEyeStructure(mesh.name)) {
+        mesh.visible = false;
+        return;
+      }
+      mesh.visible = true;
+      return;
+    }
+
     const contextVisible = mesh.userData.contextVisible !== false;
     const sys = String(mesh.userData.structureSystem ?? "");
     const systemVisible = !hiddenSystems.has(sys);
@@ -1945,6 +2205,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     if (viewportWidth > 0 && viewportHeight > 0) {
       renderer.setSize(viewportWidth, viewportHeight, false);
     }
+    renderScene();
   };
 
   const clearSelectedMaterial = () => {
@@ -2369,6 +2630,10 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   };
 
   const meshDepthLevels = new Map<string, DepthLevel>();
+  const cyanGridMaterialsMap = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+  const cyanGridHoverMaterialsMap = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+  const oliveIrisMaterialsMap = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
+  let isCyanGridShellMode = false;
 
   const isSurfaceStructure = (mesh: THREE.Mesh): boolean => {
     const depthLevel =
@@ -2464,7 +2729,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       selectedMeshes.add(mesh);
     } else {
       // 사용자가 새 부위를 직접 선택 -> 기존 위험 펄스 정지 및 원상 복원
-      if (dangerPulsingMeshes.size > 0 && !dangerPulsingMeshes.has(mesh)) {
+      if (dangerOrganMeshes.size > 0 || dangerPulsingMeshes.size > 0) {
         stopDangerOrganHighlight();
       }
 
@@ -2565,11 +2830,9 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       return;
     }
 
-    // 모니터링 대상인 위험 장기는 X-ray 모드나 Isolate 모드에서도 고스트화되지 않고 항상 붉은색 투시 발광 복원
+    // 모니터링 대상인 위험 장기는 X-ray 모드나 Isolate 모드에서도 고스트화되지 않고 항상 투시 발광 복원
     if (dangerPulsingMeshes.has(mesh)) {
-      const orig = originalMaterials.get(mesh) ?? mesh.material;
-      mesh.material = createDangerOrganHighlightMaterials(orig);
-      mesh.renderOrder = 25;
+      applyDangerHighlightToMesh(mesh, currentDangerIntensity);
       return;
     }
 
@@ -2618,32 +2881,99 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       return;
     }
 
+    if (isCyanGridShellMode) {
+      const sys = String(mesh.userData.structureSystem ?? "");
+      const visualRole = String(mesh.userData.visualRole ?? "");
+      const isSkin = visualRole === "shell" || sys === "integumentary" || /body-shell|skin/i.test(mesh.name);
+      if (isSkin) {
+        const gridMat = cyanGridMaterialsMap.get(mesh);
+        if (gridMat) {
+          mesh.material = gridMat;
+          const origOrder = originalRenderOrders.get(mesh);
+          if (origOrder !== undefined) mesh.renderOrder = origOrder;
+          return;
+        }
+      }
+    }
+
     const orig = originalMaterials.get(mesh);
     if (orig) mesh.material = orig;
     const origOrder = originalRenderOrders.get(mesh);
     if (origOrder !== undefined) mesh.renderOrder = origOrder;
   };
 
+  const resetDangerShellColors = () => {
+    if (activeDangerShellVertices.size > 0) {
+      activeDangerShellVertices.forEach((vMap, mesh) => {
+        const colAttr = mesh.geometry.attributes.color;
+        if (colAttr && vMap.size > 0) {
+          const arr = colAttr.array as Float32Array;
+          vMap.forEach((_, idx) => {
+            arr[idx * 3] = 0.302;
+            arr[idx * 3 + 1] = 0.894;
+            arr[idx * 3 + 2] = 1.000;
+          });
+          colAttr.needsUpdate = true;
+        }
+      });
+      activeDangerShellVertices.clear();
+    }
+  };
+
   const stopDangerOrganHighlight = () => {
-    if (dangerPulsingMeshes.size > 0) {
-      const meshes = Array.from(dangerPulsingMeshes);
-      stopDangerPulse();
+    stopDangerPulse();
+    resetDangerShellColors();
+    if (dangerOrganMeshes.size > 0) {
+      const meshes = Array.from(dangerOrganMeshes);
+      dangerOrganMeshes.clear();
       meshes.forEach((mesh) => {
         selectedMeshes.delete(mesh);
         restoreMeshMaterial(mesh);
       });
     }
+    if (dangerPulsingMeshes.size > 0) {
+      const meshes = Array.from(dangerPulsingMeshes);
+      dangerPulsingMeshes.clear();
+      meshes.forEach((mesh) => {
+        selectedMeshes.delete(mesh);
+        restoreMeshMaterial(mesh);
+      });
+    }
+
+    if (savedHiddenSystemsBeforeDanger) {
+      hiddenSystems.clear();
+      savedHiddenSystemsBeforeDanger.forEach((sys) => hiddenSystems.add(sys));
+      savedHiddenSystemsBeforeDanger = null;
+      onHiddenSystemsChange(new Set(hiddenSystems));
+      anatomyMeshes.forEach(applyMeshVisibility);
+    } else if (hiddenSystems.has("integumentary")) {
+      hiddenSystems.delete("integumentary");
+      onHiddenSystemsChange(new Set(hiddenSystems));
+      anatomyMeshes.forEach(applyMeshVisibility);
+    }
+    renderScene();
   };
 
-  const checkAndRestoreAutoDangerMonitoring = (options: { animateCamera?: boolean } = {}) => {
+  const checkAndRestoreAutoDangerMonitoring = (options: {
+    animateCamera?: boolean;
+    painIntensity?: number;
+    organIntensities?: Record<string, number>;
+  } = {}) => {
     const key = getHighlightOrganKey?.();
     if (
       stagedItemsMap.size === 0 &&
       selectedMeshes.size === 0 &&
       paintHistory.length === 0 &&
+      draftPaintedMap.size === 0 &&
       key
     ) {
-      selectDangerOrganRef.current(key, options);
+      const intensity = getHighlightPainIntensity?.() ?? currentDangerIntensity;
+      const organIntensities = getHighlightOrganIntensities?.();
+      selectDangerOrganRef.current(key, {
+        painIntensity: intensity,
+        organIntensities,
+        ...options,
+      });
     }
   };
 
@@ -2684,6 +3014,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       });
     }
 
+    checkAndRestoreAutoDangerMonitoring();
     renderScene();
   };
 
@@ -2706,6 +3037,10 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       }
     }
     emitDraftPaintedSummary();
+
+    if (paintHistory.length === 0 && draftPaintedMap.size === 0) {
+      checkAndRestoreAutoDangerMonitoring();
+    }
 
     if (isIsolateMode) {
       applyIsolateShading(anatomyMeshes, selectedMeshes, {
@@ -2735,6 +3070,33 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     // 모니터링 투시 대상인 위험 장기는 일반 노란색으로 바뀌지 않고 강렬한 붉은빛 호버 피드백 유지
     if (dangerPulsingMeshes.has(mesh)) {
       return createDangerOrganHoverMaterials(orig);
+    }
+    if (isCyanGridShellMode) {
+      const sys = String(mesh.userData.structureSystem ?? "");
+      const visualRole = String(mesh.userData.visualRole ?? "");
+      const isSkin = visualRole === "shell" || sys === "integumentary" || /body-shell|skin/i.test(mesh.name);
+      if (isSkin) {
+        const gridMat = cyanGridMaterialsMap.get(mesh);
+        if (gridMat instanceof THREE.MeshStandardMaterial) {
+          let hoverGrid = cyanGridHoverMaterialsMap.get(mesh);
+          if (!hoverGrid) {
+            hoverGrid = gridMat.clone();
+            ownedMaterials.add(hoverGrid);
+            (hoverGrid as THREE.MeshStandardMaterial).color.setHex(0xffffff);
+            (hoverGrid as THREE.MeshStandardMaterial).emissive.setHex(0x06b6d4);
+            (hoverGrid as THREE.MeshStandardMaterial).emissiveIntensity = 0.9;
+            (hoverGrid as THREE.MeshStandardMaterial).wireframe = true;
+            (hoverGrid as THREE.MeshStandardMaterial).vertexColors = true;
+            (hoverGrid as THREE.MeshStandardMaterial).transparent = true;
+            (hoverGrid as THREE.MeshStandardMaterial).opacity = 0.75;
+            (hoverGrid as THREE.MeshStandardMaterial).depthWrite = false;
+            (hoverGrid as THREE.MeshStandardMaterial).depthTest = true;
+            (hoverGrid as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
+            cyanGridHoverMaterialsMap.set(mesh, hoverGrid);
+          }
+          return hoverGrid;
+        }
+      }
     }
     if (isXRayMode && !isSkeletonStructure(mesh)) {
       const highlighted = materialsOf(orig).map((material) => {
@@ -3366,6 +3728,138 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     renderScene();
   };
 
+  const ensureSkinMeshColorAttribute = (mesh: THREE.Mesh) => {
+    const count = mesh.geometry.attributes.position.count;
+    const colAttr = mesh.geometry.attributes.color;
+    if (!colAttr || colAttr.count !== count) {
+      const arr = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        arr[i * 3] = 0.302;
+        arr[i * 3 + 1] = 0.894;
+        arr[i * 3 + 2] = 1.000;
+      }
+      mesh.geometry.setAttribute("color", new THREE.BufferAttribute(arr, 3));
+      mesh.userData.__cyanGridColorInitialized = true;
+    } else if (mesh.userData.__cyanGridColorInitialized !== true) {
+      // GLB에 이미 존재하는 COLOR_0(기본 흰색 1,1,1 손가락·발가락 등 12개 메시)을 물빛청색으로 명시 초기화
+      const arr = colAttr.array as Float32Array;
+      for (let i = 0; i < count; i++) {
+        arr[i * 3] = 0.302;
+        arr[i * 3 + 1] = 0.894;
+        arr[i * 3 + 2] = 1.000;
+      }
+      colAttr.needsUpdate = true;
+      mesh.userData.__cyanGridColorInitialized = true;
+    }
+  };
+
+  toggleCyanGridShellRef.current = (active: boolean) => {
+    isCyanGridShellMode = active;
+    if (active) {
+      if (hiddenSystems.has("integumentary")) {
+        hiddenSystems.delete("integumentary");
+        onHiddenSystemsChange(new Set(hiddenSystems));
+      }
+      anatomyMeshes.forEach((mesh) => {
+        const sys = String(mesh.userData.structureSystem ?? "");
+        const visualRole = String(mesh.userData.visualRole ?? "");
+        const isSkin = visualRole === "shell" || sys === "integumentary" || /body-shell|skin/i.test(mesh.name);
+        if (!isSkin) return;
+
+        ensureSkinMeshColorAttribute(mesh);
+
+        if (!cyanGridMaterialsMap.has(mesh)) {
+          const gridMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            emissive: new THREE.Color(0x0e7490),
+            emissiveIntensity: 0.45,
+            wireframe: true,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.55,
+            depthWrite: false,
+            depthTest: true,
+            side: THREE.DoubleSide,
+          });
+          ownedMaterials.add(gridMat);
+          cyanGridMaterialsMap.set(mesh, gridMat);
+        }
+        mesh.material = cyanGridMaterialsMap.get(mesh)!;
+        mesh.visible = true;
+      });
+    } else {
+      resetDangerShellColors();
+      anatomyMeshes.forEach((mesh) => {
+        const sys = String(mesh.userData.structureSystem ?? "");
+        const visualRole = String(mesh.userData.visualRole ?? "");
+        const isSkin = visualRole === "shell" || sys === "integumentary" || /body-shell|skin/i.test(mesh.name);
+        if (!isSkin) return;
+
+        const orig = originalMaterials.get(mesh);
+        if (orig) mesh.material = orig;
+        applyMeshVisibility(mesh);
+      });
+    }
+    const curKey = getHighlightOrganKey?.();
+    if (curKey) {
+      selectDangerOrganRef.current(curKey, {
+        painIntensity: getHighlightPainIntensity?.(),
+        organIntensities: getHighlightOrganIntensities?.(),
+      });
+    }
+    renderScene();
+  };
+
+  toggleOliveIrisRef.current = (active: boolean) => {
+    if (active) {
+      let systemsChanged = false;
+      if (hiddenSystems.has("sensory")) {
+        hiddenSystems.delete("sensory");
+        systemsChanged = true;
+      }
+      if (hiddenSystems.has("nervous")) {
+        hiddenSystems.delete("nervous");
+        systemsChanged = true;
+      }
+      if (systemsChanged) {
+        onHiddenSystemsChange(new Set(hiddenSystems));
+      }
+      anatomyMeshes.forEach((mesh) => {
+        if (!isOcularStructure(mesh.name)) return;
+        if (isOccludingEyeStructure(mesh.name)) {
+          mesh.visible = false;
+          return;
+        }
+
+        if (!oliveIrisMaterialsMap.has(mesh)) {
+          // Human Atlas (BodyParts3D) / bubblik525/head 표준: 소프트 아이보리 흰자위(sclera: 0xddd9ca), 올리브/세이지 그린 홍채(iris: 0x47685e), 투명 각막(cornea: 0xc0dce1)
+          const baseMat = originalMaterials.get(mesh) ?? mesh.material;
+          const ocularMat = createOcularMaterials(baseMat, mesh.name, ownedMaterials);
+          const singleMat = Array.isArray(ocularMat) ? ocularMat[0] : ocularMat;
+          oliveIrisMaterialsMap.set(mesh, singleMat);
+        }
+        mesh.material = oliveIrisMaterialsMap.get(mesh)!;
+        if (/iris|pupil/i.test(mesh.name)) {
+          mesh.renderOrder = 2;
+        } else if (/cornea/i.test(mesh.name)) {
+          mesh.renderOrder = 3;
+        } else {
+          mesh.renderOrder = 1;
+        }
+        mesh.visible = true;
+      });
+    } else {
+      anatomyMeshes.forEach((mesh) => {
+        if (oliveIrisMaterialsMap.has(mesh)) {
+          const orig = originalMaterials.get(mesh);
+          if (orig) mesh.material = orig;
+          applyMeshVisibility(mesh);
+        }
+      });
+    }
+    renderScene();
+  };
+
   focusSelectedMeshRef.current = () => {
     const targetMeshes = Array.from(selectedMeshes);
     if (targetMeshes.length === 0) return;
@@ -3418,7 +3912,11 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
 
   selectDangerOrganRef.current = (
     organKey: string,
-    options: { animateCamera?: boolean } = {},
+    options: {
+      animateCamera?: boolean;
+      painIntensity?: number;
+      organIntensities?: Record<string, number>;
+    } = {},
   ) => {
     const rawKeys = organKey
       .split(/[,+&|]/)
@@ -3431,15 +3929,86 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       return false;
     }
 
-    const includesSkeletal = rawKeys.some(
+    // 좌/우 측면성(laterality) 판별
+    const hasLeft = rawKeys.some((k) => k === "left" || k.startsWith("left_") || k.includes("왼쪽") || k.includes("좌측") || k.includes("(좌)"));
+    const hasRight = rawKeys.some((k) => k === "right" || k.startsWith("right_") || k.includes("오른쪽") || k.includes("우측") || k.includes("(우)"));
+    const targetSide: "left" | "right" | "both" = (hasLeft && !hasRight) ? "left" : (hasRight && !hasLeft) ? "right" : "both";
+
+    // 접두사(left_/right_)가 제거된 순수 해부학 키 목록
+    const normalizedKeys = rawKeys.map((k) => k.replace(/^(?:left|right)_/, ""));
+
+    const getMeshSide = (name: string): "left" | "right" | "midline" | "unknown" => {
+      const lower = name.toLowerCase();
+      if (lower.includes("왼쪽") || lower.includes("(좌)") || lower.includes("좌측")) return "left";
+      if (lower.includes("오른쪽") || lower.includes("(우)") || lower.includes("우측")) return "right";
+      if (lower.includes("중앙") || lower.includes("정중") || lower.includes("척추") || lower.includes("spine") || lower.includes("vertebra")) return "midline";
+
+      // Z-Anatomy 표준 작명 규칙: .l, _l, 접미 l (예: Deltoid_regionl, Posterior_region_of_arml)
+      if (
+        lower.endsWith(".l") ||
+        lower.endsWith("_l") ||
+        lower.includes(".l.") ||
+        lower.includes("_l_") ||
+        lower.includes("left") ||
+        (lower.endsWith("l") && !lower.endsWith("oral") && !lower.endsWith("heel") && !lower.endsWith("skull") && !lower.endsWith("canal") && !lower.endsWith("vessel"))
+      ) {
+        return "left";
+      }
+
+      // Z-Anatomy 표준 작명 규칙: .r, _r, 접미 r (예: Deltoid_regionr, Posterior_region_of_armr)
+      if (
+        lower.endsWith(".r") ||
+        lower.endsWith("_r") ||
+        lower.includes(".r.") ||
+        lower.includes("_r_") ||
+        lower.includes("right") ||
+        (lower.endsWith("r") && !lower.endsWith("posterior") && !lower.endsWith("anterior") && !lower.endsWith("superficial") && !lower.endsWith("intercondylar"))
+      ) {
+        return "right";
+      }
+
+      return "unknown";
+    };
+
+    const includesSkeletal = normalizedKeys.some(
       (k) =>
         k.includes("cervical") ||
         k.includes("spine") ||
         k.includes("skelet") ||
         k.includes("경추") ||
-        k.includes("척추"),
+        k.includes("척추") ||
+        k.includes("knee") ||
+        k.includes("무릎") ||
+        k.includes("shoulder") ||
+        k.includes("어깨") ||
+        k.includes("jaw") ||
+        k.includes("턱") ||
+        k.includes("scalp") ||
+        k.includes("두피") ||
+        k.includes("머리") ||
+        k.includes("hand") ||
+        k.includes("손") ||
+        k.includes("foot") ||
+        k.includes("발") ||
+        k.includes("pelvis") ||
+        k.includes("골반") ||
+        k.includes("lumbar") ||
+        k.includes("요추"),
     );
-    const includesNervous = rawKeys.some(
+    const includesJoints = normalizedKeys.some(
+      (k) =>
+        k.includes("joint") ||
+        k.includes("관절") ||
+        k.includes("knee") ||
+        k.includes("무릎") ||
+        k.includes("shoulder") ||
+        k.includes("어깨") ||
+        k.includes("wrist") ||
+        k.includes("손목") ||
+        k.includes("ankle") ||
+        k.includes("발목"),
+    );
+    const includesNervous = normalizedKeys.some(
       (k) =>
         k.includes("nerv") ||
         k.includes("신경") ||
@@ -3447,125 +4016,414 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         k.includes("뇌"),
     );
 
+    if (!savedHiddenSystemsBeforeDanger) {
+      savedHiddenSystemsBeforeDanger = new Set(hiddenSystems);
+    }
+
     // 모니터링 투시 모드: 대상 시스템과 신체 피부(integumentary)를 활성화
-    ANATOMY_SYSTEM_LAYERS.forEach((layer) => {
-      if (layer.id === "integumentary") return;
-      if (includesSkeletal && layer.id === "skeletal") return;
-      if (includesNervous && layer.id === "nervous") return;
-      hiddenSystems.add(layer.id);
-    });
-    hiddenSystems.delete("integumentary");
-    if (includesSkeletal) hiddenSystems.delete("skeletal");
-    if (includesNervous) hiddenSystems.delete("nervous");
-    onHiddenSystemsChange(new Set(hiddenSystems));
+    if (isCyanGridShellMode) {
+      ANATOMY_SYSTEM_LAYERS.forEach((layer) => {
+        if (layer.id !== "integumentary") {
+          hiddenSystems.add(layer.id);
+        }
+      });
+      hiddenSystems.delete("integumentary");
+      onHiddenSystemsChange(new Set(hiddenSystems));
+    } else {
+      ANATOMY_SYSTEM_LAYERS.forEach((layer) => {
+        if (layer.id === "integumentary") return;
+        if (includesSkeletal && layer.id === "skeletal") return;
+        if (includesJoints && layer.id === "joints") return;
+        if (includesNervous && layer.id === "nervous") return;
+        hiddenSystems.add(layer.id);
+      });
+      hiddenSystems.delete("integumentary");
+      if (includesSkeletal) hiddenSystems.delete("skeletal");
+      if (includesJoints) hiddenSystems.delete("joints");
+      if (includesNervous) hiddenSystems.delete("nervous");
+      onHiddenSystemsChange(new Set(hiddenSystems));
+    }
 
-    const matchSingleKey = (s: string, targetKey: string) => {
-      if (targetKey === "liver" || targetKey === "간") {
-        return s.includes("liver") || s.includes("vh_o_liver") || s.includes("간");
-      }
-      if (targetKey === "lung" || targetKey === "폐") {
-        return s.includes("lung") || s.includes("vh_o_lung") || s.includes("폐");
-      }
-      if (targetKey === "stomach" || targetKey === "위") {
-        return s.includes("stomach") || s.includes("vh_o_stomach") || s.includes("위");
-      }
-      if (targetKey === "heart" || targetKey === "심장") {
-        return s.includes("heart") || s.includes("vh_o_heart") || s.includes("심장");
-      }
-      if (targetKey === "kidney" || targetKey === "신장" || targetKey === "콩팥") {
-        return s.includes("kidney") || s.includes("vh_o_kidney") || s.includes("신장") || s.includes("콩팥");
-      }
-      if (targetKey === "colon" || targetKey === "대장" || targetKey === "결장" || targetKey === "직장") {
-        return (
-          s.includes("colon") ||
-          s.includes("large_intestine") ||
-          s.includes("large-intestine") ||
-          s.includes("대장") ||
-          s.includes("결장") ||
-          s.includes("직장") ||
-          s.includes("rectum")
-        );
-      }
-      if (targetKey === "pancreas" || targetKey === "췌장") {
-        return s.includes("pancreas") || s.includes("췌장");
-      }
-      if (targetKey === "gallbladder" || targetKey === "담낭" || targetKey === "쓸개") {
-        return s.includes("gallbladder") || s.includes("담낭") || s.includes("쓸개");
-      }
-      if (targetKey === "brain" || targetKey === "뇌") {
-        return s.includes("brain") || s.includes("cerebrum") || s.includes("뇌");
-      }
-      if (
-        targetKey === "cervical_spine" ||
-        targetKey === "cervical" ||
-        targetKey === "경추" ||
-        targetKey === "spine"
-      ) {
-        return (
-          s.includes("cervical") ||
-          s.includes("경추") ||
-          s.includes("atlas") ||
-          s.includes("axis") ||
-          (s.includes("vertebra") &&
-            (s.includes("c1") ||
-              s.includes("c2") ||
-              s.includes("c3") ||
-              s.includes("c4") ||
-              s.includes("c5") ||
-              s.includes("c6") ||
-              s.includes("c7")))
-        );
-      }
-      if (
-        targetKey === "nervous" ||
-        targetKey === "신경" ||
-        targetKey === "nerve" ||
-        targetKey === "spinal_cord"
-      ) {
-        return (
-          s.includes("nerv") ||
-          s.includes("spinal_cord") ||
-          s.includes("plexus") ||
-          s.includes("brachial") ||
-          s.includes("신경") ||
-          s.includes("척수")
-        );
-      }
-      return s.includes(targetKey);
-    };
-
-    const isMatch = (str: string) => {
-      const s = str.toLowerCase();
-      return rawKeys.some((targetKey) => matchSingleKey(s, targetKey));
-    };
-
-    const matchedMeshes: THREE.Mesh[] = anatomyMeshes.filter((m) => {
+    const isMeshMatched = (m: THREE.Mesh) => {
       const id = String(m.userData.anatomyId ?? m.name ?? "");
-      return isMatch(id);
-    });
+      const s = id.toLowerCase();
+      const sys = String(m.userData.structureSystem ?? "").toLowerCase();
+
+      // 측면성 불일치 내부 메시는 제외
+      const meshSide = getMeshSide(m.name || id);
+      if (targetSide === "left" && meshSide === "right") return false;
+      if (targetSide === "right" && meshSide === "left") return false;
+
+      // 비신경/비골격 구조물 필터링 플래그 (근육·혈관·근막 오탐 배제)
+      const isMuscular = sys === "muscular" || s.includes("muscle") || s.includes("근육");
+      const isVascular =
+        sys === "cardiovascular" ||
+        s.includes("artery") ||
+        s.includes("vein") ||
+        s.includes("동맥") ||
+        s.includes("정맥");
+      const isConnective =
+        sys === "joints" ||
+        s.includes("fascia") ||
+        s.includes("bursa") ||
+        s.includes("근막") ||
+        s.includes("점액낭");
+
+      // 그리드 외피 모드(모니터링)에서는 세밀한 근육/혈관/신경/결합조직/사지골격을 내부에서 솔리드 색상으로 덕지덕지 보여주지 않고,
+      // 오직 실제 주요 장기(내장기관: 폐, 간, 심장, 위, 신장, 대장, 췌장, 담낭 등)만 내부에서 투시하고,
+      // 팔/다리/손/목 등 사지 및 체표 통증/증상은 외피 그리드 와이어프레임 발광으로 단순화
+      if (isCyanGridShellMode) {
+        if (isMuscular || isVascular || isConnective) return false;
+        if (sys === "nervous" || sys === "skeletal") return false;
+      }
+
+      return normalizedKeys.some((targetKey) => {
+        if (targetKey === "liver" || targetKey === "간") {
+          return s.includes("liver") || s.includes("vh_o_liver") || s.includes("간");
+        }
+        if (targetKey === "lung" || targetKey === "폐") {
+          return s.includes("lung") || s.includes("vh_o_lung") || s.includes("폐");
+        }
+        if (targetKey === "stomach" || targetKey === "위") {
+          return s.includes("stomach") || s.includes("vh_o_stomach") || s.includes("위");
+        }
+        if (targetKey === "heart" || targetKey === "심장") {
+          return s.includes("heart") || s.includes("vh_o_heart") || s.includes("심장");
+        }
+        if (targetKey === "kidney" || targetKey === "신장" || targetKey === "콩팥") {
+          return s.includes("kidney") || s.includes("vh_o_kidney") || s.includes("신장") || s.includes("콩팥");
+        }
+        if (targetKey === "colon" || targetKey === "대장" || targetKey === "결장" || targetKey === "직장") {
+          return (
+            s.includes("colon") ||
+            s.includes("large_intestine") ||
+            s.includes("large-intestine") ||
+            s.includes("대장") ||
+            s.includes("결장") ||
+            s.includes("직장") ||
+            s.includes("rectum")
+          );
+        }
+        if (targetKey === "pancreas" || targetKey === "췌장") {
+          return s.includes("pancreas") || s.includes("췌장");
+        }
+        if (targetKey === "gallbladder" || targetKey === "담낭" || targetKey === "쓸개") {
+          return s.includes("gallbladder") || s.includes("담낭") || s.includes("쓸개");
+        }
+        if (targetKey === "brain" || targetKey === "뇌") {
+          return s.includes("brain") || s.includes("cerebrum") || s.includes("뇌");
+        }
+        if (
+          targetKey === "cervical_spine" ||
+          targetKey === "cervical" ||
+          targetKey === "경추" ||
+          targetKey === "spine"
+        ) {
+          // 경추 골격/신경근: 혈관(동맥/정맥)이나 근육, 근막은 배제
+          if (isVascular || isMuscular || isConnective) return false;
+          return (
+            s.includes("cervical") ||
+            s.includes("경추") ||
+            s.includes("atlas") ||
+            s.includes("axis") ||
+            (s.includes("vertebra") &&
+              (s.includes("c1") ||
+                s.includes("c2") ||
+                s.includes("c3") ||
+                s.includes("c4") ||
+                s.includes("c5") ||
+                s.includes("c6") ||
+                s.includes("c7")))
+          );
+        }
+        if (
+          targetKey === "nervous" ||
+          targetKey === "신경" ||
+          targetKey === "신경근" ||
+          targetKey === "nerve" ||
+          targetKey === "spinal_cord"
+        ) {
+          // 신경 구조물: 근육, 혈관, 근막, 관절낭 등 비신경 조직 엄격 배제!
+          if (isMuscular || isVascular || isConnective) return false;
+
+          // 신경계 계통 메시 우선 (장기처럼 신경도 직접 발광)
+          if (sys === "nervous") {
+            return true;
+          }
+
+          // C8-척골신경, 상완신경총, 척수, 말초신경, 경추 신경근 등
+          return (
+            s.includes("ulnar_nerve") ||
+            s.includes("ulnar nerve") ||
+            s.includes("brachial plexus") ||
+            s.includes("roots of brachial plexus") ||
+            s.includes("spinal_cord") ||
+            s.includes("신경") ||
+            s.includes("척수") ||
+            (s.includes("nerv") && !s.includes("innervat"))
+          );
+        }
+        if (targetKey === "knee" || targetKey === "무릎" || targetKey === "슬관절") {
+          return s.includes("patella") || s.includes("knee") || s.includes("무릎") || s.includes("femur") || s.includes("tibia") || s.includes("meniscus");
+        }
+        if (targetKey === "jaw" || targetKey === "턱" || targetKey === "하악" || targetKey === "악관절") {
+          return s.includes("mandible") || s.includes("maxilla") || s.includes("턱") || s.includes("temporomandibular");
+        }
+        if (targetKey === "scalp" || targetKey === "두피" || targetKey === "두개골" || targetKey === "머리") {
+          return s.includes("cranium") || s.includes("skull") || s.includes("scalp") || s.includes("두개골") || s.includes("두피") || s.includes("머리");
+        }
+        if (targetKey === "shoulder" || targetKey === "어깨") {
+          return s.includes("clavicle") || s.includes("scapula") || s.includes("shoulder") || s.includes("어깨") || s.includes("humerus") || s.includes("deltoid");
+        }
+        if (targetKey === "hand" || targetKey === "손" || targetKey === "손가락" || targetKey === "손목") {
+          if (isCyanGridShellMode) return false;
+          return s.includes("carpal") || s.includes("metacarpal") || s.includes("phalanx") || s.includes("hand") || s.includes("손");
+        }
+        if (targetKey === "foot" || targetKey === "발" || targetKey === "발목" || targetKey === "발가락") {
+          return s.includes("tarsal") || s.includes("metatarsal") || s.includes("foot") || s.includes("발") || s.includes("calcaneus");
+        }
+        if (targetKey === "spine" || targetKey === "척추" || targetKey === "허리" || targetKey === "요추") {
+          return s.includes("vertebra") || s.includes("lumbar") || s.includes("척추") || s.includes("요추") || s.includes("spine");
+        }
+        if (targetKey === "pelvis" || targetKey === "골반" || targetKey === "고관절") {
+          return s.includes("pelvis") || s.includes("ilium") || s.includes("ischium") || s.includes("pubis") || s.includes("골반") || s.includes("hip");
+        }
+        return s.includes(targetKey);
+      });
+    };
+
+    const matchedMeshes: THREE.Mesh[] = anatomyMeshes.filter((m) => isMeshMatched(m));
 
     if (matchedMeshes.length === 0) {
       scene.traverse((obj) => {
         if (obj instanceof THREE.Mesh) {
-          const id = String(obj.userData.anatomyId ?? obj.name ?? "");
-          if (isMatch(id) && !matchedMeshes.includes(obj)) {
+          if (isMeshMatched(obj) && !matchedMeshes.includes(obj)) {
             matchedMeshes.push(obj);
           }
         }
       });
     }
 
-    if (matchedMeshes.length > 0) {
-      stopDangerOrganHighlight();
+    if (matchedMeshes.length === 0 && (normalizedKeys.includes("all") || normalizedKeys.includes("general") || normalizedKeys.length > 0)) {
+      // 일반 기록 모니터링: 뷰어 신체 표면을 매칭하여 자동 관찰 모드 유지
+      anatomyMeshes.forEach((m) => {
+        if (isShellOrSurface(m) && !matchedMeshes.includes(m)) {
+          matchedMeshes.push(m);
+        }
+      });
+    }
 
+    const computeDangerShellVertices = (
+      _keys: string[],
+      organIntensities?: Record<string, number>,
+      defaultIntensity?: number,
+    ) => {
+      resetDangerShellColors();
+      const skinMeshes = anatomyMeshes.filter((m) => {
+        const sys = String(m.userData.structureSystem ?? "");
+        const visualRole = String(m.userData.visualRole ?? "");
+        return visualRole === "shell" || sys === "integumentary" || /body-shell|skin/i.test(m.name);
+      });
+      if (skinMeshes.length === 0) return;
+
+      const getRegionIntensity = (regionKeys: string[]): number => {
+        if (organIntensities) {
+          for (const k of regionKeys) {
+            if (typeof organIntensities[k] === "number") return organIntensities[k];
+            if (typeof organIntensities[`left_${k}`] === "number") return organIntensities[`left_${k}`];
+            if (typeof organIntensities[`right_${k}`] === "number") return organIntensities[`right_${k}`];
+          }
+        }
+        return typeof defaultIntensity === "number" ? defaultIntensity : 10;
+      };
+
+      const isShoulder = normalizedKeys.some((k) => k.includes("shoulder") || k.includes("어깨") || k.includes("deltoid") || k.includes("견갑"));
+      const isArm = isShoulder || normalizedKeys.some((k) => k.includes("arm") || k.includes("팔") || k.includes("hand") || k.includes("손") || k.includes("wrist") || k.includes("손목"));
+      const isHandOnly = normalizedKeys.some((k) => k.includes("hand") || k.includes("손") || k.includes("wrist") || k.includes("손목")) && !normalizedKeys.some((k) => k.includes("arm") || k.includes("팔") || k.includes("shoulder") || k.includes("어깨") || k.includes("deltoid"));
+      const isNeckOnly = normalizedKeys.some((k) => k.includes("cervical") || k.includes("경추") || k.includes("neck") || k.includes("목")) && !normalizedKeys.some((k) => k.includes("arm") || k.includes("팔") || k.includes("shoulder") || k.includes("hand") || k.includes("손"));
+      const isChest = normalizedKeys.some((k) => k.includes("lung") || k.includes("폐") || k.includes("chest") || k.includes("thorax") || k.includes("가슴") || k.includes("흉부") || k.includes("rib"));
+      const isAbdomen = normalizedKeys.some((k) => k.includes("abdomen") || k.includes("복부") || k.includes("배") || k.includes("liver") || k.includes("간") || k.includes("stomach") || k.includes("위"));
+      const isKnee = normalizedKeys.some((k) => k.includes("knee") || k.includes("무릎"));
+      const isFoot = normalizedKeys.some((k) => k.includes("foot") || k.includes("발"));
+      const isHead = normalizedKeys.some((k) => k.includes("head") || k.includes("머리") || k.includes("두통") || k.includes("scalp"));
+
+      if (!isArm && !isHandOnly && !isNeckOnly && !isChest && !isAbdomen && !isKnee && !isFoot && !isHead) {
+        return;
+      }
+
+      const bounds = currentBodyBounds || new THREE.Box3().setFromObject(skinMeshes[0]);
+      const size = bounds.getSize(new THREE.Vector3());
+      const center = bounds.getCenter(new THREE.Vector3());
+      const tempV = new THREE.Vector3();
+
+      skinMeshes.forEach((mesh) => {
+        ensureSkinMeshColorAttribute(mesh);
+        const posAttr = mesh.geometry.attributes.position;
+        if (!posAttr) return;
+        const vertexCount = posAttr.count;
+        const nameLower = mesh.name.toLowerCase();
+
+        const meshSide = getMeshSide(mesh.name);
+        // 측면성 불일치 외피 메시는 즉시 제외 (예: targetSide가 left면 right 외피 메시 완전 배제)
+        if (targetSide === "left" && meshSide === "right") return;
+        if (targetSide === "right" && meshSide === "left") return;
+
+        // 1) 개별 분할 외피 메시 이름 기준 직접 매칭
+        const isHandMesh = (nameLower.includes("hand") || nameLower.includes("digit") || nameLower.includes("palm") || nameLower.includes("wrist") || ((nameLower.includes("nail") || nameLower.includes("perionyx")) && !nameLower.includes("foot"))) && !nameLower.includes("foot");
+        const isShoulderMesh = nameLower.includes("shoulder") || nameLower.includes("deltoid") || nameLower.includes("clavic") || nameLower.includes("scapul");
+        const isArmMesh = isHandMesh || isShoulderMesh || nameLower.includes("arm") || nameLower.includes("elbow") || nameLower.includes("forearm");
+        const isNeckMesh = nameLower.includes("neck") || nameLower.includes("cervical");
+        const isChestMesh = nameLower.includes("chest") || nameLower.includes("thorax") || nameLower.includes("pectoral") || nameLower.includes("rib");
+        const isAbdomenMesh = nameLower.includes("abdomen") || nameLower.includes("belly") || nameLower.includes("epigastric");
+        const isKneeMesh = nameLower.includes("knee") || nameLower.includes("patella");
+        const isFootMesh = nameLower.includes("foot") || nameLower.includes("toe") || nameLower.includes("sole") || nameLower.includes("heel") || nameLower.includes("ankle") || ((nameLower.includes("nail") || nameLower.includes("perionyx")) && nameLower.includes("foot"));
+        const isHeadMesh = nameLower.includes("head") || nameLower.includes("scalp") || nameLower.includes("face") || nameLower.includes("cranial") || nameLower.includes("skull") || nameLower.includes("oral") || nameLower.includes("auricle");
+
+        const vMap = new Map<number, number>();
+        let fullyMatched = false;
+        let fullIntensity = 10;
+
+        const canFullyMatch = targetSide === "both" || meshSide === targetSide;
+
+        if (canFullyMatch) {
+          if (isHandOnly && isHandMesh) {
+            fullyMatched = true;
+            fullIntensity = getRegionIntensity(["hand", "손", "wrist", "손목"]);
+          } else if (isShoulder && isShoulderMesh) {
+            fullyMatched = true;
+            fullIntensity = getRegionIntensity(["shoulder", "어깨", "deltoid"]);
+          } else if (isArm && isArmMesh) {
+            fullyMatched = true;
+            fullIntensity = getRegionIntensity(["arm", "팔", "shoulder", "어깨", "hand", "손"]);
+          } else if (isNeckOnly && isNeckMesh) {
+            fullyMatched = true;
+            fullIntensity = getRegionIntensity(["cervical", "경추", "neck", "목"]);
+          } else if (isChest && isChestMesh) {
+            fullyMatched = true;
+            fullIntensity = getRegionIntensity(["lung", "폐", "chest", "thorax", "가슴", "흉부"]);
+          } else if (isAbdomen && isAbdomenMesh) {
+            fullyMatched = true;
+            fullIntensity = getRegionIntensity(["abdomen", "복부", "배", "liver", "간", "stomach", "위"]);
+          } else if (isKnee && isKneeMesh) {
+            fullyMatched = true;
+            fullIntensity = getRegionIntensity(["knee", "무릎"]);
+          } else if (isFoot && isFootMesh) {
+            fullyMatched = true;
+            fullIntensity = getRegionIntensity(["foot", "발"]);
+          } else if (isHead && isHeadMesh) {
+            fullyMatched = true;
+            fullIntensity = getRegionIntensity(["head", "머리", "두통", "scalp"]);
+          }
+        }
+
+        if (fullyMatched) {
+          for (let i = 0; i < vertexCount; i++) {
+            vMap.set(i, fullIntensity);
+          }
+        } else {
+          // 2) 단일 통 외피(여성형 아틀라스 등) 또는 복합 정점 좌표 기반 공간 매칭
+          mesh.updateMatrixWorld(true);
+          const matrixWorld = mesh.matrixWorld;
+
+          for (let i = 0; i < vertexCount; i++) {
+            tempV.fromBufferAttribute(posAttr, i).applyMatrix4(matrixWorld);
+
+            // 환자 기준 좌우 필터링 (Three.js anterior 뷰: 좌측 tempV.x > center.x, 우측 tempV.x < center.x)
+            if (targetSide === "left" && tempV.x <= center.x) continue;
+            if (targetSide === "right" && tempV.x >= center.x) continue;
+
+            const dx = Math.abs(tempV.x - center.x);
+            const dy = tempV.y;
+
+            let matched = false;
+            let matchedIntensity = 10;
+
+            if (isHandOnly) {
+              if (dx > size.x * 0.16 && dy <= center.y + size.y * 0.08 && dy >= center.y - size.y * 0.42) {
+                matched = true;
+                matchedIntensity = getRegionIntensity(["hand", "손", "wrist", "손목"]);
+              }
+            } else if (isArm) {
+              if (dx > size.x * 0.12 && dy <= center.y + size.y * 0.33 && dy >= center.y - size.y * 0.42) {
+                matched = true;
+                matchedIntensity = getRegionIntensity(["arm", "팔", "shoulder", "어깨", "hand", "손"]);
+              }
+            } else if (isNeckOnly) {
+              if (dx <= size.x * 0.16 && dy >= center.y + size.y * 0.26 && dy <= center.y + size.y * 0.38) {
+                matched = true;
+                matchedIntensity = getRegionIntensity(["cervical", "경추", "neck", "목"]);
+              }
+            }
+
+            if (!matched && isChest) {
+              if (dx <= size.x * 0.22 && dy >= center.y - size.y * 0.04 && dy <= center.y + size.y * 0.24 && tempV.z > center.z - size.z * 0.12) {
+                matched = true;
+                matchedIntensity = getRegionIntensity(["lung", "폐", "chest", "thorax", "가슴", "흉부"]);
+              }
+            }
+
+            if (!matched && isAbdomen) {
+              if (dx <= size.x * 0.20 && dy >= center.y - size.y * 0.20 && dy < center.y - size.y * 0.04 && tempV.z > center.z - size.z * 0.12) {
+                matched = true;
+                matchedIntensity = getRegionIntensity(["abdomen", "복부", "배", "liver", "간", "stomach", "위"]);
+              }
+            }
+
+            if (!matched && isKnee && Math.abs(dy - (center.y - size.y * 0.31)) <= size.y * 0.09) {
+              matched = true;
+              matchedIntensity = getRegionIntensity(["knee", "무릎"]);
+            }
+            if (!matched && isFoot && dy <= bounds.min.y + size.y * 0.18) {
+              matched = true;
+              matchedIntensity = getRegionIntensity(["foot", "발"]);
+            }
+            if (!matched && isHead && dy >= center.y + size.y * 0.35) {
+              matched = true;
+              matchedIntensity = getRegionIntensity(["head", "머리", "두통", "scalp"]);
+            }
+
+            if (matched) {
+              vMap.set(i, matchedIntensity);
+            }
+          }
+        }
+
+        if (vMap.size > 0) {
+          activeDangerShellVertices.set(mesh, vMap);
+        }
+      });
+    };
+
+    stopDangerOrganHighlight();
+
+    if (isCyanGridShellMode) {
+      computeDangerShellVertices(rawKeys, options.organIntensities, options.painIntensity);
+    }
+
+    if (matchedMeshes.length > 0 || getActiveDangerShellVertexCount() > 0) {
+      currentDangerIntensity = options.painIntensity;
+
+      dangerOrganMeshes.clear();
       matchedMeshes.forEach((mesh) => {
-        mesh.visible = true;
-        const orig = originalMaterials.get(mesh) ?? mesh.material;
-        mesh.material = createDangerOrganHighlightMaterials(orig);
-        mesh.renderOrder = 25;
+        dangerOrganMeshes.add(mesh);
+        let meshIntensity = options.painIntensity;
+        if (options.organIntensities) {
+          const mName = mesh.name.toLowerCase();
+          const aId = String(mesh.userData.anatomyId ?? "").toLowerCase();
+          for (const [k, int] of Object.entries(options.organIntensities)) {
+            const kLower = k.toLowerCase().replace(/^(left_|right_)/, "");
+            if (mName.includes(kLower) || aId.includes(kLower)) {
+              meshIntensity = int;
+              break;
+            }
+          }
+        }
+        applyDangerHighlightToMesh(mesh, meshIntensity);
       });
 
-      startDangerPulse(matchedMeshes);
+      if (typeof options.painIntensity !== "number" || options.painIntensity > 0 || getActiveDangerShellVertexCount() > 0) {
+        startDangerPulse(matchedMeshes);
+      }
 
       // 모니터링 대상 장기 및 피부 외 다른 계통(뼈 포함) 숨김 동기화
       anatomyMeshes.forEach(applyMeshVisibility);
@@ -4198,6 +5056,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
 
   // 3D 회전 제어를 위한 OS 내장 커서 (외곽선 마우스 오버 시 grab, 드래그 회전 시 grabbing)
   const ROTATE_CURSOR = "grab";
+  const tempOutlinePointer = new THREE.Vector2();
 
   const setPointerFromEvent = (event: PointerEvent) => {
     const bounds = canvas.getBoundingClientRect();
@@ -4252,9 +5111,9 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       };
     }
 
-    // 2. 인체와 검정 배경 사이의 외곽선 마진 (약 8px로 좁혀 작은 신체 선택 방해 최소화)
+    // 2. 인체와 검정 배경 사이의 실제 신체 외곽선 마진 (8방향 오프셋 레이캐스팅으로 정밀 실루엣 감지)
     const bounds = canvas.getBoundingClientRect();
-    const marginPx = 8;
+    const marginPx = 20; // 신체 외곽선 드래그 회전 조작을 위한 자연스러운 여유 마진 (20px)
     const dx = (marginPx / Math.max(bounds.width, 1)) * 2;
     const dy = (marginPx / Math.max(bounds.height, 1)) * 2;
 
@@ -4264,16 +5123,21 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       [-dx * 0.707, dy * 0.707], [dx * 0.707, dy * 0.707],
     ];
 
-    const tempPointer = new THREE.Vector2();
-    for (const [ox, oy] of offsets) {
-      tempPointer.set(pointer.x + ox, pointer.y + oy);
-      raycaster.setFromCamera(tempPointer, camera);
-      const marginHits = raycaster.intersectObjects(
-        anatomyMeshes.filter((m) => m.visible),
-        false,
-      );
-      if (marginHits.length > 0) {
-        return { zone: "outline" };
+    const activeVisibleMeshes = anatomyMeshes.filter(
+      (m) =>
+        m.visible &&
+        (!isFasciaHidden || !isFasciaStructure(m)) &&
+        (!isPeritoneumHidden || !isPeritoneumStructure(m)),
+    );
+
+    if (activeVisibleMeshes.length > 0) {
+      for (let i = 0; i < offsets.length; i++) {
+        tempOutlinePointer.set(pointer.x + offsets[i][0], pointer.y + offsets[i][1]);
+        raycaster.setFromCamera(tempOutlinePointer, camera);
+        const marginHits = raycaster.intersectObjects(activeVisibleMeshes, false);
+        if (marginHits.length > 0) {
+          return { zone: "outline" };
+        }
       }
     }
 
@@ -4307,7 +5171,6 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         controls.enabled = false;
         currentStroke = { samples: [], touchedMeshes: [] };
         sprayAgitationState = createSprayAgitationState(event.clientX, event.clientY, performance.now());
-        recordPaintSample(hit, 0);
         pointerGesture = {
           pointerId: event.pointerId,
           mode: "paint" as const,
@@ -4316,6 +5179,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
           lastY: event.clientY,
         };
         setDynamicPixelRatio(dynamicDragPixelRatio);
+        recordPaintSample(hit, 0);
         canvas.style.cursor = "crosshair";
         return;
       }
@@ -4466,6 +5330,8 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
 
   let hoverFrameId: number | undefined;
   let pendingHoverEvent: PointerEvent | null = null;
+  let lastHoverClientX = -9999;
+  let lastHoverClientY = -9999;
 
   const processHover = () => {
     hoverFrameId = undefined;
@@ -4476,6 +5342,13 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   };
 
   const requestHover = (event: PointerEvent) => {
+    // 마우스 미세 떨림(2px 미만) 필터링: 제자리 떨림 시 불필요한 레이캐스팅 연산 원천 차단
+    const dx = event.clientX - lastHoverClientX;
+    const dy = event.clientY - lastHoverClientY;
+    if (dx * dx + dy * dy < 4) return;
+    lastHoverClientX = event.clientX;
+    lastHoverClientY = event.clientY;
+
     pendingHoverEvent = event;
     if (hoverFrameId !== undefined) return;
     hoverFrameId = window.requestAnimationFrame(processHover);
@@ -4487,6 +5360,8 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       hoverFrameId = undefined;
     }
     pendingHoverEvent = null;
+    lastHoverClientX = -9999;
+    lastHoverClientY = -9999;
     if (hoveredMesh && !isMeshSelected(hoveredMesh)) {
       restoreMeshMaterial(hoveredMesh);
       renderScene();
@@ -4501,14 +5376,35 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   };
   canvas.addEventListener("pointerleave", handlePointerLeave);
 
+  // 스마트 절전 1: 브라우저 탭 전환(화상회의 탭 등) 시 펄스 렌더링 즉시 0% 정지, 복귀 시 부드럽게 재개
   const handleVisibilityChange = () => {
     if (document.hidden) {
-      stopDangerPulse();
+      pauseDangerPulse();
     } else {
+      resumeDangerPulse();
       requestRender();
     }
   };
   document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  // 스마트 절전 2: 화면 스크롤로 3D 뷰어가 화면 밖으로 벗어나면 펄스 루프 완전 정지(GPU 0%), 재진입 시 재개
+  let bodyMapVisibilityObserver: IntersectionObserver | null = null;
+  if (typeof IntersectionObserver !== "undefined") {
+    bodyMapVisibilityObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            resumeDangerPulse();
+            requestRender();
+          } else {
+            pauseDangerPulse();
+          }
+        }
+      },
+      { threshold: 0.05 },
+    );
+    bodyMapVisibilityObserver.observe(viewport ?? canvas);
+  }
 
   const handlePointerMove = (event: PointerEvent) => {
     if (!pointerGesture || pointerGesture.pointerId !== event.pointerId) {
@@ -4779,6 +5675,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     controls.dispose();
     dracoLoader.dispose();
     resizeObserver.disconnect();
+    bodyMapVisibilityObserver?.disconnect();
     scene.traverse((object) => {
       if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) {
         object.geometry.dispose();
@@ -4786,117 +5683,172 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     });
     sourceMaterials.forEach((material) => material.dispose());
     ownedMaterials.forEach((material) => material.dispose());
+    env.texture.dispose();
     renderer.dispose();
   }
 
   try {
-    const [metadata, loadedAssets] = await Promise.all([
-      metadataPromise,
-      Promise.all(manifest.assets.map(async (asset) => ({ asset, ...await loadAsset(asset) }))),
-    ]);
-    if (isDisposed()) return cleanup;
-
     const atlasGroup = new THREE.Group();
-    const isStandaloneSkeletonAtlas = manifest.assets.every(
-      (asset) => asset.visualRole === "skeleton",
-    );
-    const dimsShellForReadableInternals = manifest.id
-      === "tripo-triangle2m-v49-internals-preview"
-      && manifest.assets.some((asset) => (
-        asset.visualRole === "skeleton" || asset.visualRole === "organ"
-      ));
-    for (const { asset, model, animations } of loadedAssets) {
-      model.traverse((object) => {
-        if (!(object instanceof THREE.Mesh)) return;
-        materialsOf(object.material).forEach((material) => sourceMaterials.add(material));
-        inheritAnatomyMetadata(object);
-        const adapted = adaptAnatomyMesh(object, asset, manifest, metadata);
-        object.visible = Boolean(adapted);
-        if (!adapted) return;
 
-        const layerSystem = anatomyLayerSystem(adapted.system);
+    let metadata: Awaited<ReturnType<typeof loadAnatomyMetadata>> = new Map();
 
-        object.userData.anatomyId = adapted.anatomyId;
-        object.userData.anatomySourceKey = adapted.sourceKey;
-        object.userData.structureLabel = adapted.label;
+    if (modelSource === "humanAtlas") {
+      onProgress(5);
+      const atlasData = await loadHumanAtlasMeshes({
+        signal,
+        onProgress: (pct) => {
+          if (!isDisposed()) onProgress(pct);
+        },
+        ownedMaterials,
+      });
+      if (signal.aborted || isDisposed()) return cleanup;
+
+      atlasData.meshes.forEach((object) => {
+        const rawSystem = object.userData.structureSystem as string;
+        const layerSystem = anatomyLayerSystem(rawSystem);
         object.userData.structureSystem = layerSystem;
-        object.userData.visualRole = adapted.visualRole;
-        object.userData.contextVisible = Boolean(adapted);
+        object.userData.structureLabel = object.name;
+        object.userData.anatomySourceKey = object.name;
+        object.userData.anatomyId = object.userData.anatomyId || object.name;
+        ensureMeshBvh(object);
         anatomyMeshes.push(object);
         readySystems.add(layerSystem);
-        const isFemaleComposite = manifest.id === "tripo-triangle2m-v49-internals-preview";
-        const isAdaptiveSurfaceFlowGuide = isFemaleComposite
-          && asset.system === "adaptive-surface-flow-guide";
-        const isRegionalBoundaryGuide = isFemaleComposite
-          && asset.system === "regional-boundary-guide";
-        const isFemaleScalpAponeurosis = isFemaleComposite
-          && adapted.system === "muscular"
-          && adapted.anatomyId.includes("epicranial-aponeurosis");
-        object.material = isRegionalBoundaryGuide
-          ? createRegionalBoundaryMaterial(
-            ownedMaterials,
-            dimsShellForReadableInternals
-              ? INTERNALS_READABILITY_STYLE.regionalBoundaryOpacity
-              : undefined,
-          )
-          : isAdaptiveSurfaceFlowGuide
-          ? createAdaptiveFlowGuideMaterial(
-            ownedMaterials,
-            /Detail/i.test(object.name),
-            dimsShellForReadableInternals
-              ? (/Detail/i.test(object.name)
-                ? INTERNALS_READABILITY_STYLE.detailGuideOpacity
-                : INTERNALS_READABILITY_STYLE.bodyGuideOpacity)
-              : undefined,
-          )
-          : isFemaleScalpAponeurosis
-            ? createMatteScalpMaterials(object.material, ownedMaterials)
-          : isFemaleComposite && adapted.visualRole === "shell"
-            ? createHolographicMaterials(
+        originalMaterials.set(object, object.material);
+        applyMeshVisibility(object);
+        if (object.userData.visualRole === "shell") {
+          object.renderOrder = 5;
+        } else if (isOcularStructure(object.name)) {
+          if (isOccludingEyeStructure(object.name)) {
+            object.visible = false;
+            object.userData.contextVisible = false;
+          } else if (/iris|pupil/i.test(object.name)) {
+            object.renderOrder = 2;
+          } else if (/cornea/i.test(object.name)) {
+            object.renderOrder = 3;
+          } else {
+            object.renderOrder = 1;
+          }
+        }
+        selectableMeshes.push(object);
+        atlasGroup.add(object);
+      });
+    } else {
+      const [loadedMetadata, loadedAssets] = await Promise.all([
+        metadataPromise,
+        Promise.all(manifest.assets.map(async (asset) => ({ asset, ...await loadAsset(asset) }))),
+      ]);
+      metadata = loadedMetadata;
+      if (isDisposed()) return cleanup;
+
+      const isStandaloneSkeletonAtlas = manifest.assets.every(
+        (asset) => asset.visualRole === "skeleton",
+      );
+      const dimsShellForReadableInternals = manifest.id
+        === "tripo-triangle2m-v49-internals-preview"
+        && manifest.assets.some((asset) => (
+          asset.visualRole === "skeleton" || asset.visualRole === "organ"
+        ));
+      for (const { asset, model, animations } of loadedAssets) {
+        model.traverse((object) => {
+          if (!(object instanceof THREE.Mesh)) return;
+          materialsOf(object.material).forEach((material) => sourceMaterials.add(material));
+          inheritAnatomyMetadata(object);
+          const adapted = adaptAnatomyMesh(object, asset, manifest, metadata);
+          object.visible = Boolean(adapted);
+          if (!adapted) return;
+
+          const layerSystem = anatomyLayerSystem(adapted.system);
+
+          object.userData.anatomyId = adapted.anatomyId;
+          object.userData.anatomySourceKey = adapted.sourceKey;
+          object.userData.structureLabel = adapted.label;
+          object.userData.structureSystem = layerSystem;
+          object.userData.visualRole = adapted.visualRole;
+          object.userData.contextVisible = Boolean(adapted);
+          ensureMeshBvh(object);
+          anatomyMeshes.push(object);
+          readySystems.add(layerSystem);
+          const isFemaleComposite = manifest.id === "tripo-triangle2m-v49-internals-preview";
+          const isAdaptiveSurfaceFlowGuide = isFemaleComposite
+            && asset.system === "adaptive-surface-flow-guide";
+          const isRegionalBoundaryGuide = isFemaleComposite
+            && asset.system === "regional-boundary-guide";
+          const isFemaleScalpAponeurosis = isFemaleComposite
+            && adapted.system === "muscular"
+            && adapted.anatomyId.includes("epicranial-aponeurosis");
+          object.material = isRegionalBoundaryGuide
+            ? createRegionalBoundaryMaterial(
+              ownedMaterials,
+              dimsShellForReadableInternals
+                ? INTERNALS_READABILITY_STYLE.regionalBoundaryOpacity
+                : undefined,
+            )
+            : isAdaptiveSurfaceFlowGuide
+            ? createAdaptiveFlowGuideMaterial(
+              ownedMaterials,
+              /Detail/i.test(object.name),
+              dimsShellForReadableInternals
+                ? (/Detail/i.test(object.name)
+                  ? INTERNALS_READABILITY_STYLE.detailGuideOpacity
+                  : INTERNALS_READABILITY_STYLE.bodyGuideOpacity)
+                : undefined,
+            )
+            : isOcularStructure(object.name)
+              ? createOcularMaterials(object.material, object.name, ownedMaterials)
+            : isDentalStructure(object.name)
+              ? createDentalMaterials(object.material, ownedMaterials)
+            : isFemaleScalpAponeurosis
+              ? createMatteScalpMaterials(object.material, ownedMaterials)
+            : isFemaleComposite && adapted.visualRole === "shell"
+              ? createHolographicMaterials(
+                object.material,
+                adapted.visualRole,
+                adapted.system,
+                ownedMaterials,
+                undefined,
+                object.name,
+              )
+            : createHolographicMaterials(
               object.material,
               adapted.visualRole,
               adapted.system,
               ownedMaterials,
-            )
-          : createHolographicMaterials(
-            object.material,
-            adapted.visualRole,
-            adapted.system,
-            ownedMaterials,
-            dimsShellForReadableInternals
-              ? INTERNALS_READABILITY_STYLE.skeletonOpacity
-              : isStandaloneSkeletonAtlas ? 1 : undefined,
-          );
-        if (object.userData.tissueType === "costal-cartilage") {
-          applyCostalCartilageStyle(object.material, false);
-        }
-        originalMaterials.set(object, object.material);
-        // 초기 남성 화면은 외피·골격만 보인다. 다른 계통도 파싱해 scene에는 두되
-        // 사용자가 버튼으로 켜기 전까지 렌더링하지 않는다.
-        applyMeshVisibility(object);
-        if (adapted.visualRole === "shell") {
-          object.renderOrder = isRegionalBoundaryGuide
-            ? 7
-            : isAdaptiveSurfaceFlowGuide ? 6 : 4;
-          if (isRegionalBoundaryGuide || isAdaptiveSurfaceFlowGuide) {
-            object.raycast = () => undefined;
+              dimsShellForReadableInternals
+                ? INTERNALS_READABILITY_STYLE.skeletonOpacity
+                : isStandaloneSkeletonAtlas ? 1 : undefined,
+              object.name,
+            );
+          if (object.userData.tissueType === "costal-cartilage") {
+            applyCostalCartilageStyle(object.material, false);
+          }
+          originalMaterials.set(object, object.material);
+          // 초기 남성 화면은 외피·골격만 보인다. 다른 계통도 파싱해 scene에는 두되
+          // 사용자가 버튼으로 켜기 전까지 렌더링하지 않는다.
+          applyMeshVisibility(object);
+          if (adapted.visualRole === "shell") {
+            object.renderOrder = isRegionalBoundaryGuide
+              ? 7
+              : isAdaptiveSurfaceFlowGuide ? 6 : 4;
+            if (isRegionalBoundaryGuide || isAdaptiveSurfaceFlowGuide) {
+              object.raycast = () => undefined;
+            }
+          }
+          if (adapted.selectable) selectableMeshes.push(object);
+        });
+        const declaredClips = new Set(asset.animationClips ?? []);
+        if (declaredClips.size > 0 && animations.length > 0) {
+          const mixer = new THREE.AnimationMixer(model);
+          animationMixers.push(mixer);
+          for (const clip of animations) {
+            if (!declaredClips.has(clip.name)) continue;
+            const action = mixer.clipAction(clip);
+            action.setLoop(THREE.LoopOnce, 1);
+            action.clampWhenFinished = true;
+            handPoseActions.set(clip.name as HandPose, action);
           }
         }
-        if (adapted.selectable) selectableMeshes.push(object);
-      });
-      const declaredClips = new Set(asset.animationClips ?? []);
-      if (declaredClips.size > 0 && animations.length > 0) {
-        const mixer = new THREE.AnimationMixer(model);
-        animationMixers.push(mixer);
-        for (const clip of animations) {
-          if (!declaredClips.has(clip.name)) continue;
-          const action = mixer.clipAction(clip);
-          action.setLoop(THREE.LoopOnce, 1);
-          action.clampWhenFinished = true;
-          handPoseActions.set(clip.name as HandPose, action);
-        }
+        atlasGroup.add(model);
       }
-      atlasGroup.add(model);
     }
     onSystemsReady(new Set(readySystems));
 
@@ -4936,7 +5888,9 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       if (!group) return;
       group.traverse((object) => {
         if (object instanceof THREE.Mesh && object.userData.lazyLayerId === layerId) {
-          object.userData.contextVisible = visible;
+          const isEye = isOcularStructure(object.name);
+          const isOccluded = isOccludingEyeStructure(object.name);
+          object.userData.contextVisible = isEye ? !isOccluded : visible;
           applyMeshVisibility(object);
         }
       });
@@ -4959,7 +5913,10 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         materialsOf(object.material).forEach((material) => sourceMaterials.add(material));
         inheritAnatomyMetadata(object);
         const adapted = adaptAnatomyMesh(object, asset, manifest, metadata);
-        object.visible = Boolean(adapted) && layer.triggerFocus.includes(activeLazyFocus);
+        const isEye = isOcularStructure(object.name);
+        const isOccluded = isOccludingEyeStructure(object.name);
+        const contextVisible = isEye ? !isOccluded : layer.triggerFocus.includes(activeLazyFocus);
+        object.visible = Boolean(adapted) && contextVisible;
         if (!adapted) return;
 
         const layerSystem = anatomyLayerSystem(adapted.system);
@@ -4970,11 +5927,16 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         object.userData.structureSystem = layerSystem;
         object.userData.visualRole = adapted.visualRole;
         object.userData.lazyLayerId = layer.id;
-        object.userData.contextVisible = layer.triggerFocus.includes(activeLazyFocus);
+        object.userData.contextVisible = contextVisible;
+        ensureMeshBvh(object);
         anatomyMeshes.push(object);
         readySystems.add(layerSystem);
         selectableMeshes.push(object);
-        object.material = isFemaleComposite
+        object.material = isEye
+          ? createOcularMaterials(object.material, object.name, ownedMaterials)
+          : isDentalStructure(object.name)
+          ? createDentalMaterials(object.material, ownedMaterials)
+          : isFemaleComposite
           && adapted.system === "muscular"
           && adapted.anatomyId.includes("epicranial-aponeurosis")
           ? createMatteScalpMaterials(object.material, ownedMaterials)
@@ -4983,7 +5945,21 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
             adapted.visualRole,
             adapted.system,
             ownedMaterials,
+            undefined,
+            object.name,
           );
+        if (isEye) {
+          if (isOccluded) {
+            object.visible = false;
+            object.userData.contextVisible = false;
+          } else if (/iris|pupil/i.test(object.name)) {
+            object.renderOrder = 2;
+          } else if (/cornea/i.test(object.name)) {
+            object.renderOrder = 3;
+          } else {
+            object.renderOrder = 1;
+          }
+        }
         if (object.userData.tissueType === "costal-cartilage") {
           applyCostalCartilageStyle(object.material, activeLazyFocus === "upper");
         }
@@ -5141,8 +6117,10 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       min: normalizedBounds.min.y,
       max: normalizedBounds.max.y,
     };
+
     const presets = createFocusPresets(normalizedBounds);
     currentFocusPresets = presets;
+    currentBodyBounds = normalizedBounds;
     fullBodyReferenceDistance = presets.full.position.distanceTo(presets.full.target);
     camera.position.copy(presets.full.position);
     controls.target.copy(presets.full.target);
