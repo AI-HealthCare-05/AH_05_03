@@ -214,6 +214,8 @@ AuthoritativeEvidenceType = Literal[
     "health_records",
 ]
 
+HealthAssistantResponseMode = Literal["answer", "clarify"]
+
 
 class HealthAssistantScopeDecision(BaseModel):
     """메인 답변 전에 실행하는 서비스 범위 판정 및 쿼리 인리치먼트 결과."""
@@ -226,6 +228,15 @@ class HealthAssistantScopeDecision(BaseModel):
     required_evidence_types: list[AuthoritativeEvidenceType] = Field(
         default_factory=list,
         description="질문에 답하기 위해 모두 충족해야 하는 승인 근거 종류",
+    )
+    response_mode: HealthAssistantResponseMode = Field(
+        default="answer",
+        description="현재 정보로 답변할지, 개인화된 판단 전에 확인 질문을 먼저 할지 여부",
+    )
+    clarifying_question: str | None = Field(
+        default=None,
+        max_length=240,
+        description="response_mode=clarify일 때 건강정보나 권고를 포함하지 않는 단 하나의 확인 질문",
     )
     allowed_health_request: str | None = Field(
         default=None,

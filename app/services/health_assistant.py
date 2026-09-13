@@ -70,6 +70,9 @@ _EXPLICIT_PAIN_INTENSITY_PATTERN = re.compile(
     r"|(?<!\d)(?:10|[0-9])\s*(?:점|/\s*10)(?!\d)"
 )
 
+_SUPPLEMENT_DISCLAIMER = "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다."
+_SUPPLEMENT_TOPIC_KEYWORDS = ("영양제", "건강기능식품", "보충제", "오메가3", "유산균", "홍삼", "마그네슘")
+
 _FOOD_NUTRITION_KEYWORDS = (
     "칼로리",
     "열량",
@@ -963,6 +966,23 @@ class HealthAssistantService:
             response.needs_confirmation = True
         return response
 
+    @staticmethod
+    def _remove_irrelevant_supplement_disclaimer(
+        response: HealthAssistantResponse,
+        request: HealthAssistantChatRequest,
+    ) -> HealthAssistantResponse:
+        """음식·식단의 '영양'을 영양제로 오인해 붙인 고정 문구를 제거한다."""
+        conversation = " ".join(message.content for message in request.messages if message.role == "user")
+        if any(keyword in conversation for keyword in _SUPPLEMENT_TOPIC_KEYWORDS):
+            return response
+        if not response.assistant_message.startswith(_SUPPLEMENT_DISCLAIMER):
+            return response
+
+        cleaned = response.assistant_message.removeprefix(_SUPPLEMENT_DISCLAIMER).lstrip()
+        if cleaned:
+            response.assistant_message = cleaned
+        return response
+
     async def respond(
         self,
         request: HealthAssistantChatRequest,
@@ -1062,6 +1082,7 @@ class HealthAssistantService:
             response = HealthAssistantResponse.model_validate(llm_res.model_dump())
             self._attach_tool_result_to_response(response, tool_result)
 
+        response = self._remove_irrelevant_supplement_disclaimer(response, request)
         response = self._clear_unstated_pain_intensity(response, request)
         if outdoor_conditions and not response.outdoor_conditions:
             response.outdoor_conditions = outdoor_conditions
@@ -1282,6 +1303,7 @@ class HealthAssistantService:
         except Exception as ex:
             raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex
 
+        parsed = self._remove_irrelevant_supplement_disclaimer(parsed, request)
         parsed = self._clear_unstated_pain_intensity(parsed, request)
         validated = self.safety_service.validate_response(parsed)
         validated = self.boundary_service.enforce_grounding(

@@ -1262,3 +1262,28 @@ async def test_health_assistant_clinical_reasoning_referred_pain() -> None:
     assert response.pain_diary_tool.suspected_anatomy_ids == ["cervical_spine", "nervous"]
     assert response.pain_diary_tool.suspected_system == "nervous"
     assert "경추" in (response.pain_diary_tool.clinical_reasoning or "")
+
+
+def test_food_question_does_not_keep_irrelevant_supplement_disclaimer() -> None:
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="당뇨에 좋은 음식 알려줘")])
+    response = HealthAssistantResponse(
+        intent="health_advice",
+        assistant_message=(
+            "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다. "
+            "규칙적인 식사 원칙을 안내해 드릴게요."
+        ),
+    )
+
+    cleaned = HealthAssistantService._remove_irrelevant_supplement_disclaimer(response, request)
+
+    assert cleaned.assistant_message == "규칙적인 식사 원칙을 안내해 드릴게요."
+
+
+def test_supplement_question_keeps_supplement_disclaimer() -> None:
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="임신 중 영양제 알려줘")])
+    message = "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다."
+    response = HealthAssistantResponse(intent="health_advice", assistant_message=message)
+
+    kept = HealthAssistantService._remove_irrelevant_supplement_disclaimer(response, request)
+
+    assert kept.assistant_message == message

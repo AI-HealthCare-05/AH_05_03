@@ -16,6 +16,8 @@ from app.dtos.health_assistant import (
 from app.dtos.health_knowledge import HealthKnowledgeSearchResult
 from app.services.health_assistant import HealthAssistantService
 from app.services.health_assistant_boundary import (
+    CLARIFICATION_FALLBACK_QUESTION,
+    CLARIFICATION_PREFIX,
     CLASSIFICATION_FAILED_MESSAGE,
     HEALTH_ONLY_MESSAGE,
     MISSING_EVIDENCE_MESSAGE,
@@ -177,6 +179,52 @@ async def test_query_enrichment_builds_rich_query() -> None:
     assert checked.request.inferred_intent == "급성 두통 증상에 대한 원인 및 완화 방법 문의"
     assert checked.request.enriched_query is not None
     assert "급성 두통의 원인과 안전한 의학적 대처 방법" in checked.request.enriched_query
+
+
+@pytest.mark.asyncio
+async def test_personalized_health_question_can_ask_one_question_before_main_llm() -> None:
+    client = ScopeOnlyClient(
+        HealthAssistantScopeDecision(
+            scope="health",
+            requires_authoritative_evidence=True,
+            required_evidence_types=["health_knowledge"],
+            response_mode="clarify",
+            clarifying_question="현재 임신 몇 주 차이고 복용 중인 약이나 영양제가 있나요?",
+        )
+    )
+    service = HealthAssistantService(llm_client=client)
+
+    response = await service.respond(
+        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="임신 중인데 영양제 추천해줘")])
+    )
+
+    assert response.intent == "health_advice"
+    assert response.assistant_message == (
+        f"{CLARIFICATION_PREFIX} 현재 임신 몇 주 차이고 복용 중인 약이나 영양제가 있나요?"
+    )
+    assert client.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_unsafe_model_generated_clarification_is_replaced() -> None:
+    client = ScopeOnlyClient(
+        HealthAssistantScopeDecision(
+            scope="health",
+            requires_authoritative_evidence=True,
+            required_evidence_types=["health_knowledge"],
+            response_mode="clarify",
+            clarifying_question="철분제 30mg을 복용하세요. 현재 임신 몇 주인가요?",
+        )
+    )
+    service = HealthAssistantService(llm_client=client)
+
+    response = await service.respond(
+        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="임신 중인데 영양제 추천해줘")])
+    )
+
+    assert response.assistant_message == f"{CLARIFICATION_PREFIX} {CLARIFICATION_FALLBACK_QUESTION}"
+    assert "30mg" not in response.assistant_message
+    assert client.calls == 1
 
 
 # =========================================================================

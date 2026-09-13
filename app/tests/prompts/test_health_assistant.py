@@ -37,6 +37,8 @@ def test_build_system_instruction_contains_health_condition_guidance() -> None:
 
     assert "대화 맥락 및 지속적 건강 상태(임신, 수유, 만성질환 등) 연계 안내" in instruction
     assert "이전 대화 세션 기록" not in instruction
+    assert "승인 근거에 없는 임신 중 약물 안전성" in instruction
+    assert "비교적 안전하게 사용되는 진통제" not in instruction
 
 
 def test_build_system_instruction_contains_supplement_guidance() -> None:
@@ -44,6 +46,7 @@ def test_build_system_instruction_contains_supplement_guidance() -> None:
 
     assert "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다" in instruction
     assert "일반적으로는 ~" in instruction
+    assert "음식·식단·영양성분 질문은 영양제 문의가 아닙니다" in instruction
 
 
 def test_build_system_instruction_contains_food_nutrition_guidance() -> None:
@@ -69,3 +72,7 @@ def test_scope_instruction_contains_scope_evidence_and_query_builder() -> None:
     assert "required_evidence_types" in instruction
     assert "inferred_intent" in instruction
     assert "enriched_query" in instruction
+    assert "response_mode" in instruction
+    assert "clarifying_question" in instruction
+    assert "의학 지식" in instruction
+    assert "특정 음식·제품을 지목하지 않은 질환별 식이 질문" in instruction

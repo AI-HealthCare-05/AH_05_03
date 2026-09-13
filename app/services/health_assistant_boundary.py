@@ -39,6 +39,17 @@ MISSING_EVIDENCE_MESSAGE = (
 CLASSIFICATION_FAILED_MESSAGE = (
     "질문을 정확히 이해하지 못했습니다. 건강과 관련된 내용을 조금 더 구체적으로 말씀해 주세요."
 )
+CLARIFICATION_PREFIX = "안전하게 안내하기 위해 한 가지만 먼저 확인할게요."
+CLARIFICATION_FALLBACK_QUESTION = (
+    "일반적인 건강정보가 필요한지, 현재 상태에 맞춘 개인적인 안내가 필요한지 알려주시겠어요?"
+)
+
+_UNSAFE_CLARIFICATION_PATTERN = re.compile(
+    r"(복용하세요|드세요|먹으세요|운동하세요|중단하세요|피하세요|추천합니다|권장합니다|"
+    r"안전합니다|괜찮습니다|문제없|진단됩니다|의심됩니다|위험합니다|"
+    r"\d+\s*(?:mg|g|ml|정|알|회|개월))",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -418,6 +429,13 @@ class HealthAssistantBoundaryService:
                 response=self._fixed_response(HEALTH_ONLY_MESSAGE),
             )
 
+        if decision.scope == "health" and decision.response_mode == "clarify":
+            return HealthAssistantBoundaryResult(
+                request=None,
+                decision=decision,
+                response=self._clarification_response(decision.clarifying_question),
+            )
+
         if decision.scope == "mixed":
             allowed = (decision.allowed_health_request or "").strip()
             if not allowed or allowed not in latest_user_message:
@@ -516,3 +534,15 @@ class HealthAssistantBoundaryService:
             missing_fields=[],
             suggested_quick_replies=[],
         )
+
+    @classmethod
+    def _clarification_response(cls, question: str | None) -> HealthAssistantResponse:
+        normalized = " ".join((question or "").split())
+        is_safe_question = (
+            1 <= len(normalized) <= 240
+            and normalized.endswith("?")
+            and normalized.count("?") == 1
+            and not _UNSAFE_CLARIFICATION_PATTERN.search(normalized)
+        )
+        safe_question = normalized if is_safe_question else CLARIFICATION_FALLBACK_QUESTION
+        return cls._fixed_response(f"{CLARIFICATION_PREFIX} {safe_question}", intent="health_advice")
