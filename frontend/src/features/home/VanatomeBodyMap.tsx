@@ -373,6 +373,8 @@ export function VanatomeBodyMap({
   const toggleDarkBackgroundRef = useRef<(active: boolean) => void>(() => undefined);
   const toggleDarkBeigeBackgroundRef = useRef<(active: boolean) => void>(() => undefined);
   const togglePulseRef = useRef<(active: boolean) => void>(() => undefined);
+  const [isOnlyConfirmedActive, setIsOnlyConfirmedActive] = useState(false);
+  const toggleOnlyConfirmedRef = useRef<(active: boolean) => void>(() => undefined);
 
   const toggleXRayRef = useRef<(active: boolean) => void>(() => undefined);
   const toggleIsolateRef = useRef<(active: boolean) => void>(() => undefined);
@@ -654,6 +656,7 @@ export function VanatomeBodyMap({
           toggleDarkBackgroundRef,
           toggleDarkBeigeBackgroundRef,
           togglePulseRef,
+          toggleOnlyConfirmedRef,
           getIsDarkBackgroundActive: () => isDarkBgActiveRef.current,
           getIsDarkBeigeBackgroundActive: () => isDarkBeigeBgActiveRef.current,
           getIsPulseActive: () => isPulseActiveRef.current,
@@ -724,6 +727,7 @@ export function VanatomeBodyMap({
       toggleDarkBackgroundRef.current = () => undefined;
       toggleDarkBeigeBackgroundRef.current = () => undefined;
       togglePulseRef.current = () => undefined;
+      toggleOnlyConfirmedRef.current = () => undefined;
       focusSelectedMeshRef.current = () => undefined;
       selectCandidateMeshRef.current = () => undefined;
       selectByAnatomyIdRef.current = () => false;
@@ -1199,6 +1203,50 @@ export function VanatomeBodyMap({
                 }}
               />
               <span>호흡 펄스 효과</span>
+            </button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "6px" }}>
+            <button
+              type="button"
+              className={`toolbar-btn ${isOnlyConfirmedActive ? "is-active" : ""}`}
+              style={{
+                fontSize: "0.74rem",
+                padding: "5px 6px",
+                borderColor: isOnlyConfirmedActive ? "#1d4fb8" : "#cbd5e1",
+                color: isOnlyConfirmedActive ? "#1d4fb8" : "#475569",
+                background: isOnlyConfirmedActive ? "rgba(29, 79, 184, 0.1)" : "#ffffff",
+                fontWeight: isOnlyConfirmedActive ? 600 : 500,
+                borderRadius: "6px",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "5px",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+              disabled={loadProgress < 100}
+              aria-pressed={isOnlyConfirmedActive}
+              title="확정 범위로 선택된 부위만 3D 뷰어에 표시 (기타 모델 숨김)"
+              onClick={() => {
+                const next = !isOnlyConfirmedActive;
+                setIsOnlyConfirmedActive(next);
+                toggleOnlyConfirmedRef.current(next);
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: "7px",
+                  height: "7px",
+                  borderRadius: "50%",
+                  background: isOnlyConfirmedActive ? "#1d4fb8" : "#94a3b8",
+                  boxShadow: isOnlyConfirmedActive ? "0 0 6px rgba(29, 79, 184, 0.7)" : "none",
+                }}
+              />
+              <span>확정 범위만 보기</span>
             </button>
           </div>
         </div>
@@ -1882,6 +1930,7 @@ type CreateAnatomySceneOptions = {
   toggleDarkBackgroundRef: React.MutableRefObject<(active: boolean) => void>;
   toggleDarkBeigeBackgroundRef: React.MutableRefObject<(active: boolean) => void>;
   togglePulseRef: React.MutableRefObject<(active: boolean) => void>;
+  toggleOnlyConfirmedRef: React.MutableRefObject<(active: boolean) => void>;
   getIsDarkBackgroundActive?: () => boolean;
   getIsDarkBeigeBackgroundActive?: () => boolean;
   getIsPulseActive?: () => boolean;
@@ -1932,6 +1981,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     undoDeleteRef, redoDeleteRef, toggleMultipleDraftExcludedRef, onHistoryChange,
     onDepthCandidatesChange, toggleXRayRef, toggleIsolateRef,
     toggleCyanGridShellRef, toggleDarkBackgroundRef, toggleDarkBeigeBackgroundRef, togglePulseRef,
+    toggleOnlyConfirmedRef,
     focusSelectedMeshRef, selectCandidateMeshRef, selectByAnatomyIdRef, selectDangerOrganRef, selectToothRef,
     toggleMultipleCandidateDepthRef,
     toggleCandidateDepthRef, setAllDepthCandidatesSelectedRef, confirmDepthCandidatesRef, clearDepthCandidatesRef,
@@ -2312,7 +2362,14 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
 
   let isFasciaHidden = false;
   let isPeritoneumHidden = false;
+  let isOnlyConfirmedActive = false;
   const applyMeshVisibility = (mesh: THREE.Mesh) => {
+    if (isOnlyConfirmedActive) {
+      const item = stagedItemsMap.get(mesh.name);
+      mesh.visible = Boolean((item && !item.excluded) || selectedMeshes.has(mesh));
+      return;
+    }
+
     if (dangerOrganMeshes.has(mesh) || dangerPulsingMeshes.has(mesh)) {
       mesh.visible = true;
       return;
@@ -2582,6 +2639,15 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   const emitStagedSummary = () => {
     const allItems = Array.from(stagedItemsMap.values());
     onStagingChange(allItems);
+
+    if (isOnlyConfirmedActive) {
+      anatomyMeshes.forEach(applyMeshVisibility);
+      selectedMeshes.forEach(applyConfirmedMaterial);
+      stagedItemsMap.forEach((item) => {
+        if (item.mesh) applyConfirmedMaterial(item.mesh);
+      });
+      renderScene();
+    }
 
     const activeItems = allItems.filter((i) => !i.excluded);
     if (activeItems.length === 0) {
@@ -2864,6 +2930,29 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     return false;
   };
 
+  let isXRayMode = false;
+  let isIsolateMode = false;
+
+  const applyConfirmedMaterial = (mesh: THREE.Mesh) => {
+    const orig = originalMaterials.get(mesh) ?? mesh.material;
+    if (isOnlyConfirmedActive) {
+      mesh.material = orig;
+      mesh.renderOrder = isShellOrSurface(mesh) ? 10 : 20;
+      return;
+    }
+    const isSurface = isSurfaceStructure(mesh);
+    if (isXRayMode && !isSkeletonStructure(mesh)) {
+      mesh.material = createSelectedTransparentMaterials(orig, 0.35);
+      mesh.renderOrder = 15;
+    } else if (isIsolateMode && isSurface) {
+      mesh.material = createSelectedTransparentMaterials(orig, 0.35);
+      mesh.renderOrder = 15;
+    } else {
+      mesh.material = createSelectedMaterials(orig);
+      mesh.renderOrder = 20;
+    }
+  };
+
   const selectSingleMesh = (mesh: THREE.Mesh) => {
     if (isFasciaHidden && isFasciaStructure(mesh)) {
       return;
@@ -2885,18 +2974,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       }
     } else if (existing && existing.excluded) {
       existing.excluded = false;
-      const orig = originalMaterials.get(mesh) ?? mesh.material;
-      const isSurface = isSurfaceStructure(mesh);
-      if (isXRayMode && !isSkeletonStructure(mesh)) {
-        mesh.material = createSelectedTransparentMaterials(orig, 0.35);
-        mesh.renderOrder = 15;
-      } else if (isIsolateMode && isSurface) {
-        mesh.material = createSelectedTransparentMaterials(orig, 0.35);
-        mesh.renderOrder = 15;
-      } else {
-        mesh.material = createSelectedMaterials(orig);
-        mesh.renderOrder = 20;
-      }
+      applyConfirmedMaterial(mesh);
       selectedMeshes.add(mesh);
     } else {
       // 사용자가 새 부위를 직접 선택 -> 기존 위험 하이라이트 정지 및 원상 복원
@@ -2905,18 +2983,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       }
 
       ensureStagedItem(mesh);
-      const orig = originalMaterials.get(mesh) ?? mesh.material;
-      const isSurface = isSurfaceStructure(mesh);
-      if (isXRayMode && !isSkeletonStructure(mesh)) {
-        mesh.material = createSelectedTransparentMaterials(orig, 0.35);
-        mesh.renderOrder = 15;
-      } else if (isIsolateMode && isSurface) {
-        mesh.material = createSelectedTransparentMaterials(orig, 0.35);
-        mesh.renderOrder = 15;
-      } else {
-        mesh.material = createSelectedMaterials(orig);
-        mesh.renderOrder = 20;
-      }
+      applyConfirmedMaterial(mesh);
       selectedMeshes.add(mesh);
     }
 
@@ -2955,8 +3022,6 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     renderScene();
   };
 
-  let isXRayMode = false;
-  let isIsolateMode = false;
   let currentDepthCandidates: DepthHitCandidate[] = [];
   let selectedDepthCandidateNames = new Set<string>();
 
@@ -2986,18 +3051,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
 
   const restoreMeshMaterial = (mesh: THREE.Mesh) => {
     if (isMeshSelected(mesh)) {
-      const orig = originalMaterials.get(mesh) ?? mesh.material;
-      const isSurface = isSurfaceStructure(mesh);
-      if (isXRayMode && !isSkeletonStructure(mesh)) {
-        mesh.material = createSelectedTransparentMaterials(orig, 0.35);
-        mesh.renderOrder = 15;
-      } else if (isIsolateMode && isSurface) {
-        mesh.material = createSelectedTransparentMaterials(orig, 0.35);
-        mesh.renderOrder = 15;
-      } else {
-        mesh.material = createSelectedMaterials(orig);
-        mesh.renderOrder = 20;
-      }
+      applyConfirmedMaterial(mesh);
       return;
     }
 
@@ -4226,6 +4280,16 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
 
   toggleDarkBeigeBackgroundRef.current = (active: boolean) => {
     applyThemeStyling(active ? "dark-beige" : "light");
+    renderScene();
+  };
+
+  toggleOnlyConfirmedRef.current = (active: boolean) => {
+    isOnlyConfirmedActive = active;
+    anatomyMeshes.forEach(applyMeshVisibility);
+    selectedMeshes.forEach(applyConfirmedMaterial);
+    stagedItemsMap.forEach((item) => {
+      if (item.mesh) applyConfirmedMaterial(item.mesh);
+    });
     renderScene();
   };
 
