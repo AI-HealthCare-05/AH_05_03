@@ -6165,8 +6165,8 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       if (otherCandidates.length > 0) {
         clearCandidatePreviewMaterials();
         currentDepthCandidates = otherCandidates;
-        selectedDepthCandidateNames = new Set(otherCandidates.map((c) => c.meshName));
-        setSelectedDepthCandidateIds(new Set(selectedDepthCandidateNames));
+        selectedDepthCandidateNames.clear();
+        setSelectedDepthCandidateIds(new Set());
         onDepthCandidatesChange(otherCandidates);
         applyCandidatePreviewMaterials();
       } else {
