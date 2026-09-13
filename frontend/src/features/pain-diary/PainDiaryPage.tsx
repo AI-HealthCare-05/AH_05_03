@@ -286,20 +286,41 @@ export function PainDiaryPage() {
 
     try {
       if (currentRecord) {
-        // 기존 기록 수정 (AI 추론 anatomy, 신경망 메타데이터 보존 병합)
+        // 기존 기록 수정: 사용자가 본문/부위를 직접 수정했다면 구버전 AI 추론 메타데이터를 정돈
+        const prevPayload = (currentRecord.payload as Record<string, unknown>) ?? {};
+        const isTextModified =
+          prevPayload.bodyArea !== bodyArea.trim() ||
+          prevPayload.note !== (note.trim() || undefined) ||
+          prevPayload.sensation !== (sensation.trim() || undefined) ||
+          prevPayload.aggravatingFactors !== (aggravatingFactors.trim() || undefined);
+
+        // 사용자가 3D에서 직접 선택/확인한 수동 선택(tap, brush, dental, search, confirmed)은 텍스트 변경 시에도 보존
+        const isUserConfirmedAnatomy =
+          anatomyEvent?.provenance === "user_confirmed" ||
+          (anatomyEvent && anatomyEvent.inputSource !== "ai_inference") ||
+          anatomyEvent?.state === "confirmed";
+
+        const mergedPayload: Record<string, unknown> = {
+          ...prevPayload,
+          type: "pain",
+          bodyArea: bodyArea.trim(),
+          intensity,
+          sensation: sensation.trim() || undefined,
+          aggravatingFactors: aggravatingFactors.trim() || undefined,
+          note: note.trim() || undefined,
+          anatomyEvent: isUserConfirmedAnatomy ? anatomyEvent : (isTextModified ? undefined : (anatomyEvent || undefined)),
+        };
+
+        if (isTextModified) {
+          delete mergedPayload.clinicalReasoning;
+          delete mergedPayload.suspectedAnatomyIds;
+          delete mergedPayload.suspectedSystem;
+        }
+
         const updateRes = await runtime.healthRecords.update(currentRecord.id, {
           recordType: "pain",
           recordedAt: currentRecord.recordedAt,
-          payload: {
-            ...((currentRecord.payload as Record<string, unknown>) ?? {}),
-            type: "pain",
-            bodyArea: bodyArea.trim(),
-            intensity,
-            sensation: sensation.trim() || undefined,
-            aggravatingFactors: aggravatingFactors.trim() || undefined,
-            note: note.trim() || undefined,
-            anatomyEvent: anatomyEvent || undefined,
-          },
+          payload: mergedPayload,
           expectedVersion: currentRecord.version,
         });
         if (!updateRes.ok) throw new Error(updateRes.error.message);
@@ -330,6 +351,20 @@ export function PainDiaryPage() {
       }
       lastLoadedKeyRef.current = "";
       await loadRecords();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("ieobom:record-saved", {
+            detail: { profileId: selectedProfile.id },
+          }),
+        );
+        try {
+          const ch = new BroadcastChannel("ieobom-sync");
+          ch.postMessage({ type: "record-saved", profileId: selectedProfile.id });
+          ch.close();
+        } catch {
+          // ignore
+        }
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "통증 다이어리 저장에 실패했습니다.");
     } finally {
@@ -350,6 +385,20 @@ export function PainDiaryPage() {
       setSelectedRecordId(null);
       lastLoadedKeyRef.current = "";
       await loadRecords();
+      if (typeof window !== "undefined" && selectedProfile) {
+        window.dispatchEvent(
+          new CustomEvent("ieobom:record-saved", {
+            detail: { profileId: selectedProfile.id },
+          }),
+        );
+        try {
+          const ch = new BroadcastChannel("ieobom-sync");
+          ch.postMessage({ type: "record-saved", profileId: selectedProfile.id });
+          ch.close();
+        } catch {
+          // ignore
+        }
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "기록 삭제에 실패했습니다.");
     } finally {

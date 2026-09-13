@@ -21,6 +21,7 @@ export interface FamilyIntegratedMonitoringProps {
     label: string,
     intensity?: number,
     organIntensities?: Record<string, number>,
+    focusedOrganKey?: string,
   ) => void;
 }
 
@@ -73,7 +74,7 @@ const SUPPORTED_ORGANS: OrganDefinition[] = [
     label: "신장",
     system: "urinary",
     defaultMeshName: "VH_O_kidney",
-    keywords: ["신장암", "신부전", "사구체", "콩팥", "신장", "kidney"],
+    keywords: ["신우염", "콩팥깔대기", "신우", "신장암", "신부전", "사구체", "콩팥", "신장", "renal pelvis", "kidney", "renal"],
   },
   {
     key: "pancreas",
@@ -166,6 +167,20 @@ const SUPPORTED_ORGANS: OrganDefinition[] = [
     defaultMeshName: "skeleton-pelvis",
     keywords: ["골반", "고관절", "엉치", "엉덩이", "pelvis", "hip"],
   },
+  {
+    key: "thigh",
+    label: "허벅지·대퇴",
+    system: "skeletal",
+    defaultMeshName: "femur",
+    keywords: ["대퇴", "대퇴골", "허벅지", "thigh", "femur"],
+  },
+  {
+    key: "nose",
+    label: "코·비강",
+    system: "skeletal",
+    defaultMeshName: "nasal",
+    keywords: ["코", "비골", "비강", "nasal", "nose", "septal"],
+  },
 ];
 
 function detectOrganFromText(text: string): OrganDefinition | undefined {
@@ -183,9 +198,13 @@ function detectOrganFromText(text: string): OrganDefinition | undefined {
 
   for (const organ of SUPPORTED_ORGANS) {
     for (const kw of organ.keywords) {
-      const isMatched = kw.length === 1
+      let isMatched = kw.length === 1
         ? new RegExp(`(?:^|[^가-힣a-z0-9])${kw}(?:가|이|는|은|에|도|를|을|의|로|으로|와|과|만|뿐)?(?=[^가-힣a-z0-9]|$)`, "i").test(sanitized)
         : sanitized.includes(kw);
+
+      if (isMatched && kw === "pelvis" && sanitized.includes("renal")) {
+        isMatched = false;
+      }
 
       if (isMatched) {
         if (!bestMatch || kw.length > bestMatch.keywordLength) {
@@ -219,9 +238,14 @@ export function detectAllOrgansFromText(text: string): OrganDefinition[] {
   const matchedOrgans: OrganDefinition[] = [];
   for (const organ of SUPPORTED_ORGANS) {
     for (const kw of organ.keywords) {
-      const isMatched = kw.length === 1
+      let isMatched = kw.length === 1
         ? new RegExp(`(?:^|[^가-힣a-z0-9])${kw}(?:가|이|는|은|에|도|를|을|의|로|으로|와|과|만|뿐)?(?=[^가-힣a-z0-9]|$)`, "i").test(sanitized)
         : sanitized.includes(kw);
+
+      if (isMatched && kw === "pelvis" && sanitized.includes("renal")) {
+        isMatched = false;
+      }
+
       if (isMatched) {
         if (!matchedOrgans.some((o) => o.key === organ.key)) {
           matchedOrgans.push(organ);
@@ -233,13 +257,82 @@ export function detectAllOrgansFromText(text: string): OrganDefinition[] {
   return matchedOrgans;
 }
 
+export interface ClauseFinding {
+  organ: OrganDefinition;
+  side: "left" | "right" | "midline" | "both" | "unknown";
+  isNegated: boolean;
+  clause: string;
+}
+
+export function extractClauseFindings(text: string): ClauseFinding[] {
+  if (!text) return [];
+  // 문장/절 분해 (마침표, 쉼표, 세미콜론, 줄바꿈, '그리고', '및')
+  const clauses = text
+    .split(/[,.;\n/+]|\s+및\s+|\s+그리고\s+/)
+    .map((c) => c.trim())
+    .filter(Boolean);
+
+  const findings: ClauseFinding[] = [];
+  const negationPattern = /(없음|아님|아니|배제|정상|안\s*아픔|이상\s*없음|통증\s*없음|저림\s*없음|음성)/;
+
+  for (const clause of clauses) {
+    const isNegated = negationPattern.test(clause);
+    const side = detectLateralityFromText(clause);
+    const organs = detectAllOrgansFromText(clause);
+
+    for (const organ of organs) {
+      findings.push({
+        organ,
+        side,
+        isNegated,
+        clause,
+      });
+    }
+  }
+
+  return findings;
+}
+
 const CANCER_SERIOUS_KEYWORDS = [
-  "암", "전이", "악성", "종양", "판정", "진단", "확진", "말기", "cancer", "carcinoma", "metastasis", "tumor",
+  "암", "전이", "악성종양", "악성 종양", "악성신생물", "말기암", "대장암", "간암", "폐암", "위암", "유방암", "췌장암", "신장암", "cancer", "carcinoma", "metastasis", "malignan",
 ];
 
 function isSeriousCondition(text: string): boolean {
   const lower = text.toLowerCase();
-  return CANCER_SERIOUS_KEYWORDS.some((kw) => lower.includes(kw));
+  const hasCancer = CANCER_SERIOUS_KEYWORDS.some((kw) => lower.includes(kw));
+  if (!hasCancer) return false;
+
+  // 1. 원발암 자체가 확진/진단/치료/소견인 경우 긍정 판정 우선 확인
+  const hasConfirmedCancer =
+    /(?:간암|위암|대장암|폐암|유방암|췌장암|신장암|악성\s*종양|악성\s*신생물|말기암|cancer|carcinoma)\s*(?:확진|진단|판정|치료|수술|발견|소견|환자|투병)/.test(
+      lower
+    );
+
+  // 2. 암 자체에 대한 명시적 부정문 검사 ('간암 아님', '암 배제', '종양 없음', '악성 아님', '암 정상', '음성')
+  // 주의: [^\\w\\n]은 JS에서 한글 음절까지 매칭하므로 [\\s,.:;~-] 구두점/공백을 사용해야 단어 경계가 보존됨
+  // 주의: '전이 없음'은 전이 여부의 부정일 뿐 원발암 진단을 취소하지 않음 (Astra 2차 반례 2)
+  const isCancerNegated =
+    /(?:암|악성|종양|신생물|cancer)[\s,.:;~-]{0,6}(?:아님|아니|배제|정상|없음|완치|음성)/.test(lower) ||
+    /(?:아님|아니|배제|음성|정상|없음)[\s,.:;~-]{0,6}(?:암|악성|종양|신생물|cancer)/.test(lower) ||
+    /(?:의심\s*배제|악성\s*아님)/.test(lower);
+
+  if (hasConfirmedCancer && !isCancerNegated) {
+    return true;
+  }
+
+  if (isCancerNegated) return false;
+
+  // 3. 전이 단독 언급 시 전이 부정 여부 판별
+  if (lower.includes("전이") || lower.includes("metastasis")) {
+    const isMetastasisNegated = /(?:전이)[\s,.:;~-]{0,6}(?:아님|아니|배제|정상|없음|음성)/.test(lower);
+    if (isMetastasisNegated) {
+      // 전이는 없으나 일반 암 키워드가 있는 경우
+      return hasConfirmedCancer;
+    }
+    return true;
+  }
+
+  return true;
 }
 
 export function matchesTimelineDate(observedAt: string, recordedAt: string, targetDate: string): boolean {
@@ -259,7 +352,7 @@ export function matchesTimelineDate(observedAt: string, recordedAt: string, targ
 /**
  * 건강기록 목록으로부터 출처와 시점이 보존된 HealthEvent 목록을 추출합니다.
  */
-function extractHealthEvents(records: HealthRecord[]): HealthEvent[] {
+export function extractHealthEvents(records: HealthRecord[]): HealthEvent[] {
   const events: HealthEvent[] = [];
 
   for (const r of records) {
@@ -283,7 +376,7 @@ function extractHealthEvents(records: HealthRecord[]): HealthEvent[] {
       if (organ || isCancer) {
         const isFamily = fullText.includes("아버지") || fullText.includes("가족") || fullText.includes("부모");
         const isSuspected = fullText.includes("의심") || fullText.includes("추정");
-        const isNegated = fullText.includes("아님") || fullText.includes("정상") || fullText.includes("배제");
+        const isNegated = fullText.includes("아님") || fullText.includes("정상") || fullText.includes("배제") || fullText.includes("음성");
         const isPast = fullText.includes("완치") || fullText.includes("과거") || fullText.includes("이전");
 
         const provenance = isFamily
@@ -298,10 +391,12 @@ function extractHealthEvents(records: HealthRecord[]): HealthEvent[] {
           ? "document_confirmed"
           : "user_report";
 
-        const organLabel = organ?.label || "신체 장기";
+        const organLabel = organ?.label || (isCancer ? "신체 장기" : "임상 소견");
         const title = isFamily
           ? `가족력: ${organLabel}${isCancer ? "암" : " 질환"}`
-          : fullText.includes("간암")
+          : isNegated
+          ? `${organLabel} 질환 배제/음성 소견`
+          : isCancer && fullText.includes("간암")
           ? "간암 진단 기록"
           : isCancer
           ? `${organLabel} 암/전이 판정 기록`
@@ -319,14 +414,34 @@ function extractHealthEvents(records: HealthRecord[]): HealthEvent[] {
           recordedAt,
           provenance,
           sourceDocumentId: r.sourceDocumentId ?? undefined,
-          sourceDocumentName: r.sourceDocumentId ? `${organLabel} 정밀 검진 소견서` : undefined,
+          sourceDocumentName: r.sourceDocumentId ? (payload.documentTitle as string) || "정밀 검진 결과지" : undefined,
           sourceSentence: note || (payload.summary as string) || fullText || "진단 기록",
           severityTone: isNegated ? "neutral" : isCancer ? "diagnosis_alert" : "warning",
           detailNote: isFamily
             ? "가족(직계) 병력으로 확인된 기록입니다. 본인의 장기 손상률과는 무관합니다."
+            : isNegated
+            ? "검진 서류 또는 소견상 해당 중증 질환이 배제되었거나 음성으로 확인된 기록입니다."
             : isCancer
             ? "중요 진단(암/전이) 기록이 연결된 장기입니다. 손상률이나 현재 응급도를 뜻하지 않습니다."
             : "검진 서류에 기재된 임상 소견입니다.",
+        });
+      } else if (r.recordType === "health_screening" || r.recordType === "assessment") {
+        const title = r.recordType === "health_screening"
+          ? String(payload.screeningName || "건강검진 종합 소견")
+          : "건강 위험도 판정 결과";
+        events.push({
+          id: `exam-${r.id}`,
+          profileId: r.profileId,
+          category: "test",
+          title,
+          observedAt,
+          recordedAt,
+          provenance: r.sourceDocumentId ? "document_confirmed" : "user_report",
+          sourceDocumentId: r.sourceDocumentId ?? undefined,
+          sourceDocumentName: r.sourceDocumentId ? "건강검진 결과지" : undefined,
+          sourceSentence: note || (payload.summary as string) || fullText || "검진 기록",
+          severityTone: "neutral",
+          detailNote: "건강검진 및 위험도 종합 평가 기록입니다.",
         });
       }
     }
@@ -335,10 +450,15 @@ function extractHealthEvents(records: HealthRecord[]): HealthEvent[] {
     if (r.recordType === "pain") {
       const anatomy = payload.anatomyEvent as Record<string, unknown> | undefined;
       const concept = (anatomy?.concept || {}) as Record<string, unknown>;
-      const rawLabel = (concept.label as string) || (payload.bodyArea as string) || "통증 부위";
-      const sensation = (payload.sensation as string) || (payload.note as string) || "통증";
+      // 원본 사실(Fact)은 사용자가 입력한 bodyArea를 우선하고, AI 해석 라벨과 엄격 분리 (Astra 반례 4)
+      const userBodyArea = (payload.bodyArea as string) || (concept.label as string) || "통증 부위";
+      const inferredLabel = (concept.label as string) || "신경 및 근골격계";
+      const sensation = (payload.sensation as string) || "";
       const noteStr = String(payload.note || "");
-      const fullText = `${rawLabel} ${sensation} ${noteStr}`.trim();
+
+      // 필드 경계 오염 방지: 각 필드를 마침표와 개행으로 명확히 구분하여 절 분석 (Astra 반례 3)
+      const textParts = [userBodyArea, sensation, noteStr].map((s) => s.trim()).filter(Boolean);
+      const fullText = textParts.join(".\n");
 
       const anatomySide = (concept.side as string) || "";
       const detectedSide =
@@ -346,96 +466,165 @@ function extractHealthEvents(records: HealthRecord[]): HealthEvent[] {
           ? (anatomySide as "left" | "right" | "both")
           : detectLateralityFromText(fullText);
 
-      const matchedOrgans = detectAllOrgansFromText(fullText);
-      const organ = matchedOrgans[0];
       const isSerious = isSeriousCondition(fullText);
+      const recordIntensity = typeof payload.intensity === "number" ? payload.intensity : undefined;
 
-      // AI Agent 임상 추론 (연관통 및 원인 해부학 구조 분석 결과) 우선 채택
+      // AI Agent 임상 추론 (연관통 및 원인 해부학 구조 분석 결과)
       const isAiInferred =
         anatomy?.provenance === "clinical_ai_inferred" ||
         Boolean(payload.clinicalReasoning) ||
         (Array.isArray(payload.suspectedAnatomyIds) && (payload.suspectedAnatomyIds as string[]).length > 0);
 
-      const recordIntensity = typeof payload.intensity === "number" ? payload.intensity : undefined;
-
       if (isAiInferred) {
         const suspectedIds = (payload.suspectedAnatomyIds as string[]) || (concept.canonicalConceptId ? [String(concept.canonicalConceptId)] : []);
-        const suspectedKey = suspectedIds.length > 0 ? suspectedIds.join(",") : "cervical_spine,nervous";
         const reasoningText = String(payload.clinicalReasoning || anatomy?.uncertainty || anatomy?.clinicalReasoning || "");
-        const eventTitle = `연관통 추정: ${concept.label || "경추 및 신경계"} (${rawLabel} 분석)`;
 
-        events.push({
-          id: `pain-inferred-${r.id}`,
-          profileId: r.profileId,
-          category: "symptom",
-          title: eventTitle,
-          organKey: suspectedKey,
-          organLabel: String(concept.label || "경추 및 신경계"),
-          meshName: String(concept.sourceMeshId || "skeleton-cervical-vertebra"),
-          observedAt,
-          recordedAt,
-          provenance: "clinical_ai_inferred",
-          sourceSentence: noteStr || sensation,
-          severityTone: "warning",
-          detailNote: reasoningText || "임상 AI Agent가 복합 증상(상지 저림·악력 저하·하지 위약감)을 분석하여 경추 신경근 연관통으로 추론한 부위입니다.",
-          intensity: recordIntensity,
-        });
-        continue;
+        // 부위 ID가 실제로 있을 때만 연관통 추정 이벤트 생성 (경추 기본값 강제 주입 제거: concept.sourceMeshId 없으면 undefined)
+        if (suspectedIds.length > 0) {
+          const suspectedKey = suspectedIds.join(",");
+          const eventTitle = `연관통 추정: ${inferredLabel} (${userBodyArea} 분석)`;
+
+          events.push({
+            id: `pain-inferred-${r.id}`,
+            profileId: r.profileId,
+            category: "symptom",
+            title: eventTitle,
+            organKey: suspectedKey,
+            organLabel: inferredLabel,
+            meshName: concept.sourceMeshId ? String(concept.sourceMeshId) : undefined,
+            observedAt,
+            recordedAt,
+            provenance: "clinical_ai_inferred",
+            sourceSentence: noteStr || sensation,
+            severityTone: "warning",
+            detailNote: reasoningText || "임상 AI Agent가 복합 증상을 분석하여 연관통으로 추론한 부위입니다.",
+            intensity: recordIntensity,
+          });
+          // 주의: 사용자 원본 증상(Fact)도 묵살되지 않고 함께 유지되어야 하므로 continue 하지 않음 (Astra 반례 4)
+        }
       }
 
-      const organKeys: string[] = [];
-      if (matchedOrgans.length > 0) {
-        matchedOrgans.forEach((o) => {
-          if (detectedSide === "left") organKeys.push(`left_${o.key}`);
-          else if (detectedSide === "right") organKeys.push(`right_${o.key}`);
-          else organKeys.push(o.key);
+      // 절(clause) 단위 다중 부위 및 부정문 추출
+      const clauseFindings = extractClauseFindings(fullText);
+      const negatedFindings = clauseFindings.filter((f) => f.isNegated);
+
+      // 부정 대상을 장기 전체(shoulder)로 뭉뚱그리지 않고, 개별 관찰의 부위·측면성(laterality)에 맞추어 판별 (Astra 2차 반례 1)
+      const isFindingNegated = (f: ClauseFinding) =>
+        negatedFindings.some((nf) => {
+          if (nf.organ.key !== f.organ.key) return false;
+          // 부정문의 측면성이 불명이거나 양쪽인 경우 해당 장기 전체 부정
+          if (nf.side === "unknown" || nf.side === "both") return true;
+          // 구체적 측면성이 명시된 경우 동일한 측면성만 부정 ('오른쪽 어깨 없음'은 '왼쪽 어깨'를 부정하지 않음)
+          return nf.side === f.side;
         });
-      } else if (concept.canonicalConceptId) {
+
+      const activeFindings = clauseFindings.filter((f) => !f.isNegated && !isFindingNegated(f));
+
+      // 장기 전체가 부정된 경우에만 matchedOrgans fallback에서 제외
+      const wholeOrganNegatedKeys = new Set(
+        negatedFindings
+          .filter((nf) => nf.side === "unknown" || nf.side === "both")
+          .map((nf) => nf.organ.key)
+      );
+      const matchedOrgans = detectAllOrgansFromText(fullText).filter((o) => !wholeOrganNegatedKeys.has(o.key));
+      const organ = activeFindings[0]?.organ || matchedOrgans[0];
+
+      const rawOrganKeys: string[] = [];
+
+      // 3D 신체 상호작용 또는 3D 스프레이로 기록된 원본 메쉬 ID/개념 보존
+      if (concept.sourceMeshId) {
+        rawOrganKeys.push(String(concept.sourceMeshId));
+      }
+      if (concept.canonicalConceptId) {
         const baseKey = String(concept.canonicalConceptId);
-        if (detectedSide === "left") organKeys.push(`left_${baseKey}`);
-        else if (detectedSide === "right") organKeys.push(`right_${baseKey}`);
-        else organKeys.push(baseKey);
-      } else if (rawLabel && rawLabel !== "통증 부위") {
-        if (detectedSide === "left") organKeys.push(`left_${rawLabel}`);
-        else if (detectedSide === "right") organKeys.push(`right_${rawLabel}`);
-        else organKeys.push(rawLabel);
+        if (detectedSide === "left") rawOrganKeys.push(`left_${baseKey}`);
+        else if (detectedSide === "right") rawOrganKeys.push(`right_${baseKey}`);
+        else rawOrganKeys.push(baseKey);
       }
 
-      if (detectedSide === "left") organKeys.push("left");
-      else if (detectedSide === "right") organKeys.push("right");
+      if (activeFindings.length > 0) {
+        activeFindings.forEach((f) => {
+          if (f.side === "left") rawOrganKeys.push(`left_${f.organ.key}`);
+          else if (f.side === "right") rawOrganKeys.push(`right_${f.organ.key}`);
+          else rawOrganKeys.push(f.organ.key);
+        });
+      } else if (clauseFindings.length === 0 && wholeOrganNegatedKeys.size === 0) {
+        // 부정문이 없고 절 분석도 감지되지 않은 순수 단문인 경우에만 fallback 허용
+        if (matchedOrgans.length > 0) {
+          matchedOrgans.forEach((o) => {
+            if (detectedSide === "left") rawOrganKeys.push(`left_${o.key}`);
+            else if (detectedSide === "right") rawOrganKeys.push(`right_${o.key}`);
+            else rawOrganKeys.push(o.key);
+          });
+        } else if (concept.canonicalConceptId) {
+          const baseKey = String(concept.canonicalConceptId);
+          if (detectedSide === "left") rawOrganKeys.push(`left_${baseKey}`);
+          else if (detectedSide === "right") rawOrganKeys.push(`right_${baseKey}`);
+          else rawOrganKeys.push(baseKey);
+        } else if (userBodyArea && userBodyArea !== "통증 부위") {
+          if (detectedSide === "left") rawOrganKeys.push(`left_${userBodyArea}`);
+          else if (detectedSide === "right") rawOrganKeys.push(`right_${userBodyArea}`);
+          else rawOrganKeys.push(userBodyArea);
+        }
+      }
 
-      const organKey = organKeys.length > 0 ? organKeys.join(",") : undefined;
-      const organLabel = organ
-        ? isSerious
-          ? `${organ.label} (${organ.label} 암/전이 판정)`
-          : rawLabel && rawLabel !== organ.label
-          ? `${organ.label} (${rawLabel})`
-          : `${organ.label} (통증)`
-        : rawLabel;
-      const meshName = organ?.defaultMeshName || (concept.sourceMeshId as string | undefined);
+      // 구체적 측면성 키(left_X, right_X)가 존재할 때 모호한 비측면성 키(X) 억제 (Astra 반례 3)
+      const hasLateralFor = (baseKey: string) =>
+        rawOrganKeys.some((k) => k === `left_${baseKey}` || k === `right_${baseKey}`);
+
+      const organKeys = rawOrganKeys.filter((k) => {
+        if (k === "left" || k === "right") return false;
+        const isBase = !k.startsWith("left_") && !k.startsWith("right_");
+        if (isBase && hasLateralFor(k)) return false;
+        return true;
+      });
+
+      if (organKeys.length === 0 && activeFindings.length === 0 && negatedFindings.length === 0) {
+        if (detectedSide === "left") organKeys.push("left");
+        else if (detectedSide === "right") organKeys.push("right");
+      }
+
+      // AI 추론 가설이 별도로 생성되더라도 사용자 원본 증상(Fact)의 organKey는 3D 연결을 위해 온전히 유지 (Astra 2차 반례 3)
+      const organKey = organKeys.length > 0
+        ? Array.from(new Set(organKeys)).join(",")
+        : undefined;
+
+      const isNegated = negatedFindings.length > 0 && activeFindings.length === 0;
+
+      const organLabel = isSerious && organ && !isNegated
+        ? `${organ.label} (${organ.label} 암/전이 판정)`
+        : userBodyArea;
+
+      const title = isSerious && organ && !isNegated
+        ? `${organ.label} 암/전이 판정 기록`
+        : isNegated
+        ? `${organ ? organ.label : userBodyArea} 이상/통증 없음 소견`
+        : organ && userBodyArea === organ.label
+        ? `통증: ${organ.label}`
+        : `통증: ${userBodyArea}`;
+
+      const negatedNote = negatedFindings.length > 0
+        ? ` (음성 확인: ${negatedFindings.map((nf) => nf.clause).join(", ")})`
+        : "";
 
       events.push({
         id: `pain-${r.id}`,
         profileId: r.profileId,
-        category: isSerious ? "diagnosis" : "symptom",
-        title: isSerious
-          ? `${organ?.label ?? "부위"} 암/전이 판정 기록`
-          : organ
-          ? rawLabel === organ.label
-            ? `통증: ${organ.label}`
-            : `통증: ${organ.label} (${rawLabel})`
-          : `통증: ${rawLabel}`,
+        category: isSerious && !isNegated ? "diagnosis" : "symptom",
+        title,
         organKey,
         organLabel,
-        meshName,
+        meshName: organ?.defaultMeshName || (concept.sourceMeshId as string | undefined),
         observedAt,
         recordedAt,
         provenance: "user_report",
         sourceSentence: noteStr || sensation,
-        severityTone: isSerious ? "diagnosis_alert" : "warning",
-        detailNote: isSerious
-          ? "건강 다이어리에 기록된 중요 진단(암/전이) 연결 장기입니다. 손상률이나 현재 응급도를 뜻하지 않습니다."
-          : "사용자가 일일 건강기록(통증 다이어리)에 직접 기록한 부위와 증상입니다.",
+        severityTone: isSerious && !isNegated ? "diagnosis_alert" : isNegated ? "neutral" : "warning",
+        detailNote: isSerious && !isNegated
+          ? `건강 다이어리에 기록된 중요 진단(암/전이) 연결 장기입니다. 손상률이나 현재 응급도를 뜻하지 않습니다.${negatedNote}`
+          : isNegated
+          ? `기록상 통증이나 이상 소견이 배제되었거나 없다고 확인된 부위입니다.${negatedNote}`
+          : `사용자가 일일 건강기록(통증 다이어리)에 직접 기록한 부위와 증상입니다.${negatedNote}`,
         intensity: recordIntensity,
       });
     }
@@ -476,6 +665,7 @@ export function FamilyIntegratedMonitoring({
   const [selectedEventId, setSelectedEventId] = useState<string>();
   const [dateOffsetDays, setDateOffsetDays] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [selectionVersion, setSelectionVersion] = useState<number>(0);
 
   // 날짜 범위: dateOffsetDays 기준 7일 동적 타임라인 블록
   const timelineDates = useMemo(() => {
@@ -514,17 +704,23 @@ export function FamilyIntegratedMonitoring({
     return undefined;
   }, [allEvents, selectedEventId, currentMemberDateEvents]);
 
-  // 장기별 통증 강도 맵 생성 헬퍼
+  // 날짜 또는 구성원 변경 시 기본으로 전체 부위 동시 보기 모드 활성화
+  useEffect(() => {
+    setSelectedEventId(undefined);
+  }, [selectedDate, selectedProfileId]);
+
+  // 장기별 통증 강도 맵 생성 헬퍼 (진단 경고라고 임의로 10점/4점 주입하지 않으며, 미상 intensity는 0으로 왜곡하지 않고 실제 기록된 값만 보존)
   const buildOrganIntensityMap = (events: HealthEvent[]): Record<string, number> => {
     const map: Record<string, number> = {};
     events.forEach((ev) => {
       if (ev.organKey && typeof ev.intensity === "number") {
+        const intVal = ev.intensity;
         ev.organKey.split(",").forEach((k) => {
           const trimmed = k.trim();
           if (trimmed) {
             map[trimmed] = typeof map[trimmed] === "number"
-              ? Math.max(map[trimmed], ev.intensity!)
-              : ev.intensity!;
+              ? Math.max(map[trimmed], intVal)
+              : intVal;
           }
         });
       }
@@ -532,30 +728,11 @@ export function FamilyIntegratedMonitoring({
     return map;
   };
 
-  // 선택된 날짜의 모든 위험 장기를 3D 뷰어로 통보 (단일 이벤트 선택 시 해당 장기, 기본은 해당 날짜의 모든 위험 장기 동시 발광)
+  // 선택된 날짜의 모든 위험 장기를 3D 뷰어로 통보 (전체 표시 부위 집합과 상세 포커스 분리: Astra 2차 요구사항 5)
   useEffect(() => {
     if (!onSelectOrgan) return;
     const dateOrgans = currentMemberDateEvents.filter((ev) => ev.organKey);
     if (dateOrgans.length > 0) {
-      if (selectedEventId) {
-        const specificEvent = dateOrgans.find((e) => e.id === selectedEventId);
-        if (specificEvent?.organKey) {
-          if (typeof specificEvent.intensity === "number") {
-            onSelectOrgan(specificEvent.organKey, specificEvent.organLabel || "", specificEvent.intensity);
-          } else {
-            onSelectOrgan(specificEvent.organKey, specificEvent.organLabel || "");
-          }
-          return;
-        }
-      }
-      if (dateOrgans.length === 1) {
-        if (typeof dateOrgans[0].intensity === "number") {
-          onSelectOrgan(dateOrgans[0].organKey!, dateOrgans[0].organLabel || "", dateOrgans[0].intensity);
-        } else {
-          onSelectOrgan(dateOrgans[0].organKey!, dateOrgans[0].organLabel || "");
-        }
-        return;
-      }
       const uniqueKeys = Array.from(new Set(dateOrgans.map((ev) => ev.organKey!)));
       const uniqueLabels = Array.from(new Set(dateOrgans.map((ev) => ev.organLabel!)));
       const organIntensityMap = buildOrganIntensityMap(dateOrgans);
@@ -564,7 +741,18 @@ export function FamilyIntegratedMonitoring({
         ? dateOrgans.reduce((max, ev) => (typeof ev.intensity === "number" ? Math.max(max, ev.intensity) : max), 0)
         : undefined;
 
-      if (Object.keys(organIntensityMap).length > 0) {
+      const specificEvent = selectedEventId ? dateOrgans.find((e) => e.id === selectedEventId) : undefined;
+      const focusedOrganKey = specificEvent?.organKey;
+
+      if (focusedOrganKey) {
+        onSelectOrgan(
+          uniqueKeys.join(","),
+          uniqueLabels.join(", "),
+          maxIntensity,
+          Object.keys(organIntensityMap).length > 0 ? organIntensityMap : undefined,
+          focusedOrganKey,
+        );
+      } else if (Object.keys(organIntensityMap).length > 0) {
         onSelectOrgan(
           uniqueKeys.join(","),
           uniqueLabels.join(", "),
@@ -579,7 +767,7 @@ export function FamilyIntegratedMonitoring({
     } else {
       onSelectOrgan("", "");
     }
-  }, [currentMemberDateEvents, selectedEventId, onSelectOrgan]);
+  }, [currentMemberDateEvents, selectedEventId, onSelectOrgan, selectionVersion]);
 
   return (
     <section className="family-monitoring-workspace" aria-labelledby="family-monitoring-heading">
@@ -681,7 +869,17 @@ export function FamilyIntegratedMonitoring({
                 key={profile.id}
                 className={`timeline-member-row ${isSelectedMember ? "selected-member-row" : ""}`}
                 onClick={() => {
-                  onSelectProfile(profile.id);
+                  if (profile.id !== selectedProfileId) {
+                    onSelectProfile(profile.id);
+                  }
+                  const datesWithEvents = timelineDates.filter((d) =>
+                    memberEvents.some((e) => matchesTimelineDate(e.observedAt, e.recordedAt, d)),
+                  );
+                  if (datesWithEvents.length > 0 && !datesWithEvents.includes(selectedDate)) {
+                    setSelectedDate(datesWithEvents[datesWithEvents.length - 1]);
+                  }
+                  setSelectedEventId(undefined);
+                  setSelectionVersion((v) => v + 1);
                 }}
               >
                 <div className="timeline-member-info">
@@ -747,46 +945,12 @@ export function FamilyIntegratedMonitoring({
                         }
                         onClick={(e) => {
                           e.stopPropagation();
-                          onSelectProfile(profile.id);
-                          setSelectedDate(date);
-                          if (dayEvents.length > 0) {
-                            if (dayEvents.length > 1) {
-                              setSelectedEventId(undefined);
-                              const dayOrgans = dayEvents.filter((ev) => Boolean(ev.organKey));
-                              const keys = Array.from(new Set(dayOrgans.map((ev) => ev.organKey!)));
-                              const labels = Array.from(new Set(dayOrgans.map((ev) => ev.organLabel!).filter(Boolean)));
-                              const organIntensityMap = buildOrganIntensityMap(dayOrgans);
-                              const hasIntensity = dayOrgans.some((ev) => typeof ev.intensity === "number");
-                              const maxIntensity = hasIntensity
-                                ? dayOrgans.reduce((max, ev) => (typeof ev.intensity === "number" ? Math.max(max, ev.intensity) : max), 0)
-                                : undefined;
-                              if (keys.length > 0 && onSelectOrgan) {
-                                onSelectOrgan(keys.join(","), labels.join(", "), maxIntensity, organIntensityMap);
-                              }
-                            } else {
-                              setSelectedEventId(dayEvents[0].id);
-                              if (dayEvents[0].organKey && onSelectOrgan) {
-                                const singleIntensityMap: Record<string, number> = {};
-                                if (typeof dayEvents[0].intensity === "number") {
-                                  dayEvents[0].organKey.split(",").forEach((k) => {
-                                    const trimmed = k.trim();
-                                    if (trimmed) singleIntensityMap[trimmed] = dayEvents[0].intensity!;
-                                  });
-                                }
-                                onSelectOrgan(
-                                  dayEvents[0].organKey,
-                                  dayEvents[0].organLabel || "",
-                                  dayEvents[0].intensity,
-                                  singleIntensityMap,
-                                );
-                              }
-                            }
-                          } else {
-                            setSelectedEventId(undefined);
-                            if (onSelectOrgan) {
-                              onSelectOrgan("", "");
-                            }
+                          if (profile.id !== selectedProfileId) {
+                            onSelectProfile(profile.id);
                           }
+                          setSelectedDate(date);
+                          setSelectedEventId(undefined);
+                          setSelectionVersion((v) => v + 1);
                         }}
                       >
                         {dayEvents.length > 0 ? (
@@ -863,19 +1027,6 @@ export function FamilyIntegratedMonitoring({
                 className={`same-day-chip ${selectedEventId === undefined ? "active-chip" : ""}`}
                 onClick={() => {
                   setSelectedEventId(undefined);
-                  const dateOrgans = currentMemberDateEvents.filter((ev) => ev.organKey);
-                  const uniqueKeys = Array.from(new Set(dateOrgans.map((ev) => ev.organKey!)));
-                  const uniqueLabels = Array.from(new Set(dateOrgans.map((ev) => ev.organLabel!).filter(Boolean)));
-                  const organIntensityMap = buildOrganIntensityMap(dateOrgans);
-                  const hasIntensity = dateOrgans.some((ev) => typeof ev.intensity === "number");
-                  const maxIntensity = hasIntensity
-                    ? dateOrgans.reduce((max, ev) => (typeof ev.intensity === "number" ? Math.max(max, ev.intensity) : max), 0)
-                    : undefined;
-                  if (uniqueKeys.length > 0 && onSelectOrgan) {
-                    onSelectOrgan(uniqueKeys.join(","), uniqueLabels.join(", "), maxIntensity, organIntensityMap);
-                  } else if (onSelectOrgan) {
-                    onSelectOrgan("all", "전체 신체");
-                  }
                 }}
               >
                 {(() => {
@@ -886,8 +1037,8 @@ export function FamilyIntegratedMonitoring({
                     return "전체 위험 장기 동시 보기 (간 + 폐)";
                   }
                   return uniqueLabels.length > 0
-                    ? `해당 일자 전체 부위 동시 보기 (${uniqueLabels.join(" + ")})`
-                    : "해당 일자 전체 부위 동시 보기";
+                    ? `전체 기록 동시 보기 (${uniqueLabels.join(" + ")})`
+                    : `전체 기록 동시 보기 (${currentMemberDateEvents.length}건 전체)`;
                 })()}
               </button>
               {currentMemberDateEvents.map((ev) => {
@@ -901,15 +1052,6 @@ export function FamilyIntegratedMonitoring({
                     className={`same-day-chip ${isActive ? "active-chip" : ""}`}
                     onClick={() => {
                       setSelectedEventId(ev.id);
-                      if (ev.organKey && onSelectOrgan) {
-                        if (hasInt) {
-                          onSelectOrgan(ev.organKey, ev.organLabel || "", ev.intensity);
-                        } else {
-                          onSelectOrgan(ev.organKey, ev.organLabel || "");
-                        }
-                      } else if (onSelectOrgan) {
-                        onSelectOrgan("", "");
-                      }
                     }}
                   >
                     {hasInt ? (

@@ -384,6 +384,34 @@ export function HomePage() {
     };
   }, [runtime, profileIds]);
 
+  const handleSelectOrgan = useCallback(
+    (
+      key?: string,
+      _label?: string,
+      intensity?: number,
+      organIntensities?: Record<string, number>,
+    ) => {
+      const nextKey = key || undefined;
+      setHighlightOrganKey((prev) => (prev !== nextKey ? nextKey : prev));
+      setHighlightPainIntensity((prev) => (prev !== intensity ? intensity : prev));
+      setHighlightOrganIntensities((prev) => {
+        if (!prev && !organIntensities) return prev;
+        if (prev && organIntensities && Object.keys(prev).length === Object.keys(organIntensities).length) {
+          let same = true;
+          for (const [k, v] of Object.entries(organIntensities)) {
+            if (prev[k] !== v) {
+              same = false;
+              break;
+            }
+          }
+          if (same) return prev;
+        }
+        return organIntensities;
+      });
+    },
+    [],
+  );
+
   async function submitProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
@@ -685,11 +713,7 @@ export function HomePage() {
                 void navigate(`/members/${id}`);
               }}
               records={familyRecords.length > 0 ? familyRecords : records}
-              onSelectOrgan={(key, _label, intensity, organIntensities) => {
-                setHighlightOrganKey(key || undefined);
-                setHighlightPainIntensity(intensity);
-                setHighlightOrganIntensities(organIntensities);
-              }}
+              onSelectOrgan={handleSelectOrgan}
             />
 
             <Suspense fallback={<div className="body-map-loading">3D 인체 미리보기를 준비하는 중…</div>}>
