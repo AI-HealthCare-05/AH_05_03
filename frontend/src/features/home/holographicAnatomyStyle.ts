@@ -58,7 +58,11 @@ export function resolveVascularSystem(nameOrId: string, system: string): string 
     lower.includes("saphenous") ||
     lower.includes("sinus") ||
     lower.includes("azygos") ||
-    lower.includes("caval")
+    lower.includes("caval") ||
+    lower.includes("basilic") ||
+    lower.includes("cephalic") ||
+    lower.includes("phleb") ||
+    lower.includes("정맥")
   ) {
     return "venous";
   }
@@ -68,7 +72,8 @@ export function resolveVascularSystem(nameOrId: string, system: string): string 
     lower.includes("aortic") ||
     lower.includes("carotid") ||
     lower.includes("celiac") ||
-    lower.includes("trunk")
+    lower.includes("trunk") ||
+    lower.includes("동맥")
   ) {
     return "arterial";
   }
@@ -79,7 +84,8 @@ export function resolveVascularSystem(nameOrId: string, system: string): string 
     lower.includes("cardiac") ||
     lower.includes("coronary") ||
     lower.includes("valve") ||
-    lower.includes("myocard")
+    lower.includes("myocard") ||
+    lower.includes("심장")
   ) {
     return "cardiac";
   }
@@ -580,6 +586,7 @@ export function createDangerOrganHighlightMaterials(
     return createDangerShellHighlightMaterials(source, options.intensity);
   }
   const painProfile = getPainColorProfile(options?.intensity);
+  const isExtreme = typeof options?.intensity === "number" && options.intensity >= 9;
   const highlighted = materialsOf(source).map((material) => {
     const clone = material.clone();
     if (
@@ -591,11 +598,11 @@ export function createDangerOrganHighlightMaterials(
       clone.color.copy(painProfile.color);
       if ("emissive" in clone) {
         (clone as THREE.MeshStandardMaterial).emissive.setHex(painProfile.emissiveHex);
-        (clone as THREE.MeshStandardMaterial).emissiveIntensity = 0.95;
+        (clone as THREE.MeshStandardMaterial).emissiveIntensity = isExtreme ? 1.8 : 0.95;
       }
-      clone.opacity = 0.78; // 부드러운 반투명 깊이감
+      clone.opacity = isExtreme ? 0.92 : 0.78; // 극심 장기는 더 또렷한 불투명도
       clone.transparent = true;
-      clone.depthTest = true;
+      clone.depthTest = !isExtreme; // 극심한 내부 장기(폐암 등)는 뼈/연골에 가리지 않고 항상 엑스레이 홀로그램 투시
       clone.depthWrite = false; // 반투명 겹침 블렌딩
       clone.wireframe = false;
       clone.needsUpdate = true;
