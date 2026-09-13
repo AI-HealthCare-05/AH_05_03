@@ -39,10 +39,6 @@ from app.services.food_nutrition_tools import (
 from app.services.health_assistant_boundary import HealthAssistantBoundaryService
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.health_knowledge_catalog import HealthKnowledgeClientProtocol, is_alcohol_topic
-from app.services.health_knowledge_tools import (
-    execute_health_knowledge_tool,
-    get_health_knowledge_tools,
-)
 from app.services.health_record_tools import (
     QUERY_HEALTH_RECORDS_TOOL_NAME,
     execute_health_record_tool,
@@ -64,13 +60,15 @@ from app.services.outdoor_conditions_client import (
     OutdoorConditionsClientProtocol,
     resolve_sido_coordinates,
 )
-from app.services.outdoor_conditions_tools import (
-    execute_outdoor_conditions_tool,
-    get_outdoor_conditions_tools,
-)
+from app.services.outdoor_conditions_tools import execute_outdoor_conditions_tool
 from app.services.outdoor_topic import OUTDOOR_ACTIVITY_KEYWORDS, OUTDOOR_ENVIRONMENT_KEYWORDS
 
 logger = logging.getLogger(__name__)
+
+_EXPLICIT_PAIN_INTENSITY_PATTERN = re.compile(
+    r"(?:통증\s*)?(?:강도|세기)\s*(?:는|가)?\s*(?:약\s*)?(?:10|[0-9])(?:\s*(?:점|정도|/\s*10))?"
+    r"|(?<!\d)(?:10|[0-9])\s*(?:점|/\s*10)(?!\d)"
+)
 
 _FOOD_NUTRITION_KEYWORDS = (
     "칼로리",
@@ -313,7 +311,12 @@ class HealthAssistantService:
         account: ServiceAccount | None,
         profile_context: ProfileContext | None,
     ) -> tuple[list[Any], str | None]:
-        """바운더리 판정이 요구한 근거 종류를 실제로 채운다.
+        """바운더리 판정이 요구한 근거 종류를 메인 LLM 호출 전에 서버가 직접 채운다.
+
+        health_knowledge/health_records는 LLM이 도구를 "알아서" 부르게 두지 않는다 —
+        모델이 도구를 안 부르거나 다른 도구를 먼저 부르면 근거가 영원히 안 채워지고,
+        그 판단이 매 호출마다 달라질 수 있어 재현도 안 된다. 여기서 결정론적으로
+        채우고, 메인 LLM은 이미 채워진 근거를 요약·설명만 한다.
 
         바운더리가 이미 내린 판정(``decision.required_evidence_types``)을 그대로
         신뢰해서 근거를 채운다 — 여기서 같은 판단을 별도 키워드로 다시 하면,
@@ -323,24 +326,41 @@ class HealthAssistantService:
             return [], None
 
         required = set(decision.required_evidence_types)
-        if not required & {"health_records"}:
+        if not required & {"health_knowledge", "health_records"}:
             return [], None
 
-        query = request.messages[-1].content
+        # 원문("당뇨에 좋은 음식")보다 쿼리 빌더가 만든 enriched_query("당뇨병 환자의
+        # 식이요법 안내" 같은)가 포털 제목과 더 가깝게 맞는다 — 원문 그대로 검색하면
+        # 관련 없는 문서가 걸리기 쉽다.
+        query = request.enriched_query or request.messages[-1].content
+        raw_query = request.messages[-1].content
         results: list[Any] = []
         snapshot_lines: list[str] = []
+        knowledge_lines: list[str] = []
 
         # 개인 건강기록 스냅샷은 아직 음주 주제만 구현돼 있다. 다른 주제의 개인기록
         # 스냅샷이 생기면 여기에 분기를 추가하면 된다.
-        if "health_records" in required and is_alcohol_topic(query):
+        if "health_records" in required and is_alcohol_topic(raw_query):
             snapshot = await self._fetch_alcohol_snapshot(account=account, profile_context=profile_context)
             results.append(snapshot)
             snapshot_lines = ["[개인 건강기록 스냅샷]", snapshot.model_dump_json(exclude_none=True)]
 
+        if "health_knowledge" in required:
+            knowledge = await self.health_knowledge_client.search(query)
+            # 카탈로그/포털에 아직 없는 주제는 items가 빈 채로 돌아온다. 그걸 그대로
+            # results에 넣으면 "근거를 하나도 못 채웠다"는 사전 차단 게이트가 빈 결과도
+            # "뭔가 채워졌다"고 착각해서, 실제로는 근거가 없는데도 메인 LLM 호출까지
+            # 새어나간다. 빈 결과는 근거가 아니므로 넣지 않는다.
+            if knowledge.items:
+                results.append(knowledge)
+                knowledge_lines.append("[질병관리청 국가건강정보포털 근거]")
+                for item in knowledge.items:
+                    knowledge_lines.append(f"- {item.title}: {item.summary} (출처: {item.url})")
+
         if not results:
             return [], None
 
-        lines = snapshot_lines
+        lines = snapshot_lines + knowledge_lines
         return results, "\n".join(lines) if lines else None
 
     @classmethod
@@ -853,14 +873,16 @@ class HealthAssistantService:
             )
         if name == "search_medication_info":
             return await execute_medication_tool(name, args, self.medication_client)
-        if name == "get_outdoor_health_conditions":
-            return await execute_outdoor_conditions_tool(name, args, self.outdoor_conditions_client)
-        if name == "search_health_knowledge":
-            return await execute_health_knowledge_tool(name, args, self.health_knowledge_client)
         return await execute_facility_tool(name, args, self.facility_client)
 
     def _get_tools(self, request: HealthAssistantChatRequest) -> list[Any] | None:
-        """요청에 필요한 Tool 목록을 반환한다. 불필요한 툴은 포함하지 않는다."""
+        """요청에 필요한 Tool 목록을 반환한다. 불필요한 툴은 포함하지 않는다.
+
+        health_knowledge·outdoor는 여기 없다 — LLM이 호출 여부를 그때그때
+        판단하게 두면 근거가 채워질 때도 있고 안 채워질 때도 있어서(재현 안 됨),
+        `_load_authoritative_evidence`/`_load_outdoor_conditions`가 메인 LLM을
+        부르기 전에 서버에서 결정론적으로 미리 채운다.
+        """
         if self._needs_health_record_query_tool(request):
             return get_health_record_tools()
         tools: list[Any] = []
@@ -870,11 +892,6 @@ class HealthAssistantService:
             tools.extend(get_medication_tools())
         if self._needs_food_nutrition(request):
             tools.extend(get_food_nutrition_tools())
-        if self._needs_outdoor_conditions(request):
-            tools.extend(get_outdoor_conditions_tools())
-
-        # Add health knowledge tools if required by boundary or globally
-        tools.extend(get_health_knowledge_tools())
 
         return tools if tools else None
 
@@ -921,6 +938,30 @@ class HealthAssistantService:
             missing_fields=["profile_id"],
             needs_confirmation=False,
         )
+
+    @staticmethod
+    def _clear_unstated_pain_intensity(
+        response: HealthAssistantResponse,
+        request: HealthAssistantChatRequest,
+    ) -> HealthAssistantResponse:
+        """사용자가 말하지 않은 통증 수치를 LLM이 만들어도 저장 경로에서 제거한다."""
+        if response.intent != "record_pain" or not request.messages:
+            return response
+        user_message = request.messages[-1].content
+        if _EXPLICIT_PAIN_INTENSITY_PATTERN.search(user_message):
+            return response
+
+        changed = False
+        if response.pain_draft is not None and response.pain_draft.intensity is not None:
+            response.pain_draft.intensity = None
+            changed = True
+        if response.pain_diary_tool is not None and response.pain_diary_tool.intensity is not None:
+            response.pain_diary_tool.intensity = None
+            changed = True
+        if changed:
+            response.auto_save = False
+            response.needs_confirmation = True
+        return response
 
     async def respond(
         self,
@@ -1021,6 +1062,7 @@ class HealthAssistantService:
             response = HealthAssistantResponse.model_validate(llm_res.model_dump())
             self._attach_tool_result_to_response(response, tool_result)
 
+        response = self._clear_unstated_pain_intensity(response, request)
         if outdoor_conditions and not response.outdoor_conditions:
             response.outdoor_conditions = outdoor_conditions
         validated_response = self.safety_service.validate_response(response)
@@ -1240,6 +1282,7 @@ class HealthAssistantService:
         except Exception as ex:
             raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex
 
+        parsed = self._clear_unstated_pain_intensity(parsed, request)
         validated = self.safety_service.validate_response(parsed)
         validated = self.boundary_service.enforce_grounding(
             boundary.decision,

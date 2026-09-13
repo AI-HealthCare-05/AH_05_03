@@ -56,7 +56,7 @@ export interface MedicationDraft {
 
 export interface PainDraft {
   body_area: string;
-  intensity: number;
+  intensity?: number | null;
   sensation?: string | null;
   onset_at?: string | null;
   note?: string | null;
@@ -70,7 +70,7 @@ export interface PainDraft {
 export interface PainDiaryToolCall {
   tool_name: "format_pain_diary";
   body_area: string;
-  intensity: number;
+  intensity?: number | null;
   sensation?: string | null;
   aggravating_factors?: string | null;
   formatted_diary: string;

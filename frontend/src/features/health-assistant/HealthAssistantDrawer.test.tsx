@@ -546,6 +546,53 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     });
   });
 
+  it("사용자가 통증 강도를 말하지 않으면 임의 값으로 저장하지 않고 직접 선택하게 한다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "record_pain",
+      assistant_message: "머리 통증 강도를 선택해 주세요.",
+      pain_draft: {
+        body_area: "머리",
+        intensity: null,
+        sensation: "깨질 듯함",
+      },
+      missing_fields: [],
+      needs_confirmation: true,
+      auto_save: false,
+      suggested_quick_replies: [],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={mockProfile}
+        runtime={mockRuntime}
+        isOpen={true}
+        onClose={mockOnClose}
+        onRecordSaved={mockOnRecordSaved}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+    fireEvent.change(input, { target: { value: "머리가 깨질 것 같아" } });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    const saveButton = await screen.findByRole("button", { name: "통증 기록에 저장하기" });
+    expect(saveButton).toBeDisabled();
+    expect(mockCreateRecord).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("통증 강도"), { target: { value: "7" } });
+    expect(saveButton).toBeEnabled();
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordType: "pain",
+          payload: expect.objectContaining({ intensity: 7 }),
+        }),
+      );
+    });
+  });
+
   it("통증일기 대화 시 format_pain_diary 툴콜링 카드가 표시되고 다이어리에 저장할 수 있다", async () => {
     vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_pain",
@@ -2337,4 +2384,3 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     });
   });
 });
-

@@ -9,7 +9,7 @@ from app.dtos.health_knowledge import HealthKnowledgeItem, HealthKnowledgeSearch
 from app.dtos.health_record_query import AlcoholConsultationSnapshot
 from app.services.health_assistant_boundary import HealthAssistantBoundaryService
 from app.services.health_knowledge_catalog import HealthKnowledgeCatalogClient, is_alcohol_topic
-from app.services.kdca_health_info_client import KdcaHealthInfoClient
+from app.services.kdca_health_info_client import KdcaHealthInfoClient, _candidate_keywords, _is_relevant
 
 
 @pytest.mark.asyncio
@@ -108,6 +108,34 @@ async def test_kdca_health_info_client_hits_the_real_api() -> None:
     assert first.title
     assert first.url.startswith("https://health.kdca.go.kr/")
     assert len(first.summary) > 10
+
+
+def test_kdca_food_question_uses_portal_title_alias() -> None:
+    candidates = _candidate_keywords("당뇨에 좋은 음식")
+
+    assert "당뇨환자의 식이요법" in candidates
+
+
+def test_kdca_relevance_requires_same_disease_and_intent() -> None:
+    query = "당뇨병 환자의 식이요법 안내"
+
+    assert _is_relevant("당뇨환자의 식이요법", query) is True
+    assert _is_relevant("고혈압 환자의 식이요법", query) is False
+    assert _is_relevant("투석환자의 식이요법", query) is False
+    assert _is_relevant("당뇨병 급성 합병증", query) is False
+
+
+def test_kdca_relevance_covers_newly_added_diseases() -> None:
+    assert _is_relevant("무릎관절염, 올바로 운동하기", "관절염 환자 운동 어떻게 해야 돼") is True
+    assert _is_relevant("당뇨환자의 식이요법", "관절염 환자 운동 어떻게 해야 돼") is False
+
+
+def test_kdca_relevance_rejects_ambiguous_intake_word_match() -> None:
+    """'섭취'는 식이요법(먹는 것)과 방사성동위원소 섭취율(검사 수치)에 둘 다 쓰여서 오매칭을 낸다.
+
+    갑상선 검사 문서가 '음식' 관련 질문에 걸리면 안 된다.
+    """
+    assert _is_relevant("갑상선 검사(방사성 요오드 섭취율)", "갑상선 기능 저하증에 좋은 음식") is False
 
 
 def test_is_alcohol_topic_catches_statement_form_that_fast_path_intent_check_misses() -> None:

@@ -52,8 +52,50 @@ _PREFERRED_SECTION_ORDER = ("요약문", "개요")
 _TOKEN_SPLIT_PATTERN = re.compile(r"[\s,./?!·]+")
 # 흔한 조사 하나만 뒤에 붙은 경우 떼어낸다 — 짧은 명사 키워드일수록 포털
 # 검색이 잘 맞는다("당뇨에" 검색은 0건, "당뇨"는 매치된다).
-_TRAILING_PARTICLE_PATTERN = re.compile(r"(?<=[가-힣]{2})(은|는|이|가|을|를|도|만|에|의|로|으로)$")
-_MAX_KEYWORD_ATTEMPTS = 4
+_TRAILING_PARTICLE_PATTERN = re.compile(
+    r"(?<=[가-힣]{2})(에게|한테|으로|에서|부터|까지|은|는|이|가|을|를|도|만|에|의|로|과|와)$"
+)
+_STOPWORDS = frozenset({"환자", "환자들", "안내", "정보", "방법", "정도", "관련", "대해", "알려줘", "뭐가", "어떤"})
+_DISEASE_ALIASES: dict[str, tuple[str, ...]] = {
+    "당뇨": ("당뇨", "당뇨병"),
+    "고혈압": ("고혈압",),
+    "이상지질혈증": ("이상지질혈증", "고지혈증"),
+    "비만": ("비만",),
+    "갑상선": ("갑상선",),
+    "관절염": ("관절염",),
+    "골다공증": ("골다공증",),
+    "천식": ("천식",),
+    "뇌졸중": ("뇌졸중", "뇌경색", "뇌출혈"),
+    "심장질환": ("심장질환", "심근경색", "협심증"),
+    "위염": ("위염", "위궤양"),
+    "우울증": ("우울증", "우울"),
+}
+_INTENT_ALIASES: dict[str, tuple[str, ...]] = {
+    "식이요법": ("식이요법", "식이", "식사", "식단", "좋은음식", "음식", "뭘먹", "먹어야", "영양"),
+    "운동요법": ("운동요법", "운동법", "운동", "신체활동"),
+    "예방": ("예방법", "예방"),
+    "관리": ("관리", "자기관리"),
+}
+_PORTAL_QUERY_ALIASES: dict[tuple[str, str], str] = {
+    ("당뇨", "식이요법"): "당뇨환자의 식이요법",
+    ("고혈압", "식이요법"): "고혈압 환자의 식이요법",
+}
+_MAX_KEYWORD_ATTEMPTS = 6
+
+
+def _matched_concepts(text: str, aliases: dict[str, tuple[str, ...]]) -> set[str]:
+    compact = re.sub(r"\s+", "", text)
+    return {canonical for canonical, words in aliases.items() if any(word in compact for word in words)}
+
+
+def _significant_tokens(query: str) -> list[str]:
+    """원문/enriched_query에서 조사를 뗀 의미 있는 단어만 뽑는다(2자 이상, 중복 제거)."""
+    tokens: list[str] = []
+    for token in _TOKEN_SPLIT_PATTERN.split(query):
+        stripped = _TRAILING_PARTICLE_PATTERN.sub("", token)
+        if len(stripped) >= 2 and stripped not in _STOPWORDS and stripped not in tokens:
+            tokens.append(stripped)
+    return tokens
 
 
 def _candidate_keywords(query: str) -> list[str]:
@@ -62,12 +104,44 @@ def _candidate_keywords(query: str) -> list[str]:
     이 검색은 제목에 대한 단순 매칭이라 "당뇨에 좋은 음식 뭐가 있어" 같은
     문장 전체로는 안 걸리고 "당뇨"처럼 짧은 명사라야 걸린다.
     """
-    candidates = [query]
-    for token in _TOKEN_SPLIT_PATTERN.split(query):
-        stripped = _TRAILING_PARTICLE_PATTERN.sub("", token)
-        if len(stripped) >= 2 and stripped not in candidates:
-            candidates.append(stripped)
-    return candidates[:_MAX_KEYWORD_ATTEMPTS]
+    diseases = _matched_concepts(query, _DISEASE_ALIASES)
+    intents = _matched_concepts(query, _INTENT_ALIASES)
+    portal_aliases = [
+        alias
+        for disease in diseases
+        for intent in intents
+        if (alias := _PORTAL_QUERY_ALIASES.get((disease, intent))) is not None
+    ]
+    disease_keywords = [next(iter(_DISEASE_ALIASES[disease])) for disease in diseases]
+    candidates = [query, *portal_aliases, *disease_keywords, *_significant_tokens(query)]
+    seen: list[str] = []
+    for candidate in candidates:
+        if candidate not in seen:
+            seen.append(candidate)
+    return seen[:_MAX_KEYWORD_ATTEMPTS]
+
+
+def _is_relevant(title: str, query: str) -> bool:
+    """질환과 질문 의도를 별도로 맞춰 다른 질환 자료나 엉뚱한 주제를 배제한다."""
+    query_diseases = _matched_concepts(query, _DISEASE_ALIASES)
+    title_diseases = _matched_concepts(title, _DISEASE_ALIASES)
+    if query_diseases and not query_diseases.intersection(title_diseases):
+        return False
+
+    query_intents = _matched_concepts(query, _INTENT_ALIASES)
+    title_intents = _matched_concepts(title, _INTENT_ALIASES)
+    if query_intents and not query_intents.intersection(title_intents):
+        return False
+
+    if query_diseases or query_intents:
+        return True
+
+    significant_tokens = _significant_tokens(query)
+    if not significant_tokens:
+        return False
+    matches = sum(1 for token in significant_tokens if token in title)
+    required = min(2, len(significant_tokens))
+    return matches >= required
 
 
 def _strip_html(fragment: str) -> str:
@@ -148,8 +222,13 @@ class KdcaHealthInfoClient:
                     data={"TOKEN": token, "srchWrd": keyword, "lclasSn": "", "pageIndex": "1"},
                 )
                 list_resp.raise_for_status()
-                list_items = _parse_list_items(list_resp.text)[:_MAX_ITEMS]
-                if list_items:
+                raw_items = _parse_list_items(list_resp.text)
+                # 포털 검색이 질환명 하나만 겹쳐도 문서를 돌려주는 경우가 있다
+                # ("당뇨에 좋은 음식" → "당뇨병 급성 합병증"). 관련 없는 결과는 근거로
+                # 인정하지 않고, 이번 검색어가 전부 걸러지면 다음 후보 검색어로 넘어간다.
+                relevant_items = [(sn, title) for sn, title in raw_items if _is_relevant(title, query)]
+                if relevant_items:
+                    list_items = relevant_items[:_MAX_ITEMS]
                     break
 
             items: list[HealthKnowledgeItem] = []

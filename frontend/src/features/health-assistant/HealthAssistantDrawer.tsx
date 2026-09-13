@@ -282,7 +282,7 @@ export function HealthAssistantDrawer({
           return `[${dateStr} 운동] ${p.exerciseName} ${p.weightKg ? `${p.weightKg}kg ` : ""}${p.reps ? `${p.reps}회 ` : ""}${p.sets ? `${p.sets}세트` : ""}`;
         }
         if (r.recordType === "pain" || p.bodyArea) {
-          return `[${dateStr} 통증] ${p.bodyArea} 강도 ${p.intensity}/10`;
+          return `[${dateStr} 통증] ${p.bodyArea}${typeof p.intensity === "number" ? ` 강도 ${p.intensity}/10` : " (강도 미입력)"}`;
         }
         if (r.recordType === "health_screening" || r.recordType === "lab_result") {
           const name = (p.screeningName as string) ?? (p.testName as string) ?? "검진";
@@ -835,6 +835,8 @@ export function HealthAssistantDrawer({
       imageFile: currentImage ?? undefined,
     };
 
+    // 세션의 첫 메시지인지 미리 기억해 둔다 — 세션 목록 제목은 첫 메시지에만 바뀐다.
+    const isFirstMessageOfSession = messages.length === 0;
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
     setInput("");
@@ -883,8 +885,11 @@ export function HealthAssistantDrawer({
 
       // 일반 대화/기록 입력에는 과거 건강정보를 보내지 않는다.
       // 개인 기록이 실제로 필요한 건강 질문에 한해 관련 종류만 선별한다.
+      // 창을 너무 넓게 잡으면(예: 최근 6개) 몇 턴 전에 나온 주제 단어("혈압" 등)가
+      // 완전히 무관한 다음 질문까지 물고 늘어져 불필요한 개인기록 조회가 반복된다.
+      // "질문 → 되묻기(missing_fields) → 답변" 한 왕복만 담기면 되므로 3개로 좁힌다.
       const recentConversationText = nextMessages
-        .slice(-6)
+        .slice(-3)
         .map((message) => message.content)
         .join("\n");
       const contextRecordTypes = selectContextRecordTypes(recentConversationText);
@@ -1130,8 +1135,11 @@ export function HealthAssistantDrawer({
           assistantMsgId,
         );
       }
-      // 첫 사용자 질문이 세션 제목으로 저장되므로 목록도 최신 상태로 갱신한다.
-      void listChatSessions(profile.id).then((sessions) => setChatSessions(sessions)).catch(() => undefined);
+      // 첫 사용자 질문이 세션 제목으로 저장되므로, 그때만 목록을 최신 상태로 갱신한다.
+      // 이후 턴은 제목이 안 바뀌므로 답변마다 매번 다시 불러올 필요가 없다.
+      if (isFirstMessageOfSession) {
+        void listChatSessions(profile.id).then((sessions) => setChatSessions(sessions)).catch(() => undefined);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "응답을 받지 못했습니다. 다시 시도해 주세요.");
     } finally {
@@ -1527,6 +1535,10 @@ export function HealthAssistantDrawer({
   // 통증 초안 로컬 저장
   async function savePain(draft: PainDraft, msgId: string): Promise<boolean> {
     if (!runtime || !profile || !draft.body_area) return false;
+    if (draft.intensity == null) {
+      setError("통증 강도를 0~10 사이에서 선택해 주세요.");
+      return false;
+    }
     setLoading(true);
     try {
       let anatomyEvent: AnatomyEvent | undefined;
@@ -1616,6 +1628,10 @@ export function HealthAssistantDrawer({
     msgId: string,
   ): Promise<boolean> {
     if (!runtime || !profile || !tool.body_area) return false;
+    if (tool.intensity == null) {
+      setError("통증 강도를 0~10 사이에서 선택해 주세요.");
+      return false;
+    }
     setLoading(true);
     try {
       const recordDate = tool.date_str
@@ -1676,7 +1692,7 @@ export function HealthAssistantDrawer({
         payload: {
           type: "pain",
           bodyArea: tool.body_area,
-          intensity: typeof tool.intensity === "number" ? tool.intensity : 5,
+          intensity: tool.intensity,
           sensation: tool.sensation || undefined,
           aggravatingFactors: tool.aggravating_factors || undefined,
           note: tool.formatted_diary,
@@ -2939,7 +2955,7 @@ function PainConfirmationCard({
   onSave: (updated: PainDraft) => void;
 }) {
   const [bodyArea, setBodyArea] = useState(draft.body_area);
-  const [intensity, setIntensity] = useState(draft.intensity ?? 5);
+  const [intensity, setIntensity] = useState<number | null>(draft.intensity ?? null);
   const [sensation, setSensation] = useState(draft.sensation ?? "");
   const [note, setNote] = useState(draft.note ?? "");
 
@@ -2947,7 +2963,7 @@ function PainConfirmationCard({
     return (
       <div className="draft-confirm-card is-saved">
         <span className="saved-badge">안전하게 저장되었습니다.</span>
-        <p><strong>{bodyArea}</strong>: 강도 {intensity}/10 {sensation ? `(${sensation})` : ""}</p>
+        <p><strong>{bodyArea}</strong>: {intensity == null ? "강도 미입력" : `강도 ${intensity}/10`} {sensation ? `(${sensation})` : ""}</p>
       </div>
     );
   }
@@ -2969,16 +2985,17 @@ function PainConfirmationCard({
         </label>
         <div className="input-row">
           <label>
-            통증 강도 ({intensity}/10)
+            통증 강도 {intensity == null ? "(선택 필요)" : `(${intensity}/10)`}
             <div className="pain-intensity-slider-wrap">
-              <input
-                type="range"
-                min="0"
-                max="10"
-                value={intensity}
-                onChange={(e) => setIntensity(Number(e.target.value))}
-              />
-              <span className="pain-intensity-val">{intensity}</span>
+              <select
+                aria-label="통증 강도"
+                value={intensity ?? ""}
+                onChange={(e) => setIntensity(e.target.value === "" ? null : Number(e.target.value))}
+              >
+                <option value="">선택해 주세요</option>
+                {Array.from({ length: 11 }, (_, value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+              <span className="pain-intensity-val">{intensity ?? "-"}</span>
             </div>
           </label>
           <label>
@@ -3004,7 +3021,7 @@ function PainConfirmationCard({
       <button
         type="button"
         className="confirm-save-btn"
-        disabled={!bodyArea}
+        disabled={!bodyArea || intensity == null}
         onClick={() => onSave({ ...draft, body_area: bodyArea, intensity, sensation, note })}
       >
         통증 기록에 저장하기
@@ -3273,7 +3290,7 @@ function QueriedRecordsView({
                 } else if (rec.recordType === "medication" || p.medicationName) {
                   contentText = `${p.medicationName}${p.dosage ? ` ${p.dosage}` : ""}${p.takenAt ? ` (${p.takenAt})` : ""}`;
                 } else if (rec.recordType === "pain" || p.bodyArea) {
-                  contentText = `${p.bodyArea} · 강도 ${p.intensity}/10${p.sensation ? ` (${p.sensation})` : ""}`;
+                  contentText = `${p.bodyArea}${typeof p.intensity === "number" ? ` · 강도 ${p.intensity}/10` : " · 강도 미입력"}${p.sensation ? ` (${p.sensation})` : ""}`;
                 } else if (rec.recordType === "health_screening" || p.screeningName) {
                   contentText = `${p.screeningName ?? "검진"}${p.summary ? ` · ${p.summary}` : ""}`;
                 } else {
@@ -3771,7 +3788,7 @@ function PainDiaryToolCard({
   }, []);
   const [diaryDate, setDiaryDate] = useState(toolCall.date_str || todayStr);
   const [bodyArea, setBodyArea] = useState(toolCall.body_area || "");
-  const [intensity, setIntensity] = useState(toolCall.intensity ?? 5);
+  const [intensity, setIntensity] = useState<number | null>(toolCall.intensity ?? null);
   const [sensation, setSensation] = useState(toolCall.sensation || "");
   const [aggravatingFactors, setAggravatingFactors] = useState(toolCall.aggravating_factors || "");
   const [formattedDiary, setFormattedDiary] = useState(toolCall.formatted_diary || "");
@@ -3781,7 +3798,7 @@ function PainDiaryToolCard({
       <div className="draft-confirm-card is-saved pain-tool-card">
         <span className="saved-badge">✨ 통증 다이어리에 안전하게 저장되었습니다.</span>
         <p>
-          <strong>{bodyArea}</strong> ({diaryDate}): 강도 {intensity}/10 {sensation ? `(${sensation})` : ""}
+          <strong>{bodyArea}</strong> ({diaryDate}): {intensity == null ? "강도 미입력" : `강도 ${intensity}/10`} {sensation ? `(${sensation})` : ""}
         </p>
         <p className="tool-saved-diary">{formattedDiary}</p>
         <button
@@ -3827,16 +3844,17 @@ function PainDiaryToolCard({
             />
           </label>
           <label>
-            통증 강도 ({intensity}/10)
+            통증 강도 {intensity == null ? "(선택 필요)" : `(${intensity}/10)`}
             <div className="pain-intensity-slider-wrap">
-              <input
-                type="range"
-                min="0"
-                max="10"
-                value={intensity}
-                onChange={(e) => setIntensity(Number(e.target.value))}
-              />
-              <span className="pain-intensity-val">{intensity}</span>
+              <select
+                aria-label="통증 다이어리 강도"
+                value={intensity ?? ""}
+                onChange={(e) => setIntensity(e.target.value === "" ? null : Number(e.target.value))}
+              >
+                <option value="">선택해 주세요</option>
+                {Array.from({ length: 11 }, (_, value) => <option key={value} value={value}>{value}</option>)}
+              </select>
+              <span className="pain-intensity-val">{intensity ?? "-"}</span>
             </div>
           </label>
           <label className="grid-full-col">
@@ -3869,7 +3887,7 @@ function PainDiaryToolCard({
       <button
         type="button"
         className="confirm-save-btn"
-        disabled={!bodyArea.trim() || !formattedDiary.trim()}
+        disabled={!bodyArea.trim() || !formattedDiary.trim() || intensity == null}
         onClick={() =>
           onSave({
             ...toolCall,

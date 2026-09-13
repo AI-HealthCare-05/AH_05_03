@@ -138,6 +138,7 @@ export function removeMedicationSavePrompt(message: string): string {
 export function shouldAutoSaveHealthRecord(response: HealthAssistantResponse, userMessage: string): boolean {
   if (response.emergency_notice || response.missing_fields.length > 0) return false;
   if (!["record_exercise", "record_blood_pressure", "record_blood_glucose", "record_medication", "record_pain"].includes(response.intent)) return false;
+  if (response.intent === "record_pain" && response.pain_draft?.intensity == null) return false;
   if (response.auto_save === true) return true;
 
   const normalized = userMessage.trim().toLowerCase();
@@ -178,7 +179,9 @@ export function buildAutoSaveAssistantMessage(response: HealthAssistantResponse)
   } else if (response.intent === "record_medication" && response.medication_draft) {
     confirmation = `${response.medication_draft.medication_name}${response.medication_draft.dosage ? ` ${response.medication_draft.dosage}` : ""} 복용 기록을 저장했습니다.`;
   } else if (response.intent === "record_pain" && response.pain_draft) {
-    confirmation = `${response.pain_draft.body_area} 통증 강도 ${response.pain_draft.intensity}/10을 기록했습니다.`;
+    confirmation = response.pain_draft.intensity == null
+      ? `${response.pain_draft.body_area} 통증을 기록했습니다.`
+      : `${response.pain_draft.body_area} 통증 강도 ${response.pain_draft.intensity}/10을 기록했습니다.`;
   }
 
   if (/(?:저장했습니다|기록했습니다)/.test(response.assistant_message)) return response.assistant_message;
@@ -888,4 +891,3 @@ export function mergeServerMessagesWithLocalUi(
     };
   });
 }
-

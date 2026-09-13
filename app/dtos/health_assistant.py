@@ -73,7 +73,7 @@ class MedicationDraft(BaseModel):
 
 class PainDraft(BaseModel):
     body_area: str = Field(description="통증 부위 (예: 오른쪽 무릎, 허리, 어깨 등)")
-    intensity: int = Field(default=5, description="통증 강도 (0~10)")
+    intensity: int | None = Field(default=None, ge=0, le=10, description="사용자가 직접 말한 통증 강도 (0~10)")
     sensation: str | None = Field(default=None, description="통증 양상 (예: 욱신거림, 찌르는 듯함 등)")
     onset_at: str | None = Field(default=None, description="통증 시작 시점")
     note: str | None = Field(default=None, description="추가 메모")
@@ -95,7 +95,7 @@ class PainDiaryToolCall(BaseModel):
         default="format_pain_diary", description="호출된 도구명 ('format_pain_diary')"
     )
     body_area: str = Field(description="통증 부위 (예: 팔꿈치, 왼쪽 고관절, 왼쪽 발바닥 등)")
-    intensity: int = Field(default=5, ge=0, le=10, description="통증 강도 (0~10)")
+    intensity: int | None = Field(default=None, ge=0, le=10, description="사용자가 직접 말한 통증 강도 (0~10)")
     sensation: str | None = Field(
         default=None, description="통증 양상 (예: 욱신거림, 이물감, 찌르는 듯함, 지지력 약화 등)"
     )

@@ -129,11 +129,11 @@ def build_system_instruction(
   * [복약 기록 vs 복약 질문 구분 (매우 중요)]:
     - 사용자가 약을 복용했다고 보고하는 경우(오탈자, 자모 분리, 구어체, 축약어 포함: "먹었어", "먹엇어", "머것어", "먹ㅇ성서", "1알 복용완료", "챙겨먹음", "방금 먹음", "삼킴" 등), 반드시 `intent: "record_medication"`으로 분류하고 `medication_draft`를 채우며 `auto_save=true`로 설정하세요.
     - 반대로 복약 가능 여부, 복용 방법, 효능, 부작용, 상호작용, 다른 약과의 병용을 묻는 질문("먹어도 돼?", "효능이 뭐야?", "부작용이 있어?", "피임약이랑 같이 먹어도 괜찮아?", "하루 몇 알까지 돼?")은 기록이 아니므로 절대로 `record_medication`으로 분류하지 말고 `health_advice`로 응답하며 `medication_draft`를 생성하지 마세요. 필요한 경우 `search_medication_info` 도구를 호출하여 식약처 정보를 기반으로 친절하게 답변하세요. 두 약품의 병용 가능 여부(상호작용)를 묻는 경우 `drug_name`에 첫 번째 약, `target_drug_name`에 두 번째 약을 넘겨 식약처 병용금기를 확인하세요.
-- `record_pain`: 통증 부위(body_area), 통증 강도(intensity: 0~10), 양상(sensation), 발생/기록 시각(onset_at: YYYY-MM-DDTHH:MM 형식) 추출. 사용자가 통증 증상을 보고하는 경우 `auto_save=true`로 설정하세요.
+- `record_pain`: 통증 부위(body_area), 사용자가 숫자로 직접 말한 통증 강도(intensity: 0~10), 양상(sensation), 발생/기록 시각(onset_at: YYYY-MM-DDTHH:MM 형식) 추출. 사용자가 숫자 강도를 말하지 않았다면 강도를 추정하지 말고 `intensity=null`, `auto_save=false`, `needs_confirmation=true`로 설정하세요. "조금 아파", "깨질 것 같아" 같은 표현은 sensation/note에 원문 의미를 보존하되 임의의 수치로 바꾸지 마세요.
   * [도구 호출: format_pain_diary] 사용자가 "통증일기...", "통증 일기 써줘", "오늘 운동하고 어디가 아파" 처럼 통증에 대한 기록을 작성하거나 증상을 이야기하는 경우, 반드시 `pain_diary_tool` 도구 호출 객체를 생성하세요:
     - tool_name: "format_pain_diary"
     - body_area: 언급된 모든 통증 부위 (예: "팔꿈치, 왼쪽 고관절, 왼쪽 발바닥")
-    - intensity: 통증 강도 (0~10 추정 정수, 언급 없으면 5)
+    - intensity: 사용자가 숫자로 직접 말한 통증 강도(0~10). 숫자를 말하지 않았다면 반드시 null이며, 표현만 보고 수치를 추정하지 마세요.
     - sensation: 통증 양상 (예: "이물감, 찌르는 듯함, 지지력 약화 등")
     - aggravating_factors: 유발 및 악화 상황 (예: "웨이트 트레이닝 후, 보행 시")
     - formatted_diary: 사용자의 거친 구어체, 오탈자, 띄어쓰기를 정확한 한국어 맞춤법으로 교정하고, 증상의 인과관계와 현재 상태를 구조적이고 품질 높은 문장으로 정제한 다이어리 본문 문장.
