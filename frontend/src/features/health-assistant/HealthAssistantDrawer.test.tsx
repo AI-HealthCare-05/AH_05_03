@@ -1462,10 +1462,33 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       expect(mockCreateRecord).toHaveBeenCalledTimes(1);
       expect(await screen.findByText(/5세트.*수정했습니다/)).toBeInTheDocument();
     });
+
+    it("다른 가족 프로필의 최근 운동 기록을 정정 대상으로 쓰지 않는다", async () => {
+      const otherProfile = { ...mockProfile, id: "profile-2", displayName: "가족" };
+      sessionStorage.setItem("lastSavedExerciseId:profile-1", "record-for-profile-1");
+      vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+        intent: "record_exercise",
+        assistant_message: "운동 기록을 수정했습니다.",
+        exercise_draft: { exercise_name: "랫풀다운", sets: 5 },
+        auto_save: true,
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: [],
+      });
+
+      render(<HealthAssistantDrawer profile={otherProfile} runtime={mockRuntime} isOpen={true} onClose={mockOnClose} onRecordSaved={mockOnRecordSaved} />);
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+      fireEvent.change(input, { target: { value: "아니다 5세트 함" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      expect(await screen.findByText(/수정할 운동 기록을 찾지 못했습니다/)).toBeInTheDocument();
+      expect(mockGetRecord).not.toHaveBeenCalled();
+      expect(mockUpdateRecord).not.toHaveBeenCalled();
+    });
   });
 
   describe("검진 수치 변화 그래프 및 원본 서류 분리 노출", () => {
-    it("원본을 보관하지 않은 서버 기록에는 재업로드 정책을 안내한다", async () => {
+    it("원본 서류를 찾지 못하면 보관 정책이 아니라 조회 실패를 안내한다", async () => {
       const serverRuntime = {
         healthRecords: {
           create: vi.fn(),
@@ -1500,7 +1523,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       fireEvent.change(input, { target: { value: "최근 건강검진 결과 원본 보여줘" } });
       fireEvent.click(screen.getByRole("button", { name: "전송" }));
 
-      expect(await screen.findByText(/검진표 원본은 보관하지 않고.*수치만 건강기록에 저장합니다/)).toBeInTheDocument();
+      expect(await screen.findByText(/이 기기의 원본 서류 보관함에서 해당 검진표를 찾지 못했습니다/)).toBeInTheDocument();
       expect(screen.queryByText(/먼저 검진표 이미지를 업로드하고 저장/)).not.toBeInTheDocument();
     });
 

@@ -491,6 +491,14 @@ def test_fast_path_accepts_only_contextual_facility_location_reply() -> None:
             ]
         )
     )
+    assert HealthAssistantService._needs_facility_tools(
+        HealthAssistantChatRequest(
+            messages=[
+                ChatMessage(role="assistant", content="찾으시는 지역명을 입력해 주세요."),
+                ChatMessage(role="user", content="고양시에 있어요"),
+            ]
+        )
+    )
     assert boundary._fast_path_decision([ChatMessage(role="user", content="고양시")]) is None
 
 

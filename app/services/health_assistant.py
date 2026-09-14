@@ -481,6 +481,12 @@ class HealthAssistantService:
         # 날씨나 대기질을 묻는 질문은 의료시설 조회가 아님
         if any(w in last_msg for w in ("날씨", "미세먼지", "초미세먼지", "대기질")):
             return False
+        # 직전에 시설 위치를 물었으면 "고양시에 있어요" 같은 자연스러운 위치 답변도
+        # 시설 검색으로 이어져야 한다. 이 검사를 아래 일반 위치 발화 차단보다 먼저 둔다.
+        if len(request.messages) >= 2:
+            prev_msg = request.messages[-2]
+            if prev_msg.role == "assistant" and is_facility_location_followup(prev_msg.content, last_msg):
+                return True
         # 단순히 거주지나 위치만 말한 경우("난 서울살아", "종로구에 있어")도 시설 조회가 아님
         if any(last_msg.strip().endswith(suffix) for suffix in ("살아", "살아요", "있어", "있어요")) and not any(
             k in last_msg for k in ("병원", "약국", "응급실", "의원")
@@ -500,11 +506,6 @@ class HealthAssistantService:
             return True
         if any(k in last_msg for k in ("어디 가야", "어디로 가")):
             return True
-        # 이전 어시스턴트 메시지가 시설 위치를 되묻던 상황인지 확인
-        if len(request.messages) >= 2:
-            prev_msg = request.messages[-2]
-            if prev_msg.role == "assistant" and is_facility_location_followup(prev_msg.content, last_msg):
-                return True
         return False
 
     async def _resolve_request_location(

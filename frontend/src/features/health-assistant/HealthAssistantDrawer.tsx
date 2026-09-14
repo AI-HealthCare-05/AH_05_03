@@ -1087,7 +1087,7 @@ export function HealthAssistantDrawer({
               message.saved &&
               message.savedRecordId &&
               message.responseDraft?.exercise_draft,
-          )?.savedRecordId || sessionStorage.getItem("lastSavedExerciseId") || undefined
+          )?.savedRecordId || sessionStorage.getItem(`lastSavedExerciseId:${profile.id}`) || undefined
         : undefined;
       const unresolvedCorrection = correctionRequested && !correctionTargetId;
       const shouldAutoSave = !unresolvedCorrection && (
@@ -1318,7 +1318,7 @@ export function HealthAssistantDrawer({
 
         if (assistantMsgId) {
           const emptyOriginalDocumentMessage =
-            "검진표 원본은 보관하지 않고, 확인하신 수치만 건강기록에 저장합니다. 원본을 다시 확인하려면 이미지를 다시 선택해 주세요.";
+            "이 기기의 원본 서류 보관함에서 해당 검진표를 찾지 못했습니다. 저장한 브라우저와 기기에서 다시 확인하거나 이미지를 다시 선택해 주세요.";
           const emptyTrendMessage =
             "시계열 수치 변화 그래프를 그릴 수 있는 검진 또는 측정 기록을 찾지 못했습니다. 건강검진 결과나 혈압·혈당 기록을 먼저 등록해 주세요.";
 
@@ -1429,7 +1429,11 @@ export function HealthAssistantDrawer({
       let result;
       if (correctionTargetId) {
         const current = await runtime.healthRecords.get(correctionTargetId);
-        if (!current.ok || current.value.recordType !== "exercise") {
+        if (
+          !current.ok ||
+          current.value.recordType !== "exercise" ||
+          current.value.profileId !== profile.id
+        ) {
           throw new Error("수정할 운동 기록을 찾지 못했습니다.");
         }
         const changedFields = Object.fromEntries(
@@ -1468,7 +1472,7 @@ export function HealthAssistantDrawer({
       setMessages((prev) =>
         prev.map((m) => (m.id === msgId ? { ...m, saved: true, savedRecordId: result.value.id } : m)),
       );
-      sessionStorage.setItem("lastSavedExerciseId", result.value.id);
+      sessionStorage.setItem(`lastSavedExerciseId:${profile.id}`, result.value.id);
       if (onRecordSaved) await onRecordSaved();
 
       const todayResult = await runtime.healthRecords.query({
