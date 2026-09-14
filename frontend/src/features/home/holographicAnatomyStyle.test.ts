@@ -15,6 +15,8 @@ import {
   createSelectedTransparentMaterials,
   createDangerOrganHighlightMaterials,
   createDangerOrganHoverMaterials,
+  createDangerShellHighlightMaterials,
+  getPainColorProfile,
   createStructuredFlowShellFillMaterials,
   INTERNALS_READABILITY_STYLE,
   shouldReturnToFullBody,
@@ -22,6 +24,13 @@ import {
   calculateAdaptiveSprayMetrics,
   createSprayAgitationState,
   updateSprayAgitation,
+  isOcularStructure,
+  createOcularMaterials,
+  isDentalStructure,
+  createDentalMaterials,
+  HEAD_ANATOMY_PALETTE,
+  resolveVascularSystem,
+  ORGAN_COLORS,
 } from "./holographicAnatomyStyle";
 
 describe("final anatomy hologram materials", () => {
@@ -80,6 +89,7 @@ describe("final anatomy hologram materials", () => {
     expect(skeleton.opacity).toBeCloseTo(0.96);
     expect(skeleton.transparent).toBe(true);
     expect(skeleton.vertexColors).toBe(false);
+    expect(skeleton.color.getHex()).toBe(0xe2d9ba);
   });
 
   it("GLB 진단용 정점 색상이 골격 및 선택 강조색에 섞이지 않는다", () => {
@@ -114,6 +124,7 @@ describe("final anatomy hologram materials", () => {
     expect(skeleton.opacity).toBe(1);
     expect(skeleton.transparent).toBe(false);
     expect(skeleton.depthWrite).toBe(true);
+    expect(skeleton.color.getHex()).toBe(0xe2d9ba);
   });
 
   it("관절·인대·막은 골격과 구분되는 연골색과 투명도를 사용한다", () => {
@@ -125,7 +136,7 @@ describe("final anatomy hologram materials", () => {
       ownedMaterials,
     ) as THREE.MeshStandardMaterial;
 
-    expect(joint.color.getHex()).toBe(0x9fcfd8);
+    expect(joint.color.getHex()).toBe(0xaec3bb);
     expect(joint.opacity).toBeCloseTo(0.68);
     expect(joint.transparent).toBe(true);
   });
@@ -152,9 +163,12 @@ describe("final anatomy hologram materials", () => {
       ownedMaterials,
     ) as THREE.MeshStandardMaterial;
 
-    expect(muscle.color.getHex()).toBe(0xd97865);
-    expect(nervous.color.getHex()).toBe(0xf0cf69);
-    expect(lymphatic.color.getHex()).toBe(0x77c99a);
+    expect(muscle.color.getHex()).toBe(0xa85b50);
+    expect(muscle.roughness).toBeCloseTo(0.86);
+    expect(muscle.metalness).toBeCloseTo(0.0);
+    expect(muscle.emissive.getHex()).toBe(0x000000);
+    expect(nervous.color.getHex()).toBe(0xd8b565);
+    expect(lymphatic.color.getHex()).toBe(0x879f7c);
   });
 
   it("여성 두개건막은 반사광 없는 Lambert 무광 재질을 사용한다", () => {
@@ -170,7 +184,7 @@ describe("final anatomy hologram materials", () => {
     ) as THREE.MeshLambertMaterial;
 
     expect(scalp).toBeInstanceOf(THREE.MeshLambertMaterial);
-    expect(scalp.color.getHex()).toBe(0xd97865);
+    expect(scalp.color.getHex()).toBe(0xa85b50);
     expect(scalp.vertexColors).toBe(false);
     expect(scalp.transparent).toBe(false);
     expect(scalp.depthWrite).toBe(true);
@@ -181,7 +195,7 @@ describe("final anatomy hologram materials", () => {
     const material = new THREE.MeshStandardMaterial();
 
     applyCostalCartilageStyle(material, false);
-    expect(material.color.getHex()).toBe(0xb9e2eb);
+    expect(material.color.getHex()).toBe(0xaec3bb);
     expect(material.opacity).toBeCloseTo(COSTAL_CARTILAGE_STYLE.defaultOpacity);
     expect(material.depthWrite).toBe(true);
 
@@ -189,6 +203,54 @@ describe("final anatomy hologram materials", () => {
     expect(material.opacity).toBeCloseTo(COSTAL_CARTILAGE_STYLE.upperFocusOpacity);
     expect(material.transparent).toBe(true);
     expect(material.depthWrite).toBe(true);
+  });
+
+  it("안구 부위를 정확히 감지하고 bubblik525/head 기반 홍채(딥 세이지 그린), 공막(자연 흰자위), 각막(투명) 재질을 부여한다", () => {
+    expect(isOcularStructure("Iris.l.001")).toBe(true);
+    expect(isOcularStructure("Sclera.r.001")).toBe(true);
+    expect(isOcularStructure("Cornea.l.001")).toBe(true);
+    expect(isOcularStructure("Lens.r.001")).toBe(true);
+    expect(isOcularStructure("Anterior chamber of eyeball.l.001")).toBe(true);
+    expect(isOcularStructure("Retina.l.001")).toBe(true);
+    expect(isOcularStructure("Femur.l")).toBe(false);
+    expect(isOcularStructure("Flexor Retinaculum Of Wristr001")).toBe(false);
+    expect(isOcularStructure("Extensor retinaculum of wrist.l")).toBe(false);
+    expect(isOcularStructure("Clitoris")).toBe(false);
+
+    const owned = new Set<THREE.Material>();
+    const base = new THREE.MeshStandardMaterial();
+
+    const iris = createOcularMaterials(base, "Iris.l.001", owned) as THREE.MeshStandardMaterial;
+    expect(iris.color.getHex()).toBe(HEAD_ANATOMY_PALETTE.iris); // 딥 세이지 그린 (0x47685e)
+    expect(iris.opacity).toBe(1);
+
+    const sclera = createOcularMaterials(base, "Sclera.r.001", owned) as THREE.MeshStandardMaterial;
+    expect(sclera.color.getHex()).toBe(HEAD_ANATOMY_PALETTE.sclera); // 자연스러운 공막 아이보리 (0xddd9ca)
+    expect(sclera.opacity).toBe(1);
+
+    const cornea = createOcularMaterials(base, "Cornea.l.001", owned) as THREE.MeshStandardMaterial;
+    expect(cornea.transparent).toBe(true);
+    expect(cornea.opacity).toBeCloseTo(0.16);
+  });
+
+  it("치아 구조를 정확히 감지하고 bubblik525/head 기반 법랑질 펄 아이보리(#e6e1d2) 에나멜 재질을 부여한다", () => {
+    expect(isDentalStructure("Lower medial incisor")).toBe(true);
+    expect(isDentalStructure("Upper lateral incisor")).toBe(true);
+    expect(isDentalStructure("Left lower first secondary molar tooth")).toBe(true);
+    expect(isDentalStructure("Canine tooth")).toBe(true);
+    expect(isDentalStructure("Dens axis")).toBe(true);
+    expect(isDentalStructure("Mandible")).toBe(false);
+    expect(isDentalStructure("Frontal_bone")).toBe(false);
+
+    const owned = new Set<THREE.Material>();
+    const base = new THREE.MeshStandardMaterial();
+
+    const dental = createDentalMaterials(base, owned) as THREE.MeshStandardMaterial;
+    expect(dental.color.getHex()).toBe(HEAD_ANATOMY_PALETTE.tooth); // 법랑질 펄 아이보리 (0xe6e1d2)
+    expect(dental.roughness).toBeCloseTo(0.26);
+    expect(dental.metalness).toBeCloseTo(0.04);
+    expect(dental.opacity).toBe(1);
+    expect(dental.transparent).toBe(false);
   });
 });
 
@@ -389,6 +451,115 @@ describe("calculateAdaptiveSprayMetrics (스프레이 브러시 확대 적응형
     expect(hoverMat.emissiveIntensity).toBeCloseTo(1.3);
     expect(hoverMat.transparent).toBe(true);
     expect(hoverMat.opacity).toBeCloseTo(0.9);
+  });
+
+  it("통증 강도(0: 정상 청록, 1~2: 안심 초록, 3~4: 경미 연녹, 5~6: 보통 노랑, 7~8: 심함 주황, 9~10: 극심 빨강)에 따라 적절한 색상 프로필을 반환한다", () => {
+    // 정상 (0): Normal (Cyan)
+    const normal = getPainColorProfile(0);
+    expect(normal.color.getHex()).toBe(0x06b6d4);
+    expect(normal.emissiveHex).toBe(0x0891b2);
+
+    // 안심 (1~2): Emerald / 초록
+    const reassuring = getPainColorProfile(2);
+    expect(reassuring.color.getHex()).toBe(0x10b981);
+    expect(reassuring.emissiveHex).toBe(0x059669);
+
+    // 경도 (3~4): Light Green
+    const mild = getPainColorProfile(4);
+    expect(mild.color.getHex()).toBe(0x84cc16);
+    expect(mild.emissiveHex).toBe(0x4d7c0f);
+
+    // 중등도 (5~6): Yellow
+    const moderate = getPainColorProfile(6);
+    expect(moderate.color.getHex()).toBe(0xfacc15);
+    expect(moderate.emissiveHex).toBe(0xd97706);
+
+    // 중증 (7~8): Orange
+    const severe = getPainColorProfile(8);
+    expect(severe.color.getHex()).toBe(0xf97316);
+    expect(severe.emissiveHex).toBe(0xc2410c);
+
+    // 극심 (9~10): Red
+    const extreme = getPainColorProfile(10);
+    expect(extreme.color.getHex()).toBe(0xef4444);
+    expect(extreme.emissiveHex).toBe(0xb91c1c);
+
+    // 미지정 시 기본 붉은색 반환
+    const fallback = getPainColorProfile(undefined);
+    expect(fallback.color.getHex()).toBe(0xf43f5e);
+  });
+
+  it("외피(그물망) 하이라이트 시 면(Solid)으로 칠하지 않고 wireframe: true 및 통증 색상을 유지한다", () => {
+    const source = new THREE.MeshStandardMaterial({ color: 0x4de4ff, wireframe: true });
+
+    // 1. 강도 8 (중증 주황) 외피 하이라이트
+    const shellMat = createDangerShellHighlightMaterials(source, 8) as THREE.MeshStandardMaterial;
+    expect(shellMat.wireframe).toBe(true); // 그물망 필수 유지!
+    expect(shellMat.color.getHex()).toBe(0xf97316); // Orange
+    expect(shellMat.transparent).toBe(true);
+    expect(shellMat.depthWrite).toBe(false);
+
+    // 2. createDangerOrganHighlightMaterials에 isShell 옵션을 넘기면 wireframe이 true로 유지된다
+    const organWithShell = createDangerOrganHighlightMaterials(source, {
+      intensity: 3,
+      isShell: true,
+    }) as THREE.MeshStandardMaterial;
+    expect(organWithShell.wireframe).toBe(true);
+    expect(organWithShell.color.getHex()).toBe(0x84cc16); // Light Green (3~4점)
+
+    // 3. 일반 장기 하이라이트는 내부 볼륨 표현을 위해 wireframe이 false다
+    const organNormal = createDangerOrganHighlightMaterials(source, {
+      intensity: 3,
+      isShell: false,
+    }) as THREE.MeshStandardMaterial;
+    expect(organNormal.wireframe).toBe(false);
+    expect(organNormal.color.getHex()).toBe(0x84cc16); // Light Green (3~4점)
+  });
+
+  it("심혈관계 구조명에 따라 동맥(적색), 정맥(청색), 심장(심근색)으로 정확히 분리 식별하고 채색한다", () => {
+    // 1. 키워드 판별 검증
+    expect(resolveVascularSystem("Abdominal aorta.001", "cardiovascular")).toBe("arterial");
+    expect(resolveVascularSystem("Anterior circumflex humeral artery.l.001", "cardiovascular")).toBe("arterial");
+    expect(resolveVascularSystem("Great Saphenous Vein001", "cardiovascular")).toBe("venous");
+    expect(resolveVascularSystem("Internal jugular vein", "cardiovascular")).toBe("venous");
+    expect(resolveVascularSystem("Accessory hemi-azygos vein.001", "cardiovascular")).toBe("venous");
+    expect(resolveVascularSystem("heart-left-ventricle", "cardiovascular")).toBe("cardiac");
+    expect(resolveVascularSystem("unknown-structure", "cardiovascular")).toBe("cardiovascular");
+
+    // 2. 머티리얼 채색 검증
+    const ownedMaterials = new Set<THREE.Material>();
+    const baseSource = new THREE.MeshStandardMaterial();
+
+    const arteryMat = createHolographicMaterials(
+      baseSource,
+      "organ",
+      "cardiovascular",
+      ownedMaterials,
+      undefined,
+      "Abdominal aorta.001",
+    ) as THREE.MeshStandardMaterial;
+
+    const veinMat = createHolographicMaterials(
+      baseSource,
+      "organ",
+      "cardiovascular",
+      ownedMaterials,
+      undefined,
+      "Great Saphenous Vein001",
+    ) as THREE.MeshStandardMaterial;
+
+    const heartMat = createHolographicMaterials(
+      baseSource,
+      "organ",
+      "cardiovascular",
+      ownedMaterials,
+      undefined,
+      "heart-left-ventricle",
+    ) as THREE.MeshStandardMaterial;
+
+    expect(arteryMat.color.getHex()).toBe(ORGAN_COLORS.arterial); // 0xc05245 (Red)
+    expect(veinMat.color.getHex()).toBe(ORGAN_COLORS.venous); // 0x527c9f (Blue)
+    expect(heartMat.color.getHex()).toBe(ORGAN_COLORS.cardiac); // 0xb96760 (Burgundy)
   });
 });
 

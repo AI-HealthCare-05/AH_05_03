@@ -4,8 +4,10 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { SignInPage } from "../features/account/SignInPage";
 import { GlobalHealthAssistant } from "../features/health-assistant/GlobalHealthAssistant";
 import { serverApiClient } from "../shared/api/serverApiClient";
+import { PageSkeleton } from "../shared/ui/Skeleton";
 import { useAuth } from "./authContext";
 import { LocalDomainContext } from "./localDomainContext";
+import { prefetchNavigationRoutes, prefetchRouteFor } from "./prefetchRoutes";
 import { useRouteTitle } from "./useRouteTitle";
 
 // 가족 홈이 "관리"(구성원·기록·검진표), 건강 데이터가 "지금 어떤가"(수치 추이) 다.
@@ -29,8 +31,8 @@ import { useRouteTitle } from "./useRouteTitle";
 
 const NAVIGATION = [
   { to: "/", label: "가족 홈", end: true },
+  { to: "/assessment", label: "질환 예측", end: false },
   { to: "/pain-diary", label: "통증 다이어리", end: false },
-  { to: "/assessment", label: "위험 판정", end: false },
   { to: "/health-data", label: "건강 데이터", end: false },
 ] as const;
 
@@ -46,8 +48,14 @@ function readResetToken(): boolean {
   return Boolean(params.get("reset_token"));
 }
 
+// **주 메뉴는 다시 SPA 전환이다.** 한동안 일반 `<a href>` 로 두어 누를 때마다 진짜
+// 새로고침이 나갔는데, 그러면 이동 한 번에 문서·번들·라우트 청크를 다시 받고
+// 세션 확인·프로필 연결 조회 같은 부팅 통신도 처음부터 다시 돌았다. 화면 대부분은
+// 그대로인데 전부를 다시 만든 셈이라, 바뀌는 곳만 갈아 끼우는 `NavLink` 로 되돌린다.
+// 현재 위치 표시(`.active`·`aria-current`)는 `NavLink` 가 직접 준다.
+
 export function RootLayout() {
-  const { status, email, signOut } = useAuth();
+  const { status, email, signOut, signedOutNotice } = useAuth();
   const navigationRef = useRef<HTMLElement>(null);
   const { pathname } = useLocation();
 
@@ -76,7 +84,7 @@ export function RootLayout() {
   }, [pathname]);
   const localDomain = useContext(LocalDomainContext);
   const profiles = useMemo(() => localDomain?.profiles ?? [], [localDomain?.profiles]);
-  const [matchedProfileName, setMatchedProfileName] = useState<string>();
+  const [activeLinkRef, setActiveLinkRef] = useState<string>();
   const [hasResetToken, setHasResetToken] = useState(readResetToken);
 
   useEffect(() => {
@@ -89,9 +97,35 @@ export function RootLayout() {
     };
   }, []);
 
+  // 라우트 청크는 그 화면에 처음 갈 때 받는다. 첫 화면이 한가해진 뒤 미리 받아 두면
+  // 이동 순간에 Suspense 폴백을 거치지 않고 바로 그려진다.
+  useEffect(() => prefetchNavigationRoutes(), []);
+
+  // **새로고침이 공짜로 해 주던 둘.** SPA 전환으로 되돌리면 문서가 그대로라
+  // 스크롤 위치가 남고 포커스도 눌렀던 메뉴에 머문다 — 화면은 바뀌었는데 낭독기는
+  // 그대로라 어디로 왔는지 알 수 없고, 길게 내려 보던 화면에서 이동하면 새 화면의
+  // 중간부터 보인다. 이동일 때만(첫 그리기 제외) 맨 위로 올리고 본문에 포커스를 준다.
+  const firstRenderRef = useRef(true);
+  useEffect(() => {
+    if (firstRenderRef.current) {
+      firstRenderRef.current = false;
+      return;
+    }
+    window.scrollTo({
+      top: 0,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+    document.getElementById("main-content")?.focus({ preventScroll: true });
+  }, [pathname]);
+
+  // **프로필이 바뀔 때마다 다시 물었다.** 의존성에 `profiles` 가 있었는데 그 값은
+  // `useMemo` 로 매번 새 배열이라, 기기 안 프로필·기록이 조금만 움직여도 연결 목록을
+  // 서버에 다시 물었다. 게다가 `email` 은 이 효과가 쓰지도 않는다. 연결 목록은
+  // 로그인 상태가 바뀔 때만 받고, 이름 맞추기는 받아 둔 목록으로 계산한다 —
+  // 같은 답을 얻는 데 통신이 한 번으로 준다.
   useEffect(() => {
     if (status !== "signed-in") {
-      setMatchedProfileName(undefined);
+      setActiveLinkRef(undefined);
       return;
     }
     let cancelled = false;
@@ -99,28 +133,34 @@ export function RootLayout() {
       .listProfileLinks()
       .then((links) => {
         if (cancelled) return;
-        const activeLink = links.find((l) => l.status === "active");
-        if (activeLink) {
-          const profile = profiles.find((p) => p.opaqueServerRef === activeLink.local_profile_ref);
-          if (profile) {
-            setMatchedProfileName(profile.displayName);
-            return;
-          }
-        }
-        setMatchedProfileName(undefined);
+        setActiveLinkRef(links.find((l) => l.status === "active")?.local_profile_ref);
       })
       .catch(() => {
-        if (!cancelled) setMatchedProfileName(undefined);
+        if (!cancelled) setActiveLinkRef(undefined);
       });
     return () => {
       cancelled = true;
     };
-  }, [status, email, profiles]);
+  }, [status]);
+
+  const matchedProfileName = useMemo(() => {
+    if (!activeLinkRef) return undefined;
+    return profiles.find((p) => p.opaqueServerRef === activeLinkRef)?.displayName;
+  }, [activeLinkRef, profiles]);
 
   // 갱신 토큰으로 세션을 되살리는 동안 아무것도 그리지 않는다. 로그인 화면을 먼저
   // 띄우면 **이미 로그인한 사용자에게 로그인 화면이 한 번 깜빡인다.**
   if (status === "checking") {
-    return <div className="route-loading">불러오는 중…</div>;
+    return (
+      <div className="route-loading">
+        불러오는 중…
+        <div className="route-loading-skeleton" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
+    );
   }
 
   // 리다이렉트가 아니라 `Outlet` 자리를 대신 채운다. 주소가 그대로 남아서 로그인하면
@@ -128,7 +168,7 @@ export function RootLayout() {
   // 단, 비밀번호 재설정 링크(#reset_token=...)로 진입한 경우에는 로그인 상태와 무관하게
   // 재설정 관문을 우선 열어 준다.
   if (hasResetToken || status === "signed-out") {
-    return <SignInPage onResetComplete={() => setHasResetToken(false)} />;
+    return <SignInPage onResetComplete={() => setHasResetToken(false)} initialMessage={signedOutNotice} />;
   }
 
   return (
@@ -160,7 +200,17 @@ export function RootLayout() {
             ref={navigationRef}
           >
             {NAVIGATION.map((item) => (
-              <NavLink key={`${item.to}-${item.label}`} to={item.to} end={item.end}>
+              <NavLink
+                key={`${item.to}-${item.label}`}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) => (isActive ? "active" : "")}
+                // 손이 닿은 시점(hover·focus·터치 시작)은 실제로 누르기 200~300ms 전이다.
+                // 그 사이에 청크를 받아 두면 누른 뒤에는 폴백 없이 바로 그려진다.
+                onMouseEnter={() => prefetchRouteFor(item.to)}
+                onFocus={() => prefetchRouteFor(item.to)}
+                onTouchStart={() => prefetchRouteFor(item.to)}
+              >
                 {item.label}
               </NavLink>
             ))}
@@ -170,13 +220,6 @@ export function RootLayout() {
               "계정" 이 있어서 같은 곳으로 가는 문이 둘이었다. 헤더에서 실제로 필요한
               것은 **지금 누구로 들어와 있는가** 와 나가는 문이다. */}
           <div className="header-status">
-            {/* **"기기 로컬" 이었다.** ADR-011 로 건강기록 정본이 PostgreSQL 로 옮겨
-                갔는데(2026-09-04) 이 배지만 남아서, 서버에서 읽어 온 숫자를 보여주는
-                화면이 헤더에서는 "기기 로컬" 이라고 말하고 있었다. 배지가 답해야 하는
-                것은 **지금 이 기록이 어디에 있는가** 다. */}
-            <span title="건강기록은 로그인한 계정에 저장되고, 기기를 바꿔도 같은 기록을 봅니다.">
-              <i aria-hidden="true" /> 계정 동기화
-            </span>
             {email ? (
               <NavLink
                 to="/account"
@@ -196,8 +239,14 @@ export function RootLayout() {
 
       <main id="main-content" tabIndex={-1}>
         {/* 라우트가 lazy 라 청크를 받는 동안 잠깐 빈다. 폴백을 안 두면 React 가
-            "A component suspended while responding to synchronous input" 으로 던진다. */}
-        <Suspense fallback={<div className="route-loading">불러오는 중…</div>}>
+            "A component suspended while responding to synchronous input" 으로 던진다.
+            SPA 전환으로 되돌린 뒤에는 그 화면에 **처음 갈 때만** 보이고, 미리 받아 둔
+            뒤에는(`prefetchRoutes`) 아예 지나친다.
+
+            **글자 한 줄이었다.** "불러오는 중…" + 막대 셋이라, 문서 부트 골격
+            (`index.html`) → 글자 → 진짜 화면으로 모양이 두 번 갈아 끼워졌다. 바뀌는
+            횟수가 곧 기다린 느낌이라 같은 형태로 이어 붙인다. */}
+        <Suspense fallback={<PageSkeleton />}>
           <Outlet />
         </Suspense>
       </main>
@@ -205,7 +254,8 @@ export function RootLayout() {
       <footer className="site-footer">
         <div>
           <strong>이어봄</strong>
-          {/* 같은 이유로 고쳤다 — 위 배지 주석 참조. 이 줄이 모든 화면 아래에 있어서
+          {/* **"기기 안에만" 이었다.** ADR-011 로 건강기록 정본이 PostgreSQL 로 옮겨
+              갔는데(2026-09-04) 이 문구만 남아 있었다. 이 줄이 모든 화면 아래에 있어서
               틀린 약속이 가장 넓게 퍼지던 자리다. */}
           <span>건강기록은 내 계정에, 나와 가족만 열람</span>
         </div>

@@ -39,6 +39,16 @@ jobs:
       IEOBOM_DEV_CORS_ALLOW_ORIGINS: ${{ vars.IEOBOM_DEV_CORS_ALLOW_ORIGINS }}
       IEOBOM_DEV_REFRESH_COOKIE_SECURE: ${{ vars.IEOBOM_DEV_REFRESH_COOKIE_SECURE }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      KMA_API_KEY: ${{ secrets.KMA_API_KEY }}
+      AIRKOREA_API_KEY: ${{ secrets.AIRKOREA_API_KEY }}
+      KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+      MFDS_API_KEY: ${{ secrets.MFDS_API_KEY }}
+      FOOD_NUTRITION_API_KEY: ${{ secrets.FOOD_NUTRITION_API_KEY }}
+      EMERGENCY_MEDICAL_API_KEY: ${{ secrets.EMERGENCY_MEDICAL_API_KEY }}
+      HOSPITAL_INFO_API_KEY: ${{ secrets.HOSPITAL_INFO_API_KEY }}
+      PHARMACY_INFO_API_KEY: ${{ secrets.PHARMACY_INFO_API_KEY }}
+      KDCA_DISEASE_INFO_API_KEY: ${{ secrets.KDCA_DISEASE_INFO_API_KEY }}
+      KDCA_HEALTH_INFO_API_KEY: ${{ secrets.KDCA_HEALTH_INFO_API_KEY }}
       DEPLOY_SHA: ${{ github.sha }}
       DEPLOY_BEFORE_SHA: ${{ github.event.before }}
       DEPLOY_FORCE: ${{ github.event_name == 'workflow_dispatch' && '1' || '0' }}
@@ -68,7 +78,7 @@ jobs:
           test -x "${docker_cli_dir}/docker"
           echo "${docker_cli_dir}" >> "$GITHUB_PATH"
 
-      - name: Persist Gemini API key on the admin Mac
+      - name: Persist API keys on the admin Mac
         shell: bash
         run: |
           set -euo pipefail
@@ -76,9 +86,31 @@ jobs:
           mkdir -p "$(dirname "${env_file}")"
           temp_file="$(mktemp "${env_file}.XXXXXX")"
           if [[ -f "${env_file}" ]]; then
-            grep -v '^GEMINI_API_KEY=' "${env_file}" > "${temp_file}" || true
+            cp "${env_file}" "${temp_file}"
+          else
+            touch "${temp_file}"
           fi
-          printf 'GEMINI_API_KEY=%s\n' "${GEMINI_API_KEY}" >> "${temp_file}"
+          declare -a keys=(
+            "GEMINI_API_KEY"
+            "KMA_API_KEY"
+            "AIRKOREA_API_KEY"
+            "KAKAO_REST_API_KEY"
+            "MFDS_API_KEY"
+            "FOOD_NUTRITION_API_KEY"
+            "EMERGENCY_MEDICAL_API_KEY"
+            "HOSPITAL_INFO_API_KEY"
+            "PHARMACY_INFO_API_KEY"
+            "KDCA_DISEASE_INFO_API_KEY"
+            "KDCA_HEALTH_INFO_API_KEY"
+          )
+          for key in "${keys[@]}"; do
+            val="${!key:-}"
+            grep -v "^${key}=" "${temp_file}" > "${temp_file}.tmp" || true
+            mv "${temp_file}.tmp" "${temp_file}"
+            if [[ -n "${val}" ]]; then
+              printf '%s=%s\n' "${key}" "${val}" >> "${temp_file}"
+            fi
+          done
           chmod 600 "${temp_file}"
           mv "${temp_file}" "${env_file}"
 

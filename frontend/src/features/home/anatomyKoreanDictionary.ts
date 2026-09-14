@@ -64,6 +64,159 @@ export const ANATOMY_DICTIONARY: Record<string, DictionaryEntry> = {
     description: "복강 내부 벽과 복부 장기 전체를 감싸 보호하는 장막입니다.",
   },
 
+  // --- 비뇨기계 (Urinary System) ---
+  "renal pelvis": {
+    korean: "신우",
+    canonical: "Renal Pelvis",
+    system: "urinary",
+    systemKorean: "비뇨기계",
+    description: "신장 내부에서 생성된 소변을 모아 요관으로 보내는 깔때기 모양의 신장 중심 구조(콩팥깔대기)입니다.",
+  },
+  "콩팥깔대기": {
+    korean: "신우",
+    canonical: "Renal Pelvis",
+    system: "urinary",
+    systemKorean: "비뇨기계",
+    description: "신장 내부에서 생성된 소변을 모아 요관으로 보내는 깔때기 모양의 신장 중심 구조(콩팥깔대기)입니다.",
+  },
+  "renal_pelvis": {
+    korean: "신우",
+    canonical: "Renal Pelvis",
+    system: "urinary",
+    systemKorean: "비뇨기계",
+    description: "신장 내부에서 생성된 소변을 모아 요관으로 보내는 깔때기 모양의 신장 중심 구조(콩팥깔대기)입니다.",
+  },
+  "renal-pelvis": {
+    korean: "신우",
+    canonical: "Renal Pelvis",
+    system: "urinary",
+    systemKorean: "비뇨기계",
+    description: "신장 내부에서 생성된 소변을 모아 요관으로 보내는 깔때기 모양의 신장 중심 구조(콩팥깔대기)입니다.",
+  },
+  "kidney": {
+    korean: "신장(콩팥)",
+    canonical: "Kidney",
+    system: "urinary",
+    systemKorean: "비뇨기계",
+    description: "혈액 속 노폐물을 걸러 소변을 생성하고 체내 수분과 전해질 균형을 조절하는 배설 기관입니다.",
+  },
+  "ureter": {
+    korean: "요관",
+    canonical: "Ureter",
+    system: "urinary",
+    systemKorean: "비뇨기계",
+    description: "신우에서 신장 밖 방광으로 소변을 수송하는 근육성 관입니다.",
+  },
+  "urinary bladder": {
+    korean: "방광",
+    canonical: "Urinary Bladder",
+    system: "urinary",
+    systemKorean: "비뇨기계",
+    description: "요관을 통해 모인 소변을 저장했다가 주기적으로 배출하는 근육성 주머니입니다.",
+  },
+  "bladder": {
+    korean: "방광",
+    canonical: "Bladder",
+    system: "urinary",
+    systemKorean: "비뇨기계",
+    description: "소변을 모아두었다가 배출하는 비뇨기계 저장 기관입니다.",
+  },
+  "urethra": {
+    korean: "요도",
+    canonical: "Urethra",
+    system: "urinary",
+    systemKorean: "비뇨기계",
+    description: "방광에 저장된 소변을 몸 밖으로 배출하는 통로입니다.",
+  },
+  "renal cortex": {
+    korean: "신장 피질",
+    canonical: "Renal Cortex",
+    system: "urinary",
+    systemKorean: "비뇨기계",
+    description: "신장의 바깥쪽 층으로 사구체와 네프론이 위치하여 혈액을 여과합니다.",
+  },
+  "renal medulla": {
+    korean: "신장 수질",
+    canonical: "Renal Medulla",
+    system: "urinary",
+    systemKorean: "비뇨기계",
+    description: "신장의 안쪽 층으로 집합관이 헨레고리를 거쳐 소변을 신우로 모읍니다.",
+  },
+  "renal artery": {
+    korean: "신동맥",
+    canonical: "Renal Artery",
+    system: "cardiovascular",
+    systemKorean: "심혈관계",
+    description: "복부 대동맥에서 분지하여 신장에 여과될 혈액을 공급하는 동맥입니다.",
+  },
+  "renal vein": {
+    korean: "신정맥",
+    canonical: "Renal Vein",
+    system: "cardiovascular",
+    systemKorean: "심혈관계",
+    description: "신장에서 정화된 혈액을 하대정맥으로 보내는 정맥입니다.",
+  },
+
+  // --- 내분비계 (Endocrine System) ---
+  "suprarenal gland": {
+    korean: "부신",
+    canonical: "Suprarenal Gland",
+    system: "endocrine",
+    systemKorean: "내분비계",
+    description: "신장 상단에 모자처럼 위치하며 코르티솔, 알도스테론, 아드레날린 등의 필수 호르몬을 분비합니다.",
+  },
+  "adrenal gland": {
+    korean: "부신",
+    canonical: "Adrenal Gland",
+    system: "endocrine",
+    systemKorean: "내분비계",
+    description: "신장 상단에 위치하며 스트레스 호르몬과 혈압 및 수분 대사를 조절하는 내분비 기관입니다.",
+  },
+  "gallbladder": {
+    korean: "담낭(쓸개)",
+    canonical: "Gallbladder",
+    system: "digestive",
+    systemKorean: "소화기계",
+    description: "간에서 분비된 담즙을 농축·저장하는 주머니 모양의 기관입니다.",
+  },
+
+  // --- 주요 종아리 및 전완부 근육 (Muscular System) ---
+  "tibialis anterior": {
+    korean: "전경골근(앞정강근)",
+    canonical: "Tibialis anterior",
+    system: "muscular",
+    systemKorean: "근육계",
+    description: "정강이 앞쪽에 위치하여 발목을 위로 젖히고(배굴) 발바닥 아치를 지지하는 근육입니다.",
+  },
+  "tibialis posterior": {
+    korean: "후경골근(뒤정강근)",
+    canonical: "Tibialis posterior",
+    system: "muscular",
+    systemKorean: "근육계",
+    description: "종아리 깊은 쪽에 위치하여 발목을 아래로 굽히고 안쪽 번짐을 조절하는 핵심 근육입니다.",
+  },
+  "fibularis longus": {
+    korean: "장비골근(긴종아리근)",
+    canonical: "Fibularis longus",
+    system: "muscular",
+    systemKorean: "근육계",
+    description: "종아리 바깥쪽에 위치하여 발목을 외번시키고 보행 시 균형을 유지하는 근육입니다.",
+  },
+  "fibularis brevis": {
+    korean: "단비골근(짧은종아리근)",
+    canonical: "Fibularis brevis",
+    system: "muscular",
+    systemKorean: "근육계",
+    description: "장비골근 아래에 위치하여 발목 외번과 족저굴곡을 보조하는 근육입니다.",
+  },
+  "fibularis tertius": {
+    korean: "제3비골근(셋째종아리근)",
+    canonical: "Fibularis tertius",
+    system: "muscular",
+    systemKorean: "근육계",
+    description: "종아리 앞쪽 아래에서 발목 배굴과 외번을 돕는 보조 근육입니다.",
+  },
+
   // --- 하지 근육 및 근막 ---
   "fascia lata": {
     korean: "대퇴근막",
@@ -204,13 +357,6 @@ export const ANATOMY_DICTIONARY: Record<string, DictionaryEntry> = {
     system: "muscular",
     systemKorean: "근육계",
     description: "비복근 깊은 곳에 넓게 위치하며 서 있는 자세 유지와 정맥 혈액 순환을 돕습니다.",
-  },
-  "tibialis anterior": {
-    korean: "전경골근",
-    canonical: "Tibialis anterior",
-    system: "muscular",
-    systemKorean: "근육계",
-    description: "정강이 앞쪽에 위치하여 발목을 위로 들어 올리고 발 안쪽을 세워주는 근육입니다.",
   },
   "peroneus longus": {
     korean: "장비골근",
@@ -923,6 +1069,21 @@ export const ANATOMY_DICTIONARY: Record<string, DictionaryEntry> = {
  */
 function inferSystemFromName(name: string): string {
   const lower = name.toLowerCase();
+
+  // 1. 비뇨기계 (Urinary) - renal pelvis가 pelvis(골격계)로 오분류되는 것을 원천 방지
+  if (
+    lower.includes("renal") ||
+    lower.includes("kidney") ||
+    lower.includes("nephr") ||
+    lower.includes("ureter") ||
+    lower.includes("bladder") ||
+    lower.includes("urethr") ||
+    lower.includes("urinary")
+  ) {
+    return "urinary";
+  }
+
+  // 2. 골격계 (Skeletal) - renal pelvis 제외
   if (
     lower.includes("bone") ||
     lower.includes("skull") ||
@@ -946,7 +1107,7 @@ function inferSystemFromName(name: string): string {
     lower.includes("carpal") ||
     lower.includes("tarsal") ||
     lower.includes("phalang") ||
-    lower.includes("pelvis") ||
+    (lower.includes("pelvis") && !lower.includes("renal")) ||
     lower.includes("ilium") ||
     lower.includes("ischium") ||
     lower.includes("pubis")
@@ -1179,10 +1340,13 @@ export function resolveAnatomyDisplayInfo(
 ): AnatomyDisplayInfo {
   const resolvedFallback = fallbackSystem ?? inferSystemFromName(rawName);
 
-  // 1. Z-Anatomy 계층 접두사 및 모델 래퍼 접두사 정리
+  // 1. Blender 중복 접미사(.001, .002 등) 및 Z-Anatomy 래퍼/계층 접두사 정리
   let cleaned = rawName
+    .replace(/\.\d+$/, "")
     .replace(/^body-shell__/, "")
     .replace(/^VH_[FM]_/, "")
+    .replace(/^FEMALE_(?:HRA_TX_VH_F_|PELVIS_|COVERAGE_|LOWER_LEG_|MUSCLE_[LR]_)?/i, "")
+    .replace(/^official-(?:upper|lower|head|hand)-/i, "")
     .replace(/^appendicular skeleton\s*/i, "")
     .replace(/^axial skeleton\s*/i, "")
     .replace(/^skeleton\s*/i, "")
@@ -1190,29 +1354,38 @@ export function resolveAnatomyDisplayInfo(
 
   let side: "left" | "right" | "bilateral" | undefined;
 
-  // 2. 방향성 검출 (접미사 .l, _l, -l 뿐 아니라 문자열 내부 단어 left/right 매칭)
-  if (/\bleft\b/i.test(cleaned) || /\.l$/i.test(cleaned) || /_l$/i.test(cleaned) || /-l$/i.test(cleaned)) {
+  // 2. 방향성(Laterality) 검출
+  // 1) 명시적 left / right 단어 (경계가 _, -, ., 공백이거나 단어 경계)
+  if (/(?:^|[_\s.-])(?:left|l)(?:[_\s.-]|$)/i.test(cleaned) || /(?:^|[_\s.-])(?:left|l)(?:[_\s.-]|$)/i.test(rawName)) {
     side = "left";
-    cleaned = cleaned
-      .replace(/\.l$/i, "")
-      .replace(/_l$/i, "")
-      .replace(/-l$/i, "")
-      .replace(/\bleft\b/gi, "")
-      .trim();
-  } else if (/\bright\b/i.test(cleaned) || /\.r$/i.test(cleaned) || /_r$/i.test(cleaned) || /-r$/i.test(cleaned)) {
+  } else if (/(?:^|[_\s.-])(?:right|r)(?:[_\s.-]|$)/i.test(cleaned) || /(?:^|[_\s.-])(?:right|r)(?:[_\s.-]|$)/i.test(rawName)) {
     side = "right";
-    cleaned = cleaned
-      .replace(/\.r$/i, "")
-      .replace(/_r$/i, "")
-      .replace(/-r$/i, "")
-      .replace(/\bright\b/gi, "")
-      .trim();
   }
 
-  // 3. Z-Anatomy 특유의 끝글자 오타 또는 방향성 잔여어(Bonel, Boner 등) 정규화
+  // 2) Z-Anatomy 특유의 접미 l/r (예: Kidneyl, Suprarenal_glandl, Bonel)
+  if (!side) {
+    if (/[a-z]l$/i.test(cleaned) && /(?:kidney|gland|pelvis|bone|artery|vein|nerve|muscle|organ|lung)l$/i.test(cleaned)) {
+      side = "left";
+    } else if (/[a-z]r$/i.test(cleaned) && /(?:kidney|gland|pelvis|bone|artery|vein|nerve|muscle|organ|lung)r$/i.test(cleaned)) {
+      side = "right";
+    }
+  }
+
+  // 3. 계층 노드(__) 처리: __가 있으면 마지막 세부 메쉬명을 기본으로 채택
+  if (cleaned.includes("__")) {
+    const parts = cleaned.split("__");
+    cleaned = parts[parts.length - 1].trim();
+  }
+
+  // 4. 방향성 키워드 및 특수 잔여어 정규화
   cleaned = cleaned
+    .replace(/[._-](?:l|r)$/i, "")
+    .replace(/\bleft\b/gi, "")
+    .replace(/\bright\b/gi, "")
     .replace(/\bbonel\b/gi, "bone")
     .replace(/\bboner\b/gi, "bone")
+    .replace(/(?:kidney|gland|pelvis|artery|vein|nerve|muscle|lung)l$/i, (m) => m.slice(0, -1))
+    .replace(/(?:kidney|gland|pelvis|artery|vein|nerve|muscle|lung)r$/i, (m) => m.slice(0, -1))
     .replace(/[_.-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -1242,15 +1415,36 @@ export function resolveAnatomyDisplayInfo(
   // 언더스코어 공백 치환 및 정규화
   const normalizedKey = cleaned.toLowerCase().trim();
 
-  // 사전 검색 (완전 일치 또는 부분 일치)
+  // 1. 완전 일치 (Exact Match)
   let entry: DictionaryEntry | undefined = ANATOMY_DICTIONARY[normalizedKey];
+  const isExactMatch = Boolean(entry);
 
+  // 2. 단어 경계 기반 부분 일치 탐색 (계통 충돌 방어 가드 적용)
   if (!entry) {
-    // 단어 기반 탐색: 더 구체적인 키를 우선 매칭하기 위해 키 길이 내림차순 정렬 후 탐색
     const sortedKeys = Object.keys(ANATOMY_DICTIONARY).sort((a, b) => b.length - a.length);
     for (const key of sortedKeys) {
-      if (normalizedKey === key || normalizedKey.includes(key)) {
-        entry = ANATOMY_DICTIONARY[key];
+      const cand = ANATOMY_DICTIONARY[key];
+
+      // 계통 충돌 방어 가드: 3D 모델의 원래 계통(resolvedFallback)이 주어져 있고,
+      // 사전 항목의 계통과 충돌한다면 (예: 원본은 urinary인데 사전 키 pelvis는 skeletal)
+      // 이 부분 일치는 잘못된 개념 축약/치환이므로 채택하지 않고 기각 (Astra 지적 사항)
+      if (resolvedFallback && cand.system && resolvedFallback !== "integumentary") {
+        const sysA = resolvedFallback.toLowerCase();
+        const sysB = cand.system.toLowerCase();
+        if (sysA !== sysB && !(sysA === "joints" && sysB === "skeletal") && !(sysA === "skeletal" && sysB === "joints")) {
+          continue;
+        }
+      }
+
+      // 단어 경계(\b) 매칭: 'pelvis'가 'renal pelvis' 속에서 부분 일치하더라도 위 가드로 인해 skeletal 치환 방지
+      if (key === "pelvis" && (normalizedKey.includes("renal") || resolvedFallback === "urinary")) {
+        continue;
+      }
+
+      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const wordBoundaryRegex = new RegExp(`(^|\\s|_|-)${escapedKey}(\\s|_|-|$)`, "i");
+      if (wordBoundaryRegex.test(normalizedKey)) {
+        entry = cand;
         break;
       }
     }
@@ -1261,6 +1455,14 @@ export function resolveAnatomyDisplayInfo(
   const sideShortEn = side === "left" ? " L" : side === "right" ? " R" : "";
 
   if (entry) {
+    // 계통 충돌 방어 가드: 사전 항목과 3D 메쉬의 원래 계통이 다르면 원본 계통을 우선 보존
+    const finalSystem = resolvedFallback && resolvedFallback !== "integumentary" && entry.system !== resolvedFallback
+      ? resolvedFallback
+      : entry.system;
+    const finalSystemKr = resolvedFallback && resolvedFallback !== "integumentary" && entry.system !== resolvedFallback
+      ? systemToKorean(finalSystem)
+      : entry.systemKorean;
+
     const koreanName = `${sidePrefixKr}${entry.korean}`;
     const canonicalName = `${entry.canonical}${sideSuffixEn}`;
     const fullBilingualLabel = `${koreanName} (${entry.canonical}${sideShortEn})`;
@@ -1270,10 +1472,11 @@ export function resolveAnatomyDisplayInfo(
       canonicalName,
       fullBilingualLabel,
       side,
-      systemKorean: entry.systemKorean,
-      system: entry.system,
+      systemKorean: finalSystemKr,
+      system: finalSystem,
       description: entry.description,
-      isStandardMatched: true,
+      // 오직 완전 일치(Exact Match)인 경우에만 표준 매칭 성공으로 인정 (Astra 권고)
+      isStandardMatched: isExactMatch,
     };
   }
 
@@ -1319,6 +1522,14 @@ function systemToKorean(system: string): string {
       return "소화기계";
     case "respiratory":
       return "호흡기계";
+    case "urinary":
+      return "비뇨기계";
+    case "endocrine":
+      return "내분비계";
+    case "lymphatic":
+      return "림프계";
+    case "reproductive":
+      return "생식계";
     case "integumentary":
       return "피부계";
     default:

@@ -56,7 +56,7 @@ SECURITY_HEADERS = {
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
     "Content-Security-Policy": (
         "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; "
-        "connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; "
+        "connect-src 'self' https://human-atlas-seven.vercel.app; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; "
         "frame-ancestors 'none'"
     ),
 }

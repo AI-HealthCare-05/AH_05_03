@@ -60,10 +60,10 @@ async def signup(
 @auth_router.post(
     "/login",
     response_model=ApiResponse[AccessTokenData],
+    # 정지·해지 계정도 CREDENTIALS_INVALID 하나로 받는다(`AuthService.authenticate`
+    # 참조) — 익명 로그인 시도자에게 계정 상태를 구분해 알리지 않는다.
     responses=error_responses(
         ErrorCode.CREDENTIALS_INVALID,
-        ErrorCode.ACCOUNT_SUSPENDED,
-        ErrorCode.ACCOUNT_CLOSED,
         ErrorCode.SERVICE_UNAVAILABLE,
     ),
     summary="로그인과 토큰 발급",

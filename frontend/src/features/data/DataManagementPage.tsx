@@ -23,7 +23,7 @@ export function filterDocumentsByProfile(documents: LocalDocument[], profileId: 
 
 /**
  * OCR로 읽은 수치에 해당 구성원의 프로필 기본값(성별, 생년월일 기반 나이)을 결합하여
- * 위험 판정 폼 초기값으로 넘길 페이로드를 구성한다.
+ * 질환 예측 폼 초기값으로 넘길 페이로드를 구성한다.
  */
 export function buildAssessmentPrefill(
   values: Record<string, number>,
@@ -391,7 +391,7 @@ export function DataManagementPage({ embedded = false }: { embedded?: boolean } 
           // 브라우저에서는" 이라 사용자가 브라우저를 바꾸면 될 일로 읽었다. 바꿔도
           // 안 된다 — 제품이 파일 보관을 하지 않기로 한 것이다.
           <div className="alert info-alert">
-            건강자료 파일은 보관하지 않습니다. 검진표는 위험 판정에서 올리면 수치만 기록으로 남습니다.
+            건강자료 파일은 보관하지 않습니다. 검진표는 질환 예측에서 올리면 수치만 기록으로 남습니다.
           </div>
         ) : (
           <>

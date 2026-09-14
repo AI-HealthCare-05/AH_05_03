@@ -2,9 +2,18 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import Response
 
 from app.core.errors import ErrorCode
+from app.dependencies.concurrency import (
+    IdempotencyKeyHeader,
+    IfMatchHeader,
+    check_idempotency,
+    parse_if_match,
+    remember_idempotent,
+)
 from app.dependencies.security import require_active_account
+from app.dependencies.services import get_idempotency_store
 from app.dtos.envelope import ApiResponse, error_responses
 from app.dtos.households import (
     HouseholdData,
@@ -15,6 +24,7 @@ from app.dtos.households import (
 )
 from app.models.service_accounts import ServiceAccount
 from app.services.households import HouseholdService
+from app.services.idempotency import IdempotencyStore
 
 household_router = APIRouter(prefix="/households", tags=["households"])
 
@@ -34,14 +44,30 @@ _AUTH_ERRORS = (
     "",
     response_model=ApiResponse[HouseholdData],
     status_code=status.HTTP_201_CREATED,
-    responses=error_responses(*_AUTH_ERRORS),
+    responses=error_responses(*_AUTH_ERRORS, ErrorCode.IDEMPOTENCY_KEY_REUSED),
     summary="가정 생성",
 )
 async def create_household(
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     service: Annotated[HouseholdService, Depends(HouseholdService)],
-) -> ApiResponse[HouseholdData]:
-    return ApiResponse(data=await service.create(account), message="가정을 생성했습니다.")
+    idem_store: Annotated[IdempotencyStore, Depends(get_idempotency_store)],
+    idempotency_key: IdempotencyKeyHeader = None,
+) -> ApiResponse[HouseholdData] | Response:
+    payload: dict = {}
+    cached = await check_idempotency(idem_store, account.id, "household.create", idempotency_key, payload)
+    if cached is not None:
+        return cached
+    response = ApiResponse(data=await service.create(account), message="가정을 생성했습니다.")
+    await remember_idempotent(
+        idem_store,
+        account.id,
+        "household.create",
+        idempotency_key,
+        payload,
+        status_code=status.HTTP_201_CREATED,
+        body=response.model_dump(mode="json"),
+    )
+    return response
 
 
 @household_router.get(
@@ -126,6 +152,10 @@ async def leave_household(
 
 @household_router.delete(
     "/{household_id}",
+    # **명시적으로 `None`이어야 한다.** 반환 타입에 `Response`가 섞여 있으면 FastAPI가
+    # 그로부터 응답 스키마를 추론하려다 "204는 본문을 가질 수 없다"는 조립 시점
+    # 단언에 걸린다. 재생 경로가 `Response`를 직접 돌려주므로 스키마 추론 자체를 끈다.
+    response_model=None,
     status_code=status.HTTP_204_NO_CONTENT,
     responses=error_responses(
         *_AUTH_ERRORS,
@@ -133,6 +163,8 @@ async def leave_household(
         ErrorCode.HOUSEHOLD_MEMBERSHIP_REQUIRED,
         ErrorCode.HOUSEHOLD_STATE_CONFLICT,
         ErrorCode.ACTIVE_MEMBERS_REMAIN,
+        ErrorCode.IDEMPOTENCY_KEY_REUSED,
+        ErrorCode.VERSION_MISMATCH,
     ),
     summary="가정 폐쇄",
 )
@@ -140,8 +172,25 @@ async def close_household(
     household_id: uuid.UUID,
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     service: Annotated[HouseholdService, Depends(HouseholdService)],
-) -> None:
-    await service.close(household_id, account)
+    idem_store: Annotated[IdempotencyStore, Depends(get_idempotency_store)],
+    idempotency_key: IdempotencyKeyHeader = None,
+    if_match: IfMatchHeader = None,
+) -> Response | None:
+    payload = {"household_id": str(household_id)}
+    cached = await check_idempotency(idem_store, account.id, "household.close", idempotency_key, payload)
+    if cached is not None:
+        return cached
+    await service.close(household_id, account, expected_version=parse_if_match(if_match))
+    await remember_idempotent(
+        idem_store,
+        account.id,
+        "household.close",
+        idempotency_key,
+        payload,
+        status_code=status.HTTP_204_NO_CONTENT,
+        body=None,
+    )
+    return None
 
 
 @household_router.delete(

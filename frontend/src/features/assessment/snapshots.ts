@@ -347,17 +347,33 @@ export function summarizeLatest(snapshots: Snapshot[]): LatestSummary | undefine
 /**
  * 구성원 전체의 최근 판정을 한 번에.
  *
- * 순차로 훑는다. 보관함 조회는 복호화를 끼고 있어 동시에 던지면 CPU 가 몰리는데,
- * 가족 구성원은 많아야 대여섯이라 병렬로 얻을 이득이 없다.
+ * **순차로 훑었다.** "보관함 조회는 복호화를 끼고 있어 동시에 던지면 CPU 가 몰린다"
+ * 는 것이 이유였는데, 그 전제는 기기 안 런타임(IndexedDB + 복호화) 시절 것이다.
+ * ADR-011 이후 정본이 서버로 옮겨 가면서 이 조회는 구성원마다 **왕복 한 번**이
+ * 됐고(`/api/v1/health-records?profile_id=…`), CPU 가 아니라 그물망이 병목이다.
+ * 넷이면 넷을 줄 세우느라 왕복 넷이 직렬로 쌓인다(실측 왕복당 약 300ms).
+ *
+ * 같이 던진다. 대여섯 개를 한꺼번에 여는 것은 브라우저 동시 연결 한도 안이고,
+ * 한 사람 조회가 실패해도 나머지는 그대로 보여 준다 — 한 칸 배지가 비는 것이
+ * 목록 전체가 비는 것보다 낫다.
  */
 export async function listLatestByProfile(
   runtime: LocalDomainRuntime,
   profileIds: string[],
 ): Promise<Record<string, LatestSummary>> {
+  const found = await Promise.all(
+    profileIds.map(async (profileId) => {
+      try {
+        return [profileId, summarizeLatest(await listSnapshots(runtime, profileId))] as const;
+      } catch {
+        return [profileId, undefined] as const;
+      }
+    }),
+  );
+
   const summaries: Record<string, LatestSummary> = {};
-  for (const profileId of profileIds) {
-    const found = summarizeLatest(await listSnapshots(runtime, profileId));
-    if (found) summaries[profileId] = found;
+  for (const [profileId, summary] of found) {
+    if (summary) summaries[profileId] = summary;
   }
   return summaries;
 }

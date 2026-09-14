@@ -23,7 +23,7 @@ const RECORD_LABELS: Record<HealthRecordType, string> = {
   medication: "복약",
   sleep: "수면",
   daily_condition: "컨디션",
-  assessment: "위험 판정",
+  assessment: "질환 예측",
   note: "건강 메모",
 };
 

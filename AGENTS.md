@@ -14,11 +14,12 @@
 
 | 영역 | 문서 |
 |---|---|
+| 설계·아키텍처 | `SYSTEM_DESIGN.md` (클린 아키텍처·Tidy First·타이핑·RESTful/로깅) · `.agents/skills/rest-api-design/` |
 | ML·서빙 | 19 · 21 · 23 · 27 · 30 · 41 · 42 · ADR-009 |
 | 판정 중재 | 22 · 31 · `app/services/assessment.py` 머리말 |
 | 챗봇·RAG | **43** |
 | OCR·저장 | 24 · 40 · **44** · ADR-010 |
-| 프런트 | `frontend/README.md` · `features/assessment/contracts.ts`(서버 DTO 손 사본) |
+| 프런트 | `frontend/README.md` · `DESIGN.md` · `.agents/skills/ui-ux-pro-max/` · `.agents/skills/browser-testing/` · `features/assessment/contracts.ts`(서버 DTO 손 사본) |
 
 ## 어기면 조용히 틀리는 것
 
@@ -32,6 +33,10 @@
 8. **번들 재export 는 사후 주입물을 지운다.** `rule_anchor` 는 `bundle_io`, `trajectory.json` 의 `evidence` 는 `fit_trajectory` 가 승계한다.
 9. **`.env`·`*.pem`·`*.key` 는 열지도 출력하지도 않는다.** 키 이름 유무만 `grep -c` 로 본다.
 10. **`git checkout -- .` 을 쓰지 않는다.** 되돌릴 것만 경로로 지정한다. 2026-09-03 에 이것 하나로 그날 작업 전체가 날아갔다.
+11. **구조 변경과 기능 추가를 한 커밋에 섞지 않는다(Tidy First).** 리팩토링은 `refactor:`, 기능은 `feat:`, 수정은 `fix:`로 원자적 분리.
+12. **파이썬 타이핑은 3.10+ 내장 구문 준수.** `int | None`, `list[T]` 네이티브 제네릭 사용. `typing.Optional`/`Union`/`List` 및 3.12+ 전용 PEP 695 금지.
+13. **RESTful API & 관측성 표준 준수.** 백엔드 라우터/엔드포인트 작성 시 `SYSTEM_DESIGN.md` 8번 섹션 및 `.agents/skills/rest-api-design/` 준수. 동사 배제·복수형 명사 컬렉션, 상태 코드(201+Location, 202, 204), RFC 7807 에러 포맷(`application/problem+json`), `X-Request-ID` 전파, 로그 내 의료 민감정보(PHI) 마스킹 필수.
+14. **프런트엔드 작업 시 `DESIGN.md` 단일 진실 원천(SSOT) 준수.** 프런트엔드(UI/UX·컴포넌트·스타일·타이포그래피) 수정 시 반드시 `DESIGN.md`를 먼저 확인한다. 임의의 폰트/인라인 색상/새 키 컬러 추가 금지. 2색 이하 키 컬러(Primary Blue `#1d4fb8`, Secondary Slate `#5b687e`), 타이포그래피 스케일(Inter/Pretendard, 32/24/18/16/14/12/11px), 스켈레톤 UI 표준, 터치 타깃 44px을 엄격 준수한다.
 
 ## 검증 — 같은 순서로, 숫자로
 

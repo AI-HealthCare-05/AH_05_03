@@ -28,6 +28,7 @@ from app.exceptions import (
     InvitationTokenInvalidError,
     ProfileReferenceAlreadyUsedError,
     TokenStoreUnavailableError,
+    VersionMismatchError,
 )
 from app.models.family_invitations import FamilyInvitation, InvitationStatus
 from app.models.households import HouseholdStatus
@@ -132,12 +133,18 @@ class FamilyInvitationService:
         return FamilyInvitationListData(sent=sent, received=received)
 
     async def accept(
-        self, invitation_id: uuid.UUID, account: ServiceAccount, request: InvitationTokenRequest
+        self,
+        invitation_id: uuid.UUID,
+        account: ServiceAccount,
+        request: InvitationTokenRequest,
+        *,
+        expected_version: int | None = None,
     ) -> FamilyInvitationData:
         await self.invitation_store.enforce_transition_rate(account.id, invitation_id)
         invitation = await self._require_recipient(invitation_id, account)
         await self._require_pending(invitation)
         self._verify_hash(invitation, request.token)
+        self._check_version(invitation, expected_version)
         restore_ttl = self._remaining_ttl(invitation)
         await self.invitation_store.consume(invitation.id, request.token)
         try:
@@ -156,7 +163,12 @@ class FamilyInvitationService:
         return self._serialize(invitation)
 
     async def decline(
-        self, invitation_id: uuid.UUID, account: ServiceAccount, request: InvitationTokenRequest | None = None
+        self,
+        invitation_id: uuid.UUID,
+        account: ServiceAccount,
+        request: InvitationTokenRequest | None = None,
+        *,
+        expected_version: int | None = None,
     ) -> FamilyInvitationData:
         await self.invitation_store.enforce_transition_rate(account.id, invitation_id)
         invitation = await self._require_recipient(invitation_id, account)
@@ -164,6 +176,7 @@ class FamilyInvitationService:
 
         if request is not None and request.token:
             self._verify_hash(invitation, request.token)
+            self._check_version(invitation, expected_version)
             restore_ttl = self._remaining_ttl(invitation)
             await self.invitation_store.consume(invitation.id, request.token)
             try:
@@ -176,6 +189,7 @@ class FamilyInvitationService:
                 await self._best_effort_restore(invitation_id, request.token, restore_ttl)
                 raise
         else:
+            self._check_version(invitation, expected_version)
             invitation.status = InvitationStatus.DECLINED
             invitation.declined_at = datetime.now(tz=timezone.utc)
             invitation.row_version += 1
@@ -185,11 +199,14 @@ class FamilyInvitationService:
         await self.session.refresh(invitation)
         return self._serialize(invitation)
 
-    async def cancel(self, invitation_id: uuid.UUID, account: ServiceAccount) -> FamilyInvitationData:
+    async def cancel(
+        self, invitation_id: uuid.UUID, account: ServiceAccount, *, expected_version: int | None = None
+    ) -> FamilyInvitationData:
         invitation = await self.invitation_repo.get_for_update(invitation_id)
         if invitation is None or invitation.inviter_account_id != account.id:
             raise InvitationNotFoundError()
         await self._require_pending(invitation)
+        self._check_version(invitation, expected_version)
 
         invitation.status = InvitationStatus.CANCELLED
         invitation.cancelled_at = datetime.now(tz=timezone.utc)
@@ -219,6 +236,11 @@ class FamilyInvitationService:
     def _verify_hash(self, invitation: FamilyInvitation, raw_token: str) -> None:
         if not hmac.compare_digest(invitation.token_hash, self.invitation_store.hash_token(raw_token)):
             raise InvitationTokenInvalidError()
+
+    @staticmethod
+    def _check_version(invitation: FamilyInvitation, expected_version: int | None) -> None:
+        if expected_version is not None and invitation.row_version != expected_version:
+            raise VersionMismatchError()
 
     def _serialize(self, invitation: FamilyInvitation) -> FamilyInvitationData:
         result = FamilyInvitationData.model_validate(invitation)

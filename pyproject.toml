@@ -132,7 +132,7 @@ line-length = 120
 target-version = "py310"
 # 가져온 코드는 우리 린트 규칙으로 고치지 않는다. 한 글자라도 바꾸면 "팀원의 엔진과
 # 비교"가 아니라 "내가 고친 엔진과 비교"가 된다. chronic_disease_engine/PROVENANCE.md 참조.
-extend-exclude = ["chronic_disease_engine", ".codex_tmp_*.py"]
+extend-exclude = ["chronic_disease_engine", ".codex_tmp_*.py", ".agents"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "C90", "B", "UP", "N"]

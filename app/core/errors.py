@@ -84,6 +84,9 @@ class ErrorCode(StrEnum):
     PROFILE_NOT_FOUND = "PROFILE_NOT_FOUND"
     HEALTH_RECORD_NOT_FOUND = "HEALTH_RECORD_NOT_FOUND"
     PROFILE_ACCESS_DENIED = "PROFILE_ACCESS_DENIED"
+    # --- 멱등성·낙관적 잠금 (docs/03_api_spec.md §2.4·§2.5) ----------
+    IDEMPOTENCY_KEY_REUSED = "IDEMPOTENCY_KEY_REUSED"
+    VERSION_MISMATCH = "VERSION_MISMATCH"
 
 
 ERROR_STATUS: dict[ErrorCode, int] = {
@@ -144,6 +147,8 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     ErrorCode.PROFILE_NOT_FOUND: status.HTTP_404_NOT_FOUND,
     ErrorCode.HEALTH_RECORD_NOT_FOUND: status.HTTP_404_NOT_FOUND,
     ErrorCode.PROFILE_ACCESS_DENIED: status.HTTP_403_FORBIDDEN,
+    ErrorCode.IDEMPOTENCY_KEY_REUSED: status.HTTP_409_CONFLICT,
+    ErrorCode.VERSION_MISMATCH: status.HTTP_412_PRECONDITION_FAILED,
 }
 
 DEFAULT_MESSAGE: dict[ErrorCode, str] = {
@@ -163,7 +168,7 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.LLM_PROVIDER_FAILED: "대화 응답을 받지 못했습니다. 잠시 후 다시 시도해 주세요.",
     ErrorCode.LLM_TIMEOUT: "응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.",
     ErrorCode.AUTH_REQUIRED: "로그인이 필요합니다.",
-    ErrorCode.CREDENTIALS_INVALID: "이메일 또는 비밀번호가 올바르지 않습니다.",
+    ErrorCode.CREDENTIALS_INVALID: "로그인에 실패하였습니다. 이메일이나 비밀번호를 다시 확인해주세요.",
     ErrorCode.EMAIL_ALREADY_REGISTERED: "이미 사용중인 이메일입니다.",
     ErrorCode.TOKEN_INVALID: "유효하지 않은 토큰입니다.",
     ErrorCode.TOKEN_EXPIRED: "토큰이 만료되었습니다. 다시 로그인해 주세요.",
@@ -199,6 +204,8 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.PROFILE_NOT_FOUND: "프로필을 찾을 수 없습니다.",
     ErrorCode.HEALTH_RECORD_NOT_FOUND: "건강 기록을 찾을 수 없습니다.",
     ErrorCode.PROFILE_ACCESS_DENIED: "해당 프로필에 접근할 권한이 없습니다.",
+    ErrorCode.IDEMPOTENCY_KEY_REUSED: "이미 다른 요청에 사용된 Idempotency-Key입니다.",
+    ErrorCode.VERSION_MISMATCH: "다른 곳에서 먼저 변경되었습니다. 최신 상태를 다시 불러온 뒤 시도해 주세요.",
 }
 
 # 프레임워크가 직접 올리는 오류(라우터 404·405, HTTPBearer 401)만 여기로 온다.

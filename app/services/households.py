@@ -18,6 +18,7 @@ from app.exceptions import (
     HouseholdNotFoundError,
     HouseholdStateConflictError,
     MembershipStateConflictError,
+    VersionMismatchError,
 )
 from app.models.households import HouseholdStatus, MembershipStatus
 from app.models.service_accounts import ServiceAccount
@@ -121,7 +122,9 @@ class HouseholdService:
         await self.session.refresh(membership)
         return HouseholdMembershipData.model_validate(membership)
 
-    async def close(self, household_id: uuid.UUID, account: ServiceAccount) -> None:
+    async def close(
+        self, household_id: uuid.UUID, account: ServiceAccount, *, expected_version: int | None = None
+    ) -> None:
         household = await self.household_repo.get_for_update(household_id)
         if household is None:
             raise HouseholdNotFoundError()
@@ -138,6 +141,11 @@ class HouseholdService:
             raise HouseholdMembershipRequiredError()
         if await self.household_repo.count_other_active_members(household_id, account.id):
             raise HouseholdHasOtherMembersError()
+        # 존재·상태·권한을 먼저 가른 뒤에야 버전을 본다 — docs/03 §2.5. 순서를
+        # 바꾸면 이미 다른 이유로 실패할 요청이 "다른 곳에서 먼저 바뀌었다"는
+        # 부정확한 사유(412)를 받는다.
+        if expected_version is not None and household.row_version != expected_version:
+            raise VersionMismatchError()
 
         membership = await self.household_repo.get_membership_for_update(household_id, account.id)
         if membership is not None and membership.status is MembershipStatus.ACTIVE:

@@ -109,7 +109,7 @@ describe("RootLayout 로그인 관문", () => {
       .filter((link) => link.getAttribute("aria-current") === "page");
 
     expect(current).toHaveLength(1);
-    expect(current[0]).toHaveTextContent("위험 판정");
+    expect(current[0]).toHaveTextContent("질환 예측");
   });
 
   /**

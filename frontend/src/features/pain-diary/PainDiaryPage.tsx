@@ -33,39 +33,11 @@ function formatDateKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-/**
- * 강도 색 — **면(칠하는 자리)에 쓴다.** 점·막대·배경처럼 글자가 아닌 곳이다.
- * 글자에는 `getIntensityTextColor` 를 쓴다(아래 참조).
- */
-function getIntensityColor(intensity: number): string {
-  if (intensity <= 3) return "#10b981"; // 경미 (초록)
-  if (intensity <= 6) return "#f59e0b"; // 보통 (주황)
-  return "#ef4444"; // 심함 (빨강)
-}
-
-/**
- * 강도 색 — **글자용.** 같은 색조를 어둡게 한 것이다.
- *
- * 위 색을 그대로 글자에 쓰면 대비가 무너진다. 강도 알약은 `색 + '22'` 를 배경으로
- * 깔고 같은 색을 글자로 썼는데, 연한 주황 위의 주황 글자는 대비 **2.00** 으로
- * WCAG 1.4.3(4.5:1)의 절반도 안 됐다(2026-09-10 실측. 경미 2.32 · 심함 3.32).
- *
- * 색조를 바꾸지 않고 명도만 내렸다 — 초록·주황·빨강이라는 강도 신호는 그대로 읽히고,
- * 같은 틴트 배경 위에서 4.78~5.22 로 통과한다. 면에 쓰는 색을 어둡게 하지 않은 것은
- * 점과 막대는 글자가 아니라 이 기준의 대상이 아니고, 어둡게 하면 강도 구분이
- * 눈에 덜 띄기 때문이다.
- */
-function getIntensityTextColor(intensity: number): string {
-  if (intensity <= 3) return "#0f7a5a"; // 경미 — 틴트 위 4.86
-  if (intensity <= 6) return "#a35c02"; // 보통 — 틴트 위 4.78
-  return "#c02626"; // 심함 — 틴트 위 5.22
-}
-
-function getIntensityLabel(intensity: number): string {
-  if (intensity <= 3) return "경미한 통증";
-  if (intensity <= 6) return "보통 통증";
-  return "심한 통증";
-}
+import {
+  getIntensityColor,
+  getIntensityTextColor,
+  getIntensityLabel,
+} from "../home/holographicAnatomyStyle";
 
 export function PainDiaryPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -135,6 +107,17 @@ export function PainDiaryPage() {
 
   useEffect(() => {
     void loadRecords();
+  }, [loadRecords]);
+
+  // 봄이(챗봇) 등에서 통증 기록이 저장되면 실시간으로 다이어리 목록을 갱신한다.
+  useEffect(() => {
+    const handleRecordSaved = () => {
+      void loadRecords();
+    };
+    window.addEventListener("ieobom:record-saved", handleRecordSaved);
+    return () => {
+      window.removeEventListener("ieobom:record-saved", handleRecordSaved);
+    };
   }, [loadRecords]);
 
   // 날짜별 통증 기록 매핑 (YYYY-MM-DD -> HealthRecord[])
@@ -303,23 +286,46 @@ export function PainDiaryPage() {
 
     try {
       if (currentRecord) {
-        // 기존 기록 수정
+        // 기존 기록 수정: 사용자가 본문/부위를 직접 수정했다면 구버전 AI 추론 메타데이터를 정돈
+        const prevPayload = (currentRecord.payload as Record<string, unknown>) ?? {};
+        const isTextModified =
+          prevPayload.bodyArea !== bodyArea.trim() ||
+          prevPayload.note !== (note.trim() || undefined) ||
+          prevPayload.sensation !== (sensation.trim() || undefined) ||
+          prevPayload.aggravatingFactors !== (aggravatingFactors.trim() || undefined);
+
+        // 사용자가 3D에서 직접 선택/확인한 수동 선택(tap, brush, dental, search, confirmed)은 텍스트 변경 시에도 보존
+        const isUserConfirmedAnatomy =
+          anatomyEvent?.provenance === "user_confirmed" ||
+          (anatomyEvent && anatomyEvent.inputSource !== "ai_inference") ||
+          anatomyEvent?.state === "confirmed";
+
+        const mergedPayload: Record<string, unknown> = {
+          ...prevPayload,
+          type: "pain",
+          bodyArea: bodyArea.trim(),
+          intensity,
+          sensation: sensation.trim() || undefined,
+          aggravatingFactors: aggravatingFactors.trim() || undefined,
+          note: note.trim() || undefined,
+          anatomyEvent: isUserConfirmedAnatomy ? anatomyEvent : (isTextModified ? undefined : (anatomyEvent || undefined)),
+        };
+
+        if (isTextModified) {
+          delete mergedPayload.clinicalReasoning;
+          delete mergedPayload.suspectedAnatomyIds;
+          delete mergedPayload.suspectedSystem;
+        }
+
         const updateRes = await runtime.healthRecords.update(currentRecord.id, {
           recordType: "pain",
           recordedAt: currentRecord.recordedAt,
-          payload: {
-            type: "pain",
-            bodyArea: bodyArea.trim(),
-            intensity,
-            sensation: sensation.trim() || undefined,
-            aggravatingFactors: aggravatingFactors.trim() || undefined,
-            note: note.trim() || undefined,
-            anatomyEvent: anatomyEvent || undefined,
-          },
+          payload: mergedPayload,
           expectedVersion: currentRecord.version,
         });
         if (!updateRes.ok) throw new Error(updateRes.error.message);
         setFeedbackMessage("통증 다이어리 기록이 수정되었습니다.");
+        lastLoadedKeyRef.current = "";
         setSelectedRecordId(currentRecord.id);
       } else {
         // 신규 기록 등록
@@ -345,6 +351,20 @@ export function PainDiaryPage() {
       }
       lastLoadedKeyRef.current = "";
       await loadRecords();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("ieobom:record-saved", {
+            detail: { profileId: selectedProfile.id },
+          }),
+        );
+        try {
+          const ch = new BroadcastChannel("ieobom-sync");
+          ch.postMessage({ type: "record-saved", profileId: selectedProfile.id });
+          ch.close();
+        } catch {
+          // ignore
+        }
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "통증 다이어리 저장에 실패했습니다.");
     } finally {
@@ -365,6 +385,20 @@ export function PainDiaryPage() {
       setSelectedRecordId(null);
       lastLoadedKeyRef.current = "";
       await loadRecords();
+      if (typeof window !== "undefined" && selectedProfile) {
+        window.dispatchEvent(
+          new CustomEvent("ieobom:record-saved", {
+            detail: { profileId: selectedProfile.id },
+          }),
+        );
+        try {
+          const ch = new BroadcastChannel("ieobom-sync");
+          ch.postMessage({ type: "record-saved", profileId: selectedProfile.id });
+          ch.close();
+        } catch {
+          // ignore
+        }
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "기록 삭제에 실패했습니다.");
     } finally {
@@ -777,16 +811,28 @@ export function PainDiaryPage() {
 
               <div className="calendar-legend">
                 <div className="legend-item">
-                  <span className="legend-dot" style={{ backgroundColor: "#10b981" }} />
-                  <span>경미(0~3)</span>
+                  <span className="legend-dot" style={{ backgroundColor: "#06b6d4" }} />
+                  <span>정상(0)</span>
                 </div>
                 <div className="legend-item">
-                  <span className="legend-dot" style={{ backgroundColor: "#f59e0b" }} />
-                  <span>보통(4~6)</span>
+                  <span className="legend-dot" style={{ backgroundColor: "#10b981" }} />
+                  <span>안심(1~2)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-dot" style={{ backgroundColor: "#84cc16" }} />
+                  <span>경미(3~4)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-dot" style={{ backgroundColor: "#eab308" }} />
+                  <span>보통(5~6)</span>
+                </div>
+                <div className="legend-item">
+                  <span className="legend-dot" style={{ backgroundColor: "#f97316" }} />
+                  <span>심함(7~8)</span>
                 </div>
                 <div className="legend-item">
                   <span className="legend-dot" style={{ backgroundColor: "#ef4444" }} />
-                  <span>심함(7~10)</span>
+                  <span>극심(9~10)</span>
                 </div>
               </div>
             </section>

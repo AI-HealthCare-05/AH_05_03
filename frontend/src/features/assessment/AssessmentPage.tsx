@@ -830,8 +830,8 @@ export function AssessmentPage() {
           "여기만 다른 앱" 처럼 보였다. */}
       <section className="dashboard-heading">
         <div>
-          <p className="page-kicker">위험 판정</p>
-          <h1>만성질환 위험 판정</h1>
+          <p className="page-kicker">질환 예측</p>
+          <h1>만성질환 예측</h1>
           <p>
             기본 정보와 혈압·공복혈당을 채우면 판정이 나옵니다. 나머지 검진결과지
             수치를 넣을수록 답하는 칸이 늘고,{" "}

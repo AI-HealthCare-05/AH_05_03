@@ -319,4 +319,5 @@ class TestShortAbbreviationsAreDeliberatelyNarrow:
         assert match.value == 247.0
 
 
+        assert match.reason is not None
         assert "구출한 값: 247" in match.reason

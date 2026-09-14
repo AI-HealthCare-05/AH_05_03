@@ -27,8 +27,18 @@ export interface AuthContextValue {
   accountId?: string;
   signIn(email: string, password: string, options?: { signUpFirst?: boolean }): Promise<void>;
   signOut(): Promise<void>;
-  /** 계정 화면이 스스로 로그아웃·계정 종료를 했을 때 관문에 알린다. */
-  markSignedOut(): void;
+  /**
+   * 계정 화면이 스스로 로그아웃·회원 탈퇴를 했을 때 관문에 알린다.
+   *
+   * `message` 를 주면 로그인 화면에 그대로 뜬다. **여기서 관문으로 넘어가는 순간
+   * 계정 화면은 통째로 사라진다** — `AccountPage` 자신이 그 직후에 띄우려던
+   * 성공 메시지(건강정보 보존·폐기 결과 등)는 화면이 스스로를 unmount 하기 전에
+   * 지나가 버려 아무도 못 본다. 버튼을 눌러도 아무 반응이 없는 것처럼 보이던
+   * 실제 원인이다 — 요청은 성공했지만 알림이 뜰 자리가 없어졌다.
+   */
+  markSignedOut(message?: string): void;
+  /** `markSignedOut(message)` 로 넘어온, 로그인 화면이 한 번 보여 줄 안내문. */
+  signedOutNotice?: string;
   /** 계정 화면 등에서 최신 계정 정보를 동기화할 때 사용한다. */
   updateAccount?(email: string, accountId?: string): void;
 }
