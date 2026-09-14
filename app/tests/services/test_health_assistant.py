@@ -1287,3 +1287,14 @@ def test_supplement_question_keeps_supplement_disclaimer() -> None:
     kept = HealthAssistantService._remove_irrelevant_supplement_disclaimer(response, request)
 
     assert kept.assistant_message == message
+
+
+def test_vitamin_or_mineral_question_keeps_supplement_disclaimer() -> None:
+    message = "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다."
+    for content in ("비타민 D 먹어도 될까요?", "미네랄 보충이 필요할까요?"):
+        request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=content)])
+        response = HealthAssistantResponse(intent="health_advice", assistant_message=f"{message} 일반 정보")
+
+        kept = HealthAssistantService._remove_irrelevant_supplement_disclaimer(response, request)
+
+        assert kept.assistant_message.startswith(message)

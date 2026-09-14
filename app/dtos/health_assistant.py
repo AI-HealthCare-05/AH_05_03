@@ -215,6 +215,14 @@ AuthoritativeEvidenceType = Literal[
 ]
 
 HealthAssistantResponseMode = Literal["answer", "clarify"]
+HealthAssistantClarificationKind = Literal[
+    "none",
+    "request_goal",
+    "pregnancy_supplement_context",
+    "exercise_safety_context",
+    "medication_safety_context",
+    "personal_health_context",
+]
 
 
 class HealthAssistantScopeDecision(BaseModel):
@@ -233,10 +241,9 @@ class HealthAssistantScopeDecision(BaseModel):
         default="answer",
         description="현재 정보로 답변할지, 개인화된 판단 전에 확인 질문을 먼저 할지 여부",
     )
-    clarifying_question: str | None = Field(
-        default=None,
-        max_length=240,
-        description="response_mode=clarify일 때 건강정보나 권고를 포함하지 않는 단 하나의 확인 질문",
+    clarification_kind: HealthAssistantClarificationKind = Field(
+        default="none",
+        description="response_mode=clarify일 때 서버가 안전한 고정 질문을 선택하는 분류값",
     )
     allowed_health_request: str | None = Field(
         default=None,

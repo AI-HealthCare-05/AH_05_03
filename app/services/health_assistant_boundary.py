@@ -43,13 +43,13 @@ CLARIFICATION_PREFIX = "안전하게 안내하기 위해 한 가지만 먼저 �
 CLARIFICATION_FALLBACK_QUESTION = (
     "일반적인 건강정보가 필요한지, 현재 상태에 맞춘 개인적인 안내가 필요한지 알려주시겠어요?"
 )
-
-_UNSAFE_CLARIFICATION_PATTERN = re.compile(
-    r"(복용하세요|드세요|먹으세요|운동하세요|중단하세요|피하세요|추천합니다|권장합니다|"
-    r"안전합니다|괜찮습니다|문제없|진단됩니다|의심됩니다|위험합니다|"
-    r"\d+\s*(?:mg|g|ml|정|알|회|개월))",
-    re.IGNORECASE,
-)
+CLARIFICATION_QUESTIONS = {
+    "request_goal": "본인의 건강 위험이 궁금하신가요, 아니면 가족을 돌보는 방법이 궁금하신가요?",
+    "pregnancy_supplement_context": "현재 임신 주수와 복용 중인 약이나 영양제, 의료진에게 확인받은 사항이 있나요?",
+    "exercise_safety_context": "현재 증상의 정도와 진단받은 질환 또는 의료진에게 들은 운동 제한이 있나요?",
+    "medication_safety_context": "복용하려는 약의 이름과 현재 복용 중인 약, 진단받은 질환이 있나요?",
+    "personal_health_context": CLARIFICATION_FALLBACK_QUESTION,
+}
 
 
 @dataclass(frozen=True)
@@ -433,7 +433,7 @@ class HealthAssistantBoundaryService:
             return HealthAssistantBoundaryResult(
                 request=None,
                 decision=decision,
-                response=self._clarification_response(decision.clarifying_question),
+                response=self._clarification_response(decision.clarification_kind),
             )
 
         if decision.scope == "mixed":
@@ -536,13 +536,8 @@ class HealthAssistantBoundaryService:
         )
 
     @classmethod
-    def _clarification_response(cls, question: str | None) -> HealthAssistantResponse:
-        normalized = " ".join((question or "").split())
-        is_safe_question = (
-            1 <= len(normalized) <= 240
-            and normalized.endswith("?")
-            and normalized.count("?") == 1
-            and not _UNSAFE_CLARIFICATION_PATTERN.search(normalized)
-        )
-        safe_question = normalized if is_safe_question else CLARIFICATION_FALLBACK_QUESTION
+    def _clarification_response(cls, clarification_kind: str) -> HealthAssistantResponse:
+        # 사용자에게 표시할 문장은 LLM이 작성하지 않는다. 분류값만 받아 서버의
+        # 검토된 고정 문구를 선택하므로 한국어 어미 변형으로 안전 필터를 우회할 수 없다.
+        safe_question = CLARIFICATION_QUESTIONS.get(clarification_kind, CLARIFICATION_FALLBACK_QUESTION)
         return cls._fixed_response(f"{CLARIFICATION_PREFIX} {safe_question}", intent="health_advice")

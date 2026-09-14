@@ -71,7 +71,17 @@ _EXPLICIT_PAIN_INTENSITY_PATTERN = re.compile(
 )
 
 _SUPPLEMENT_DISCLAIMER = "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다."
-_SUPPLEMENT_TOPIC_KEYWORDS = ("영양제", "건강기능식품", "보충제", "오메가3", "유산균", "홍삼", "마그네슘")
+_SUPPLEMENT_TOPIC_KEYWORDS = (
+    "영양제",
+    "건강기능식품",
+    "보충제",
+    "비타민",
+    "미네랄",
+    "오메가3",
+    "유산균",
+    "홍삼",
+    "마그네슘",
+)
 
 _FOOD_NUTRITION_KEYWORDS = (
     "칼로리",

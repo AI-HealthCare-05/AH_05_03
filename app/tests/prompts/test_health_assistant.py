@@ -73,6 +73,6 @@ def test_scope_instruction_contains_scope_evidence_and_query_builder() -> None:
     assert "inferred_intent" in instruction
     assert "enriched_query" in instruction
     assert "response_mode" in instruction
-    assert "clarifying_question" in instruction
-    assert "의학 지식" in instruction
+    assert "clarification_kind" in instruction
+    assert "자유문장 질문을 만들지 말고" in instruction
     assert "특정 음식·제품을 지목하지 않은 질환별 식이 질문" in instruction

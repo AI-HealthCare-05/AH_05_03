@@ -18,6 +18,7 @@ from app.services.health_assistant import HealthAssistantService
 from app.services.health_assistant_boundary import (
     CLARIFICATION_FALLBACK_QUESTION,
     CLARIFICATION_PREFIX,
+    CLARIFICATION_QUESTIONS,
     CLASSIFICATION_FAILED_MESSAGE,
     HEALTH_ONLY_MESSAGE,
     MISSING_EVIDENCE_MESSAGE,
@@ -189,7 +190,7 @@ async def test_personalized_health_question_can_ask_one_question_before_main_llm
             requires_authoritative_evidence=True,
             required_evidence_types=["health_knowledge"],
             response_mode="clarify",
-            clarifying_question="현재 임신 몇 주 차이고 복용 중인 약이나 영양제가 있나요?",
+            clarification_kind="pregnancy_supplement_context",
         )
     )
     service = HealthAssistantService(llm_client=client)
@@ -200,20 +201,25 @@ async def test_personalized_health_question_can_ask_one_question_before_main_llm
 
     assert response.intent == "health_advice"
     assert response.assistant_message == (
-        f"{CLARIFICATION_PREFIX} 현재 임신 몇 주 차이고 복용 중인 약이나 영양제가 있나요?"
+        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_supplement_context']}"
     )
     assert client.calls == 1
 
 
 @pytest.mark.asyncio
-async def test_unsafe_model_generated_clarification_is_replaced() -> None:
+async def test_model_cannot_put_medical_advice_in_clarification_text() -> None:
     client = ScopeOnlyClient(
-        HealthAssistantScopeDecision(
-            scope="health",
-            requires_authoritative_evidence=True,
-            required_evidence_types=["health_knowledge"],
-            response_mode="clarify",
-            clarifying_question="철분제 30mg을 복용하세요. 현재 임신 몇 주인가요?",
+        HealthAssistantScopeDecision.model_validate(
+            {
+                "scope": "health",
+                "requires_authoritative_evidence": True,
+                "required_evidence_types": ["health_knowledge"],
+                "response_mode": "clarify",
+                "clarification_kind": "none",
+                # 이전 스키마의 자유문장을 모델이 억지로 보내도 Pydantic이 무시하고,
+                # 서버는 이 내용을 사용자에게 전달할 경로 자체가 없다.
+                "clarifying_question": "지금 드시는 철분제는 계속 드셔도 됩니다. 최근 언제부터 드셨나요?",
+            }
         )
     )
     service = HealthAssistantService(llm_client=client)
@@ -223,7 +229,8 @@ async def test_unsafe_model_generated_clarification_is_replaced() -> None:
     )
 
     assert response.assistant_message == f"{CLARIFICATION_PREFIX} {CLARIFICATION_FALLBACK_QUESTION}"
-    assert "30mg" not in response.assistant_message
+    assert "철분제" not in response.assistant_message
+    assert "드셔도 됩니다" not in response.assistant_message
     assert client.calls == 1
 
 
