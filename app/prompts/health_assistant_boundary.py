@@ -61,6 +61,7 @@ def build_health_assistant_scope_instruction() -> str:
 - clarify이면 자유문장 질문을 만들지 말고 clarification_kind를 아래 값 중 하나로만 선택하세요.
   - request_goal: 누구를 위한 어떤 도움인지 질문 목적이 불명확함
   - pregnancy_supplement_context: 임신·수유 중 영양제 문의에 필요한 현재 정보가 부족함
+  - pregnancy_symptom_context: 앞선 임신 맥락에서 새 증상을 말했지만 주수·시작 시점·정도·동반 증상이 부족함
   - exercise_safety_context: 증상·질환이 있는 사용자의 운동 가능 여부 판단에 필요한 정보가 부족함
   - medication_safety_context: 개인의 약 복용 가능 여부 판단에 필요한 정보가 부족함
   - personal_health_context: 위 종류에는 해당하지 않지만 개인별 건강 판단에 필요한 정보가 부족함
@@ -96,6 +97,8 @@ def build_health_assistant_scope_instruction() -> str:
 - '오늘 혈압 130에 80 나왔어' → health, false, []
 - '임신 중인데 영양제 추천해줘' → health, true, [health_knowledge], clarify,
   clarification_kind=pregnancy_supplement_context
+- '나 임신 중이야' 다음에 '배가 좀 당기는 것 같아' → health, true, [health_knowledge], clarify,
+  clarification_kind=pregnancy_symptom_context
 - '무릎이 안 좋은데 계단 운동해도 돼?' → health, true, [health_knowledge], clarify,
   clarification_kind=exercise_safety_context
 - '아버지가 간암 3기인데 저는 어떡하죠?' → health, true, [health_knowledge], clarify,

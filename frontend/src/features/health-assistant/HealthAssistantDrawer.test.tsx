@@ -9,6 +9,7 @@ import {
   extractRegionHint,
   formatTargetDateTime,
   isFacilityQuery,
+  isExerciseCorrection,
   resolveHealthRecordDateTime,
   resolveMedicationTakenAt,
   shouldAutoSaveHealthRecord,
@@ -58,6 +59,9 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     value: [],
   });
 
+  const mockGetRecord = vi.fn();
+  const mockUpdateRecord = vi.fn();
+
   const mockReadDocById = vi.fn().mockResolvedValue({
     ok: true,
     value: { file: new File(["dummy"], "screening_result.png", { type: "image/png" }), fileName: "screening_result.png" },
@@ -72,6 +76,8 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     healthRecords: {
       create: mockCreateRecord,
       query: mockQueryRecords,
+      get: mockGetRecord,
+      update: mockUpdateRecord,
     },
     documents: {
       readById: mockReadDocById,
@@ -1231,6 +1237,12 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
   });
 
   describe("운동 시간 및 수행 일시 기록", () => {
+    it("명시적인 운동 정정 표현만 구분한다", () => {
+      expect(isExerciseCorrection("아니다 5세트 함")).toBe(true);
+      expect(isExerciseCorrection("5세트로 수정할게")).toBe(true);
+      expect(isExerciseCorrection("오늘도 5세트 함")).toBe(false);
+    });
+
     it("운동 시간과 수행 일시가 포함된 완료 기록을 즉시 저장한다", async () => {
       vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
         intent: "record_exercise",
@@ -1326,9 +1338,130 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       });
       expect(screen.queryByText("운동 기록 확인")).not.toBeInTheDocument();
     });
+
+    it("직전에 저장한 운동의 세트 정정은 새 기록 대신 기존 기록을 수정한다", async () => {
+      const existingRecord: HealthRecord = {
+        id: "record-123",
+        householdId: "household-1",
+        profileId: "profile-1",
+        recordType: "exercise",
+        recordedAt: "2026-09-14T05:17:00.000Z",
+        source: "local_ai",
+        sourceDocumentId: null,
+        payload: {
+          type: "exercise",
+          exerciseName: "랫풀다운",
+          weightKg: 20,
+          reps: 10,
+          sets: 3,
+          note: "랫풀다운 (20kg · 10회 · 3세트)",
+        },
+        version: 1,
+        createdAt: "2026-09-14T05:17:00.000Z",
+        updatedAt: "2026-09-14T05:17:00.000Z",
+        deletedAt: null,
+      };
+      mockGetRecord.mockResolvedValueOnce({ ok: true, value: existingRecord });
+      mockUpdateRecord.mockResolvedValueOnce({
+        ok: true,
+        value: { ...existingRecord, payload: { ...existingRecord.payload, sets: 5 }, version: 2 },
+      });
+      vi.spyOn(clientModule, "streamHealthAssistantMessage")
+        .mockResolvedValueOnce({
+          intent: "record_exercise",
+          assistant_message: "운동을 기록했습니다.",
+          exercise_draft: { exercise_name: "랫풀다운", weight_kg: 20, reps: 10, sets: 3 },
+          auto_save: true,
+          missing_fields: [],
+          needs_confirmation: false,
+          suggested_quick_replies: [],
+        })
+        .mockResolvedValueOnce({
+          intent: "record_exercise",
+          assistant_message: "운동 기록을 수정했습니다.",
+          exercise_draft: { exercise_name: "랫풀다운", sets: 5 },
+          auto_save: true,
+          missing_fields: [],
+          needs_confirmation: false,
+          suggested_quick_replies: [],
+        });
+
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={mockRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+          onRecordSaved={mockOnRecordSaved}
+        />,
+      );
+
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+      fireEvent.change(input, { target: { value: "랫풀다운 20kg 10회 3세트 함" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+      await waitFor(() => expect(mockCreateRecord).toHaveBeenCalledTimes(1));
+
+      fireEvent.change(input, { target: { value: "아니다 5세트 함" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      await waitFor(() => {
+        expect(mockUpdateRecord).toHaveBeenCalledWith(
+          "record-123",
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              exerciseName: "랫풀다운",
+              weightKg: 20,
+              reps: 10,
+              sets: 5,
+            }),
+          }),
+        );
+      });
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1);
+      expect(await screen.findByText(/5세트.*수정했습니다/)).toBeInTheDocument();
+    });
   });
 
   describe("검진 수치 변화 그래프 및 원본 서류 분리 노출", () => {
+    it("원본을 보관하지 않은 서버 기록에는 재업로드 정책을 안내한다", async () => {
+      const serverRuntime = {
+        healthRecords: {
+          create: vi.fn(),
+          query: vi.fn().mockResolvedValue({
+            ok: true,
+            value: [{
+              id: "screening-without-file",
+              profileId: "profile-1",
+              recordType: "health_screening",
+              recordedAt: "2026-09-14T09:00:00Z",
+              source: "ocr",
+              sourceDocumentId: null,
+              payload: { screeningName: "건강검진", note: "공복혈당 100" },
+            }],
+          }),
+        },
+        documents: undefined,
+      } as unknown as LocalDomainRuntime;
+      vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+        intent: "query_records",
+        assistant_message: "최근 건강검진 원본을 조회합니다.",
+        query_draft: { record_type: "health_screening", time_range: "recent", keyword: "원본" },
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: [],
+      });
+
+      render(
+        <HealthAssistantDrawer profile={mockProfile} runtime={serverRuntime} isOpen onClose={mockOnClose} />,
+      );
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+      fireEvent.change(input, { target: { value: "최근 건강검진 결과 원본 보여줘" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      expect(await screen.findByText(/검진표 원본은 보관하지 않고.*수치만 건강기록에 저장합니다/)).toBeInTheDocument();
+      expect(screen.queryByText(/먼저 검진표 이미지를 업로드하고 저장/)).not.toBeInTheDocument();
+    });
+
     it("'검진수치변화그래프' 질의 시 원본 사진 없이 수치 변화 그래프 카드만 단독 노출된다", async () => {
       const runtimeWithDoc = {
         healthRecords: {

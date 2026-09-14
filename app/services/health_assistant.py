@@ -14,7 +14,7 @@ from app.dtos.health_assistant import (
 )
 from app.dtos.health_record_query import AlcoholConsultationSnapshot
 from app.exceptions import LlmProviderFailedError
-from app.integrations.llm.chain import shared_chat_client
+from app.integrations.llm.chain import shared_chat_client, shared_classifier_client
 from app.integrations.llm.protocol import LLMClientProtocol
 from app.models.households import HouseholdStatus
 from app.models.service_accounts import ServiceAccount
@@ -27,6 +27,7 @@ from app.services.facility_topic import (
     FACILITY_HISTORY_OR_ADVICE_KEYWORDS,
     FACILITY_KEYWORDS,
     FACILITY_SEARCH_KEYWORDS,
+    is_facility_location_followup,
 )
 from app.services.food_nutrition_client import (
     FoodNutritionClient,
@@ -61,7 +62,6 @@ from app.services.outdoor_conditions_client import (
     resolve_sido_coordinates,
 )
 from app.services.outdoor_conditions_tools import execute_outdoor_conditions_tool
-from app.services.outdoor_topic import OUTDOOR_ACTIVITY_KEYWORDS, OUTDOOR_ENVIRONMENT_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +174,7 @@ class HealthAssistantService:
     def __init__(
         self,
         llm_client: LLMClientProtocol | None = None,
+        classifier_llm_client: LLMClientProtocol | None = None,
         safety_service: HealthAssistantSafetyService | None = None,
         boundary_service: HealthAssistantBoundaryService | None = None,
         facility_client: MedicalFacilityClient | None = None,
@@ -188,6 +189,7 @@ class HealthAssistantService:
         health_record_service: HealthRecordService | None = None,
     ):
         self._llm_client = llm_client
+        self._classifier_llm_client = classifier_llm_client
         self.safety_service = safety_service or HealthAssistantSafetyService()
         self.boundary_service = boundary_service or HealthAssistantBoundaryService()
         self.facility_client = facility_client or MedicalFacilityClient()
@@ -501,13 +503,13 @@ class HealthAssistantService:
         # 이전 어시스턴트 메시지가 시설 위치를 되묻던 상황인지 확인
         if len(request.messages) >= 2:
             prev_msg = request.messages[-2]
-            if prev_msg.role == "assistant" and any(
-                k in prev_msg.content for k in ("가까운 병원이나 약국", "의료시설", "찾으시는 지역명")
-            ):
+            if prev_msg.role == "assistant" and is_facility_location_followup(prev_msg.content, last_msg):
                 return True
         return False
 
-    async def _resolve_request_location(self, request: HealthAssistantChatRequest) -> UserLocation | None:
+    async def _resolve_request_location(
+        self, request: HealthAssistantChatRequest, needs_outdoor: bool
+    ) -> UserLocation | None:
         """동의된 좌표를 우선하고, 야외 질문의 사용자 장소명만 보조적으로 좌표화한다."""
         loc = request.location
         if loc is not None:
@@ -524,7 +526,7 @@ class HealthAssistantService:
                     address=f"{sido}특별시" if sido == "서울" else sido,
                 )
 
-        if self._needs_outdoor_conditions(request):
+        if needs_outdoor:
             for message in reversed(recent_user_messages):
                 resolved_place = await self.outdoor_conditions_client.resolve_location(message.content)
                 if resolved_place:
@@ -532,39 +534,8 @@ class HealthAssistantService:
                     return UserLocation(latitude=lat, longitude=lon, address=address)
         return None
 
-    @staticmethod
-    def _needs_outdoor_conditions(request: HealthAssistantChatRequest) -> bool:
-        """실시간 API가 필요한 질문만 판별한다.
-
-        모든 대화에 외부 API를 호출하면 느려지고 할당량을 낭비한다. 이 라우팅은
-        도구의 호출 조건만 정하며, 최종 건강 안내 문장은 모델의 안전 지침을 거친다.
-        """
-        if not request.messages:
-            return False
-        message = request.messages[-1].content.replace(" ", "")
-        if any(keyword in message for keyword in OUTDOOR_ENVIRONMENT_KEYWORDS):
-            return True
-        if any(
-            keyword in message
-            for keyword in ("했어", "완료", "기록해", "기록할", "기록하기", "달렸어", "뛰었어", "걸었어", "탔어")
-        ):
-            return False
-        if any(keyword in message for keyword in OUTDOOR_ACTIVITY_KEYWORDS) or (
-            "운동" in message and any(k in message for k in ("추천", "할까", "할건", "할거", "예정", "계획", "뭐"))
-        ):
-            return True
-        # 이전 턴에서 위치 미확인으로 날씨 조회를 못했을 때 사용자가 거주지/지역명을 답변한 경우
-        if len(request.messages) >= 2:
-            prev_msg = request.messages[-2]
-            if prev_msg.role == "assistant" and any(
-                k in prev_msg.content for k in ("실시간 날씨", "날씨와 대기질", "외출 전 기온", "날씨를 확인")
-            ):
-                if resolve_sido_coordinates(message) is not None or "살아" in message:
-                    return True
-        return False
-
-    async def _load_outdoor_conditions(self, request: HealthAssistantChatRequest, loc: UserLocation | None):
-        if not self._needs_outdoor_conditions(request) or loc is None:
+    async def _load_outdoor_conditions(self, loc: UserLocation | None):
+        if loc is None:
             return None
         return await execute_outdoor_conditions_tool(
             "get_outdoor_health_conditions",
@@ -864,6 +835,21 @@ class HealthAssistantService:
             self._llm_client = shared_chat_client()
         return self._llm_client
 
+    @property
+    def classifier_llm_client(self) -> LLMClientProtocol:
+        """바운더리 판정(범위·근거 종류 분류) 전용 client.
+
+        `llm_client`가 생성자에 명시적으로 주입된 경우(테스트가 흔히 그런다)는 그
+        client를 그대로 재사용한다 — 분류용을 따로 안 준 테스트가 갑자기 진짜
+        네트워크를 부르게 되는 것을 막는다. 아무것도 안 준 경우(프로덕션 기본값)만
+        `shared_classifier_client()`로 갈라진다.
+        """
+        if self._classifier_llm_client is not None:
+            return self._classifier_llm_client
+        if self._llm_client is not None:
+            return self._llm_client
+        return shared_classifier_client()
+
     async def _execute_tool(
         self,
         name: str,
@@ -972,9 +958,9 @@ class HealthAssistantService:
         """사용자가 말하지 않은 통증 수치를 LLM이 만들어도 저장 경로에서 제거한다."""
         if response.intent != "record_pain" or not request.messages:
             return response
-        user_message = request.messages[-1].content
-        if _EXPLICIT_PAIN_INTENSITY_PATTERN.search(user_message):
-            return response
+        for message in reversed(request.messages):
+            if message.role == "user" and _EXPLICIT_PAIN_INTENSITY_PATTERN.search(message.content):
+                return response
 
         changed = False
         if response.pain_draft is not None and response.pain_draft.intensity is not None:
@@ -1014,7 +1000,7 @@ class HealthAssistantService:
         if safety_check:
             return safety_check
 
-        boundary = await self.boundary_service.check_request(self.llm_client, request)
+        boundary = await self.boundary_service.check_request(self.classifier_llm_client, request)
         if boundary.response:
             return boundary.response
         assert boundary.request is not None
@@ -1043,15 +1029,16 @@ class HealthAssistantService:
             account=account,
             profile_context=profile_context,
         )
-        loc = await self._resolve_request_location(request)
-        if self._needs_outdoor_conditions(request) and loc is None:
+        needs_outdoor = "outdoor" in boundary.decision.required_evidence_types
+        loc = await self._resolve_request_location(request, needs_outdoor)
+        if needs_outdoor and loc is None:
             return self._outdoor_location_required_response()
-        outdoor_conditions = await self._load_outdoor_conditions(request, loc)
+        outdoor_conditions = await self._load_outdoor_conditions(loc)
         system_instruction = build_system_instruction(
             profile_context,
             user_location=loc,
             outdoor_conditions_context=self._format_outdoor_conditions_context(outdoor_conditions, loc is not None)
-            if self._needs_outdoor_conditions(request)
+            if needs_outdoor
             else None,
             authoritative_evidence_context=authoritative_evidence_context,
         )
@@ -1070,6 +1057,7 @@ class HealthAssistantService:
                 HealthAssistantResponse(intent="health_advice", assistant_message=""),
                 tool_result=None,
                 outdoor_conditions=None,
+                messages=request.messages,
             )
 
         response: HealthAssistantResponse
@@ -1116,6 +1104,7 @@ class HealthAssistantService:
             validated_response,
             tool_result=tool_result,
             outdoor_conditions=outdoor_conditions,
+            messages=request.messages,
         )
 
     async def _get_stream_generator(
@@ -1165,7 +1154,7 @@ class HealthAssistantService:
             yield "result", safety_check.model_dump(mode="json")
             return
 
-        boundary = await self.boundary_service.check_request(self.llm_client, request)
+        boundary = await self.boundary_service.check_request(self.classifier_llm_client, request)
         if boundary.response:
             yield "delta", {"text": boundary.response.assistant_message}
             yield "result", boundary.response.model_dump(mode="json")
@@ -1199,18 +1188,19 @@ class HealthAssistantService:
             account=account,
             profile_context=profile_context,
         )
-        loc = await self._resolve_request_location(request)
-        if self._needs_outdoor_conditions(request) and loc is None:
+        needs_outdoor = "outdoor" in boundary.decision.required_evidence_types
+        loc = await self._resolve_request_location(request, needs_outdoor)
+        if needs_outdoor and loc is None:
             response = self._outdoor_location_required_response()
             yield "delta", {"text": response.assistant_message}
             yield "result", response.model_dump(mode="json")
             return
-        outdoor_conditions = await self._load_outdoor_conditions(request, loc)
+        outdoor_conditions = await self._load_outdoor_conditions(loc)
         system_instruction = build_system_instruction(
             profile_context,
             user_location=loc,
             outdoor_conditions_context=self._format_outdoor_conditions_context(outdoor_conditions, loc is not None)
-            if self._needs_outdoor_conditions(request)
+            if needs_outdoor
             else None,
             authoritative_evidence_context=authoritative_evidence_context,
         )
@@ -1230,6 +1220,7 @@ class HealthAssistantService:
                 HealthAssistantResponse(intent="health_advice", assistant_message=""),
                 tool_result=None,
                 outdoor_conditions=None,
+                messages=request.messages,
             )
             yield "delta", {"text": response.assistant_message}
             yield "result", response.model_dump(mode="json")
@@ -1263,6 +1254,7 @@ class HealthAssistantService:
                 HealthAssistantResponse(intent="health_advice", assistant_message=""),
                 tool_result=tool_result,
                 outdoor_conditions=outdoor_conditions,
+                messages=request.messages,
             )
             yield "delta", {"text": response.assistant_message}
             yield "result", response.model_dump(mode="json")
@@ -1294,6 +1286,7 @@ class HealthAssistantService:
                     validated,
                     tool_result=tool_result,
                     outdoor_conditions=outdoor_conditions,
+                    messages=request.messages,
                 )
                 yield "result", validated.model_dump(mode="json")
                 return
@@ -1315,6 +1308,7 @@ class HealthAssistantService:
                     validated,
                     tool_result=tool_result,
                     outdoor_conditions=outdoor_conditions,
+                    messages=request.messages,
                 )
                 yield "result", validated.model_dump(mode="json")
                 return
@@ -1340,5 +1334,6 @@ class HealthAssistantService:
             validated,
             tool_result=tool_result,
             outdoor_conditions=outdoor_conditions,
+            messages=request.messages,
         )
         yield "result", validated.model_dump(mode="json")

@@ -16,8 +16,6 @@ health_knowledge를 요구하는 것으로 판정했고, 실제로 채워진 근
 
 from __future__ import annotations
 
-OUTDOOR_ENVIRONMENT_KEYWORDS = ("날씨", "미세먼지", "초미세먼지", "대기질")
-
 OUTDOOR_ACTIVITY_KEYWORDS = (
     "산책",
     "조깅",
@@ -34,12 +32,3 @@ OUTDOOR_ACTIVITY_KEYWORDS = (
     "외출",
     "한강",
 )
-
-
-def is_outdoor_topic(text: str) -> bool:
-    """메시지가 야외 활동/환경 주제를 다루는지 판별한다 (활동 키워드 또는 환경 키워드)."""
-
-    compact = text.replace(" ", "")
-    return any(word in compact for word in OUTDOOR_ACTIVITY_KEYWORDS) or any(
-        word in compact for word in OUTDOOR_ENVIRONMENT_KEYWORDS
-    )

@@ -37,6 +37,7 @@ import {
   filterRecordsByTimeRange,
   formatTargetDateTime,
   isFacilityQuery,
+  isExerciseCorrection,
   isValidContentKeyword,
   type MetricSeries,
   normalizeRecordTypes,
@@ -753,7 +754,9 @@ export function HealthAssistantDrawer({
       const assistantMsg: ExtendedChatMessage = {
         id: messageId("assistant"),
         role: "assistant",
-        content: `${draft.recorded_at}에 실시된 ${draft.screening_name || "건강검진"} 결과가 나의 건강기록에 안전하게 저장되었습니다. 원본 서류는 언제든 확인하실 수 있습니다.`,
+        content: primaryDocumentId
+          ? `${draft.recorded_at}에 실시된 ${draft.screening_name || "건강검진"} 결과와 원본 서류가 저장되었습니다.`
+          : `${draft.recorded_at}에 실시된 ${draft.screening_name || "건강검진"} 수치가 건강기록에 저장되었습니다. 원본 이미지는 보관되지 않습니다.`,
         attachedDocuments: primaryDocumentId ? [{
           id: primaryDocumentId,
           fileName: ocrImageFile.name,
@@ -885,11 +888,16 @@ export function HealthAssistantDrawer({
 
       // 일반 대화/기록 입력에는 과거 건강정보를 보내지 않는다.
       // 개인 기록이 실제로 필요한 건강 질문에 한해 관련 종류만 선별한다.
-      // 창을 너무 넓게 잡으면(예: 최근 6개) 몇 턴 전에 나온 주제 단어("혈압" 등)가
-      // 완전히 무관한 다음 질문까지 물고 늘어져 불필요한 개인기록 조회가 반복된다.
-      // "질문 → 되묻기(missing_fields) → 답변" 한 왕복만 담기면 되므로 3개로 좁힌다.
-      const recentConversationText = nextMessages
-        .slice(-3)
+      // 고정폭 창(최근 N개)은 몇 턴이든 몇 턴 전 주제 단어("혈압" 등)가 완전히
+      // 무관한 다음 질문까지 물고 늘어질 수 있다 — 대화가 짧으면 N을 아무리
+      // 줄여도 그 안에 이전 무관한 턴이 들어가 버린다. 그래서 창 크기가 아니라
+      // "직전 답변이 정보를 더 물었는가(missing_fields)"로 판단한다: 되물음에 대한
+      // 답변일 때만 그 직전 왕복(질문·되물음)을 함께 보고, 그게 아니면 이번에
+      // 보낸 메시지 하나만 본다.
+      const prevAssistantMsg = messages[messages.length - 1];
+      const isFollowUpAnswer =
+        prevAssistantMsg?.role === "assistant" && (prevAssistantMsg.responseDraft?.missing_fields.length ?? 0) > 0;
+      const recentConversationText = (isFollowUpAnswer ? nextMessages.slice(-3) : [userMsg])
         .map((message) => message.content)
         .join("\n");
       const contextRecordTypes = selectContextRecordTypes(recentConversationText);
@@ -1062,7 +1070,26 @@ export function HealthAssistantDrawer({
       }
 
       const assistantMsgId = messageId("assistant");
-      const shouldAutoSave = shouldAutoSaveHealthRecord(res, textToSend);
+      const correctionRequested = res.intent === "record_exercise" && isExerciseCorrection(textToSend);
+      const correctionTargetId = correctionRequested
+        ? [...messages].reverse().find(
+            (message) =>
+              message.role === "assistant" &&
+              message.saved &&
+              message.savedRecordId &&
+              message.responseDraft?.intent === "record_exercise",
+          )?.savedRecordId
+        : undefined;
+      const unresolvedCorrection = correctionRequested && !correctionTargetId;
+      const shouldAutoSave = !unresolvedCorrection && (
+        shouldAutoSaveHealthRecord(res, textToSend) || Boolean(correctionTargetId && res.exercise_draft)
+      );
+      if (unresolvedCorrection) {
+        res.auto_save = false;
+        res.needs_confirmation = false;
+        res.missing_fields = ["exercise_record"];
+        res.assistant_message = "수정할 운동 기록을 찾지 못했습니다. 운동명과 기록한 날짜를 함께 알려주세요.";
+      }
       if (shouldAutoSave) {
         res.auto_save = true;
         res.needs_confirmation = false;
@@ -1071,6 +1098,9 @@ export function HealthAssistantDrawer({
           (reply) => !/(?:저장|기록|수정|취소)/.test(reply),
         );
         res.assistant_message = buildAutoSaveAssistantMessage(res);
+        if (correctionTargetId) {
+          res.assistant_message = res.assistant_message.replace("기록했습니다.", "수정했습니다.");
+        }
       }
       const assistantMsg: ExtendedChatMessage = {
         id: assistantMsgId,
@@ -1089,7 +1119,7 @@ export function HealthAssistantDrawer({
       });
 
       if (shouldAutoSave) {
-        const saved = await saveStructuredDraftAutomatically(res, assistantMsgId);
+        const saved = await saveStructuredDraftAutomatically(res, assistantMsgId, correctionTargetId);
         if (!saved) {
           setMessages((prev) => prev.map((message) => message.id === assistantMsgId
             ? { ...message, content: "입력하신 기록은 이해했지만 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." }
@@ -1279,7 +1309,7 @@ export function HealthAssistantDrawer({
 
         if (assistantMsgId) {
           const emptyOriginalDocumentMessage =
-            "저장된 원본 검진 서류를 찾지 못했습니다. 먼저 검진표 이미지를 업로드하고 저장해 주세요.";
+            "검진표 원본은 보관하지 않고, 확인하신 수치만 건강기록에 저장합니다. 원본을 다시 확인하려면 이미지를 다시 선택해 주세요.";
           const emptyTrendMessage =
             "시계열 수치 변화 그래프를 그릴 수 있는 검진 또는 측정 기록을 찾지 못했습니다. 건강검진 결과나 혈압·혈당 기록을 먼저 등록해 주세요.";
 
@@ -1340,13 +1370,17 @@ export function HealthAssistantDrawer({
 
   // 초안 자동 저장: 사용자 의도(intent)와 일치하는 초안만 엄격히 검증하여 저장한다.
   // LLM이 여러 초안을 동시에 반환하더라도 사용자가 의도하지 않은 다른 유형의 기록이 오저장되는 위험을 차단한다.
-  async function saveStructuredDraftAutomatically(response: HealthAssistantResponse, msgId: string): Promise<boolean> {
+  async function saveStructuredDraftAutomatically(
+    response: HealthAssistantResponse,
+    msgId: string,
+    correctionTargetId?: string,
+  ): Promise<boolean> {
     const intent = response.intent;
     if (intent === "record_medication" && response.medication_draft) {
       return saveMedication(response.medication_draft, msgId);
     }
     if (intent === "record_exercise" && response.exercise_draft) {
-      return saveExercise(response.exercise_draft, msgId);
+      return saveExercise(response.exercise_draft, msgId, correctionTargetId);
     }
     if (intent === "record_blood_pressure" && response.blood_pressure_draft) {
       return saveBloodPressure(response.blood_pressure_draft, msgId);
@@ -1360,7 +1394,7 @@ export function HealthAssistantDrawer({
     return false;
   }
 
-  async function saveExercise(draft: ExerciseDraft, msgId: string): Promise<boolean> {
+  async function saveExercise(draft: ExerciseDraft, msgId: string, correctionTargetId?: string): Promise<boolean> {
     if (!runtime || !profile) return false;
     setLoading(true);
     try {
@@ -1372,13 +1406,7 @@ export function HealthAssistantDrawer({
       if (draft.sets) details.push(`${draft.sets}세트`);
       const summaryText = `${draft.exercise_name}${details.length > 0 ? ` (${details.join(" · ")})` : ""}`.trim();
 
-      const result = await runtime.healthRecords.create({
-        householdId: PRIMARY_HOUSEHOLD_ID,
-        profileId: profile.id,
-        recordType: "exercise",
-        recordedAt: draft.date_str ? new Date(draft.date_str).toISOString() : new Date().toISOString(),
-        source: "local_ai",
-        payload: {
+      const draftPayload = {
           type: "exercise",
           exerciseName: draft.exercise_name,
           distanceKm: draft.distance_km ?? undefined,
@@ -1387,13 +1415,49 @@ export function HealthAssistantDrawer({
           sets: draft.sets ?? undefined,
           durationMinutes: draft.duration_minutes ?? undefined,
           note: draft.note || summaryText,
-        },
-      });
+      };
+
+      let result;
+      if (correctionTargetId) {
+        const current = await runtime.healthRecords.get(correctionTargetId);
+        if (!current.ok || current.value.recordType !== "exercise") {
+          throw new Error("수정할 운동 기록을 찾지 못했습니다.");
+        }
+        const changedFields = Object.fromEntries(
+          Object.entries(draftPayload).filter(
+            ([key, value]) => value !== undefined && (key !== "note" || Boolean(draft.note)),
+          ),
+        );
+        const mergedPayload = { ...current.value.payload, ...changedFields } as Record<string, unknown>;
+        const mergedDetails = [
+          mergedPayload.distanceKm ? `${mergedPayload.distanceKm}km` : "",
+          mergedPayload.durationMinutes ? `${mergedPayload.durationMinutes}분` : "",
+          mergedPayload.weightKg ? `${mergedPayload.weightKg}kg` : "",
+          mergedPayload.reps ? `${mergedPayload.reps}회` : "",
+          mergedPayload.sets ? `${mergedPayload.sets}세트` : "",
+        ].filter(Boolean).join(" · ");
+        mergedPayload.note = draft.note || `${mergedPayload.exerciseName}${mergedDetails ? ` (${mergedDetails})` : ""}`;
+        result = await runtime.healthRecords.update(correctionTargetId, {
+          recordType: "exercise",
+          recordedAt: current.value.recordedAt,
+          payload: mergedPayload,
+          expectedVersion: current.value.version,
+        });
+      } else {
+        result = await runtime.healthRecords.create({
+          householdId: PRIMARY_HOUSEHOLD_ID,
+          profileId: profile.id,
+          recordType: "exercise",
+          recordedAt: draft.date_str ? new Date(draft.date_str).toISOString() : new Date().toISOString(),
+          source: "local_ai",
+          payload: draftPayload,
+        });
+      }
 
       if (!result.ok) throw new Error(result.error.message);
 
       setMessages((prev) =>
-        prev.map((m) => (m.id === msgId ? { ...m, saved: true } : m)),
+        prev.map((m) => (m.id === msgId ? { ...m, saved: true, savedRecordId: result.value.id } : m)),
       );
       if (onRecordSaved) await onRecordSaved();
 
@@ -1791,7 +1855,7 @@ export function HealthAssistantDrawer({
 
   const quickPrompts = [
     "검진 수치 변화 그래프",
-    "최근 건강검진 결과 원본 보여줘",
+    "최근 건강검진 결과 보여줘",
     "혈압 120에 80 나왔어",
     "랫풀다운 20kg 10개 3세트 했어",
     "저녁 8시에 타이레놀 1알 복용했어",

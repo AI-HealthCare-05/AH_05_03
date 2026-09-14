@@ -46,3 +46,25 @@ def test_explicit_pain_intensity_is_preserved() -> None:
     assert sanitized.pain_draft is not None
     assert sanitized.pain_draft.intensity == 6
     assert sanitized.auto_save is True
+
+
+def test_explicit_pain_intensity_is_preserved_across_turns() -> None:
+    request = HealthAssistantChatRequest(
+        messages=[
+            ChatMessage(role="user", content="머리 통증 6점이야"),
+            ChatMessage(role="assistant", content="언제부터 아팠나요?"),
+            ChatMessage(role="user", content="어제부터요"),
+        ]
+    )
+    response = HealthAssistantResponse(
+        intent="record_pain",
+        assistant_message="통증 기록을 확인해 주세요.",
+        pain_draft=PainDraft(body_area="머리", intensity=6),
+        auto_save=True,
+    )
+
+    sanitized = HealthAssistantService._clear_unstated_pain_intensity(response, request)
+
+    assert sanitized.pain_draft is not None
+    assert sanitized.pain_draft.intensity == 6
+    assert sanitized.auto_save is True

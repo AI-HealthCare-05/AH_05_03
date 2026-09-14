@@ -60,6 +60,20 @@ def shared_chat_client() -> FallbackChatClient:
     return _shared
 
 
+#: 바운더리 판정 전용 공유 클라이언트. `_shared` 와 따로 둔다 — 목록
+#: (`HEALTH_ASSISTANT_CLASSIFIER_MODELS`)이 나중에 갈라지면 서로 다른 모델을
+#: 캐싱해야 하므로, 지금부터 별도 캐시 슬롯을 쓴다.
+_shared_classifier: FallbackChatClient | None = None
+
+
+def shared_classifier_client() -> FallbackChatClient:
+    """분류(바운더리)용 공유 클라이언트. 목록이 같으면 사실상 `shared_chat_client()`와 같은 모델을 쓴다."""
+    global _shared_classifier
+    if _shared_classifier is None:
+        _shared_classifier = FallbackChatClient(entries=config.HEALTH_ASSISTANT_CLASSIFIER_MODELS)
+    return _shared_classifier
+
+
 def build_client(entry: str) -> LLMClientProtocol:
     """`"openai:gpt-4o-mini"` · `"gemini-3.1-flash-lite"` 한 항목을 클라이언트로.
 

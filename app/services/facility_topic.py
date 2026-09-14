@@ -10,6 +10,8 @@ boundary 쪽 목록은 진료과 7개·검색의도 8개뿐인 좁은 부분집�
 
 from __future__ import annotations
 
+import re
+
 FACILITY_KEYWORDS = (
     "응급실",
     "병원",
@@ -88,3 +90,33 @@ FACILITY_HISTORY_OR_ADVICE_KEYWORDS = (
     "먹어도",
     "부작용",
 )
+
+FACILITY_LOCATION_REQUEST_MARKERS = (
+    "가까운 병원이나 약국",
+    "의료시설",
+    "찾으시는 지역명",
+    "위치 확인 시간이 초과",
+)
+
+_LOCATION_REPLY_PATTERN = re.compile(
+    r"^[가-힣A-Za-z0-9\s·-]{1,30}(?:특별시|광역시|특별자치시|특별자치도|도|시|군|구|읍|면|동|리|역)$"
+)
+_MAJOR_REGION_NAMES = {
+    "서울",
+    "부산",
+    "대구",
+    "인천",
+    "광주",
+    "대전",
+    "울산",
+    "세종",
+    "제주",
+}
+
+
+def is_facility_location_followup(previous_assistant_message: str, user_message: str) -> bool:
+    """시설 위치를 되물은 직후의 짧은 지역명 답변만 허용한다."""
+    if not any(marker in previous_assistant_message for marker in FACILITY_LOCATION_REQUEST_MARKERS):
+        return False
+    location = user_message.strip().rstrip(".!?")
+    return location in _MAJOR_REGION_NAMES or bool(_LOCATION_REPLY_PATTERN.fullmatch(location))

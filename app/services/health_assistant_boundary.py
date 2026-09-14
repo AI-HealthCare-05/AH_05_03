@@ -19,10 +19,13 @@ from app.dtos.medication import MedicationSearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
 from app.integrations.llm.protocol import LLMClientProtocol
 from app.prompts.health_assistant_boundary import build_health_assistant_scope_instruction
-from app.services.facility_topic import FACILITY_KEYWORDS, FACILITY_SEARCH_KEYWORDS
+from app.services.facility_topic import (
+    FACILITY_KEYWORDS,
+    FACILITY_SEARCH_KEYWORDS,
+    is_facility_location_followup,
+)
 from app.services.health_knowledge_catalog import is_alcohol_topic
 from app.services.medication_topic import mentions_medication
-from app.services.outdoor_topic import OUTDOOR_ACTIVITY_KEYWORDS
 
 HEALTH_ONLY_MESSAGE = (
     "저는 건강 관리를 돕는 건강비서예요. 질병, 증상, 식단, 운동, 의약품, 검사, "
@@ -36,6 +39,10 @@ MISSING_EVIDENCE_MESSAGE = (
     "현재 연결된 공식 정보에서 답변 근거를 확인하지 못했습니다. "
     "근거 없이 건강정보를 안내하지 않겠습니다. 질문을 조금 더 구체적으로 작성해 주세요."
 )
+PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE = (
+    "현재 연결된 공식 정보만으로는 임신 중 이 증상의 원인이나 안전 여부를 판단하기 어렵습니다. "
+    "증상이 계속되거나 걱정된다면 담당 산부인과에 확인해 주세요."
+)
 CLASSIFICATION_FAILED_MESSAGE = (
     "질문을 정확히 이해하지 못했습니다. 건강과 관련된 내용을 조금 더 구체적으로 말씀해 주세요."
 )
@@ -46,6 +53,7 @@ CLARIFICATION_FALLBACK_QUESTION = (
 CLARIFICATION_QUESTIONS = {
     "request_goal": "본인의 건강 위험이 궁금하신가요, 아니면 가족을 돌보는 방법이 궁금하신가요?",
     "pregnancy_supplement_context": "현재 임신 주수와 복용 중인 약이나 영양제, 의료진에게 확인받은 사항이 있나요?",
+    "pregnancy_symptom_context": "현재 임신 주수와 증상이 시작된 시점, 통증 정도, 함께 나타난 증상이 있나요?",
     "exercise_safety_context": "현재 증상의 정도와 진단받은 질환 또는 의료진에게 들은 운동 제한이 있나요?",
     "medication_safety_context": "복용하려는 약의 이름과 현재 복용 중인 약, 진단받은 질환이 있나요?",
     "personal_health_context": CLARIFICATION_FALLBACK_QUESTION,
@@ -74,6 +82,20 @@ _PROMPT_ATTACK_KEYWORDS = (
     "jailbreak",
     "탈옥",
 )
+
+
+def is_pregnancy_symptom_context(messages: list[ChatMessage]) -> bool:
+    """현재 질문이 앞선 임신 맥락에 이어진 증상 호소인지 확인한다."""
+    latest_user = next((message.content for message in reversed(messages) if message.role == "user"), "")
+    compact = latest_user.replace(" ", "")
+    pregnancy_was_mentioned = any(
+        message.role == "user" and any(word in message.content for word in ("임신", "임산부", "산모"))
+        for message in messages
+    )
+    has_symptom = any(
+        word in compact for word in ("아파", "아픈", "통증", "당기", "당겨", "뭉치", "출혈", "어지", "구토")
+    )
+    return pregnancy_was_mentioned and has_symptom
 
 
 def hard_rule_filter(user_input: str) -> tuple[bool, str | None]:
@@ -174,6 +196,12 @@ class HealthAssistantBoundaryService:
                 break
         if not last_msg:
             return None
+
+        previous_assistant_message = ""
+        for message in reversed(messages[:-1]):
+            if message.role == "assistant":
+                previous_assistant_message = message.content
+                break
 
         # 1. 프롬프트 공격 패턴
         compact = last_msg.replace(" ", "")
@@ -338,8 +366,47 @@ class HealthAssistantBoundaryService:
                 required_evidence_types=["facility"],
             )
 
+        if is_facility_location_followup(previous_assistant_message, last_msg):
+            return HealthAssistantScopeDecision(
+                scope="health",
+                requires_authoritative_evidence=True,
+                required_evidence_types=["facility"],
+            )
+
+        # 임신 맥락에서 새 증상만 짧게 말한 경우에는 지식 검색 실패 문구부터
+        # 보여주지 않고, 판단에 필요한 상황을 서버의 고정 질문으로 먼저 확인한다.
+        has_context_details = bool(re.search(r"\d+\s*(?:주|점|분|시간|일)", last_msg)) or any(
+            word in compact for word in ("부터", "동안", "출혈", "분비물", "발열", "어지", "심해")
+        )
+        if is_pregnancy_symptom_context(messages) and not has_context_details:
+            return HealthAssistantScopeDecision(
+                scope="health",
+                requires_authoritative_evidence=True,
+                required_evidence_types=["health_knowledge"],
+                response_mode="clarify",
+                clarification_kind="pregnancy_symptom_context",
+            )
+
         # 야외 활동 / 러닝 / 운동 / 날씨 / 대기질 질의
-        has_outdoor_activity = any(k in compact for k in OUTDOOR_ACTIVITY_KEYWORDS) or "한강" in compact
+        outdoor_activity_keywords = (
+            "산책",
+            "조깅",
+            "러닝",
+            "달리기",
+            "유산소",
+            "자전거",
+            "라이딩",
+            "걷기",
+            "운동추천",
+            "운동할",
+            "야외",
+            "밖에서",
+            "외출",
+            "한강",
+        )
+        outdoor_env_keywords = ("날씨", "미세먼지", "초미세먼지", "대기질")
+        has_outdoor_activity = any(k in compact for k in outdoor_activity_keywords)
+        has_outdoor_env = any(k in compact for k in outdoor_env_keywords)
         has_outdoor_intent = any(
             k in compact
             for k in (
@@ -352,8 +419,6 @@ class HealthAssistantBoundaryService:
                 "해도돼",
                 "해도되",
                 "좋아",
-                "날씨",
-                "미세먼지",
                 "뛸까",
                 "갈까",
                 "추천",
@@ -362,7 +427,23 @@ class HealthAssistantBoundaryService:
                 "예정",
             )
         )
-        if has_outdoor_activity and has_outdoor_intent:
+
+        needs_outdoor = False
+        if has_outdoor_env:
+            needs_outdoor = True
+        elif has_outdoor_activity and has_outdoor_intent:
+            needs_outdoor = True
+        elif len(messages) >= 2:
+            prev_msg = messages[-2]
+            if prev_msg.role == "assistant" and any(
+                k in prev_msg.content for k in ("실시간 날씨", "날씨와 대기질", "외출 전 기온", "날씨를 확인")
+            ):
+                from app.services.outdoor_conditions_client import resolve_sido_coordinates
+
+                if resolve_sido_coordinates(last_msg) is not None or "살아" in compact:
+                    needs_outdoor = True
+
+        if needs_outdoor:
             if not any(k in compact for k in ("고혈압", "당뇨", "심장", "신장", "천식", "협심증", "관절염")):
                 return HealthAssistantScopeDecision(
                     scope="health",
@@ -464,6 +545,7 @@ class HealthAssistantBoundaryService:
         *,
         tool_result: Any | None,
         outdoor_conditions: OutdoorConditionsResult | None,
+        messages: list[ChatMessage] | None = None,
     ) -> HealthAssistantResponse:
         """건강 사실·권고가 승인된 근거 없이 사용자에게 나가는 것을 막는다."""
         if response.emergency_notice:
@@ -475,6 +557,8 @@ class HealthAssistantBoundaryService:
             or response.challenge_draft is not None
         )
         if requires_evidence and not self.has_required_evidence(decision, tool_result, outdoor_conditions):
+            if messages and is_pregnancy_symptom_context(messages):
+                return self._fixed_response(PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE, intent="health_advice")
             return self._fixed_response(MISSING_EVIDENCE_MESSAGE, intent="health_advice")
         return response
 

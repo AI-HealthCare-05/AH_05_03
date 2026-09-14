@@ -37,6 +37,7 @@ export interface ExtendedChatMessage extends ChatMessage {
   id: string;
   responseDraft?: HealthAssistantResponse;
   saved?: boolean;
+  savedRecordId?: string;
   imageBlobUrl?: string;
   imageFile?: File;
   attachedDocuments?: Array<{ id: string; fileName?: string }>;
@@ -158,6 +159,11 @@ export function shouldAutoSaveHealthRecord(response: HealthAssistantResponse, us
   }
 
   return false;
+}
+
+/** 이미 저장한 운동을 바로잡는다는 표현인지 확인한다. */
+export function isExerciseCorrection(message: string): boolean {
+  return /(?:아니(?:다|야|고)|정정|수정|잘못\s*(?:말|썼|적)|말고|로\s*바꿔)/.test(message.trim());
 }
 
 export function buildAutoSaveAssistantMessage(response: HealthAssistantResponse): string {
@@ -880,6 +886,7 @@ export function mergeServerMessagesWithLocalUi(
       ...serverMessage,
       responseDraft: cached.responseDraft,
       saved: cached.saved,
+      savedRecordId: cached.savedRecordId,
       attachedDocuments: cached.attachedDocuments,
       queriedRecords: cached.queriedRecords,
       queriedRecordsTitle: cached.queriedRecordsTitle,

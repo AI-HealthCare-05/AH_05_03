@@ -219,6 +219,7 @@ HealthAssistantClarificationKind = Literal[
     "none",
     "request_goal",
     "pregnancy_supplement_context",
+    "pregnancy_symptom_context",
     "exercise_safety_context",
     "medication_safety_context",
     "personal_health_context",

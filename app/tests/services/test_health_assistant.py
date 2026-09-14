@@ -160,30 +160,6 @@ async def test_streaming_weather_question_without_location_asks_for_location() -
     assert events[1][1]["missing_fields"] == ["user_location"]
 
 
-def test_health_assistant_routes_aerobic_recommendation_to_outdoor_tool() -> None:
-    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 유산소 할 건데 추천 좀")])
-
-    assert HealthAssistantService._needs_outdoor_conditions(request) is True
-
-
-def test_health_assistant_routes_exercise_plans_to_outdoor_tool() -> None:
-    for text in ["오늘 러닝할거야", "오늘 달리기 할까?", "자전거 타러 갈까?", "오늘 산책갈래", "오늘 야외 운동 어때?"]:
-        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
-        assert HealthAssistantService._needs_outdoor_conditions(req) is True, f"Failed for: {text}"
-
-
-def test_health_assistant_does_not_route_completed_run_record_to_outdoor_tool() -> None:
-    for text in [
-        "오늘 러닝 30분 했어",
-        "오늘 5km 달렸어",
-        "오늘 10km 뛰었어",
-        "오늘 1만보 걸었어",
-        "자전거 1시간 탔어",
-    ]:
-        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
-        assert HealthAssistantService._needs_outdoor_conditions(req) is False, f"Failed for: {text}"
-
-
 @pytest.mark.asyncio
 async def test_health_assistant_evaluates_rain_as_outdoor_not_recommended() -> None:
     class RainyStub:
@@ -363,7 +339,7 @@ def test_health_assistant_needs_facility_tools_classification() -> None:
 @pytest.mark.asyncio
 async def test_health_assistant_resolves_sido_location_from_text() -> None:
     req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 서울 날씨 어때")])
-    loc = await HealthAssistantService()._resolve_request_location(req)
+    loc = await HealthAssistantService()._resolve_request_location(req, needs_outdoor=True)
     assert loc is not None
     assert loc.latitude == 37.5665
     assert loc.longitude == 126.978
@@ -383,7 +359,7 @@ async def test_health_assistant_resolves_specific_place_for_outdoor_question() -
     req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 양재숲에서 러닝할 거야")])
     service = HealthAssistantService(outdoor_conditions_client=LocationResolvingStub())
 
-    loc = await service._resolve_request_location(req)
+    loc = await service._resolve_request_location(req, needs_outdoor=True)
 
     assert loc is not None
     assert (loc.latitude, loc.longitude) == (37.47, 127.035)
@@ -406,7 +382,9 @@ async def test_health_assistant_does_not_reuse_location_from_assistant_message()
         ]
     )
 
-    loc = await HealthAssistantService(outdoor_conditions_client=NoLocationStub())._resolve_request_location(req)
+    loc = await HealthAssistantService(outdoor_conditions_client=NoLocationStub())._resolve_request_location(
+        req, needs_outdoor=True
+    )
 
     assert loc is None
 
@@ -1333,3 +1311,21 @@ def test_vitamin_or_mineral_question_keeps_supplement_disclaimer() -> None:
         kept = HealthAssistantService._remove_irrelevant_supplement_disclaimer(response, request)
 
         assert kept.assistant_message.startswith(message)
+
+
+def test_classifier_llm_client_reuses_injected_llm_client_by_default() -> None:
+    """`classifier_llm_client`를 따로 안 주면, 기존 테스트들처럼 `llm_client` 하나로
+    분류·답변을 둘 다 검증하던 방식이 그대로 동작해야 한다."""
+    llm_client = MockLLMClient("{}")
+    service = HealthAssistantService(llm_client=llm_client)
+
+    assert service.classifier_llm_client is llm_client
+
+
+def test_classifier_llm_client_uses_explicit_override_when_given() -> None:
+    llm_client = MockLLMClient("{}")
+    classifier_client = MockLLMClient("{}")
+    service = HealthAssistantService(llm_client=llm_client, classifier_llm_client=classifier_client)
+
+    assert service.classifier_llm_client is classifier_client
+    assert service.classifier_llm_client is not service.llm_client

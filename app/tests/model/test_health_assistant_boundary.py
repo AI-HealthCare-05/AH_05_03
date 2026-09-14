@@ -22,6 +22,7 @@ from app.services.health_assistant_boundary import (
     CLASSIFICATION_FAILED_MESSAGE,
     HEALTH_ONLY_MESSAGE,
     MISSING_EVIDENCE_MESSAGE,
+    PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE,
     HealthAssistantBoundaryService,
     hard_rule_filter,
 )
@@ -204,6 +205,81 @@ async def test_personalized_health_question_can_ask_one_question_before_main_llm
         f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_supplement_context']}"
     )
     assert client.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_classifier_llm_client_is_used_for_boundary_and_main_llm_client_is_untouched() -> None:
+    """분류용 client 와 답변용 client 가 실제로 갈라져 있는지 — 서로 안 섞이는지 검증한다.
+
+    `clarify` 로 바운더리에서 바로 끝나는 경로를 쓴다. 이 경로는 메인 LLM 을 아예
+    부르지 않으므로, `llm_client`(`RaisingClient`)가 조금이라도 불리면 예외가 나서
+    바로 드러난다.
+    """
+    classifier_client = ScopeOnlyClient(
+        HealthAssistantScopeDecision(
+            scope="health",
+            requires_authoritative_evidence=True,
+            required_evidence_types=["health_knowledge"],
+            response_mode="clarify",
+            clarification_kind="pregnancy_supplement_context",
+        )
+    )
+    service = HealthAssistantService(llm_client=RaisingClient(), classifier_llm_client=classifier_client)
+
+    response = await service.respond(
+        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="임신 중인데 영양제 추천해줘")])
+    )
+
+    assert response.assistant_message == (
+        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_supplement_context']}"
+    )
+    assert classifier_client.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_pregnancy_symptom_followup_asks_for_context_without_calling_llm() -> None:
+    client = ScopeOnlyClient(HealthAssistantScopeDecision(scope="out_of_scope"))
+    service = HealthAssistantService(llm_client=client)
+
+    response = await service.respond(
+        HealthAssistantChatRequest(
+            messages=[
+                ChatMessage(role="user", content="나 임신 중이야"),
+                ChatMessage(role="assistant", content="임신 중이시군요."),
+                ChatMessage(role="user", content="배가 좀 당기는 것 같아"),
+            ]
+        )
+    )
+
+    assert response.assistant_message == (
+        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_symptom_context']}"
+    )
+    assert client.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_pregnancy_symptom_without_evidence_uses_safe_navigation_message() -> None:
+    client = ScopeOnlyClient(
+        HealthAssistantScopeDecision(
+            scope="health",
+            requires_authoritative_evidence=True,
+            required_evidence_types=["health_knowledge"],
+        )
+    )
+    service = HealthAssistantService(llm_client=client, health_knowledge_client=_EmptyHealthKnowledgeClient())
+
+    response = await service.respond(
+        HealthAssistantChatRequest(
+            messages=[
+                ChatMessage(role="user", content="나 임신 중이야"),
+                ChatMessage(role="assistant", content="현재 상태를 알려주세요."),
+                ChatMessage(role="user", content="20주이고 30분 전부터 배가 3점 정도로 당겨"),
+            ]
+        )
+    )
+
+    assert response.assistant_message == PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE
+    assert "괜찮" not in response.assistant_message
 
 
 @pytest.mark.asyncio
@@ -393,6 +469,64 @@ def test_fast_path_detects_service_usage_and_record_without_llm() -> None:
     # Ambiguous or complex question returns None to fallback to LLM classifier
     ambiguous = boundary._fast_path_decision([ChatMessage(role="user", content="고혈압에 좋은 운동이 뭐야?")])
     assert ambiguous is None
+
+
+def test_fast_path_accepts_only_contextual_facility_location_reply() -> None:
+    boundary = HealthAssistantBoundaryService()
+    contextual = boundary._fast_path_decision(
+        [
+            ChatMessage(role="user", content="주변 약국"),
+            ChatMessage(role="assistant", content="찾으시는 지역명을 입력해 주세요."),
+            ChatMessage(role="user", content="고양시"),
+        ]
+    )
+
+    assert contextual is not None
+    assert contextual.required_evidence_types == ["facility"]
+    assert HealthAssistantService._needs_facility_tools(
+        HealthAssistantChatRequest(
+            messages=[
+                ChatMessage(role="assistant", content="찾으시는 지역명을 입력해 주세요."),
+                ChatMessage(role="user", content="고양시"),
+            ]
+        )
+    )
+    assert boundary._fast_path_decision([ChatMessage(role="user", content="고양시")]) is None
+
+
+def test_fast_path_detects_outdoor_without_llm() -> None:
+    boundary = HealthAssistantBoundaryService()
+
+    # 날씨, 미세먼지, 대기질 단어 포함 시 outdoor
+    for query in [
+        "오늘 날씨 어때?",
+        "미세먼지 심해?",
+        "대기질 어때",
+        "서울 날씨",
+        "오늘 러닝할거야",
+        "자전거 타러 갈까",
+    ]:
+        decision = boundary._fast_path_decision([ChatMessage(role="user", content=query)])
+        assert decision is not None
+        assert "outdoor" in decision.required_evidence_types
+
+    # 날씨를 확인하기 위해 위치를 물었을 때의 답변
+    decision = boundary._fast_path_decision(
+        [
+            ChatMessage(role="user", content="오늘 날씨 어때?"),
+            ChatMessage(role="assistant", content="실시간 날씨를 확인하기 위해 계신 지역을 알려주세요."),
+            ChatMessage(role="user", content="서울이야"),
+        ]
+    )
+    assert decision is not None
+    assert "outdoor" in decision.required_evidence_types
+
+    # 건강과 관련 없거나 outdoor가 아닌 일반 의료 질의
+    decision = boundary._fast_path_decision(
+        [ChatMessage(role="user", content="혈압약 먹고 있는데 타이레놀 먹어도 돼?")]
+    )
+    if decision is not None:
+        assert "outdoor" not in decision.required_evidence_types
 
 
 class RaisingClient:
