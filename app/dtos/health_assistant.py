@@ -271,6 +271,7 @@ class HealthAssistantChatRequest(BaseModel):
         default=None, description="사용자 동의로 받은 이번 요청의 현재 좌표 (user_location과 호환)"
     )
     session_id: uuid.UUID | None = Field(default=None, description="대화 세션 ID (DB 영구 보존용)")
+    core_memory: str | None = Field(default=None, description="세션 핵심 기억 (서버 주입용)")
     inferred_intent: str | None = Field(
         default=None,
         description="인풋 가드레일을 통해 추론된 사용자 의도 요약",

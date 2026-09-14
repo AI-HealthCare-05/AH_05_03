@@ -21,6 +21,7 @@ class ChatSessionResponse(BaseSerializerModel):
     account_id: uuid.UUID
     profile_id: str
     title: str | None = None
+    core_memory: str | None = None
     created_at: datetime
     updated_at: datetime
 

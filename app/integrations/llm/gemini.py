@@ -1,4 +1,3 @@
-
 """Gemini 구조화 응답 클라이언트. **대화 경로의 유일한 Gemini 진입점이다.**
 
 원 PR(#27)은 `health_assistant` · `pain_chat` · `dev_ocr` 세 곳이 각자 클라이언트를
@@ -39,6 +38,7 @@ def _format_gemini_error(prefix: str, ex: Exception) -> str:
 
 
 logger = logging.getLogger(__name__)
+
 
 class GeminiLLMClient(LLMClientProtocol):
     """구조화 JSON 출력을 강제하는 Gemini 클라이언트."""

@@ -88,6 +88,7 @@ async def chat_with_assistant(
     )
     if request.session_id is not None:
         session_obj = await chat_session_service.get_session(account, request.session_id)
+        request.core_memory = session_obj.core_memory
         if request.profile_context and not request.profile_context.profile_id:
             request.profile_context.profile_id = session_obj.profile_id
         await chat_session_service.add_message(
@@ -145,6 +146,7 @@ async def stream_chat_with_assistant(
 
     if request.session_id is not None:
         session_obj = await chat_session_service.get_session(account, request.session_id)
+        request.core_memory = session_obj.core_memory
         if request.profile_context and not request.profile_context.profile_id:
             request.profile_context.profile_id = session_obj.profile_id
         await chat_session_service.add_message(

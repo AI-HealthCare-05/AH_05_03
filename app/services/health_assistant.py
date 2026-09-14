@@ -1041,6 +1041,7 @@ class HealthAssistantService:
             if needs_outdoor
             else None,
             authoritative_evidence_context=authoritative_evidence_context,
+            session_core_memory=request.core_memory,
         )
 
         tools = self._get_tools(request)
@@ -1203,6 +1204,7 @@ class HealthAssistantService:
             if needs_outdoor
             else None,
             authoritative_evidence_context=authoritative_evidence_context,
+            session_core_memory=request.core_memory,
         )
         reader = PartialJsonTextReader("assistant_message")
         raw = ""

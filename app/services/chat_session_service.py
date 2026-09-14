@@ -2,12 +2,18 @@ import uuid
 from typing import Annotated, Any
 
 from fastapi import Depends
+from pydantic import BaseModel
 
 from app.core.db.session import SessionDep
+from app.dtos.health_assistant import ChatMessage
 from app.exceptions import ChatSessionNotFoundError
+from app.integrations.llm.chain import shared_chat_client
 from app.models.chat_sessions import ChatMessageRecord, ChatSession
 from app.models.service_accounts import ServiceAccount
 from app.repositories.chat_session_repository import ChatSessionRepository
+from app.integrations.llm.chain import shared_chat_client
+from app.dtos.health_assistant import ChatMessage
+from pydantic import BaseModel
 
 
 def get_chat_session_repository(session: SessionDep) -> ChatSessionRepository:
@@ -110,4 +116,54 @@ class ChatSessionService:
             session_obj.title = content[:50].strip()
             self.session.add(session_obj)
         await self.session.commit()
+
+        if created.sequence_number > 0 and created.sequence_number % 10 == 0:
+            await self._update_core_memory(session_obj)
+
         return created
+
+    async def _update_core_memory(self, session_obj: ChatSession) -> None:
+        """최근 메시지와 기존 기억을 바탕으로 핵심 기억을 누적 갱신한다."""
+        messages_obj = await self.chat_session_repo.list_messages(session_obj.id, limit=10)
+        messages_obj = await self.chat_session_repo.list_messages(session_obj.id, limit=10)
+        if not messages_obj:
+            return
+            
+
+        recent_text = "\n".join([f"{m.role}: {m.content}" for m in messages_obj])
+        existing_memory = session_obj.core_memory or "없음"
+        
+
+        prompt = f"""
+당신은 건강 어시스턴트의 장기 기억 요약기입니다.
+다음은 사용자의 기존 장기 기억(핵심 건강 정보)과 최근 대화 내역입니다.
+
+[기존 기억]
+{existing_memory}
+
+[최근 대화]
+{recent_text}
+
+지시사항:
+- 기존 기억과 최근 대화를 합쳐서, 챗봇이 반드시 기억해야 할 사용자의 핵심 건강 상태, 질환, 관심사, 특이사항을 누적 요약하세요.
+- 불필요한 일상 대화나 인사말은 버리고 핵심만 짧은 3~4문장 줄글로 압축하세요.
+- 출력 형식은 요약된 텍스트 자체여야 합니다.
+"""
+
+        class SummarySchema(BaseModel):
+            summary: str
+
+        try:
+            res = await shared_chat_client().generate_structured_response(
+                system_instruction="당신은 요약 어시스턴트입니다.",
+                messages=[ChatMessage(role="user", content=prompt)],
+                response_schema=SummarySchema,
+            )
+            session_obj.core_memory = res.summary
+            self.session.add(session_obj)
+            await self.session.commit()
+        except Exception as e:
+            # 요약 실패 시 조용히 넘어간다.
+            import logging
+
+            logging.getLogger(__name__).warning("핵심 기억 요약 실패: %s", e)

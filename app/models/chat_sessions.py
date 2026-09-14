@@ -20,6 +20,7 @@ class ChatSession(TimestampMixin, Base):
     )
     profile_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    core_memory: Mapped[str | None] = mapped_column(Text, nullable=True)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
     messages: Mapped[list["ChatMessageRecord"]] = relationship(

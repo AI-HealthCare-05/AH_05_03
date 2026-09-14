@@ -9,6 +9,7 @@ def build_system_instruction(
     user_location: UserLocation | None = None,
     outdoor_conditions_context: str | None = None,
     authoritative_evidence_context: str | None = None,
+    session_core_memory: str | None = None,
 ) -> str:
     now = datetime.now(ZoneInfo("Asia/Seoul"))
     today_str = now.strftime("%Y-%m-%d")
