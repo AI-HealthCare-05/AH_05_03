@@ -43,6 +43,11 @@ PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE = (
     "현재 연결된 공식 정보만으로는 임신 중 이 증상의 원인이나 안전 여부를 판단하기 어렵습니다. "
     "증상이 계속되거나 걱정된다면 담당 산부인과에 확인해 주세요."
 )
+PREGNANCY_MEDICATION_EVIDENCE_MESSAGE = (
+    "임신 중 약이나 영양제의 새 복용은 임신 주수, 복용 목적, 처방 여부에 따라 달라 "
+    "현재 연결된 공식 정보만으로 복용 여부나 용량을 판단하기 어렵습니다. "
+    "처방받지 않은 약이나 영양제를 새로 시작하기 전에는 담당 산부인과 또는 약사에게 확인해 주세요."
+)
 CLASSIFICATION_FAILED_MESSAGE = (
     "질문을 정확히 이해하지 못했습니다. 건강과 관련된 내용을 조금 더 구체적으로 말씀해 주세요."
 )
@@ -52,7 +57,7 @@ CLARIFICATION_FALLBACK_QUESTION = (
 )
 CLARIFICATION_QUESTIONS = {
     "request_goal": "본인의 건강 위험이 궁금하신가요, 아니면 가족을 돌보는 방법이 궁금하신가요?",
-    "pregnancy_supplement_context": "현재 임신 주수와 복용 중인 약이나 영양제, 의료진에게 확인받은 사항이 있나요?",
+    "pregnancy_supplement_context": "현재 임신 주수와 복용하려는 이유, 처방받은 약인지, 복용 중인 약이나 영양제가 있는지 알려주시겠어요?",
     "pregnancy_symptom_context": "현재 임신 주수와 증상이 시작된 시점, 통증 정도, 함께 나타난 증상이 있나요?",
     "exercise_safety_context": "현재 증상의 정도와 진단받은 질환 또는 의료진에게 들은 운동 제한이 있나요?",
     "medication_safety_context": "복용하려는 약의 이름과 현재 복용 중인 약, 진단받은 질환이 있나요?",
@@ -96,6 +101,36 @@ def is_pregnancy_symptom_context(messages: list[ChatMessage]) -> bool:
         word in compact for word in ("아파", "아픈", "통증", "당기", "당겨", "뭉치", "출혈", "어지", "구토")
     )
     return pregnancy_was_mentioned and has_symptom
+
+
+def is_pregnancy_medication_question(messages: list[ChatMessage]) -> bool:
+    """임신 맥락에서 개인의 약·영양제 복용 가능 여부를 묻는지 확인한다."""
+    latest_user = next((message.content for message in reversed(messages) if message.role == "user"), "")
+    compact = latest_user.replace(" ", "")
+    pregnancy_was_mentioned = any(
+        message.role == "user" and any(word in message.content for word in ("임신", "임산부", "산모"))
+        for message in messages
+    )
+    mentions_supplement = any(
+        word in compact for word in ("영양제", "엽산", "철분", "칼슘", "비타민", "오메가", "유산균", "마그네슘")
+    )
+    asks_to_take = any(
+        phrase in compact for phrase in ("먹어도돼", "먹어도되", "복용해도", "복용할까", "먹을까", "시작해도", "추천")
+    )
+    return pregnancy_was_mentioned and asks_to_take and (mentions_supplement or mentions_medication(latest_user))
+
+
+def is_pregnancy_medication_followup(messages: list[ChatMessage]) -> bool:
+    """안전 확인 질문 뒤에 이어진 임신 중 약·영양제 답변인지 확인한다."""
+    pregnancy_was_mentioned = any(
+        message.role == "user" and any(word in message.content for word in ("임신", "임산부", "산모"))
+        for message in messages
+    )
+    previous_assistant = next((message.content for message in reversed(messages[:-1]) if message.role == "assistant"), "")
+    return pregnancy_was_mentioned and previous_assistant in {
+        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_supplement_context']}",
+        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['medication_safety_context']}",
+    }
 
 
 def hard_rule_filter(user_input: str) -> tuple[bool, str | None]:
@@ -331,6 +366,17 @@ class HealthAssistantBoundaryService:
                 required_evidence_types=["health_knowledge", "health_records"],
             )
 
+        # 임신 중 개인 복용 가능 여부는 검색 결과가 없을 때 곧바로 거절하지 않는다.
+        # 먼저 주수·목적·처방 여부를 고정 질문으로 확인해 모델의 임의 판단을 막는다.
+        if is_pregnancy_medication_question(messages):
+            return HealthAssistantScopeDecision(
+                scope="health",
+                requires_authoritative_evidence=True,
+                required_evidence_types=["health_knowledge"],
+                response_mode="clarify",
+                clarification_kind="pregnancy_supplement_context",
+            )
+
         # 의약품 / 식품 / 시설
         # 식약처 의약품 / DUR 질의
         # NOTE: 의약품 여부 판정은 medication_topic.mentions_medication() 하나로 모아뒀다.
@@ -559,6 +605,8 @@ class HealthAssistantBoundaryService:
         if requires_evidence and not self.has_required_evidence(decision, tool_result, outdoor_conditions):
             if messages and is_pregnancy_symptom_context(messages):
                 return self._fixed_response(PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE, intent="health_advice")
+            if messages and (is_pregnancy_medication_question(messages) or is_pregnancy_medication_followup(messages)):
+                return self._fixed_response(PREGNANCY_MEDICATION_EVIDENCE_MESSAGE, intent="health_advice")
             return self._fixed_response(MISSING_EVIDENCE_MESSAGE, intent="health_advice")
         return response
 

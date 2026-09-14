@@ -22,6 +22,7 @@ from app.services.health_assistant_boundary import (
     CLASSIFICATION_FAILED_MESSAGE,
     HEALTH_ONLY_MESSAGE,
     MISSING_EVIDENCE_MESSAGE,
+    PREGNANCY_MEDICATION_EVIDENCE_MESSAGE,
     PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE,
     HealthAssistantBoundaryService,
     hard_rule_filter,
@@ -191,18 +192,18 @@ async def test_personalized_health_question_can_ask_one_question_before_main_llm
             requires_authoritative_evidence=True,
             required_evidence_types=["health_knowledge"],
             response_mode="clarify",
-            clarification_kind="pregnancy_supplement_context",
+            clarification_kind="exercise_safety_context",
         )
     )
     service = HealthAssistantService(llm_client=client)
 
     response = await service.respond(
-        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="임신 중인데 영양제 추천해줘")])
+        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="관절이 안 좋은데 운동해도 돼?")])
     )
 
     assert response.intent == "health_advice"
     assert response.assistant_message == (
-        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_supplement_context']}"
+        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['exercise_safety_context']}"
     )
     assert client.calls == 1
 
@@ -221,17 +222,17 @@ async def test_classifier_llm_client_is_used_for_boundary_and_main_llm_client_is
             requires_authoritative_evidence=True,
             required_evidence_types=["health_knowledge"],
             response_mode="clarify",
-            clarification_kind="pregnancy_supplement_context",
+            clarification_kind="exercise_safety_context",
         )
     )
     service = HealthAssistantService(llm_client=RaisingClient(), classifier_llm_client=classifier_client)
 
     response = await service.respond(
-        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="임신 중인데 영양제 추천해줘")])
+        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="관절이 안 좋은데 운동해도 돼?")])
     )
 
     assert response.assistant_message == (
-        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_supplement_context']}"
+        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['exercise_safety_context']}"
     )
     assert classifier_client.calls == 1
 
@@ -255,6 +256,50 @@ async def test_pregnancy_symptom_followup_asks_for_context_without_calling_llm()
         f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_symptom_context']}"
     )
     assert client.calls == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("question", ["임신 중인데 엽산 먹어도 돼?", "임신 중 아스피린 먹어도 돼?"])
+async def test_pregnancy_medication_safety_question_asks_for_context_without_calling_llm(question: str) -> None:
+    client = ScopeOnlyClient(HealthAssistantScopeDecision(scope="out_of_scope"))
+    service = HealthAssistantService(llm_client=client)
+
+    response = await service.respond(
+        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=question)])
+    )
+
+    assert response.assistant_message == (
+        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_supplement_context']}"
+    )
+    assert client.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_pregnancy_supplement_followup_without_evidence_uses_safe_navigation_message() -> None:
+    client = ScopeOnlyClient(
+        HealthAssistantScopeDecision(
+            scope="health",
+            requires_authoritative_evidence=True,
+            required_evidence_types=["health_knowledge"],
+        )
+    )
+    service = HealthAssistantService(llm_client=client, health_knowledge_client=_EmptyHealthKnowledgeClient())
+
+    response = await service.respond(
+        HealthAssistantChatRequest(
+            messages=[
+                ChatMessage(role="user", content="임신 중인데 엽산 먹어도 돼?"),
+                ChatMessage(
+                    role="assistant",
+                    content=f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_supplement_context']}",
+                ),
+                ChatMessage(role="user", content="20주이고 엽산만 먹고 있어. 처방받지는 않았어."),
+            ]
+        )
+    )
+
+    assert response.assistant_message == PREGNANCY_MEDICATION_EVIDENCE_MESSAGE
+    assert "용량" in response.assistant_message
 
 
 @pytest.mark.asyncio
@@ -301,7 +346,7 @@ async def test_model_cannot_put_medical_advice_in_clarification_text() -> None:
     service = HealthAssistantService(llm_client=client)
 
     response = await service.respond(
-        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="임신 중인데 영양제 추천해줘")])
+        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="개인적인 건강 상태를 알려줘")])
     )
 
     assert response.assistant_message == f"{CLARIFICATION_PREFIX} {CLARIFICATION_FALLBACK_QUESTION}"
