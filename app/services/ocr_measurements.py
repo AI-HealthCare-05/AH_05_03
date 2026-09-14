@@ -468,10 +468,6 @@ def bounds_conflict(target: str, value: float) -> str | None:
     return None
 
 
-#: 모듈 안의 기존 호출부가 쓰는 이름. 공개 이름 하나만 두면 되지만, 이 파일 안에서
-#: `_` 접두사로 부르던 자리를 전부 고치면 diff 가 관문 로직과 섞인다.
-_bounds_conflict = bounds_conflict
-
 
 def _read_value(raw_value: str) -> tuple[float | None, str | None]:
     """결과값 칸을 읽는다. `(값, 사유)` — 사유가 있으면 값은 쓰지 않는다."""
@@ -557,7 +553,7 @@ def _measure(
         return "review", Measurement(target, label, float("nan"), raw_unit, list(row), reason or "")
 
     value, unit, reason = _scale_to_canonical_unit(target, value, raw_unit)
-    reason = reason or _reference_conflict(target, raw_reference) or _bounds_conflict(target, value)
+    reason = reason or _reference_conflict(target, raw_reference) or bounds_conflict(target, value)
     kind = "review" if reason is not None else "value"
     return kind, Measurement(target, label, round(value, 4), unit, list(row), reason)
 

@@ -652,10 +652,7 @@ class HealthAssistantBoundaryService:
 
     @staticmethod
     def _latest_user_message(messages: list[ChatMessage]) -> str:
-        for message in reversed(messages):
-            if message.role == "user":
-                return message.content
-        return ""
+        return next((m.content for m in reversed(messages) if m.role == "user"), "")
 
     @staticmethod
     def _fixed_response(message: str, *, intent: HealthIntent = "general_chat") -> HealthAssistantResponse:
