@@ -305,3 +305,18 @@ class TestShortAbbreviationsAreDeliberatelyNarrow:
         # `총콜레스테롤` 과 `T-CHOL` 이 같은 칸을 서로 다른 값으로 채우므로 둘 다 보류된다.
         assert "total_chol" not in result.values
         assert any("서로 다른 값" in (row.reason or "") for row in result.review)
+
+    def test_strips_table_header_from_the_label(self) -> None:
+        result = extract(table(["검사항목명: 알부민크레아티닌비", "153", "mg/g", ""]))
+        assert result.values["urine_acr"] == 153.0
+
+    def test_rescues_value_merged_into_the_label(self) -> None:
+        # synth-001: "UACR 247" 과 같이 라벨에 값이 섞여 있고, 옆 행 값이 raw_value 자리에 밀려온 경우.
+        # 구출한 247을 쓰되, 반드시 review 로 넘겨야 한다.
+        result = extract(table(["UACR 247", "93", "mg/g", "참고치 30 미만"]))
+        assert "urine_acr" not in result.values
+        match = next(r for r in result.review if r.field == "urine_acr")
+        assert match.value == 247.0
+
+        
+        assert "구출한 값: 247" in match.reason

@@ -310,6 +310,9 @@ def _candidates(label: str) -> list[str]:
     `AST (SGOT)` 는 `astsgot`·`ast`·`sgot` 셋 다로 찾아본다. 검진표가 옛 이름을
     괄호에 넣는 관행이 있어서, 괄호를 갈라 두지 않으면 사전을 두 배로 불려야 한다.
     """
+    # synth-007: 모델이 헤더를 검사명에 붙여버리는 경우 방어
+    label = re.sub(r"^(검사항목명?|항목명?|검사명?)[:\s]*", "", label)
+
     keys = [_normalize(label)]
     for inside in re.findall(r"[(\[（]([^)\]）]*)[)\]）]", label):
         keys.append(_normalize(inside))
@@ -514,15 +517,33 @@ def _read_row(row: list[str]) -> tuple[str, Measurement] | None:
         return _measure(target, label, raw_value, raw_unit, raw_reference, row)
 
     misread = next((_MISREAD_INDEX[key] for key in keys if key in _MISREAD_INDEX), None)
-    if misread is None:
-        return None
-    # 관측된 오독이다. **값을 잃지도, 말없이 채우지도 않는다** — 관문은 그대로 태우고
-    # 통과했더라도 검토로 보낸다. 사람이 원본을 보면 1초에 가리는 종류의 물음이다.
-    _, measurement = _measure(misread, label, raw_value, raw_unit, raw_reference, row)
-    measurement.reason = measurement.reason or (
-        f"'{label}' 은 '{_ALIASES[misread][0]}' 을 잘못 읽은 것으로 보입니다. 원본과 맞는지 확인해 주세요."
-    )
-    return "review", measurement
+    if misread is not None:
+        # 관측된 오독이다. **값을 잃지도, 말없이 채우지도 않는다** — 관문은 그대로 태우고
+        # 통과했더라도 검토로 보낸다. 사람이 원본을 보면 1초에 가리는 종류의 물음이다.
+        _, measurement = _measure(misread, label, raw_value, raw_unit, raw_reference, row)
+        measurement.reason = measurement.reason or (
+            f"'{label}' 은 '{_ALIASES[misread][0]}' 을 잘못 읽은 것으로 보입니다. 원본과 맞는지 확인해 주세요."
+        )
+        return "review", measurement
+
+    # 4. 값 밀림 복구 (synth-001)
+    # 한 줄 판형에서 모델이 검사명과 수치를 한 칸(label)에 뭉쳐서 내보내는 경우.
+    # 사용자의 지침에 따라: "사전에 매칭된 별칭 문자열 + 공백 + 숫자, 그 외엔 아무것도 없음" 일 때만 구출.
+    match = re.match(r"^(.+?)\s+(\d+(?:\.\d+)?)$", label)
+    if match:
+        name_part, value_part = match.groups()
+        rescued_keys = _candidates(name_part)
+        rescued_target = next((_FIELD_INDEX[k] for k in rescued_keys if k in _FIELD_INDEX), None)
+        if rescued_target is not None:
+            _, measurement = _measure(rescued_target, label, value_part, raw_unit, raw_reference, row)
+            reason = f"검사명에 값이 섞여 들어왔습니다. 구출한 값: {value_part}"
+            if measurement.reason:
+                measurement.reason = f"{measurement.reason} / {reason}"
+            else:
+                measurement.reason = reason
+            return "review", measurement
+
+    return None
 
 
 def _measure(
