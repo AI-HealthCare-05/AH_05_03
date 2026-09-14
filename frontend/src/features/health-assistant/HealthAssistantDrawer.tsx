@@ -1079,15 +1079,15 @@ export function HealthAssistantDrawer({
       }
 
       const assistantMsgId = messageId("assistant");
-      const correctionRequested = res.intent === "record_exercise" && isExerciseCorrection(textToSend);
+      const correctionRequested = Boolean(res.exercise_draft) && isExerciseCorrection(textToSend);
       const correctionTargetId = correctionRequested
-        ? [...messages].reverse().find(
+        ? messages.findLast(
             (message) =>
               message.role === "assistant" &&
               message.saved &&
               message.savedRecordId &&
-              message.responseDraft?.intent === "record_exercise",
-          )?.savedRecordId
+              message.responseDraft?.exercise_draft,
+          )?.savedRecordId || sessionStorage.getItem("lastSavedExerciseId") || undefined
         : undefined;
       const unresolvedCorrection = correctionRequested && !correctionTargetId;
       const shouldAutoSave = !unresolvedCorrection && (
@@ -1468,6 +1468,7 @@ export function HealthAssistantDrawer({
       setMessages((prev) =>
         prev.map((m) => (m.id === msgId ? { ...m, saved: true, savedRecordId: result.value.id } : m)),
       );
+      sessionStorage.setItem("lastSavedExerciseId", result.value.id);
       if (onRecordSaved) await onRecordSaved();
 
       const todayResult = await runtime.healthRecords.query({
@@ -3852,13 +3853,7 @@ function PainDiaryToolCard({
   onSave: (updated: PainDiaryToolCall) => void;
   onNavigateToDiary: (dateKey: string) => void;
 }) {
-  const todayStr = useMemo(() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }, []);
+  const todayStr = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
   const [diaryDate, setDiaryDate] = useState(toolCall.date_str || todayStr);
   const [bodyArea, setBodyArea] = useState(toolCall.body_area || "");
   const [intensity, setIntensity] = useState<number | null>(toolCall.intensity ?? null);
