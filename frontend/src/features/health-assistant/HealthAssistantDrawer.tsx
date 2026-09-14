@@ -1068,6 +1068,15 @@ export function HealthAssistantDrawer({
           res.pain_draft.onset_at,
         );
       }
+      if (res.pain_diary_tool) {
+        // `date_str`는 <input type="date"> 값이라 YYYY-MM-DD 만 받는다.
+        // `resolveHealthRecordDateTime`은 근거가 없을 때 현재 "시각"까지 반환하므로
+        // 날짜 부분만 잘라 쓴다.
+        res.pain_diary_tool.date_str = resolveHealthRecordDateTime(
+          textToSend,
+          res.pain_diary_tool.date_str,
+        ).slice(0, 10);
+      }
 
       const assistantMsgId = messageId("assistant");
       const correctionRequested = res.intent === "record_exercise" && isExerciseCorrection(textToSend);

@@ -663,6 +663,48 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     });
   });
 
+  it("통증일기 날짜 단서가 없으면 모델이 지어낸 날짜 대신 오늘 날짜를 쓴다", async () => {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+      now.getDate(),
+    ).padStart(2, "0")}`;
+
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "record_pain",
+      assistant_message: "통증 일기를 정리했습니다.",
+      pain_diary_tool: {
+        tool_name: "format_pain_diary",
+        // 사용자 메시지에 날짜 단서가 전혀 없는데도 모델이 지어낸 값 — 오늘로 바뀌어야 한다.
+        date_str: "2020-01-01",
+        body_area: "왼쪽 무릎",
+        intensity: 4,
+        sensation: "뻐근함",
+        formatted_diary: "왼쪽 무릎에 뻐근한 통증이 있음.",
+      },
+      missing_fields: [],
+      needs_confirmation: true,
+      suggested_quick_replies: [],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={mockProfile}
+        runtime={mockRuntime}
+        isOpen={true}
+        onClose={mockOnClose}
+        onRecordSaved={mockOnRecordSaved}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+    fireEvent.change(input, { target: { value: "왼쪽 무릎이 계속 뻐근해서 다이어리에 남기고 싶어" } });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/기록 날짜/)).toHaveValue(todayStr);
+    });
+  });
+
   it("저장된 최근 복약 기록이 있을 때 음주 질문 시 프로필 컨텍스트에 기록 요약이 전달된다", async () => {
     const runtimeWithMed = {
       healthRecords: {
