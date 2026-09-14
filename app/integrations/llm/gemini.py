@@ -10,6 +10,7 @@
 """
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, TypeVar, cast
 
@@ -36,6 +37,8 @@ def _format_gemini_error(prefix: str, ex: Exception) -> str:
     clean_msg = msg.strip().split("\n")[0] if msg else type(ex).__name__
     return f"{prefix}: {clean_msg}"
 
+
+logger = logging.getLogger(__name__)
 
 class GeminiLLMClient(LLMClientProtocol):
     """구조화 JSON 출력을 강제하는 Gemini 클라이언트."""
@@ -166,8 +169,12 @@ class GeminiLLMClient(LLMClientProtocol):
         async def execute_and_format(fc):
             fc_name = fc.name or ""
             fc_args = fc.args or {}
-            tool_res = await tool_executor(fc_name, fc_args)
-            result_payload = tool_res.model_dump(mode="json") if hasattr(tool_res, "model_dump") else tool_res
+            try:
+                tool_res = await tool_executor(fc_name, fc_args)
+                result_payload = tool_res.model_dump(mode="json") if hasattr(tool_res, "model_dump") else tool_res
+            except Exception as e:
+                logger.warning("Gemini tool execution failed: %s %s - %s", fc_name, fc_args, e)
+                tool_res = result_payload = {"error": str(e)}
             part = types.Part.from_function_response(
                 name=fc_name,
                 response={"result": result_payload},

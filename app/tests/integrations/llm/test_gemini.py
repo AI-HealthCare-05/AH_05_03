@@ -62,3 +62,46 @@ async def test_gemini_client_generates_response(monkeypatch) -> None:
 
     assert response.intent == "general_chat"
     assert response.assistant_message == "안녕하세요!"
+
+async def test_gemini_client_tools_execute_exactly_once_and_handle_errors(monkeypatch) -> None:
+    from app.integrations.llm.gemini import GeminiLLMClient
+    from pydantic import BaseModel
+    import asyncio
+    
+    monkeypatch.setenv("GOOGLE_API_KEY", "dummy")
+    client = GeminiLLMClient("gemini-2.5-flash")
+    
+    class DummySchema(BaseModel):
+        msg: str
+
+    from unittest.mock import AsyncMock, MagicMock
+
+    class MockContent: text = '{"msg": "done"}'
+    class MockFC: 
+        def __init__(self, n): self.name, self.args = n, {}
+    class MockFirstTurn:
+        function_calls = [MockFC("tool_1"), MockFC("tool_error")]
+        candidates, text = [], ""
+
+    client.client = MagicMock()
+    client.client.aio.models.generate_content = AsyncMock(side_effect=[MockFirstTurn(), MockContent()])
+    
+    execution_counts = {"tool_1": 0, "tool_error": 0}
+    
+    async def mock_tool_executor(name, args):
+        execution_counts[name] += 1
+        if name == "tool_error":
+            raise ValueError("Test error")
+        return {"ok": True}
+        
+    res, tool_results = await client.generate_structured_response_with_tools(
+        system_instruction="sys",
+        messages=[],
+        response_schema=DummySchema,
+        tools=["dummy_tool"],
+        tool_executor=mock_tool_executor
+    )
+    
+    assert execution_counts["tool_1"] == 1
+    assert execution_counts["tool_error"] == 1
+    assert tool_results == [{"ok": True}, {"error": "Test error"}]
