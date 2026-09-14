@@ -318,5 +318,5 @@ class TestShortAbbreviationsAreDeliberatelyNarrow:
         match = next(r for r in result.review if r.field == "urine_acr")
         assert match.value == 247.0
 
-        
+
         assert "구출한 값: 247" in match.reason

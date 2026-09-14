@@ -184,6 +184,25 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     expect(screen.getByText("일반적인 영양 정보는 다음과 같습니다.")).toBeInTheDocument();
   });
 
+  it("의료 답변을 핵심 요약과 짧은 목록으로 표시한다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "health_advice",
+      assistant_message: "핵심: 복용 전 확인이 필요해요\n\n확인할 점\n- 현재 임신 주수\n- 처방받은 약인지 여부",
+      missing_fields: [],
+      needs_confirmation: false,
+      auto_save: false,
+      suggested_quick_replies: [],
+    });
+    render(<HealthAssistantDrawer profile={mockProfile} runtime={mockRuntime} isOpen onClose={mockOnClose} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), { target: { value: "임신 중 약 먹어도 돼?" } });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    expect((await screen.findByText("복용 전 확인이 필요해요")).closest("p")).toHaveClass("medical-answer-summary");
+    expect(screen.getByRole("heading", { name: "확인할 점" })).toBeInTheDocument();
+    expect(screen.getByRole("list")).toHaveTextContent("현재 임신 주수");
+  });
+
   it("이미 수행한 운동 정보가 명확하면 확인 카드 없이 즉시 저장한다", async () => {
     vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_exercise",

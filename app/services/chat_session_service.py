@@ -11,9 +11,6 @@ from app.integrations.llm.chain import shared_chat_client
 from app.models.chat_sessions import ChatMessageRecord, ChatSession
 from app.models.service_accounts import ServiceAccount
 from app.repositories.chat_session_repository import ChatSessionRepository
-from app.integrations.llm.chain import shared_chat_client
-from app.dtos.health_assistant import ChatMessage
-from pydantic import BaseModel
 
 
 def get_chat_session_repository(session: SessionDep) -> ChatSessionRepository:
@@ -128,11 +125,11 @@ class ChatSessionService:
         messages_obj = await self.chat_session_repo.list_messages(session_obj.id, limit=10)
         if not messages_obj:
             return
-            
+
 
         recent_text = "\n".join([f"{m.role}: {m.content}" for m in messages_obj])
         existing_memory = session_obj.core_memory or "없음"
-        
+
 
         prompt = f"""
 당신은 건강 어시스턴트의 장기 기억 요약기입니다.

@@ -88,6 +88,8 @@ function AssistantMessageText({ content, highlightSupplementNotice }: {
   const notice = match?.[1];
   const body = notice ? content.slice(match[0].length) : content;
 
+  const paragraphs = body.split("\n\n").map((paragraph) => paragraph.trim()).filter(Boolean);
+
   return <>
     {notice && (
       <aside className="supplement-consultation-notice" role="note">
@@ -95,7 +97,22 @@ function AssistantMessageText({ content, highlightSupplementNotice }: {
         <p>{notice}</p>
       </aside>
     )}
-    {body.split("\n\n").filter(Boolean).map((para, i) => <p key={i}>{para}</p>)}
+    {paragraphs.map((paragraph, index) => {
+      const lines = paragraph.split("\n").map((line) => line.trim()).filter(Boolean);
+      const summary = lines.length === 1 ? lines[0].match(/^핵심:\s*(.+)$/) : null;
+      const bullets = lines.slice(1).filter((line) => line.startsWith("- "));
+
+      if (summary) {
+        return <p className="medical-answer-summary" key={index}><strong>{summary[1]}</strong></p>;
+      }
+      if (lines.length > 1 && bullets.length === lines.length - 1) {
+        return <section className="medical-answer-section" key={index}>
+          <h4>{lines[0].replace(/[:：]$/, "")}</h4>
+          <ul>{bullets.map((bullet, bulletIndex) => <li key={bulletIndex}>{bullet.slice(2)}</li>)}</ul>
+        </section>;
+      }
+      return <p key={index}>{lines.join(" ")}</p>;
+    })}
   </>;
 }
 

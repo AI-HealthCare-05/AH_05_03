@@ -468,6 +468,10 @@ def bounds_conflict(target: str, value: float) -> str | None:
     return None
 
 
+#: 모듈 안의 기존 호출부가 쓰는 이름. 공개 이름 하나만 두면 되지만, 이 파일 안에서
+#: `_` 접두사로 부르던 자리를 전부 고치면 diff 가 관문 로직과 섞인다.
+bounds_conflict = bounds_conflict
+
 
 def _read_value(raw_value: str) -> tuple[float | None, str | None]:
     """결과값 칸을 읽는다. `(값, 사유)` — 사유가 있으면 값은 쓰지 않는다."""
