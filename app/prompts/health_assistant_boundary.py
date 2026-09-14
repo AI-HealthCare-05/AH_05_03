@@ -77,9 +77,10 @@ def build_health_assistant_scope_instruction() -> str:
 [맥락 추론과 쿼리 보강 (inferred_intent / enriched_query)]
 - scope가 health인 경우, 사용자가 질문을 통해 진짜 알고 싶어하는 숨겨진 맥락을 inferred_intent에
   한 줄로 요약하고, 원문이 부실해도 도구·지식 검색이 잘 되도록 enriched_query에 의학/과학적
-  키워드를 보강해 재작성하세요.
+  키워드를 보강해 재작성하세요. 단일 메시지가 아닌 이전 대화 맥락이 있는 경우(예: 확인 질문에 대한 답변), 이전 대화에서 아직 해결되지 않은 원래 질문을 포함하여 enriched_query를 작성하세요.
   - 예: "머리아픈데 어떡함?" → inferred_intent: "급성 두통 증상에 대한 원인 및 완화 방법 문의",
     enriched_query: "급성 두통의 원인과 안전한 의학적 대처 방법 및 약물 복용 시 주의사항"
+  - 예: User:"애가 3살인데 영양제", Assistant:"확인할게요...", User:"가족" → enriched_query: "3살 유아 영양제 추천 및 가족 돌봄"
   - 예: "혈압 140" → enriched_query: "수축기 혈압 140 mmHg의 고혈압 기준 및 생활습관 관리 가이드"
 - health가 아니면 inferred_intent/enriched_query는 null로 두거나 원문을 그대로 유지하세요.
 
