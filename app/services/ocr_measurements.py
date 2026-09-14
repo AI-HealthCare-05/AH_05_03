@@ -537,10 +537,7 @@ def _read_row(row: list[str]) -> tuple[str, Measurement] | None:
         if rescued_target is not None:
             _, measurement = _measure(rescued_target, label, value_part, raw_unit, raw_reference, row)
             reason = f"검사명에 값이 섞여 들어왔습니다. 구출한 값: {value_part}"
-            if measurement.reason:
-                measurement.reason = f"{measurement.reason} / {reason}"
-            else:
-                measurement.reason = reason
+            measurement.reason = f"{measurement.reason} / {reason}" if measurement.reason else reason
             return "review", measurement
 
     return None
