@@ -77,6 +77,28 @@ import "./healthAssistantDrawer.css";
 function messageId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+const SUPPLEMENT_CONSULTATION_NOTICE = /^(영양제 섭취는[^.]*?(?:권장드립니다|권장합니다)\.)\s*/;
+
+function AssistantMessageText({ content, highlightSupplementNotice }: {
+  content: string;
+  highlightSupplementNotice: boolean;
+}) {
+  const match = highlightSupplementNotice ? content.match(SUPPLEMENT_CONSULTATION_NOTICE) : null;
+  const notice = match?.[1];
+  const body = notice ? content.slice(match[0].length) : content;
+
+  return <>
+    {notice && (
+      <aside className="supplement-consultation-notice" role="note">
+        <strong>복용 전 의료진 확인</strong>
+        <p>{notice}</p>
+      </aside>
+    )}
+    {body.split("\n\n").filter(Boolean).map((para, i) => <p key={i}>{para}</p>)}
+  </>;
+}
+
 async function getBrowserLocation(): Promise<{
   location: UserLocation | null;
   permissionDenied: boolean;
@@ -2138,9 +2160,7 @@ export function HealthAssistantDrawer({
                     {msg.responseDraft?.medication_search_result ? (
                       <MedicationCard searchResult={msg.responseDraft.medication_search_result}>
                         {msg.content ? (
-                          msg.content.split("\n\n").map((para, i) => (
-                            <p key={i}>{para}</p>
-                          ))
+                          <AssistantMessageText content={msg.content} highlightSupplementNotice={msg.role === "assistant"} />
                         ) : (
                           <div className="loading-dots">
                             <span>.</span><span>.</span><span>.</span>
@@ -2150,9 +2170,7 @@ export function HealthAssistantDrawer({
                     ) : (
                       <>
                         {msg.content ? (
-                          msg.content.split("\n\n").map((para, i) => (
-                            <p key={i}>{para}</p>
-                          ))
+                          <AssistantMessageText content={msg.content} highlightSupplementNotice={msg.role === "assistant"} />
                         ) : (
                           <div className="loading-dots">
                             <span>.</span><span>.</span><span>.</span>
