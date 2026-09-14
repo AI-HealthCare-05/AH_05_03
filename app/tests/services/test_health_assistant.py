@@ -125,6 +125,41 @@ async def test_health_assistant_loads_outdoor_tool_result_for_outdoor_question()
     assert "PM2.5 11㎍/㎥(보통)" in llm_client.system_instruction
 
 
+@pytest.mark.asyncio
+async def test_weather_question_without_location_asks_for_location() -> None:
+    service = HealthAssistantService(
+        llm_client=CapturingLLMClient(),
+        outdoor_conditions_client=OutdoorConditionsStub(),
+    )
+
+    response = await service.respond(
+        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 날씨 어때?")])
+    )
+
+    assert "현재 위치 권한" in response.assistant_message
+    assert "서울 날씨" in response.assistant_message
+    assert response.missing_fields == ["user_location"]
+
+
+@pytest.mark.asyncio
+async def test_streaming_weather_question_without_location_asks_for_location() -> None:
+    service = HealthAssistantService(
+        llm_client=CapturingLLMClient(),
+        outdoor_conditions_client=OutdoorConditionsStub(),
+    )
+
+    events = [
+        event
+        async for event in service.stream(
+            HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 날씨 어때?")])
+        )
+    ]
+
+    assert [event_type for event_type, _ in events] == ["delta", "result"]
+    assert "현재 위치 권한" in events[0][1]["text"]
+    assert events[1][1]["missing_fields"] == ["user_location"]
+
+
 def test_health_assistant_routes_aerobic_recommendation_to_outdoor_tool() -> None:
     request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 유산소 할 건데 추천 좀")])
 

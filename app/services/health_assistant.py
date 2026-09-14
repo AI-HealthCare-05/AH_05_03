@@ -953,6 +953,18 @@ class HealthAssistantService:
         )
 
     @staticmethod
+    def _outdoor_location_required_response() -> HealthAssistantResponse:
+        return HealthAssistantResponse(
+            intent="health_advice",
+            assistant_message=(
+                "오늘 날씨와 대기질을 확인하려면 현재 위치 권한을 허용하거나 "
+                "지역명을 알려주세요. 예를 들어 '서울 날씨'처럼 말씀해 주세요."
+            ),
+            missing_fields=["user_location"],
+            needs_confirmation=False,
+        )
+
+    @staticmethod
     def _clear_unstated_pain_intensity(
         response: HealthAssistantResponse,
         request: HealthAssistantChatRequest,
@@ -1032,6 +1044,8 @@ class HealthAssistantService:
             profile_context=profile_context,
         )
         loc = await self._resolve_request_location(request)
+        if self._needs_outdoor_conditions(request) and loc is None:
+            return self._outdoor_location_required_response()
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
             profile_context,
@@ -1186,6 +1200,11 @@ class HealthAssistantService:
             profile_context=profile_context,
         )
         loc = await self._resolve_request_location(request)
+        if self._needs_outdoor_conditions(request) and loc is None:
+            response = self._outdoor_location_required_response()
+            yield "delta", {"text": response.assistant_message}
+            yield "result", response.model_dump(mode="json")
+            return
         outdoor_conditions = await self._load_outdoor_conditions(request, loc)
         system_instruction = build_system_instruction(
             profile_context,
