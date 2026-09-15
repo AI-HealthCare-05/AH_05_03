@@ -509,9 +509,9 @@ class HealthAssistantService:
         return False
 
     async def _resolve_request_location(
-        self, request: HealthAssistantChatRequest, needs_outdoor: bool
+        self, request: HealthAssistantChatRequest, needs_outdoor: bool, client_ip: str | None = None
     ) -> UserLocation | None:
-        """동의된 좌표를 우선하고, 야외 질문의 사용자 장소명만 보조적으로 좌표화한다."""
+        """동의된 좌표를 우선하고, 야외 질문의 사용자 장소명만 보조적으로 좌표화한다. 둘 다 없으면 IP 기반으로 추정한다."""
         loc = request.location
         if loc is not None:
             return loc
@@ -533,6 +533,26 @@ class HealthAssistantService:
                 if resolved_place:
                     lat, lon, address = resolved_place
                     return UserLocation(latitude=lat, longitude=lon, address=address)
+                    
+        # IP Fallback
+        if client_ip:
+            if client_ip in ("127.0.0.1", "::1", "localhost", "testclient"):
+                return UserLocation(latitude=37.5665, longitude=126.9780, address="서울특별시") # 로컬 개발용 폴백 (서울)
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=2.0) as client:
+                    resp = await client.get(f"http://ip-api.com/json/{client_ip}?lang=ko")
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if data.get("status") == "success":
+                            return UserLocation(
+                                latitude=data["lat"],
+                                longitude=data["lon"],
+                                address=data.get("city", data.get("regionName", "알 수 없는 지역"))
+                            )
+            except Exception:
+                pass
+                
         return None
 
     async def _load_outdoor_conditions(self, loc: UserLocation | None):
@@ -996,6 +1016,7 @@ class HealthAssistantService:
         self,
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None = None,
+        client_ip: str | None = None,
     ) -> HealthAssistantResponse:
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
@@ -1031,7 +1052,7 @@ class HealthAssistantService:
             profile_context=profile_context,
         )
         needs_outdoor = "outdoor" in boundary.decision.required_evidence_types
-        loc = await self._resolve_request_location(request, needs_outdoor)
+        loc = await self._resolve_request_location(request, needs_outdoor, client_ip)
         if needs_outdoor and loc is None:
             return self._outdoor_location_required_response()
         outdoor_conditions = await self._load_outdoor_conditions(loc)
@@ -1149,6 +1170,7 @@ class HealthAssistantService:
         self,
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None = None,
+        client_ip: str | None = None,
     ) -> AsyncIterator[tuple[str, Any]]:
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
@@ -1191,7 +1213,7 @@ class HealthAssistantService:
             profile_context=profile_context,
         )
         needs_outdoor = "outdoor" in boundary.decision.required_evidence_types
-        loc = await self._resolve_request_location(request, needs_outdoor)
+        loc = await self._resolve_request_location(request, needs_outdoor, client_ip)
         if needs_outdoor and loc is None:
             response = self._outdoor_location_required_response()
             yield "delta", {"text": response.assistant_message}
