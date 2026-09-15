@@ -80,12 +80,7 @@ def test_hard_rule_filter_profanity_blocked() -> None:
     assert "비속어" in reason
 
 
-def test_hard_rule_filter_too_short_or_meaningless_blocked() -> None:
-    # 2자 미만
-    passed, reason = hard_rule_filter("아")
-    assert passed is False
-    assert "너무 짧습니다" in str(reason)
-
+def test_hard_rule_filter_meaningless_blocked() -> None:
     # 단순 자모음 나열
     passed_jamo, reason_jamo = hard_rule_filter("ㅋㅋㅋㅋ")
     assert passed_jamo is False

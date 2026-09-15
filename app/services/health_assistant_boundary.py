@@ -150,10 +150,7 @@ def hard_rule_filter(user_input: str) -> tuple[bool, str | None]:
     if PROFANITY_PATTERN.search(compact):
         return False, "부적절한 비속어 또는 표현이 포함되어 있습니다."
 
-    # 너무 짧은 입력 (공백 제외 2글자 미만)
     stripped = user_input.strip()
-    if len(stripped) < 2:
-        return False, "입력 내용이 너무 짧습니다. 2자 이상의 구체적인 질문을 입력해 주세요."
 
     # 단순 자음/모음만으로 구성된 무의미한 입력 (예: ㅋㅋ, ㅎㅎ, ㅠㅠ, ㅇㅇ)
     if re.fullmatch(r"[ㄱ-ㆎ\s]+", stripped):
