@@ -203,6 +203,25 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     expect(screen.getByRole("list")).toHaveTextContent("현재 임신 주수");
   });
 
+  it("원본을 요청하지 않은 검진 날짜 질문에는 원본을 보라는 문구를 숨긴다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "query_records",
+      assistant_message:
+        "가장 최근에 등록된 검진 기록은 2026년 8월 28일에 실시하신 건강검진입니다. 아래 검진 결과 원본에서 상세한 항목들을 확인해 보세요.",
+      missing_fields: [],
+      needs_confirmation: false,
+      auto_save: false,
+      suggested_quick_replies: [],
+    });
+    render(<HealthAssistantDrawer profile={mockProfile} runtime={mockRuntime} isOpen onClose={mockOnClose} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), { target: { value: "제일 최근에 건강검진 언제했지?" } });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    expect(await screen.findByText(/2026년 8월 28일/)).toBeInTheDocument();
+    expect(screen.queryByText(/아래 검진 결과 원본/)).not.toBeInTheDocument();
+  });
+
   it("이미 수행한 운동 정보가 명확하면 확인 카드 없이 즉시 저장한다", async () => {
     vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_exercise",

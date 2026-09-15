@@ -1243,9 +1243,14 @@ class HealthAssistantService:
             tools,
             tool_executor,
         )
-        tool_result: Any | None = preloaded_results or None
-        if generated_tool_result is not None:
-            tool_result = [*preloaded_results, generated_tool_result]
+        generated_tool_results = (
+            generated_tool_result
+            if isinstance(generated_tool_result, list)
+            else [generated_tool_result]
+            if generated_tool_result is not None
+            else []
+        )
+        tool_result: Any | None = [*preloaded_results, *generated_tool_results] or None
 
         if boundary.decision.requires_authoritative_evidence and not self.boundary_service.has_required_evidence(
             boundary.decision,
@@ -1263,58 +1268,59 @@ class HealthAssistantService:
             yield "result", response.model_dump(mode="json")
             return
 
-        if generated_tool_result is not None:
+        if generated_tool_results:
             from app.dtos.food_nutrition import FoodNutritionSearchResult
             from app.dtos.health_record_query import HealthRecordQueryResult
             from app.dtos.medication import MedicationSearchResult
 
-            payload = (
-                generated_tool_result.model_dump(mode="json")
-                if hasattr(generated_tool_result, "model_dump")
-                else generated_tool_result
-            )
-            if isinstance(generated_tool_result, FoodNutritionSearchResult):
-                yield "food_nutrition", payload
-            elif isinstance(generated_tool_result, HealthRecordQueryResult):
-                yield "delta", {"text": generated_tool_result.message}
-                res_obj = HealthAssistantResponse(
-                    intent="query_records",
-                    assistant_message=generated_tool_result.message,
-                    health_record_query_result=generated_tool_result,
-                    outdoor_conditions=outdoor_conditions,
+            for generated_tool in generated_tool_results:
+                payload = (
+                    generated_tool.model_dump(mode="json")
+                    if hasattr(generated_tool, "model_dump")
+                    else generated_tool
                 )
-                validated = self.safety_service.validate_response(res_obj)
-                validated = self.boundary_service.enforce_grounding(
-                    boundary.decision,
-                    validated,
-                    tool_result=tool_result,
-                    outdoor_conditions=outdoor_conditions,
-                    messages=request.messages,
-                )
-                yield "result", validated.model_dump(mode="json")
-                return
-            elif isinstance(generated_tool_result, MedicationSearchResult):
-                yield "medication", payload
-            else:
-                yield "facility", payload
-                summary_msg = getattr(generated_tool_result, "message", None) or "주변 의료시설을 조회했습니다."
-                yield "delta", {"text": summary_msg}
-                res_obj = HealthAssistantResponse(
-                    intent="search_facility",
-                    assistant_message=summary_msg,
-                    facility_search_draft=generated_tool_result,
-                    outdoor_conditions=outdoor_conditions,
-                )
-                validated = self.safety_service.validate_response(res_obj)
-                validated = self.boundary_service.enforce_grounding(
-                    boundary.decision,
-                    validated,
-                    tool_result=tool_result,
-                    outdoor_conditions=outdoor_conditions,
-                    messages=request.messages,
-                )
-                yield "result", validated.model_dump(mode="json")
-                return
+                if isinstance(generated_tool, FoodNutritionSearchResult):
+                    yield "food_nutrition", payload
+                elif isinstance(generated_tool, HealthRecordQueryResult):
+                    yield "delta", {"text": generated_tool.message}
+                    res_obj = HealthAssistantResponse(
+                        intent="query_records",
+                        assistant_message=generated_tool.message,
+                        health_record_query_result=generated_tool,
+                        outdoor_conditions=outdoor_conditions,
+                    )
+                    validated = self.safety_service.validate_response(res_obj)
+                    validated = self.boundary_service.enforce_grounding(
+                        boundary.decision,
+                        validated,
+                        tool_result=tool_result,
+                        outdoor_conditions=outdoor_conditions,
+                        messages=request.messages,
+                    )
+                    yield "result", validated.model_dump(mode="json")
+                    return
+                elif isinstance(generated_tool, MedicationSearchResult):
+                    yield "medication", payload
+                else:
+                    yield "facility", payload
+                    summary_msg = getattr(generated_tool, "message", None) or "주변 의료시설을 조회했습니다."
+                    yield "delta", {"text": summary_msg}
+                    res_obj = HealthAssistantResponse(
+                        intent="search_facility",
+                        assistant_message=summary_msg,
+                        facility_search_draft=generated_tool,
+                        outdoor_conditions=outdoor_conditions,
+                    )
+                    validated = self.safety_service.validate_response(res_obj)
+                    validated = self.boundary_service.enforce_grounding(
+                        boundary.decision,
+                        validated,
+                        tool_result=tool_result,
+                        outdoor_conditions=outdoor_conditions,
+                        messages=request.messages,
+                    )
+                    yield "result", validated.model_dump(mode="json")
+                    return
 
         async for piece in stream_gen:
             raw += piece

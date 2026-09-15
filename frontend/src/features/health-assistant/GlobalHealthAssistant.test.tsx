@@ -94,8 +94,8 @@ describe("GlobalHealthAssistant (채널톡 스타일 전역 연속형 건강 비
     expect(screen.getAllByText(/통증 다이어리/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/가족 대표/)).toBeInTheDocument();
 
-    // 닫기 동작
-    const closeBtn = screen.getByRole("button", { name: /창닫기/i });
+    // 런처가 X로 바뀐 뒤에도 직접 닫을 수 있다.
+    const closeBtn = screen.getByRole("button", { name: /건강 비서 닫기/i });
     await user.click(closeBtn);
     expect(screen.queryByTestId("mock-health-assistant")).not.toBeInTheDocument();
   });

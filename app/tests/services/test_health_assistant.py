@@ -1,3 +1,4 @@
+import json
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
@@ -800,7 +801,8 @@ async def test_medication_tool_stream_preserves_llm_answer() -> None:
             required_evidence_types=["medication"],
         )
     )
-    mock_llm.stream_structured_response_with_tools = AsyncMock(return_value=(fake_chunks(), mock_med_result))
+    # 실제 Gemini 클라이언트는 도구를 하나만 실행해도 결과를 리스트로 반환한다.
+    mock_llm.stream_structured_response_with_tools = AsyncMock(return_value=(fake_chunks(), [mock_med_result]))
 
     service = HealthAssistantService(llm_client=mock_llm)
     req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="타이레놀이랑 피임약 같이먹어도돼?")])
@@ -813,6 +815,9 @@ async def test_medication_tool_stream_preserves_llm_answer() -> None:
     assert "medication" in event_types
     assert "delta" in event_types
     assert "result" in event_types
+    # SSE 라우터가 json.dumps(payload) 하므로, 모든 이벤트가 실제 전송 가능한 JSON이어야 한다.
+    for _, payload in events:
+        json.dumps(payload, ensure_ascii=False)
 
     # final result 객체에 medication_search_result가 포함되어 있고 assistant_message는 LLM 답변임
     result_event = next(e[1] for e in events if e[0] == "result")

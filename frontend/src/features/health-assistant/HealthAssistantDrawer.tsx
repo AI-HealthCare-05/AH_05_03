@@ -80,6 +80,18 @@ function messageId(prefix: string): string {
 }
 
 const SUPPLEMENT_CONSULTATION_NOTICE = /^(영양제 섭취는[^.]*?(?:권장드립니다|권장합니다)\.)\s*/;
+const ORIGINAL_DOCUMENT_REQUEST_PATTERN = /(?:원본|서류|사진|스캔|문서|이미지)/;
+const UNREQUESTED_DOCUMENT_REFERENCE_PATTERN =
+  /\s*아래\s+(?:검진\s*결과\s*)?원본(?:\s*서류)?(?:에서|을)?[^.]*?(?:확인해\s*보세요|확인하세요)\.?/g;
+
+function requestsOriginalDocument(text: string): boolean {
+  return ORIGINAL_DOCUMENT_REQUEST_PATTERN.test(text);
+}
+
+function removeUnrequestedDocumentReference(message: string, userQuery: string): string {
+  if (requestsOriginalDocument(userQuery)) return message;
+  return message.replace(UNREQUESTED_DOCUMENT_REFERENCE_PATTERN, "").trim();
+}
 
 function AssistantMessageText({ content, highlightSupplementNotice }: {
   content: string;
@@ -1048,6 +1060,7 @@ export function HealthAssistantDrawer({
       if (streamedFacility && !res.facility_search_draft) {
         res.facility_search_draft = streamedFacility;
       }
+      res.assistant_message = removeUnrequestedDocumentReference(res.assistant_message, textToSend);
 
 
       // OCR에서 추출된 날짜가 있고 AI가 날짜를 채우지 않았거나 오늘로 채운 경우 보정
@@ -1190,8 +1203,7 @@ export function HealthAssistantDrawer({
 
       // 조회 질의이거나 질문인 경우 IndexedDB에서 데이터 조회 수행
       const isExplicitDocRequest =
-        /(?:원본|서류|사진|스캔|문서|이미지)/.test(textToSend) ||
-        /(?:원본|서류|서류함).*(?:확인|보여|아래)/.test(res.assistant_message);
+        requestsOriginalDocument(textToSend) || res.query_draft?.keyword === "원본";
       const isTrendRequest =
         /(?:그래프|변화\s*추이|추이|트렌드)/.test(textToSend) ||
         /(?:검진|측정|수치).*(?:변화|추이|그래프)/.test(textToSend) ||
