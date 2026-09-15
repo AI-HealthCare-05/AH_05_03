@@ -321,8 +321,6 @@ class HealthAssistantBoundaryService:
                 scope="health",
                 requires_authoritative_evidence=False,
                 required_evidence_types=[],
-                response_mode="clarify",
-                clarification_kind="pain_record_context",
             )
 
         # 건강기록 단순 조회 / 차트 조회 (의학적 권고/원인/치료 문의가 아닌 단순 기록 열람)
