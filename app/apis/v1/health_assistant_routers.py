@@ -8,7 +8,7 @@
 
 import json
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -87,12 +87,17 @@ async def _inject_24h_memory(
         content=request.messages[-1].content,
     )
 
-    since_24h = datetime.now(UTC) - timedelta(hours=24)
+    since_24h = datetime.now(timezone.utc) - timedelta(hours=24)
     db_msgs = await chat_session_service.list_messages(
         account=account, session_id=request.session_id, limit=100, since=since_24h
     )
     if db_msgs:
-        request.messages = [ChatMessage(role=m.role, content=m.content) for m in db_msgs]
+        # DB 의 `role` 은 `String(20)` 이라 DTO 의 Literal 로 그냥 넘어가지 않는다.
+        # `cast` 로 덮으면 예상 밖의 값이 그대로 통과해 `gemini.py` 에서 조용히 틀리므로
+        # 실제로 좁힌다.
+        request.messages = [
+            ChatMessage(role="assistant" if m.role == "assistant" else "user", content=m.content) for m in db_msgs
+        ]
 
 
 @health_assistant_router.post(
