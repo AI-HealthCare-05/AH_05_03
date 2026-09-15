@@ -7,10 +7,8 @@
 """
 
 import json
-from datetime import datetime, timedelta, UTC
-from app.dtos.health_assistant import ChatMessage
-
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -23,6 +21,7 @@ from app.dependencies.security import require_active_account
 from app.dependencies.services import get_rate_limiter
 from app.dtos.envelope import ApiResponse, error_responses
 from app.dtos.health_assistant import (
+    ChatMessage,
     HealthAssistantChatRequest,
     HealthAssistantResponse,
 )
@@ -70,6 +69,32 @@ def get_health_assistant_service(
     )
 
 
+async def _inject_24h_memory(
+    request: HealthAssistantChatRequest,
+    account: ServiceAccount,
+    chat_session_service: ChatSessionService,
+) -> None:
+    if request.session_id is None:
+        return
+    session_obj = await chat_session_service.get_session(account, request.session_id)
+    request.core_memory = session_obj.core_memory
+    if request.profile_context and not request.profile_context.profile_id:
+        request.profile_context.profile_id = session_obj.profile_id
+    await chat_session_service.add_message(
+        account=account,
+        session_id=request.session_id,
+        role="user",
+        content=request.messages[-1].content,
+    )
+
+    since_24h = datetime.now(UTC) - timedelta(hours=24)
+    db_msgs = await chat_session_service.list_messages(
+        account=account, session_id=request.session_id, limit=100, since=since_24h
+    )
+    if db_msgs:
+        request.messages = [ChatMessage(role=m.role, content=m.content) for m in db_msgs]
+
+
 @health_assistant_router.post(
     "/chat",
     response_model=ApiResponse[HealthAssistantResponse],
@@ -90,30 +115,7 @@ async def chat_with_assistant(
         config.LLM_CHAT_RATE_LIMIT,
         config.LLM_CHAT_RATE_WINDOW_SECONDS,
     )
-    if request.session_id is not None:
-        session_obj = await chat_session_service.get_session(account, request.session_id)
-        request.core_memory = session_obj.core_memory
-        if request.profile_context and not request.profile_context.profile_id:
-            request.profile_context.profile_id = session_obj.profile_id
-        await chat_session_service.add_message(
-            account=account,
-            session_id=request.session_id,
-            role="user",
-            content=request.messages[-1].content,
-        )
-        
-        # 24시간 치 단기 기억 DB 자동 주입
-        since_24h = datetime.now(UTC) - timedelta(hours=24)
-        db_msgs = await chat_session_service.list_messages(
-            account=account,
-            session_id=request.session_id,
-            limit=100,
-            since=since_24h
-        )
-        if db_msgs:
-            request.messages = [
-                ChatMessage(role=m.role, content=m.content) for m in db_msgs
-            ]
+    await _inject_24h_memory(request, account, chat_session_service)
 
     client_ip = fastapi_req.client.host if fastapi_req.client else None
     data = await service.respond(request, account=account, client_ip=client_ip)
@@ -163,30 +165,7 @@ async def stream_chat_with_assistant(
         config.LLM_CHAT_RATE_WINDOW_SECONDS,
     )
 
-    if request.session_id is not None:
-        session_obj = await chat_session_service.get_session(account, request.session_id)
-        request.core_memory = session_obj.core_memory
-        if request.profile_context and not request.profile_context.profile_id:
-            request.profile_context.profile_id = session_obj.profile_id
-        await chat_session_service.add_message(
-            account=account,
-            session_id=request.session_id,
-            role="user",
-            content=request.messages[-1].content,
-        )
-        
-        # 24시간 치 단기 기억 DB 자동 주입
-        since_24h = datetime.now(UTC) - timedelta(hours=24)
-        db_msgs = await chat_session_service.list_messages(
-            account=account,
-            session_id=request.session_id,
-            limit=100,
-            since=since_24h
-        )
-        if db_msgs:
-            request.messages = [
-                ChatMessage(role=m.role, content=m.content) for m in db_msgs
-            ]
+    await _inject_24h_memory(request, account, chat_session_service)
 
     client_ip = fastapi_req.client.host if fastapi_req.client else None
 

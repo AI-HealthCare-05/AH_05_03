@@ -89,12 +89,14 @@ class ChatSessionRepository:
         await self.session.flush()
         return message
 
-    async def list_messages(self, session_id: uuid.UUID, limit: int = 100, since: datetime | None = None) -> list[ChatMessageRecord]:
+    async def list_messages(
+        self, session_id: uuid.UUID, limit: int = 100, since: datetime | None = None
+    ) -> list[ChatMessageRecord]:
         query = select(ChatMessageRecord).where(ChatMessageRecord.session_id == session_id)
         if since:
             query = query.where(ChatMessageRecord.created_at >= since)
         query = query.order_by(ChatMessageRecord.sequence_number.desc()).limit(limit)
-        
+
         result = await self.session.scalars(query)
         # 제한은 최신 N개에 적용하고 반환은 대화의 시간 순서를 유지한다.
-        return list(reversed(list(result)))
+        return list(result)[::-1]
