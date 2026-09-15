@@ -516,7 +516,8 @@ def test_fast_path_detects_service_usage_and_record_without_llm() -> None:
     assert ambiguous is None
 
 
-def test_fast_path_treats_plain_pain_statement_as_a_record_not_medical_advice() -> None:
+@pytest.mark.asyncio
+async def test_fast_path_turns_plain_pain_statement_into_an_immediate_intensity_question() -> None:
     boundary = HealthAssistantBoundaryService()
 
     decision = boundary._fast_path_decision([ChatMessage(role="user", content="나 무릎이랑 발목이 아파")])
@@ -524,6 +525,17 @@ def test_fast_path_treats_plain_pain_statement_as_a_record_not_medical_advice() 
     assert decision is not None
     assert decision.scope == "health"
     assert decision.requires_authoritative_evidence is False
+    assert decision.response_mode == "clarify"
+    assert decision.clarification_kind == "pain_record_context"
+
+    client = ScopeOnlyClient(HealthAssistantScopeDecision(scope="health", requires_authoritative_evidence=True))
+    checked = await boundary.check_request(
+        client,
+        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="나 무릎이랑 발목이 아파")]),
+    )
+    assert checked.response is not None
+    assert "0~10점" in checked.response.assistant_message
+    assert client.calls == 0
 
     advice = boundary._fast_path_decision([ChatMessage(role="user", content="무릎이 아픈 원인이 뭐야?")])
     assert advice is None

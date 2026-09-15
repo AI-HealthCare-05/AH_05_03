@@ -59,6 +59,7 @@ CLARIFICATION_QUESTIONS = {
     "request_goal": "본인의 건강 위험이 궁금하신가요, 아니면 가족을 돌보는 방법이 궁금하신가요?",
     "pregnancy_supplement_context": "현재 임신 주수와 복용하려는 이유, 처방받은 약인지, 복용 중인 약이나 영양제가 있는지 알려주시겠어요?",
     "pregnancy_symptom_context": "현재 임신 주수와 증상이 시작된 시점, 통증 정도, 함께 나타난 증상이 있나요?",
+    "pain_record_context": "통증 기록을 위해 강도를 0~10점 중 몇 점인지 알려주시겠어요?",
     "exercise_safety_context": "현재 증상의 정도와 진단받은 질환 또는 의료진에게 들은 운동 제한이 있나요?",
     "medication_safety_context": "복용하려는 약의 이름과 현재 복용 중인 약, 진단받은 질환이 있나요?",
     "personal_health_context": CLARIFICATION_FALLBACK_QUESTION,
@@ -304,6 +305,8 @@ class HealthAssistantBoundaryService:
                 scope="health",
                 requires_authoritative_evidence=False,
                 required_evidence_types=[],
+                response_mode="clarify",
+                clarification_kind="pain_record_context",
             )
 
         # 건강기록 단순 조회 / 차트 조회 (의학적 권고/원인/치료 문의가 아닌 단순 기록 열람)
