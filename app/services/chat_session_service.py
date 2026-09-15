@@ -86,10 +86,11 @@ class ChatSessionService:
         account: ServiceAccount,
         session_id: uuid.UUID,
         limit: int = 100,
+        since: datetime | None = None,
     ) -> list[ChatMessageRecord]:
         # 세션 소유권 및 삭제 여부 검증
         await self.get_session(account, session_id)
-        return await self.chat_session_repo.list_messages(session_id, limit=limit)
+        return await self.chat_session_repo.list_messages(session_id, limit=limit, since=since)
 
     async def add_message(
         self,

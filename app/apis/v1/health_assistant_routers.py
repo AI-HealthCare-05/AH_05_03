@@ -7,6 +7,9 @@
 """
 
 import json
+from datetime import datetime, timedelta, UTC
+from app.dtos.health_assistant import ChatMessage
+
 from collections.abc import AsyncIterator
 from typing import Annotated, Any
 
@@ -98,6 +101,19 @@ async def chat_with_assistant(
             role="user",
             content=request.messages[-1].content,
         )
+        
+        # 24시간 치 단기 기억 DB 자동 주입
+        since_24h = datetime.now(UTC) - timedelta(hours=24)
+        db_msgs = await chat_session_service.list_messages(
+            account=account,
+            session_id=request.session_id,
+            limit=100,
+            since=since_24h
+        )
+        if db_msgs:
+            request.messages = [
+                ChatMessage(role=m.role, content=m.content) for m in db_msgs
+            ]
 
     client_ip = fastapi_req.client.host if fastapi_req.client else None
     data = await service.respond(request, account=account, client_ip=client_ip)
@@ -158,6 +174,19 @@ async def stream_chat_with_assistant(
             role="user",
             content=request.messages[-1].content,
         )
+        
+        # 24시간 치 단기 기억 DB 자동 주입
+        since_24h = datetime.now(UTC) - timedelta(hours=24)
+        db_msgs = await chat_session_service.list_messages(
+            account=account,
+            session_id=request.session_id,
+            limit=100,
+            since=since_24h
+        )
+        if db_msgs:
+            request.messages = [
+                ChatMessage(role=m.role, content=m.content) for m in db_msgs
+            ]
 
     client_ip = fastapi_req.client.host if fastapi_req.client else None
 
