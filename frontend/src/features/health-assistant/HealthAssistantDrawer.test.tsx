@@ -9,6 +9,7 @@ import {
   extractRegionHint,
   formatTargetDateTime,
   isFacilityQuery,
+  isExerciseCorrection,
   resolveHealthRecordDateTime,
   resolveMedicationTakenAt,
   shouldAutoSaveHealthRecord,
@@ -58,6 +59,9 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     value: [],
   });
 
+  const mockGetRecord = vi.fn();
+  const mockUpdateRecord = vi.fn();
+
   const mockReadDocById = vi.fn().mockResolvedValue({
     ok: true,
     value: { file: new File(["dummy"], "screening_result.png", { type: "image/png" }), fileName: "screening_result.png" },
@@ -72,6 +76,8 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     healthRecords: {
       create: mockCreateRecord,
       query: mockQueryRecords,
+      get: mockGetRecord,
+      update: mockUpdateRecord,
     },
     documents: {
       readById: mockReadDocById,
@@ -156,6 +162,91 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     expect(containsNewMedicationRecord("아스피린 1정 복용완료")).toBe(true);
     expect(containsNewMedicationRecord("나 담배 피워도 돼?")).toBe(false);
     expect(containsNewMedicationRecord("타이레놀 먹어도 돼?")).toBe(false);
+  });
+
+  it("영양제 의료진 상담 문구를 답변 본문과 분리해 강조한다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "health_advice",
+      assistant_message: "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다. 일반적인 영양 정보는 다음과 같습니다.",
+      missing_fields: [],
+      needs_confirmation: false,
+      auto_save: false,
+      suggested_quick_replies: [],
+    });
+    render(<HealthAssistantDrawer profile={mockProfile} runtime={mockRuntime} isOpen onClose={mockOnClose} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), { target: { value: "임신 영양제 알려줘" } });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    const notice = await screen.findByRole("note");
+    expect(notice).toHaveTextContent("복용 전 의료진 확인");
+    expect(notice).toHaveTextContent("영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다.");
+    expect(screen.getByText("일반적인 영양 정보는 다음과 같습니다.")).toBeInTheDocument();
+  });
+
+  it("약 복용 전 상담 문구도 최종 답변에서 경고 카드로 유지한다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "health_advice",
+      assistant_message: "아스피린 복용은 의사 또는 약사와 상담이 필요합니다.\n\n확인할 점\n- 현재 복용 중인 약을 확인하세요.",
+      medication_search_result: {
+        query: "아스피린",
+        items: [],
+        interaction_items: [],
+        has_interaction_danger: false,
+        message: "아스피린 정보",
+        errors: [],
+      },
+      missing_fields: [],
+      needs_confirmation: false,
+      auto_save: false,
+      suggested_quick_replies: [],
+    });
+    render(<HealthAssistantDrawer profile={mockProfile} runtime={mockRuntime} isOpen onClose={mockOnClose} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), { target: { value: "아스피린 먹어도 돼?" } });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    const notice = await screen.findByRole("note");
+    expect(notice).toHaveTextContent("의사·약사 상담 필요");
+    expect(notice).toHaveTextContent("아스피린 복용은 의사 또는 약사와 상담이 필요합니다.");
+  });
+
+  it("의료 답변을 핵심 요약과 짧은 목록으로 표시한다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "health_advice",
+      assistant_message: "핵심: 복용 전 확인이 필요해요\n\n확인할 점\n- 현재 임신 주수\n- 처방받은 약인지 여부",
+      missing_fields: [],
+      needs_confirmation: false,
+      auto_save: false,
+      suggested_quick_replies: [],
+    });
+    render(<HealthAssistantDrawer profile={mockProfile} runtime={mockRuntime} isOpen onClose={mockOnClose} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), { target: { value: "임신 중 약 먹어도 돼?" } });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    expect((await screen.findByText("복용 전 확인이 필요해요")).closest("p")).toHaveClass("medical-answer-summary");
+    expect(screen.getByRole("heading", { name: "확인할 점" })).toBeInTheDocument();
+    expect(screen.getByRole("list")).toHaveTextContent("현재 임신 주수");
+  });
+
+  it("원본을 요청하지 않은 검진 날짜 질문에는 원본을 보라는 문구를 숨긴다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "query_records",
+      assistant_message:
+        "가장 최근에 등록된 검진 기록은 2026년 8월 28일에 실시하신 건강검진입니다. 아래 검진 결과 원본에서 상세한 항목들을 확인해 보세요.",
+      missing_fields: [],
+      needs_confirmation: false,
+      auto_save: false,
+      suggested_quick_replies: [],
+    });
+    render(<HealthAssistantDrawer profile={mockProfile} runtime={mockRuntime} isOpen onClose={mockOnClose} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), { target: { value: "제일 최근에 건강검진 언제했지?" } });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    expect(await screen.findByText(/2026년 8월 28일/)).toBeInTheDocument();
+    expect(screen.queryByText(/아래 검진 결과 원본/)).not.toBeInTheDocument();
   });
 
   it("이미 수행한 운동 정보가 명확하면 확인 카드 없이 즉시 저장한다", async () => {
@@ -546,6 +637,53 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     });
   });
 
+  it("사용자가 통증 강도를 말하지 않으면 임의 값으로 저장하지 않고 직접 선택하게 한다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "record_pain",
+      assistant_message: "머리 통증 강도를 선택해 주세요.",
+      pain_draft: {
+        body_area: "머리",
+        intensity: null,
+        sensation: "깨질 듯함",
+      },
+      missing_fields: [],
+      needs_confirmation: true,
+      auto_save: false,
+      suggested_quick_replies: [],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={mockProfile}
+        runtime={mockRuntime}
+        isOpen={true}
+        onClose={mockOnClose}
+        onRecordSaved={mockOnRecordSaved}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+    fireEvent.change(input, { target: { value: "머리가 깨질 것 같아" } });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    const saveButton = await screen.findByRole("button", { name: "통증 기록에 저장하기" });
+    expect(saveButton).toBeDisabled();
+    expect(mockCreateRecord).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("통증 강도"), { target: { value: "7" } });
+    expect(saveButton).toBeEnabled();
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordType: "pain",
+          payload: expect.objectContaining({ intensity: 7 }),
+        }),
+      );
+    });
+  });
+
   it("통증일기 대화 시 format_pain_diary 툴콜링 카드가 표시되고 다이어리에 저장할 수 있다", async () => {
     vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_pain",
@@ -607,6 +745,48 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
         }),
       );
       expect(mockOnRecordSaved).toHaveBeenCalled();
+    });
+  });
+
+  it("통증일기 날짜 단서가 없으면 모델이 지어낸 날짜 대신 오늘 날짜를 쓴다", async () => {
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+      now.getDate(),
+    ).padStart(2, "0")}`;
+
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "record_pain",
+      assistant_message: "통증 일기를 정리했습니다.",
+      pain_diary_tool: {
+        tool_name: "format_pain_diary",
+        // 사용자 메시지에 날짜 단서가 전혀 없는데도 모델이 지어낸 값 — 오늘로 바뀌어야 한다.
+        date_str: "2020-01-01",
+        body_area: "왼쪽 무릎",
+        intensity: 4,
+        sensation: "뻐근함",
+        formatted_diary: "왼쪽 무릎에 뻐근한 통증이 있음.",
+      },
+      missing_fields: [],
+      needs_confirmation: true,
+      suggested_quick_replies: [],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={mockProfile}
+        runtime={mockRuntime}
+        isOpen={true}
+        onClose={mockOnClose}
+        onRecordSaved={mockOnRecordSaved}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+    fireEvent.change(input, { target: { value: "왼쪽 무릎이 계속 뻐근해서 다이어리에 남기고 싶어" } });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/기록 날짜/)).toHaveValue(todayStr);
     });
   });
 
@@ -1184,6 +1364,12 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
   });
 
   describe("운동 시간 및 수행 일시 기록", () => {
+    it("명시적인 운동 정정 표현만 구분한다", () => {
+      expect(isExerciseCorrection("아니다 5세트 함")).toBe(true);
+      expect(isExerciseCorrection("5세트로 수정할게")).toBe(true);
+      expect(isExerciseCorrection("오늘도 5세트 함")).toBe(false);
+    });
+
     it("운동 시간과 수행 일시가 포함된 완료 기록을 즉시 저장한다", async () => {
       vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
         intent: "record_exercise",
@@ -1279,9 +1465,153 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
       });
       expect(screen.queryByText("운동 기록 확인")).not.toBeInTheDocument();
     });
+
+    it("직전에 저장한 운동의 세트 정정은 새 기록 대신 기존 기록을 수정한다", async () => {
+      const existingRecord: HealthRecord = {
+        id: "record-123",
+        householdId: "household-1",
+        profileId: "profile-1",
+        recordType: "exercise",
+        recordedAt: "2026-09-14T05:17:00.000Z",
+        source: "local_ai",
+        sourceDocumentId: null,
+        payload: {
+          type: "exercise",
+          exerciseName: "랫풀다운",
+          weightKg: 20,
+          reps: 10,
+          sets: 3,
+          note: "랫풀다운 (20kg · 10회 · 3세트)",
+        },
+        version: 1,
+        createdAt: "2026-09-14T05:17:00.000Z",
+        updatedAt: "2026-09-14T05:17:00.000Z",
+        deletedAt: null,
+      };
+      mockGetRecord.mockResolvedValueOnce({ ok: true, value: existingRecord });
+      mockUpdateRecord.mockResolvedValueOnce({
+        ok: true,
+        value: { ...existingRecord, payload: { ...existingRecord.payload, sets: 5 }, version: 2 },
+      });
+      vi.spyOn(clientModule, "streamHealthAssistantMessage")
+        .mockResolvedValueOnce({
+          intent: "record_exercise",
+          assistant_message: "운동을 기록했습니다.",
+          exercise_draft: { exercise_name: "랫풀다운", weight_kg: 20, reps: 10, sets: 3 },
+          auto_save: true,
+          missing_fields: [],
+          needs_confirmation: false,
+          suggested_quick_replies: [],
+        })
+        .mockResolvedValueOnce({
+          intent: "record_exercise",
+          assistant_message: "운동 기록을 수정했습니다.",
+          exercise_draft: { exercise_name: "랫풀다운", sets: 5 },
+          auto_save: true,
+          missing_fields: [],
+          needs_confirmation: false,
+          suggested_quick_replies: [],
+        });
+
+      render(
+        <HealthAssistantDrawer
+          profile={mockProfile}
+          runtime={mockRuntime}
+          isOpen={true}
+          onClose={mockOnClose}
+          onRecordSaved={mockOnRecordSaved}
+        />,
+      );
+
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+      fireEvent.change(input, { target: { value: "랫풀다운 20kg 10회 3세트 함" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+      await waitFor(() => expect(mockCreateRecord).toHaveBeenCalledTimes(1));
+
+      fireEvent.change(input, { target: { value: "아니다 5세트 함" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      await waitFor(() => {
+        expect(mockUpdateRecord).toHaveBeenCalledWith(
+          "record-123",
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              exerciseName: "랫풀다운",
+              weightKg: 20,
+              reps: 10,
+              sets: 5,
+            }),
+          }),
+        );
+      });
+      expect(mockCreateRecord).toHaveBeenCalledTimes(1);
+      expect(await screen.findByText(/5세트.*수정했습니다/)).toBeInTheDocument();
+    });
+
+    it("다른 가족 프로필의 최근 운동 기록을 정정 대상으로 쓰지 않는다", async () => {
+      const otherProfile = { ...mockProfile, id: "profile-2", displayName: "가족" };
+      sessionStorage.setItem("lastSavedExerciseId:profile-1", "record-for-profile-1");
+      vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+        intent: "record_exercise",
+        assistant_message: "운동 기록을 수정했습니다.",
+        exercise_draft: { exercise_name: "랫풀다운", sets: 5 },
+        auto_save: true,
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: [],
+      });
+
+      render(<HealthAssistantDrawer profile={otherProfile} runtime={mockRuntime} isOpen={true} onClose={mockOnClose} onRecordSaved={mockOnRecordSaved} />);
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+      fireEvent.change(input, { target: { value: "아니다 5세트 함" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      expect(await screen.findByText(/수정할 운동 기록을 찾지 못했습니다/)).toBeInTheDocument();
+      expect(mockGetRecord).not.toHaveBeenCalled();
+      expect(mockUpdateRecord).not.toHaveBeenCalled();
+    });
   });
 
   describe("검진 수치 변화 그래프 및 원본 서류 분리 노출", () => {
+    it("원본 서류를 찾지 못하면 보관 정책이 아니라 조회 실패를 안내한다", async () => {
+      const serverRuntime = {
+        healthRecords: {
+          create: vi.fn(),
+          query: vi.fn().mockResolvedValue({
+            ok: true,
+            value: [{
+              id: "screening-without-file",
+              profileId: "profile-1",
+              recordType: "health_screening",
+              recordedAt: "2026-09-14T09:00:00Z",
+              source: "ocr",
+              sourceDocumentId: null,
+              payload: { screeningName: "건강검진", note: "공복혈당 100" },
+            }],
+          }),
+        },
+        documents: undefined,
+      } as unknown as LocalDomainRuntime;
+      vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+        intent: "query_records",
+        assistant_message: "최근 건강검진 원본을 조회합니다.",
+        query_draft: { record_type: "health_screening", time_range: "recent", keyword: "원본" },
+        missing_fields: [],
+        needs_confirmation: false,
+        suggested_quick_replies: [],
+      });
+
+      render(
+        <HealthAssistantDrawer profile={mockProfile} runtime={serverRuntime} isOpen onClose={mockOnClose} />,
+      );
+      const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
+      fireEvent.change(input, { target: { value: "최근 건강검진 결과 원본 보여줘" } });
+      fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+      expect(await screen.findByText(/이 기기의 원본 서류 보관함에서 해당 검진표를 찾지 못했습니다/)).toBeInTheDocument();
+      expect(screen.queryByText(/먼저 검진표 이미지를 업로드하고 저장/)).not.toBeInTheDocument();
+    });
+
     it("'검진수치변화그래프' 질의 시 원본 사진 없이 수치 변화 그래프 카드만 단독 노출된다", async () => {
       const runtimeWithDoc = {
         healthRecords: {
@@ -2337,4 +2667,3 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     });
   });
 });
-

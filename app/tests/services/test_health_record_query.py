@@ -194,3 +194,58 @@ async def test_query_rejects_profile_outside_authenticated_household(db_session:
             _query(),
             now=datetime(2026, 9, 8, 12, 0, tzinfo=_SEOUL),
         )
+
+
+@pytest.mark.asyncio
+async def test_alcohol_snapshot_collects_latest_bp_liver_exercise_and_medication(
+    db_session: AsyncSession,
+) -> None:
+    owner, _, profile, service = await _setup_profile(db_session)
+    db_session.add_all(
+        [
+            HealthRecord(
+                profile_id=profile.id,
+                record_type="blood_pressure",
+                recorded_at=datetime(2026, 9, 10, 0, 0, tzinfo=timezone.utc),
+                payload={"systolicMmHg": 138, "diastolicMmHg": 88},
+            ),
+            HealthRecord(
+                profile_id=profile.id,
+                record_type="health_screening",
+                recorded_at=datetime(2026, 9, 1, 0, 0, tzinfo=timezone.utc),
+                payload={
+                    "items": [
+                        {"testName": "AST(SGOT)", "value": "41", "unit": "U/L", "judgment": ""},
+                        {"testName": "ALT(SGPT)", "value": "52", "unit": "U/L", "judgment": ""},
+                        {"testName": "감마지티피", "value": "83", "unit": "IU/L", "judgment": ""},
+                    ]
+                },
+            ),
+            HealthRecord(
+                profile_id=profile.id,
+                record_type="exercise",
+                recorded_at=datetime(2026, 9, 10, 1, 0, tzinfo=timezone.utc),
+                payload={"exerciseName": "랫풀다운", "durationMinutes": 40, "weightKg": 20},
+            ),
+            HealthRecord(
+                profile_id=profile.id,
+                record_type="medication",
+                recorded_at=datetime(2026, 9, 9, 12, 0, tzinfo=timezone.utc),
+                payload={"medicationName": "타이레놀", "dosage": "1알"},
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    result = await service.get_alcohol_consultation_snapshot(
+        owner,
+        profile.id,
+        now=datetime(2026, 9, 10, 12, 0, tzinfo=_SEOUL),
+    )
+
+    assert result.blood_pressure is not None
+    assert result.blood_pressure.systolic == 138
+    assert {item.metric: item.value for item in result.liver_tests} == {"ast": 41, "alt": 52, "ggt": 83}
+    assert result.today_activities[0].activity == "랫풀다운"
+    assert result.recent_medications[0].name == "타이레놀"
+    assert result.missing_sections == []

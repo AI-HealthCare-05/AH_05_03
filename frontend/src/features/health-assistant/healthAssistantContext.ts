@@ -10,7 +10,6 @@ export function selectContextRecordTypes(message: string): HealthRecordType[] {
   const selected = new Set<HealthRecordType>();
   const looksLikeAdvice =
     /(괜찮|도\s*돼|도\s*됨|먹어도|마셔도|피워도|피해야|주의|위험|문제|추천|어떻게\s*해야)/.test(normalized);
-
   if (!looksLikeAdvice) return [];
   if (/(술|음주|알코올|약|복용|타이레놀|진통제|항생제)/.test(normalized)) selected.add("medication");
   if (/(혈압|맥박)/.test(normalized)) selected.add("blood_pressure");
@@ -19,6 +18,10 @@ export function selectContextRecordTypes(message: string): HealthRecordType[] {
   if (/(운동|헬스|달리|걷기)/.test(normalized)) {
     selected.add("exercise");
     selected.add("walking");
+  }
+  if (/(간수치|간기능|ast|alt|ggt|콜레스테롤|검진|결과지|피검사|혈액검사|검사결과)/.test(normalized)) {
+    selected.add("health_screening");
+    selected.add("lab_result");
   }
 
   return [...selected];

@@ -8,9 +8,10 @@
 
 import json
 from collections.abc import AsyncIterator
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
 from app.core import config
@@ -20,6 +21,7 @@ from app.dependencies.security import require_active_account
 from app.dependencies.services import get_rate_limiter
 from app.dtos.envelope import ApiResponse, error_responses
 from app.dtos.health_assistant import (
+    ChatMessage,
     HealthAssistantChatRequest,
     HealthAssistantResponse,
 )
@@ -67,6 +69,37 @@ def get_health_assistant_service(
     )
 
 
+async def _inject_24h_memory(
+    request: HealthAssistantChatRequest,
+    account: ServiceAccount,
+    chat_session_service: ChatSessionService,
+) -> None:
+    if request.session_id is None:
+        return
+    session_obj = await chat_session_service.get_session(account, request.session_id)
+    request.core_memory = session_obj.core_memory
+    if request.profile_context and not request.profile_context.profile_id:
+        request.profile_context.profile_id = session_obj.profile_id
+    await chat_session_service.add_message(
+        account=account,
+        session_id=request.session_id,
+        role="user",
+        content=request.messages[-1].content,
+    )
+
+    since_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+    db_msgs = await chat_session_service.list_messages(
+        account=account, session_id=request.session_id, limit=100, since=since_24h
+    )
+    if db_msgs:
+        # DB 의 `role` 은 `String(20)` 이라 DTO 의 Literal 로 그냥 넘어가지 않는다.
+        # `cast` 로 덮으면 예상 밖의 값이 그대로 통과해 `gemini.py` 에서 조용히 틀리므로
+        # 실제로 좁힌다.
+        request.messages = [
+            ChatMessage(role="assistant" if m.role == "assistant" else "user", content=m.content) for m in db_msgs
+        ]
+
+
 @health_assistant_router.post(
     "/chat",
     response_model=ApiResponse[HealthAssistantResponse],
@@ -74,6 +107,7 @@ def get_health_assistant_service(
     summary="통합 건강 어시스턴트(봄이) 자연어 대화 및 기록 초안 추출",
 )
 async def chat_with_assistant(
+    fastapi_req: Request,
     request: HealthAssistantChatRequest,
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
@@ -86,18 +120,10 @@ async def chat_with_assistant(
         config.LLM_CHAT_RATE_LIMIT,
         config.LLM_CHAT_RATE_WINDOW_SECONDS,
     )
-    if request.session_id is not None:
-        session_obj = await chat_session_service.get_session(account, request.session_id)
-        if request.profile_context and not request.profile_context.profile_id:
-            request.profile_context.profile_id = session_obj.profile_id
-        await chat_session_service.add_message(
-            account=account,
-            session_id=request.session_id,
-            role="user",
-            content=request.messages[-1].content,
-        )
+    await _inject_24h_memory(request, account, chat_session_service)
 
-    data = await service.respond(request, account=account)
+    client_ip = fastapi_req.client.host if fastapi_req.client else None
+    data = await service.respond(request, account=account, client_ip=client_ip)
 
     if request.session_id is not None:
         await chat_session_service.add_message(
@@ -117,6 +143,7 @@ async def chat_with_assistant(
     summary="같은 대화를 SSE 로 흘린다 — 글자가 오는 대로 보여 주기 위해",
 )
 async def stream_chat_with_assistant(
+    fastapi_req: Request,
     request: HealthAssistantChatRequest,
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
@@ -143,21 +170,14 @@ async def stream_chat_with_assistant(
         config.LLM_CHAT_RATE_WINDOW_SECONDS,
     )
 
-    if request.session_id is not None:
-        session_obj = await chat_session_service.get_session(account, request.session_id)
-        if request.profile_context and not request.profile_context.profile_id:
-            request.profile_context.profile_id = session_obj.profile_id
-        await chat_session_service.add_message(
-            account=account,
-            session_id=request.session_id,
-            role="user",
-            content=request.messages[-1].content,
-        )
+    await _inject_24h_memory(request, account, chat_session_service)
+
+    client_ip = fastapi_req.client.host if fastapi_req.client else None
 
     async def frames() -> AsyncIterator[str]:
         final_payload: dict[str, Any] | None = None
         try:
-            async for name, payload in service.stream(request, account=account):
+            async for name, payload in service.stream(request, account=account, client_ip=client_ip):
                 if name == "result" and isinstance(payload, dict):
                     final_payload = payload
                 body = json.dumps(payload, ensure_ascii=False)

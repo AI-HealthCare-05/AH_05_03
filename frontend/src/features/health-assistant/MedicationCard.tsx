@@ -6,12 +6,26 @@ interface MedicationCardProps {
   children?: React.ReactNode;
 }
 
+
 export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, children }) => {
   const { items, interaction_items, has_interaction_danger, target_drug_name, query } = searchResult;
-  const [selectedDrugIndex, setSelectedDrugIndex] = useState(0);
-
   const isInteractionQuery = Boolean(target_drug_name || (interaction_items && interaction_items.length > 0));
   const [showDetails, setShowDetails] = useState(!isInteractionQuery && !children);
+
+  const representativeDrug: DrugInfo | undefined = items?.[0];
+
+  const mergedDurItems = React.useMemo(() => {
+    return (items ?? [])
+      .flatMap((drug) => drug.dur_items ?? [])
+      .filter(
+        (item, idx, all) =>
+          all.findIndex(
+            (other) =>
+              other.prohibition_type === item.prohibition_type &&
+              other.ingredient_name === item.ingredient_name,
+          ) === idx,
+      );
+  }, [items]);
 
   if (!isInteractionQuery && (!items || items.length === 0)) {
     return children ? <>{children}</> : null;
@@ -97,86 +111,63 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, ch
             onClick={() => setShowDetails((prev) => !prev)}
             aria-expanded={showDetails}
           >
-            <span>각 약품 상세 정보(효능·용법) {showDetails ? "접기 ▲" : "보기 ▼"}</span>
+            <span>효능·용법 {showDetails ? "▲" : "▼"}</span>
           </button>
           <span className="medication-source-text">출처: 식약처 e약은요 & DUR</span>
         </div>
       )}
 
-      {/* 4. 개별 의약품 기본 정보 탭 및 세부 정보 (접기/펼치기 제어) */}
-      {showDetails && items && items.length > 0 && (
+      {/* 4. 의약품 공통 기준 정보 (접기/펼치기 제어, 개별 상표목록/제조사 광고성 노출 배제) */}
+      {showDetails && representativeDrug && (
         <div className="medication-details-section">
-          {items.length > 1 && (
-            <div className="medication-tabs" role="tablist">
-              {items.map((drug, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  role="tab"
-                  aria-selected={selectedDrugIndex === idx}
-                  className={`medication-tab-btn ${selectedDrugIndex === idx ? "active" : ""}`}
-                  onClick={() => setSelectedDrugIndex(idx)}
-                >
-                  {drug.item_name.split("(")[0].trim()}
-                </button>
-              ))}
+          <div className="medication-info-body">
+            <div className="medication-title-row">
+              <h4 className="medication-item-name">
+                {query ? `${query} 식약처 기준 정보` : "식약처 의약품 기준 정보"}
+              </h4>
+              {representativeDrug.class_name && (
+                <span className="medication-class-name">[{representativeDrug.class_name}]</span>
+              )}
             </div>
-          )}
 
-          {(() => {
-            const currentDrug: DrugInfo = items[selectedDrugIndex] ?? items[0];
-            return (
-              <div className="medication-info-body">
-                <div className="medication-title-row">
-                  <h4 className="medication-item-name">{currentDrug.item_name}</h4>
-                  {currentDrug.entp_name && (
-                    <span className="medication-entp-name">{currentDrug.entp_name}</span>
-                  )}
-                  {currentDrug.class_name && (
-                    <span className="medication-class-name">[{currentDrug.class_name}]</span>
-                  )}
+            <div className="medication-info-fields">
+              {representativeDrug.efcy_qesitm && (
+                <div className="medication-field">
+                  <span className="field-label">효능·효과</span>
+                  <p className="field-content">{representativeDrug.efcy_qesitm}</p>
                 </div>
+              )}
 
-                <div className="medication-info-fields">
-                  {currentDrug.efcy_qesitm && (
-                    <div className="medication-field">
-                      <span className="field-label">효능·효과</span>
-                      <p className="field-content">{currentDrug.efcy_qesitm}</p>
-                    </div>
-                  )}
-
-                  {currentDrug.use_method_qesitm && (
-                    <div className="medication-field">
-                      <span className="field-label">용법·용량</span>
-                      <p className="field-content">{currentDrug.use_method_qesitm}</p>
-                    </div>
-                  )}
-
-                  {currentDrug.dur_items && currentDrug.dur_items.length > 0 && (
-                    <div className="medication-field dur-warnings">
-                      <span className="field-label">DUR 주의</span>
-                      <div className="dur-items-list">
-                        {currentDrug.dur_items.slice(0, 3).map((d, dIdx) => (
-                          <span key={dIdx} className="dur-item-tag">
-                            [{d.prohibition_type}] {d.ingredient_name || d.reason || ""}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {(currentDrug.atpn_warn_qesitm || currentDrug.atpn_qesitm) && (
-                    <div className="medication-field">
-                      <span className="field-label">주의사항</span>
-                      <p className="field-content warn-text">
-                        {currentDrug.atpn_warn_qesitm || currentDrug.atpn_qesitm}
-                      </p>
-                    </div>
-                  )}
+              {representativeDrug.use_method_qesitm && (
+                <div className="medication-field">
+                  <span className="field-label">용법·용량</span>
+                  <p className="field-content">{representativeDrug.use_method_qesitm}</p>
                 </div>
-              </div>
-            );
-          })()}
+              )}
+
+              {mergedDurItems.length > 0 && (
+                <div className="medication-field dur-warnings">
+                  <span className="field-label warning">DUR 주의</span>
+                  <div className="dur-items-list">
+                    {mergedDurItems.slice(0, 3).map((d, dIdx) => (
+                      <span key={dIdx} className="dur-item-tag">
+                        [{d.prohibition_type}] {d.ingredient_name || d.reason || ""}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(representativeDrug.atpn_warn_qesitm || representativeDrug.atpn_qesitm) && (
+                <div className="medication-field">
+                  <span className="field-label warning">주의사항</span>
+                  <p className="field-content warn-text">
+                    {representativeDrug.atpn_warn_qesitm || representativeDrug.atpn_qesitm}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

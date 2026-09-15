@@ -4,7 +4,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.dtos.food_nutrition import FoodNutritionSearchResult
-from app.dtos.health_record_query import HealthRecordQueryResult
+from app.dtos.health_knowledge import HealthKnowledgeSearchResult
+from app.dtos.health_record_query import AlcoholConsultationSnapshot, HealthRecordQueryResult
 from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.medication import MedicationSearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
@@ -72,7 +73,9 @@ class MedicationDraft(BaseModel):
 
 class PainDraft(BaseModel):
     body_area: str = Field(description="통증 부위 (예: 오른쪽 무릎, 허리, 어깨 등)")
-    intensity: int = Field(default=5, description="통증 강도 (0~10)")
+    intensity: int | None = Field(
+        default=None, ge=0, le=10, description="사용자가 언급한 통증 강도 (단답형 숫자 포함, 0~10)"
+    )
     sensation: str | None = Field(default=None, description="통증 양상 (예: 욱신거림, 찌르는 듯함 등)")
     onset_at: str | None = Field(default=None, description="통증 시작 시점")
     note: str | None = Field(default=None, description="추가 메모")
@@ -94,7 +97,9 @@ class PainDiaryToolCall(BaseModel):
         default="format_pain_diary", description="호출된 도구명 ('format_pain_diary')"
     )
     body_area: str = Field(description="통증 부위 (예: 팔꿈치, 왼쪽 고관절, 왼쪽 발바닥 등)")
-    intensity: int = Field(default=5, ge=0, le=10, description="통증 강도 (0~10)")
+    intensity: int | None = Field(
+        default=None, ge=0, le=10, description="사용자가 언급한 통증 강도 (단답형 숫자 포함, 0~10)"
+    )
     sensation: str | None = Field(
         default=None, description="통증 양상 (예: 욱신거림, 이물감, 찌르는 듯함, 지지력 약화 등)"
     )
@@ -213,17 +218,17 @@ AuthoritativeEvidenceType = Literal[
     "health_records",
 ]
 
-
-class QueryAnalyst(BaseModel):
-    """인풋 가드레일: 맥락 추론 및 쿼리 빌더 결과 DTO."""
-
-    is_scientific_or_medical: bool = Field(
-        description="질문의 본질과 맥락이 과학, 의학, 보건, 건강, 신체 증상, 질병, 약물, 영양, 식단, 운동, 의료기관, 일상 건강관리 또는 건강비서 서비스 사용법에 해당하는지 여부"
-    )
-    inferred_intent: str = Field(description="사용자가 질문을 통해 진짜 알고 싶어하는 숨겨진 맥락 추론")
-    enriched_query: str = Field(
-        description="원문이 부실할 경우, 지식 DB 검색 및 도구 활용이 가능하도록 의학/과학적 키워드를 추가하여 풍부하게 재작성한 쿼리"
-    )
+HealthAssistantResponseMode = Literal["answer", "clarify"]
+HealthAssistantClarificationKind = Literal[
+    "none",
+    "request_goal",
+    "pregnancy_supplement_context",
+    "pregnancy_symptom_context",
+    "pain_record_context",
+    "exercise_safety_context",
+    "medication_safety_context",
+    "personal_health_context",
+]
 
 
 class HealthAssistantScopeDecision(BaseModel):
@@ -237,6 +242,14 @@ class HealthAssistantScopeDecision(BaseModel):
     required_evidence_types: list[AuthoritativeEvidenceType] = Field(
         default_factory=list,
         description="질문에 답하기 위해 모두 충족해야 하는 승인 근거 종류",
+    )
+    response_mode: HealthAssistantResponseMode = Field(
+        default="answer",
+        description="현재 정보로 답변할지, 개인화된 판단 전에 확인 질문을 먼저 할지 여부",
+    )
+    clarification_kind: HealthAssistantClarificationKind = Field(
+        default="none",
+        description="response_mode=clarify일 때 서버가 안전한 고정 질문을 선택하는 분류값",
     )
     allowed_health_request: str | None = Field(
         default=None,
@@ -263,6 +276,7 @@ class HealthAssistantChatRequest(BaseModel):
         default=None, description="사용자 동의로 받은 이번 요청의 현재 좌표 (user_location과 호환)"
     )
     session_id: uuid.UUID | None = Field(default=None, description="대화 세션 ID (DB 영구 보존용)")
+    core_memory: str | None = Field(default=None, description="세션 핵심 기억 (서버 주입용)")
     inferred_intent: str | None = Field(
         default=None,
         description="인풋 가드레일을 통해 추론된 사용자 의도 요약",
@@ -322,6 +336,14 @@ class HealthAssistantResponse(HealthAssistantLlmResponse):
     health_record_query_result: HealthRecordQueryResult | None = Field(
         default=None,
         description="PostgreSQL이 계산한 장기 건강기록 조건별 집계 결과",
+    )
+    alcohol_consultation_snapshot: AlcoholConsultationSnapshot | None = Field(
+        default=None,
+        description="음주 상담을 위해 인증된 PostgreSQL에서 조회한 개인 건강기록 스냅샷",
+    )
+    health_knowledge_search_result: HealthKnowledgeSearchResult | None = Field(
+        default=None,
+        description="질병관리청 국가건강정보포털에서 확인한 공식 건강정보",
     )
     outdoor_conditions: OutdoorConditionsResult | None = Field(
         default=None,

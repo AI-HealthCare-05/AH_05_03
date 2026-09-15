@@ -11,8 +11,8 @@
  * `vi.mock` 이 파일 전체에 걸리므로 기존 드로어 스위트와 갈라 둔다.
  */
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { HealthAssistantDrawer } from "./HealthAssistantDrawer";
 import * as clientModule from "./healthAssistantClient";
@@ -72,6 +72,8 @@ describe("서류 확정 저장과 대화 기록", () => {
     sessionStorage.clear();
   });
 
+  afterEach(() => cleanup());
+
   it("서류로 기록하면 세션을 만들고 주고받은 두 줄을 서버에 남긴다", async () => {
     const createSession = vi
       .spyOn(clientModule, "createChatSession")
@@ -116,5 +118,39 @@ describe("서류 확정 저장과 대화 기록", () => {
     // 사용자 줄이 세션 제목이 된다(`chat_session_service.add_message`). 파일명이 보여야
     // 목록에서 어떤 서류로 만든 대화인지 알 수 있다.
     expect(createMessage.mock.calls[0][2]).toContain("검진표.png");
+  });
+
+  it("서버 모드에서는 수치만 저장하고 원본을 보관했다고 안내하지 않는다", async () => {
+    vi.spyOn(clientModule, "createChatSession").mockResolvedValue({ id: "session-1", title: null } as never);
+    vi.spyOn(clientModule, "createChatMessage").mockResolvedValue({ id: "msg-1" } as never);
+    vi.spyOn(clientModule, "listChatSessions").mockResolvedValue([]);
+    const serverRuntime = {
+      healthRecords: runtime.healthRecords,
+      documents: undefined,
+    } as unknown as LocalDomainRuntime;
+
+    render(
+      <HealthAssistantDrawer
+        profile={profile}
+        runtime={serverRuntime}
+        isOpen={true}
+        onClose={vi.fn()}
+        onRecordSaved={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File(["x"], "검진표.png", { type: "image/png" })] },
+    });
+    const confirm = await screen.findByRole(
+      "button",
+      { name: "수정 내용 확정 · 건강기록 저장" },
+      { timeout: 5000 },
+    );
+    await waitFor(() => expect(confirm).not.toBeDisabled(), { timeout: 5000 });
+    fireEvent.click(confirm);
+
+    expect(await screen.findByText(/수치가 건강기록에 저장되었습니다. 원본 이미지는 보관되지 않습니다/)).toBeInTheDocument();
   });
 });

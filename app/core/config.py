@@ -277,6 +277,15 @@ class Config(BaseSettings):
     #: 둘을 같이 적어 두고 키 하나만 넣은 상태가 실제로 흔하다.
     HEALTH_ASSISTANT_MODELS: list[str] = ["gemini-3.5-flash-lite", "openai:gpt-4o-mini"]
 
+    #: 바운더리 판정(범위·근거 종류 분류)이 **따로** 쓸 수 있는 모델 목록.
+    #:
+    #: 기본값은 `HEALTH_ASSISTANT_MODELS`와 똑같다 — 지금 당장 더 싼 모델로 바꾸는
+    #: 것이 아니라, 나중에 바꿀 수 있는 자리만 미리 만들어 둔다. 바운더리는
+    #: 프롬프트 공격 차단·건강/비건강 구분을 담당하는 안전 경계라, 검증 없이
+    #: 저가형 모델을 끼우면 그 경계가 조용히 물러질 수 있다. 바꾸기 전에 반드시
+    #: 프롬프트 공격·애매한 개인화 질문 사례로 분류 정확도를 실측한다.
+    HEALTH_ASSISTANT_CLASSIFIER_MODELS: list[str] = ["gemini-3.5-flash-lite", "openai:gpt-4o-mini"]
+
     LLM_CHAT_TIMEOUT_SECONDS: float = 12.0
     # 문서 인식 작업 큐. 예측 큐와 같은 구조지만 흐르는 것이 수치가 아니라 검진
     # 결과지 원본이라 상한을 더 좁게 잡았다.

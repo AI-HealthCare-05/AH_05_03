@@ -259,3 +259,49 @@ class TestChatSessionsApi:
         )
         assert chat_res.status_code == status.HTTP_404_NOT_FOUND
         assert chat_res.json()["error_code"] == "CHAT_SESSION_NOT_FOUND"
+
+    async def test_core_memory_accumulates_after_10_messages(self, authorized_client: AsyncClient, monkeypatch) -> None:
+        """10번째 메시지가 추가되면 core_memory가 갱신되는지 테스트한다."""
+        from unittest.mock import AsyncMock
+
+        # 1. Mock shared_chat_client
+        class MockSummary:
+            summary = "이 사용자는 고혈압 약을 복용 중임."
+
+        mock_generate = AsyncMock(return_value=MockSummary())
+
+        class MockClient:
+            generate_structured_response = mock_generate
+
+        monkeypatch.setattr("app.services.chat_session_service.shared_chat_client", lambda: MockClient())
+
+        # 2. 세션 생성
+        create_res = await authorized_client.post(
+            "/api/v1/chat-sessions",
+            json={"profile_id": "profile-alpha", "title": "핵심 기억 테스트"},
+        )
+        session_id = create_res.json()["data"]["id"]
+
+        # 3. 메시지 9개 전송
+        for i in range(9):
+            res = await authorized_client.post(
+                f"/api/v1/chat-sessions/{session_id}/messages",
+                json={"role": "user" if i % 2 == 0 else "assistant", "content": f"msg {i + 1}"},
+            )
+            assert res.status_code == 200
+
+        # 아직 core_memory는 null이어야 함
+        get_res = await authorized_client.get(f"/api/v1/chat-sessions/{session_id}")
+        assert get_res.json()["data"]["core_memory"] is None
+
+        # 4. 10번째 메시지 전송 (이때 _update_core_memory가 트리거됨)
+        res = await authorized_client.post(
+            f"/api/v1/chat-sessions/{session_id}/messages",
+            json={"role": "assistant", "content": "msg 10"},
+        )
+        assert res.status_code == 200
+
+        # 5. core_memory 갱신 확인
+        get_res = await authorized_client.get(f"/api/v1/chat-sessions/{session_id}")
+        assert get_res.json()["data"]["core_memory"] == "이 사용자는 고혈압 약을 복용 중임."
+        mock_generate.assert_called_once()

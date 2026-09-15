@@ -104,13 +104,22 @@ def resolve_sido_coordinates(text: str) -> tuple[str, float, float] | None:
     """텍스트에서 시도 명칭을 감지하여 대표 좌표(위도, 경도)를 반환한다."""
     for sido, aliases in _SIDO_ALIASES.items():
         for alias in aliases:
-            if re.search(rf"(?<![가-힣]){re.escape(alias)}(?![가-힣])", text):
-                lat, lon = _SIDO_CENTERS[sido]
-                return sido, lat, lon
-        short_name = aliases[-1]
-        if re.search(rf"{re.escape(short_name)}(?=날씨|미세먼지|초미세먼지|대기질|살아|살아요)", text):
-            lat, lon = _SIDO_CENTERS[sido]
-            return sido, lat, lon
+            # "서울"처럼 짧은 이름은 "서울숲" 같은 다른 장소와 헷갈리지 않도록
+            # 뒤에 조사/서술어가 붙는 경우만 매칭하거나, 다른 글자와 떨어져 있을 때만 매칭한다.
+            if len(alias) <= 2:
+                if re.search(
+                    rf"(?<![가-힣]){re.escape(alias)}(?:야|은|는|이|가|에서|에|살|거주|날씨|미세먼지|초미세먼지|대기질|입니다|예요|이에요|됨|$)",
+                    text,
+                ):
+                    lat, lon = _SIDO_CENTERS[sido]
+                    return sido, lat, lon
+                if re.search(rf"(?<![가-힣]){re.escape(alias)}(?![가-힣])", text):
+                    lat, lon = _SIDO_CENTERS[sido]
+                    return sido, lat, lon
+            else:
+                if alias in text:
+                    lat, lon = _SIDO_CENTERS[sido]
+                    return sido, lat, lon
     return None
 
 

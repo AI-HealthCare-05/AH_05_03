@@ -254,17 +254,14 @@ export function GlobalHealthAssistant() {
           aria-label="봄이 건강 비서"
           aria-modal="false"
         >
-          {/* 컨텍스트 바 */}
-          <div className="channel-talk-context-bar">
-            <span>
-              <strong>{activeProfile.displayName}</strong>님 대화 중
-            </span>
-            {contextLabel && (
+          {/* 컨텍스트 바 — 현재 화면과 연동된 경우에만 표시 */}
+          {contextLabel && (
+            <div className="channel-talk-context-bar">
               <span className="channel-talk-context-tag">
                 <span style={{ fontSize: "0.7rem" }}>●</span> {contextLabel} 연동
               </span>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* 챗봇 메신저 본체 */}
           <Suspense fallback={<ChatLoadingSkeleton />}>

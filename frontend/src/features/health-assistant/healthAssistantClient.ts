@@ -56,7 +56,7 @@ export interface MedicationDraft {
 
 export interface PainDraft {
   body_area: string;
-  intensity: number;
+  intensity?: number | null;
   sensation?: string | null;
   onset_at?: string | null;
   note?: string | null;
@@ -70,7 +70,7 @@ export interface PainDraft {
 export interface PainDiaryToolCall {
   tool_name: "format_pain_diary";
   body_area: string;
-  intensity: number;
+  intensity?: number | null;
   sensation?: string | null;
   aggravating_factors?: string | null;
   formatted_diary: string;
@@ -220,6 +220,32 @@ export interface HealthRecordQueryResult {
   message: string;
 }
 
+export interface HealthKnowledgeSearchResult {
+  query: string;
+  items: Array<{
+    source: "질병관리청 국가건강정보포털";
+    title: string;
+    url: string;
+    summary: string;
+    topics: string[];
+    content_updated_at?: string | null;
+  }>;
+  retrieved_at: string;
+  message: string;
+  errors: string[];
+}
+
+export interface AlcoholConsultationSnapshot {
+  topic: "alcohol";
+  blood_pressure?: { systolic: number; diastolic?: number | null; measured_at: string } | null;
+  liver_tests: Array<{ metric: "ast" | "alt" | "ggt"; value: number; unit: string; measured_at: string }>;
+  today_activities: Array<{ activity: string; recorded_at: string; duration_minutes?: number | null }>;
+  recent_medications: Array<{ name: string; recorded_at: string; dosage?: string | null }>;
+  recent_alcohol_records: number;
+  missing_sections: string[];
+  message: string;
+}
+
 export interface DurItem {
   prohibition_type: string;
   ingredient_name?: string | null;
@@ -286,6 +312,8 @@ export interface HealthAssistantResponse {
   challenge_draft?: ChallengeDraft | null;
   query_draft?: QueryDraft | null;
   health_record_query_result?: HealthRecordQueryResult | null;
+  alcohol_consultation_snapshot?: AlcoholConsultationSnapshot | null;
+  health_knowledge_search_result?: HealthKnowledgeSearchResult | null;
   facility_search_draft?: FacilitySearchResult | null;
   outdoor_conditions?: OutdoorConditionsResult | null;
   food_nutrition_search_result?: FoodNutritionSearchResult | null;

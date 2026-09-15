@@ -9,25 +9,16 @@
 from app.dtos.health_assistant import ChatMessage
 from app.dtos.pain_chat import PainChatData, PainChatMessage
 from app.integrations.llm.chain import shared_chat_client
-from app.integrations.llm.protocol import LLMClientProtocol
 from app.prompts.pain_chat import PAIN_CHAT_INSTRUCTION
 
 
-class PainChatService:
-    def __init__(self, llm_client: LLMClientProtocol | None = None):
-        self._llm_client = llm_client
-
-    @property
-    def llm_client(self) -> LLMClientProtocol:
-        # 키가 없으면 생성자에서 바로 터지므로, 실제로 부를 때 만든다. 그래야
-        # 라우터 의존성 주입 단계가 아니라 요청 처리 중에 503 이 난다.
-        if self._llm_client is None:
-            self._llm_client = shared_chat_client()
-        return self._llm_client
-
-    async def respond(self, messages: list[PainChatMessage]) -> PainChatData:
-        return await self.llm_client.generate_structured_response(
-            system_instruction=PAIN_CHAT_INSTRUCTION,
-            messages=[ChatMessage(role=m.role, content=m.content) for m in messages],
-            response_schema=PainChatData,
-        )
+async def respond_pain_chat(messages: list[PainChatMessage]) -> PainChatData:
+    """통증 대화를 분석하여 정형화된 기록을 반환한다."""
+    # 키가 없으면 불러올 때 터지므로, 모듈 임포트 시가 아니라 실제로 부를 때 만든다.
+    # 그래야 요청 처리 중에 503이 난다.
+    llm_client = shared_chat_client()
+    return await llm_client.generate_structured_response(
+        system_instruction=PAIN_CHAT_INSTRUCTION,
+        messages=[ChatMessage(role=m.role, content=m.content) for m in messages],
+        response_schema=PainChatData,
+    )

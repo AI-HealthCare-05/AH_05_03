@@ -37,6 +37,7 @@ import {
   filterRecordsByTimeRange,
   formatTargetDateTime,
   isFacilityQuery,
+  isExerciseCorrection,
   isValidContentKeyword,
   type MetricSeries,
   normalizeRecordTypes,
@@ -77,6 +78,57 @@ import "./healthAssistantDrawer.css";
 function messageId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+const CONSULTATION_NOTICE = /^((?:영양제 섭취는[^.]*?(?:권장드립니다|권장합니다)\.)|(?:[^.]{0,80}(?:의사|약사|의료진|전문의)[^.]{0,30}(?:상담|상의)[^.]{0,30}(?:필요|권장)[^.]*\.))\s*/;
+const ORIGINAL_DOCUMENT_REQUEST_PATTERN = /(?:원본|서류|사진|스캔|문서|이미지)/;
+const UNREQUESTED_DOCUMENT_REFERENCE_PATTERN =
+  /\s*아래\s+(?:검진\s*결과\s*)?원본(?:\s*서류)?(?:에서|을)?[^.]*?(?:확인해\s*보세요|확인하세요)\.?/g;
+
+function requestsOriginalDocument(text: string): boolean {
+  return ORIGINAL_DOCUMENT_REQUEST_PATTERN.test(text);
+}
+
+function removeUnrequestedDocumentReference(message: string, userQuery: string): string {
+  if (requestsOriginalDocument(userQuery)) return message;
+  return message.replace(UNREQUESTED_DOCUMENT_REFERENCE_PATTERN, "").trim();
+}
+
+function AssistantMessageText({ content, highlightSupplementNotice }: {
+  content: string;
+  highlightSupplementNotice: boolean;
+}) {
+  const match = highlightSupplementNotice ? content.match(CONSULTATION_NOTICE) : null;
+  const notice = match?.[1];
+  const body = notice ? content.slice(match[0].length) : content;
+
+  const paragraphs = body.split("\n\n").map((paragraph) => paragraph.trim()).filter(Boolean);
+
+  return <>
+    {notice && (
+      <aside className="supplement-consultation-notice" role="note">
+        <strong>{notice.startsWith("영양제") ? "복용 전 의료진 확인" : "의사·약사 상담 필요"}</strong>
+        <p>{notice}</p>
+      </aside>
+    )}
+    {paragraphs.map((paragraph, index) => {
+      const lines = paragraph.split("\n").map((line) => line.trim()).filter(Boolean);
+      const summary = lines.length === 1 ? lines[0].match(/^핵심:\s*(.+)$/) : null;
+      const bullets = lines.slice(1).filter((line) => line.startsWith("- "));
+
+      if (summary) {
+        return <p className="medical-answer-summary" key={index}><strong>{summary[1]}</strong></p>;
+      }
+      if (lines.length > 1 && bullets.length === lines.length - 1) {
+        return <section className="medical-answer-section" key={index}>
+          <h4>{lines[0].replace(/[:：]$/, "")}</h4>
+          <ul>{bullets.map((bullet, bulletIndex) => <li key={bulletIndex}>{bullet.slice(2)}</li>)}</ul>
+        </section>;
+      }
+      return <p key={index}>{lines.join(" ")}</p>;
+    })}
+  </>;
+}
+
 async function getBrowserLocation(): Promise<{
   location: UserLocation | null;
   permissionDenied: boolean;
@@ -235,6 +287,8 @@ export function HealthAssistantDrawer({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isInitialScrollRef = useRef(true);
+  const popoverContainerRef = useRef<HTMLDivElement>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // 건강 서류 상세 검토 및 저장 모달 상태
   const [ocrModalOpen, setOcrModalOpen] = useState(false);
@@ -281,10 +335,19 @@ export function HealthAssistantDrawer({
           return `[${dateStr} 운동] ${p.exerciseName} ${p.weightKg ? `${p.weightKg}kg ` : ""}${p.reps ? `${p.reps}회 ` : ""}${p.sets ? `${p.sets}세트` : ""}`;
         }
         if (r.recordType === "pain" || p.bodyArea) {
-          return `[${dateStr} 통증] ${p.bodyArea} 강도 ${p.intensity}/10`;
+          return `[${dateStr} 통증] ${p.bodyArea}${typeof p.intensity === "number" ? ` 강도 ${p.intensity}/10` : " (강도 미입력)"}`;
         }
         if (r.recordType === "health_screening" || r.recordType === "lab_result") {
-          return `[${dateStr} 검진/검사] ${p.screeningName ?? p.testName ?? ""} ${p.note ?? p.summary ?? ""}`.slice(0, 100);
+          const name = (p.screeningName as string) ?? (p.testName as string) ?? "검진";
+          const items = Array.isArray(p.items)
+            ? (p.items as Array<Record<string, unknown>>)
+                .filter((item) => item?.testName && item?.value)
+                .map((item) => `${item.testName} ${item.value}${item.unit ?? ""}`)
+                .slice(0, 8)
+                .join(", ")
+            : "";
+          const desc = items || (p.itemsSummary as string) || (p.summary as string) || (p.note as string) || "";
+          return `[${dateStr} 검진/검사] ${name}${desc ? `: ${desc}` : ""}`.slice(0, 150);
         }
         return `[${dateStr} ${r.recordType}] ${p.note ?? ""}`;
       });
@@ -452,6 +515,17 @@ export function HealthAssistantDrawer({
     scrollToBottom("auto");
   }
 
+  /** 대화 화면 → 목록 화면. 헤더 뒤로가기 버튼과 스와이프 제스처가 같이 쓴다. */
+  function goToSessionList() {
+    setShowSessionList(true);
+    if (profile) {
+      saveChatViewMode(profile.id, "list");
+      void listChatSessions(profile.id)
+        .then((sessions) => setChatSessions(sessions))
+        .catch(() => undefined);
+    }
+  }
+
   /**
    * 대화 삭제. 서버가 지운 뒤에만 목록에서 뺀다 — 먼저 지우면 실패했을 때
    * 화면에서만 사라진 대화가 새로고침에 되살아난다.
@@ -508,28 +582,6 @@ export function HealthAssistantDrawer({
     }
   }
 
-  async function handleDeleteSession(sessionId: string, event?: React.MouseEvent) {
-    event?.stopPropagation();
-    if (!window.confirm("이 대화를 삭제하시겠습니까? 삭제된 대화는 복구할 수 없습니다.")) {
-      return;
-    }
-    try {
-      await deleteChatSession(sessionId);
-      setChatSessions((previous) => previous.filter((s) => s.id !== sessionId));
-      if (activeSessionIdRef.current === sessionId) {
-        activeSessionIdRef.current = null;
-        setActiveSessionId(null);
-        if (profile) {
-          setMessages([createWelcomeMessage(profile.displayName)]);
-        }
-      }
-    } catch (err) {
-      console.warn("대화 삭제 실패:", err);
-      setError("대화를 삭제하지 못했습니다. 다시 시도해 주세요.");
-    } finally {
-      setOpenMenuSessionId(null);
-    }
-  }
 
   async function handleSaveSessionTitle(sessionId: string, newTitle: string) {
     const trimmed = newTitle.trim();
@@ -570,6 +622,22 @@ export function HealthAssistantDrawer({
       if (sourcePreviewModal) URL.revokeObjectURL(sourcePreviewModal.url);
     };
   }, [imagePreview, sourcePreviewModal]);
+
+  // 팝오버 바깥을 누르면 닫는다. popover 변형에서만 의미가 있다(embedded/모달은
+  // 각자의 배경 클릭 처리가 따로 있다).
+  useEffect(() => {
+    if (variant !== "popover" || !isOpen) return;
+    function handleOutsideClick(e: MouseEvent) {
+      if (popoverContainerRef.current && !popoverContainerRef.current.contains(e.target as Node)) {
+        (onMinimize ?? handleAnimatedClose)();
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variant, isOpen, onMinimize]);
 
 
   // 닫을 때 오른쪽으로 슬라이드 아웃 후 부모 onClose 호출
@@ -738,7 +806,9 @@ export function HealthAssistantDrawer({
       const assistantMsg: ExtendedChatMessage = {
         id: messageId("assistant"),
         role: "assistant",
-        content: `${draft.recorded_at}에 실시된 ${draft.screening_name || "건강검진"} 결과가 나의 건강기록에 안전하게 저장되었습니다. 원본 서류는 언제든 확인하실 수 있습니다.`,
+        content: primaryDocumentId
+          ? `${draft.recorded_at}에 실시된 ${draft.screening_name || "건강검진"} 결과와 원본 서류가 저장되었습니다.`
+          : `${draft.recorded_at}에 실시된 ${draft.screening_name || "건강검진"} 수치가 건강기록에 저장되었습니다. 원본 이미지는 보관되지 않습니다.`,
         attachedDocuments: primaryDocumentId ? [{
           id: primaryDocumentId,
           fileName: ocrImageFile.name,
@@ -820,6 +890,8 @@ export function HealthAssistantDrawer({
       imageFile: currentImage ?? undefined,
     };
 
+    // 세션의 첫 메시지인지 미리 기억해 둔다 — 세션 목록 제목은 첫 메시지에만 바뀐다.
+    const isFirstMessageOfSession = messages.length === 0;
     const nextMessages = [...messages, userMsg];
     setMessages(nextMessages);
     setInput("");
@@ -868,8 +940,16 @@ export function HealthAssistantDrawer({
 
       // 일반 대화/기록 입력에는 과거 건강정보를 보내지 않는다.
       // 개인 기록이 실제로 필요한 건강 질문에 한해 관련 종류만 선별한다.
-      const recentConversationText = nextMessages
-        .slice(-6)
+      // 고정폭 창(최근 N개)은 몇 턴이든 몇 턴 전 주제 단어("혈압" 등)가 완전히
+      // 무관한 다음 질문까지 물고 늘어질 수 있다 — 대화가 짧으면 N을 아무리
+      // 줄여도 그 안에 이전 무관한 턴이 들어가 버린다. 그래서 창 크기가 아니라
+      // "직전 답변이 정보를 더 물었는가(missing_fields)"로 판단한다: 되물음에 대한
+      // 답변일 때만 그 직전 왕복(질문·되물음)을 함께 보고, 그게 아니면 이번에
+      // 보낸 메시지 하나만 본다.
+      const prevAssistantMsg = messages[messages.length - 1];
+      const isFollowUpAnswer =
+        prevAssistantMsg?.role === "assistant" && (prevAssistantMsg.responseDraft?.missing_fields.length ?? 0) > 0;
+      const recentConversationText = (isFollowUpAnswer ? nextMessages.slice(-3) : [userMsg])
         .map((message) => message.content)
         .join("\n");
       const contextRecordTypes = selectContextRecordTypes(recentConversationText);
@@ -906,8 +986,21 @@ export function HealthAssistantDrawer({
         needs_confirmation: false,
         suggested_quick_replies: [],
       });
-      const applyDelta = (delta: string) => {
-        streamed += delta;
+      // 타자기 효과 (Typewriter effect)를 위한 큐
+      let pendingDelta = "";
+      let isTyping = false;
+      const typeNextChar = () => {
+        if (!pendingDelta) {
+          isTyping = false;
+          return;
+        }
+        
+        // 플래시 모델이 너무 빨라 한 번에 많이 들어올 때는 청크 단위로 조금씩 빼냄
+        const chunkSize = Math.max(1, Math.floor(pendingDelta.length / 5));
+        const chunk = pendingDelta.slice(0, chunkSize);
+        pendingDelta = pendingDelta.slice(chunkSize);
+        streamed += chunk;
+        
         setMessages((prev) => prev.map((message) => (
           message.id === streamingId
             ? {
@@ -917,6 +1010,16 @@ export function HealthAssistantDrawer({
               }
             : message
         )));
+        
+        requestAnimationFrame(typeNextChar);
+      };
+
+      const applyDelta = (delta: string) => {
+        pendingDelta += delta;
+        if (!isTyping) {
+          isTyping = true;
+          requestAnimationFrame(typeNextChar);
+        }
       };
       const applyFacilityResult = (facility: FacilitySearchResult) => {
         streamedFacility = facility;
@@ -957,6 +1060,7 @@ export function HealthAssistantDrawer({
       if (streamedFacility && !res.facility_search_draft) {
         res.facility_search_draft = streamedFacility;
       }
+      res.assistant_message = removeUnrequestedDocumentReference(res.assistant_message, textToSend);
 
 
       // OCR에서 추출된 날짜가 있고 AI가 날짜를 채우지 않았거나 오늘로 채운 경우 보정
@@ -1017,9 +1121,37 @@ export function HealthAssistantDrawer({
           res.pain_draft.onset_at,
         );
       }
+      if (res.pain_diary_tool) {
+        // `date_str`는 <input type="date"> 값이라 YYYY-MM-DD 만 받는다.
+        // `resolveHealthRecordDateTime`은 근거가 없을 때 현재 "시각"까지 반환하므로
+        // 날짜 부분만 잘라 쓴다.
+        res.pain_diary_tool.date_str = resolveHealthRecordDateTime(
+          textToSend,
+          res.pain_diary_tool.date_str,
+        ).slice(0, 10);
+      }
 
       const assistantMsgId = messageId("assistant");
-      const shouldAutoSave = shouldAutoSaveHealthRecord(res, textToSend);
+      const correctionRequested = Boolean(res.exercise_draft) && isExerciseCorrection(textToSend);
+      const correctionTargetId = correctionRequested
+        ? messages.findLast(
+            (message) =>
+              message.role === "assistant" &&
+              message.saved &&
+              message.savedRecordId &&
+              message.responseDraft?.exercise_draft,
+          )?.savedRecordId || sessionStorage.getItem(`lastSavedExerciseId:${profile.id}`) || undefined
+        : undefined;
+      const unresolvedCorrection = correctionRequested && !correctionTargetId;
+      const shouldAutoSave = !unresolvedCorrection && (
+        shouldAutoSaveHealthRecord(res, textToSend) || Boolean(correctionTargetId && res.exercise_draft)
+      );
+      if (unresolvedCorrection) {
+        res.auto_save = false;
+        res.needs_confirmation = false;
+        res.missing_fields = ["exercise_record"];
+        res.assistant_message = "수정할 운동 기록을 찾지 못했습니다. 운동명과 기록한 날짜를 함께 알려주세요.";
+      }
       if (shouldAutoSave) {
         res.auto_save = true;
         res.needs_confirmation = false;
@@ -1028,6 +1160,9 @@ export function HealthAssistantDrawer({
           (reply) => !/(?:저장|기록|수정|취소)/.test(reply),
         );
         res.assistant_message = buildAutoSaveAssistantMessage(res);
+        if (correctionTargetId) {
+          res.assistant_message = res.assistant_message.replace("기록했습니다.", "수정했습니다.");
+        }
       }
       const assistantMsg: ExtendedChatMessage = {
         id: assistantMsgId,
@@ -1046,7 +1181,7 @@ export function HealthAssistantDrawer({
       });
 
       if (shouldAutoSave) {
-        const saved = await saveStructuredDraftAutomatically(res, assistantMsgId);
+        const saved = await saveStructuredDraftAutomatically(res, assistantMsgId, correctionTargetId);
         if (!saved) {
           setMessages((prev) => prev.map((message) => message.id === assistantMsgId
             ? { ...message, content: "입력하신 기록은 이해했지만 저장하지 못했습니다. 잠시 후 다시 시도해 주세요." }
@@ -1068,8 +1203,7 @@ export function HealthAssistantDrawer({
 
       // 조회 질의이거나 질문인 경우 IndexedDB에서 데이터 조회 수행
       const isExplicitDocRequest =
-        /(?:원본|서류|사진|스캔|문서|이미지)/.test(textToSend) ||
-        /(?:원본|서류|서류함).*(?:확인|보여|아래)/.test(res.assistant_message);
+        requestsOriginalDocument(textToSend) || res.query_draft?.keyword === "원본";
       const isTrendRequest =
         /(?:그래프|변화\s*추이|추이|트렌드)/.test(textToSend) ||
         /(?:검진|측정|수치).*(?:변화|추이|그래프)/.test(textToSend) ||
@@ -1092,8 +1226,11 @@ export function HealthAssistantDrawer({
           assistantMsgId,
         );
       }
-      // 첫 사용자 질문이 세션 제목으로 저장되므로 목록도 최신 상태로 갱신한다.
-      void listChatSessions(profile.id).then((sessions) => setChatSessions(sessions)).catch(() => undefined);
+      // 첫 사용자 질문이 세션 제목으로 저장되므로, 그때만 목록을 최신 상태로 갱신한다.
+      // 이후 턴은 제목이 안 바뀌므로 답변마다 매번 다시 불러올 필요가 없다.
+      if (isFirstMessageOfSession) {
+        void listChatSessions(profile.id).then((sessions) => setChatSessions(sessions)).catch(() => undefined);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "응답을 받지 못했습니다. 다시 시도해 주세요.");
     } finally {
@@ -1233,7 +1370,7 @@ export function HealthAssistantDrawer({
 
         if (assistantMsgId) {
           const emptyOriginalDocumentMessage =
-            "저장된 원본 검진 서류를 찾지 못했습니다. 먼저 검진표 이미지를 업로드하고 저장해 주세요.";
+            "이 기기의 원본 서류 보관함에서 해당 검진표를 찾지 못했습니다. 저장한 브라우저와 기기에서 다시 확인하거나 이미지를 다시 선택해 주세요.";
           const emptyTrendMessage =
             "시계열 수치 변화 그래프를 그릴 수 있는 검진 또는 측정 기록을 찾지 못했습니다. 건강검진 결과나 혈압·혈당 기록을 먼저 등록해 주세요.";
 
@@ -1245,20 +1382,32 @@ export function HealthAssistantDrawer({
           }
 
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === assistantMsgId
-                ? {
-                    ...m,
-                    content: finalContent ?? m.content,
-                    attachedDocuments: attachedDocs.length > 0 ? attachedDocs : undefined,
-                    queriedRecords,
-                    queriedRecordsTitle,
-                    showTrendChart: hasTrendData,
-                    trendMetrics: hasTrendData ? metrics : undefined,
-                    trendInitialKey: hasTrendData ? trendInitialKey : undefined,
-                  }
-                : m,
-            ),
+            prev.map((m) => {
+              if (m.id !== assistantMsgId) return m;
+              let contentToUse = finalContent ?? m.content;
+              // 시계열 그래프 데이터가 존재하는 경우, LLM이 프롬프트에서 오판하여 생성한 "기록이 없습니다" 문구를
+              // 차트 안내 문구로 교체하여 UI 모순을 방지한다.
+              if (
+                hasTrendData &&
+                (contentToUse.includes("기록이 없습니다") ||
+                  contentToUse.includes("기록을 찾지 못했습니다") ||
+                  contentToUse.includes("기록이 필요하시면") ||
+                  contentToUse.includes("검진을 받아보시는 것을 권장"))
+              ) {
+                contentToUse =
+                  "등록된 건강검진 및 측정 기록의 시계열 수치 변화 그래프를 조회했습니다. 아래 차트에서 상세 변화 추이를 확인해 보세요.";
+              }
+              return {
+                ...m,
+                content: contentToUse,
+                attachedDocuments: attachedDocs.length > 0 ? attachedDocs : undefined,
+                queriedRecords,
+                queriedRecordsTitle,
+                showTrendChart: hasTrendData,
+                trendMetrics: hasTrendData ? metrics : undefined,
+                trendInitialKey: hasTrendData ? trendInitialKey : undefined,
+              };
+            }),
           );
         }
       }
@@ -1282,13 +1431,17 @@ export function HealthAssistantDrawer({
 
   // 초안 자동 저장: 사용자 의도(intent)와 일치하는 초안만 엄격히 검증하여 저장한다.
   // LLM이 여러 초안을 동시에 반환하더라도 사용자가 의도하지 않은 다른 유형의 기록이 오저장되는 위험을 차단한다.
-  async function saveStructuredDraftAutomatically(response: HealthAssistantResponse, msgId: string): Promise<boolean> {
+  async function saveStructuredDraftAutomatically(
+    response: HealthAssistantResponse,
+    msgId: string,
+    correctionTargetId?: string,
+  ): Promise<boolean> {
     const intent = response.intent;
     if (intent === "record_medication" && response.medication_draft) {
       return saveMedication(response.medication_draft, msgId);
     }
     if (intent === "record_exercise" && response.exercise_draft) {
-      return saveExercise(response.exercise_draft, msgId);
+      return saveExercise(response.exercise_draft, msgId, correctionTargetId);
     }
     if (intent === "record_blood_pressure" && response.blood_pressure_draft) {
       return saveBloodPressure(response.blood_pressure_draft, msgId);
@@ -1302,7 +1455,7 @@ export function HealthAssistantDrawer({
     return false;
   }
 
-  async function saveExercise(draft: ExerciseDraft, msgId: string): Promise<boolean> {
+  async function saveExercise(draft: ExerciseDraft, msgId: string, correctionTargetId?: string): Promise<boolean> {
     if (!runtime || !profile) return false;
     setLoading(true);
     try {
@@ -1314,13 +1467,7 @@ export function HealthAssistantDrawer({
       if (draft.sets) details.push(`${draft.sets}세트`);
       const summaryText = `${draft.exercise_name}${details.length > 0 ? ` (${details.join(" · ")})` : ""}`.trim();
 
-      const result = await runtime.healthRecords.create({
-        householdId: PRIMARY_HOUSEHOLD_ID,
-        profileId: profile.id,
-        recordType: "exercise",
-        recordedAt: draft.date_str ? new Date(draft.date_str).toISOString() : new Date().toISOString(),
-        source: "local_ai",
-        payload: {
+      const draftPayload = {
           type: "exercise",
           exerciseName: draft.exercise_name,
           distanceKm: draft.distance_km ?? undefined,
@@ -1329,14 +1476,55 @@ export function HealthAssistantDrawer({
           sets: draft.sets ?? undefined,
           durationMinutes: draft.duration_minutes ?? undefined,
           note: draft.note || summaryText,
-        },
-      });
+      };
+
+      let result;
+      if (correctionTargetId) {
+        const current = await runtime.healthRecords.get(correctionTargetId);
+        if (
+          !current.ok ||
+          current.value.recordType !== "exercise" ||
+          current.value.profileId !== profile.id
+        ) {
+          throw new Error("수정할 운동 기록을 찾지 못했습니다.");
+        }
+        const changedFields = Object.fromEntries(
+          Object.entries(draftPayload).filter(
+            ([key, value]) => value !== undefined && (key !== "note" || Boolean(draft.note)),
+          ),
+        );
+        const mergedPayload = { ...current.value.payload, ...changedFields } as Record<string, unknown>;
+        const mergedDetails = [
+          mergedPayload.distanceKm ? `${mergedPayload.distanceKm}km` : "",
+          mergedPayload.durationMinutes ? `${mergedPayload.durationMinutes}분` : "",
+          mergedPayload.weightKg ? `${mergedPayload.weightKg}kg` : "",
+          mergedPayload.reps ? `${mergedPayload.reps}회` : "",
+          mergedPayload.sets ? `${mergedPayload.sets}세트` : "",
+        ].filter(Boolean).join(" · ");
+        mergedPayload.note = draft.note || `${mergedPayload.exerciseName}${mergedDetails ? ` (${mergedDetails})` : ""}`;
+        result = await runtime.healthRecords.update(correctionTargetId, {
+          recordType: "exercise",
+          recordedAt: current.value.recordedAt,
+          payload: mergedPayload,
+          expectedVersion: current.value.version,
+        });
+      } else {
+        result = await runtime.healthRecords.create({
+          householdId: PRIMARY_HOUSEHOLD_ID,
+          profileId: profile.id,
+          recordType: "exercise",
+          recordedAt: draft.date_str ? new Date(draft.date_str).toISOString() : new Date().toISOString(),
+          source: "local_ai",
+          payload: draftPayload,
+        });
+      }
 
       if (!result.ok) throw new Error(result.error.message);
 
       setMessages((prev) =>
-        prev.map((m) => (m.id === msgId ? { ...m, saved: true } : m)),
+        prev.map((m) => (m.id === msgId ? { ...m, saved: true, savedRecordId: result.value.id } : m)),
       );
+      sessionStorage.setItem(`lastSavedExerciseId:${profile.id}`, result.value.id);
       if (onRecordSaved) await onRecordSaved();
 
       const todayResult = await runtime.healthRecords.query({
@@ -1477,6 +1665,10 @@ export function HealthAssistantDrawer({
   // 통증 초안 로컬 저장
   async function savePain(draft: PainDraft, msgId: string): Promise<boolean> {
     if (!runtime || !profile || !draft.body_area) return false;
+    if (draft.intensity == null) {
+      setError("통증 강도를 0~10 사이에서 선택해 주세요.");
+      return false;
+    }
     setLoading(true);
     try {
       let anatomyEvent: AnatomyEvent | undefined;
@@ -1566,6 +1758,10 @@ export function HealthAssistantDrawer({
     msgId: string,
   ): Promise<boolean> {
     if (!runtime || !profile || !tool.body_area) return false;
+    if (tool.intensity == null) {
+      setError("통증 강도를 0~10 사이에서 선택해 주세요.");
+      return false;
+    }
     setLoading(true);
     try {
       const recordDate = tool.date_str
@@ -1626,7 +1822,7 @@ export function HealthAssistantDrawer({
         payload: {
           type: "pain",
           bodyArea: tool.body_area,
-          intensity: typeof tool.intensity === "number" ? tool.intensity : 5,
+          intensity: tool.intensity,
           sensation: tool.sensation || undefined,
           aggravatingFactors: tool.aggravating_factors || undefined,
           note: tool.formatted_diary,
@@ -1725,7 +1921,7 @@ export function HealthAssistantDrawer({
 
   const quickPrompts = [
     "검진 수치 변화 그래프",
-    "최근 건강검진 결과 원본 보여줘",
+    "최근 건강검진 결과 보여줘",
     "혈압 120에 80 나왔어",
     "랫풀다운 20kg 10개 3세트 했어",
     "저녁 8시에 타이레놀 1알 복용했어",
@@ -1738,10 +1934,37 @@ export function HealthAssistantDrawer({
       className={`health-assistant-drawer ${isEmbedded ? "is-embedded" : ""} ${isClosing ? "closing" : ""}`}
       role={isEmbedded ? "region" : "dialog"}
       aria-label="AI 건강 비서 봄이"
+      onTouchStart={(e) => {
+        const touch = e.touches[0];
+        touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+      }}
+      onTouchEnd={(e) => {
+        const start = touchStartRef.current;
+        touchStartRef.current = null;
+        if (!start || showSessionList) return;
+        const touch = e.changedTouches[0];
+        const dx = touch.clientX - start.x;
+        const dy = touch.clientY - start.y;
+        // 오른쪽으로 크게, 세로 방향은 크지 않게 — 스크롤 제스처와 헷갈리지 않게 한다.
+        if (dx > 70 && Math.abs(dy) < 40) {
+          goToSessionList();
+        }
+      }}
     >
       {/* 헤더 */}
       <header className="assistant-header" {...dragHandleProps}>
         <div className="assistant-header-title">
+          {!showSessionList && (
+            <button
+              type="button"
+              className="assistant-back-btn"
+              onClick={goToSessionList}
+              aria-label="대화 목록"
+              title="대화 목록으로 돌아가기"
+            >
+              ‹
+            </button>
+          )}
           {isEmbedded && (
             <span
               className="sidebar-card-drag-grip"
@@ -1763,51 +1986,23 @@ export function HealthAssistantDrawer({
                 </span>
               )}
             </div>
-            {profile && variant === "popover" && (
-              <small style={{ color: "#64748b", fontSize: "0.75rem", display: "block" }}>
-                {profile.displayName}님의 건강 비서
-              </small>
-            )}
           </div>
         </div>
-        <div className="assistant-header-actions">
-          {showSessionList ? (
+        {/* popover 는 채널톡 스타일 런처의 X 버튼이 이미 닫기를 맡는다 — 여기서 또
+            닫기 버튼을 두면 같은 동작이 두 군데에 중복된다. */}
+        {variant !== "popover" && (
+          <div className="assistant-header-actions">
             <button
-              className="assistant-new-chat-header-btn"
+              className="assistant-minimize-btn"
               type="button"
-              onClick={() => void handleCreateChat()}
-              aria-label="새 대화"
+              onClick={onMinimize ?? (isEmbedded ? onClose : handleAnimatedClose)}
+              aria-label="창 닫기"
+              title="창 닫기"
             >
-              + 새 대화
+              −
             </button>
-          ) : (
-            <button
-              className="assistant-clear-btn"
-              type="button"
-              onClick={() => {
-                setShowSessionList(true);
-                if (profile) {
-                  saveChatViewMode(profile.id, "list");
-                  void listChatSessions(profile.id)
-                    .then((sessions) => setChatSessions(sessions))
-                    .catch(() => undefined);
-                }
-              }}
-              aria-label="대화 목록"
-            >
-              대화 목록
-            </button>
-          )}
-          <button
-            className="assistant-minimize-btn"
-            type="button"
-            onClick={onMinimize ?? (isEmbedded ? onClose : handleAnimatedClose)}
-            aria-label="창 닫기"
-            title="창 닫기"
-          >
-            −
-          </button>
-        </div>
+          </div>
+        )}
       </header>
 
         {showSessionList && (
@@ -1900,6 +2095,8 @@ export function HealthAssistantDrawer({
                             >
                               ···
                             </button>
+                            {/* 삭제는 옆의 휴지통 아이콘 하나로 충분하다 — 여기 또 넣으면 같은
+                                동작이 두 군데(휴지통, 이 메뉴)에 중복된다. */}
                             {openMenuSessionId === session.id && (
                               <div
                                 className="chat-session-menu-popover"
@@ -1919,7 +2116,11 @@ export function HealthAssistantDrawer({
                                 <button
                                   type="button"
                                   className="chat-session-menu-item danger"
-                                  onClick={(e) => void handleDeleteSession(session.id, e)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenMenuSessionId(null);
+                                    setPendingDeleteSessionId(session.id);
+                                  }}
                                 >
                                   대화 삭제
                                 </button>
@@ -1993,9 +2194,7 @@ export function HealthAssistantDrawer({
                     {msg.responseDraft?.medication_search_result ? (
                       <MedicationCard searchResult={msg.responseDraft.medication_search_result}>
                         {msg.content ? (
-                          msg.content.split("\n\n").map((para, i) => (
-                            <p key={i}>{para}</p>
-                          ))
+                          <AssistantMessageText content={msg.content} highlightSupplementNotice={msg.role === "assistant"} />
                         ) : (
                           <div className="loading-dots">
                             <span>.</span><span>.</span><span>.</span>
@@ -2005,9 +2204,7 @@ export function HealthAssistantDrawer({
                     ) : (
                       <>
                         {msg.content ? (
-                          msg.content.split("\n\n").map((para, i) => (
-                            <p key={i}>{para}</p>
-                          ))
+                          <AssistantMessageText content={msg.content} highlightSupplementNotice={msg.role === "assistant"} />
                         ) : (
                           <div className="loading-dots">
                             <span>.</span><span>.</span><span>.</span>
@@ -2140,6 +2337,17 @@ export function HealthAssistantDrawer({
                   <FoodNutritionCard searchResult={msg.responseDraft.food_nutrition_search_result} />
                 )}
 
+                {msg.responseDraft?.health_knowledge_search_result?.items.length && msg.role === "assistant" ? (
+                  <aside className="health-knowledge-sources" aria-label="공식 건강정보 출처">
+                    <strong>확인한 공식 건강정보</strong>
+                    {msg.responseDraft.health_knowledge_search_result.items.map((item) => (
+                      <a key={item.url} href={item.url} target="_blank" rel="noreferrer">
+                        질병관리청 국가건강정보포털 · {item.title}
+                      </a>
+                    ))}
+                  </aside>
+                ) : null}
+
 
 
 
@@ -2265,12 +2473,27 @@ export function HealthAssistantDrawer({
             </button>
           </form>
         </footer>
+
+        {showSessionList && (
+          <button
+            type="button"
+            className="assistant-fab-new-chat"
+            onClick={() => void handleCreateChat()}
+            aria-label="새 대화"
+            title="새 대화 시작"
+          >
+            + 새 대화
+          </button>
+        )}
       </aside>
   );
 
   if (isEmbedded || variant === "popover") {
     return (
-      <div className={isEmbedded ? "health-assistant-embedded-container" : "health-assistant-popover-container"}>
+      <div
+        className={isEmbedded ? "health-assistant-embedded-container" : "health-assistant-popover-container"}
+        ref={popoverContainerRef}
+      >
         {drawerContent}
 
         {/* 원본 서류 이미지 크게 보기 모달 */}
@@ -2304,6 +2527,7 @@ export function HealthAssistantDrawer({
               clearSelectedImage();
             }}
             onConfirm={(updatedDraft, updatedItems) => void handleConfirmOcrModalSave(updatedDraft, updatedItems)}
+            onRetry={() => fileInputRef.current?.click()}
           />
         )}
       </div>
@@ -2347,6 +2571,7 @@ export function HealthAssistantDrawer({
             clearSelectedImage();
           }}
           onConfirm={(updatedDraft, updatedItems) => void handleConfirmOcrModalSave(updatedDraft, updatedItems)}
+          onRetry={() => fileInputRef.current?.click()}
         />
       )}
     </div>
@@ -2366,6 +2591,7 @@ function OcrReviewModal({
   working,
   onClose,
   onConfirm,
+  onRetry,
 }: {
   profileName: string;
   imageUrl: string;
@@ -2376,6 +2602,7 @@ function OcrReviewModal({
   working: boolean;
   onClose: () => void;
   onConfirm: (draft: LabResultDraft, items: OcrReviewItem[]) => void;
+  onRetry?: () => void;
 }) {
   const [recordedAt, setRecordedAt] = useState(draft?.recorded_at ?? new Date().toISOString().slice(0, 10));
   const [screeningName, setScreeningName] = useState(draft?.screening_name ?? "국가건강검진");
@@ -2419,7 +2646,10 @@ function OcrReviewModal({
               <div className="ocr-modal-error" role="alert">
                 <strong>서류를 분석하지 못했습니다.</strong>
                 <p>{error}</p>
-                <button className="secondary-button" type="button" onClick={onClose}>다른 파일 선택하기</button>
+                <button className="secondary-button" type="button" onClick={() => {
+                  onClose();
+                  if (onRetry) onRetry();
+                }}>다른 파일 선택하기</button>
               </div>
             ) : working && !draft ? (
               <div className="ocr-modal-loading">
@@ -2855,7 +3085,7 @@ function PainConfirmationCard({
   onSave: (updated: PainDraft) => void;
 }) {
   const [bodyArea, setBodyArea] = useState(draft.body_area);
-  const [intensity, setIntensity] = useState(draft.intensity ?? 5);
+  const [intensity, setIntensity] = useState<number | null>(draft.intensity ?? null);
   const [sensation, setSensation] = useState(draft.sensation ?? "");
   const [note, setNote] = useState(draft.note ?? "");
 
@@ -2863,7 +3093,7 @@ function PainConfirmationCard({
     return (
       <div className="draft-confirm-card is-saved">
         <span className="saved-badge">안전하게 저장되었습니다.</span>
-        <p><strong>{bodyArea}</strong>: 강도 {intensity}/10 {sensation ? `(${sensation})` : ""}</p>
+        <p><strong>{bodyArea}</strong>: {intensity == null ? "강도 미입력" : `강도 ${intensity}/10`} {sensation ? `(${sensation})` : ""}</p>
       </div>
     );
   }
@@ -2885,16 +3115,23 @@ function PainConfirmationCard({
         </label>
         <div className="input-row">
           <label>
-            통증 강도 ({intensity}/10)
+            통증 강도 {intensity == null ? "(선택 필요)" : `(${intensity}/10)`}
             <div className="pain-intensity-slider-wrap">
               <input
                 type="range"
                 min="0"
                 max="10"
-                value={intensity}
+                step="1"
+                aria-label="통증 강도"
+                value={intensity ?? 5}
                 onChange={(e) => setIntensity(Number(e.target.value))}
+                onClick={(e) => {
+                  if (intensity == null) {
+                    setIntensity(Number((e.target as HTMLInputElement).value));
+                  }
+                }}
               />
-              <span className="pain-intensity-val">{intensity}</span>
+              <span className="pain-intensity-val">{intensity ?? "-"}</span>
             </div>
           </label>
           <label>
@@ -2920,7 +3157,7 @@ function PainConfirmationCard({
       <button
         type="button"
         className="confirm-save-btn"
-        disabled={!bodyArea}
+        disabled={!bodyArea || intensity == null}
         onClick={() => onSave({ ...draft, body_area: bodyArea, intensity, sensation, note })}
       >
         통증 기록에 저장하기
@@ -3189,7 +3426,7 @@ function QueriedRecordsView({
                 } else if (rec.recordType === "medication" || p.medicationName) {
                   contentText = `${p.medicationName}${p.dosage ? ` ${p.dosage}` : ""}${p.takenAt ? ` (${p.takenAt})` : ""}`;
                 } else if (rec.recordType === "pain" || p.bodyArea) {
-                  contentText = `${p.bodyArea} · 강도 ${p.intensity}/10${p.sensation ? ` (${p.sensation})` : ""}`;
+                  contentText = `${p.bodyArea}${typeof p.intensity === "number" ? ` · 강도 ${p.intensity}/10` : " · 강도 미입력"}${p.sensation ? ` (${p.sensation})` : ""}`;
                 } else if (rec.recordType === "health_screening" || p.screeningName) {
                   contentText = `${p.screeningName ?? "검진"}${p.summary ? ` · ${p.summary}` : ""}`;
                 } else {
@@ -3678,16 +3915,10 @@ function PainDiaryToolCard({
   onSave: (updated: PainDiaryToolCall) => void;
   onNavigateToDiary: (dateKey: string) => void;
 }) {
-  const todayStr = useMemo(() => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }, []);
+  const todayStr = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
   const [diaryDate, setDiaryDate] = useState(toolCall.date_str || todayStr);
   const [bodyArea, setBodyArea] = useState(toolCall.body_area || "");
-  const [intensity, setIntensity] = useState(toolCall.intensity ?? 5);
+  const [intensity, setIntensity] = useState<number | null>(toolCall.intensity ?? null);
   const [sensation, setSensation] = useState(toolCall.sensation || "");
   const [aggravatingFactors, setAggravatingFactors] = useState(toolCall.aggravating_factors || "");
   const [formattedDiary, setFormattedDiary] = useState(toolCall.formatted_diary || "");
@@ -3697,7 +3928,7 @@ function PainDiaryToolCard({
       <div className="draft-confirm-card is-saved pain-tool-card">
         <span className="saved-badge">✨ 통증 다이어리에 안전하게 저장되었습니다.</span>
         <p>
-          <strong>{bodyArea}</strong> ({diaryDate}): 강도 {intensity}/10 {sensation ? `(${sensation})` : ""}
+          <strong>{bodyArea}</strong> ({diaryDate}): {intensity == null ? "강도 미입력" : `강도 ${intensity}/10`} {sensation ? `(${sensation})` : ""}
         </p>
         <p className="tool-saved-diary">{formattedDiary}</p>
         <button
@@ -3743,16 +3974,23 @@ function PainDiaryToolCard({
             />
           </label>
           <label>
-            통증 강도 ({intensity}/10)
+            통증 강도 {intensity == null ? "(선택 필요)" : `(${intensity}/10)`}
             <div className="pain-intensity-slider-wrap">
               <input
                 type="range"
                 min="0"
                 max="10"
-                value={intensity}
+                step="1"
+                aria-label="통증 강도"
+                value={intensity ?? 5}
                 onChange={(e) => setIntensity(Number(e.target.value))}
+                onClick={(e) => {
+                  if (intensity == null) {
+                    setIntensity(Number((e.target as HTMLInputElement).value));
+                  }
+                }}
               />
-              <span className="pain-intensity-val">{intensity}</span>
+              <span className="pain-intensity-val">{intensity ?? "-"}</span>
             </div>
           </label>
           <label className="grid-full-col">
@@ -3785,7 +4023,7 @@ function PainDiaryToolCard({
       <button
         type="button"
         className="confirm-save-btn"
-        disabled={!bodyArea.trim() || !formattedDiary.trim()}
+        disabled={!bodyArea.trim() || !formattedDiary.trim() || intensity == null}
         onClick={() =>
           onSave({
             ...toolCall,

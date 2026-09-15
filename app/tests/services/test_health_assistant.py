@@ -1,6 +1,8 @@
+import json
 import uuid
 from collections.abc import AsyncIterator
-from typing import Any, TypeVar
+from datetime import datetime, timezone
+from typing import Any, TypeVar, cast
 
 import pytest
 from pydantic import BaseModel
@@ -13,9 +15,12 @@ from app.dtos.health_assistant import (
     HealthAssistantScopeDecision,
     ProfileContext,
 )
+from app.dtos.health_knowledge import HealthKnowledgeItem, HealthKnowledgeSearchResult
 from app.dtos.outdoor_conditions import AirQualityConditions, OutdoorConditionsResult, WeatherConditions
 from app.models.households import HouseholdStatus
+from app.models.service_accounts import ServiceAccount
 from app.services.health_assistant import HealthAssistantService
+from app.services.health_records import HealthRecordService
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -121,28 +126,39 @@ async def test_health_assistant_loads_outdoor_tool_result_for_outdoor_question()
     assert "PM2.5 11㎍/㎥(보통)" in llm_client.system_instruction
 
 
-def test_health_assistant_routes_aerobic_recommendation_to_outdoor_tool() -> None:
-    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 유산소 할 건데 추천 좀")])
+@pytest.mark.asyncio
+async def test_weather_question_without_location_asks_for_location() -> None:
+    service = HealthAssistantService(
+        llm_client=CapturingLLMClient(),
+        outdoor_conditions_client=OutdoorConditionsStub(),
+    )
 
-    assert HealthAssistantService._needs_outdoor_conditions(request) is True
+    response = await service.respond(
+        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 날씨 어때?")])
+    )
+
+    assert "현재 위치 권한" in response.assistant_message
+    assert "서울 날씨" in response.assistant_message
+    assert response.missing_fields == ["user_location"]
 
 
-def test_health_assistant_routes_exercise_plans_to_outdoor_tool() -> None:
-    for text in ["오늘 러닝할거야", "오늘 달리기 할까?", "자전거 타러 갈까?", "오늘 산책갈래", "오늘 야외 운동 어때?"]:
-        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
-        assert HealthAssistantService._needs_outdoor_conditions(req) is True, f"Failed for: {text}"
+@pytest.mark.asyncio
+async def test_streaming_weather_question_without_location_asks_for_location() -> None:
+    service = HealthAssistantService(
+        llm_client=CapturingLLMClient(),
+        outdoor_conditions_client=OutdoorConditionsStub(),
+    )
 
+    events = [
+        event
+        async for event in service.stream(
+            HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 날씨 어때?")])
+        )
+    ]
 
-def test_health_assistant_does_not_route_completed_run_record_to_outdoor_tool() -> None:
-    for text in [
-        "오늘 러닝 30분 했어",
-        "오늘 5km 달렸어",
-        "오늘 10km 뛰었어",
-        "오늘 1만보 걸었어",
-        "자전거 1시간 탔어",
-    ]:
-        req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=text)])
-        assert HealthAssistantService._needs_outdoor_conditions(req) is False, f"Failed for: {text}"
+    assert [event_type for event_type, _ in events] == ["delta", "result"]
+    assert "현재 위치 권한" in events[0][1]["text"]
+    assert events[1][1]["missing_fields"] == ["user_location"]
 
 
 @pytest.mark.asyncio
@@ -324,7 +340,7 @@ def test_health_assistant_needs_facility_tools_classification() -> None:
 @pytest.mark.asyncio
 async def test_health_assistant_resolves_sido_location_from_text() -> None:
     req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 서울 날씨 어때")])
-    loc = await HealthAssistantService()._resolve_request_location(req)
+    loc = await HealthAssistantService()._resolve_request_location(req, needs_outdoor=True)
     assert loc is not None
     assert loc.latitude == 37.5665
     assert loc.longitude == 126.978
@@ -344,7 +360,7 @@ async def test_health_assistant_resolves_specific_place_for_outdoor_question() -
     req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="오늘 양재숲에서 러닝할 거야")])
     service = HealthAssistantService(outdoor_conditions_client=LocationResolvingStub())
 
-    loc = await service._resolve_request_location(req)
+    loc = await service._resolve_request_location(req, needs_outdoor=True)
 
     assert loc is not None
     assert (loc.latitude, loc.longitude) == (37.47, 127.035)
@@ -367,7 +383,9 @@ async def test_health_assistant_does_not_reuse_location_from_assistant_message()
         ]
     )
 
-    loc = await HealthAssistantService(outdoor_conditions_client=NoLocationStub())._resolve_request_location(req)
+    loc = await HealthAssistantService(outdoor_conditions_client=NoLocationStub())._resolve_request_location(
+        req, needs_outdoor=True
+    )
 
     assert loc is None
 
@@ -491,6 +509,12 @@ async def test_health_assistant_service_handles_emergency_notice() -> None:
 
 @pytest.mark.asyncio
 async def test_health_assistant_service_links_alcohol_question_with_recent_medication_record() -> None:
+    """음주 질문은 health_records 근거가 필요해, 인증된 프로필이 있어야 답한다.
+
+    이 근거는 클라이언트가 보낸 ``recent_records_summary``(검증되지 않은 텍스트)가
+    아니라 서버가 인증된 프로필로 직접 조회한 스냅샷이어야 한다 — 그래서
+    account/profile_id/health_record_service가 모두 있어야 통과한다.
+    """
     fake_json = """{
         "intent": "health_advice",
         "assistant_message": "최근 8월 31일에 타이레놀(아세트아미노펜) 복약 기록이 있습니다. 타이레놀 복용 중 알코올을 섭취하면 간 손상 위험이 급격히 증가하므로 음주를 피하시는 것이 안전합니다.",
@@ -508,15 +532,59 @@ async def test_health_assistant_service_links_alcohol_question_with_recent_medic
         "safety_disclaimer": "본 답변은 의학적 진단을 대신하지 않으며, 약물 복용 중 음주는 전문의 또는 약사와 상담하세요."
     }"""
     mock_client = MockLLMClient(fake_json)
-    service = HealthAssistantService(llm_client=mock_client)
+
+    class FakeHealthRecordService:
+        async def get_alcohol_consultation_snapshot(self, account: Any, profile_id: uuid.UUID) -> Any:
+            from app.dtos.health_record_query import AlcoholConsultationSnapshot, ConsultationMedication
+
+            return AlcoholConsultationSnapshot(
+                recent_medications=[
+                    ConsultationMedication(
+                        name="타이레놀",
+                        dosage=None,
+                        recorded_at=datetime(2026, 8, 31, 8, 0, tzinfo=timezone.utc),
+                    )
+                ],
+                message="최근 복약 기록 1건을 확인했습니다.",
+            )
+
+    class FakeHealthKnowledgeClient:
+        """실제 질병관리청 API 대신 이 테스트에서만 쓰는 고정 결과 — 네트워크와 무관하게
+        "개인기록 + 공식정보 둘 다 있으면 통과한다"만 검증한다."""
+
+        async def search(self, query: str) -> HealthKnowledgeSearchResult:
+            return HealthKnowledgeSearchResult(
+                query=query,
+                items=[
+                    HealthKnowledgeItem(
+                        title="음주",
+                        url="https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=5297",
+                        summary="과도한 음주는 혈압을 상승시키고 약물 대사에 영향을 줄 수 있습니다.",
+                        topics=["alcohol"],
+                    )
+                ],
+                retrieved_at=datetime.now(timezone.utc),
+                message="질병관리청 국가건강정보포털 공식 문서 1건을 확인했습니다.",
+            )
+
+    account = ServiceAccount(id=uuid.uuid4(), email="alcohol-test@example.com", password_hash="hash")
+    profile_id = str(uuid.uuid4())
+    service = HealthAssistantService(
+        llm_client=mock_client,
+        health_record_service=cast(HealthRecordService, FakeHealthRecordService()),
+        health_knowledge_client=FakeHealthKnowledgeClient(),
+    )
 
     request = HealthAssistantChatRequest(
         messages=[ChatMessage(role="user", content="나 오늘 술마셔도 됨?")],
         profile_context=ProfileContext(
-            profile_name="다원", relationship="본인", recent_records_summary="[2026-08-31 복약] 타이레놀 1알"
+            profile_id=profile_id,
+            profile_name="다원",
+            relationship="본인",
+            recent_records_summary="[2026-08-31 복약] 타이레놀 1알",
         ),
     )
-    response = await service.respond(request)
+    response = await service.respond(request, account=account)
 
     assert response.intent == "health_advice"
     assert "타이레놀" in response.assistant_message
@@ -733,7 +801,8 @@ async def test_medication_tool_stream_preserves_llm_answer() -> None:
             required_evidence_types=["medication"],
         )
     )
-    mock_llm.stream_structured_response_with_tools = AsyncMock(return_value=(fake_chunks(), mock_med_result))
+    # 실제 Gemini 클라이언트는 도구를 하나만 실행해도 결과를 리스트로 반환한다.
+    mock_llm.stream_structured_response_with_tools = AsyncMock(return_value=(fake_chunks(), [mock_med_result]))
 
     service = HealthAssistantService(llm_client=mock_llm)
     req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="타이레놀이랑 피임약 같이먹어도돼?")])
@@ -746,6 +815,9 @@ async def test_medication_tool_stream_preserves_llm_answer() -> None:
     assert "medication" in event_types
     assert "delta" in event_types
     assert "result" in event_types
+    # SSE 라우터가 json.dumps(payload) 하므로, 모든 이벤트가 실제 전송 가능한 JSON이어야 한다.
+    for _, payload in events:
+        json.dumps(payload, ensure_ascii=False)
 
     # final result 객체에 medication_search_result가 포함되어 있고 assistant_message는 LLM 답변임
     result_event = next(e[1] for e in events if e[0] == "result")
@@ -1208,3 +1280,57 @@ async def test_health_assistant_clinical_reasoning_referred_pain() -> None:
     assert response.pain_diary_tool.suspected_anatomy_ids == ["cervical_spine", "nervous"]
     assert response.pain_diary_tool.suspected_system == "nervous"
     assert "경추" in (response.pain_diary_tool.clinical_reasoning or "")
+
+
+def test_food_question_does_not_keep_irrelevant_supplement_disclaimer() -> None:
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="당뇨에 좋은 음식 알려줘")])
+    response = HealthAssistantResponse(
+        intent="health_advice",
+        assistant_message=(
+            "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다. "
+            "규칙적인 식사 원칙을 안내해 드릴게요."
+        ),
+    )
+
+    cleaned = HealthAssistantService._remove_irrelevant_supplement_disclaimer(response, request)
+
+    assert cleaned.assistant_message == "규칙적인 식사 원칙을 안내해 드릴게요."
+
+
+def test_supplement_question_keeps_supplement_disclaimer() -> None:
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="임신 중 영양제 알려줘")])
+    message = "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다."
+    response = HealthAssistantResponse(intent="health_advice", assistant_message=message)
+
+    kept = HealthAssistantService._remove_irrelevant_supplement_disclaimer(response, request)
+
+    assert kept.assistant_message == message
+
+
+def test_vitamin_or_mineral_question_keeps_supplement_disclaimer() -> None:
+    message = "영양제 섭취는 담당 의료진이나 전문의와 상의를 먼저 하신 후 복용을 권장드립니다."
+    for content in ("비타민 D 먹어도 될까요?", "미네랄 보충이 필요할까요?"):
+        request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=content)])
+        response = HealthAssistantResponse(intent="health_advice", assistant_message=f"{message} 일반 정보")
+
+        kept = HealthAssistantService._remove_irrelevant_supplement_disclaimer(response, request)
+
+        assert kept.assistant_message.startswith(message)
+
+
+def test_classifier_llm_client_reuses_injected_llm_client_by_default() -> None:
+    """`classifier_llm_client`를 따로 안 주면, 기존 테스트들처럼 `llm_client` 하나로
+    분류·답변을 둘 다 검증하던 방식이 그대로 동작해야 한다."""
+    llm_client = MockLLMClient("{}")
+    service = HealthAssistantService(llm_client=llm_client)
+
+    assert service.classifier_llm_client is llm_client
+
+
+def test_classifier_llm_client_uses_explicit_override_when_given() -> None:
+    llm_client = MockLLMClient("{}")
+    classifier_client = MockLLMClient("{}")
+    service = HealthAssistantService(llm_client=llm_client, classifier_llm_client=classifier_client)
+
+    assert service.classifier_llm_client is classifier_client
+    assert service.classifier_llm_client is not service.llm_client
