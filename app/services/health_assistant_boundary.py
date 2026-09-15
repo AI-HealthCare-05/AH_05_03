@@ -252,6 +252,18 @@ class HealthAssistantBoundaryService:
                 requires_authoritative_evidence=False,
             )
 
+        # 3. 명확한 단답형 응답 (숫자, 네/아니오 등) - 의학적 근거 검색 불필요
+        is_short_answer = len(compact) <= 5 and (
+            any(c.isdigit() for c in compact) 
+            or compact in ("응", "어", "네", "아니", "아니오", "아니요", "맞아", "아님", "없어", "있어", "몰라", "모름")
+        )
+        if is_short_answer:
+            return HealthAssistantScopeDecision(
+                scope="health",
+                requires_authoritative_evidence=False,
+                required_evidence_types=[],
+            )
+
         # 3. 명확한 건강 기록 입력 및 단순 조회 (혈압/혈당/복약/운동 수치 등록 및 기록/차트 조회)
         has_record_keyword = any(
             k in compact

@@ -78,6 +78,9 @@ export function OcrProgressPanel({
 
   return (
     <section className="ocr-progress" aria-label="검진표 인식 진행" aria-live="polite">
+      <h3 className="ocr-progress-title">
+        <span className="shimmer-text">✨ AI가 서류를 꼼꼼히 읽고 있습니다...</span>
+      </h3>
       <div className="ocr-progress-head">
         <strong>{STAGE_LABEL[stage]}</strong>
         <span className="ocr-progress-elapsed">

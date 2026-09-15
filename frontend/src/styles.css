@@ -9919,3 +9919,25 @@ main:focus {
 
 
 
+
+.ocr-progress-title {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--blue-800);
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg, var(--blue-800) 0%, var(--blue-400) 50%, var(--blue-800) 100%);
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shimmer 2s linear infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position: 200% center;
+  }
+}
