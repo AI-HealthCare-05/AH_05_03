@@ -123,6 +123,8 @@ class MockToolEnabledLLMClient:
             return cast(
                 T,
                 HealthAssistantScopeDecision(
+                    request_kind="information",
+                    clinical_contexts=["none"],
                     scope="health",
                     requires_authoritative_evidence=True,
                     required_evidence_types=["facility"],

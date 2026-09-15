@@ -38,6 +38,8 @@ class MockLLMClient:
     async def generate_structured_response(self, *args, **kwargs):
         if kwargs.get("response_schema") is HealthAssistantScopeDecision:
             return HealthAssistantScopeDecision(
+                request_kind="information",
+                clinical_contexts=["none"],
                 scope="health",
                 requires_authoritative_evidence=False,
             )
@@ -63,6 +65,10 @@ class CapturingLLMClient:
             return response_schema.model_validate(
                 {
                     "scope": "health",
+                    # 판정기는 계약상 두 필드를 반드시 돌려준다. 빼면 서버가 근거 없는
+                    # 판정으로 보고 확인 질문으로 끝낸다.
+                    "request_kind": "information",
+                    "clinical_contexts": ["none"],
                     "requires_authoritative_evidence": True,
                     "required_evidence_types": ["outdoor"],
                 }
@@ -796,6 +802,8 @@ async def test_medication_tool_stream_preserves_llm_answer() -> None:
     mock_llm = AsyncMock()
     mock_llm.generate_structured_response = AsyncMock(
         return_value=HealthAssistantScopeDecision(
+            request_kind="information",
+            clinical_contexts=["none"],
             scope="health",
             requires_authoritative_evidence=True,
             required_evidence_types=["medication"],
@@ -1334,3 +1342,52 @@ def test_classifier_llm_client_uses_explicit_override_when_given() -> None:
 
     assert service.classifier_llm_client is classifier_client
     assert service.classifier_llm_client is not service.llm_client
+
+
+@pytest.mark.asyncio
+async def test_outdoor_fast_path_integration_han_river() -> None:
+    """판정의 outdoor 요구가 한강 지오코딩과 야외조건 조회까지 이어진다."""
+
+    class UnexpectedClassifierClient:
+        async def generate_structured_response(self, *args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("명시적인 한강 야외 질문은 분류 LLM을 호출하면 안 됩니다.")
+
+        def stream_structured_response(self, *args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("명시적인 한강 야외 질문은 분류 LLM을 호출하면 안 됩니다.")
+
+    class HanRiverOutdoorStub:
+        def __init__(self) -> None:
+            self.resolver_inputs: list[str] = []
+            self.condition_coordinates: list[tuple[float, float]] = []
+
+        async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
+            self.resolver_inputs.append(text)
+            return 37.5283, 126.9326, "서울 한강"
+
+        async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
+            self.condition_coordinates.append((latitude, longitude))
+            return OutdoorConditionsResult(
+                latitude=latitude,
+                longitude=longitude,
+                weather=WeatherConditions(temperature_c=21.5, precipitation_type="강수 없음"),
+                air_quality=AirQualityConditions(region_name="서울", pm10=20, pm25=9),
+            )
+
+    original_question = "오늘 한강에서 러닝해도 돼?"
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=original_question)])
+    llm_client = CapturingLLMClient()
+    outdoor_client = HanRiverOutdoorStub()
+    service = HealthAssistantService(
+        llm_client=llm_client,
+        classifier_llm_client=UnexpectedClassifierClient(),
+        outdoor_conditions_client=outdoor_client,
+    )
+
+    response = await service.respond(request=request)
+
+    assert outdoor_client.resolver_inputs == [original_question]
+    assert outdoor_client.condition_coordinates == [(37.5283, 126.9326)]
+    assert response.outdoor_conditions is not None
+    assert response.outdoor_conditions.latitude == 37.5283
+    assert response.outdoor_conditions.longitude == 126.9326
+    assert "기온 21.5℃" in llm_client.system_instruction
