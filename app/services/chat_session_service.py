@@ -128,10 +128,8 @@ class ChatSessionService:
         if not messages_obj:
             return
 
-
         recent_text = "\n".join([f"{m.role}: {m.content}" for m in messages_obj])
         existing_memory = session_obj.core_memory or "없음"
-
 
         prompt = f"""
 당신은 건강 어시스턴트의 장기 기억 요약기입니다.

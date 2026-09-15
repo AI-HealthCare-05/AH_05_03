@@ -259,9 +259,7 @@ async def test_pregnancy_medication_safety_question_asks_for_context_without_cal
     client = ScopeOnlyClient(HealthAssistantScopeDecision(scope="out_of_scope"))
     service = HealthAssistantService(llm_client=client)
 
-    response = await service.respond(
-        HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=question)])
-    )
+    response = await service.respond(HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=question)]))
 
     assert response.assistant_message == (
         f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_supplement_context']}"

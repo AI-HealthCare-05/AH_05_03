@@ -286,7 +286,7 @@ class TestChatSessionsApi:
         for i in range(9):
             res = await authorized_client.post(
                 f"/api/v1/chat-sessions/{session_id}/messages",
-                json={"role": "user" if i % 2 == 0 else "assistant", "content": f"msg {i+1}"},
+                json={"role": "user" if i % 2 == 0 else "assistant", "content": f"msg {i + 1}"},
             )
             assert res.status_code == 200
 

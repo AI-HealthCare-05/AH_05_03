@@ -3117,14 +3117,20 @@ function PainConfirmationCard({
           <label>
             통증 강도 {intensity == null ? "(선택 필요)" : `(${intensity}/10)`}
             <div className="pain-intensity-slider-wrap">
-              <select
+              <input
+                type="range"
+                min="0"
+                max="10"
+                step="1"
                 aria-label="통증 강도"
-                value={intensity ?? ""}
-                onChange={(e) => setIntensity(e.target.value === "" ? null : Number(e.target.value))}
-              >
-                <option value="">선택해 주세요</option>
-                {Array.from({ length: 11 }, (_, value) => <option key={value} value={value}>{value}</option>)}
-              </select>
+                value={intensity ?? 5}
+                onChange={(e) => setIntensity(Number(e.target.value))}
+                onClick={(e) => {
+                  if (intensity == null) {
+                    setIntensity(Number((e.target as HTMLInputElement).value));
+                  }
+                }}
+              />
               <span className="pain-intensity-val">{intensity ?? "-"}</span>
             </div>
           </label>
@@ -3970,14 +3976,20 @@ function PainDiaryToolCard({
           <label>
             통증 강도 {intensity == null ? "(선택 필요)" : `(${intensity}/10)`}
             <div className="pain-intensity-slider-wrap">
-              <select
-                aria-label="통증 다이어리 강도"
-                value={intensity ?? ""}
-                onChange={(e) => setIntensity(e.target.value === "" ? null : Number(e.target.value))}
-              >
-                <option value="">선택해 주세요</option>
-                {Array.from({ length: 11 }, (_, value) => <option key={value} value={value}>{value}</option>)}
-              </select>
+              <input
+                type="range"
+                min="0"
+                max="10"
+                step="1"
+                aria-label="통증 강도"
+                value={intensity ?? 5}
+                onChange={(e) => setIntensity(Number(e.target.value))}
+                onClick={(e) => {
+                  if (intensity == null) {
+                    setIntensity(Number((e.target as HTMLInputElement).value));
+                  }
+                }}
+              />
               <span className="pain-intensity-val">{intensity ?? "-"}</span>
             </div>
           </label>

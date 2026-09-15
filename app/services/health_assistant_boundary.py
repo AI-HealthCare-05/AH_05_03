@@ -127,7 +127,9 @@ def is_pregnancy_medication_followup(messages: list[ChatMessage]) -> bool:
         message.role == "user" and any(word in message.content for word in ("임신", "임산부", "산모"))
         for message in messages
     )
-    previous_assistant = next((message.content for message in reversed(messages[:-1]) if message.role == "assistant"), "")
+    previous_assistant = next(
+        (message.content for message in reversed(messages[:-1]) if message.role == "assistant"), ""
+    )
     return pregnancy_was_mentioned and previous_assistant in {
         f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_supplement_context']}",
         f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['medication_safety_context']}",
@@ -254,7 +256,7 @@ class HealthAssistantBoundaryService:
 
         # 3. 명확한 단답형 응답 (숫자, 네/아니오 등) - 의학적 근거 검색 불필요
         is_short_answer = len(compact) <= 5 and (
-            any(c.isdigit() for c in compact) 
+            any(c.isdigit() for c in compact)
             or compact in ("응", "어", "네", "아니", "아니오", "아니요", "맞아", "아님", "없어", "있어", "몰라", "모름")
         )
         if is_short_answer:
@@ -309,7 +311,12 @@ class HealthAssistantBoundaryService:
         has_urgent_symptom = any(
             word in compact for word in ("가슴", "흉통", "호흡", "숨이", "마비", "의식", "출혈", "실신", "경련")
         )
-        if has_pain_statement and not asks_pain_advice and not has_urgent_symptom and not is_pregnancy_symptom_context(messages):
+        if (
+            has_pain_statement
+            and not asks_pain_advice
+            and not has_urgent_symptom
+            and not is_pregnancy_symptom_context(messages)
+        ):
             return HealthAssistantScopeDecision(
                 scope="health",
                 requires_authoritative_evidence=False,

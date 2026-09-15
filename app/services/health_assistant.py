@@ -533,13 +533,16 @@ class HealthAssistantService:
                 if resolved_place:
                     lat, lon, address = resolved_place
                     return UserLocation(latitude=lat, longitude=lon, address=address)
-                    
+
         # IP Fallback
         if client_ip:
             if client_ip in ("127.0.0.1", "::1", "localhost", "testclient"):
-                return UserLocation(latitude=37.5665, longitude=126.9780, address="서울특별시") # 로컬 개발용 폴백 (서울)
+                return UserLocation(
+                    latitude=37.5665, longitude=126.9780, address="서울특별시"
+                )  # 로컬 개발용 폴백 (서울)
             try:
                 import httpx
+
                 async with httpx.AsyncClient(timeout=2.0) as client:
                     resp = await client.get(f"http://ip-api.com/json/{client_ip}?lang=ko")
                     if resp.status_code == 200:
@@ -548,11 +551,11 @@ class HealthAssistantService:
                             return UserLocation(
                                 latitude=data["lat"],
                                 longitude=data["lon"],
-                                address=data.get("city", data.get("regionName", "알 수 없는 지역"))
+                                address=data.get("city", data.get("regionName", "알 수 없는 지역")),
                             )
             except Exception:
                 pass
-                
+
         return None
 
     async def _load_outdoor_conditions(self, loc: UserLocation | None):
@@ -1297,9 +1300,7 @@ class HealthAssistantService:
 
             for generated_tool in generated_tool_results:
                 payload = (
-                    generated_tool.model_dump(mode="json")
-                    if hasattr(generated_tool, "model_dump")
-                    else generated_tool
+                    generated_tool.model_dump(mode="json") if hasattr(generated_tool, "model_dump") else generated_tool
                 )
                 if isinstance(generated_tool, FoodNutritionSearchResult):
                     yield "food_nutrition", payload
