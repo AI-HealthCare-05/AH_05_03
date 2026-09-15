@@ -4,6 +4,8 @@ import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, cast
 
+import httpx
+
 from app.dtos.health_assistant import (
     HealthAssistantChatRequest,
     HealthAssistantLlmResponse,
@@ -534,27 +536,29 @@ class HealthAssistantService:
                     lat, lon, address = resolved_place
                     return UserLocation(latitude=lat, longitude=lon, address=address)
 
-        # IP Fallback
-        if client_ip:
-            if client_ip in ("127.0.0.1", "::1", "localhost", "testclient"):
-                return UserLocation(
-                    latitude=37.5665, longitude=126.9780, address="서울특별시"
-                )  # 로컬 개발용 폴백 (서울)
-            try:
-                import httpx
+        return await self._resolve_location_by_ip(client_ip)
 
-                async with httpx.AsyncClient(timeout=2.0) as client:
-                    resp = await client.get(f"http://ip-api.com/json/{client_ip}?lang=ko")
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        if data.get("status") == "success":
-                            return UserLocation(
-                                latitude=data["lat"],
-                                longitude=data["lon"],
-                                address=data.get("city", data.get("regionName", "알 수 없는 지역")),
-                            )
-            except Exception:
-                pass
+    @staticmethod
+    async def _resolve_location_by_ip(client_ip: str | None) -> UserLocation | None:
+        """좌표도 장소명도 없을 때의 마지막 폴백. 실패하면 조용히 None — 위치는 있으면 좋은 것이지 필수가 아니다."""
+        if not client_ip:
+            return None
+        if client_ip in ("127.0.0.1", "::1", "localhost", "testclient"):
+            # 로컬 개발용 폴백 (서울)
+            return UserLocation(latitude=37.5665, longitude=126.9780, address="서울특별시")
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.get(f"http://ip-api.com/json/{client_ip}?lang=ko")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data.get("status") == "success":
+                        return UserLocation(
+                            latitude=data["lat"],
+                            longitude=data["lon"],
+                            address=data.get("city", data.get("regionName", "알 수 없는 지역")),
+                        )
+        except Exception:
+            logger.debug("IP 기반 위치 추정 실패", exc_info=True)
 
         return None
 
