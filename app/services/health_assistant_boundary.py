@@ -288,6 +288,24 @@ class HealthAssistantBoundaryService:
                 required_evidence_types=[],
             )
 
+        # 원인·치료를 묻지 않고 통증만 말한 경우는 의학적 조언 요청이 아니라 통증 기록 입력이다.
+        # 이 경로를 판정 모델에 맡기면 근거 검색이 필요한 health_advice로 분류되어 기록도 못 남긴다.
+        has_pain_statement = any(
+            word in compact for word in ("아파", "아픈", "통증", "쑤셔", "저려", "결려", "뻐근", "시큰", "찌릿")
+        )
+        asks_pain_advice = any(
+            word in compact for word in ("왜", "어떻게", "어떡", "원인", "치료", "괜찮", "병원", "위험", "심각")
+        )
+        has_urgent_symptom = any(
+            word in compact for word in ("가슴", "흉통", "호흡", "숨이", "마비", "의식", "출혈", "실신", "경련")
+        )
+        if has_pain_statement and not asks_pain_advice and not has_urgent_symptom and not is_pregnancy_symptom_context(messages):
+            return HealthAssistantScopeDecision(
+                scope="health",
+                requires_authoritative_evidence=False,
+                required_evidence_types=[],
+            )
+
         # 건강기록 단순 조회 / 차트 조회 (의학적 권고/원인/치료 문의가 아닌 단순 기록 열람)
         has_record_query_kw = any(
             k in compact for k in ("조회", "보여줘", "확인해줘", "그래프", "추이", "트렌드", "내역", "기록목록")

@@ -79,7 +79,7 @@ function messageId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-const SUPPLEMENT_CONSULTATION_NOTICE = /^(영양제 섭취는[^.]*?(?:권장드립니다|권장합니다)\.)\s*/;
+const CONSULTATION_NOTICE = /^((?:영양제 섭취는[^.]*?(?:권장드립니다|권장합니다)\.)|(?:[^.]{0,80}(?:의사|약사|의료진|전문의)[^.]{0,30}(?:상담|상의)[^.]{0,30}(?:필요|권장)[^.]*\.))\s*/;
 const ORIGINAL_DOCUMENT_REQUEST_PATTERN = /(?:원본|서류|사진|스캔|문서|이미지)/;
 const UNREQUESTED_DOCUMENT_REFERENCE_PATTERN =
   /\s*아래\s+(?:검진\s*결과\s*)?원본(?:\s*서류)?(?:에서|을)?[^.]*?(?:확인해\s*보세요|확인하세요)\.?/g;
@@ -97,7 +97,7 @@ function AssistantMessageText({ content, highlightSupplementNotice }: {
   content: string;
   highlightSupplementNotice: boolean;
 }) {
-  const match = highlightSupplementNotice ? content.match(SUPPLEMENT_CONSULTATION_NOTICE) : null;
+  const match = highlightSupplementNotice ? content.match(CONSULTATION_NOTICE) : null;
   const notice = match?.[1];
   const body = notice ? content.slice(match[0].length) : content;
 
@@ -106,7 +106,7 @@ function AssistantMessageText({ content, highlightSupplementNotice }: {
   return <>
     {notice && (
       <aside className="supplement-consultation-notice" role="note">
-        <strong>복용 전 의료진 확인</strong>
+        <strong>{notice.startsWith("영양제") ? "복용 전 의료진 확인" : "의사·약사 상담 필요"}</strong>
         <p>{notice}</p>
       </aside>
     )}

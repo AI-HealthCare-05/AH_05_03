@@ -111,7 +111,7 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ searchResult, ch
             onClick={() => setShowDetails((prev) => !prev)}
             aria-expanded={showDetails}
           >
-            <span>식약처 상세 정보(효능·용법)<br/>{showDetails ? "접기 ▲" : "보기 ▼"}</span>
+            <span>효능·용법 {showDetails ? "▲" : "▼"}</span>
           </button>
           <span className="medication-source-text">출처: 식약처 e약은요 & DUR</span>
         </div>

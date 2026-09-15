@@ -516,6 +516,19 @@ def test_fast_path_detects_service_usage_and_record_without_llm() -> None:
     assert ambiguous is None
 
 
+def test_fast_path_treats_plain_pain_statement_as_a_record_not_medical_advice() -> None:
+    boundary = HealthAssistantBoundaryService()
+
+    decision = boundary._fast_path_decision([ChatMessage(role="user", content="나 무릎이랑 발목이 아파")])
+
+    assert decision is not None
+    assert decision.scope == "health"
+    assert decision.requires_authoritative_evidence is False
+
+    advice = boundary._fast_path_decision([ChatMessage(role="user", content="무릎이 아픈 원인이 뭐야?")])
+    assert advice is None
+
+
 def test_fast_path_accepts_only_contextual_facility_location_reply() -> None:
     boundary = HealthAssistantBoundaryService()
     contextual = boundary._fast_path_decision(

@@ -49,7 +49,7 @@ describe("MedicationCard", () => {
     expect(screen.getByText(/상대 성분: 아세틸살리실산/i)).toBeInTheDocument();
 
     // 초기에는 상세 정보가 접혀있고 토글 버튼이 노출됨
-    const toggleBtn = screen.getByRole("button", { name: /식약처 상세 정보/i });
+    const toggleBtn = screen.getByRole("button", { name: "효능·용법 ▼" });
     expect(toggleBtn).toBeInTheDocument();
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
 
@@ -183,4 +183,3 @@ describe("MedicationCard", () => {
     expect(container.firstChild).toBeNull();
   });
 });
-

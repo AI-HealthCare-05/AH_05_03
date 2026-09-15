@@ -2614,7 +2614,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 3px 8px;
   padding: 6px 12px;
   background: #f8fafc;
   border: 1px solid #cbd5e1;
@@ -2627,6 +2626,7 @@
   width: auto;
   margin-top: 0;
   text-align: center;
+  white-space: nowrap;
 }
 
 .medication-toggle-details-btn:hover {

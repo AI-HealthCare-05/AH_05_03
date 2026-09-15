@@ -184,6 +184,33 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     expect(screen.getByText("일반적인 영양 정보는 다음과 같습니다.")).toBeInTheDocument();
   });
 
+  it("약 복용 전 상담 문구도 최종 답변에서 경고 카드로 유지한다", async () => {
+    vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
+      intent: "health_advice",
+      assistant_message: "아스피린 복용은 의사 또는 약사와 상담이 필요합니다.\n\n확인할 점\n- 현재 복용 중인 약을 확인하세요.",
+      medication_search_result: {
+        query: "아스피린",
+        items: [],
+        interaction_items: [],
+        has_interaction_danger: false,
+        message: "아스피린 정보",
+        errors: [],
+      },
+      missing_fields: [],
+      needs_confirmation: false,
+      auto_save: false,
+      suggested_quick_replies: [],
+    });
+    render(<HealthAssistantDrawer profile={mockProfile} runtime={mockRuntime} isOpen onClose={mockOnClose} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/건강정보를 입력하거나/), { target: { value: "아스피린 먹어도 돼?" } });
+    fireEvent.click(screen.getByRole("button", { name: "전송" }));
+
+    const notice = await screen.findByRole("note");
+    expect(notice).toHaveTextContent("의사·약사 상담 필요");
+    expect(notice).toHaveTextContent("아스피린 복용은 의사 또는 약사와 상담이 필요합니다.");
+  });
+
   it("의료 답변을 핵심 요약과 짧은 목록으로 표시한다", async () => {
     vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "health_advice",
