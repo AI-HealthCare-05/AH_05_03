@@ -41,7 +41,12 @@ from app.services.food_nutrition_tools import (
     execute_food_nutrition_tool,
     get_food_nutrition_tools,
 )
-from app.services.health_assistant_boundary import HealthAssistantBoundaryService
+from app.services.health_assistant_boundary import (
+    _MEDICAL_EVIDENCE_TYPES,
+    HealthAssistantBoundaryService,
+    asks_personal_clearance,
+    detect_explicit_protected_contexts,
+)
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.health_knowledge_catalog import HealthKnowledgeClientProtocol, is_alcohol_topic
 from app.services.health_knowledge_query import normalize_knowledge_query
@@ -60,7 +65,6 @@ from app.services.medical_facility_tools import (
 from app.services.medication_client import MedicationClient, MedicationClientProtocol
 from app.services.medication_tools import execute_medication_tool, get_medication_tools
 from app.services.medication_topic import mentions_medication
-from app.services.ocr_partial import PartialJsonTextReader
 from app.services.outdoor_conditions_client import (
     OutdoorConditionsClient,
     OutdoorConditionsClientProtocol,
@@ -1082,20 +1086,44 @@ class HealthAssistantService:
         )
         needs_outdoor = "outdoor" in boundary.decision.required_evidence_types
         loc = await self._resolve_request_location(request, needs_outdoor, client_ip)
-        if needs_outdoor and loc is None:
+        medical_required = bool(set(boundary.decision.required_evidence_types) & _MEDICAL_EVIDENCE_TYPES)
+        if needs_outdoor and loc is None and not medical_required:
             return self._outdoor_location_required_response()
-        outdoor_conditions = await self._load_outdoor_conditions(loc)
+        outdoor_conditions = await self._load_outdoor_conditions(loc) if loc is not None else None
         system_instruction = build_system_instruction(
             profile_context,
             user_location=loc,
             outdoor_conditions_context=self._format_outdoor_conditions_context(outdoor_conditions, loc is not None)
-            if needs_outdoor
+            if (needs_outdoor and loc is not None)
             else None,
             authoritative_evidence_context=authoritative_evidence_context,
             session_core_memory=request.core_memory,
         )
 
         tools = self._get_tools(request)
+
+        # 민감 개인 허가 질문(임신, 만성질환, 증상 등)에서
+        # health_knowledge가 요구되는데 사전 적재된 근거가 없으면 날씨만으로 메인 LLM을 호출하지 않는다.
+        # (날씨만으로 운동 허가를 단정하거나 stream 시 위험 delta가 사전 누출되는 것을 방지)
+        effective_contexts = (set(boundary.decision.clinical_contexts) - {"none"}) | detect_explicit_protected_contexts(
+            request.messages
+        )
+        asks_advice = boundary.decision.request_kind == "personalized_advice" or asks_personal_clearance(
+            request.messages
+        )
+        is_sensitive_clearance = asks_advice and bool(effective_contexts)
+
+        if is_sensitive_clearance and ("health_knowledge" in boundary.decision.required_evidence_types):
+            available_preloaded = HealthAssistantBoundaryService.available_evidence_types(preloaded_results, None)
+            if "health_knowledge" not in available_preloaded:
+                return self.boundary_service.enforce_grounding(
+                    boundary.decision,
+                    HealthAssistantResponse(intent="health_advice", assistant_message=""),
+                    tool_result=preloaded_results or None,
+                    outdoor_conditions=outdoor_conditions,
+                    messages=request.messages,
+                )
+
         if (
             boundary.decision.requires_authoritative_evidence
             and not tools
@@ -1220,7 +1248,6 @@ class HealthAssistantService:
             return
 
         request = prepared.request
-        reader = PartialJsonTextReader("assistant_message")
         raw = ""
 
         async def tool_executor(name: str, args: dict[str, Any]) -> Any:
@@ -1252,6 +1279,7 @@ class HealthAssistantService:
             prepared.decision,
             tool_result,
             prepared.outdoor_conditions,
+            messages=request.messages,
         ):
             response = self.boundary_service.enforce_grounding(
                 prepared.decision,
@@ -1276,7 +1304,6 @@ class HealthAssistantService:
                 if isinstance(generated_tool, FoodNutritionSearchResult):
                     yield "food_nutrition", payload
                 elif isinstance(generated_tool, HealthRecordQueryResult):
-                    yield "delta", {"text": generated_tool.message}
                     res_obj = HealthAssistantResponse(
                         intent="query_records",
                         assistant_message=generated_tool.message,
@@ -1291,6 +1318,7 @@ class HealthAssistantService:
                         outdoor_conditions=prepared.outdoor_conditions,
                         messages=request.messages,
                     )
+                    yield "delta", {"text": validated.assistant_message}
                     yield "result", validated.model_dump(mode="json")
                     return
                 elif isinstance(generated_tool, MedicationSearchResult):
@@ -1298,7 +1326,6 @@ class HealthAssistantService:
                 else:
                     yield "facility", payload
                     summary_msg = getattr(generated_tool, "message", None) or "주변 의료시설을 조회했습니다."
-                    yield "delta", {"text": summary_msg}
                     res_obj = HealthAssistantResponse(
                         intent="search_facility",
                         assistant_message=summary_msg,
@@ -1313,14 +1340,12 @@ class HealthAssistantService:
                         outdoor_conditions=prepared.outdoor_conditions,
                         messages=request.messages,
                     )
+                    yield "delta", {"text": validated.assistant_message}
                     yield "result", validated.model_dump(mode="json")
                     return
 
         async for piece in stream_gen:
             raw += piece
-            fresh = reader.push(piece)
-            if fresh:
-                yield "delta", {"text": fresh}
 
         try:
             llm_parsed = HealthAssistantLlmResponse.model_validate_json(raw)
@@ -1339,6 +1364,9 @@ class HealthAssistantService:
             outdoor_conditions=prepared.outdoor_conditions,
             messages=request.messages,
         )
+        # 생성 중인 문장을 먼저 전송하면 최종 safety/grounding이 차단해도
+        # 이미 사용자에게 노출된다. 검증된 문장만 delta로 내보낸다.
+        yield "delta", {"text": validated.assistant_message}
         yield "result", validated.model_dump(mode="json")
 
     @staticmethod

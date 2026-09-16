@@ -1118,6 +1118,16 @@ def test_unlisted_korean_verb_still_triggers_the_clearance_invariant() -> None:
     assert normalized.requires_authoritative_evidence is True
 
 
+def test_recovered_pain_statement_stays_on_record_fast_path() -> None:
+    boundary = HealthAssistantBoundaryService()
+
+    decision = boundary._fast_path_decision([ChatMessage(role="user", content="무릎도 좋아졌고 발목이 아파")])
+
+    assert decision is not None
+    assert decision.request_kind == "operation"
+    assert decision.clinical_contexts == ["symptom"]
+
+
 # --- 민감 맥락 조언의 근거 요건 (2026-09-16) ----------------------------------
 #
 # 앞서는 "날씨 말고 뭐라도 있으면 통과" 였다. 그래서 라면 칼로리나 병원 목록이
@@ -1413,3 +1423,134 @@ def test_blocked_activity_clearance_asks_what_the_judgement_needs(question: str)
 def test_other_blocked_questions_keep_the_general_message() -> None:
     assert _blocked_message("고혈압이 뭐야?") == MISSING_EVIDENCE_MESSAGE
     assert _blocked_message("달리기 해도 돼?") == MISSING_EVIDENCE_MESSAGE
+
+
+def test_partial_grounding_waives_only_missing_outdoor_evidence() -> None:
+    decision = HealthAssistantScopeDecision(
+        scope="health",
+        request_kind="personalized_advice",
+        clinical_contexts=["pregnancy"],
+        requires_authoritative_evidence=True,
+        required_evidence_types=["health_knowledge", "outdoor", "food_nutrition"],
+    )
+    messages = [ChatMessage(role="user", content="임신 중인데 오늘 뛰고 라면 먹어도 돼?")]
+
+    assert not HealthAssistantBoundaryService.has_required_evidence(
+        decision, _knowledge_result(), None, "health_advice", messages=messages
+    )
+    assert HealthAssistantBoundaryService.has_required_evidence(
+        decision, [_knowledge_result(), _food_result()], None, "health_advice", messages=messages
+    )
+
+
+@pytest.mark.parametrize(
+    ("intent", "required"),
+    [("health_advice", ["health_knowledge"]), ("general_chat", [])],
+)
+def test_generated_emergency_notice_does_not_bypass_grounding(intent: str, required: list[str]) -> None:
+    boundary = HealthAssistantBoundaryService()
+    decision = HealthAssistantScopeDecision(
+        scope="health",
+        request_kind="personalized_advice",
+        clinical_contexts=["pregnancy"],
+        requires_authoritative_evidence=bool(required),
+        required_evidence_types=cast(Any, required),
+    )
+    response = HealthAssistantResponse(
+        intent=cast(Any, intent),
+        assistant_message="근거 없이 지금 달려도 안전합니다.",
+        emergency_notice="응급 상황일 수 있습니다.",
+    )
+
+    result = boundary.enforce_grounding(
+        decision,
+        response,
+        tool_result=None,
+        outdoor_conditions=None,
+        messages=[ChatMessage(role="user", content="임신 중인데 달리기 해도 돼?")],
+    )
+
+    assert "지금 달려도 안전" not in result.assistant_message
+    assert result.emergency_notice is not None
+
+
+@pytest.mark.parametrize(
+    "user_turns",
+    [
+        ["달리기 해도 돼?", "나 임신했어"],
+        ["임신했는데 달리기 어때?", "응 알려줘"],
+    ],
+)
+def test_recent_followup_keeps_personal_activity_clearance_guard(user_turns: list[str]) -> None:
+    messages = [ChatMessage(role="user", content=turn) for turn in user_turns]
+    wrong_decision = HealthAssistantScopeDecision(
+        scope="health",
+        request_kind="information",
+        clinical_contexts=["none"],
+        required_evidence_types=[],
+    )
+
+    normalized = HealthAssistantBoundaryService._validate_and_normalize_decision(messages, wrong_decision)
+
+    assert "health_knowledge" in normalized.required_evidence_types
+    assert normalized.requires_authoritative_evidence is True
+
+
+# --- 응답 라벨로 근거 검사를 피할 수 없다 (2026-09-16) -------------------------
+#
+# 근거 검사를 여는 조건이 전부 앞 단계의 자기 신고(`requires_authoritative_evidence`,
+# `response.intent`)에만 걸려 있으면, 라벨 하나로 관문 전체를 건너뛸 수 있었다.
+# `enforce_grounding` 은 앞 단계가 틀렸을 때 잡으라고 있는 자리이므로, 앞 단계를
+# 믿는 조건만 두면 관문이 아니다. 원문을 보는 갈래를 함께 둔다.
+
+_UNGROUNDED_DECISION = dict(
+    scope="health",
+    request_kind="information",
+    clinical_contexts=["none"],
+    required_evidence_types=[],
+    requires_authoritative_evidence=False,
+)
+
+
+@pytest.mark.parametrize(
+    "intent",
+    ["health_advice", "general_chat", "query_records", "record_pain", "search_facility"],
+)
+def test_clearance_question_cannot_escape_grounding_by_relabelling_intent(intent: str) -> None:
+    """판정이 '근거 불필요' 라고 해도, 원문이 개인 의료 판단 요청이면 막힌다."""
+    boundary = HealthAssistantBoundaryService()
+    answer = "임신 중 달리기 괜찮습니다."
+
+    result = boundary.enforce_grounding(
+        HealthAssistantScopeDecision(**cast(Any, _UNGROUNDED_DECISION)),
+        HealthAssistantResponse(intent=cast(Any, intent), assistant_message=answer),
+        tool_result=None,
+        outdoor_conditions=None,
+        messages=[ChatMessage(role="user", content="나 임신했는데 달리기 해도돼?")],
+    )
+
+    assert result.assistant_message != answer
+
+
+@pytest.mark.parametrize(
+    ("question", "intent"),
+    [
+        ("안녕 오늘 기분 좋아", "general_chat"),
+        ("나 무릎이랑 발목이 아파", "record_pain"),
+        ("내 혈압 기록 보여줘", "query_records"),
+    ],
+)
+def test_non_advice_conversation_is_not_dragged_into_grounding(question: str, intent: str) -> None:
+    """허가를 구하지 않은 대화까지 근거를 요구하면 인사와 기록이 막힌다."""
+    boundary = HealthAssistantBoundaryService()
+    answer = "반가워요!"
+
+    result = boundary.enforce_grounding(
+        HealthAssistantScopeDecision(**cast(Any, {**_UNGROUNDED_DECISION, "request_kind": "operation"})),
+        HealthAssistantResponse(intent=cast(Any, intent), assistant_message=answer),
+        tool_result=None,
+        outdoor_conditions=None,
+        messages=[ChatMessage(role="user", content=question)],
+    )
+
+    assert result.assistant_message == answer

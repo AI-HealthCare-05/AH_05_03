@@ -684,12 +684,10 @@ async def test_health_assistant_service_links_alcohol_question_with_recent_medic
 
 
 @pytest.mark.asyncio
-async def test_streaming_emits_message_deltas_then_the_whole_response() -> None:
-    """글자는 흐르고 초안은 마지막에 한 번.
+async def test_streaming_emits_validated_message_then_the_whole_response() -> None:
+    """완성된 JSON을 검증한 뒤 문장과 초안을 전송한다.
 
-    두 벌인 이유가 있다. 기록 초안은 JSON 이 끝나야 유효해지고, 안전 검증도 완성본에만
-    걸 수 있다 — 덜 온 문장으로 응급 판정을 하면 "가슴이 아" 에서 119 를 띄우거나
-    반대로 놓친다.
+    최종 grounding이 본문을 교체할 수 있으므로 미검증 문장 조각은 먼저 보내지 않는다.
     """
     fake_json = """{
         "intent": "record_blood_pressure",
@@ -706,8 +704,7 @@ async def test_streaming_emits_message_deltas_then_the_whole_response() -> None:
     deltas = [payload["text"] for name, payload in events if name == "delta"]
     results = [payload for name, payload in events if name == "result"]
 
-    # 한 글자씩 흘렸으므로 조각이 여럿이어야 한다 — 한 덩어리면 스트리밍이 아니다.
-    assert len(deltas) > 1
+    assert len(deltas) == 1
     assert "".join(deltas) == "아침 혈압 130에 85로 기록할까요?"
     # 초안은 마지막 한 번에만 실린다.
     assert len(results) == 1
