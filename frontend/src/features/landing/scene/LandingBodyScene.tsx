@@ -78,6 +78,15 @@ interface LandingBodySceneProps {
   onLoadingChange?: (state: { loading: boolean; percent: number }) => void;
   /** WebGL 이 없거나 자산을 못 받았을 때. 부모가 대체 화면을 세운다. */
   onFailure?: (reason: string) => void;
+  /**
+   * 표식 색. **주지 않으면 앱의 통증 팔레트(보통, 5점)** 를 쓴다 — v1 랜딩이
+   * 그 값으로 서 있으므로 기본값을 바꾸지 않는다.
+   *
+   * v2 랜딩은 배경이 검정이 아니라 딥 오버진이라 그 위에서 통증 팔레트의 주황이
+   * 따로 떠 보인다(보색에 가깝다). 같은 장면을 두 벌 복사하는 대신 **색 하나만**
+   * 밖에서 받는다 — 장면의 판단(무엇이 언제 드러나는가)은 여전히 한 곳에 있다.
+   */
+  markerColor?: string;
 }
 
 const MARKER_IDS = Object.keys(BODY_MARKER_ANCHORS) as BodyMarkerId[];
@@ -110,6 +119,7 @@ export function LandingBodyScene({
   reducedMotion,
   onLoadingChange,
   onFailure,
+  markerColor,
 }: LandingBodySceneProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -193,7 +203,9 @@ export function LandingBodyScene({
     const ownedTextures = new Set<THREE.Texture>();
 
     /* 표식 ------------------------------------------------------------ */
-    const painColor = getPainColorProfile(MARKER_INTENSITY).color.clone();
+    const painColor = markerColor
+      ? new THREE.Color(markerColor)
+      : getPainColorProfile(MARKER_INTENSITY).color.clone();
     const glowTexture = createGlowTexture(painColor);
     ownedTextures.add(glowTexture);
 
@@ -454,7 +466,7 @@ export function LandingBodyScene({
       dracoLoader.dispose();
       renderer.dispose();
     };
-  }, [active, progressRef]);
+  }, [active, progressRef, markerColor]);
 
   return (
     <div className="ln-body-canvas" ref={hostRef}>
