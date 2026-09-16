@@ -770,6 +770,38 @@ export function chatViewModeStorageKey(profileId: string): string {
 
 export const LAST_OPENED_PROFILE_KEY = "ieobom_chat_last_opened_profile";
 
+export function chatActiveSessionStorageKey(profileId: string): string {
+  return `ieobom_chat_active_session_${profileId}`;
+}
+
+/** 마지막으로 보고 있던 대화. 화면 모드(chat/list)만 기억하고 **어느 대화인지는**
+ * 기억하지 않아서, 예전 대화를 보다 봄이를 닫으면 항상 최신 대화로 돌아왔다. */
+export function loadActiveChatSessionId(profileId: string, storage?: Storage): string | null {
+  if (!profileId) return null;
+  const targetStorage = storage ?? (typeof window !== "undefined" ? window.sessionStorage : undefined);
+  if (!targetStorage) return null;
+  try {
+    return targetStorage.getItem(chatActiveSessionStorageKey(profileId));
+  } catch {
+    return null;
+  }
+}
+
+export function saveActiveChatSessionId(profileId: string, sessionId: string | null, storage?: Storage): void {
+  if (!profileId) return;
+  const targetStorage = storage ?? (typeof window !== "undefined" ? window.sessionStorage : undefined);
+  if (!targetStorage) return;
+  try {
+    if (sessionId) {
+      targetStorage.setItem(chatActiveSessionStorageKey(profileId), sessionId);
+    } else {
+      targetStorage.removeItem(chatActiveSessionStorageKey(profileId));
+    }
+  } catch (err) {
+    console.warn("Failed to persist active chat session:", err);
+  }
+}
+
 export function loadChatViewMode(
   profileId: string,
   storage?: Storage,

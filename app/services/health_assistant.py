@@ -86,6 +86,14 @@ class _PreparedExecution:
     tools: list[Any] | None
 
 
+#: 봄이가 먼저 "0~10점 중 몇 점인가요?" 라고 물으면 사용자는 보통 `2` 처럼 숫자만
+#: 답한다. 그 답은 `강도 2` 와 달리 위 패턴에 걸리지 않아, 묻고서 받은 답을 도로
+#: 버렸다 — 화면에는 "강도 2를 저장했습니다" 가 뜨는데 슬라이더는 비어 있었다
+#: (2026-09-16). 질문이 앞에 있었는지까지 보면 맨 숫자도 명시한 값이다.
+_PAIN_INTENSITY_QUESTION_PATTERN = re.compile(r"(?:강도|세기)[^?]{0,30}?(?:몇|점|0\s*[~-]\s*10)")
+_BARE_INTENSITY_ANSWER_PATTERN = re.compile(r"^\D{0,4}(?:10|[0-9])\D{0,4}$")
+
+
 _EXPLICIT_PAIN_INTENSITY_PATTERN = re.compile(
     r"(?:통증\s*)?(?:강도|세기)\s*(?:는|가)?\s*(?:약\s*)?(?:10|[0-9])(?:\s*(?:점|정도|/\s*10))?"
     r"|(?<!\d)(?:10|[0-9])\s*(?:점|/\s*10)(?!\d)"
@@ -1012,8 +1020,17 @@ class HealthAssistantService:
         """사용자가 말하지 않은 통증 수치를 LLM이 만들어도 저장 경로에서 제거한다."""
         if response.intent != "record_pain" or not request.messages:
             return response
-        for message in reversed(request.messages):
-            if message.role == "user" and _EXPLICIT_PAIN_INTENSITY_PATTERN.search(message.content):
+        previous_assistant = ""
+        for message in request.messages:
+            if message.role != "user":
+                previous_assistant = message.content
+                continue
+            if _EXPLICIT_PAIN_INTENSITY_PATTERN.search(message.content):
+                return response
+            # 앞선 질문이 강도를 물었다면 `2` 같은 숫자만의 답도 명시한 값이다.
+            if _PAIN_INTENSITY_QUESTION_PATTERN.search(previous_assistant) and _BARE_INTENSITY_ANSWER_PATTERN.match(
+                message.content.strip()
+            ):
                 return response
 
         changed = False
