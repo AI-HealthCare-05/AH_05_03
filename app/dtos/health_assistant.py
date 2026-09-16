@@ -231,10 +231,22 @@ HealthAssistantClarificationKind = Literal[
 ]
 
 
+#: 임상 맥락 값. 판정 DTO 와 패스트패스 헬퍼가 같은 정의를 쓴다.
+HealthAssistantClinicalContext = Literal["pregnancy", "symptom", "chronic_condition", "medication", "treatment", "none"]
+
+
 class HealthAssistantScopeDecision(BaseModel):
     """메인 답변 전에 실행하는 서비스 범위 판정 및 쿼리 인리치먼트 결과."""
 
     scope: HealthAssistantScope = Field(description="건강비서 서비스 범위 판정")
+    request_kind: Literal["operation", "information", "personalized_advice"] = Field(
+        default="information",
+        description="요청의 기본 성격 (기록/동작, 일반 정보, 개인화된 조언)",
+    )
+    clinical_contexts: list[HealthAssistantClinicalContext] = Field(
+        default_factory=list,
+        description="요청에 포함된 임상적 건강 맥락",
+    )
     requires_authoritative_evidence: bool = Field(
         default=False,
         description="사용자에게 건강 사실·수치·권고를 답하려면 승인된 근거 조회가 필요한지 여부",

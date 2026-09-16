@@ -363,15 +363,21 @@ export function HealthAssistantDrawer({
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     const doScroll = () => {
-      if (messagesContainerRef.current) {
-        if (typeof messagesContainerRef.current.scrollTo === "function") {
-          messagesContainerRef.current.scrollTo({
-            top: messagesContainerRef.current.scrollHeight,
-            behavior,
-          });
+      const container = messagesContainerRef.current;
+      if (container) {
+        // **CSS 가 이긴다.** 이 컨테이너에는 `scroll-behavior: smooth` 가 걸려 있어서,
+        // `scrollTop` 대입은 물론 일부 브라우저에서는 `scrollTo` 의 `behavior` 까지
+        // 무시하고 부드럽게 기어 내려간다. 대화를 통째로 바꿀 때는 그 애니메이션이
+        // 곧 "맨 위에서 최근 글까지 훑는" 증상이 된다. 즉시 이동하는 동안만 CSS 를
+        // 함께 꺼 두고 원래 값으로 돌려놓는다(2026-09-16).
+        const previousBehavior = container.style.scrollBehavior;
+        if (behavior === "auto") container.style.scrollBehavior = "auto";
+        if (typeof container.scrollTo === "function") {
+          container.scrollTo({ top: container.scrollHeight, behavior });
         } else {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+          container.scrollTop = container.scrollHeight;
         }
+        if (behavior === "auto") container.style.scrollBehavior = previousBehavior;
       } else if (typeof messagesEndRef.current?.scrollIntoView === "function") {
         messagesEndRef.current.scrollIntoView({ behavior });
       }
@@ -384,18 +390,36 @@ export function HealthAssistantDrawer({
   };
 
   // 서랍을 열거나 재진입할 때, 이전 대화 목록이 복원되면 사용자가 마지막으로 나눈 대화(최하단)를 즉시 보여준다.
+  //
+  // **여는 순간의 플래그 하나로는 부족했다.** 서랍을 열면 먼저 인사말이나 캐시가
+  // 그려지고, 그 다음에 DB 대화가 도착해 `messages` 를 통째로 갈아끼운다. 그 두 번째
+  // 갱신 때는 플래그가 이미 꺼져 있어서 `smooth` 로 잡히고, 화면이 대화 맨 위에서
+  // 최근 글까지 쭉 훑어 내려갔다. 목록에서 다른 대화를 고를 때도 같은 이유로 그랬다.
+  //
+  // 부드럽게 따라가야 하는 것은 **대화 중 한 줄이 덧붙을 때**뿐이다. 목록이 다른
+  // 대화로 교체됐는지는 맨 앞 메시지가 바뀌었는지로 알 수 있다.
+  const previousFirstMessageIdRef = useRef<string | undefined>(undefined);
+  const previousMessageCountRef = useRef(0);
+
   useEffect(() => {
     if (!isOpen) {
       isInitialScrollRef.current = true;
+      previousFirstMessageIdRef.current = undefined;
+      previousMessageCountRef.current = 0;
       return;
     }
 
-    if (isInitialScrollRef.current) {
-      isInitialScrollRef.current = false;
-      scrollToBottom("auto");
-    } else {
-      scrollToBottom("smooth");
-    }
+    const firstMessageId = messages[0]?.id;
+    const replacedWholeConversation =
+      isInitialScrollRef.current ||
+      firstMessageId !== previousFirstMessageIdRef.current ||
+      messages.length - previousMessageCountRef.current > 1;
+
+    isInitialScrollRef.current = false;
+    previousFirstMessageIdRef.current = firstMessageId;
+    previousMessageCountRef.current = messages.length;
+
+    scrollToBottom(replacedWholeConversation ? "auto" : "smooth");
   }, [messages, loading, isOpen]);
 
   // 구성원이 바뀌거나 서랍이 열리면 해당 구성원의 대화 세션을 복원한다.
@@ -625,10 +649,17 @@ export function HealthAssistantDrawer({
 
   // 팝오버 바깥을 누르면 닫는다. popover 변형에서만 의미가 있다(embedded/모달은
   // 각자의 배경 클릭 처리가 따로 있다).
+  //
+  // **런처 버튼은 바깥이 아니다.** 열려 있을 때 그 버튼은 X 로 바뀌어 "닫기" 역할을
+  // 하는데, 여기서도 바깥으로 치면 한 번의 클릭이 두 번 토글된다 —
+  // `mousedown` 에서 닫히고, 이어지는 `click` 이 "닫혀 있으니 열자"로 다시 연다.
+  // 사용자에게는 닫았는데 곧바로 다시 열리는 것으로 보인다.
   useEffect(() => {
     if (variant !== "popover" || !isOpen) return;
     function handleOutsideClick(e: MouseEvent) {
-      if (popoverContainerRef.current && !popoverContainerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if ((target as Element | null)?.closest?.(".channel-talk-launcher")) return;
+      if (popoverContainerRef.current && !popoverContainerRef.current.contains(target)) {
         (onMinimize ?? handleAnimatedClose)();
       }
     }

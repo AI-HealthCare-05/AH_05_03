@@ -30,7 +30,14 @@ class OutdoorConditionsClientProtocol(Protocol):
 
 
 _TIMEOUT_SECONDS = 5.0
+#: 대기질은 날씨와 달리 **없어도 답이 성립하는 보조 정보**다. 그런데 둘이 상한을
+#: 공유하는 바람에, 날씨가 0.3초에 도착해 있어도 대기질을 5초까지 기다렸다가 결국
+#: 빈손으로 넘어갔다 — 실측 6회 중 4회가 그랬다(2026-09-16). 보조 정보는 먼저 포기한다.
+_AIR_QUALITY_TIMEOUT_SECONDS = 2.0
 _CACHE_SECONDS = 600.0
+#: 실패도 10분을 살면 그 좌표는 그동안 계속 대기질 없이 답한다 — API 가 1분 뒤
+#: 복구돼도 다시 묻지 않는다. 실패는 짧게만 기억해 곧 재시도한다.
+_PARTIAL_CACHE_SECONDS = 30.0
 _SEOUL_TZ = ZoneInfo("Asia/Seoul")
 _KMA_ULTRA_SHORT_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst"
 _AIRKOREA_REALTIME_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getCtprvnRltmMesureDnsty"
@@ -139,7 +146,7 @@ class OutdoorConditionsClient:
         )
         self.kakao_api_key = self._clean_key(kakao_api_key if kakao_api_key is not None else config.KAKAO_REST_API_KEY)
         self._http_client = http_client
-        self._cache: dict[tuple[float, float], tuple[float, OutdoorConditionsResult]] = {}
+        self._cache: dict[tuple[float, float], tuple[float, float, OutdoorConditionsResult]] = {}
 
     @staticmethod
     def _clean_key(key: str | None) -> str | None:
@@ -215,14 +222,14 @@ class OutdoorConditionsClient:
     async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
         cache_key = (round(latitude, 2), round(longitude, 2))
         cached = self._cache.get(cache_key)
-        if cached and time.monotonic() - cached[0] < _CACHE_SECONDS:
-            return cached[1].model_copy(deep=True)
+        if cached and time.monotonic() - cached[0] < cached[1]:
+            return cached[2].model_copy(deep=True)
 
         client = self._get_client()
         try:
             (weather, weather_error), (air_quality, air_error) = await asyncio.gather(
                 self._fetch_weather(client, latitude, longitude),
-                self._fetch_air_quality(client, latitude, longitude),
+                self._fetch_air_quality_within_budget(client, latitude, longitude),
             )
             errors = [error for error in (weather_error, air_error) if error]
             result = OutdoorConditionsResult(
@@ -232,7 +239,8 @@ class OutdoorConditionsClient:
                 air_quality=air_quality,
                 errors=errors,
             )
-            self._cache[cache_key] = (time.monotonic(), result)
+            ttl = _CACHE_SECONDS if (weather and air_quality) else _PARTIAL_CACHE_SECONDS
+            self._cache[cache_key] = (time.monotonic(), ttl, result)
             return result
         finally:
             if self._http_client is None:
@@ -283,6 +291,21 @@ class OutdoorConditionsClient:
             )
         except (httpx.HTTPError, ValueError, TypeError):
             return None, "기상청 날씨 정보를 불러오지 못했습니다."
+
+    async def _fetch_air_quality_within_budget(
+        self,
+        client: httpx.AsyncClient,
+        latitude: float,
+        longitude: float,
+    ) -> tuple[AirQualityConditions | None, str | None]:
+        """대기질만 먼저 포기한다. 날씨는 이미 와 있는데 함께 기다릴 이유가 없다."""
+        try:
+            return await asyncio.wait_for(
+                self._fetch_air_quality(client, latitude, longitude),
+                timeout=_AIR_QUALITY_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            return None, "AirKorea 대기질 정보를 불러오지 못했습니다."
 
     async def _fetch_air_quality(
         self,

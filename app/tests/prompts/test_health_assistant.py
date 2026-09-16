@@ -74,5 +74,39 @@ def test_scope_instruction_contains_scope_evidence_and_query_builder() -> None:
     assert "enriched_query" in instruction
     assert "response_mode" in instruction
     assert "clarification_kind" in instruction
+    assert "request_kind" in instruction
+    assert "clinical_contexts" in instruction
     assert "자유문장 질문을 만들지 말고" in instruction
     assert "특정 음식·제품을 지목하지 않은 질환별 식이 질문" in instruction
+
+
+def test_scope_instruction_defines_request_kind_and_clinical_context_contract() -> None:
+    instruction = build_health_assistant_scope_instruction()
+
+    assert "operation" in instruction
+    assert "information" in instruction
+    assert "personalized_advice" in instruction
+    assert "pregnancy" in instruction
+    assert "symptom" in instruction
+    assert "chronic_condition" in instruction
+    assert "medication" in instruction
+    assert "treatment" in instruction
+    assert "none은 다른 값과 함께 넣지 마세요" in instruction
+
+
+def test_scope_instruction_distinguishes_health_record_from_contextual_advice() -> None:
+    instruction = build_health_assistant_scope_instruction()
+
+    assert "'무릎이 아파' → health, operation, [symptom], false, []" in instruction
+    assert "'무릎이 아픈데 산책해도 돼?' → health, personalized_advice, [symptom], true" in instruction
+    assert "'임신 중인데 달리기 해도 돼?' → health, personalized_advice, [pregnancy], true" in instruction
+    assert "required_evidence_types=[] 또는 [outdoor]만 반환하지 마세요" in instruction
+
+
+def test_scope_instruction_distinguishes_activity_from_current_outdoor_conditions() -> None:
+    instruction = build_health_assistant_scope_instruction()
+
+    assert "활동명이 있다는 이유만으로 outdoor를 넣지 마세요" in instruction
+    assert "'오늘 날씨 어때?' → health, information, [none], true, [outdoor], answer" in instruction
+    assert "'오늘 한강에서 러닝해도 돼?' → health, personalized_advice, [none], true, [outdoor], answer" in instruction
+    assert "[health_knowledge, outdoor], clarify" in instruction
