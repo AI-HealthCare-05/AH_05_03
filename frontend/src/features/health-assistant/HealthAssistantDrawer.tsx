@@ -58,7 +58,9 @@ import {
   saveChatSession,
   createWelcomeMessage,
   mergeServerMessagesWithLocalUi,
+  loadActiveChatSessionId,
   loadChatViewMode,
+  saveActiveChatSessionId,
   saveChatViewMode,
   getLastOpenedProfileId,
   setLastOpenedProfileId,
@@ -208,15 +210,35 @@ async function getCurrentLocationForOutdoorQuestion(): Promise<OutdoorLocationAt
   if (!navigator.geolocation) {
     return { error: "이 브라우저에서는 현재 위치 기능을 사용할 수 없습니다." };
   }
+
+  // **타임아웃에 권한 팝업 응답 시간이 포함된다.** 처음 쓰는 사람은 팝업을 읽고
+  // 누르는 데 6초를 넘기기 쉬운데, 그러면 "허용"을 눌러도 이미 시간이 지나 실패로
+  // 처리돼 "권한을 허용해 주세요" 가 떴다 — 허용했는데 허용하라는 말을 듣는다
+  // (2026-09-16). 아직 응답하지 않은 상태라면 넉넉히 기다린다.
+  let awaitingPermission = true;
+  try {
+    const status = await navigator.permissions?.query({ name: "geolocation" as PermissionName });
+    awaitingPermission = status?.state === "prompt";
+  } catch {
+    // Permissions API 가 없거나 막힌 환경이면 넉넉한 쪽으로 둔다.
+  }
+
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (position) => resolve({
         location: { latitude: position.coords.latitude, longitude: position.coords.longitude },
       }),
-      () => resolve({
-        error: "실시간 날씨와 대기질을 확인하려면 기기와 브라우저 설정에서 위치 서비스 권한을 허용해 주세요.",
+      (error) => resolve({
+        error:
+          error.code === error.PERMISSION_DENIED
+            ? "실시간 날씨와 대기질을 확인하려면 기기와 브라우저 설정에서 위치 서비스 권한을 허용해 주세요."
+            : "현재 위치를 확인하지 못했습니다. 지역명을 알려주시면 바로 확인해 드릴게요.",
       }),
-      { enableHighAccuracy: false, timeout: 6000, maximumAge: 5 * 60 * 1000 },
+      {
+        enableHighAccuracy: false,
+        timeout: awaitingPermission ? 25000 : 6000,
+        maximumAge: 5 * 60 * 1000,
+      },
     );
   });
 }
@@ -272,6 +294,8 @@ export function HealthAssistantDrawer({
     const savedMode = loadChatViewMode(profile.id);
     return savedMode === "list";
   });
+  // 처음 열 때는 전환이 아니라 "이미 목록"이므로 페이드인을 걸지 않는다.
+  const [enteredListByNavigation, setEnteredListByNavigation] = useState(false);
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
@@ -475,10 +499,15 @@ export function HealthAssistantDrawer({
         setChatSessions(sessions);
 
         if (sessions.length > 0) {
-          const latest = sessions[0];
-          activeSessionIdRef.current = latest.id;
-          setActiveSessionId(latest.id);
-          const dbMessages = await listChatMessages(latest.id);
+          // **마지막으로 보던 대화로 돌아간다.** 전에는 무조건 `sessions[0]`(최신)을
+          // 열어서, 예전 대화를 보다 봄이를 닫으면 엉뚱한 대화가 떴다. 그 대화가
+          // 지워졌거나 다른 프로필 것이면 최신으로 돌아간다.
+          const rememberedId = loadActiveChatSessionId(currentProfileId);
+          const restored = sessions.find((item) => item.id === rememberedId) ?? sessions[0];
+          activeSessionIdRef.current = restored.id;
+          setActiveSessionId(restored.id);
+          saveActiveChatSessionId(currentProfileId, restored.id);
+          const dbMessages = await listChatMessages(restored.id);
           if (!isSubscribed || activeProfileIdRef.current !== currentProfileId) return null;
 
           if (dbMessages.length > 0) {
@@ -492,7 +521,7 @@ export function HealthAssistantDrawer({
           } else {
             setMessages([createWelcomeMessage(profileDisplayName)]);
           }
-          return latest.id;
+          return restored.id;
         } else {
           setMessages([createWelcomeMessage(profileDisplayName)]);
           return null;
@@ -529,6 +558,7 @@ export function HealthAssistantDrawer({
     if (!profile) return;
     activeSessionIdRef.current = null;
     setActiveSessionId(null);
+    saveActiveChatSessionId(profile.id, null);
     sessionSyncPromiseRef.current = null;
     clearChatSession(profile.id);
     setMessages([createWelcomeMessage(profile.displayName)]);
@@ -541,6 +571,7 @@ export function HealthAssistantDrawer({
 
   /** 대화 화면 → 목록 화면. 헤더 뒤로가기 버튼과 스와이프 제스처가 같이 쓴다. */
   function goToSessionList() {
+    setEnteredListByNavigation(true);
     setShowSessionList(true);
     if (profile) {
       saveChatViewMode(profile.id, "list");
@@ -596,6 +627,7 @@ export function HealthAssistantDrawer({
       if (activeProfileIdRef.current !== profile.id) return;
       const mapped = mergeServerMessagesWithLocalUi(dbMessages, loadChatSession(profile.id) ?? []);
       activeSessionIdRef.current = session.id;
+      saveActiveChatSessionId(profile.id, session.id);
       setActiveSessionId(session.id);
       setMessages(mapped.length > 0 ? mapped : [createWelcomeMessage(profile.displayName)]);
       setShowSessionList(false);
@@ -761,6 +793,7 @@ export function HealthAssistantDrawer({
         sessionId = newSession.id;
         activeSessionIdRef.current = sessionId;
         setActiveSessionId(sessionId);
+        saveActiveChatSessionId(profileId, sessionId);
         // **만든 세션을 동기화 약속에도 승계한다.** 안 하면 다음 호출이 여전히
         // 빈 약속을 기다렸다가 세션을 또 만든다(#120 의 "대화 누적").
         sessionSyncPromiseRef.current = Promise.resolve(sessionId);
@@ -2037,7 +2070,10 @@ export function HealthAssistantDrawer({
       </header>
 
         {showSessionList && (
-          <section className="chat-session-list" aria-label="대화 목록">
+          <section
+            className={`chat-session-list ${enteredListByNavigation ? "is-entering" : ""}`}
+            aria-label="대화 목록"
+          >
 
             {chatSessions.length === 0 ? (
               <div className="chat-session-empty">

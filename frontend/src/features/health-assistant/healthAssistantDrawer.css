@@ -78,6 +78,13 @@
   overflow-y: auto;
   background: #ffffff;
   padding: 12px 16px 64px;
+}
+
+/* 페이드인은 **대화창에서 목록으로 넘어갈 때만** 건다. 목록은 대화창 위에 덮이는
+   절대위치 레이어라, 봄이를 다시 열 때도 애니메이션이 돌면 그 0.2초 동안 아래
+   대화창이 비쳐 보인다 — 목록에 있다가 닫았는데 대화창이 스쳤다 사라지는 것으로
+   보였다(2026-09-16). 처음부터 목록인 경우에는 보여 줄 전환이 없다. */
+.chat-session-list.is-entering {
   animation: listFadeIn 0.2s ease-out;
 }
 
