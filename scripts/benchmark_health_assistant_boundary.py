@@ -87,9 +87,11 @@ class BenchmarkLLMClientWrapper(LLMClientProtocol):
     def __init__(self, delegate: LLMClientProtocol | None = None):
         self.delegate = delegate
         self.call_count = 0
+        self.delegate_error_category: str | None = None
 
     def reset(self) -> None:
         self.call_count = 0
+        self.delegate_error_category = None
 
     async def generate_structured_response(
         self,
@@ -101,7 +103,14 @@ class BenchmarkLLMClientWrapper(LLMClientProtocol):
 
         last_msg = next((m.content for m in reversed(messages) if m.role == "user"), "")
         if "dummy_fail" not in last_msg and self.delegate:
-            return await self.delegate.generate_structured_response(system_instruction, messages, response_schema)
+            try:
+                return await self.delegate.generate_structured_response(system_instruction, messages, response_schema)
+            except (LlmProviderFailedError, LlmTimeoutError, LlmUnavailableError):
+                self.delegate_error_category = "classifier_exception"
+                raise
+            except Exception:
+                self.delegate_error_category = "unexpected_error"
+                raise
 
         await asyncio.sleep(0.01)
 
@@ -239,15 +248,22 @@ async def run_benchmark(live: bool, warmup: int, runs: int, report_path: str | N
                 else:
                     outcome = "answer"
 
+                if llm_wrapper.delegate_error_category:
+                    error_count += 1
+                    error_categories[llm_wrapper.delegate_error_category] += 1
+                    errors[route_taken] += 1
+                    errors["total"] += 1
+
                 if outcome in ("answer", "clarify") and case.contract:
                     if not res.decision.requires_authoritative_evidence or case.contract not in (
                         res.decision.required_evidence_types or []
                     ):
                         contract_mismatches += 1
 
-                latencies.append(latency_ms)
-                metrics[route_taken].append(latency_ms)
-                metrics["total"].append(latency_ms)
+                if not llm_wrapper.delegate_error_category:
+                    latencies.append(latency_ms)
+                    metrics[route_taken].append(latency_ms)
+                    metrics["total"].append(latency_ms)
                 route_counts[route_taken] += 1
                 outcome_counts[outcome] += 1
 

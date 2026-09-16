@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from app.dtos.health_assistant import HealthAssistantScopeDecision
+from app.exceptions import LlmProviderFailedError
 from app.services.health_assistant_boundary import HealthAssistantBoundaryResult, HealthAssistantBoundaryService
 from scripts.benchmark_health_assistant_boundary import (
     CASES,
@@ -144,6 +145,42 @@ async def test_outcome_mismatch_is_reported_as_degraded() -> None:
         assert report["outcome_mismatch_count"] == 1
         assert report["safety_status"] == "pass"
         assert report["behavior_status"] == "degraded"
+
+
+@pytest.mark.asyncio
+async def test_swallowed_live_classifier_failure_is_reported_as_error() -> None:
+    class FailingLiveClient:
+        model_name = "test-model"
+
+        async def generate_structured_response(self, *args: Any, **kwargs: Any) -> Any:
+            raise LlmProviderFailedError("synthetic provider failure")
+
+        def stream_structured_response(self, *args: Any, **kwargs: Any) -> Any:
+            raise NotImplementedError
+
+    case = BenchmarkCase(
+        case_id="provider_failure",
+        message="합성 분류기 실패 문장",
+        expected_route="llm_classifier",
+        expected_outcomes=frozenset({"answer"}),
+    )
+
+    with TemporaryDirectory() as d:
+        report_path = Path(d) / "report.json"
+        with (
+            patch("scripts.benchmark_health_assistant_boundary.CASES", [case]),
+            patch("app.integrations.llm.gemini.GeminiLLMClient", return_value=FailingLiveClient()),
+        ):
+            assert await run_benchmark(True, warmup=0, runs=1, report_path=str(report_path)) == 1
+
+        with open(report_path) as f:
+            report = json.load(f)
+
+        assert report["total_errors"] == 1
+        assert report["case_summaries"][0]["errors"] == 1
+        assert report["case_summaries"][0]["error_categories"] == {"classifier_exception": 1}
+        assert report["aggregates"]["llm_classifier"]["samples"] == 0
+        assert report["safety_status"] == "fail"
 
 
 @pytest.mark.asyncio
