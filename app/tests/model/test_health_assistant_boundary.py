@@ -1378,3 +1378,38 @@ async def test_classifier_omitting_contract_fields_ends_in_clarification() -> No
     assert result.request is None
     assert result.response is not None
     assert result.response.assistant_message.startswith(CLARIFICATION_PREFIX)
+
+
+def _blocked_message(question: str) -> str:
+    boundary = HealthAssistantBoundaryService()
+    decision = HealthAssistantScopeDecision(
+        scope="health",
+        request_kind="personalized_advice",
+        clinical_contexts=["none"],
+        required_evidence_types=["health_knowledge"],
+        requires_authoritative_evidence=True,
+    )
+    response = HealthAssistantResponse(intent="health_advice", assistant_message="근거 없는 답")
+    return boundary.enforce_grounding(
+        decision,
+        response,
+        tool_result=None,
+        outdoor_conditions=None,
+        messages=[ChatMessage(role="user", content=question)],
+    ).assistant_message
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["무릎이 아픈데 산책해도 돼?", "허리 아픈데 자전거 타도 돼?", "임신 중인데 달리기 해도 돼?"],
+)
+def test_blocked_activity_clearance_asks_what_the_judgement_needs(question: str) -> None:
+    message = _blocked_message(question)
+
+    assert message.startswith(CLARIFICATION_PREFIX)
+    assert message.endswith(CLARIFICATION_QUESTIONS["exercise_safety_context"])
+
+
+def test_other_blocked_questions_keep_the_general_message() -> None:
+    assert _blocked_message("고혈압이 뭐야?") == MISSING_EVIDENCE_MESSAGE
+    assert _blocked_message("달리기 해도 돼?") == MISSING_EVIDENCE_MESSAGE

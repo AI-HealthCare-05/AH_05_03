@@ -110,6 +110,91 @@ class OutdoorConditionsStub:
         return None
 
 
+class RecordingHealthKnowledgeClient:
+    def __init__(self, results_by_query: dict[str, list[HealthKnowledgeItem]]) -> None:
+        self.results_by_query = results_by_query
+        self.queries: list[str] = []
+
+    async def search(self, query: str) -> HealthKnowledgeSearchResult:
+        self.queries.append(query)
+        return HealthKnowledgeSearchResult(
+            query=query,
+            items=self.results_by_query.get(query, []),
+            retrieved_at=datetime(2026, 9, 16, tzinfo=timezone.utc),
+            message="테스트 결과",
+        )
+
+
+def _knowledge_item() -> HealthKnowledgeItem:
+    return HealthKnowledgeItem(
+        title="임신 중 운동",
+        url="https://health.kdca.go.kr/example",
+        summary="임신 중 운동에 관한 공식 정보",
+        topics=["pregnancy", "exercise"],
+    )
+
+
+def _knowledge_decision() -> HealthAssistantScopeDecision:
+    return HealthAssistantScopeDecision(
+        scope="health",
+        request_kind="personalized_advice",
+        clinical_contexts=["pregnancy"],
+        requires_authoritative_evidence=True,
+        required_evidence_types=["health_knowledge"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_authoritative_evidence_does_not_retry_when_primary_query_succeeds() -> None:
+    client = RecordingHealthKnowledgeClient({"임신 중 달리기": [_knowledge_item()]})
+    service = HealthAssistantService(llm_client=MockLLMClient("{}"), health_knowledge_client=client)
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="임신 중인데 달리기 해도 돼?")],
+        enriched_query="임신 중 달리기",
+    )
+
+    results, evidence = await service._load_authoritative_evidence(
+        request, _knowledge_decision(), account=None, profile_context=None
+    )
+
+    assert client.queries == ["임신 중 달리기"]
+    assert len(results) == 1
+    assert evidence is not None and "임신 중 운동" in evidence
+
+
+@pytest.mark.asyncio
+async def test_authoritative_evidence_retries_normalized_enriched_query_after_empty_primary() -> None:
+    client = RecordingHealthKnowledgeClient({"임신 운동": [_knowledge_item()]})
+    service = HealthAssistantService(llm_client=MockLLMClient("{}"), health_knowledge_client=client)
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="달리기는?")],
+        enriched_query="임신 중 달리기 안전성",
+    )
+
+    results, evidence = await service._load_authoritative_evidence(
+        request, _knowledge_decision(), account=None, profile_context=None
+    )
+
+    assert client.queries == ["임신 중 달리기 안전성", "임신 운동"]
+    assert len(results) == 1
+    assert evidence is not None and "임신 중 운동" in evidence
+
+
+@pytest.mark.asyncio
+async def test_authoritative_evidence_does_not_retry_when_query_cannot_be_normalized() -> None:
+    client = RecordingHealthKnowledgeClient({})
+    service = HealthAssistantService(llm_client=MockLLMClient("{}"), health_knowledge_client=client)
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="이건 어떤가요?")])
+
+    results, evidence = await service._load_authoritative_evidence(
+        request, _knowledge_decision(), account=None, profile_context=None
+    )
+
+    assert client.queries == ["이건 어떤가요?"]
+    assert results == []
+    assert evidence is None
+
+
 @pytest.mark.asyncio
 async def test_health_assistant_loads_outdoor_tool_result_for_outdoor_question() -> None:
     llm_client = CapturingLLMClient()

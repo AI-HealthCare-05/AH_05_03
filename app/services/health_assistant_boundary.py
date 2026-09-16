@@ -26,6 +26,7 @@ from app.services.facility_topic import (
     is_facility_location_followup,
 )
 from app.services.health_knowledge_catalog import is_alcohol_topic
+from app.services.health_knowledge_query import mentions_activity
 from app.services.medication_topic import mentions_medication
 
 HEALTH_ONLY_MESSAGE = (
@@ -204,6 +205,14 @@ def _fast_path_contexts(messages: list[ChatMessage]) -> list[HealthAssistantClin
     """
     contexts = detect_explicit_protected_contexts(messages)
     return [context for context in _CLINICAL_CONTEXT_ORDER if context in contexts] or ["none"]
+
+
+def _asks_activity_clearance(messages: list[ChatMessage]) -> bool:
+    """몸에 조건이 있는 사람이 활동 가능 여부를 물었는지 본다."""
+    latest_user = next((message.content for message in reversed(messages) if message.role == "user"), "")
+    if not mentions_activity(latest_user):
+        return False
+    return bool(detect_explicit_protected_contexts(messages)) and asks_personal_clearance(messages)
 
 
 def asks_personal_clearance(messages: list[ChatMessage]) -> bool:
@@ -925,6 +934,8 @@ class HealthAssistantBoundaryService:
             return self._fixed_response(PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE, intent="health_advice")
         if messages and (is_pregnancy_medication_question(messages) or is_pregnancy_medication_followup(messages)):
             return self._fixed_response(PREGNANCY_MEDICATION_EVIDENCE_MESSAGE, intent="health_advice")
+        if messages and _asks_activity_clearance(messages):
+            return self._clarification_response("exercise_safety_context")
         return self._fixed_response(MISSING_EVIDENCE_MESSAGE, intent="health_advice")
 
     @classmethod

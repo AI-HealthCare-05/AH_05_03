@@ -44,6 +44,7 @@ from app.services.food_nutrition_tools import (
 from app.services.health_assistant_boundary import HealthAssistantBoundaryService
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.health_knowledge_catalog import HealthKnowledgeClientProtocol, is_alcohol_topic
+from app.services.health_knowledge_query import normalize_knowledge_query
 from app.services.health_record_tools import (
     QUERY_HEALTH_RECORDS_TOOL_NAME,
     execute_health_record_tool,
@@ -378,6 +379,13 @@ class HealthAssistantService:
 
         if "health_knowledge" in required:
             knowledge = await self.health_knowledge_client.search(query)
+            if not knowledge.items:
+                # 포털은 문장이 아니라 주제어에 매칭된다 — "임신 중인데 달리기 해도 돼?"
+                # 도 "임신 중 달리기 안전성" 도 0건이지만 "임신 운동" 은 3건이다
+                # (2026-09-16 실측). 1차가 비었을 때만 주제어로 줄여 한 번 더 본다.
+                fallback_query = normalize_knowledge_query(query)
+                if fallback_query and fallback_query != query:
+                    knowledge = await self.health_knowledge_client.search(fallback_query)
             # 카탈로그/포털에 아직 없는 주제는 items가 빈 채로 돌아온다. 그걸 그대로
             # results에 넣으면 "근거를 하나도 못 채웠다"는 사전 차단 게이트가 빈 결과도
             # "뭔가 채워졌다"고 착각해서, 실제로는 근거가 없는데도 메인 LLM 호출까지
