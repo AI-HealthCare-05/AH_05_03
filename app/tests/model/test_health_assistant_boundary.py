@@ -1086,7 +1086,12 @@ def test_invariant_forces_medical_evidence_even_when_the_classifier_is_wrong(
 
 @pytest.mark.parametrize(
     "question",
-    ["밖에서 뛰어도 돼?", "야외에서 걸어도 되나", "오늘 한강에서 러닝해도 돼?"],
+    [
+        "밖에서 뛰어도 돼?",
+        "야외에서 걸어도 되나",
+        "오늘 한강에서 러닝해도 돼?",
+        "오늘 한강에서 자전거 타도 돼?",
+    ],
 )
 def test_explicit_outdoor_place_with_permission_phrasing_still_requires_outdoor(question: str) -> None:
     """장소를 명시한 허가 질문은 `해도 돼` 가 아닌 어미(`뛰어도 돼`)여도 야외 조건을 요구한다."""
@@ -1096,6 +1101,21 @@ def test_explicit_outdoor_place_with_permission_phrasing_still_requires_outdoor(
 
     assert decision is not None
     assert decision.required_evidence_types == ["outdoor"]
+
+
+def test_unlisted_korean_verb_still_triggers_the_clearance_invariant() -> None:
+    messages = [ChatMessage(role="user", content="임신인데 사우나 가도 돼?")]
+    decision = HealthAssistantScopeDecision(
+        scope="health",
+        request_kind="information",
+        clinical_contexts=["none"],
+        required_evidence_types=[],
+    )
+
+    normalized = HealthAssistantBoundaryService._validate_and_normalize_decision(messages, decision)
+
+    assert normalized.required_evidence_types == ["health_knowledge"]
+    assert normalized.requires_authoritative_evidence is True
 
 
 # --- 민감 맥락 조언의 근거 요건 (2026-09-16) ----------------------------------
