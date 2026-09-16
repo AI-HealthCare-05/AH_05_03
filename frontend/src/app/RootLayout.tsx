@@ -1,5 +1,5 @@
 import { Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { SignInPage } from "../features/account/SignInPage";
 import { GlobalHealthAssistant } from "../features/health-assistant/GlobalHealthAssistant";
@@ -168,6 +168,15 @@ export function RootLayout() {
   // 단, 비밀번호 재설정 링크(#reset_token=...)로 진입한 경우에는 로그인 상태와 무관하게
   // 재설정 관문을 우선 열어 준다.
   if (hasResetToken || status === "signed-out") {
+    // **사이트 첫 주소에 처음 온 사람에게는 로그인 폼이 아니라 소개 페이지를 준다.**
+    // 관문의 성질은 그대로다 — `/assessment` 같은 깊은 링크는 여전히 그 자리에서
+    // 로그인 화면을 그리고(주소가 남아 로그인하면 원래 화면이 뜬다), 여기서 비키는
+    // 것은 **더 볼 것이 없는 `/` 하나**뿐이다. 재설정 링크(#reset_token)로 들어온
+    // 경우는 소개를 보여 줄 때가 아니므로 먼저 걸러 낸다.
+    // 로그아웃 안내가 있을 때도 비키지 않는다 — 방금 나간 사람에게 할 말이 있다.
+    if (!hasResetToken && pathname === "/" && !signedOutNotice) {
+      return <Navigate to="/landing" replace />;
+    }
     return <SignInPage onResetComplete={() => setHasResetToken(false)} initialMessage={signedOutNotice} />;
   }
 
