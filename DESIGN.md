@@ -24,6 +24,9 @@ colors:
   danger-soft: "#fff0f1"
   garden-leaf: "#6e9b6a"
   garden-trunk: "#8a6142"
+  landing-cream: "#faf7f3"
+  landing-cream-deep: "#f3ede5"
+  landing-dark: "#0b0f17"
 typography:
   headline-lg:
     fontFamily: Inter, Pretendard, sans-serif
@@ -67,6 +70,18 @@ typography:
     fontSize: 11px
     fontWeight: 600
     lineHeight: 1.2
+  display-lg:
+    fontFamily: Inter, Pretendard, sans-serif
+    fontSize: clamp(38px, 6.4vw, 72px)
+    fontWeight: 700
+    lineHeight: 1.08
+    letterSpacing: -0.035em
+  display-md:
+    fontFamily: Inter, Pretendard, sans-serif
+    fontSize: clamp(28px, 4.2vw, 50px)
+    fontWeight: 700
+    lineHeight: 1.16
+    letterSpacing: -0.03em
 rounded:
   none: 0px
   xs: 4px
@@ -192,6 +207,19 @@ components:
 - **Body Medium (14px / 400)**: 입력 폼 레이블, 테이블 본문 셀.
 - **Body Small (12px / 400)**: 각주, 부가 안내, 법적 고지.
 - **Label / Metric (11px~13px / 600)**: 차트 축, 배지, 수치 단위.
+
+### 디스플레이 스케일 — 공개 랜딩페이지 전용
+
+`Display Large / Medium` 두 단은 **로그인 밖 소개 화면(`/landing`)에서만** 쓴다. 앱 화면의 최상위 제목은 그대로 `Headline Large(32px)`다.
+
+- 왜 더했나: 32px 위가 없어 첫 화면을 세울 수 없었다. 한 화면에 문장 하나만 두는 스크롤 서사에서 32px 제목은 본문처럼 읽힌다.
+- 무엇을 지켰나: 폰트 패밀리·굵기는 그대로이고, `clamp()`의 하한(38px · 28px)이 기존 32px 스케일과 이어진다. 화면 폭에 따라 커지되 상한을 둔다.
+- 어디까지인가: 랜딩 밖에서 이 두 단을 쓰지 않는다. 앱 화면에서 더 큰 제목이 필요하면 그것은 타이포가 아니라 정보 구조 문제다.
+
+### 랜딩 표면색 (`landing-*`)
+
+- `landing-cream(#faf7f3)`·`landing-cream-deep(#f3ede5)`: 소개 화면의 따뜻한 아이보리 배경. 앱의 쿨그레이 배경(`background #f5f7fb`)은 데이터 화면의 피로를 줄이는 색이라 "따뜻함"을 만들지 못한다. **상태 색이 아니므로 위험도 오독 위험이 없고**, 앱 화면에서는 쓰지 않는다.
+- `landing-dark(#0b0f17)`: 3D 인체 장면의 배경. Elevation 항목의 3D 캔버스 백드롭(`rgba(15,23,42,0.95)`)과 같은 계열이며, 뷰포트 전체를 덮을 때 쓰는 불투명 값이다.
 
 ## Layout
 
