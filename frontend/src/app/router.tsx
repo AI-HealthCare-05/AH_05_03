@@ -16,6 +16,7 @@ import {
   DataManagementPage,
   HealthDataPage,
   LandingPage,
+  LandingV2Page,
   PainDiaryPage,
   UiPreviewPage,
 } from "./lazyRoutes";
@@ -46,6 +47,26 @@ export const router = createBrowserRouter([
       // 없으면 지연 청크를 받는 동안 React 가 그대로 던진다.
       <Suspense fallback={<PageSkeleton />}>
         <LandingPage />
+      </Suspense>
+    ),
+    errorElement: <ErrorPage />,
+  },
+  {
+    // **관문 밖에 있는 셋째 화면 — 소개 페이지의 대안 디자인 시안(v2).**
+    // 자격은 `/landing` 과 한 글자도 다르지 않다: `features/landing-v2` 는
+    // `useLocalDomain` 도 `serverApiClient` 도 부르지 않고, 화면의 수치는 v1 과
+    // **같은** `features/landing/landingStory.ts` 의 예시 시나리오다
+    // (`features/landing-v2/LandingV2Page.test.tsx` 가 지킨다).
+    //
+    // 주소를 따로 둔 이유는 견주기 위해서다. 로그아웃 상태의 `/` 는 여전히
+    // `/landing`(v1)로 간다 — 어느 쪽을 정본으로 세울지는 디자인 결정이고,
+    // 그 결정 전에 기본 동작을 바꾸지 않는다.
+    path: "/landing-v2",
+    element: (
+      // 이 라우트는 `RootLayout` 밖이라 그쪽의 Suspense 경계를 못 쓴다. 폴백이
+      // 없으면 지연 청크를 받는 동안 React 가 그대로 던진다.
+      <Suspense fallback={<PageSkeleton />}>
+        <LandingV2Page />
       </Suspense>
     ),
     errorElement: <ErrorPage />,

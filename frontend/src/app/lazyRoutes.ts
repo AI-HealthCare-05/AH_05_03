@@ -41,6 +41,14 @@ export const AccountPage = lazy(() =>
 export const LandingPage = lazy(() =>
   import("../features/landing/LandingPage").then((m) => ({ default: m.LandingPage })),
 );
+/**
+ * 랜딩 v2(대안 디자인 시안). v1 과 청크가 갈려야 한다 — 두 랜딩의 CSS 를 한
+ * 청크에 뭉치면 `/landing` 을 여는 사람이 쓰지 않는 디자인 시스템 한 벌을 같이
+ * 받는다(`landingV2.css` 만 2,400줄이다).
+ */
+export const LandingV2Page = lazy(() =>
+  import("../features/landing-v2/LandingV2Page").then((m) => ({ default: m.LandingV2Page })),
+);
 export const PainDiaryPage = lazy(() =>
   import("../features/pain-diary/PainDiaryPage").then((m) => ({ default: m.PainDiaryPage })),
 );

@@ -21,11 +21,14 @@ import { router } from "./router";
  * - `/landing` 공개 소개 페이지. 같은 조건이다 — `features/landing` 은
  *   `useLocalDomain` 도 `serverApiClient` 도 부르지 않고 예시 시나리오만 그린다.
  *   그 조건은 `features/landing/LandingPage.test.tsx` 가 따로 지킨다.
+ * - `/landing-v2` 같은 소개 페이지의 대안 디자인 시안. 자격도 같고, 화면에 쓰는
+ *   예시 데이터도 v1 과 같은 파일이다 —
+ *   `features/landing-v2/LandingV2Page.test.tsx` 가 그 조건을 따로 지킨다.
  */
-const OUTSIDE_THE_GATE = ["/signup", "/landing"];
+const OUTSIDE_THE_GATE = ["/signup", "/landing", "/landing-v2"];
 
 describe("라우트 표", () => {
-  it("관문 밖에 있는 것은 가입과 소개 화면뿐이다", () => {
+  it("관문 밖에 있는 것은 가입과 소개 화면들뿐이다", () => {
     const layout = router.routes.filter((route) => route.path === "/");
     expect(layout).toHaveLength(1);
 

@@ -1,0 +1,2447 @@
+/**
+ * 랜딩 v2 — **Violet Capsule Minimal** 구현.
+ *
+ * 전부 `.lnv2-root` 안으로 한정한다. 앱 화면과 v1 랜딩은 이 파일을 한 줄도 상속하지
+ * 않는다(`landingV2.css` 는 `LandingV2Page` 만 import 한다).
+ *
+ * ## 이 화면의 토큰은 앱의 토큰이 아니다
+ *
+ * 앱과 v1 은 `DESIGN.md` 의 Primary Blue(`#1d4fb8`) · Inter/Pretendard 700 위에 서
+ * 있다. v2 는 **다른 디자인 시스템 한 벌을 그대로 구현한 대안 시안**이다 — 딥
+ * 오버진 단색 세계, 굵기 300~400 의 속삭이는 타이포, 100px 캡슐 기하학.
+ * 그래서 값을 `--v2-*` 로 새로 세우고 앱 토큰(`--blue-700` 등)을 상속하지 않는다.
+ * 이것이 `DESIGN.md` SSOT 를 흔드는 것이 아니라는 근거는 `docs/53_landing_page_v2.md`
+ * §2 에 적어 두었다(범위·되돌리는 방법 포함).
+ *
+ * ## 원본에서 **의도적으로 고친 것 둘 — 둘 다 대비다**
+ *
+ * 1. **Fog(`#86848d`) 를 본문 글자색으로 쓰지 않는다.** Paper White 위에서 3.67:1 로
+ *    WCAG 1.4.3(4.5:1) 미달이다. 이 저장소는 같은 함정을 이미 한 번 밟았다
+ *    (`styles.css` 의 `--muted` 를 2026-09-10 에 어둡게 한 주석). 그래서 Fog 는
+ *    **테두리·아이콘·장식 전용**으로 두고, 글자는 시스템 자신의 어두운 토큰
+ *    (`on-surface-variant #49454e`)과 중간 톤(`--v2-meta #605b6a`, 5.9:1)을 쓴다.
+ * 2. **Mint Signal 배지에 흰 글자를 얹지 않는다.** 원문은 `#2ec08b` 채움에
+ *    `#fdfcfe` 글자를 지정하는데 2.29:1 이다. 파스텔 캡슐에 Obsidian 글자를 얹는
+ *    것은 이미 이 시스템의 지배적 패턴("Pastel Multi-Action Set")이므로, 상태 배지
+ *    셋 전부 그 패턴으로 통일한다(7.3:1 이상).
+ *
+ * ## 스크롤 연출
+ *
+ * 전부 `--ln-progress`(0~1) 하나로 움직인다. 그 값은 JS 가 섹션 요소에 쓰고
+ * (`../landing/scrollProgress.ts`), 자식들은 `clamp()` 로 자기 구간만 떼어 쓴다.
+ * 프레임마다 React 가 하는 일이 없다.
+ */
+
+.lnv2-root {
+  /* 표면 — 본문 평면은 Bone, 떠 있는 판은 Paper White */
+  --v2-bone: #f4f2f4;
+  --v2-paper: #fdfcfe;
+  --v2-ash: #e9e8ea;
+  --v2-ash-soft: #f1f0f2;
+
+  /* 오버진 축 — 몰입 구간의 두 깊이 */
+  --v2-aubergine: #3c315b;
+  --v2-deep: #261b44;
+  --v2-lavender: #e2dffe;
+  --v2-periwinkle: #ab9ff2;
+
+  /* 글자 */
+  --v2-ink: #1c1c1c;
+  --v2-ink-soft: #49454e;
+  /* 캡션·메타 전용 중간 톤. Fog 대신 쓴다(위 머리말 1번). */
+  --v2-meta: #605b6a;
+  /* 테두리·아이콘 획 전용. **글자에 쓰지 않는다.** */
+  --v2-fog: #86848d;
+  --v2-on-dark: #fdfcfe;
+  --v2-on-dark-soft: #a79acb;
+
+  /* 파스텔 — 리듬과 상태 배지에만 */
+  --v2-buttercream: #ffffc4;
+  --v2-blush: #ffdadc;
+  --v2-mint: #2ec08b;
+
+  /* 기하학 — 16px 아래 반경은 이 시스템에 없다 */
+  --v2-pill: 100px;
+  --v2-card: 24px;
+  --v2-card-lg: 32px;
+
+  /* 시스템 전체에서 유일한 그림자 — 주 CTA 의 라벤더 발광 */
+  --v2-glow: 0 0 4px 0 rgb(226 223 254);
+  --v2-glow-lg: 0 0 10px 0 rgb(226 223 254 / 0.9);
+
+  --v2-gutter: clamp(16px, 5vw, 48px);
+  --v2-measure: 1200px;
+  --v2-font: "DM Sans", Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  background: var(--v2-bone);
+  color: var(--v2-ink);
+  font-family: var(--v2-font);
+  /* 시스템 전체에 균일한 자간. 이 하나가 "건축적" 인상의 절반이다. */
+  letter-spacing: -0.025em;
+  /* **`hidden` 이면 안 된다.** `overflow-x: hidden` 은 이 요소를 스크롤 컨테이너로
+     만들고, 그러면 안쪽 `position: sticky` 가 뷰포트가 아니라 이 요소에 붙는다 —
+     고정 구간이 통째로 안 먹어 장면이 전부 빈 화면으로 지나갔다(v1 실측).
+     `clip` 은 넘친 것을 자르기만 하고 스크롤 컨테이너를 만들지 않는다. */
+  overflow-x: clip;
+}
+
+.lnv2-root *,
+.lnv2-root *::before,
+.lnv2-root *::after {
+  box-sizing: border-box;
+}
+
+.lnv2-root ::selection {
+  background: var(--v2-lavender);
+  color: var(--v2-aubergine);
+}
+
+.lnv2-container {
+  width: 100%;
+  max-width: var(--v2-measure);
+  margin: 0 auto;
+  padding: 0 var(--v2-gutter);
+}
+
+.lnv2-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.lnv2-skip {
+  position: absolute;
+  left: 16px;
+  top: -80px;
+  z-index: 60;
+  padding: 12px 24px;
+  border-radius: var(--v2-pill);
+  background: var(--v2-aubergine);
+  color: var(--v2-on-dark);
+  font-size: 15px;
+  text-decoration: none;
+  transition: top 0.16s ease;
+}
+
+.lnv2-skip:focus-visible {
+  top: 16px;
+}
+
+/* 목차 링크(#v2-service …)로 뛰면 고정 내비 아래로 들어가 제목이 가린다. */
+.lnv2-root [id] {
+  scroll-margin-top: 92px;
+}
+
+/* ---------------------------------------------------------------- */
+/* 타이포그래피 — 굵기 300 의 큰 글자가 조각처럼 서는 것이 전부         */
+/* ---------------------------------------------------------------- */
+
+/**
+ * `word-break: keep-all` 이 없으면 한글은 **어절 가운데서 끊긴다** —
+ * "건강을 기록 / 하는 것에서," 처럼. 이 페이지의 글은 거의 전부 한글이고 큰
+ * 글자에서 그 한 줄이 디자인을 통째로 망친다(실측). 아래 큰 글자 전부에 건다.
+ */
+.lnv2-display {
+  margin: 0;
+  font-size: clamp(33px, 6.2vw, 84px);
+  font-weight: 300;
+  line-height: 1.04;
+  word-break: keep-all;
+  text-wrap: balance;
+}
+
+.lnv2-display-center {
+  text-align: center;
+}
+
+.lnv2-headline {
+  margin: 0;
+  font-size: clamp(26px, 4.2vw, 60px);
+  font-weight: 300;
+  line-height: 1.12;
+  word-break: keep-all;
+  text-wrap: balance;
+}
+
+.lnv2-lead {
+  margin: 0;
+  max-width: 34em;
+  font-size: clamp(16px, 1.4vw, 20px);
+  font-weight: 400;
+  line-height: 1.5;
+  word-break: keep-all;
+  color: var(--v2-ink-soft);
+}
+
+.lnv2-lead-sm {
+  font-size: clamp(15px, 1.2vw, 17px);
+}
+
+/**
+ * 눈썹 문구를 캡슐로 둔다. 이 시스템에는 자간을 벌린 대문자 라벨이 없다 —
+ * 한글은 자간을 벌리면 낱글자가 흩어져 읽히기도 한다(v1 실측: 0.06em 이 한계).
+ */
+.lnv2-chip {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  padding: 7px 16px;
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-pill);
+  background: var(--v2-paper);
+  color: var(--v2-aubergine);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.lnv2-chip-onDark {
+  border-color: rgb(171 159 242 / 0.4);
+  background: rgb(226 223 254 / 0.08);
+  color: var(--v2-lavender);
+}
+
+.lnv2-head {
+  display: grid;
+  gap: clamp(16px, 2.4vh, 24px);
+  justify-items: center;
+  text-align: center;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.lnv2-head-left {
+  justify-items: start;
+  text-align: left;
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------- */
+/* 캡슐 버튼 — 44px 터치 타깃을 지킨다                                 */
+/* ---------------------------------------------------------------- */
+
+.lnv2-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 28px;
+  border: 1px solid transparent;
+  border-radius: var(--v2-pill);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.lnv2-btn:focus-visible {
+  outline: 3px solid var(--v2-periwinkle);
+  outline-offset: 3px;
+}
+
+.lnv2-btn-primary {
+  background: var(--v2-lavender);
+  color: var(--v2-aubergine);
+  box-shadow: var(--v2-glow);
+}
+
+.lnv2-btn-primary:hover {
+  background: #d3ccfd;
+  box-shadow: var(--v2-glow-lg);
+}
+
+.lnv2-btn-quiet {
+  background: var(--v2-paper);
+  border-color: var(--v2-ash);
+  color: var(--v2-aubergine);
+}
+
+.lnv2-btn-quiet:hover {
+  border-color: var(--v2-periwinkle);
+}
+
+/* 오버진 평면 위에 서는 보조 버튼. */
+.lnv2-btn-onDark {
+  background: transparent;
+  border-color: rgb(226 223 254 / 0.38);
+  color: var(--v2-lavender);
+}
+
+.lnv2-btn-onDark:hover {
+  background: rgb(226 223 254 / 0.1);
+  border-color: var(--v2-lavender);
+}
+
+.lnv2-btn-sm {
+  min-height: 44px;
+  padding: 0 20px;
+  font-size: 15px;
+}
+
+.lnv2-btn-lg {
+  min-height: 56px;
+  padding: 0 34px;
+  font-size: 17px;
+}
+
+.lnv2-btn-block {
+  width: 100%;
+}
+
+.lnv2-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.lnv2-actions-center {
+  justify-content: center;
+}
+
+/* ---------------------------------------------------------------- */
+/* 상태 배지 — 파스텔 채움 + Obsidian 글자(머리말 2번)                  */
+/* ---------------------------------------------------------------- */
+
+.lnv2-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--v2-pill);
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+  color: var(--v2-ink);
+}
+
+/* 색만으로 뜻을 나르지 않는다 — 글자(정상/주의/관리 필요)가 항상 같이 있고,
+   테두리는 옅은 채움이 Bone 배경에서 사라지지 않게 잡아 준다. */
+.lnv2-status[data-status="normal"] {
+  background: var(--v2-mint);
+  border-color: #1fa273;
+}
+
+.lnv2-status[data-status="watch"] {
+  background: var(--v2-buttercream);
+  border-color: #e4e08a;
+}
+
+.lnv2-status[data-status="manage"] {
+  background: var(--v2-blush);
+  border-color: #f0b3b7;
+}
+
+/* ---------------------------------------------------------------- */
+/* 스크롤 원시 요소                                                   */
+/* ---------------------------------------------------------------- */
+
+.lnv2-scroll {
+  --ln-progress: 0;
+  position: relative;
+  height: calc(var(--scenes, 3) * 100vh);
+}
+
+.lnv2-sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(24px, 4vh, 56px);
+  padding: clamp(92px, 12vh, 148px) var(--v2-gutter) clamp(40px, 8vh, 80px);
+  overflow: hidden;
+}
+
+@supports (height: 100svh) {
+  .lnv2-sticky {
+    height: 100svh;
+  }
+}
+
+/** 색이 바뀌는 자리. **글자를 한 자도 두지 않는다**(v1 실측: 섹션 안에서 색을
+    바꾸면 그 섹션의 글이 중간 밝기 위에 앉아 대비가 무너진다). */
+.lnv2-fade {
+  height: 32vh;
+  min-height: 190px;
+}
+
+.lnv2-fade-dark {
+  background: linear-gradient(to bottom, var(--v2-bone), var(--v2-deep));
+}
+
+.lnv2-fade-light {
+  background: linear-gradient(to bottom, var(--v2-deep), var(--v2-bone));
+}
+
+/* ---------------------------------------------------------------- */
+/* 내비게이션 — 떠 있는 캡슐                                           */
+/* ---------------------------------------------------------------- */
+
+.lnv2-nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 50;
+  padding: 16px var(--v2-gutter) 0;
+  /* `backdrop-filter` 를 쓰지 않는다 — 화면 전체를 덮는 고정 요소에 걸면
+     스크롤하는 동안 매 프레임 뷰포트를 블러 합성한다(v1 실측). */
+  pointer-events: none;
+}
+
+.lnv2-nav-pill {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 2vw, 28px);
+  width: 100%;
+  max-width: var(--v2-measure);
+  margin: 0 auto;
+  padding: 9px 12px 9px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--v2-pill);
+  background: transparent;
+  transition: background-color 0.24s ease, border-color 0.24s ease;
+}
+
+.lnv2-nav.is-lifted .lnv2-nav-pill {
+  background: var(--v2-paper);
+  border-color: var(--v2-ash);
+  box-shadow: var(--v2-glow);
+}
+
+.lnv2-nav-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--v2-aubergine);
+}
+
+.lnv2-mark {
+  display: block;
+  flex: none;
+}
+
+.lnv2-nav-word {
+  font-size: 17px;
+  font-weight: 400;
+}
+
+.lnv2-nav-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--v2-periwinkle);
+}
+
+.lnv2-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: auto;
+}
+
+.lnv2-nav-links a {
+  padding: 10px 16px;
+  border-radius: var(--v2-pill);
+  color: var(--v2-ink-soft);
+  font-size: 15px;
+  font-weight: 400;
+  text-decoration: none;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.lnv2-nav-links a:hover {
+  background: var(--v2-ash);
+  color: var(--v2-aubergine);
+}
+
+.lnv2-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lnv2-nav-signin {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: var(--v2-pill);
+  color: var(--v2-aubergine);
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.lnv2-nav-signin:hover {
+  background: var(--v2-ash);
+}
+
+/* ---------------------------------------------------------------- */
+/* 히어로                                                            */
+/* ---------------------------------------------------------------- */
+
+.lnv2-hero {
+  --scenes: 2;
+}
+
+.lnv2-hero-stage {
+  /**
+   * **두 칼럼으로 두지 않는다.**
+   *
+   * 처음에는 글 왼쪽 / 그림 오른쪽으로 두었는데, 1024px 에서 글 칼럼이 452px 이
+   * 되고 7.4vw(=76px) 짜리 문장이 그 안에서 네 줄로 접혔다 — "건강을 기록 /
+   * 하는 것에서," (실측). 이 문장의 가장 긴 줄은 한글 14자이므로 76px 로 세우려면
+   * 1,060px 이 필요하다. 즉 **디스플레이 타이포와 2단 히어로는 같이 못 선다.**
+   * 디자인 시스템이 말하는 "조각 같은 큰 머리글" 쪽을 택하고 그림을 아래로 내렸다.
+   */
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: center;
+  justify-items: center;
+  gap: clamp(28px, 5vh, 56px);
+  max-width: var(--v2-measure);
+  margin: 0 auto;
+  width: 100%;
+  text-align: center;
+
+  /**
+   * 히어로는 **세 박자**다. 한 박자가 다른 박자를 덮으면 연출이 없는 것과 같다 —
+   * 처음에는 정렬과 페이드가 같은 구간에 겹쳐서, 캡슐이 줄을 맞추는 순간에 이미
+   * 투명도가 0.18 이었다(실측: 정렬의 보람이 화면에 안 남았다).
+   *
+   *   --h-conv  0.03 → 0.34   흩어진 캡슐이 제자리를 찾는다 (글은 그대로 있다)
+   *   --h-out   0.34 → 0.67   글이 비킨다 (정렬된 캡슐과 선은 남아 있다)
+   *   --h-exit  0.58 → 1      캡슐 묶음이 확대되며 다음 장면으로 넘어간다
+   */
+  --h-conv: clamp(0, calc((var(--ln-progress) - 0.03) * 3.2), 1);
+  --h-out: clamp(0, calc((var(--ln-progress) - 0.34) * 3), 1);
+  --h-exit: clamp(0, calc((var(--ln-progress) - 0.58) * 2.4), 1);
+}
+
+.lnv2-hero-copy {
+  display: grid;
+  justify-items: center;
+  gap: clamp(18px, 2.6vh, 28px);
+  /* 캡슐이 줄을 맞춘 **뒤에** 비킨다. 그림은 남아서 다음 장면으로 넘어간다. */
+  opacity: calc(1 - var(--h-out));
+  transform: translateY(calc(var(--h-out) * -72px));
+}
+
+.lnv2-hero-visual {
+  position: relative;
+  width: 100%;
+  transform: scale(calc(1 + var(--h-exit) * 0.34)) translateY(calc(var(--h-exit) * -48px));
+  opacity: calc(1 - var(--h-exit));
+}
+
+/**
+ * 캡슐 다섯의 **정렬된 모습은 이 흐름 배치가 만든다.** 흩어짐은 자식의 transform
+ * 으로만 얹는다 — 절대 위치로 두면 글자 길이가 달라 간격이 들쭉날쭉해진다.
+ */
+.lnv2-hero-stack {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: clamp(9px, 1.2vh, 13px);
+}
+
+/** `--conv` 는 "정렬됨" 0~1 이다. 0 이면 흩어져 기울어 있고, 1 이면 반듯하게 쌓인다. */
+.lnv2-hero-pill {
+  --conv: var(--h-conv);
+  display: inline-flex;
+  align-items: center;
+  padding: 11px 20px;
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-pill);
+  background: var(--v2-paper);
+  color: var(--v2-ink-soft);
+  font-size: clamp(12px, 1.1vw, 14px);
+  font-weight: 400;
+  white-space: nowrap;
+  transform: translate(calc((1 - var(--conv)) * var(--dx)), calc((1 - var(--conv)) * var(--dy)))
+    rotate(calc((1 - var(--conv)) * var(--rot)));
+  /* 흩어진 동안에는 캡슐끼리 겹친다. 앞뒤 순서를 고정해 깜빡이지 않게 둔다. */
+  position: relative;
+  z-index: calc(10 - var(--i));
+}
+
+.lnv2-hero-pill[data-tone="lavender"] {
+  background: var(--v2-lavender);
+  border-color: transparent;
+  color: var(--v2-aubergine);
+}
+
+.lnv2-hero-pill[data-tone="mint"] {
+  background: var(--v2-mint);
+  border-color: #1fa273;
+  color: var(--v2-ink);
+}
+
+.lnv2-hero-pill[data-tone="blush"] {
+  background: var(--v2-blush);
+  border-color: transparent;
+  color: var(--v2-ink);
+}
+
+/** 캡슐이 제자리를 찾은 뒤에야 그려지는 한 줄. "하나의 흐름" 쪽이다. */
+.lnv2-hero-spine {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: var(--v2-pill);
+  background: linear-gradient(to bottom, transparent, var(--v2-periwinkle) 16%, var(--v2-periwinkle) 84%, transparent);
+  /* 캡슐이 줄을 맞추는 동안 함께 그려진다. */
+  transform: scaleY(clamp(0, calc((var(--ln-progress) - 0.2) * 4.4), 1));
+  opacity: clamp(0, calc((var(--ln-progress) - 0.2) * 4.4), 1);
+}
+
+.lnv2-scroll-hint {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(20px, 4vh, 40px);
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--v2-meta);
+  font-size: 13px;
+  opacity: clamp(0, calc(1 - var(--ln-progress) * 5), 1);
+}
+
+.lnv2-scroll-hint span {
+  display: block;
+  width: 1px;
+  height: 28px;
+  background: linear-gradient(to bottom, var(--v2-fog), transparent);
+}
+
+.lnv2-br-wide {
+  display: none;
+}
+
+@media (min-width: 901px) {
+  .lnv2-br-wide {
+    display: inline;
+  }
+}
+
+/* ---------------------------------------------------------------- */
+/* 검진표 · OCR                                                      */
+/* ---------------------------------------------------------------- */
+
+.lnv2-ocr {
+  --scenes: 4;
+}
+
+.lnv2-ocr-stage {
+  max-width: var(--v2-measure);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.lnv2-ocr-flow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(24px, 4vw, 64px);
+  min-height: 0;
+}
+
+/* 종이 — 이 시스템에는 16px 아래 반경이 없으므로 "종이" 도 큰 반경 카드다. */
+.lnv2-paper {
+  position: relative;
+  margin: 0;
+  padding: clamp(20px, 2.4vw, 36px);
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-card-lg);
+  background: var(--v2-paper);
+  /* 숫자가 떠난 뒤에는 종이가 한 발 물러난다. 위치를 바꾸지 않고 기울기만 준다 —
+     좌우로 움직이면 오른쪽 캡슐 줄과 부딛는다. */
+  transform: rotate(calc(-0.8deg + var(--ln-progress) * 0.8deg)) scale(calc(1 - var(--ln-progress) * 0.045));
+}
+
+.lnv2-paper-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--v2-ash);
+}
+
+.lnv2-paper-name {
+  font-size: clamp(14px, 1.3vw, 17px);
+  color: var(--v2-aubergine);
+}
+
+.lnv2-paper-date {
+  font-size: 13px;
+  color: var(--v2-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+/** 업로드 → 읽는 중 → 저장됨. 세 글을 같은 캡슐 자리에 겹쳐 두고 바꿔 끼운다. */
+.lnv2-paper-state {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 7px 16px 7px 14px;
+  border-radius: var(--v2-pill);
+  background: var(--v2-lavender);
+  color: var(--v2-aubergine);
+  font-size: 13px;
+  /* 세 글 중 가장 긴 것에 폭을 맞춰 둔다 — 캡슐이 늘었다 줄면 종이가 흔들린다. */
+  min-width: 158px;
+}
+
+.lnv2-paper-state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--v2-aubergine);
+  flex: none;
+}
+
+.lnv2-paper-state-text {
+  position: absolute;
+  left: 32px;
+  white-space: nowrap;
+}
+
+.lnv2-paper-state-text[data-phase="upload"] {
+  opacity: clamp(0, calc(1 - var(--ln-progress) * 8), 1);
+}
+
+.lnv2-paper-state-text[data-phase="read"] {
+  opacity: clamp(0, calc(min((var(--ln-progress) - 0.14) * 10, (0.62 - var(--ln-progress)) * 10)), 1);
+}
+
+.lnv2-paper-state-text[data-phase="done"] {
+  opacity: clamp(0, calc((var(--ln-progress) - 0.6) * 10), 1);
+}
+
+.lnv2-paper-rows {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+/**
+ * 종이 위 한 줄. `--lit` 은 짚였는가, `--moved` 는 숫자가 떠났는가.
+ * 둘 다 `--ln-progress` 와 줄마다 다른 문턱값(`--t`·`--m`)의 차이로 만든다.
+ */
+.lnv2-paper-row {
+  --lit: clamp(0, calc((var(--ln-progress) - var(--t)) * 16), 1);
+  --moved: clamp(0, calc((var(--ln-progress) - var(--m)) * 14), 1);
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: clamp(7px, 1vh, 11px) 14px;
+  border-radius: var(--v2-pill);
+  font-size: clamp(12px, 1.1vw, 15px);
+  color: var(--v2-ink-soft);
+  /* 짚인 줄만 라벤더 캡슐이 깔린다. */
+  background: rgb(226 223 254 / calc(var(--lit) * 0.85));
+}
+
+.lnv2-paper-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lnv2-paper-value {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--v2-aubergine);
+  /* 떠난 숫자는 오른쪽으로 빠지며 사라진다. */
+  opacity: calc(1 - var(--moved));
+  transform: translateX(calc(var(--moved) * 26px));
+}
+
+.lnv2-paper-value small {
+  margin-left: 3px;
+  font-size: 0.78em;
+  color: var(--v2-meta);
+}
+
+/* 떠난 숫자가 다시 서는 자리 — 캡슐 줄 */
+.lnv2-extracted {
+  list-style: none;
+  margin: 0;
+  padding: clamp(18px, 2.2vw, 30px);
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-card-lg);
+  background: var(--v2-bone);
+  /**
+   * **그릇도 같이 온다.** 처음에는 테두리와 배경을 늘 켜 두었는데, 숫자가 떠나기
+   * 전(섹션의 앞 60%)에는 화면 절반이 빈 상자였다 — 미완성으로 보인다.
+   * 첫 캡슐이 앉기 조금 전에 그릇이 생긴다.
+   */
+  opacity: clamp(0, calc((var(--ln-progress) - 0.52) * 8), 1);
+}
+
+.lnv2-extracted-pill {
+  --in: clamp(0, calc((var(--ln-progress) - var(--t)) * 14), 1);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: clamp(9px, 1.2vh, 13px) 18px;
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-pill);
+  background: var(--v2-paper);
+  font-size: clamp(12px, 1.1vw, 15px);
+  opacity: var(--in);
+  transform: translateX(calc((1 - var(--in)) * -22px));
+}
+
+.lnv2-extracted-label {
+  color: var(--v2-ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lnv2-extracted-value {
+  flex: none;
+  color: var(--v2-aubergine);
+  font-variant-numeric: tabular-nums;
+}
+
+.lnv2-extracted-value small {
+  margin-left: 3px;
+  font-size: 0.78em;
+  color: var(--v2-meta);
+}
+
+/* ---------------------------------------------------------------- */
+/* 해석                                                              */
+/* ---------------------------------------------------------------- */
+
+.lnv2-insight {
+  padding: clamp(80px, 14vh, 168px) 0;
+}
+
+.lnv2-insight-hero {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  margin: clamp(48px, 8vh, 104px) 0 clamp(40px, 6vh, 80px);
+  text-align: center;
+}
+
+.lnv2-insight-label {
+  margin: 0;
+  font-size: clamp(15px, 1.4vw, 18px);
+  color: var(--v2-meta);
+}
+
+/** 숫자 하나에 디스플레이 단계를 통째로 쓴다. 상태로 색을 바꾸지 않는다 —
+    색이 바뀌면 "위험" 으로 읽히고, 이 화면은 위치만 말한다. */
+.lnv2-insight-number {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: clamp(64px, 12vw, 152px);
+  font-weight: 300;
+  line-height: 0.92;
+  color: var(--v2-deep);
+  /* 세는 동안 자리 폭이 흔들리지 않게. */
+  font-variant-numeric: tabular-nums;
+}
+
+.lnv2-insight-number small {
+  font-size: clamp(16px, 1.8vw, 24px);
+  color: var(--v2-meta);
+}
+
+/* 세 칸 캡슐. 지금 어디인지만 켠다. */
+.lnv2-insight-steps {
+  display: inline-flex;
+  margin: 6px 0 0;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-pill);
+  background: var(--v2-paper);
+}
+
+.lnv2-insight-step {
+  padding: 8px 18px;
+  border-radius: var(--v2-pill);
+  font-size: 14px;
+  color: var(--v2-meta);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.lnv2-insight-step[data-on="true"] {
+  color: var(--v2-ink);
+}
+
+.lnv2-insight-step[data-on="true"][data-step="normal"] {
+  background: var(--v2-mint);
+}
+
+.lnv2-insight-step[data-on="true"][data-step="watch"] {
+  background: var(--v2-buttercream);
+}
+
+.lnv2-insight-step[data-on="true"][data-step="manage"] {
+  background: var(--v2-blush);
+}
+
+.lnv2-insight-note {
+  margin: 0;
+  font-size: clamp(15px, 1.4vw, 19px);
+  color: var(--v2-ink-soft);
+}
+
+.lnv2-insight-caveat {
+  margin: 4px 0 0;
+  max-width: 44em;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--v2-meta);
+}
+
+.lnv2-insight-list {
+  list-style: none;
+  margin: 0;
+  padding: clamp(18px, 2.4vw, 32px);
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-card-lg);
+  background: var(--v2-paper);
+}
+
+.lnv2-insight-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(10px, 2vw, 24px);
+  padding: 15px 18px;
+  border-radius: var(--v2-pill);
+  font-size: 15px;
+}
+
+.lnv2-insight-row:hover {
+  background: var(--v2-ash-soft);
+}
+
+.lnv2-insight-row-label {
+  color: var(--v2-ink-soft);
+}
+
+.lnv2-insight-row-value {
+  color: var(--v2-aubergine);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lnv2-insight-row-value small {
+  margin-left: 3px;
+  font-size: 0.8em;
+  color: var(--v2-meta);
+}
+
+.lnv2-insight-row-ref {
+  color: var(--v2-meta);
+  font-size: 13px;
+  text-align: right;
+}
+
+/* ---------------------------------------------------------------- */
+/* 3D 인체 — 몰입형 오버진 평면                                        */
+/* ---------------------------------------------------------------- */
+
+.lnv2-body {
+  --scenes: 5.5;
+  background: var(--v2-deep);
+  color: var(--v2-on-dark);
+}
+
+/**
+ * **`position` 을 여기서 다시 쓰지 않는다.**
+ *
+ * 이 요소는 `.lnv2-sticky` 와 `.lnv2-body-stage` 를 같이 달고 있고 특이도가 같다.
+ * 파일에서 이쪽이 뒤에 있어서, 여기 `position: relative` 를 적었더니 `sticky` 를
+ * 덮어 **3D 인체 섹션만 고정이 통째로 안 먹었다** — 5.5 화면짜리 구간을 스크롤하는
+ * 동안 몸이 위로 흘러가 버리고 빈 오버진 화면만 지나갔다(실측).
+ * `position: sticky` 자체가 이미 절대 위치 자식(`.ln-body-canvas`)의 기준이다.
+ */
+.lnv2-body-stage {
+  padding: 0;
+  justify-content: stretch;
+  gap: 0;
+}
+
+/* 아래 셋은 재사용하는 장면 컴포넌트(`../landing/scene/LandingBodyScene`)가 그리는
+   클래스다. v2 는 그 파일을 고치지 않고 **여기서 입힌다**. */
+.lnv2-root .ln-body-canvas {
+  position: absolute;
+  /**
+   * **위를 비워 둔다.** 캔버스를 `inset: 0` 으로 두면 3D 뷰포트의 세로 중심이
+   * 화면 중심과 같아져 정수리가 떠 있는 내비 캡슐 뒤로 들어간다(실측). 카메라
+   * 키프레임(`../landing/scene/bodyScene.ts`)은 v1 과 **공유하는 정본**이라
+   * 여기서 고치면 v1 의 구도가 같이 바뀐다 — 그래서 카메라가 아니라 **그리는
+   * 자리**를 내린다.
+   */
+  inset: clamp(44px, 7vh, 72px) 0 0;
+}
+
+.lnv2-root .ln-body-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.lnv2-root .ln-body-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.lnv2-root .ln-body-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  will-change: transform, opacity;
+  transition: opacity 0.25s ease;
+}
+
+.lnv2-root .ln-body-marker[data-flip="true"] span {
+  left: auto;
+  right: 18px;
+}
+
+.lnv2-root .ln-body-marker span {
+  position: absolute;
+  left: 18px;
+  top: -14px;
+  display: inline-block;
+  padding: 5px 13px;
+  border-radius: var(--v2-pill);
+  /* 3D 가 도는 위에 얹히는 이름표에 `backdrop-filter` 를 쓰지 않는다 —
+     프레임마다 합성 비용이 붙고, 어두운 장면 위에서는 불투명 배경과 구분도
+     안 된다(v1 실측). 그냥 칠한다. */
+  background: rgb(38 27 68 / 0.92);
+  border: 1px solid rgb(171 159 242 / 0.5);
+  color: var(--v2-lavender);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.lnv2-body-overlay {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  /* 장면 글은 아래쪽 끝에 붙는다. 진행 표시와 사이를 비워 두지 않으면 좁은
+     화면에서 막대가 글자 위를 지난다(390×844 실측). */
+  row-gap: 18px;
+  padding: clamp(92px, 12vh, 148px) var(--v2-gutter) clamp(36px, 6vh, 64px);
+  max-width: var(--v2-measure);
+  margin: 0 auto;
+  width: 100%;
+  pointer-events: none;
+}
+
+.lnv2-body-head {
+  justify-self: start;
+}
+
+/** 장면 글. 아래쪽에 앉혀 3D 인체의 얼굴·가슴을 가리지 않는다. */
+.lnv2-body-copy {
+  align-self: end;
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  max-width: 30em;
+}
+
+.lnv2-body-scene {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+}
+
+/**
+ * **장면 전환은 글 요소에만 건다.**
+ *
+ * 처음에는 `.lnv2-body-copy` 에 통째로 걸었는데, 그 애니메이션의 `transform` 이
+ * 그 요소를 **절대 위치의 기준(containing block)으로 만들어** 안에 있는 부위
+ * 패널이 오른쪽 가운데가 아니라 글 바로 아래에 붙어 화면 밖으로 잘렸다(실측).
+ * 패널(`<aside>`)은 이동을 받지 않고 투명도만 바꾼다 — 그러면 기준은 다시
+ * `.lnv2-body-overlay` 가 된다.
+ */
+.lnv2-body-scene > p {
+  animation: lnv2-scene-in 0.5s ease both;
+}
+
+@keyframes lnv2-scene-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes lnv2-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.lnv2-body-headline {
+  margin: 0;
+  font-size: clamp(26px, 3.8vw, 52px);
+  font-weight: 300;
+  line-height: 1.1;
+  color: var(--v2-on-dark);
+  white-space: pre-line;
+  word-break: keep-all;
+  text-wrap: balance;
+}
+
+.lnv2-body-sub {
+  margin: 0;
+  font-size: clamp(15px, 1.4vw, 18px);
+  line-height: 1.5;
+  color: var(--v2-on-dark-soft);
+}
+
+/* 장면 진행 표시 — 캡슐 다섯 칸 */
+.lnv2-body-trail {
+  list-style: none;
+  align-self: end;
+  justify-self: center;
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.lnv2-body-trail li {
+  width: 34px;
+  height: 3px;
+  border-radius: var(--v2-pill);
+  background: rgb(226 223 254 / 0.2);
+  transition: background-color 0.3s ease;
+}
+
+.lnv2-body-trail li[data-done="true"] {
+  background: var(--v2-periwinkle);
+}
+
+/** 부위 정보 패널. 넓은 화면에서는 오른쪽에 떠 있고, 좁은 화면에서는 글 아래에
+    이어 붙는다(부모를 나누면 모바일에서 줄이 하나 더 생겨 몸이 잘린다). */
+.lnv2-inspect {
+  position: absolute;
+  right: var(--v2-gutter);
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(300px, 34vw);
+  padding: 24px;
+  border: 1px solid rgb(171 159 242 / 0.3);
+  border-radius: var(--v2-card);
+  background: rgb(38 27 68 / 0.9);
+  /* 이동 없이 투명도만 — 위 주석 참고. */
+  animation: lnv2-fade-in 0.45s 0.1s ease both;
+}
+
+.lnv2-inspect-region {
+  margin: 0 0 16px;
+  font-size: 19px;
+  color: var(--v2-lavender);
+}
+
+.lnv2-inspect dl {
+  margin: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.lnv2-inspect dt {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--v2-on-dark-soft);
+}
+
+.lnv2-inspect dd {
+  margin: 0;
+  font-size: 15px;
+  color: var(--v2-on-dark);
+}
+
+.lnv2-inspect dd span {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--v2-on-dark-soft);
+}
+
+.lnv2-body-loading,
+.lnv2-body-optin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  width: min(420px, calc(100% - 2 * var(--v2-gutter)));
+  margin: 0;
+  text-align: center;
+  color: var(--v2-on-dark-soft);
+  font-size: 14px;
+}
+
+.lnv2-body-optin p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.lnv2-body-fallback {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+  align-content: center;
+  padding: clamp(92px, 12vh, 148px) var(--v2-gutter) clamp(40px, 6vh, 72px);
+  text-align: center;
+}
+
+.lnv2-body-fallback svg {
+  width: min(200px, 44vw);
+  height: auto;
+}
+
+.lnv2-body-fallback-figure {
+  fill: rgb(226 223 254 / 0.16);
+}
+
+.lnv2-body-fallback-marks circle {
+  fill: var(--v2-periwinkle);
+  opacity: 0.85;
+}
+
+.lnv2-body-fallback-reason {
+  margin: 0;
+  font-size: 12px;
+  color: var(--v2-on-dark-soft);
+}
+
+/* ---------------------------------------------------------------- */
+/* 챌린지                                                            */
+/* ---------------------------------------------------------------- */
+
+.lnv2-challenge {
+  --scenes: 3.6;
+}
+
+.lnv2-challenge-stage {
+  max-width: var(--v2-measure);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.lnv2-challenge-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(14px, 1.8vw, 24px);
+}
+
+/**
+ * 카드 하나. 세 값이 순서대로 움직인다 —
+ * `--in` 등장 · `--fillp` 진행 막대 · `--checkp` 체크 획.
+ */
+.lnv2-challenge-card {
+  --in: clamp(0, calc((var(--ln-progress) - var(--enter)) * 12), 1);
+  --fillp: clamp(0, calc((var(--ln-progress) - var(--fill)) * 7), 1);
+  --checkp: clamp(0, calc((var(--ln-progress) - var(--check)) * 9), 1);
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: clamp(22px, 2.6vw, 40px);
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-card-lg);
+  background: var(--v2-paper);
+  opacity: var(--in);
+  transform: translateY(calc((1 - var(--in)) * 28px));
+}
+
+.lnv2-challenge-check {
+  display: block;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 6px;
+}
+
+.lnv2-challenge-check svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.lnv2-challenge-check-fill {
+  fill: var(--v2-lavender);
+  opacity: var(--checkp);
+}
+
+.lnv2-challenge-check-ring {
+  fill: none;
+  stroke: var(--v2-ash);
+  stroke-width: 1.5;
+}
+
+/** 체크는 **그려진다.** 툭 나타나는 것과의 차이가 이 섹션의 완성도 전부다. */
+.lnv2-challenge-check-mark {
+  stroke: var(--v2-aubergine);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: calc(1 - var(--checkp));
+}
+
+.lnv2-challenge-title {
+  margin: 0;
+  word-break: keep-all;
+  font-size: clamp(19px, 1.8vw, 26px);
+  font-weight: 300;
+  line-height: 1.24;
+  color: var(--v2-aubergine);
+}
+
+.lnv2-challenge-detail {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--v2-meta);
+}
+
+.lnv2-challenge-progress {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.lnv2-challenge-track {
+  display: block;
+  height: 8px;
+  border-radius: var(--v2-pill);
+  background: var(--v2-ash);
+  overflow: hidden;
+}
+
+.lnv2-challenge-bar {
+  display: block;
+  height: 100%;
+  border-radius: var(--v2-pill);
+  background: var(--v2-periwinkle);
+  /* 목표치(`--rate`)까지 진행도에 따라 찬다. */
+  width: calc(var(--rate) * var(--fillp) * 100%);
+}
+
+.lnv2-challenge-count {
+  font-size: 13px;
+  color: var(--v2-meta);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- */
+/* 기록과 변화                                                       */
+/* ---------------------------------------------------------------- */
+
+.lnv2-trend {
+  --scenes: 4;
+}
+
+.lnv2-trend-stage {
+  max-width: var(--v2-measure);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.lnv2-trend-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: clamp(20px, 3vw, 48px);
+}
+
+.lnv2-trend-chart {
+  padding: clamp(20px, 2.6vw, 40px);
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-card-lg);
+  background: var(--v2-paper);
+}
+
+.lnv2-trend-readout {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
+
+.lnv2-trend-week {
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: var(--v2-pill);
+  background: var(--v2-lavender);
+  color: var(--v2-aubergine);
+  font-size: 13px;
+}
+
+.lnv2-trend-metric {
+  margin: 0;
+  font-size: clamp(34px, 4.4vw, 60px);
+  font-weight: 300;
+  line-height: 1;
+  color: var(--v2-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+.lnv2-trend-metric small {
+  margin-left: 6px;
+  font-size: 0.34em;
+  color: var(--v2-meta);
+}
+
+.lnv2-trend-caption {
+  margin: 0;
+  font-size: 13px;
+  color: var(--v2-meta);
+}
+
+.lnv2-trend-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lnv2-trend-grid line {
+  stroke: var(--v2-ash);
+  stroke-width: 1;
+  transition: stroke 0.3s ease;
+}
+
+.lnv2-trend-grid line[data-done="true"] {
+  stroke: #d6cffb;
+}
+
+/** 선은 스크롤이 **그린다.** 한 번에 띄우면 "쌓였다" 가 아니라 "있었다" 가 된다. */
+.lnv2-trend-line {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: clamp(0, calc(1 - var(--ln-progress) * 1.18), 1);
+}
+
+.lnv2-trend-line.is-rate {
+  stroke: var(--v2-periwinkle);
+}
+
+.lnv2-trend-line.is-metric {
+  stroke: var(--v2-aubergine);
+}
+
+.lnv2-trend-labels text {
+  fill: var(--v2-fog);
+  font-size: 13px;
+  font-family: var(--v2-font);
+  text-anchor: middle;
+  transition: fill 0.3s ease;
+}
+
+.lnv2-trend-labels text[data-done="true"] {
+  fill: var(--v2-aubergine);
+}
+
+/* 두 선은 축이 다르다(% · mg/dL). 단위를 여기 적지 않으면 "혈당이 올라간 것" 으로
+   읽힐 수 있다. */
+.lnv2-trend-legend {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 14px 0 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--v2-meta);
+}
+
+.lnv2-trend-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lnv2-trend-legend li::before {
+  content: "";
+  width: 18px;
+  height: 3px;
+  border-radius: var(--v2-pill);
+}
+
+.lnv2-trend-legend .is-rate::before {
+  background: var(--v2-periwinkle);
+}
+
+.lnv2-trend-legend .is-metric::before {
+  background: var(--v2-aubergine);
+}
+
+.lnv2-trend-garden {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 12px;
+  margin: 0;
+  padding: clamp(18px, 2vw, 26px);
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-card-lg);
+  background: var(--v2-bone);
+  width: min(224px, 28vw);
+}
+
+.lnv2-trend-garden figcaption {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--v2-meta);
+  text-align: center;
+}
+
+.lnv2-trend-garden strong {
+  font-weight: 400;
+  color: var(--v2-aubergine);
+}
+
+/* ---------------------------------------------------------------- */
+/* 가족                                                              */
+/* ---------------------------------------------------------------- */
+
+.lnv2-family {
+  --scenes: 3.5;
+}
+
+.lnv2-family-stage {
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* 가족 선택은 **화면 위쪽에 그대로 세워 둔다.** 아래에 숨기면 기능이 있다는 것을
+   아무도 모른다. */
+.lnv2-family-tabs {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-pill);
+  background: var(--v2-paper);
+  margin-inline: auto;
+}
+
+.lnv2-family-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: var(--v2-pill);
+  background: transparent;
+  color: var(--v2-ink-soft);
+  font-family: inherit;
+  font-size: 15px;
+  letter-spacing: inherit;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.lnv2-family-tab:hover {
+  background: var(--v2-ash-soft);
+}
+
+.lnv2-family-tab.is-active {
+  background: var(--v2-lavender);
+  color: var(--v2-aubergine);
+}
+
+.lnv2-family-tab:focus-visible {
+  outline: 3px solid var(--v2-periwinkle);
+  outline-offset: 2px;
+}
+
+.lnv2-family-card {
+  display: grid;
+  gap: 14px;
+  justify-items: start;
+  padding: clamp(26px, 3.4vw, 48px);
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-card-lg);
+  background: var(--v2-paper);
+  animation: lnv2-scene-in 0.45s ease both;
+}
+
+.lnv2-family-relation {
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: var(--v2-pill);
+  background: var(--v2-bone);
+  font-size: 13px;
+  color: var(--v2-meta);
+}
+
+.lnv2-family-summary {
+  margin: 0;
+  word-break: keep-all;
+  font-size: clamp(20px, 2.4vw, 32px);
+  font-weight: 300;
+  line-height: 1.24;
+  color: var(--v2-aubergine);
+  text-wrap: balance;
+}
+
+.lnv2-family-highlight {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding-top: 6px;
+}
+
+.lnv2-family-highlight-label {
+  font-size: 14px;
+  color: var(--v2-meta);
+}
+
+.lnv2-family-highlight-value {
+  font-size: clamp(22px, 2.2vw, 30px);
+  font-weight: 300;
+  color: var(--v2-deep);
+  font-variant-numeric: tabular-nums;
+}
+
+.lnv2-family-note {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--v2-ink-soft);
+}
+
+/* ---------------------------------------------------------------- */
+/* 말풍선 · 챗봇 섹션                                                 */
+/* ---------------------------------------------------------------- */
+
+.lnv2-bubble {
+  margin: 0;
+  padding: 14px 20px;
+  border-radius: var(--v2-card);
+  font-size: clamp(14px, 1.2vw, 16px);
+  line-height: 1.5;
+  max-width: 36em;
+}
+
+.lnv2-bubble[data-from="user"] {
+  background: var(--v2-lavender);
+  color: var(--v2-aubergine);
+  /* 보낸 말은 오른쪽 아래 귀를 접는다 — 말풍선 꼬리를 그리지 않고 반경으로만 낸다. */
+  border-bottom-right-radius: 8px;
+  justify-self: end;
+}
+
+.lnv2-bubble[data-from="bomi"] {
+  background: var(--v2-paper);
+  border: 1px solid var(--v2-ash);
+  color: var(--v2-ink-soft);
+  border-bottom-left-radius: 8px;
+  justify-self: start;
+}
+
+/* 오버진 평면 위의 말풍선(3D 장면). */
+.lnv2-body-scene .lnv2-bubble[data-from="user"] {
+  background: var(--v2-lavender);
+  color: var(--v2-aubergine);
+}
+
+.lnv2-assistant {
+  padding: clamp(80px, 14vh, 168px) 0;
+}
+
+.lnv2-assistant-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(32px, 5vw, 80px);
+}
+
+.lnv2-thread {
+  display: grid;
+  gap: 18px;
+  padding: clamp(22px, 2.6vw, 40px);
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-card-lg);
+  background: var(--v2-bone);
+}
+
+.lnv2-turn {
+  display: grid;
+  gap: 10px;
+}
+
+/* ---------------------------------------------------------------- */
+/* 마지막 제안 · 푸터 — 오버진 평면으로 닫는다                          */
+/* ---------------------------------------------------------------- */
+
+.lnv2-final {
+  background: var(--v2-aubergine);
+  color: var(--v2-on-dark);
+  padding: clamp(100px, 20vh, 220px) var(--v2-gutter) clamp(88px, 16vh, 180px);
+}
+
+.lnv2-final-inner {
+  display: grid;
+  justify-items: center;
+  gap: clamp(32px, 5vh, 56px);
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.lnv2-footer {
+  background: var(--v2-aubergine);
+  color: var(--v2-on-dark-soft);
+  padding: clamp(40px, 6vh, 72px) 0 clamp(32px, 5vh, 56px);
+  border-top: 1px solid rgb(226 223 254 / 0.14);
+  font-size: 14px;
+}
+
+.lnv2-footer-inner {
+  display: grid;
+  gap: clamp(24px, 4vh, 40px);
+}
+
+.lnv2-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.lnv2-footer-brand strong {
+  display: block;
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--v2-on-dark);
+}
+
+.lnv2-footer-brand p {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+
+.lnv2-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lnv2-footer-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid rgb(226 223 254 / 0.22);
+  border-radius: var(--v2-pill);
+  color: var(--v2-lavender);
+  text-decoration: none;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.lnv2-footer-links a:hover {
+  background: rgb(226 223 254 / 0.1);
+  border-color: var(--v2-lavender);
+}
+
+.lnv2-footer-notes {
+  display: grid;
+  gap: 10px;
+  max-width: 70ch;
+  line-height: 1.6;
+}
+
+.lnv2-footer-notes p {
+  margin: 0;
+}
+
+.lnv2-footer-notes a {
+  color: var(--v2-lavender);
+}
+
+.lnv2-footer-copy {
+  color: rgb(167 154 203 / 0.7);
+}
+
+/* ---------------------------------------------------------------- */
+/* 떠 있는 챗봇 런처 · 미리보기 패널                                    */
+/* ---------------------------------------------------------------- */
+
+.lnv2-launcher-root {
+  position: fixed;
+  right: clamp(16px, 3vw, 32px);
+  bottom: clamp(16px, 3vh, 32px);
+  z-index: 55;
+  display: grid;
+  justify-items: end;
+  gap: 12px;
+}
+
+.lnv2-launcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 0 24px 0 12px;
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-pill);
+  background: var(--v2-paper);
+  color: var(--v2-aubergine);
+  font-family: inherit;
+  font-size: 15px;
+  letter-spacing: inherit;
+  cursor: pointer;
+  box-shadow: var(--v2-glow);
+  transition: box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.lnv2-launcher:hover {
+  box-shadow: var(--v2-glow-lg);
+}
+
+.lnv2-launcher:focus-visible {
+  outline: 3px solid var(--v2-periwinkle);
+  outline-offset: 3px;
+}
+
+.lnv2-launcher img {
+  display: block;
+  border-radius: 50%;
+  background: var(--v2-lavender);
+  padding: 3px;
+}
+
+.lnv2-launcher.is-open .lnv2-launcher-word {
+  display: none;
+}
+
+.lnv2-launcher.is-open {
+  padding: 0 12px;
+}
+
+.lnv2-panel {
+  width: min(360px, calc(100vw - 2 * clamp(16px, 3vw, 32px)));
+  max-height: min(560px, calc(100vh - 140px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-card-lg);
+  background: var(--v2-paper);
+  overflow: hidden;
+  animation: lnv2-panel-in 0.24s ease both;
+}
+
+@keyframes lnv2-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+
+.lnv2-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 14px 20px;
+  border-bottom: 1px solid var(--v2-ash);
+}
+
+.lnv2-panel-head img {
+  display: block;
+  border-radius: 50%;
+  background: var(--v2-lavender);
+  padding: 2px;
+}
+
+.lnv2-panel-who {
+  margin-right: auto;
+}
+
+.lnv2-panel-who strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--v2-aubergine);
+}
+
+.lnv2-panel-who small {
+  font-size: 12px;
+  color: var(--v2-meta);
+}
+
+.lnv2-panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--v2-aubergine);
+  cursor: pointer;
+}
+
+.lnv2-panel-close:hover {
+  background: var(--v2-ash-soft);
+}
+
+.lnv2-panel-close:focus-visible {
+  outline: 3px solid var(--v2-periwinkle);
+  outline-offset: 0;
+}
+
+.lnv2-panel-body {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  overflow-y: auto;
+  background: var(--v2-bone);
+}
+
+.lnv2-panel-body .lnv2-bubble {
+  font-size: 14px;
+  max-width: 100%;
+}
+
+.lnv2-panel-foot {
+  display: grid;
+  gap: 12px;
+  padding: 16px 20px 20px;
+  border-top: 1px solid var(--v2-ash);
+}
+
+.lnv2-panel-suggest {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.lnv2-panel-suggest button {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid var(--v2-ash);
+  border-radius: var(--v2-pill);
+  background: var(--v2-paper);
+  color: var(--v2-aubergine);
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.lnv2-panel-suggest button:hover {
+  border-color: var(--v2-periwinkle);
+  background: var(--v2-ash-soft);
+}
+
+.lnv2-panel-suggest button:focus-visible {
+  outline: 3px solid var(--v2-periwinkle);
+  outline-offset: 2px;
+}
+
+.lnv2-panel-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--v2-meta);
+}
+
+/* ---------------------------------------------------------------- */
+/* 등장 — `../landing/Reveal` 이 붙이는 클래스                         */
+/* ---------------------------------------------------------------- */
+
+.lnv2-root .ln-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease var(--delay, 0s), transform 0.6s ease var(--delay, 0s);
+}
+
+.lnv2-root .ln-reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* ================================================================ */
+/* 반응형 — 모바일은 데스크톱의 축소판이 아니다                          */
+/* ================================================================ */
+
+/**
+ * 태블릿·모바일(≤ 900px).
+ *
+ * 나란히 놓던 것을 세로로 쌓되 **중요도는 데스크톱과 같게** 둔다 — 3D 인체는
+ * 여전히 뷰포트를 꽉 쓰고, 가족 선택은 여전히 화면 위쪽에 있다. 줄이는 것은
+ * 고정 구간의 길이와 parallax 뿐이다.
+ */
+@media (max-width: 900px) {
+  .lnv2-nav {
+    padding-top: 12px;
+  }
+
+  /* 목차 세 줄은 좁은 화면에서 브랜드와 CTA 를 밀어낸다. 같은 곳으로 가는 문이
+     푸터에 그대로 있으므로 여기서만 접는다. */
+  .lnv2-nav-links {
+    display: none;
+  }
+
+  .lnv2-nav-pill {
+    justify-content: space-between;
+  }
+
+  .lnv2-nav-brand {
+    margin-right: auto;
+  }
+
+  .lnv2-hero {
+    --scenes: 1.7;
+  }
+
+  .lnv2-hero-visual {
+    /* 좁은 화면에서는 흩어짐과 확대 parallax 를 함께 줄인다 — 캡슐이 화면 밖으로
+       밀려 가로 스크롤이 생긴다. */
+    transform: scale(calc(1 + var(--h-exit) * 0.14)) translateY(calc(var(--h-exit) * -18px));
+  }
+
+  .lnv2-hero-pill {
+    transform: translate(calc((1 - var(--conv)) * var(--dx) * 0.3), calc((1 - var(--conv)) * var(--dy)))
+      rotate(calc((1 - var(--conv)) * var(--rot)));
+  }
+
+  .lnv2-ocr {
+    --scenes: 3.2;
+  }
+
+  /**
+   * **종이와 데이터를 세로로 쌓지 않는다.** 375px 에서 둘을 위아래로 놓으면
+   * 양쪽 다 화면 밖으로 나간다(v1 실측). 같은 칸에 포개 두고 진행도로 바꿔 끼운다.
+   * (모션을 끄면 이 겹치기를 반드시 풀어야 한다 — 아래 모션 축소 블록 참고.)
+   */
+  .lnv2-ocr-flow {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .lnv2-paper,
+  .lnv2-extracted {
+    grid-area: 1 / 1;
+  }
+
+  .lnv2-paper {
+    opacity: clamp(0, calc(1 - (var(--ln-progress) - 0.62) * 9), 1);
+  }
+
+  .lnv2-extracted {
+    opacity: clamp(0, calc((var(--ln-progress) - 0.64) * 9), 1);
+  }
+
+  .lnv2-insight-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+  }
+
+  .lnv2-insight-row-ref {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+
+  .lnv2-body {
+    --scenes: 4.6;
+  }
+
+  .lnv2-body-copy {
+    max-width: none;
+  }
+
+  /* 넓은 화면에서 오른쪽에 떠 있던 패널은 여기서 글 아래 제 줄에 앉는다. */
+  .lnv2-inspect {
+    position: static;
+    transform: none;
+    width: 100%;
+    max-width: 360px;
+  }
+
+  .lnv2-challenge {
+    --scenes: 3.1;
+  }
+
+  .lnv2-challenge-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  /* 세 장이 한 화면에 들어와야 하므로 카드를 눕힌다 — 체크가 왼쪽, 글이 오른쪽. */
+  .lnv2-challenge-card {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 4px 16px;
+    padding: 18px 22px;
+  }
+
+  .lnv2-challenge-check {
+    grid-row: 1 / span 3;
+    width: 36px;
+    height: 36px;
+    margin: 0;
+  }
+
+  .lnv2-challenge-progress {
+    margin-top: 4px;
+  }
+
+  .lnv2-trend {
+    --scenes: 3.4;
+  }
+
+  .lnv2-trend-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  /**
+   * 축 라벨은 SVG 좌표(뷰박스 640)로 쓰이므로 **화면에 찍히는 크기는 축소 비율을
+   * 곱한 값**이다. 390px 에서 차트는 0.5 배로 줄어 13px 라벨이 6.7px 로 찍혔다 —
+   * 읽을 수 없다. 뷰박스 단위를 키워 실제 크기를 12px 부근으로 맞춘다.
+   */
+  .lnv2-trend-labels text {
+    font-size: 24px;
+  }
+
+  .lnv2-trend-garden {
+    width: 100%;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 18px;
+    justify-items: start;
+  }
+
+  .lnv2-trend-garden figcaption {
+    text-align: left;
+  }
+
+  .lnv2-family {
+    --scenes: 3.1;
+  }
+
+  .lnv2-assistant-inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  /* 좁은 화면에서 런처의 글자는 화면 폭의 절반을 먹는다. 마스코트만 남긴다. */
+  .lnv2-launcher-word {
+    display: none;
+  }
+
+  .lnv2-launcher {
+    min-height: 56px;
+    width: 56px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 560px) {
+  .lnv2-sticky {
+    min-height: 480px;
+    padding-top: clamp(80px, 11vh, 104px);
+  }
+
+  .lnv2-hero-copy {
+    gap: 18px;
+  }
+
+  /* 캡슐 둘을 각각 100% 폭으로 쌓으면 첫 화면의 절반이 버튼이 된다. 390px 에서
+     둘을 나란히 놓아도 320px 면 들어간다 — 패딩만 줄인다. */
+  .lnv2-actions .lnv2-btn-lg {
+    padding: 0 20px;
+    font-size: 15px;
+  }
+
+  .lnv2-hero-pill {
+    font-size: 11.5px;
+    padding: 9px 15px;
+    /* 캡슐 폭이 화면의 절반을 넘는다. 가로로 흩으면 이웃과 글자가 겹쳐 읽히므로
+       기울기와 아주 작은 어긋남만 남긴다(390px 실측). */
+    transform: translate(calc((1 - var(--conv)) * var(--dx) * 0.16), calc((1 - var(--conv)) * var(--dy) * 0.35))
+      rotate(calc((1 - var(--conv)) * var(--rot)));
+  }
+
+  .lnv2-family-tabs {
+    border-radius: var(--v2-card);
+  }
+
+  .lnv2-family-tab {
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 0 14px;
+  }
+
+  .lnv2-trend-garden {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+  }
+
+  .lnv2-trend-garden figcaption {
+    text-align: center;
+  }
+
+  .lnv2-panel {
+    max-height: calc(100vh - 120px);
+  }
+
+  /* 마지막 캡슐과 겹친다. 좁은 화면에서는 스크롤이 자명하므로 없앤다. */
+  .lnv2-scroll-hint {
+    display: none;
+  }
+}
+
+/**
+ * 낮은 화면(가로로 든 휴대폰). 100vh 안에 머리글·본문·진행 표시가 다 들어가야
+ * 하는데 세로 여백이 먼저 사라진다.
+ */
+@media (max-height: 620px) and (min-width: 561px) {
+  .lnv2-sticky {
+    min-height: 0;
+    padding-top: clamp(76px, 14vh, 100px);
+    gap: 16px;
+  }
+
+  .lnv2-head {
+    gap: 10px;
+  }
+
+  .lnv2-insight-number {
+    font-size: clamp(56px, 9vw, 96px);
+  }
+}
+
+/* ================================================================ */
+/* 모션 축소 — 연출만 끄고 내용은 전부 남긴다                            */
+/* ================================================================ */
+
+.lnv2-root[data-motion="reduced"] .lnv2-scroll {
+  height: auto;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-sticky {
+  position: static;
+  height: auto;
+  min-height: 0;
+  padding-top: clamp(64px, 10vh, 120px);
+  padding-bottom: clamp(48px, 8vh, 96px);
+  overflow: visible;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-fade {
+  height: 120px;
+  min-height: 0;
+}
+
+/* 히어로 — 캡슐은 정렬된 모습으로 선다. */
+.lnv2-root[data-motion="reduced"] .lnv2-hero-stage {
+  /* 정렬은 끝난 상태로, 비키기와 퇴장은 일어나지 않은 상태로 고정한다. */
+  --h-conv: 1;
+  --h-out: 0;
+  --h-exit: 0;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-hero-copy,
+.lnv2-root[data-motion="reduced"] .lnv2-hero-visual {
+  opacity: 1;
+  transform: none;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-hero-pill {
+  --conv: 1;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-hero-spine {
+  transform: none;
+  opacity: 1;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-scroll-hint {
+  display: none;
+}
+
+/**
+ * OCR — **겹치기를 반드시 푼다.**
+ *
+ * 좁은 화면에서는 종이와 데이터 캡슐을 같은 칸에 포개 두고 진행도로 바꿔 끼우는데,
+ * 모션을 끄면 진행도가 0 에 머물러 **둘 다 불투명해진 채 글자 위에 글자가 찍힌다**
+ * (v1 이 375px 에서 실제로 그랬다). 모션이 없을 때는 위아래로 나란히 놓아
+ * "종이 → 데이터" 를 정지 화면으로 읽힌다.
+ */
+.lnv2-root[data-motion="reduced"] .lnv2-ocr-flow {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 16px;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-paper,
+.lnv2-root[data-motion="reduced"] .lnv2-extracted {
+  grid-area: auto;
+  opacity: 1;
+  transform: none;
+}
+
+/* 짚는 연출이 없으니 라벤더 강조도 없다. 값은 종이에 그대로 남는다. */
+.lnv2-root[data-motion="reduced"] .lnv2-paper-row {
+  --lit: 0;
+  --moved: 0;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-extracted-pill {
+  --in: 1;
+}
+
+/* 세 상태 중 마지막 하나만 남긴다 — 겹쳐 둔 글이 전부 보이면 겹쳐 찍힌다. */
+.lnv2-root[data-motion="reduced"] .lnv2-paper-state-text[data-phase="upload"],
+.lnv2-root[data-motion="reduced"] .lnv2-paper-state-text[data-phase="read"] {
+  opacity: 0;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-paper-state-text[data-phase="done"] {
+  opacity: 1;
+}
+
+/* 3D 인체 — 다섯 장면을 전부 펴 놓는다. 회전만 멈추고 몸은 그대로 남는다. */
+.lnv2-root[data-motion="reduced"] .lnv2-body-stage {
+  display: grid;
+  padding: clamp(64px, 10vh, 120px) 0;
+}
+
+.lnv2-root[data-motion="reduced"] .ln-body-canvas {
+  position: relative;
+  inset: auto;
+  height: 70vh;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-body-overlay {
+  position: relative;
+  height: auto;
+  display: grid;
+  gap: 24px;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-body-copy {
+  align-self: auto;
+  gap: 40px;
+  max-width: none;
+}
+
+/* 넘길 것이 없으니 진행 표시는 치운다. */
+.lnv2-root[data-motion="reduced"] .lnv2-body-trail {
+  display: none;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-inspect {
+  position: static;
+  transform: none;
+  width: min(360px, 100%);
+}
+
+/* 챌린지 · 변화 — 최종 상태로 선다. */
+.lnv2-root[data-motion="reduced"] .lnv2-challenge-card {
+  --in: 1;
+  --fillp: 1;
+  --checkp: 1;
+}
+
+.lnv2-root[data-motion="reduced"] .lnv2-trend-line {
+  stroke-dashoffset: 0;
+}
+
+/* 장면 전환 애니메이션 자체를 끈다. */
+.lnv2-root[data-motion="reduced"] .lnv2-body-scene > p,
+.lnv2-root[data-motion="reduced"] .lnv2-inspect,
+.lnv2-root[data-motion="reduced"] .lnv2-family-card,
+.lnv2-root[data-motion="reduced"] .lnv2-panel {
+  animation: none;
+}
+
+.lnv2-root[data-motion="reduced"] .ln-reveal {
+  opacity: 1;
+  transform: none;
+}
+
+/**
+ * 브라우저 설정이 우선이다. 위 `data-motion` 은 JS 가 읽은 같은 값이지만,
+ * JS 가 아직 안 붙은 첫 페인트에도 효과가 있어야 한다.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .lnv2-root *,
+  .lnv2-root *::before,
+  .lnv2-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .lnv2-root .ln-reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
