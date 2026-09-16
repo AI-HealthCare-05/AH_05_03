@@ -2,6 +2,7 @@ import logging
 import re
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any, cast
 
 import httpx
@@ -15,6 +16,7 @@ from app.dtos.health_assistant import (
     UserLocation,
 )
 from app.dtos.health_record_query import AlcoholConsultationSnapshot
+from app.dtos.outdoor_conditions import OutdoorConditionsResult
 from app.exceptions import LlmProviderFailedError
 from app.integrations.llm.chain import shared_chat_client, shared_classifier_client
 from app.integrations.llm.protocol import LLMClientProtocol
@@ -66,6 +68,18 @@ from app.services.outdoor_conditions_client import (
 from app.services.outdoor_conditions_tools import execute_outdoor_conditions_tool
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _PreparedExecution:
+    request: HealthAssistantChatRequest
+    decision: HealthAssistantScopeDecision
+    profile_context: ProfileContext | None
+    preloaded_results: list[Any]
+    outdoor_conditions: OutdoorConditionsResult | None
+    system_instruction: str
+    tools: list[Any] | None
+
 
 _EXPLICIT_PAIN_INTENSITY_PATTERN = re.compile(
     r"(?:통증\s*)?(?:강도|세기)\s*(?:는|가)?\s*(?:약\s*)?(?:10|[0-9])(?:\s*(?:점|정도|/\s*10))?"
@@ -1019,12 +1033,12 @@ class HealthAssistantService:
             response.assistant_message = cleaned
         return response
 
-    async def respond(
+    async def _prepare_execution(
         self,
         request: HealthAssistantChatRequest,
-        account: ServiceAccount | None = None,
-        client_ip: str | None = None,
-    ) -> HealthAssistantResponse:
+        account: ServiceAccount | None,
+        client_ip: str | None,
+    ) -> HealthAssistantResponse | _PreparedExecution:
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
             return safety_check
@@ -1080,8 +1094,8 @@ class HealthAssistantService:
             and not outdoor_conditions
             and not preloaded_results
         ):
-            # 근거가 필요한 질문인데 도구도, 야외 조건도, 사전로딩된 근거도 없다 —
-            # 메인 LLM을 불러도 근거 없이 자기 지식으로 답할 뿐이니 아예 부르지 않는다.
+            # 근거가 필요한 질문인데 준비된 근거·도구가 없으면 메인 LLM을
+            # 호출해도 무근거 답변만 생성하므로 여기서 안전 응답으로 끝낸다.
             return self.boundary_service.enforce_grounding(
                 boundary.decision,
                 HealthAssistantResponse(intent="health_advice", assistant_message=""),
@@ -1090,6 +1104,27 @@ class HealthAssistantService:
                 messages=request.messages,
             )
 
+        return _PreparedExecution(
+            request=request,
+            decision=boundary.decision,
+            profile_context=profile_context,
+            preloaded_results=preloaded_results,
+            outdoor_conditions=outdoor_conditions,
+            system_instruction=system_instruction,
+            tools=tools,
+        )
+
+    async def respond(
+        self,
+        request: HealthAssistantChatRequest,
+        account: ServiceAccount | None = None,
+        client_ip: str | None = None,
+    ) -> HealthAssistantResponse:
+        prepared = await self._prepare_execution(request, account, client_ip)
+        if isinstance(prepared, HealthAssistantResponse):
+            return prepared
+
+        request = prepared.request
         response: HealthAssistantResponse
         client_any = cast(Any, self.llm_client)
 
@@ -1098,26 +1133,28 @@ class HealthAssistantService:
                 name,
                 args,
                 account=account,
-                profile_id=self._parse_profile_id(profile_context.profile_id) if profile_context else None,
+                profile_id=self._parse_profile_id(prepared.profile_context.profile_id)
+                if prepared.profile_context
+                else None,
             )
 
-        tool_result: Any | None = preloaded_results or None
-        if tools and hasattr(client_any, "generate_structured_response_with_tools"):
+        tool_result: Any | None = prepared.preloaded_results or None
+        if prepared.tools and hasattr(client_any, "generate_structured_response_with_tools"):
             res_tuple = await client_any.generate_structured_response_with_tools(
-                system_instruction=system_instruction,
+                system_instruction=prepared.system_instruction,
                 messages=request.messages,
                 response_schema=HealthAssistantLlmResponse,
-                tools=tools,
+                tools=prepared.tools,
                 tool_executor=tool_executor,
             )
             llm_res, generated_tool_result = res_tuple
             if generated_tool_result is not None:
-                tool_result = [*preloaded_results, generated_tool_result]
+                tool_result = [*prepared.preloaded_results, generated_tool_result]
             response = HealthAssistantResponse.model_validate(llm_res.model_dump())
             self._attach_tool_result_to_response(response, tool_result)
         else:
             llm_res = await self.llm_client.generate_structured_response(
-                system_instruction=system_instruction,
+                system_instruction=prepared.system_instruction,
                 messages=request.messages,
                 response_schema=HealthAssistantLlmResponse,
             )
@@ -1126,14 +1163,14 @@ class HealthAssistantService:
 
         response = self._remove_irrelevant_supplement_disclaimer(response, request)
         response = self._clear_unstated_pain_intensity(response, request)
-        if outdoor_conditions and not response.outdoor_conditions:
-            response.outdoor_conditions = outdoor_conditions
+        if prepared.outdoor_conditions and not response.outdoor_conditions:
+            response.outdoor_conditions = prepared.outdoor_conditions
         validated_response = self.safety_service.validate_response(response)
         return self.boundary_service.enforce_grounding(
-            boundary.decision,
+            prepared.decision,
             validated_response,
             tool_result=tool_result,
-            outdoor_conditions=outdoor_conditions,
+            outdoor_conditions=prepared.outdoor_conditions,
             messages=request.messages,
         )
 
@@ -1162,114 +1199,36 @@ class HealthAssistantService:
             None,
         )
 
-    @staticmethod
-    def _enrich_parsed_response(
-        parsed: HealthAssistantResponse,
-        tool_result: Any,
-        outdoor_conditions: Any,
-    ) -> HealthAssistantResponse:
-        HealthAssistantService._attach_tool_result_to_response(parsed, tool_result)
-        if outdoor_conditions and not parsed.outdoor_conditions:
-            parsed.outdoor_conditions = outdoor_conditions
-        return parsed
-
     async def stream(  # noqa: C901 - 안전·권한·도구 경로를 한 흐름에서 스트리밍한다.
         self,
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None = None,
         client_ip: str | None = None,
     ) -> AsyncIterator[tuple[str, Any]]:
-        safety_check = self.safety_service.check_input_safety(request.messages)
-        if safety_check:
-            yield "delta", {"text": safety_check.assistant_message}
-            yield "result", safety_check.model_dump(mode="json")
+        prepared = await self._prepare_execution(request, account, client_ip)
+        if isinstance(prepared, HealthAssistantResponse):
+            yield "delta", {"text": prepared.assistant_message}
+            yield "result", prepared.model_dump(mode="json")
             return
 
-        boundary = await self.boundary_service.check_request(self.classifier_llm_client, request)
-        if boundary.response:
-            yield "delta", {"text": boundary.response.assistant_message}
-            yield "result", boundary.response.model_dump(mode="json")
-            return
-        assert boundary.request is not None
-        request = boundary.request
-
-        needs_health_query = self._needs_health_record_query_tool(request) or self._needs_personal_record_evidence(
-            request, boundary.decision
-        )
-        if needs_health_query and (
-            request.profile_context is None
-            or request.profile_context.profile_id is None
-            or account is None
-            or self.health_record_service is None
-        ):
-            response = self._profile_required_response()
-            yield "delta", {"text": response.assistant_message}
-            yield "result", response.model_dump(mode="json")
-            return
-
-        account_id = account.id if account else None
-        profile_context = await self._enrich_context(
-            request.profile_context,
-            account_id=account_id,
-            request=request,
-        )
-        preloaded_results, authoritative_evidence_context = await self._load_authoritative_evidence(
-            request,
-            boundary.decision,
-            account=account,
-            profile_context=profile_context,
-        )
-        needs_outdoor = "outdoor" in boundary.decision.required_evidence_types
-        loc = await self._resolve_request_location(request, needs_outdoor, client_ip)
-        if needs_outdoor and loc is None:
-            response = self._outdoor_location_required_response()
-            yield "delta", {"text": response.assistant_message}
-            yield "result", response.model_dump(mode="json")
-            return
-        outdoor_conditions = await self._load_outdoor_conditions(loc)
-        system_instruction = build_system_instruction(
-            profile_context,
-            user_location=loc,
-            outdoor_conditions_context=self._format_outdoor_conditions_context(outdoor_conditions, loc is not None)
-            if needs_outdoor
-            else None,
-            authoritative_evidence_context=authoritative_evidence_context,
-            session_core_memory=request.core_memory,
-        )
+        request = prepared.request
         reader = PartialJsonTextReader("assistant_message")
         raw = ""
-
-        tools = self._get_tools(request)
-
-        if (
-            boundary.decision.requires_authoritative_evidence
-            and not tools
-            and not outdoor_conditions
-            and not preloaded_results
-        ):
-            response = self.boundary_service.enforce_grounding(
-                boundary.decision,
-                HealthAssistantResponse(intent="health_advice", assistant_message=""),
-                tool_result=None,
-                outdoor_conditions=None,
-                messages=request.messages,
-            )
-            yield "delta", {"text": response.assistant_message}
-            yield "result", response.model_dump(mode="json")
-            return
 
         async def tool_executor(name: str, args: dict[str, Any]) -> Any:
             return await self._execute_tool(
                 name,
                 args,
                 account=account,
-                profile_id=self._parse_profile_id(profile_context.profile_id) if profile_context else None,
+                profile_id=self._parse_profile_id(prepared.profile_context.profile_id)
+                if prepared.profile_context
+                else None,
             )
 
         stream_gen, generated_tool_result = await self._get_stream_generator(
             request,
-            system_instruction,
-            tools,
+            prepared.system_instruction,
+            prepared.tools,
             tool_executor,
         )
         generated_tool_results = (
@@ -1279,18 +1238,18 @@ class HealthAssistantService:
             if generated_tool_result is not None
             else []
         )
-        tool_result: Any | None = [*preloaded_results, *generated_tool_results] or None
+        tool_result: Any | None = [*prepared.preloaded_results, *generated_tool_results] or None
 
-        if boundary.decision.requires_authoritative_evidence and not self.boundary_service.has_required_evidence(
-            boundary.decision,
+        if prepared.decision.requires_authoritative_evidence and not self.boundary_service.has_required_evidence(
+            prepared.decision,
             tool_result,
-            outdoor_conditions,
+            prepared.outdoor_conditions,
         ):
             response = self.boundary_service.enforce_grounding(
-                boundary.decision,
+                prepared.decision,
                 HealthAssistantResponse(intent="health_advice", assistant_message=""),
                 tool_result=tool_result,
-                outdoor_conditions=outdoor_conditions,
+                outdoor_conditions=prepared.outdoor_conditions,
                 messages=request.messages,
             )
             yield "delta", {"text": response.assistant_message}
@@ -1314,14 +1273,14 @@ class HealthAssistantService:
                         intent="query_records",
                         assistant_message=generated_tool.message,
                         health_record_query_result=generated_tool,
-                        outdoor_conditions=outdoor_conditions,
+                        outdoor_conditions=prepared.outdoor_conditions,
                     )
                     validated = self.safety_service.validate_response(res_obj)
                     validated = self.boundary_service.enforce_grounding(
-                        boundary.decision,
+                        prepared.decision,
                         validated,
                         tool_result=tool_result,
-                        outdoor_conditions=outdoor_conditions,
+                        outdoor_conditions=prepared.outdoor_conditions,
                         messages=request.messages,
                     )
                     yield "result", validated.model_dump(mode="json")
@@ -1336,14 +1295,14 @@ class HealthAssistantService:
                         intent="search_facility",
                         assistant_message=summary_msg,
                         facility_search_draft=generated_tool,
-                        outdoor_conditions=outdoor_conditions,
+                        outdoor_conditions=prepared.outdoor_conditions,
                     )
                     validated = self.safety_service.validate_response(res_obj)
                     validated = self.boundary_service.enforce_grounding(
-                        boundary.decision,
+                        prepared.decision,
                         validated,
                         tool_result=tool_result,
-                        outdoor_conditions=outdoor_conditions,
+                        outdoor_conditions=prepared.outdoor_conditions,
                         messages=request.messages,
                     )
                     yield "result", validated.model_dump(mode="json")
@@ -1358,7 +1317,7 @@ class HealthAssistantService:
         try:
             llm_parsed = HealthAssistantLlmResponse.model_validate_json(raw)
             parsed = HealthAssistantResponse.model_validate(llm_parsed.model_dump())
-            parsed = self._enrich_parsed_response(parsed, tool_result, outdoor_conditions)
+            parsed = self._enrich_parsed_response(parsed, tool_result, prepared.outdoor_conditions)
         except Exception as ex:
             raise LlmProviderFailedError(f"응답 구조화 실패: {type(ex).__name__}") from ex
 
@@ -1366,10 +1325,21 @@ class HealthAssistantService:
         parsed = self._clear_unstated_pain_intensity(parsed, request)
         validated = self.safety_service.validate_response(parsed)
         validated = self.boundary_service.enforce_grounding(
-            boundary.decision,
+            prepared.decision,
             validated,
             tool_result=tool_result,
-            outdoor_conditions=outdoor_conditions,
+            outdoor_conditions=prepared.outdoor_conditions,
             messages=request.messages,
         )
         yield "result", validated.model_dump(mode="json")
+
+    @staticmethod
+    def _enrich_parsed_response(
+        parsed: HealthAssistantResponse,
+        tool_result: Any,
+        outdoor_conditions: Any,
+    ) -> HealthAssistantResponse:
+        HealthAssistantService._attach_tool_result_to_response(parsed, tool_result)
+        if outdoor_conditions and not parsed.outdoor_conditions:
+            parsed.outdoor_conditions = outdoor_conditions
+        return parsed
