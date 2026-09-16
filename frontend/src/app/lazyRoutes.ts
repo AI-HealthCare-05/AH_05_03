@@ -34,6 +34,13 @@ export const UiPreviewPage = lazy(() =>
 export const AccountPage = lazy(() =>
   import("../features/account/AccountPage").then((m) => ({ default: m.AccountPage })),
 );
+/**
+ * 공개 랜딩페이지. 로그인한 사람은 평생 한 번도 열지 않는 화면이라 앱 번들과
+ * 같이 받으면 순수 손해다(스크롤 연출·three.js 장면이 딸려 온다).
+ */
+export const LandingPage = lazy(() =>
+  import("../features/landing/LandingPage").then((m) => ({ default: m.LandingPage })),
+);
 export const PainDiaryPage = lazy(() =>
   import("../features/pain-diary/PainDiaryPage").then((m) => ({ default: m.PainDiaryPage })),
 );

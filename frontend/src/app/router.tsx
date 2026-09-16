@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import { Navigate, createBrowserRouter } from "react-router-dom";
 
 import { ErrorPage } from "./ErrorPage";
 import { SignUpPage } from "../features/account/SignUpPage";
 import { HomePage } from "../features/home/HomePage";
+import { PageSkeleton } from "../shared/ui/Skeleton";
 // 라우트 단위 코드 분할. 정적 임포트로 두면 페이지 일곱이 한 청크에 뭉쳐서,
 // 홈만 보는 사용자도 판정 폼 36필드와 개발용 화면까지 받아 간다.
 import {
@@ -13,6 +15,7 @@ import {
   ChallengeSetupPage,
   DataManagementPage,
   HealthDataPage,
+  LandingPage,
   PainDiaryPage,
   UiPreviewPage,
 } from "./lazyRoutes";
@@ -27,6 +30,24 @@ export const router = createBrowserRouter([
     // 비킨다. 이 예외가 하나뿐이라는 것은 `router.test.tsx` 가 지킨다.
     path: "/signup",
     element: <SignUpPage />,
+    errorElement: <ErrorPage />,
+  },
+  {
+    // **관문 밖에 있는 둘째 화면 — 공개 소개 페이지.** 가입과 같은 조건을 지켜서
+    // 밖에 세운다: `useLocalDomain()` 도 `serverApiClient` 도 부르지 않고, 화면에
+    // 나오는 수치는 `features/landing/landingStory.ts` 의 예시 시나리오 하나뿐이다
+    // (그 사실은 `features/landing/LandingPage.test.tsx` 가 지킨다).
+    //
+    // 주소가 필요한 이유도 가입과 같다 — 서비스를 아직 모르는 사람에게 링크로
+    // 건네는 화면이라 로그인 뒤에만 열리면 쓸모가 없다.
+    path: "/landing",
+    element: (
+      // 이 라우트는 `RootLayout` 밖이라 그쪽의 Suspense 경계를 못 쓴다. 폴백이
+      // 없으면 지연 청크를 받는 동안 React 가 그대로 던진다.
+      <Suspense fallback={<PageSkeleton />}>
+        <LandingPage />
+      </Suspense>
+    ),
     errorElement: <ErrorPage />,
   },
   {
