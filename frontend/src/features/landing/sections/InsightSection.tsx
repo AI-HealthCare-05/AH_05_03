@@ -8,39 +8,10 @@
  * `note` 와 `reference` 가 그 선을 지키는 문구다.
  */
 
-import { useEffect, useRef, useState } from "react";
-
 import { Reveal } from "../Reveal";
 import { HEADLINE_VALUE_FIELD, LANDING_VALUES, STATUS_LABEL } from "../landingStory";
-import { useInView, usePrefersReducedMotion } from "../scrollProgress";
-
-/** 숫자가 0 에서 올라온다. 값이 바뀌었다는 것을 눈이 먼저 안다. */
-function useCountUp(target: number, active: boolean, decimals = 0) {
-  const [value, setValue] = useState(active ? target : 0);
-  const reduced = usePrefersReducedMotion();
-  const frameRef = useRef(0);
-
-  useEffect(() => {
-    if (!active) return;
-    if (reduced) {
-      setValue(target);
-      return;
-    }
-    const startedAt = performance.now();
-    const duration = 900;
-    const step = () => {
-      const t = Math.min(1, (performance.now() - startedAt) / duration);
-      // 끝에서 천천히 멈춘다.
-      const eased = 1 - Math.pow(1 - t, 3);
-      setValue(Number((target * eased).toFixed(decimals)));
-      if (t < 1) frameRef.current = requestAnimationFrame(step);
-    };
-    frameRef.current = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frameRef.current);
-  }, [active, target, decimals, reduced]);
-
-  return value;
-}
+import { useInView } from "../scrollProgress";
+import { useCountUp } from "../useCountUp";
 
 export function InsightSection() {
   const headline = LANDING_VALUES.find((value) => value.field === HEADLINE_VALUE_FIELD) ?? LANDING_VALUES[0];
