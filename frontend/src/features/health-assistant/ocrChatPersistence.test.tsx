@@ -19,14 +19,13 @@ import * as clientModule from "./healthAssistantClient";
 import type { FamilyProfile } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 
+const recognize = vi.hoisted(() => vi.fn());
+
 // 서류 인식은 서버 작업이다. 여기서 보려는 것은 인식 결과가 아니라 그 뒤에 남는 대화다.
 vi.mock("../../shared/api/geminiOcrAdapter", () => ({
   GeminiOcrAdapter: class {
     async recognize() {
-      return {
-        text: "2026년 8월 28일 종합건강검진표\n공복혈당 104 mg/dL\n총콜레스테롤 210 mg/dL",
-        tables: [],
-      };
+      return recognize();
     }
   },
 }));
@@ -70,9 +69,39 @@ describe("서류 확정 저장과 대화 기록", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    recognize.mockResolvedValue({
+      text: "2026년 8월 28일 종합건강검진표\n공복혈당 104 mg/dL\n총콜레스테롤 210 mg/dL",
+      tables: [],
+    });
   });
 
   afterEach(() => cleanup());
+
+  it("위치 권한 화면은 검진 결과로 분류하거나 저장하지 않는다", async () => {
+    recognize.mockResolvedValueOnce({
+      text: "'localhost'이(가) 사용자의 현재 위치를 사용하려고 합니다.\n하루 동안 나의 결정사항 기억하기\n허용 안 함\n허용",
+      tables: [],
+    });
+
+    render(
+      <HealthAssistantDrawer
+        profile={profile}
+        runtime={runtime}
+        isOpen={true}
+        onClose={vi.fn()}
+        onRecordSaved={vi.fn()}
+      />,
+    );
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File(["x"], "location permit.png", { type: "image/png" })] },
+    });
+
+    expect(await screen.findByText(/검사 항목과 결과를 확인할 수 없습니다/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "수정 내용 확정 · 건강기록 저장" })).toBeDisabled();
+    expect(runtime.healthRecords.create).not.toHaveBeenCalled();
+  });
 
   it("서류로 기록하면 세션을 만들고 주고받은 두 줄을 서버에 남긴다", async () => {
     const createSession = vi

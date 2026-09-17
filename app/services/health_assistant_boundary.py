@@ -248,7 +248,32 @@ def asks_personal_clearance(messages: list[ChatMessage]) -> bool:
     통과한다(2026-09-15). 판별은 `_PERMISSION_PATTERN` 하나를 공유한다.
     """
     latest_user = next((m.content for m in reversed(messages) if m.role == "user"), "")
-    return bool(_PERMISSION_PATTERN.search(latest_user.replace(" ", ""))) or _recent_activity_clearance(messages)
+    pending_question = _pending_question(messages)
+    return (
+        bool(_PERMISSION_PATTERN.search(latest_user.replace(" ", "")))
+        or bool(pending_question and _PERMISSION_PATTERN.search(pending_question.replace(" ", "")))
+        or _recent_activity_clearance(messages)
+    )
+
+
+def _pending_question(messages: list[ChatMessage]) -> str | None:
+    """직전 확인 질문에 대한 짧은 답이면 바로 앞 사용자 요청을 되살린다."""
+    if len(messages) < 3 or messages[-1].role != "user" or messages[-2].role != "assistant":
+        return None
+    reply = messages[-1].content.strip()
+    if not reply or len(reply) > 30 or "?" in reply or "？" in reply:
+        return None
+    if not any(mark in messages[-2].content for mark in ("?", "？")):
+        return None
+    return next((message.content for message in reversed(messages[:-2]) if message.role == "user"), None)
+
+
+def _contextual_enriched_query(messages: list[ChatMessage], decision: HealthAssistantScopeDecision) -> str | None:
+    query = decision.enriched_query
+    previous = _pending_question(messages)
+    if previous and decision.scope == "health" and previous not in (query or ""):
+        return f"{previous} {query or ''}".strip()
+    return query
 
 
 def _is_pure_statement(text: str) -> bool:
@@ -447,15 +472,20 @@ class HealthAssistantBoundaryService:
                 requires_authoritative_evidence=False,
             )
 
-        # 3. 명확한 단답형 응답 (숫자, 네/아니오 등) - 의학적 근거 검색 불필요
+        # 3. 확인 질문에 대한 짧은 답은 이전 요청과 함께 판정 모델에 맡긴다.
+        # 통증 점수 확인만 기존 기록 경로를 유지한다.
+        is_pain_score_followup = any(c.isdigit() for c in compact) and previous_assistant_message == (
+            f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pain_record_context']}"
+        )
+        if _pending_question(messages) and not is_pain_score_followup:
+            return None
+
+        # 맥락이 없는 명확한 단답형 입력
         is_short_answer = len(compact) <= 5 and (
             any(c.isdigit() for c in compact)
             or compact in ("응", "어", "네", "아니", "아니오", "아니요", "맞아", "아님", "없어", "있어", "몰라", "모름")
         )
         if is_short_answer:
-            is_pain_score_followup = any(c.isdigit() for c in compact) and previous_assistant_message == (
-                f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pain_record_context']}"
-            )
             return HealthAssistantScopeDecision(
                 scope="health",
                 request_kind="operation" if is_pain_score_followup else "information",
@@ -848,11 +878,12 @@ class HealthAssistantBoundaryService:
             request = request.model_copy(update={"messages": [ChatMessage(role="user", content=allowed)]})
             return HealthAssistantBoundaryResult(request=request, decision=decision)
 
-        if decision.inferred_intent or decision.enriched_query:
+        enriched_query = _contextual_enriched_query(request.messages, decision)
+        if decision.inferred_intent or enriched_query:
             request = request.model_copy(
                 update={
                     "inferred_intent": decision.inferred_intent,
-                    "enriched_query": decision.enriched_query,
+                    "enriched_query": enriched_query,
                 }
             )
 

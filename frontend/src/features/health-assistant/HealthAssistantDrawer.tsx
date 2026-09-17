@@ -50,6 +50,7 @@ import {
   PRIMARY_HOUSEHOLD_ID,
   buildAutoSaveAssistantMessage,
   extractReviewItems,
+  hasHealthExamResult,
   normalizeBloodGlucoseTiming,
   removeMedicationSavePrompt,
   reviewItemsToText,
@@ -748,6 +749,9 @@ export function HealthAssistantDrawer({
       const structuredText = reviewItemsToText(items);
       const extractedText = ocrResult.text.trim() || structuredText;
       if (!extractedText) throw new Error("서류에서 확인할 수 있는 글자나 검사 항목을 찾지 못했습니다. 더 선명한 이미지를 선택해 주세요.");
+      if (!hasHealthExamResult(extractedText, items, ocrResult.measurements?.values ?? {})) {
+        throw new Error("검사 항목과 결과를 확인할 수 없습니다. 건강검진 결과지나 검사 결과 서류를 선택해 주세요.");
+      }
       const extractedDate = parseExamDateFromText(extractedText) || new Date().toISOString().slice(0, 10);
 
       const draft: LabResultDraft = {
