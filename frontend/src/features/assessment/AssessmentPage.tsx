@@ -40,6 +40,9 @@ import type { PrefilledField, RecordPrefillData } from "../../shared/api/contrac
 import { recordValues } from "../../shared/local/recordSummary";
 import { RecordCard } from "../home/RecordCard";
 import { RecordValueDetail } from "../health-data/ValueSheet";
+import { RiskReportPage } from "./RiskReportPage";
+import { restoreSnapshot } from "./restoreSnapshot";
+import "./assessment-input.css";
 import type { HealthRecord } from "../../shared/local/domainContracts";
 import type { LocalDocument } from "../../shared/local/domainContracts";
 import type { AssessmentSummaryData, RiskLevel } from "./contracts";
@@ -48,9 +51,8 @@ import { DetailReport } from "./DetailReport";
 import { DocumentPane, type DocumentReading } from "./DocumentPane";
 import type { ModelSpec } from "./Evidence";
 import { ASSESSMENT_PRESETS, type AssessmentPreset, presetValues } from "./presets";
-import { SuspectPanel } from "./SuspectPanel";
-import { briefList, objectParticle, sharedRefining } from "./precision";
-import { LevelBadge, MatrixCard, VerdictCard } from "./VerdictCards";
+import { sharedRefining } from "./precision";
+import { LevelBadge } from "./VerdictCards";
 import {
   calculateAgeFromBirthDate,
   FIELD_BY_NAME,
@@ -73,7 +75,6 @@ import {
   TREND_WINDOW,
   type Snapshot,
 } from "./snapshots";
-import { TrendChart } from "./TrendChart";
 
 function byLevel<T>(items: T[], level: (item: T) => RiskLevel): T[] {
   return [...items].sort(
@@ -118,6 +119,24 @@ function disambiguatedTimes(isoList: string[]): string[] {
     const seconds = new Date(isoList[index]).getSeconds();
     return `${label}:${String(seconds).padStart(2, "0")}`;
   });
+}
+
+function recordPreviewLine(record: HealthRecord): string {
+  const items = recordValues(record);
+  const byField = new Map(items.filter((item) => item.field).map((item) => [item.field, item]));
+  const chosen: string[] = [];
+  const bloodPressure = byField.get("sbp") && byField.get("dbp");
+  if (bloodPressure) chosen.push(`혈압 ${byField.get("sbp")?.value}/${byField.get("dbp")?.value} mmHg`);
+  for (const field of ["fasting_glucose", "hdl", "ldl", "total_chol", "weight_kg"]) {
+    const item = byField.get(field);
+    if (item) chosen.push(`${FIELD_LABELS[field] ?? item.label} ${item.value}${item.unit ? ` ${item.unit}` : ""}`);
+  }
+  for (const item of items) {
+    if (chosen.length >= 5) break;
+    if (item.field && ["sbp", "dbp", "fasting_glucose", "hdl", "ldl", "total_chol", "weight_kg"].includes(item.field)) continue;
+    chosen.push(`${item.field ? FIELD_LABELS[item.field] ?? item.label : item.label} ${item.value}${item.unit ? ` ${item.unit}` : ""}`);
+  }
+  return chosen.slice(0, 5).join(" · ");
 }
 
 function prefillFrom(state: unknown): Record<string, string> {
@@ -180,18 +199,11 @@ export function AssessmentPage() {
     () => (location.state as { prefillSource?: "document" | "record" } | null)?.prefillSource,
   );
   const [values, setValues] = useState<Record<string, string>>(prefilled);
-  /**
-   * 검진표를 붙였는가. **화면을 가르는 것은 이제 진입 경로가 아니라 이 값이다.**
-   *
-   * 예전에는 가족 홈의 "검진표 올려서 판정" 이 넘겨준 `state.withDocument` 하나로
-   * 갈렸다. 그래서 같은 `/assessment` 인데 내비로 들어오면 **검진표를 올릴 자리가
-   * 아예 없었다** — 같은 주소가 두 화면이었고, 사용자는 왜 어떤 날은 업로드가
-   * 보이고 어떤 날은 안 보이는지 알 수 없었다.
-   *
-   * 지금은 언제나 올릴 수 있다. 문서가 없으면 폼 위에 얇게 앉고, 붙으면 왼쪽으로
-   * 펼쳐져 원본과 폼을 나란히 본다. 가족 홈에서 온 state 는 "그 의도로 들어왔다"
-   * 는 표시로만 남아 저장 출처(`ocr`)를 가른다.
-   */
+  const [inputMethod, setInputMethod] = useState<"upload" | "manual" | null>(() =>
+    (location.state as { withDocument?: boolean } | null)?.withDocument ? "upload" : null,
+  );
+  const [recordListOpen, setRecordListOpen] = useState(false);
+  /** OCR 원본의 저장 고리와 판정 출처를 유지한다. 화면에서는 입력 방법만 전환한다. */
   const [document, setDocument] = useState<LocalDocument>();
   /**
    * 보관함에 저장된 검진표를 **ref 로도** 들고 있는다.
@@ -220,8 +232,14 @@ export function AssessmentPage() {
    * 수치와 원본을 보고, 그 자리에서 폼으로 옮길 수 있다.
    */
   const [valueRecords, setValueRecords] = useState<HealthRecord[]>([]);
+  const [recordsLoading, setRecordsLoading] = useState(true);
   /** 카드를 눌러 펼쳐 본 기록. */
   const [openValueRecord, setOpenValueRecord] = useState<HealthRecord>();
+  const orderedRecords = useMemo(
+    () => [...valueRecords].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt)),
+    [valueRecords],
+  );
+  const suggestedRecord = orderedRecords.find((item) => item.id === sourceRecordId) ?? orderedRecords[0];
 
   const rememberDocument = useCallback((next: LocalDocument | undefined) => {
     documentRef.current = next;
@@ -264,6 +282,12 @@ export function AssessmentPage() {
     valuesRef.current = values;
   }, [values]);
   const [result, setResult] = useState<AssessmentSummaryData>();
+  const [reportAt, setReportAt] = useState<string>();
+  const [entryLoading, setEntryLoading] = useState(true);
+  const [entryMode, setEntryMode] = useState<"auto" | "before">(() => {
+    const state = location.state as { withDocument?: boolean; prefill?: unknown; startNew?: boolean } | null;
+    return state?.withDocument || state?.prefill || state?.startNew ? "before" : "auto";
+  });
   const [error, setError] = useState<string>();
   // 서버가 되돌려준 칸. 값을 고치는 즉시 그 칸만 풀린다 — 다시 눌러 봐야
   // 빨간색이 사라지면 사용자는 자기가 고친 게 맞는지 알 수 없다.
@@ -274,13 +298,15 @@ export function AssessmentPage() {
   const [saved, setSaved] = useState<string>();
   const [keeping, setKeeping] = useState(false);
 
-  // 프로필을 고르지 않았으면 첫 구성원으로 둔다. 대부분 본인 하나다.
-  // 가족 홈에서 구성원을 골라 들어왔으면 그 사람이 먼저다.
-  const activeProfileId =
-    profileId ??
-    (location.state as { profileId?: string } | null)?.profileId ??
-    profiles[0]?.id;
-  const activeProfile = profiles.find((item) => item.id === activeProfileId);
+  // 가족 홈에서 고른 사람을 메뉴·새로고침 뒤에도 유지한다. 오래된 저장 ID는 버린다.
+  let storedProfileId: string | null = null;
+  try { storedProfileId = localStorage.getItem("ieobom:selected-profile-id"); } catch { /* storage unavailable */ }
+  const explicitProfileId = profileId ?? (location.state as { profileId?: string } | null)?.profileId;
+  const requestedProfileId = explicitProfileId ?? storedProfileId;
+  const activeProfile = profiles.find((item) => item.id === requestedProfileId) ?? profiles[0];
+  const activeProfileId = activeProfile?.id ?? (profiles.length === 0 ? explicitProfileId : undefined);
+  const activeProfileIdRef = useRef(activeProfileId);
+  activeProfileIdRef.current = activeProfileId;
 
   useEffect(() => {
     let cancelled = false;
@@ -330,11 +356,16 @@ export function AssessmentPage() {
   const reloadValueRecords = useCallback(async () => {
     if (!runtime || !activeProfileId) return;
     const found = await runtime.healthRecords.query({ profileId: activeProfileId });
-    if (!found.ok) return;
+    if (activeProfileIdRef.current !== activeProfileId) return;
+    if (!found.ok) {
+      setRecordsLoading(false);
+      return;
+    }
     // 판정 스냅샷은 옆 줄("지난 판정에서")이 맡는다. 수치를 든 기록만 세운다.
     setValueRecords(
       found.value.filter((record) => record.recordType !== "assessment" && recordValues(record).length > 0),
     );
+    setRecordsLoading(false);
   }, [runtime, activeProfileId]);
 
   useEffect(() => {
@@ -355,17 +386,34 @@ export function AssessmentPage() {
     // 사용자는 자기 기록이 사라진 줄 안다.
     void listSnapshots(runtime, activeProfileId)
       .then((found) => {
-        if (!cancelled) setSnapshots(found);
+        if (cancelled) return;
+        setSnapshots(found);
+        if (entryMode === "auto") {
+          const latest = [...found].sort((left, right) =>
+            (right.payload.checkedAt || right.recordedAt).localeCompare(left.payload.checkedAt || left.recordedAt),
+          ).map((snapshot) => ({ snapshot, restored: restoreSnapshot(snapshot) })).find((item) => item.restored);
+          if (latest?.restored) {
+            setValues(latest.restored.values);
+            setSourceRecordId(latest.snapshot.payload.sourceRecordId);
+            setResult(latest.restored.result);
+            setReportAt(latest.snapshot.payload.checkedAt || latest.snapshot.recordedAt);
+          } else {
+            setResult(undefined);
+            setReportAt(undefined);
+          }
+        }
+        setEntryLoading(false);
       })
       .catch((caught: unknown) => {
         if (!cancelled) {
           setError(caught instanceof Error ? caught.message : "기기에 저장된 지난 판정을 불러오지 못했습니다.");
+          setEntryLoading(false);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [runtime, activeProfileId]);
+  }, [runtime, activeProfileId, entryMode]);
 
   // `keeping` 이 없으면 버튼을 두 번 누르면 **같은 시점이 두 벌 저장된다.** 몇 밀리초
   // 차이로 나란히 선 두 점은 그래프에서 뜻이 없고, 지우는 화면도 아직 없다.
@@ -609,7 +657,8 @@ export function AssessmentPage() {
       // 끝내 말하지 않는다. 서른여섯 칸짜리 폼에서 그건 답이 아니다.
       // 눌러 보게 두고, 비어 있는 칸을 이름으로 세운 뒤 첫 칸으로 커서를 옮긴다.
       if (missingRequired.length > 0) {
-        revealField(fieldRefs.current[missingRequired[0]]);
+        setInputMethod("manual");
+        window.setTimeout(() => revealField(fieldRefs.current[missingRequired[0]]), 0);
         return;
       }
 
@@ -621,9 +670,10 @@ export function AssessmentPage() {
       const badNames = Object.keys(badRange);
       if (badNames.length > 0) {
         setRejected(badRange);
+        setInputMethod("manual");
         // 그룹 순서대로 위에 있는 칸부터 데려간다. `FIELD_GROUPS` 를 훑어 만든
         // 객체라 키 순서가 곧 화면 순서다.
-        revealField(fieldRefs.current[badNames[0]]);
+        window.setTimeout(() => revealField(fieldRefs.current[badNames[0]]), 0);
         return;
       }
 
@@ -636,6 +686,7 @@ export function AssessmentPage() {
           toRequestBody(values),
         );
         setResult(data);
+        setReportAt(new Date().toISOString());
         // **판정과 기록을 한 번에 남긴다.** 나눠 두면 사용자가 판정만 보고 나가서
         // 추이 그래프가 영영 비어 있다 — 이 화면의 값은 검진표에서 온 것이라
         // 다시 모을 방법도 없다. 실패해도 판정 결과는 지키려고 따로 감싼다.
@@ -704,7 +755,8 @@ export function AssessmentPage() {
           if (names.length > 0) {
             setRejected(bad);
             setError(undefined);
-            revealField(fieldRefs.current[names[0]]);
+            setInputMethod("manual");
+            window.setTimeout(() => revealField(fieldRefs.current[names[0]]), 0);
           } else {
             const detail = cause.details
               ? ` (${JSON.stringify(cause.details)})`
@@ -810,295 +862,112 @@ export function AssessmentPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [recordPrefill]);
 
+  const chooseRecord = useCallback((record: HealthRecord) => {
+    const mapped = recordPrefill?.items.filter((item) => item.record_id === record.id) ?? [];
+    const fallback: PrefilledField[] = recordValues(record)
+      .filter((item): item is typeof item & { field: string; value: number } => Boolean(item.field) && typeof item.value === "number")
+      .map((item) => ({
+        field: item.field,
+        value: item.value,
+        measured_at: record.recordedAt,
+        record_type: record.recordType,
+        record_id: record.id,
+      }));
+    applyRecordPrefill(mapped.length ? mapped : fallback, true);
+    setSourceRecordId(record.id);
+    setPreset(undefined);
+    setReadFields(new Set());
+    setRecordListOpen(false);
+  }, [recordPrefill, applyRecordPrefill]);
+
 
   // 카드 여럿에 똑같이 걸린 정밀화 입력. 카드 위에서 한 번만 적고 카드에서는 뺀다.
   const sharedInputs = useMemo(
     () => sharedRefining(verdicts, values, models),
     [verdicts, values, models],
   );
+  const historyList = [...snapshots].reverse().slice(0, 8);
+  const historyLabels = disambiguatedTimes(historyList.map((item) => item.recordedAt));
+
+  const changeProfile = (id: string) => {
+    if (id === activeProfileId || !profiles.some((item) => item.id === id)) return;
+    setEntryLoading(true);
+    setRecordsLoading(true);
+    setEntryMode("auto");
+    setResult(undefined);
+    setReportAt(undefined);
+    setValues({});
+    setSourceRecordId(undefined);
+    setSnapshots([]);
+    setValueRecords([]);
+    setOpenDetail(false);
+    setError(undefined);
+    setProfileId(id);
+    try { localStorage.setItem("ieobom:selected-profile-id", id); } catch { /* storage unavailable */ }
+    window.dispatchEvent(new CustomEvent("ieobom:profile-changed", { detail: { profileId: id } }));
+  };
 
   return (
     // **공용 셸을 같이 쓴다.** 이 화면만 `.product-page` 를 빠뜨려서 좌우 여백 없이
     // 뷰포트에 딱 붙어 있었다 — 헤더의 브랜드와 세로줄도 안 맞았다.
     // `.product-page` 가 `width: min(1240px, 100% - 48px)` 와 위아래 여백을 준다
     // (`AccountPage`·`DataManagementPage` 와 같은 방식).
-    <section className="product-page assess-page">
-      {/* **가족 홈·건강 데이터와 같은 머리말 틀이다**(`dashboard-heading` ·
-          `page-kicker`). 예전에는 이 화면만 `<header className="assess-intro">`
-          로 따로 놀아서 제목 글자 크기가 다른 화면 h1 의 2/3 정도였고, 위에
-          붙는 작은 이름표(`page-kicker`)도 없었다 — 다른 화면과 나란히 두면
-          "여기만 다른 앱" 처럼 보였다. */}
-      <section className="dashboard-heading">
-        <div>
-          <p className="page-kicker">질환 예측</p>
-          <h1>만성질환 예측</h1>
-          <p>
-            기본 정보와 혈압·공복혈당을 채우면 판정이 나옵니다. 나머지 검진결과지
-            수치를 넣을수록 답하는 칸이 늘고,{" "}
-            <strong>
-              넣은 값이 있는 질환은 추정이 아니라 학회 기준 대조로 넘어갑니다.
-            </strong>
-          </p>
-        </div>
-      </section>
+    <section className="product-page assess-page risk-page">
+      {(entryLoading || recordsLoading) && runtime && activeProfileId ? (
+        <div className="risk-entry-loading" role="status">최근 판정과 건강기록을 확인하고 있습니다…</div>
+      ) : !result ? (
+        <div className="risk-input-experience">
+          <header className="assessment-start-header">
+            <p className="assessment-kicker">위험 판정</p>
+            <h1>건강정보로 위험도를 확인하세요</h1>
+            <p>최근 기록을 선택하거나 새 검진표·수치를 추가해 분석을 시작하세요.</p>
+          </header>
 
-      {Object.keys(prefilled).length > 0 && (
-        <p className="form-notice assess-prefilled">
-          {/* 어디서 온 값인지 밝힌다. 안 밝히면 "이건 내가 안 적었는데" 가 된다. */}
-          {prefillSource === "record" ? (
-            <>
-              지난 기록의 값 <strong>{Object.keys(prefilled).length}개</strong>를 미리 채웠어요. 오늘 기준으로 다시
-              판정하며, 지난 기록은 그대로 남습니다.
-            </>
-          ) : (
-            <>
-              건강자료에서 읽은 수치 <strong>{Object.keys(prefilled).length}개</strong>를 미리 채웠어요. 원본과 맞는지
-              확인하고 판정하세요 — 확실하지 않은 항목은 넣지 않았습니다.
-            </>
-          )}
-        </p>
-      )}
-
-      <div className={hasDocument ? "assess-workspace has-document" : "assess-workspace"}>
-        {/* **언제 들어와도 올릴 수 있다.** 문서가 없으면 폼 위에 얇게 앉고, 붙으면
-            왼쪽으로 펼쳐져 원본과 폼을 나란히 본다 — 화면을 가르는 것은 진입
-            경로가 아니라 문서 유무다(위 `hasDocument` 머리말). */}
-        {activeProfile ? (
-          <DocumentPane
-            runtime={runtime}
-            householdId={activeProfile.householdId}
-            profileId={activeProfile.id}
-            profileName={activeProfile.displayName}
-            onRead={handleReading}
-            onDocument={rememberDocument}
-          />
-        ) : null}
-
-        <div className="assess-form-column">
-          {/* **지난 판정을 눌러 값을 되불러온다.**
-              예전에는 가족 홈으로 돌아가 기록을 열고 "이 값으로 다시 판정" 을 눌러야
-              여기로 왔다. 수치 하나만 바꿔 다시 돌려 보는 것이 이 화면에서 가장 자주
-              하는 일인데, 그때마다 화면을 두 번 옮겨야 했다. */}
-          {/* **채우는 문을 한 곳으로 모았다.**
-              예전에는 "남긴 기록으로 채우기" 와 "지난 판정으로 채우기" 가 따로 서 있었다.
-              각각 다른 때에 만들어져 모양도 달랐고(하나는 값 목록, 하나는 칩), 사용자
-              입장에서는 **같은 일**을 하는 문이 둘이라 어느 쪽을 눌러야 하는지 알 수 없었다.
-
-              둘의 차이는 남겨야 한다 — 뜻이 다르다.
-                기록에서   혈압·혈당·검사값 기록을 **칸 단위로** 모은 것. 값마다 잰 날이 다르다.
-                지난 판정   그날 폼에 넣었던 값 **한 벌**. 한 시점의 스냅샷이다.
-              그래서 한 섹션 안에 두 줄로 두고, 각각이 무엇인지 한 문장으로 적는다. */}
-          {/* **자동 저장은 말해 주지 않으면 안 된 것과 같다.** 검진표를 올리면 판정
-              버튼을 누르기 전에 이미 기록이 남는데, 그 사실을 화면이 밝히지 않으면
-              사용자는 판정을 눌러야 저장되는 줄 알고 같은 서류를 다시 올린다. */}
-          {screeningSaved ? (
-            <p className="assess-saved-note" role="status">
-              검진표에서 읽은 <strong>{screeningSaved}개</strong> 수치를 건강기록으로 저장했어요. 판정하지 않고
-              나가도 남아 있습니다.
-            </p>
-          ) : null}
-
-          {(valueRecords.length > 0 || snapshots.length > 0) && (
-            <section className="assess-fill" aria-labelledby="assess-fill-heading">
-              <h3 id="assess-fill-heading">값을 불러와 채우기</h3>
-
-              {valueRecords.length > 0 && (
-                <div className="assess-fill-row">
-                  <div className="assess-fill-copy">
-                    <strong>남긴 건강검진에서</strong>
-                    <small>
-                      카드를 누르면 그 검진의 전체 수치와 원본을 볼 수 있어요. 확인한 뒤 "이 수치 사용하기" 를
-                      누르면 폼으로 옮깁니다.
-                    </small>
-                  </div>
-                  {/* **가족 홈과 같은 카드다**(`RecordCard`). 같은 기록을 화면마다 다른
-                      모양으로 그리면 사용자가 같은 것을 두 번 배워야 한다. 예전에는
-                      여기가 칸 이름과 숫자를 평평하게 늘어놓아서, 그 값들이 몇 건의
-                      검진에서 온 것인지도 원본이 무엇인지도 읽히지 않았다. */}
-                  <ul className="record-list">
-                    {valueRecords.slice(0, 6).map((record) => (
-                      <RecordCard
-                        key={record.id}
-                        record={record}
-                        pressed={openValueRecord?.id === record.id}
-                        onOpen={() => setOpenValueRecord(record)}
-                      />
-                    ))}
-                  </ul>
-                  {/* 칸마다 가장 최근 값을 한 번에 모으는 문. 여러 검진에 흩어져 있을
-                      때 쓴다(서버 `record_prefill.build` 가 그렇게 고른다). */}
-                  {recordPrefill && recordPrefill.items.length > 0 && valueRecords.length > 1 ? (
-                    <button type="button" className="secondary-button" onClick={() => applyRecordPrefill()}>
-                      최근 값 전부 가져오기 ({recordPrefill.items.length}칸)
-                    </button>
-                  ) : null}
+          <section className="assessment-source" aria-labelledby="assessment-source-title">
+            <div className="assessment-section-title">
+              <div><span>01</span><h2 id="assessment-source-title">분석에 사용할 건강기록</h2></div>
+              {activeProfile && <small>{activeProfile.displayName}님의 기록</small>}
+            </div>
+            {suggestedRecord ? (
+              <div className="assessment-record-choice">
+                <div className="assessment-record-main">
+                  <p className="assessment-record-overline">{sourceRecordId === suggestedRecord.id ? "선택한 기록" : "가장 최근 기록"}</p>
+                  <h3>{new Date(suggestedRecord.recordedAt).toLocaleDateString("ko-KR")} {suggestedRecord.recordType === "health_screening" ? "건강검진" : "건강기록"}</h3>
+                  <p>{recordPreviewLine(suggestedRecord)}</p>
                 </div>
-              )}
-
-              {snapshots.length > 0 && (
-                <div className="assess-fill-row">
-                  <div className="assess-fill-copy">
-                    <strong>지난 판정에서</strong>
-                    <small>그날 넣은 값 한 벌이 그대로 들어와요. 고쳐 다시 판정하면 새 기록으로 남습니다.</small>
-                  </div>
-                  <ul className="assess-history-list">
-                  {(() => {
-                  // 라벨을 목록 단위로 먼저 만든다 — 초를 붙일지는 **다른 칩과 겹치는지**
-                  // 로 정해지므로 칩 하나만 보고는 알 수 없다.
-                  const shown = [...snapshots].reverse().slice(0, 8);
-                  const labels = disambiguatedTimes(shown.map((item) => item.recordedAt));
-                  return shown.map((snapshot, index) => {
-                  const restored = valuesFromInputs(snapshot.payload.inputs ?? {});
-                  const level = snapshot.payload.highestLevel as RiskLevel;
-                  return (
-                    <li key={snapshot.id}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setValues(restored);
-                          // 앞의 결과를 지운다. 안 지우면 새로 채운 값 옆에 지난 판정이
-                          // 남아 어느 쪽이 지금 것인지 알 수 없다.
-                          setResult(undefined);
-                          setError(undefined);
-                          setRejected({});
-                          setAttempted(false);
-                          setSaved(undefined);
-                          window.scrollTo({ top: 0, behavior: "smooth" });
-                        }}
-                      >
-                        <time dateTime={snapshot.recordedAt}>{labels[index]}</time>
-                        <LevelBadge level={level} />
-                        <small>
-                          입력 {Object.keys(restored).length}칸 · BMI {snapshot.payload.bmi}
-                        </small>
-                      </button>
-                    </li>
-                  );
-                  });
-                })()}
-                  </ul>
+                <div className="assessment-record-actions">
+                  {sourceRecordId === suggestedRecord.id ? <span className="assessment-selected">선택됨</span> : <button type="button" className="assessment-primary-small" onClick={() => chooseRecord(suggestedRecord)}>이 기록 선택</button>}
+                  <button type="button" className="assessment-text-button" onClick={() => setRecordListOpen((open) => !open)} aria-expanded={recordListOpen}>변경</button>
                 </div>
-              )}
-
-            </section>
-          )}
-
-          {/* **섹션 밖에 둔다.** 위 섹션은 채울 것이 있을 때만 서므로, 안에 두면
-              "옮길 수치가 없다" 는 말이 영영 뜨지 않는다 — 실제로 그랬다.
-              기록이 아예 없는 경우와 있어도 수치가 없는 경우는 다른 상황이고,
-              후자는 "수치 기록을 남기면 여기가 채워진다" 를 말할 자리다. */}
-          {recordPrefill && recordPrefill.items.length === 0 && recordPrefill.scanned > 0 && (
-            <p className="assess-muted assess-records-empty">
-              남긴 기록 {recordPrefill.scanned}건에는 판정에 쓸 수치가 없었어요. 혈압·혈당·체성분이나 검사
-              결과를 기록으로 남기면 다음 판정에서 이 자리가 채워집니다.
-            </p>
-          )}
-
-
-          {flagged.length > 0 && (
-            <div
-              className="alert error-alert assess-required-alert"
-              role="alert"
-            >
-              <p>
-                필수 항목 <strong>{flagged.length}개</strong>가 비어 있어요.
-                채우면 바로 판정합니다.
-              </p>
-              <ul>
-                {flagged.map((name) => (
-                  <li key={name}>
-                    {/* `type="button"` 이 없으면 폼 안의 button 은 submit 이 된다 — 누를 때마다 다시 제출된다. */}
-                    <button
-                      type="button"
-                      onClick={() => revealField(fieldRefs.current[name])}
-                    >
-                      {FIELD_LABELS[name]}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {Object.keys(rejected).length > 0 && (
-            <div
-              className="alert error-alert assess-required-alert"
-              role="alert"
-            >
-              <p>
-                값이 범위를 벗어난 칸이{" "}
-                <strong>{Object.keys(rejected).length}개</strong> 있어요.
-                검진표에서 읽어 온 값이면 원본과 다시 맞춰 보세요.
-              </p>
-              <ul>
-                {Object.entries(rejected).map(([name, range]) => (
-                  <li key={name}>
-                    <button
-                      type="button"
-                      onClick={() => revealField(fieldRefs.current[name])}
-                    >
-                      {FIELD_LABELS[name]}
-                    </button>{" "}
-                    <span className="assess-muted">
-                      {values[name]} → {range}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/*
-        **`noValidate` 로 브라우저 검사를 끈다.** 안 끄면 필수 칸이 비었을 때 브라우저가
-        `submit` 이벤트 자체를 막아 아래 `submit` 이 실행되지 않는다 — 대신 뜨는 기본
-        말풍선은 문구를 못 바꾸고, 다른 칸을 건드리면 사라져 버린다.
-        `required` 속성은 그대로 둔다. 검사에는 안 쓰이지만 보조기술에는 여전히 필요하다.
-      */}
-          {/* **테스트 프로필. 폼 맨 위, 기본 칸 위에 선다.**
-              예측 데모(`/api/demo`)가 갖고 있던 것을 여기로 옮겼다 — 수치 34칸을 손으로
-              채우지 않고도 "당뇨인 사람" 을 한 번에 넣어 볼 수 있다는 것이 그 화면의
-              쓸모 절반이었고, 데모를 지우면서 그 절반을 데려왔다.
-
-              **필수 다섯 칸이 어느 프로필에서나 채워진다**(`presets.test.ts` 가 고정).
-              그래서 프리셋을 누르면 곧바로 판정할 수 있다. */}
-          <section className="assess-presets" aria-labelledby="assess-presets-heading">
-            <h3 id="assess-presets-heading">테스트로 돌려보기</h3>
-            <p className="assess-group-note">
-              학회 기준에 맞춘 예시 수치로 폼을 한 번에 채웁니다. 채운 뒤 몇 칸을 고쳐 보면 무엇이 판정을 움직이는지
-              보입니다. <strong>채우기만 하고 판정은 하지 않습니다.</strong>
-            </p>
-            <div className="assess-preset-buttons">
-              {ASSESSMENT_PRESETS.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={preset === item.key ? "assess-preset is-active" : "assess-preset"}
-                  aria-pressed={preset === item.key}
-                  onClick={() => applyPreset(item)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-            {preset && (
-              <>
-                <p className="assess-preset-note">
-                  {ASSESSMENT_PRESETS.find((item) => item.key === preset)?.note}
-                </p>
-                {/* **판정은 되지만 기록에는 안 남는다는 것을 미리 말한다.** 판정을
-                    돌린 뒤에야 알려 주면 사용자는 저장이 실패한 줄 안다. */}
-                <p className="assess-preset-note is-warning">
-                  <strong>이 값으로 판정해도 기록에는 남지 않아요.</strong> 학회 기준 예시 수치라 실제 몸의
-                  기록이 아니기 때문입니다.
-                </p>
-                <button type="button" className="secondary-button" onClick={clearPreset}>
-                  테스트 값 비우기
-                </button>
-              </>
-            )}
+              </div>
+            ) : <div className="assessment-no-record"><strong>아직 분석에 사용할 건강기록이 없어요.</strong><p>{recordPrefill && recordPrefill.scanned > 0 && recordPrefill.items.length === 0 ? `남긴 기록 ${recordPrefill.scanned}건에는 판정에 쓸 수치가 없어요.` : "검진표를 불러오거나 건강 수치를 직접 입력해 주세요."}</p></div>}
+            {recordListOpen && <div className="assessment-record-list">
+              <h3>다른 건강기록</h3>
+              <ul className="record-list">{orderedRecords.slice(0, 6).map((record) => <RecordCard key={record.id} record={record} pressed={openValueRecord?.id === record.id} onOpen={() => setOpenValueRecord(record)} />)}</ul>
+              {recordPrefill && recordPrefill.items.length > 0 && <button type="button" className="assessment-text-button" onClick={() => { applyRecordPrefill(); setRecordListOpen(false); }}>최근 수치 모두 가져오기 ({recordPrefill.items.length}칸)</button>}
+            </div>}
           </section>
 
-          <form className="assess-form" onSubmit={submit} noValidate>
+          <section className="assessment-methods" aria-labelledby="assessment-methods-title">
+            <div className="assessment-section-title"><div><span>02</span><h2 id="assessment-methods-title">다른 방법으로 시작하기</h2></div></div>
+            <div className="assessment-method-options">
+              <button type="button" className={inputMethod === "upload" ? "is-active" : ""} aria-expanded={inputMethod === "upload"} onClick={() => setInputMethod(inputMethod === "upload" ? null : "upload")}><strong>검진표 불러오기</strong><small>이미지 또는 PDF에서 수치를 읽어요.</small><span aria-hidden="true">↗</span></button>
+              <button type="button" className={inputMethod === "manual" ? "is-active" : ""} aria-expanded={inputMethod === "manual"} onClick={() => setInputMethod(inputMethod === "manual" ? null : "manual")}><strong>직접 수치 입력하기</strong><small>건강 수치를 직접 입력하고 확인해요.</small><span aria-hidden="true">↗</span></button>
+            </div>
+          </section>
+
+          <section className="assessment-input-panel" hidden={inputMethod !== "upload"} aria-label="검진표 업로드">
+            {activeProfile ? <DocumentPane runtime={runtime} householdId={activeProfile.householdId} profileId={activeProfile.id} profileName={activeProfile.displayName} onRead={handleReading} onDocument={rememberDocument} onReview={() => setInputMethod("manual")} /> : <p>먼저 가족 홈에서 구성원을 등록해 주세요.</p>}
+            {screeningSaved && <p className="assessment-saved-note" role="status">검진표 수치 {screeningSaved}개를 건강기록에 저장했습니다.</p>}
+          </section>
+
+          <section className="assessment-input-panel assessment-manual-panel" hidden={inputMethod !== "manual"} aria-label="직접 수치 입력">
+            <div className="assessment-manual-head"><h2>입력 수치 확인</h2><p>필수 항목을 채우고, 가지고 있는 검사값만 추가하세요.</p></div>
+            {Object.keys(prefilled).length > 0 && <p className="form-notice assess-prefilled">{prefillSource === "record" ? "지난 기록의 값" : "건강자료에서 읽은 수치"} {Object.keys(prefilled).length}개를 미리 채웠습니다. 원본과 맞는지 확인해 주세요.</p>}
+            {flagged.length > 0 && <div className="alert error-alert assess-required-alert" role="alert"><p>필수 항목 {flagged.length}개가 비어 있어요.</p><ul>{flagged.map((name) => <li key={name}><button type="button" onClick={() => revealField(fieldRefs.current[name])}>{FIELD_LABELS[name]}</button></li>)}</ul></div>}
+            {Object.keys(rejected).length > 0 && <div className="alert error-alert assess-required-alert" role="alert"><p>값이 범위를 벗어난 칸이 {Object.keys(rejected).length}개 있어요.</p><ul>{Object.entries(rejected).map(([name, range]) => <li key={name}><button type="button" onClick={() => revealField(fieldRefs.current[name])}>{FIELD_LABELS[name]}</button> {values[name]} → {range}</li>)}</ul></div>}
+
+          <form id="assessment-input-form" className="assess-form" onSubmit={submit} noValidate>
             {FIELD_GROUPS.map((group) => (
               <fieldset key={group.key} className="assess-group">
                 <legend>{group.title}</legend>
@@ -1226,7 +1095,7 @@ export function AssessmentPage() {
             <div className="assess-submit">
               {/* 필수가 비었다고 잠그지 않는다 — 눌러야 어디가 비었는지 알려 줄 수 있다. */}
               <button type="submit" disabled={working}>
-                {working ? "판정 중…" : "판정하기"}
+                {working ? "분석 중…" : "위험도 분석 시작"}
               </button>
               <p className="assess-muted">
                 {missingRequired.length > 0
@@ -1235,8 +1104,50 @@ export function AssessmentPage() {
               </p>
             </div>
           </form>
-        </div>
-      </div>
+          </section>
+
+          {snapshots.length > 0 && <section className="assessment-previous" aria-labelledby="assessment-previous-title">
+            <div className="assessment-section-title"><div><span>03</span><h2 id="assessment-previous-title">이전에 분석한 결과</h2></div></div>
+            <ul className="assessment-previous-list">{historyList.slice(0, 3).map((snapshot, index) => {
+              const restored = restoreSnapshot(snapshot);
+              return <li key={snapshot.id}><button type="button" onClick={() => {
+                if (restored) {
+                  setValues(restored.values);
+                  setResult(restored.result);
+                  setReportAt(snapshot.payload.checkedAt || snapshot.recordedAt);
+                  setSourceRecordId(snapshot.payload.sourceRecordId);
+                } else {
+                  setValues(valuesFromInputs(snapshot.payload.inputs ?? {}));
+                  setSourceRecordId(undefined);
+                  setInputMethod("manual");
+                }
+                setError(undefined);
+                setSaved(undefined);
+              }}><time dateTime={snapshot.recordedAt}>{historyLabels[index]}</time><strong>만성질환 위험도 분석</strong><LevelBadge level={snapshot.payload.highestLevel as RiskLevel} /><span aria-hidden="true">›</span></button></li>;
+            })}</ul>
+            {snapshots.length > 3 && <details className="assessment-history"><summary>이전 결과 모두 보기 <span>{snapshots.length}건</span></summary><ul>{historyList.slice(3).map((snapshot, index) => <li key={snapshot.id}><button type="button" onClick={() => {
+              const restored = restoreSnapshot(snapshot);
+              if (!restored) return;
+              setValues(restored.values);
+              setResult(restored.result);
+              setReportAt(snapshot.payload.checkedAt || snapshot.recordedAt);
+              setSourceRecordId(snapshot.payload.sourceRecordId);
+            }}><time dateTime={snapshot.recordedAt}>{historyLabels[index + 3]}</time><LevelBadge level={snapshot.payload.highestLevel as RiskLevel} /></button></li>)}</ul></details>}
+          </section>}
+
+          <div className="assessment-start-action">
+            <button type="submit" form="assessment-input-form" disabled={working}>{working ? "분석 중…" : "이 기록으로 분석하기"}<span aria-hidden="true">→</span></button>
+            <p>{missingRequired.length > 0 ? `분석 전 필수 수치 ${missingRequired.length}개를 확인해 주세요.` : `수치 ${Object.values(values).filter(Boolean).length}개가 준비됐습니다.`}</p>
+          </div>
+
+          <details className="assessment-test-tools">
+            <summary>테스트 값으로 살펴보기</summary>
+            <p>예시 수치로 입력을 채웁니다. 판정해도 개인 기록에는 남지 않습니다.</p>
+            <div className="assess-preset-buttons">
+              {ASSESSMENT_PRESETS.map((item) => <button key={item.key} type="button" className={preset === item.key ? "assess-preset is-active" : "assess-preset"} aria-pressed={preset === item.key} onClick={() => { applyPreset(item); setInputMethod("manual"); }}>{item.label}</button>)}
+            </div>
+            {preset && <><p className="assess-preset-note">{ASSESSMENT_PRESETS.find((item) => item.key === preset)?.note}</p><p className="assess-preset-note is-warning">테스트 값은 기록에는 남지 않아요.</p><button type="button" className="assessment-text-button" onClick={clearPreset}>테스트 값 비우기</button></>}
+          </details>
 
       {error && (
         <p className="alert error-alert" role="alert">
@@ -1244,140 +1155,42 @@ export function AssessmentPage() {
         </p>
       )}
 
-      {result && (
-        <section className="assess-result">
-          <header className="assess-summary">
-            <h2>판정 요약</h2>
-            {/* **예측 근거 전체를 여는 한 곳.** 카드마다 있는 "판정 근거" 는 질환
-                하나를 설명하는데, 열 장을 나란히 놓고 게이지·정확도·안 쓴 입력까지
-                보려면 자리가 따로 있어야 한다. 예측 데모가 그 자리였다. */}
-            <button type="button" className="secondary-button" onClick={() => setOpenDetail(true)}>
-              예측 근거 자세히 보기
-            </button>
-            {!result.model_available && (
-              <p className="alert error-alert">
-                예측 모델이 적재되지 않아 규칙·공식으로만 판정했습니다.
-              </p>
-            )}
-
-            <div className="assess-keep">
-              {profiles.length === 0 ? (
-                <p className="assess-muted">
-                  변화 추이를 남기려면 먼저 <strong>가족 홈</strong>에서
-                  구성원을 등록해 주세요. 판정은 지금도 보이지만 시점을 이을
-                  자리가 없습니다.
-                </p>
-              ) : (
-                <>
-                  <label className="assess-field">
-                    <span className="assess-field-label">누구의 기록으로</span>
-                    <select
-                      value={activeProfileId ?? ""}
-                      onChange={(event) => setProfileId(event.target.value)}
-                    >
-                      {profiles.map((profile) => (
-                        <option key={profile.id} value={profile.id}>
-                          {profile.displayName}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {/* 판정할 때 이미 남긴다. 이 버튼은 그게 실패했거나 구성원을 바꿔
-                      다시 남기고 싶을 때를 위한 것이라 문구도 "다시" 다. */}
-                  <button type="button" onClick={keep} disabled={keeping}>
-                    {keeping ? "저장 중…" : "이 구성원의 기록으로 다시 남기기"}
-                  </button>
-                  {/* "기기 안 암호화 보관함에 남기고 서버로 동기화" 였다. 앞 절이
-                      옛 구조다 — 로그인 상태에서는 서버 런타임이 정본이고 보관함은
-                      레거시 이전용으로만 열린다(`LocalDomainProvider`). 두 곳에
-                      남는다고 적으면 사용자가 기기를 지우면 기록이 사라진다고 읽는다. */}
-                  <p className="assess-muted">
-                    입력값과 등급을 <strong>로그인한 계정</strong>에 남깁니다 (ADR-011).
-                    같은 계정이면 다른 기기에서도 같은 기록을 봅니다.
-                  </p>
-                </>
-              )}
-              {saved && <p className="alert success-alert">{saved}</p>}
-            </div>
-          </header>
-
-          <SuspectPanel suspects={result.top_suspects ?? []} verdicts={result.verdicts ?? []} />
-
-          <h2 className="assess-axis-title">
-            질환별 결과 <span className="assess-muted">지금 내 몸의 상태</span>
-          </h2>
-          {/* **여러 카드가 같은 값을 기다린다면 그 말은 한 번만 한다.**
-              카드마다 적던 때 "앉아 있는 시간을 넣으면 예측이 정밀해져요" 가 한 화면에
-              14번 나왔다(2026-09-10 실측). 같은 한 칸을 채우면 그 카드들이 동시에
-              정밀해지니 정보는 하나뿐이고, 열네 번 반복되면 정보가 아니라 배경이 된다.
-              세 장 이상에 걸린 것만 올린다 — `sharedRefining` 의 문턱 참조. */}
-          {sharedInputs.length > 0 ? (
-            <p className="assess-axis-note assess-shared-need">
-              <strong>{briefList(sharedInputs)}</strong>
-              {objectParticle(briefList(sharedInputs))} 채우면 여러 카드의 예측이 함께 정밀해져요.
-            </p>
-          ) : null}
-          <div className="assess-cards">
-            {verdicts.map((verdict) => (
-              <VerdictCard
-                key={verdict.key}
-                verdict={verdict}
-                values={values}
-                models={models}
-                sharedRefining={sharedInputs}
-              />
-            ))}
-          </div>
-
-          <h2 className="assess-axis-title">
-            수치가 가리키는 앞날 <span className="assess-muted">이 값이 무엇을 예고하는가</span>
-          </h2>
-          <p className="assess-axis-note">
-            위가 "지금 어떤가"라면 여기는 "이 값이 앞으로 무엇을 부르는가"입니다. 같은 질환이 양쪽에 나올 수
-            있어요 — 예를 들어 γ-GTP 는 간 수치이면서 당뇨 발생도 예고합니다.
-          </p>
-          {/* **판정 카드와 다른 격자를 쓴다.** 이쪽은 넷뿐인데 신호 목록이 붙어
-              카드가 훨씬 길다. 같은 격자에 두면 판정 카드용 최소 행 높이(15.5rem)와
-              싸우고, 좁은 칸에 네 줄짜리 신호가 접혀 글 벽이 된다. */}
-          <div className="assess-matrix-grid">
-            {matrix.map((risk) => (
-              <MatrixCard key={risk.category} risk={risk} />
-            ))}
-          </div>
-
-          {snapshots.length > 0 && (
-            <>
-              <h2 className="assess-axis-title">
-                추적 대시보드{" "}
-                <span className="assess-muted">같은 사람 · 다른 시점</span>
-              </h2>
-              <p className="assess-axis-note">
-                그래프의 확률은{" "}
-                <strong>
-                  발병 가능성이 아니라 "지금 재면 기준을 넘을 가능성"
-                </strong>
-                입니다. 그래서 여기서는 확률선을 그리지 않고{" "}
-                <strong>입력한 수치 자체</strong>와 <strong>등급의 변화</strong>
-                를 겹칩니다. 등급은 그날 계산한 값을 그대로 남긴 것입니다 —
-                나중에 재채점하면 그날 본 화면과 달라집니다.
-              </p>
-              <TrendChart
-                series={series}
-                tracks={tracks}
-                names={diseaseNames}
-                dates={recent.map((s) => s.recordedAt)}
-                total={snapshots.length}
-              />
-            </>
-          )}
-
-          <footer className="assess-disclaimers">
-            {result.disclaimers.map((line) => (
-              <p key={line}>{line}</p>
-            ))}
-          </footer>
-        </section>
+        </div>
+      ) : (
+        <RiskReportPage
+          result={result}
+          values={values}
+          models={models}
+          snapshots={snapshots}
+          recent={recent}
+          series={series}
+          tracks={tracks}
+          diseaseNames={diseaseNames}
+          verdicts={verdicts}
+          matrix={matrix}
+          sharedInputs={sharedInputs}
+          profileName={activeProfile?.displayName ?? ""}
+          reportAt={reportAt}
+          profiles={profiles}
+          activeProfileId={activeProfileId}
+          onProfileChange={changeProfile}
+          onKeep={keep}
+          keeping={keeping}
+          saved={saved}
+          onReset={() => {
+            setEntryMode("before");
+            setResult(undefined);
+            setReportAt(undefined);
+            setOpenDetail(false);
+            setError(undefined);
+            setSaved(undefined);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          onOpenDetail={() => setOpenDetail(true)}
+        />
       )}
+
+      {result && error && <p className="alert error-alert" role="alert">{error}</p>}
 
       {/* 근거 모달. `verdicts` 에서 다시 찾는 이유는 재판정하면 같은 키의 내용이
           바뀌기 때문이다 — 열어 둔 채 판정하면 옛 값이 남는다. */}
@@ -1416,4 +1229,3 @@ export function AssessmentPage() {
     </section>
   );
 }
-

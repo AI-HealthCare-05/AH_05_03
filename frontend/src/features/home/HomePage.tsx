@@ -75,21 +75,11 @@ export function HomePage() {
     restoreHealthRecord,
     purgeHealthRecord,
   } = useLocalDomain();
-  const [selectedProfileId, setSelectedProfileId] = useState<string>();
+  const [selectedProfileId, setSelectedProfileId] = useState<string | undefined>(() => {
+    try { return localStorage.getItem("ieobom:selected-profile-id") ?? undefined; } catch { return undefined; }
+  });
   const [summary, setSummary] = useState<DashboardSummary>();
   const [records, setRecords] = useState<HealthRecord[]>([]);
-
-  // 전역 비서(채널톡)와 프로필 동기화
-  useEffect(() => {
-    if (selectedProfileId) {
-      try {
-        localStorage.setItem("ieobom:selected-profile-id", selectedProfileId);
-      } catch {
-        // ignore
-      }
-      window.dispatchEvent(new CustomEvent("ieobom:profile-changed", { detail: { profileId: selectedProfileId } }));
-    }
-  }, [selectedProfileId]);
 
   /**
    * 목록에 세울 기록. **판정은 자기 수치 기록에 매달려 있으면 빠진다.**
@@ -260,6 +250,13 @@ export function HomePage() {
     () => profiles.find((profile) => profile.id === (routeProfileId ?? selectedProfileId)) ?? profiles[0],
     [profiles, routeProfileId, selectedProfileId],
   );
+
+  // URL에서 연 구성원도 상단 메뉴로 이동할 때 같은 사람을 이어서 보게 한다.
+  useEffect(() => {
+    if (!selectedProfile) return;
+    try { localStorage.setItem("ieobom:selected-profile-id", selectedProfile.id); } catch { /* storage unavailable */ }
+    window.dispatchEvent(new CustomEvent("ieobom:profile-changed", { detail: { profileId: selectedProfile.id } }));
+  }, [selectedProfile]);
 
   useEffect(() => {
     setHighlightOrganKey(undefined);
@@ -770,6 +767,11 @@ export function HomePage() {
                 <p>최신 기록부터 보여줍니다.</p>
               </div>
               <div className="panel-heading-actions">
+                {records.some((record) => record.recordType === "assessment" && Array.isArray((record.payload as { verdicts?: unknown }).verdicts) && (record.payload as { verdicts?: unknown[] }).verdicts!.length > 0) && (
+                  <button className="text-button" type="button" onClick={() => { void navigate("/assessment", { state: { profileId: selectedProfile.id } }); }}>
+                    위험도 자세히 보기 →
+                  </button>
+                )}
                 {deletedRecords.length > 0 ? (
                   <button className="text-button" type="button" onClick={() => {
                     setActionError(undefined);
@@ -1333,4 +1335,3 @@ function toLocalDateTime(value: string): string {
 function recordNote(record: HealthRecord): string {
   return recordSummary(record);
 }
-

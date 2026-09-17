@@ -162,7 +162,7 @@ describe("DocumentPane", () => {
 
     // 첫 장은 아직 인식 중. 그 사이 두 번째를 고른다.
     await user.upload(picker, new File(["a"], "첫장.png", { type: "image/png" }));
-    await user.upload(picker, new File(["b"], "둘째장.png", { type: "image/png" }));
+    await user.upload(screen.getByLabelText("다른 검진표 고르기"), new File(["b"], "둘째장.png", { type: "image/png" }));
     await waitFor(() => expect(recognize).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(onRead).toHaveBeenCalledWith(expect.objectContaining({ values: { hdl: 42 } })));
 

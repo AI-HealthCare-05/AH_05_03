@@ -1,11 +1,8 @@
 /**
- * 판정 폼 왼쪽에 서는 검진표 패널 — 올리기·인식·원본 대조를 한 자리에서.
+ * 판정에 사용할 검진표를 고르고 OCR 결과를 확인하는 compact 입력 패널.
  *
- * 왜 폼 옆에 두는가
- * -----------------
- * 예전에는 `/data` 에서 올려 인식하고, 결과를 들고 `/assessment` 로 넘어와야 했다.
- * 사용자가 확인해야 하는 것은 **"이 숫자가 저 표의 그 줄과 같은가"** 인데 두 화면에
- * 나뉘어 있으면 대조 자체가 불가능하다 — 기억으로 맞추게 된다.
+ * 원본은 작은 썸네일로만 보여 주고, 명시적으로 요청할 때 모달에서 연다.
+ * 인식된 수치는 같은 판정 화면의 직접 입력 패널에서 확인한다.
  *
  * 무엇을 넘기고 무엇을 안 넘기는가
  * --------------------------------
@@ -22,8 +19,6 @@ import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 import { buildPreview, type DocumentPreview } from "./documentPreview";
 import { OcrProgressPanel, type OcrStage } from "./OcrProgressPanel";
 
-const ZOOM_STEPS = [1, 1.5, 2, 3] as const;
-
 export interface DocumentReading {
   /** 관문을 통과해 폼으로 갈 수치. */
   values: Record<string, number>;
@@ -38,6 +33,7 @@ export function DocumentPane({
   profileName,
   onRead,
   onDocument,
+  onReview,
 }: {
   runtime?: LocalDomainRuntime;
   householdId: string;
@@ -50,8 +46,8 @@ export function DocumentPane({
    * 건강 데이터의 검진 이력에서 서류를 열 방법이 사라진다.
    */
   onDocument?: (document: LocalDocument | undefined) => void;
+  onReview?: () => void;
 }) {
-  const [document, setDocument] = useState<LocalDocument>();
   const [preview, setPreview] = useState<DocumentPreview>();
   const [reading, setReading] = useState<DocumentReading>();
   /**
@@ -62,7 +58,8 @@ export function DocumentPane({
    */
   const [job, setJob] = useState<{ stage: OcrStage; text: string; restarted: boolean; startedAt: number }>();
   const [error, setError] = useState<string>();
-  const [zoom, setZoom] = useState<number>(1);
+  const [fileName, setFileName] = useState<string>();
+  const [showOriginal, setShowOriginal] = useState(false);
 
   // 미리보기를 갈아 끼울 때 이전 것의 `blob:` 을 반드시 놓아 준다. 안 놓으면 원본
   // 바이트가 탭이 닫힐 때까지 메모리에 남는다 — 검진표는 장당 수 MB 다.
@@ -97,9 +94,9 @@ export function DocumentPane({
 
       setError(undefined);
       setReading(undefined);
-      setZoom(1);
+      setFileName(file.name);
+      setShowOriginal(false);
       swapPreview(undefined);
-      setDocument(undefined);
       onDocument?.(undefined);
 
       const startedAt = Date.now();
@@ -125,7 +122,6 @@ export function DocumentPane({
           });
           if (!current()) return;
           if (!saved.ok) throw new Error(saved.error.message);
-          setDocument(saved.value);
           onDocument?.(saved.value);
         }
 
@@ -189,55 +185,43 @@ export function DocumentPane({
 
   const filled = reading ? Object.keys(reading.values).length : 0;
 
+  useEffect(() => {
+    if (!showOriginal) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setShowOriginal(false);
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [showOriginal]);
+
   return (
-    <aside className="checkup-pane" aria-label="올린 검진표">
-      <div className="checkup-pane-head">
-        <div>
-          <p className="section-kicker">검진표</p>
-          <h2>{profileName}님의 검진결과지</h2>
-        </div>
-        {preview && preview.pages.length > 0 ? (
-          <div className="checkup-zoom" role="group" aria-label="확대">
-            {ZOOM_STEPS.map((step) => (
-              <button
-                key={step}
-                type="button"
-                className={step === zoom ? "is-active" : undefined}
-                aria-pressed={step === zoom}
-                onClick={() => setZoom(step)}
-              >
-                ×{step}
-              </button>
-            ))}
+    <aside className="checkup-pane" aria-label="검진표 불러오기">
+      {!fileName ? (
+        <label
+          className={dragging ? "checkup-picker is-dragging" : "checkup-picker"}
+          onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={drop}
+        >
+          <input type="file" accept="image/*,.pdf,application/pdf" aria-label="검진표 이미지나 PDF 고르기" onChange={pick} />
+          <span>{dragging ? "여기에 놓으세요" : "이미지 또는 PDF 선택"}</span>
+        </label>
+      ) : (
+        <div className="checkup-selected">
+          {preview?.pages[0] ? <div className="checkup-thumbnail"><img src={preview.pages[0]} alt="선택한 검진표 첫 쪽 미리보기" /></div> : <div className="checkup-thumbnail is-loading" aria-hidden="true">문서</div>}
+          <div className="checkup-file-info">
+            <strong title={fileName}>{fileName}</strong>
+            <span>검진일은 원본에서 확인해 주세요.</span>
+            <span>{job ? "수치 인식 중" : error ? "인식 실패" : reading ? `인식 완료 · ${filled}개 항목` : "파일 준비 중"}</span>
+            <div className="checkup-actions">
+              <button type="button" onClick={onReview}>수치 확인</button>
+              {preview?.pages.length ? <button type="button" onClick={() => setShowOriginal(true)}>원본 보기</button> : null}
+              <label className="checkup-repick"><input type="file" accept="image/*,.pdf,application/pdf" aria-label="다른 검진표 고르기" onChange={pick} /><span>다시 선택</span></label>
+            </div>
           </div>
-        ) : null}
-      </div>
-
-      <label
-        className={dragging ? "checkup-picker is-dragging" : "checkup-picker"}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={drop}
-      >
-        <input type="file" accept="image/*,.pdf,application/pdf" onChange={pick} />
-        <span>
-          {dragging
-            ? "여기에 놓으면 읽어 옵니다"
-            : document
-              ? "다른 검진표 고르기 · 끌어다 놓아도 됩니다"
-              : "검진표 이미지나 PDF 고르기 · 끌어다 놓아도 됩니다"}
-        </span>
-      </label>
-
-      {/* 위 `save` 가 `if (runtime?.documents)` 안에 있고 서버 런타임은 그 칸을 들지
-          않는다(`serverDomainRuntime.ts` 의 `documents: undefined`). 그래서 "이 브라우저에
-          암호화해 둔다" 는 옛 문구는 사실이 아니었다. 실제 동작은 아래가 맞다. */}
-      <p className="checkup-privacy">
-        원본은 어디에도 보관하지 않아요. 읽어 들이는 동안에만 쓰고, 확정한 수치만 내 계정에 남습니다.
-      </p>
+        </div>
+      )}
+      <p className="checkup-privacy">원본은 읽는 동안에만 사용하고, 확정한 수치만 계정에 남습니다.</p>
 
       {job ? (
         <OcrProgressPanel stage={job.stage} text={job.text} restarted={job.restarted} startedAt={job.startedAt} />
@@ -248,26 +232,18 @@ export function DocumentPane({
         </p>
       ) : null}
 
-      {preview && preview.pages.length > 0 ? (
-        <div className="checkup-viewer">
-          {preview.pages.map((page, index) => (
-            <img key={page} src={page} alt={`검진표 ${index + 1}쪽`} style={{ width: `${zoom * 100}%` }} />
-          ))}
-        </div>
-      ) : null}
-
       {reading ? (
         <div className="checkup-reading">
           <p className={filled > 0 ? "checkup-filled" : "form-notice"}>
             {filled > 0
-              ? `표에서 수치 ${filled}개를 읽어 오른쪽 폼에 채웠어요. 원본과 맞는지 확인하고 고쳐 주세요.`
-              : "표에서 판정에 쓸 수치를 찾지 못했어요. 오른쪽 폼에 직접 넣어 주세요."}
+              ? `수치 ${filled}개를 읽어 입력에 반영했어요. 원본과 맞는지 확인해 주세요.`
+              : "판정에 쓸 수치를 찾지 못했어요. 직접 입력해 주세요."}
           </p>
 
           {reading.review.length > 0 ? (
             <details className="checkup-review" open>
               <summary>확인이 필요한 {reading.review.length}개 — 폼에는 넣지 않았어요</summary>
-              <p>검사명을 잘못 읽었을 수 있어서 뺐습니다. 원본의 해당 줄과 맞으면 오른쪽 폼에 직접 넣어 주세요.</p>
+              <p>검사명을 잘못 읽었을 수 있어 입력에 반영하지 않았습니다. 원본과 대조한 뒤 직접 넣어 주세요.</p>
               <ul>
                 {reading.review.map((row, index) => (
                   <li key={`${row.field}-${index}`}>
@@ -283,6 +259,14 @@ export function DocumentPane({
               </ul>
             </details>
           ) : null}
+        </div>
+      ) : null}
+      {showOriginal && preview?.pages.length ? (
+        <div className="checkup-lightbox" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowOriginal(false); }}>
+          <div className="checkup-lightbox-content" role="dialog" aria-modal="true" aria-label={`${profileName}님의 검진표 원본`}>
+            <div className="checkup-lightbox-head"><strong>{fileName}</strong><button type="button" onClick={() => setShowOriginal(false)}>닫기</button></div>
+            <div className="checkup-lightbox-pages">{preview.pages.map((page, index) => <img key={page} src={page} alt={`검진표 ${index + 1}쪽 원본`} />)}</div>
+          </div>
         </div>
       ) : null}
     </aside>
