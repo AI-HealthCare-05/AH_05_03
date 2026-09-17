@@ -1,5 +1,7 @@
 from typing import Literal
 
+import pytest
+
 from app.dtos.health_assistant import (
     ChatMessage,
     HealthAssistantChatRequest,
@@ -48,6 +50,40 @@ def test_explicit_pain_intensity_is_preserved() -> None:
     assert sanitized.pain_draft is not None
     assert sanitized.pain_draft.intensity == 6
     assert sanitized.auto_save is True
+
+
+@pytest.mark.parametrize("user_text", ["통증을 2라고 했어", "무릎 통증 2", "강도는 2"])
+def test_explicitly_stated_pain_intensity_is_preserved(user_text: str) -> None:
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=user_text)])
+    response = HealthAssistantResponse(
+        intent="record_pain",
+        assistant_message="통증 기록을 확인해 주세요.",
+        pain_draft=PainDraft(body_area="무릎", intensity=2),
+        auto_save=True,
+    )
+
+    sanitized = HealthAssistantService._clear_unstated_pain_intensity(response, request)
+
+    assert sanitized.pain_draft is not None
+    assert sanitized.pain_draft.intensity == 2
+    assert sanitized.auto_save is True
+
+
+@pytest.mark.parametrize("user_text", ["2일 전부터 아파", "통증은 2일 전에 시작했어"])
+def test_date_number_is_not_preserved_as_pain_intensity(user_text: str) -> None:
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=user_text)])
+    response = HealthAssistantResponse(
+        intent="record_pain",
+        assistant_message="통증 기록을 확인해 주세요.",
+        pain_draft=PainDraft(body_area="무릎", intensity=2),
+        auto_save=True,
+    )
+
+    sanitized = HealthAssistantService._clear_unstated_pain_intensity(response, request)
+
+    assert sanitized.pain_draft is not None
+    assert sanitized.pain_draft.intensity is None
+    assert sanitized.auto_save is False
 
 
 def test_explicit_pain_intensity_is_preserved_across_turns() -> None:

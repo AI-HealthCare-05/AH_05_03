@@ -73,6 +73,35 @@ class ScopeOnlyClient:
         return _stream()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reply", ["없어", "없엉", "그런 건 전혀 없는데요"])
+async def test_clarification_reply_is_classified_with_original_question(reply: str) -> None:
+    messages = [
+        ChatMessage(role="user", content="아스피린 먹어도 되는지?"),
+        ChatMessage(role="assistant", content="현재 복용 중인 약, 진단받은 질환이 있나요?"),
+        ChatMessage(role="user", content=reply),
+    ]
+
+    classifier = ScopeOnlyClient(
+        HealthAssistantScopeDecision(
+            scope="health",
+            request_kind="information",
+            clinical_contexts=["none"],
+            requires_authoritative_evidence=False,
+            enriched_query=reply,
+        )
+    )
+    checked = await HealthAssistantBoundaryService().check_request(
+        classifier, HealthAssistantChatRequest(messages=messages)
+    )
+
+    assert classifier.calls == 1
+    assert checked.request is not None
+    assert checked.decision.required_evidence_types == ["medication"]
+    assert "아스피린 먹어도 되는지?" in (checked.request.enriched_query or "")
+    assert HealthAssistantService._needs_medication_info(checked.request) is True
+
+
 # =========================================================================
 # Step 1: 하드 규칙 필터 (Regex, 최소 길이, 비속어, 인젝션 방어)
 # =========================================================================
