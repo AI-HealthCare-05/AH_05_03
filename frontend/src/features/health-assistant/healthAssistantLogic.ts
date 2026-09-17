@@ -55,6 +55,19 @@ export interface OcrReviewItem {
   judgment: string;
 }
 
+/** 검진 결과로 저장하기 전에 OCR 내용에서 검사 항목과 실제 결과를 확인한다. */
+export function hasHealthExamResult(
+  text: string,
+  items: OcrReviewItem[],
+  values: Record<string, number>,
+): boolean {
+  if (Object.keys(values).length > 0) return true;
+  const testName = /(?:혈압|혈당|혈색소|헤모글로빈|콜레스테롤|중성지방|크레아티닌|사구체여과율|간수치|AST|ALT|BMI|체질량지수|요단백|요당|백혈구|적혈구|혈소판|시력|청력)/i;
+  const result = /(?:\d+(?:\.\d+)?|정상|비정상|양성|음성|이상|소견)/;
+  if (items.some((item) => testName.test(item.testName) && result.test(item.value))) return true;
+  return text.split(/\n|[;,]/).some((line) => testName.test(line) && result.test(line));
+}
+
 export const PRIMARY_HOUSEHOLD_ID = "household-local-primary";
 
 function toLocalMinuteString(date: Date): string {
@@ -769,6 +782,38 @@ export function chatViewModeStorageKey(profileId: string): string {
 }
 
 export const LAST_OPENED_PROFILE_KEY = "ieobom_chat_last_opened_profile";
+
+export function chatActiveSessionStorageKey(profileId: string): string {
+  return `ieobom_chat_active_session_${profileId}`;
+}
+
+/** 마지막으로 보고 있던 대화. 화면 모드(chat/list)만 기억하고 **어느 대화인지는**
+ * 기억하지 않아서, 예전 대화를 보다 봄이를 닫으면 항상 최신 대화로 돌아왔다. */
+export function loadActiveChatSessionId(profileId: string, storage?: Storage): string | null {
+  if (!profileId) return null;
+  const targetStorage = storage ?? (typeof window !== "undefined" ? window.sessionStorage : undefined);
+  if (!targetStorage) return null;
+  try {
+    return targetStorage.getItem(chatActiveSessionStorageKey(profileId));
+  } catch {
+    return null;
+  }
+}
+
+export function saveActiveChatSessionId(profileId: string, sessionId: string | null, storage?: Storage): void {
+  if (!profileId) return;
+  const targetStorage = storage ?? (typeof window !== "undefined" ? window.sessionStorage : undefined);
+  if (!targetStorage) return;
+  try {
+    if (sessionId) {
+      targetStorage.setItem(chatActiveSessionStorageKey(profileId), sessionId);
+    } else {
+      targetStorage.removeItem(chatActiveSessionStorageKey(profileId));
+    }
+  } catch (err) {
+    console.warn("Failed to persist active chat session:", err);
+  }
+}
 
 export function loadChatViewMode(
   profileId: string,

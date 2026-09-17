@@ -162,3 +162,81 @@ async def test_resolve_location_sends_only_place_token_to_kakao() -> None:
 
     assert result == (37.47, 127.035, "양재시민의숲")
     assert requested_queries == ["양재숲"]
+
+
+@pytest.mark.asyncio
+async def test_slow_air_quality_does_not_hold_the_weather_answer() -> None:
+    """대기질이 늦어도 날씨는 제때 답한다.
+
+    둘이 상한을 공유하던 때는 날씨가 0.3초에 도착해 있어도 대기질을 5초까지
+    기다렸다가 결국 빈손으로 넘어갔다(실측 6회 중 4회). 대기질은 없어도 답이
+    성립하는 보조 정보이므로 먼저 포기한다.
+    """
+    import asyncio
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if "ArpltnInforInqireSvc" in str(request.url):
+            await asyncio.sleep(10)  # 상한을 넘겨 응답하지 않는 대기질 API
+        if "coord2regioncode" in str(request.url):
+            return httpx.Response(200, json={"documents": []})
+        return httpx.Response(
+            200,
+            json={"response": {"body": {"items": {"item": [{"category": "T1H", "obsrValue": "21.0"}]}}}},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = OutdoorConditionsClient(
+            kma_api_key="test-key",
+            airkorea_api_key="test-key",
+            kakao_api_key="test-key",
+            http_client=http_client,
+        )
+        started = asyncio.get_running_loop().time()
+        result = await client.get_outdoor_conditions(37.5665, 126.9780)
+        elapsed = asyncio.get_running_loop().time() - started
+
+    assert result.weather is not None, "날씨는 왔어야 한다"
+    assert result.air_quality is None
+    assert result.errors
+    assert elapsed < 5.0, f"대기질을 기다리느라 {elapsed:.1f}초를 썼다"
+
+
+@pytest.mark.asyncio
+async def test_partial_result_is_not_remembered_for_the_full_cache_window() -> None:
+    """실패를 10분 기억하면 API 가 복구돼도 그동안 계속 대기질 없이 답한다."""
+    from app.services import outdoor_conditions_client as module
+
+    calls = {"air": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "ArpltnInforInqireSvc" in url:
+            calls["air"] += 1
+            return httpx.Response(500)
+        if "coord2regioncode" in url:
+            return httpx.Response(200, json={"documents": []})
+        return httpx.Response(
+            200,
+            json={"response": {"body": {"items": {"item": [{"category": "T1H", "obsrValue": "21.0"}]}}}},
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+        client = OutdoorConditionsClient(
+            kma_api_key="test-key",
+            airkorea_api_key="test-key",
+            kakao_api_key="test-key",
+            http_client=http_client,
+        )
+        await client.get_outdoor_conditions(37.5665, 126.9780)
+        assert calls["air"] == 1
+
+        # 성공이었다면 10분 동안 재사용되지만, 대기질이 빈 결과는 짧게만 기억한다.
+        cache_key = (round(37.5665, 2), round(126.9780, 2))
+        stored_at, ttl, _ = client._cache[cache_key]
+        assert ttl == module._PARTIAL_CACHE_SECONDS
+        assert ttl < module._CACHE_SECONDS
+
+        client._cache[cache_key] = (stored_at - ttl - 1, ttl, client._cache[cache_key][2])
+        await client.get_outdoor_conditions(37.5665, 126.9780)
+
+    assert calls["air"] == 2, "짧은 수명이 지나면 다시 물어봐야 한다"

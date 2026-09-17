@@ -50,6 +50,7 @@ import {
   PRIMARY_HOUSEHOLD_ID,
   buildAutoSaveAssistantMessage,
   extractReviewItems,
+  hasHealthExamResult,
   normalizeBloodGlucoseTiming,
   removeMedicationSavePrompt,
   reviewItemsToText,
@@ -58,7 +59,9 @@ import {
   saveChatSession,
   createWelcomeMessage,
   mergeServerMessagesWithLocalUi,
+  loadActiveChatSessionId,
   loadChatViewMode,
+  saveActiveChatSessionId,
   saveChatViewMode,
   getLastOpenedProfileId,
   setLastOpenedProfileId,
@@ -208,15 +211,35 @@ async function getCurrentLocationForOutdoorQuestion(): Promise<OutdoorLocationAt
   if (!navigator.geolocation) {
     return { error: "이 브라우저에서는 현재 위치 기능을 사용할 수 없습니다." };
   }
+
+  // **타임아웃에 권한 팝업 응답 시간이 포함된다.** 처음 쓰는 사람은 팝업을 읽고
+  // 누르는 데 6초를 넘기기 쉬운데, 그러면 "허용"을 눌러도 이미 시간이 지나 실패로
+  // 처리돼 "권한을 허용해 주세요" 가 떴다 — 허용했는데 허용하라는 말을 듣는다
+  // (2026-09-16). 아직 응답하지 않은 상태라면 넉넉히 기다린다.
+  let awaitingPermission = true;
+  try {
+    const status = await navigator.permissions?.query({ name: "geolocation" as PermissionName });
+    awaitingPermission = status?.state === "prompt";
+  } catch {
+    // Permissions API 가 없거나 막힌 환경이면 넉넉한 쪽으로 둔다.
+  }
+
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
       (position) => resolve({
         location: { latitude: position.coords.latitude, longitude: position.coords.longitude },
       }),
-      () => resolve({
-        error: "실시간 날씨와 대기질을 확인하려면 기기와 브라우저 설정에서 위치 서비스 권한을 허용해 주세요.",
+      (error) => resolve({
+        error:
+          error.code === error.PERMISSION_DENIED
+            ? "실시간 날씨와 대기질을 확인하려면 기기와 브라우저 설정에서 위치 서비스 권한을 허용해 주세요."
+            : "현재 위치를 확인하지 못했습니다. 지역명을 알려주시면 바로 확인해 드릴게요.",
       }),
-      { enableHighAccuracy: false, timeout: 6000, maximumAge: 5 * 60 * 1000 },
+      {
+        enableHighAccuracy: false,
+        timeout: awaitingPermission ? 25000 : 6000,
+        maximumAge: 5 * 60 * 1000,
+      },
     );
   });
 }
@@ -272,6 +295,8 @@ export function HealthAssistantDrawer({
     const savedMode = loadChatViewMode(profile.id);
     return savedMode === "list";
   });
+  // 처음 열 때는 전환이 아니라 "이미 목록"이므로 페이드인을 걸지 않는다.
+  const [enteredListByNavigation, setEnteredListByNavigation] = useState(false);
   const [openMenuSessionId, setOpenMenuSessionId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
@@ -363,15 +388,21 @@ export function HealthAssistantDrawer({
 
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     const doScroll = () => {
-      if (messagesContainerRef.current) {
-        if (typeof messagesContainerRef.current.scrollTo === "function") {
-          messagesContainerRef.current.scrollTo({
-            top: messagesContainerRef.current.scrollHeight,
-            behavior,
-          });
+      const container = messagesContainerRef.current;
+      if (container) {
+        // **CSS 가 이긴다.** 이 컨테이너에는 `scroll-behavior: smooth` 가 걸려 있어서,
+        // `scrollTop` 대입은 물론 일부 브라우저에서는 `scrollTo` 의 `behavior` 까지
+        // 무시하고 부드럽게 기어 내려간다. 대화를 통째로 바꿀 때는 그 애니메이션이
+        // 곧 "맨 위에서 최근 글까지 훑는" 증상이 된다. 즉시 이동하는 동안만 CSS 를
+        // 함께 꺼 두고 원래 값으로 돌려놓는다(2026-09-16).
+        const previousBehavior = container.style.scrollBehavior;
+        if (behavior === "auto") container.style.scrollBehavior = "auto";
+        if (typeof container.scrollTo === "function") {
+          container.scrollTo({ top: container.scrollHeight, behavior });
         } else {
-          messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+          container.scrollTop = container.scrollHeight;
         }
+        if (behavior === "auto") container.style.scrollBehavior = previousBehavior;
       } else if (typeof messagesEndRef.current?.scrollIntoView === "function") {
         messagesEndRef.current.scrollIntoView({ behavior });
       }
@@ -384,18 +415,36 @@ export function HealthAssistantDrawer({
   };
 
   // 서랍을 열거나 재진입할 때, 이전 대화 목록이 복원되면 사용자가 마지막으로 나눈 대화(최하단)를 즉시 보여준다.
+  //
+  // **여는 순간의 플래그 하나로는 부족했다.** 서랍을 열면 먼저 인사말이나 캐시가
+  // 그려지고, 그 다음에 DB 대화가 도착해 `messages` 를 통째로 갈아끼운다. 그 두 번째
+  // 갱신 때는 플래그가 이미 꺼져 있어서 `smooth` 로 잡히고, 화면이 대화 맨 위에서
+  // 최근 글까지 쭉 훑어 내려갔다. 목록에서 다른 대화를 고를 때도 같은 이유로 그랬다.
+  //
+  // 부드럽게 따라가야 하는 것은 **대화 중 한 줄이 덧붙을 때**뿐이다. 목록이 다른
+  // 대화로 교체됐는지는 맨 앞 메시지가 바뀌었는지로 알 수 있다.
+  const previousFirstMessageIdRef = useRef<string | undefined>(undefined);
+  const previousMessageCountRef = useRef(0);
+
   useEffect(() => {
     if (!isOpen) {
       isInitialScrollRef.current = true;
+      previousFirstMessageIdRef.current = undefined;
+      previousMessageCountRef.current = 0;
       return;
     }
 
-    if (isInitialScrollRef.current) {
-      isInitialScrollRef.current = false;
-      scrollToBottom("auto");
-    } else {
-      scrollToBottom("smooth");
-    }
+    const firstMessageId = messages[0]?.id;
+    const replacedWholeConversation =
+      isInitialScrollRef.current ||
+      firstMessageId !== previousFirstMessageIdRef.current ||
+      messages.length - previousMessageCountRef.current > 1;
+
+    isInitialScrollRef.current = false;
+    previousFirstMessageIdRef.current = firstMessageId;
+    previousMessageCountRef.current = messages.length;
+
+    scrollToBottom(replacedWholeConversation ? "auto" : "smooth");
   }, [messages, loading, isOpen]);
 
   // 구성원이 바뀌거나 서랍이 열리면 해당 구성원의 대화 세션을 복원한다.
@@ -451,10 +500,15 @@ export function HealthAssistantDrawer({
         setChatSessions(sessions);
 
         if (sessions.length > 0) {
-          const latest = sessions[0];
-          activeSessionIdRef.current = latest.id;
-          setActiveSessionId(latest.id);
-          const dbMessages = await listChatMessages(latest.id);
+          // **마지막으로 보던 대화로 돌아간다.** 전에는 무조건 `sessions[0]`(최신)을
+          // 열어서, 예전 대화를 보다 봄이를 닫으면 엉뚱한 대화가 떴다. 그 대화가
+          // 지워졌거나 다른 프로필 것이면 최신으로 돌아간다.
+          const rememberedId = loadActiveChatSessionId(currentProfileId);
+          const restored = sessions.find((item) => item.id === rememberedId) ?? sessions[0];
+          activeSessionIdRef.current = restored.id;
+          setActiveSessionId(restored.id);
+          saveActiveChatSessionId(currentProfileId, restored.id);
+          const dbMessages = await listChatMessages(restored.id);
           if (!isSubscribed || activeProfileIdRef.current !== currentProfileId) return null;
 
           if (dbMessages.length > 0) {
@@ -468,7 +522,7 @@ export function HealthAssistantDrawer({
           } else {
             setMessages([createWelcomeMessage(profileDisplayName)]);
           }
-          return latest.id;
+          return restored.id;
         } else {
           setMessages([createWelcomeMessage(profileDisplayName)]);
           return null;
@@ -505,6 +559,7 @@ export function HealthAssistantDrawer({
     if (!profile) return;
     activeSessionIdRef.current = null;
     setActiveSessionId(null);
+    saveActiveChatSessionId(profile.id, null);
     sessionSyncPromiseRef.current = null;
     clearChatSession(profile.id);
     setMessages([createWelcomeMessage(profile.displayName)]);
@@ -517,6 +572,7 @@ export function HealthAssistantDrawer({
 
   /** 대화 화면 → 목록 화면. 헤더 뒤로가기 버튼과 스와이프 제스처가 같이 쓴다. */
   function goToSessionList() {
+    setEnteredListByNavigation(true);
     setShowSessionList(true);
     if (profile) {
       saveChatViewMode(profile.id, "list");
@@ -572,6 +628,7 @@ export function HealthAssistantDrawer({
       if (activeProfileIdRef.current !== profile.id) return;
       const mapped = mergeServerMessagesWithLocalUi(dbMessages, loadChatSession(profile.id) ?? []);
       activeSessionIdRef.current = session.id;
+      saveActiveChatSessionId(profile.id, session.id);
       setActiveSessionId(session.id);
       setMessages(mapped.length > 0 ? mapped : [createWelcomeMessage(profile.displayName)]);
       setShowSessionList(false);
@@ -625,10 +682,17 @@ export function HealthAssistantDrawer({
 
   // 팝오버 바깥을 누르면 닫는다. popover 변형에서만 의미가 있다(embedded/모달은
   // 각자의 배경 클릭 처리가 따로 있다).
+  //
+  // **런처 버튼은 바깥이 아니다.** 열려 있을 때 그 버튼은 X 로 바뀌어 "닫기" 역할을
+  // 하는데, 여기서도 바깥으로 치면 한 번의 클릭이 두 번 토글된다 —
+  // `mousedown` 에서 닫히고, 이어지는 `click` 이 "닫혀 있으니 열자"로 다시 연다.
+  // 사용자에게는 닫았는데 곧바로 다시 열리는 것으로 보인다.
   useEffect(() => {
     if (variant !== "popover" || !isOpen) return;
     function handleOutsideClick(e: MouseEvent) {
-      if (popoverContainerRef.current && !popoverContainerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if ((target as Element | null)?.closest?.(".channel-talk-launcher")) return;
+      if (popoverContainerRef.current && !popoverContainerRef.current.contains(target)) {
         (onMinimize ?? handleAnimatedClose)();
       }
     }
@@ -685,6 +749,9 @@ export function HealthAssistantDrawer({
       const structuredText = reviewItemsToText(items);
       const extractedText = ocrResult.text.trim() || structuredText;
       if (!extractedText) throw new Error("서류에서 확인할 수 있는 글자나 검사 항목을 찾지 못했습니다. 더 선명한 이미지를 선택해 주세요.");
+      if (!hasHealthExamResult(extractedText, items, ocrResult.measurements?.values ?? {})) {
+        throw new Error("검사 항목과 결과를 확인할 수 없습니다. 건강검진 결과지나 검사 결과 서류를 선택해 주세요.");
+      }
       const extractedDate = parseExamDateFromText(extractedText) || new Date().toISOString().slice(0, 10);
 
       const draft: LabResultDraft = {
@@ -730,6 +797,7 @@ export function HealthAssistantDrawer({
         sessionId = newSession.id;
         activeSessionIdRef.current = sessionId;
         setActiveSessionId(sessionId);
+        saveActiveChatSessionId(profileId, sessionId);
         // **만든 세션을 동기화 약속에도 승계한다.** 안 하면 다음 호출이 여전히
         // 빈 약속을 기다렸다가 세션을 또 만든다(#120 의 "대화 누적").
         sessionSyncPromiseRef.current = Promise.resolve(sessionId);
@@ -2006,7 +2074,10 @@ export function HealthAssistantDrawer({
       </header>
 
         {showSessionList && (
-          <section className="chat-session-list" aria-label="대화 목록">
+          <section
+            className={`chat-session-list ${enteredListByNavigation ? "is-entering" : ""}`}
+            aria-label="대화 목록"
+          >
 
             {chatSessions.length === 0 ? (
               <div className="chat-session-empty">

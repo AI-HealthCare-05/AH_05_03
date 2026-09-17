@@ -153,7 +153,12 @@ class _FakeRecordService:
 
 class _FakeToolClient:
     async def generate_structured_response(self, **_kwargs: Any) -> HealthAssistantScopeDecision:
-        return HealthAssistantScopeDecision(scope="health", requires_authoritative_evidence=False)
+        return HealthAssistantScopeDecision(
+            request_kind="information",
+            clinical_contexts=["none"],
+            scope="health",
+            requires_authoritative_evidence=False,
+        )
 
     async def stream_structured_response_with_tools(
         self,

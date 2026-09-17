@@ -8,6 +8,7 @@ from app.dtos.food_nutrition import FoodNutritionSearchResult
 from app.dtos.health_assistant import (
     ChatMessage,
     HealthAssistantChatRequest,
+    HealthAssistantClinicalContext,
     HealthAssistantResponse,
     HealthAssistantScopeDecision,
     HealthIntent,
@@ -25,6 +26,7 @@ from app.services.facility_topic import (
     is_facility_location_followup,
 )
 from app.services.health_knowledge_catalog import is_alcohol_topic
+from app.services.health_knowledge_query import mentions_activity
 from app.services.medication_topic import mentions_medication
 
 HEALTH_ONLY_MESSAGE = (
@@ -88,6 +90,218 @@ _PROMPT_ATTACK_KEYWORDS = (
     "jailbreak",
     "탈옥",
 )
+
+
+#: 통증 기록 패스트패스가 "순수한 진술"인지 가릴 때 쓰는 **문장 형태** 기준.
+#: 조언의 의미 목록이 아니다 — `asks_pain_advice` 에 `괜찮`·`위험`은 있고 `해도 돼`가
+#: 없어서 같은 질문이 말투 하나로 갈렸다(2026-09-15). 의미 목록은 새 표현이 나올 때마다
+#: 빠지지만, 한국어 종결어미와 허가 구문은 닫힌 문법 집합이라 그렇게 늘어나지 않는다.
+#: 통증 진술 단어. 통증 기록 패스트패스와 야외 규칙의 예외가 **같은 목록**을 본다.
+#: 두 벌로 두면 한쪽만 늘어나고 다른 쪽이 조용히 뚫린다.
+_PAIN_WORDS = ("아파", "아픈", "통증", "쑤셔", "저려", "결려", "뻐근", "시큰", "찌릿")
+#: "몸에 조건이 걸린 상태". 이런 사람의 "이거 해도 되나" 는 날씨 질문이 아니라
+#: 개인 안전 판단이다. 상태 이름은 닫힌 집합이라 조언 표현처럼 무한히 늘지 않는다.
+_CHRONIC_CONDITION_WORDS = ("고혈압", "당뇨", "심장", "신장", "천식", "협심증", "관절염")
+_EXPLICIT_CHRONIC_CONDITION_WORDS = (
+    "고혈압",
+    "당뇨",
+    "천식",
+    "협심증",
+    "관절염",
+    "심장질환",
+    "심부전",
+    "신장질환",
+    "만성신장",
+)
+_PREGNANCY_WORDS = ("임신", "임산부", "산모")
+_TREATMENT_WORDS = ("암치료", "항암", "방사선치료", "투석")
+_URGENT_SYMPTOM_WORDS = ("가슴", "흉통", "호흡", "숨이", "마비", "의식", "출혈", "실신", "경련")
+_EXPLICIT_MEDICATION_CONTEXT_WORDS = (
+    "약물",
+    "복약",
+    "복용",
+    "처방",
+    "영양제",
+    "혈압약",
+    "당뇨약",
+    "혈당약",
+    "피임약",
+    "감기약",
+    "소화제",
+    "진통제",
+    "소염진통제",
+    "항생제",
+    "위장약",
+    "타이레놀",
+    "아스피린",
+)
+#: 판정이 성립하려면 모델이 **직접 돌려줘야** 하는 필드. 기본값으로 조용히 채워진
+#: 판정은 "무릎이 아파" 를 `information` 이라고 말하게 되고, 그 값을 읽는 안전 조건이
+#: 조용히 죽는다.
+_REQUIRED_DECISION_FIELDS = frozenset({"request_kind", "clinical_contexts"})
+
+_CLINICAL_CONTEXT_ORDER: tuple[HealthAssistantClinicalContext, ...] = (
+    "pregnancy",
+    "symptom",
+    "chronic_condition",
+    "medication",
+    "treatment",
+)
+
+
+def _mentions_conditioned_body(compact: str) -> bool:
+    """개인 안전 판단이 필요한 신체 조건이 언급됐는지 본다."""
+    return any(word in compact for word in _CHRONIC_CONDITION_WORDS + _PREGNANCY_WORDS + _TREATMENT_WORDS + _PAIN_WORDS)
+
+
+def detect_explicit_protected_contexts(messages: list[ChatMessage]) -> set[str]:
+    """원문에 명시된 보호 맥락만 고정밀도로 복구한다.
+
+    조언 의도를 분류하는 함수가 아니다. LLM이 명백한 임신·증상·질환·복약·치료
+    단서를 놓쳤을 때 안전 하한선을 복구하는 센티널로만 사용한다.
+    """
+    user_text = "\n".join(message.content for message in messages if message.role == "user")
+    compact = user_text.replace(" ", "")
+    contexts: set[str] = set()
+
+    if any(word in compact for word in _PREGNANCY_WORDS):
+        contexts.add("pregnancy")
+    if any(word in compact for word in _PAIN_WORDS + _URGENT_SYMPTOM_WORDS):
+        contexts.add("symptom")
+    if any(word in compact for word in _EXPLICIT_CHRONIC_CONDITION_WORDS):
+        contexts.add("chronic_condition")
+    if any(word in compact for word in _TREATMENT_WORDS):
+        contexts.add("treatment")
+    if mentions_medication(user_text) and any(word in compact for word in _EXPLICIT_MEDICATION_CONTEXT_WORDS):
+        contexts.add("medication")
+
+    return contexts
+
+
+_REQUEST_ENDINGS = ("줘", "주세요", "주라", "다오", "부탁", "부탁해", "부탁드려")
+#: 의문 종결과 글자가 겹치는 평서형("아프구나"의 `나")을 먼저 건져 낸다.
+_STATEMENT_ENDINGS = ("구나", "더라", "거든", "네요", "군요", "는데요")
+_QUESTION_ENDINGS = ("까", "나", "니", "냐", "죠", "지요", "돼", "되", "는지", "을지", "은가", "는가")
+#: "~해도 되/돼/괜찮" 처럼 허가를 구하는 구문. 물음표를 안 찍어도 질문이다.
+#:
+#: 어미 앞 글자를 열거하면 안 된다 — 한국어는 종결어미가 어간에 붙어 `타도`(타+도)·
+#: `봐도`·`써도` 처럼 글자가 무한히 갈린다. `아|어|여|해|러|려` 만 봤다가
+#: "자전거 타도 돼?" 를 놓쳤다(2026-09-16). 앞 글자는 한글 한 자면 충분하다.
+#: `좋`은 제외한다. "무릎도 좋아졌고 발목이 아파"의 상태 변화를 허가 질문으로
+#: 오인해 통증 기록 경로를 삼키기 때문이다.
+_PERMISSION_PATTERN = re.compile(r"[가-힣]도\s*(?:되|돼|괜찮|무방|상관|괜챦)")
+
+
+#: 개인 의료 판단을 뒷받침할 수 있는 근거 종류. 날씨·음식·시설·기록은 그 자체로
+#: "이 사람에게 이 행동이 안전한가" 를 지지하지 못한다.
+_MEDICAL_EVIDENCE_TYPES = frozenset({"health_knowledge", "medication"})
+
+
+def _fast_path_contexts(messages: list[ChatMessage]) -> list[HealthAssistantClinicalContext]:
+    """패스트패스가 선언할 임상 맥락. 원문에 명시된 것만 담고, 없으면 `["none"]`.
+
+    패스트패스도 두 필드를 **반드시 명시**한다. 기본값에 기대면 "무릎이 아파" 가
+    `information` 이라고 말하게 되고(유령 입력 — AGENTS.md 6번), 그 값을 읽는
+    `enforce_grounding` 의 조건이 조용히 죽는다. 판별은 센티널 하나를 공유한다.
+    """
+    contexts = detect_explicit_protected_contexts(messages)
+    return [context for context in _CLINICAL_CONTEXT_ORDER if context in contexts] or ["none"]
+
+
+def _asks_activity_clearance(messages: list[ChatMessage]) -> bool:
+    """몸에 조건이 있는 사람이 활동 가능 여부를 물었는지 본다."""
+    latest_user = next((message.content for message in reversed(messages) if message.role == "user"), "")
+    if not (mentions_activity(latest_user) or _recent_activity_clearance(messages)):
+        return False
+    return bool(detect_explicit_protected_contexts(messages)) and asks_personal_clearance(messages)
+
+
+def _recent_activity_clearance(messages: list[ChatMessage]) -> bool:
+    """직전 활동 질문을 바로 잇는 짧은 후속 발화만 보수적으로 연결한다.
+
+    모든 과거 질문을 합치면 새 주제로 전환한 뒤에도 오래된 허가 요청이 살아난다.
+    그래서 최근 두 사용자 발화만 보고, 최신 발화가 임상 맥락 추가 또는 짧은
+    수락 표현일 때에만 직전 질문을 이어받는다.
+    """
+    user_turns = [message.content for message in messages if message.role == "user"]
+    if len(user_turns) < 2:
+        return False
+    previous, latest = user_turns[-2:]
+    if not mentions_activity(previous):
+        return False
+    previous_compact = previous.replace(" ", "")
+    if detect_explicit_protected_contexts([ChatMessage(role="user", content=latest)]):
+        return bool(_PERMISSION_PATTERN.search(previous_compact))
+    short_followups = {"응알려줘", "네알려줘", "알려줘", "응", "네", "그래", "좋아"}
+    if latest.replace(" ", "").rstrip(".!?。！？") not in short_followups:
+        return False
+    has_previous_context = bool(detect_explicit_protected_contexts([ChatMessage(role="user", content=previous)]))
+    return has_previous_context and (bool(_PERMISSION_PATTERN.search(previous_compact)) or "어때" in previous_compact)
+
+
+def asks_personal_clearance(messages: list[ChatMessage]) -> bool:
+    """원문이 "나에게 이게 괜찮은가"를 묻는 허가 구문인지 본다.
+
+    `clinical_contexts` 에 센티널을 둔 것과 같은 이유다. `request_kind` 도 LLM 만
+    채우는 필드라, LLM 이 개인 조언 질문을 `information` 으로 잘못 주면 불변조건이
+    아예 안 걸린다 — 센티널이 맥락을 복구해도 조건의 다른 쪽이 False 라 무근거로
+    통과한다(2026-09-15). 판별은 `_PERMISSION_PATTERN` 하나를 공유한다.
+    """
+    latest_user = next((m.content for m in reversed(messages) if m.role == "user"), "")
+    pending_question = _pending_question(messages)
+    return (
+        bool(_PERMISSION_PATTERN.search(latest_user.replace(" ", "")))
+        or bool(pending_question and _PERMISSION_PATTERN.search(pending_question.replace(" ", "")))
+        or _recent_activity_clearance(messages)
+    )
+
+
+def _pending_question(messages: list[ChatMessage]) -> str | None:
+    """직전 확인 질문에 대한 짧은 답이면 바로 앞 사용자 요청을 되살린다."""
+    if len(messages) < 3 or messages[-1].role != "user" or messages[-2].role != "assistant":
+        return None
+    reply = messages[-1].content.strip()
+    if not reply or len(reply) > 30 or "?" in reply or "？" in reply:
+        return None
+    if not any(mark in messages[-2].content for mark in ("?", "？")):
+        return None
+    return next((message.content for message in reversed(messages[:-2]) if message.role == "user"), None)
+
+
+def _contextual_enriched_query(messages: list[ChatMessage], decision: HealthAssistantScopeDecision) -> str | None:
+    query = decision.enriched_query
+    previous = _pending_question(messages)
+    if previous and decision.scope == "health" and previous not in (query or ""):
+        return f"{previous} {query or ''}".strip()
+    return query
+
+
+def _is_pure_statement(text: str) -> bool:
+    """통증 진술이 질문·요청이 아니라 순수한 기록 입력인지 문장 형태로 가른다.
+
+    틀리는 방향이 중요하다. 여기서 틀려 `False` 가 되면 판정이 LLM 으로 넘어가
+    1.4~1.8초가 더 걸릴 뿐이지만, `True` 로 틀리면 의료 조언이 근거 0건으로 나간다.
+    그래서 조금이라도 질문·요청으로 보이면 `False` 쪽으로 기운다.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if "?" in stripped or "？" in stripped:
+        return False
+
+    compact = stripped.replace(" ", "")
+    if _PERMISSION_PATTERN.search(compact):
+        return False
+
+    tail = stripped.rstrip(".。!！~… \t\n")
+    if not tail:
+        return False
+    # 요청형이 먼저다 — "알려주세요" 는 평서형처럼 `요` 로 끝나지만 요청이다.
+    if any(tail.endswith(end) for end in _REQUEST_ENDINGS):
+        return False
+    if any(tail.endswith(end) for end in _STATEMENT_ENDINGS):
+        return True
+    return not any(tail.endswith(end) for end in _QUESTION_ENDINGS)
 
 
 def is_pregnancy_symptom_context(messages: list[ChatMessage]) -> bool:
@@ -243,6 +457,8 @@ class HealthAssistantBoundaryService:
         if any(k in last_msg or k.replace(" ", "") in compact for k in _PROMPT_ATTACK_KEYWORDS):
             return HealthAssistantScopeDecision(
                 scope="prompt_attack",
+                request_kind="information",
+                clinical_contexts=["none"],
                 requires_authoritative_evidence=False,
             )
 
@@ -251,10 +467,20 @@ class HealthAssistantBoundaryService:
         if cleaned in _SERVICE_USAGE_EXACT or compact in {k.replace(" ", "") for k in _SERVICE_USAGE_EXACT}:
             return HealthAssistantScopeDecision(
                 scope="service_usage",
+                request_kind="information",
+                clinical_contexts=["none"],
                 requires_authoritative_evidence=False,
             )
 
-        # 3. 명확한 단답형 응답 (숫자, 네/아니오 등) - 의학적 근거 검색 불필요
+        # 3. 확인 질문에 대한 짧은 답은 이전 요청과 함께 판정 모델에 맡긴다.
+        # 통증 점수 확인만 기존 기록 경로를 유지한다.
+        is_pain_score_followup = any(c.isdigit() for c in compact) and previous_assistant_message == (
+            f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pain_record_context']}"
+        )
+        if _pending_question(messages) and not is_pain_score_followup:
+            return None
+
+        # 맥락이 없는 명확한 단답형 입력
         is_short_answer = len(compact) <= 5 and (
             any(c.isdigit() for c in compact)
             or compact in ("응", "어", "네", "아니", "아니오", "아니요", "맞아", "아님", "없어", "있어", "몰라", "모름")
@@ -262,6 +488,8 @@ class HealthAssistantBoundaryService:
         if is_short_answer:
             return HealthAssistantScopeDecision(
                 scope="health",
+                request_kind="operation" if is_pain_score_followup else "information",
+                clinical_contexts=["symptom"] if is_pain_score_followup else ["none"],
                 requires_authoritative_evidence=False,
                 required_evidence_types=[],
             )
@@ -296,29 +524,39 @@ class HealthAssistantBoundaryService:
         if has_record_keyword and (has_bp_pattern or has_bs_pattern or has_exercise_pattern or has_med_taken_pattern):
             return HealthAssistantScopeDecision(
                 scope="health",
+                request_kind="operation",
+                clinical_contexts=_fast_path_contexts(messages),
                 requires_authoritative_evidence=False,
                 required_evidence_types=[],
             )
 
-        # 원인·치료를 묻지 않고 통증만 말한 경우는 의학적 조언 요청이 아니라 통증 기록 입력이다.
-        # 이 경로를 판정 모델에 맡기면 근거 검색이 필요한 health_advice로 분류되어 기록도 못 남긴다.
-        has_pain_statement = any(
-            word in compact for word in ("아파", "아픈", "통증", "쑤셔", "저려", "결려", "뻐근", "시큰", "찌릿")
-        )
+        # 통증만 말한 경우는 의학적 조언 요청이 아니라 통증 기록 입력이다. 이 경로를
+        # 판정 모델에 맡기면 근거 검색이 필요한 health_advice로 분류되어 기록도 못 남긴다.
+        #
+        # **다만 "조언 단어가 없으면 기록" 은 기본값이 틀렸다.** `asks_pain_advice` 에
+        # `괜찮`·`위험`은 있고 `해도 돼`가 없어서, 같은 질문이 말투 하나로 갈렸다:
+        #   "무릎이 아픈데 산책해도 돼?"    -> 기록(근거 요구 0건)
+        #   "무릎이 아픈데 산책해도 괜찮아?" -> outdoor(날씨만)
+        #   "무릎이 아픈데 산책하면 위험해?" -> LLM 위임
+        # 셋 다 "아픈데 운동해도 되나"를 묻는 같은 질문이다. 그래서 순수한 진술임을
+        # `_is_pure_statement` 로 **증명했을 때만** 기록으로 확정한다. 증명에 실패하면
+        # 판정을 LLM 에 넘긴다 — 틀려도 안전한 쪽으로 틀린다.
+        has_pain_statement = any(word in compact for word in _PAIN_WORDS)
         asks_pain_advice = any(
             word in compact for word in ("왜", "어떻게", "어떡", "원인", "치료", "괜찮", "병원", "위험", "심각")
         )
-        has_urgent_symptom = any(
-            word in compact for word in ("가슴", "흉통", "호흡", "숨이", "마비", "의식", "출혈", "실신", "경련")
-        )
+        has_urgent_symptom = any(word in compact for word in _URGENT_SYMPTOM_WORDS)
         if (
             has_pain_statement
+            and _is_pure_statement(last_msg)
             and not asks_pain_advice
             and not has_urgent_symptom
             and not is_pregnancy_symptom_context(messages)
         ):
             return HealthAssistantScopeDecision(
                 scope="health",
+                request_kind="operation",
+                clinical_contexts=["symptom"],
                 requires_authoritative_evidence=False,
                 required_evidence_types=[],
             )
@@ -365,6 +603,8 @@ class HealthAssistantBoundaryService:
         if has_record_query_kw and has_metric_kw and not has_medical_advice_kw:
             return HealthAssistantScopeDecision(
                 scope="health",
+                request_kind="operation",
+                clinical_contexts=_fast_path_contexts(messages),
                 requires_authoritative_evidence=False,
                 required_evidence_types=[],
             )
@@ -397,6 +637,8 @@ class HealthAssistantBoundaryService:
         if has_alcohol and has_alcohol_intent:
             return HealthAssistantScopeDecision(
                 scope="health",
+                request_kind="personalized_advice",
+                clinical_contexts=_fast_path_contexts(messages),
                 requires_authoritative_evidence=True,
                 required_evidence_types=["health_knowledge", "health_records"],
             )
@@ -406,6 +648,8 @@ class HealthAssistantBoundaryService:
         if is_pregnancy_medication_question(messages):
             return HealthAssistantScopeDecision(
                 scope="health",
+                request_kind="personalized_advice",
+                clinical_contexts=["pregnancy", "medication"],
                 requires_authoritative_evidence=True,
                 required_evidence_types=["health_knowledge"],
                 response_mode="clarify",
@@ -423,6 +667,8 @@ class HealthAssistantBoundaryService:
         ) and mentions_medication(compact):
             return HealthAssistantScopeDecision(
                 scope="health",
+                request_kind="information",
+                clinical_contexts=_fast_path_contexts(messages),
                 requires_authoritative_evidence=True,
                 required_evidence_types=["medication"],
             )
@@ -433,6 +679,8 @@ class HealthAssistantBoundaryService:
         ):
             return HealthAssistantScopeDecision(
                 scope="health",
+                request_kind="information",
+                clinical_contexts=_fast_path_contexts(messages),
                 requires_authoritative_evidence=True,
                 required_evidence_types=["food_nutrition"],
             )
@@ -443,6 +691,8 @@ class HealthAssistantBoundaryService:
         if any(k in compact for k in FACILITY_KEYWORDS) and any(k in compact for k in FACILITY_SEARCH_KEYWORDS):
             return HealthAssistantScopeDecision(
                 scope="health",
+                request_kind="information",
+                clinical_contexts=_fast_path_contexts(messages),
                 requires_authoritative_evidence=True,
                 required_evidence_types=["facility"],
             )
@@ -450,6 +700,8 @@ class HealthAssistantBoundaryService:
         if is_facility_location_followup(previous_assistant_message, last_msg):
             return HealthAssistantScopeDecision(
                 scope="health",
+                request_kind="information",
+                clinical_contexts=_fast_path_contexts(messages),
                 requires_authoritative_evidence=True,
                 required_evidence_types=["facility"],
             )
@@ -462,6 +714,8 @@ class HealthAssistantBoundaryService:
         if is_pregnancy_symptom_context(messages) and not has_context_details:
             return HealthAssistantScopeDecision(
                 scope="health",
+                request_kind="personalized_advice",
+                clinical_contexts=["pregnancy", "symptom"],
                 requires_authoritative_evidence=True,
                 required_evidence_types=["health_knowledge"],
                 response_mode="clarify",
@@ -469,24 +723,9 @@ class HealthAssistantBoundaryService:
             )
 
         # 야외 활동 / 러닝 / 운동 / 날씨 / 대기질 질의
-        outdoor_activity_keywords = (
-            "산책",
-            "조깅",
-            "러닝",
-            "달리기",
-            "유산소",
-            "자전거",
-            "라이딩",
-            "걷기",
-            "운동추천",
-            "운동할",
-            "야외",
-            "밖에서",
-            "외출",
-            "한강",
-        )
+        outdoor_place_keywords = ("야외", "밖에서", "외출", "한강")
         outdoor_env_keywords = ("날씨", "미세먼지", "초미세먼지", "대기질")
-        has_outdoor_activity = any(k in compact for k in outdoor_activity_keywords)
+        has_outdoor_place = any(k in compact for k in outdoor_place_keywords)
         has_outdoor_env = any(k in compact for k in outdoor_env_keywords)
         has_outdoor_intent = any(
             k in compact
@@ -507,12 +746,13 @@ class HealthAssistantBoundaryService:
                 "계획",
                 "예정",
             )
-        )
+        ) or bool(_PERMISSION_PATTERN.search(compact))
+        # `해도돼`만 나열하면 `뛰어도 돼`·`걸어도 되나` 가 샌다. 허가 구문은 한 곳에서 본다.
 
         needs_outdoor = False
         if has_outdoor_env:
             needs_outdoor = True
-        elif has_outdoor_activity and has_outdoor_intent:
+        elif has_outdoor_place and has_outdoor_intent:
             needs_outdoor = True
         elif len(messages) >= 2:
             prev_msg = messages[-2]
@@ -525,15 +765,41 @@ class HealthAssistantBoundaryService:
                     needs_outdoor = True
 
         if needs_outdoor:
-            if not any(k in compact for k in ("고혈압", "당뇨", "심장", "신장", "천식", "협심증", "관절염")):
+            # 몸에 조건이 걸린 사람의 "이거 해도 되나" 는 날씨 질문이 아니다. 이 예외는
+            # 원래도 있었지만 만성질환 일곱 개뿐이어서, 성격이 같은 통증·임신·치료중이
+            # 목록에 없다는 이유만으로 날씨를 근거로 답해졌다(2026-09-15):
+            #   "무릎이 아픈데 산책해도 돼?"  -> outdoor (무릎과 미세먼지는 무관하다)
+            #   "무릎이 아픈데 수영해도 돼?"  -> LLM    (수영이 야외 활동 목록에 없어서)
+            # 같은 질문이 활동 단어 하나로 갈렸다. 상태 쪽을 기준으로 맞춘다.
+            if not _mentions_conditioned_body(compact):
                 return HealthAssistantScopeDecision(
                     scope="health",
+                    request_kind="information",
+                    clinical_contexts=["none"],
                     requires_authoritative_evidence=True,
                     required_evidence_types=["outdoor"],
                 )
 
         # 5. 그 외 복잡/혼합/애매한 질문은 LLM 판정기로 위임 (None 반환)
         return None
+
+    async def _classify(
+        self,
+        llm_client: LLMClientProtocol,
+        request: HealthAssistantChatRequest,
+    ) -> HealthAssistantScopeDecision | None:
+        """패스트패스로 확정하거나, 애매하면 판정 모델에 맡긴다. 실패하면 None."""
+        decision = self._fast_path_decision(request.messages)
+        if decision is not None:
+            return decision
+        try:
+            return await llm_client.generate_structured_response(
+                system_instruction=build_health_assistant_scope_instruction(),
+                messages=request.messages,
+                response_schema=HealthAssistantScopeDecision,
+            )
+        except Exception:
+            return None
 
     async def check_request(
         self,
@@ -554,28 +820,31 @@ class HealthAssistantBoundaryService:
                 response=self._fixed_response(HEALTH_ONLY_MESSAGE),
             )
 
-        # Step 2: 룰 기반 패스트패스 — 명확한 패턴은 LLM 호출 없이 즉시 판정
-        decision = self._fast_path_decision(request.messages)
-
-        # Step 3: 애매한 경우에만 LLM 판정 모델 호출
+        # Step 2~3: 룰 기반 패스트패스, 안 걸리면 LLM 판정 모델
+        decision = await self._classify(llm_client, request)
         if decision is None:
-            try:
-                decision = await llm_client.generate_structured_response(
-                    system_instruction=build_health_assistant_scope_instruction(),
-                    messages=request.messages,
-                    response_schema=HealthAssistantScopeDecision,
-                )
-            except Exception:
-                # 판정 실패 시 무조건 통과(fail-open)시키면, 이 판정이 걸러야 할 위험을
-                # 그대로 흘려보낸다. 실패는 차단(fail-closed)하고 재질문을 유도한다.
-                return HealthAssistantBoundaryResult(
-                    request=None,
-                    decision=HealthAssistantScopeDecision(
-                        scope="unrecognized",
-                        requires_authoritative_evidence=False,
-                    ),
-                    response=self._fixed_response(CLASSIFICATION_FAILED_MESSAGE),
-                )
+            # 판정 실패 시 무조건 통과(fail-open)시키면, 이 판정이 걸러야 할 위험을
+            # 그대로 흘려보낸다. 실패는 차단(fail-closed)하고 재질문을 유도한다.
+            return HealthAssistantBoundaryResult(
+                request=None,
+                decision=HealthAssistantScopeDecision(
+                    scope="unrecognized",
+                    requires_authoritative_evidence=False,
+                ),
+                response=self._fixed_response(CLASSIFICATION_FAILED_MESSAGE),
+            )
+
+        # 정규화 **전에** 본다. 기본값이 채워진 뒤에는 모델이 실제로 필드를 돌려줬는지
+        # 구별할 수 없다 — `model_fields_set` 은 값이 우연히 기본값과 같아도 "명시함" 으로
+        # 남는다. 누락은 판정이 성립하지 않은 것이므로 건강 사실을 만들지 않고 끝낸다.
+        if not _REQUIRED_DECISION_FIELDS.issubset(decision.model_fields_set):
+            return HealthAssistantBoundaryResult(
+                request=None,
+                decision=decision,
+                response=self._clarification_response("personal_health_context"),
+            )
+
+        decision = self._validate_and_normalize_decision(request.messages, decision)
 
         if decision.scope == "service_usage":
             return HealthAssistantBoundaryResult(
@@ -609,15 +878,65 @@ class HealthAssistantBoundaryService:
             request = request.model_copy(update={"messages": [ChatMessage(role="user", content=allowed)]})
             return HealthAssistantBoundaryResult(request=request, decision=decision)
 
-        if decision.inferred_intent or decision.enriched_query:
+        enriched_query = _contextual_enriched_query(request.messages, decision)
+        if decision.inferred_intent or enriched_query:
             request = request.model_copy(
                 update={
                     "inferred_intent": decision.inferred_intent,
-                    "enriched_query": decision.enriched_query,
+                    "enriched_query": enriched_query,
                 }
             )
 
         return HealthAssistantBoundaryResult(request=request, decision=decision)
+
+    @classmethod
+    def _validate_and_normalize_decision(
+        cls,
+        original_messages: list[ChatMessage],
+        decision: HealthAssistantScopeDecision,
+    ) -> HealthAssistantScopeDecision:
+        """LLM·패스트패스 판정을 같은 의료 안전 불변조건으로 정규화한다."""
+        if decision.scope not in {"health", "mixed"}:
+            return decision
+
+        llm_contexts = set(decision.clinical_contexts)
+        llm_contexts.discard("none")
+        effective_contexts = llm_contexts | detect_explicit_protected_contexts(original_messages)
+        normalized_contexts = [context for context in _CLINICAL_CONTEXT_ORDER if context in effective_contexts]
+        if not normalized_contexts:
+            normalized_contexts = ["none"]
+
+        required = list(dict.fromkeys(decision.required_evidence_types))
+        asks_clearance = decision.request_kind == "personalized_advice" or asks_personal_clearance(original_messages)
+        needs_clinical_evidence = asks_clearance and bool(effective_contexts)
+
+        if needs_clinical_evidence or (decision.requires_authoritative_evidence and not required):
+            if "medication" in effective_contexts and "medication" not in required:
+                required.append("medication")
+            if effective_contexts & {"pregnancy", "symptom", "chronic_condition", "treatment"}:
+                if "health_knowledge" not in required:
+                    required.append("health_knowledge")
+
+        update: dict[str, Any] = {"clinical_contexts": normalized_contexts}
+        if required:
+            update.update(
+                {
+                    "required_evidence_types": required,
+                    "requires_authoritative_evidence": True,
+                }
+            )
+        elif decision.requires_authoritative_evidence:
+            # 근거가 필요하다는 판정만 있고 종류가 없으면 어떤 도구도 안전하게
+            # 선택할 수 없다. 건강 사실을 생성하지 않고 검토된 고정 질문으로 끝낸다.
+            update.update(
+                {
+                    "requires_authoritative_evidence": False,
+                    "response_mode": "clarify",
+                    "clarification_kind": "personal_health_context",
+                }
+            )
+
+        return decision.model_copy(update=update)
 
     def enforce_grounding(
         self,
@@ -629,21 +948,88 @@ class HealthAssistantBoundaryService:
         messages: list[ChatMessage] | None = None,
     ) -> HealthAssistantResponse:
         """건강 사실·권고가 승인된 근거 없이 사용자에게 나가는 것을 막는다."""
-        if response.emergency_notice:
-            return response
+        if response.emergency_notice and not self._has_trusted_facility_notice(
+            tool_result, response.emergency_notice, response.intent
+        ):
+            # 이 필드도 생성 모델이 채운다. 본문·경고를 그대로 보내면 근거 검사와
+            # 응답 의도 라벨을 모두 우회할 수 있으므로 서버의 고정 응급 안내만 보낸다.
+            notice = "응급 상황이 의심되면 즉시 119에 연락하거나 가까운 응급실을 방문하세요."
+            return self._fixed_response(notice, intent="health_advice").model_copy(update={"emergency_notice": notice})
 
+        clearance = self._is_personal_medical_clearance(decision, messages)
         requires_evidence = (
             decision.requires_authoritative_evidence
             or response.intent == "health_advice"
             or response.challenge_draft is not None
+            or clearance
         )
-        if requires_evidence and not self.has_required_evidence(decision, tool_result, outdoor_conditions):
-            if messages and is_pregnancy_symptom_context(messages):
-                return self._fixed_response(PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE, intent="health_advice")
-            if messages and (is_pregnancy_medication_question(messages) or is_pregnancy_medication_followup(messages)):
-                return self._fixed_response(PREGNANCY_MEDICATION_EVIDENCE_MESSAGE, intent="health_advice")
-            return self._fixed_response(MISSING_EVIDENCE_MESSAGE, intent="health_advice")
-        return response
+
+        if not requires_evidence:
+            return response
+
+        has_evidence = self.has_required_evidence(
+            decision,
+            tool_result,
+            outdoor_conditions,
+            response.intent,
+            messages=messages,
+        )
+
+        # 민감 맥락의 **개인 판단 요청**은 의료 근거로만 통과한다.
+        #
+        # 앞서는 "날씨 말고 뭐라도 있으면 통과" 였는데, 그러면 라면 칼로리나 병원 목록이
+        # 임신 중 달리기 조언의 근거로 통과했다. 반대로 "민감 맥락이면 무조건 의료 근거"
+        # 로 조이면, 증상을 말한 사람의 병원 검색·기록 조회까지 막힌다 — 센티널이 원문의
+        # `아픈`·`임신` 을 잡기 때문에 그 질문들도 민감 맥락으로 잡힌다.
+        #
+        # 가르는 것은 맥락의 유무가 아니라 **판단을 구했는가**다. 그리고 확인하는 것은
+        # 고정된 의료 근거 집합이 아니라 **이 판정이 실제로 요구한 의료 근거**다.
+        if has_evidence and (response.intent == "health_advice" or clearance) and clearance:
+            required_medical = set(decision.required_evidence_types) & _MEDICAL_EVIDENCE_TYPES
+            available = self.available_evidence_types(tool_result, outdoor_conditions)
+            if not required_medical or not required_medical.issubset(available):
+                has_evidence = False
+
+        if has_evidence:
+            return response
+
+        if messages and is_pregnancy_symptom_context(messages):
+            blocked = self._fixed_response(PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE, intent="health_advice")
+        elif messages and (is_pregnancy_medication_question(messages) or is_pregnancy_medication_followup(messages)):
+            blocked = self._fixed_response(PREGNANCY_MEDICATION_EVIDENCE_MESSAGE, intent="health_advice")
+        elif messages and _asks_activity_clearance(messages):
+            blocked = self._clarification_response("exercise_safety_context")
+        else:
+            blocked = self._fixed_response(MISSING_EVIDENCE_MESSAGE, intent="health_advice")
+
+        return blocked
+
+    @classmethod
+    def _has_trusted_facility_notice(cls, tool_result: Any | None, notice: str, intent: str) -> bool:
+        """서버 시설 조회가 실제로 낸 응급 고지만 모델 생성 고지와 구분한다."""
+        if intent != "search_facility":
+            return False
+        if isinstance(tool_result, (list, tuple)):
+            return any(cls._has_trusted_facility_notice(item, notice, intent) for item in tool_result)
+        return isinstance(tool_result, FacilitySearchResult) and tool_result.emergency_notice == notice
+
+    @classmethod
+    def _is_personal_medical_clearance(
+        cls,
+        decision: HealthAssistantScopeDecision,
+        messages: list[ChatMessage] | None,
+    ) -> bool:
+        """원문과 판정을 함께 보고 "개인 의료 판단 요청" 인지 정한다.
+
+        생성 모델이 자기 응답을 뭐라고 라벨하든 이 값은 바뀌지 않는다. 근거 검사를
+        여는 조건이 전부 앞 단계의 자기 신고(`decision.requires_authoritative_evidence`,
+        `response.intent`)에만 걸려 있으면, 라벨 하나로 검사 전체를 건너뛸 수 있다 —
+        `enforce_grounding` 은 앞 단계가 틀렸을 때 잡으라고 있는 관문이므로 앞 단계를
+        믿는 조건만 두면 관문이 아니다(2026-09-16).
+        """
+        asks_advice = decision.request_kind == "personalized_advice" or asks_personal_clearance(messages or [])
+        contexts = (set(decision.clinical_contexts) - {"none"}) | detect_explicit_protected_contexts(messages or [])
+        return asks_advice and bool(contexts)
 
     @classmethod
     def has_required_evidence(
@@ -651,11 +1037,30 @@ class HealthAssistantBoundaryService:
         decision: HealthAssistantScopeDecision,
         tool_result: Any | None,
         outdoor_conditions: OutdoorConditionsResult | None,
+        intent: str = "general_chat",
+        *,
+        messages: list[ChatMessage] | None = None,
     ) -> bool:
         required = set(decision.required_evidence_types)
+        clearance = cls._is_personal_medical_clearance(decision, messages)
         if not required:
+            # 근거 종류가 비어 있으면 무엇을 확인해야 할지 모른다. 건강 조언이거나
+            # 개인 의료 판단 요청이면 "확인할 것이 없다" 가 아니라 "확인하지 못했다" 다.
+            return not (intent == "health_advice" or clearance)
+        available = cls.available_evidence_types(tool_result, outdoor_conditions)
+        if required.issubset(available):
             return True
-        return required.issubset(cls.available_evidence_types(tool_result, outdoor_conditions))
+
+        # 부분 답변(Partial Grounding) 정책:
+        # 민감 맥락의 개인 허가 질문(임신, 만성질환 등)에서 필수 의료 근거(health_knowledge 등)가
+        # 확보되었다면, 부가적인 야외 환경(outdoor) 정보가 누락되었더라도
+        # 공식 의료 지침에 기반한 부분 답변 생성을 허용한다.
+        if clearance and required - available <= {"outdoor"}:
+            required_medical = required & _MEDICAL_EVIDENCE_TYPES
+            if required_medical and required_medical.issubset(available):
+                return True
+
+        return False
 
     @classmethod
     def available_evidence_types(  # noqa: C901

@@ -38,6 +38,8 @@ class MockLLMClient:
     async def generate_structured_response(self, *args, **kwargs):
         if kwargs.get("response_schema") is HealthAssistantScopeDecision:
             return HealthAssistantScopeDecision(
+                request_kind="information",
+                clinical_contexts=["none"],
                 scope="health",
                 requires_authoritative_evidence=False,
             )
@@ -63,6 +65,10 @@ class CapturingLLMClient:
             return response_schema.model_validate(
                 {
                     "scope": "health",
+                    # 판정기는 계약상 두 필드를 반드시 돌려준다. 빼면 서버가 근거 없는
+                    # 판정으로 보고 확인 질문으로 끝낸다.
+                    "request_kind": "information",
+                    "clinical_contexts": ["none"],
                     "requires_authoritative_evidence": True,
                     "required_evidence_types": ["outdoor"],
                 }
@@ -102,6 +108,91 @@ class OutdoorConditionsStub:
 
     async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
         return None
+
+
+class RecordingHealthKnowledgeClient:
+    def __init__(self, results_by_query: dict[str, list[HealthKnowledgeItem]]) -> None:
+        self.results_by_query = results_by_query
+        self.queries: list[str] = []
+
+    async def search(self, query: str) -> HealthKnowledgeSearchResult:
+        self.queries.append(query)
+        return HealthKnowledgeSearchResult(
+            query=query,
+            items=self.results_by_query.get(query, []),
+            retrieved_at=datetime(2026, 9, 16, tzinfo=timezone.utc),
+            message="테스트 결과",
+        )
+
+
+def _knowledge_item() -> HealthKnowledgeItem:
+    return HealthKnowledgeItem(
+        title="임신 중 운동",
+        url="https://health.kdca.go.kr/example",
+        summary="임신 중 운동에 관한 공식 정보",
+        topics=["pregnancy", "exercise"],
+    )
+
+
+def _knowledge_decision() -> HealthAssistantScopeDecision:
+    return HealthAssistantScopeDecision(
+        scope="health",
+        request_kind="personalized_advice",
+        clinical_contexts=["pregnancy"],
+        requires_authoritative_evidence=True,
+        required_evidence_types=["health_knowledge"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_authoritative_evidence_does_not_retry_when_primary_query_succeeds() -> None:
+    client = RecordingHealthKnowledgeClient({"임신 중 달리기": [_knowledge_item()]})
+    service = HealthAssistantService(llm_client=MockLLMClient("{}"), health_knowledge_client=client)
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="임신 중인데 달리기 해도 돼?")],
+        enriched_query="임신 중 달리기",
+    )
+
+    results, evidence = await service._load_authoritative_evidence(
+        request, _knowledge_decision(), account=None, profile_context=None
+    )
+
+    assert client.queries == ["임신 중 달리기"]
+    assert len(results) == 1
+    assert evidence is not None and "임신 중 운동" in evidence
+
+
+@pytest.mark.asyncio
+async def test_authoritative_evidence_retries_normalized_enriched_query_after_empty_primary() -> None:
+    client = RecordingHealthKnowledgeClient({"임신 운동": [_knowledge_item()]})
+    service = HealthAssistantService(llm_client=MockLLMClient("{}"), health_knowledge_client=client)
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="달리기는?")],
+        enriched_query="임신 중 달리기 안전성",
+    )
+
+    results, evidence = await service._load_authoritative_evidence(
+        request, _knowledge_decision(), account=None, profile_context=None
+    )
+
+    assert client.queries == ["임신 중 달리기 안전성", "임신 운동"]
+    assert len(results) == 1
+    assert evidence is not None and "임신 중 운동" in evidence
+
+
+@pytest.mark.asyncio
+async def test_authoritative_evidence_does_not_retry_when_query_cannot_be_normalized() -> None:
+    client = RecordingHealthKnowledgeClient({})
+    service = HealthAssistantService(llm_client=MockLLMClient("{}"), health_knowledge_client=client)
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="이건 어떤가요?")])
+
+    results, evidence = await service._load_authoritative_evidence(
+        request, _knowledge_decision(), account=None, profile_context=None
+    )
+
+    assert client.queries == ["이건 어떤가요?"]
+    assert results == []
+    assert evidence is None
 
 
 @pytest.mark.asyncio
@@ -593,12 +684,10 @@ async def test_health_assistant_service_links_alcohol_question_with_recent_medic
 
 
 @pytest.mark.asyncio
-async def test_streaming_emits_message_deltas_then_the_whole_response() -> None:
-    """글자는 흐르고 초안은 마지막에 한 번.
+async def test_streaming_emits_validated_message_then_the_whole_response() -> None:
+    """완성된 JSON을 검증한 뒤 문장과 초안을 전송한다.
 
-    두 벌인 이유가 있다. 기록 초안은 JSON 이 끝나야 유효해지고, 안전 검증도 완성본에만
-    걸 수 있다 — 덜 온 문장으로 응급 판정을 하면 "가슴이 아" 에서 119 를 띄우거나
-    반대로 놓친다.
+    최종 grounding이 본문을 교체할 수 있으므로 미검증 문장 조각은 먼저 보내지 않는다.
     """
     fake_json = """{
         "intent": "record_blood_pressure",
@@ -615,8 +704,7 @@ async def test_streaming_emits_message_deltas_then_the_whole_response() -> None:
     deltas = [payload["text"] for name, payload in events if name == "delta"]
     results = [payload for name, payload in events if name == "result"]
 
-    # 한 글자씩 흘렸으므로 조각이 여럿이어야 한다 — 한 덩어리면 스트리밍이 아니다.
-    assert len(deltas) > 1
+    assert len(deltas) == 1
     assert "".join(deltas) == "아침 혈압 130에 85로 기록할까요?"
     # 초안은 마지막 한 번에만 실린다.
     assert len(results) == 1
@@ -796,6 +884,8 @@ async def test_medication_tool_stream_preserves_llm_answer() -> None:
     mock_llm = AsyncMock()
     mock_llm.generate_structured_response = AsyncMock(
         return_value=HealthAssistantScopeDecision(
+            request_kind="information",
+            clinical_contexts=["none"],
             scope="health",
             requires_authoritative_evidence=True,
             required_evidence_types=["medication"],
@@ -1334,3 +1424,52 @@ def test_classifier_llm_client_uses_explicit_override_when_given() -> None:
 
     assert service.classifier_llm_client is classifier_client
     assert service.classifier_llm_client is not service.llm_client
+
+
+@pytest.mark.asyncio
+async def test_outdoor_fast_path_integration_han_river() -> None:
+    """판정의 outdoor 요구가 한강 지오코딩과 야외조건 조회까지 이어진다."""
+
+    class UnexpectedClassifierClient:
+        async def generate_structured_response(self, *args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("명시적인 한강 야외 질문은 분류 LLM을 호출하면 안 됩니다.")
+
+        def stream_structured_response(self, *args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("명시적인 한강 야외 질문은 분류 LLM을 호출하면 안 됩니다.")
+
+    class HanRiverOutdoorStub:
+        def __init__(self) -> None:
+            self.resolver_inputs: list[str] = []
+            self.condition_coordinates: list[tuple[float, float]] = []
+
+        async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
+            self.resolver_inputs.append(text)
+            return 37.5283, 126.9326, "서울 한강"
+
+        async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
+            self.condition_coordinates.append((latitude, longitude))
+            return OutdoorConditionsResult(
+                latitude=latitude,
+                longitude=longitude,
+                weather=WeatherConditions(temperature_c=21.5, precipitation_type="강수 없음"),
+                air_quality=AirQualityConditions(region_name="서울", pm10=20, pm25=9),
+            )
+
+    original_question = "오늘 한강에서 러닝해도 돼?"
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=original_question)])
+    llm_client = CapturingLLMClient()
+    outdoor_client = HanRiverOutdoorStub()
+    service = HealthAssistantService(
+        llm_client=llm_client,
+        classifier_llm_client=UnexpectedClassifierClient(),
+        outdoor_conditions_client=outdoor_client,
+    )
+
+    response = await service.respond(request=request)
+
+    assert outdoor_client.resolver_inputs == [original_question]
+    assert outdoor_client.condition_coordinates == [(37.5283, 126.9326)]
+    assert response.outdoor_conditions is not None
+    assert response.outdoor_conditions.latitude == 37.5283
+    assert response.outdoor_conditions.longitude == 126.9326
+    assert "기온 21.5℃" in llm_client.system_instruction

@@ -53,7 +53,11 @@ REPO_STATIC_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
-    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    # `geolocation=()` 은 빈 허용 목록이라 **자기 출처까지** 막는다. 그 상태에서는
+    # 브라우저가 권한 팝업조차 띄우지 않아, 사용자가 허용해도 PERMISSION_DENIED 가
+    # 난다. 날씨·대기질 조회가 안 되던 원인이었다(2026-09-16). 카메라·마이크는
+    # 실제로 쓰지 않으므로 빈 채로 둔다.
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(self)",
     "Content-Security-Policy": (
         "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: blob:; "
         "connect-src 'self' https://human-atlas-seven.vercel.app; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; "
