@@ -1180,6 +1180,17 @@ class MedicalFacilityClient:
                     )
 
             # 현재 진료 중인 병원을 상단으로 정렬, 그 다음 거리순
+            
+            # 중복 제거 (이름 + 주소 기준)
+            seen = set()
+            unique_items = []
+            for item in items:
+                dedup_key = (item.name, item.address)
+                if dedup_key not in seen:
+                    seen.add(dedup_key)
+                    unique_items.append(item)
+            items = unique_items
+
             items.sort(key=lambda x: (x.is_open is not True, x.distance_m if x.distance_m is not None else 999999))
             if only_open:
                 # 가까운 5곳만 먼저 보지 않는다. 최대 2km 범위의 후보 전체에서
@@ -1433,6 +1444,17 @@ class MedicalFacilityClient:
                 items = [item for item in items if item.is_open is True]
 
             # 현재 영업 중인 약국을 상단으로 정렬, 그 다음 거리순
+            
+            # 중복 제거 (이름 + 주소 기준)
+            seen = set()
+            unique_items = []
+            for item in items:
+                dedup_key = (item.name, item.address)
+                if dedup_key not in seen:
+                    seen.add(dedup_key)
+                    unique_items.append(item)
+            items = unique_items
+
             items.sort(key=lambda x: (x.is_open is not True, x.distance_m if x.distance_m is not None else 999999))
             items = items[:5]
 

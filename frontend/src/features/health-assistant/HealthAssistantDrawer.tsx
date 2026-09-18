@@ -197,6 +197,7 @@ async function getBrowserLocation(): Promise<{
 function needsOutdoorConditions(text: string): boolean {
   const normalized = text.replace(/\s+/g, "");
   if (/날씨|미세먼지|초미세먼지|대기질/.test(normalized)) return true;
+  if (/병원|의원|약국|응급실|보건소|치과|한의원/.test(normalized)) return true;
   if (/했어|완료|기록(?:해|할|하기)?|달렸어|뛰었어|걸었어|탔어/.test(normalized)) return false;
   return /산책|조깅|러닝|유산소|야외|밖에서|외출/.test(normalized)
     || /오늘.*운동.*(?:추천|할)/.test(normalized);
@@ -2291,13 +2292,6 @@ export function HealthAssistantDrawer({
                         <p>{msg.responseDraft.emergency_notice}</p>
                       </div>
                     )}
-
-                    {/* 비진단 안전 안내문 */}
-                    {msg.responseDraft?.safety_disclaimer && (
-                      <p className="safety-disclaimer-text">
-                        ※ {msg.responseDraft.safety_disclaimer}
-                      </p>
-                    )}
                   </div>
                 )}
 
@@ -2496,7 +2490,7 @@ export function HealthAssistantDrawer({
           )}
 
           <p className="assistant-data-notice">
-            AI 답변 생성을 위해 입력 내용과 질문에 필요한 최근 기록 일부가 외부 AI로 전송될 수 있습니다.
+            ※ 본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요.
           </p>
           <form
             className="assistant-input-form"
@@ -2543,6 +2537,7 @@ export function HealthAssistantDrawer({
               전송
             </button>
           </form>
+          
         </footer>
 
         {showSessionList && (
