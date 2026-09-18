@@ -93,6 +93,8 @@ class BenchmarkLLMClientWrapper(LLMClientProtocol):
         self.call_count = 0
         self.delegate_error_category = None
 
+    async def generate_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]: raise NotImplementedError()
+    async def stream_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]: raise NotImplementedError()
     async def generate_structured_response(
         self,
         system_instruction: str,

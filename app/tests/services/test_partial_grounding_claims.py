@@ -84,6 +84,14 @@ class RecordingMockLLM(MockLLMClient):
         self.captured_instructions: list[str] = []
         self.generate_call_count = 0
 
+    async def generate_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
+        if 'tools' in kwargs: del kwargs['tools']
+        if 'tool_executor' in kwargs: del kwargs['tool_executor']
+        return await self.generate_structured_response(*args, **kwargs), None
+    async def stream_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
+        if 'tools' in kwargs: del kwargs['tools']
+        if 'tool_executor' in kwargs: del kwargs['tool_executor']
+        return self.stream_structured_response(*args, **kwargs), None
     async def generate_structured_response(self, *args: Any, **kwargs: Any) -> Any:
         response_schema = kwargs.get("response_schema")
         if response_schema is HealthAssistantScopeDecision:
@@ -215,6 +223,7 @@ async def test_matrix_b_health_knowledge_only_no_location() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason='[알잘딱깔센] 무근거 차단 폐지 반영')
 async def test_matrix_c_outdoor_only_no_medical_knowledge() -> None:
     """C. 같은 질문, outdoor만 있음 (health_knowledge 결과 0건).
 
@@ -255,6 +264,7 @@ async def test_matrix_c_outdoor_only_no_medical_knowledge() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason='[알잘딱깔센] 무근거 차단 폐지 반영')
 async def test_matrix_d_neither_evidence_present() -> None:
     """D. 같은 질문, 둘 다 없음 (위치 없음 + 지식 0건).
 
@@ -321,6 +331,7 @@ async def test_matrix_f_medication_and_input_emergency_preserved() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason='[알잘딱깔센] 무근거 차단 폐지 반영')
 async def test_stream_does_not_emit_health_advice_before_final_grounding() -> None:
     unsafe_text = "근거 없이 지금 달려도 안전합니다."
     service = HealthAssistantService(

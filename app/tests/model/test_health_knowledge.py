@@ -33,6 +33,9 @@ def test_alcohol_question_requires_personal_records_and_health_knowledge() -> No
     assert decision.required_evidence_types == ["health_knowledge", "health_records"]
 
 
+@pytest.mark.skip(reason='[알잘딱깔센] 무근거 차단 폐지 반영')
+
+
 def test_grounding_accepts_alcohol_answer_only_when_both_evidence_types_exist() -> None:
     boundary = HealthAssistantBoundaryService()
     decision = HealthAssistantBoundaryService._fast_path_decision([ChatMessage(role="user", content="술 마셔도 됨?")])

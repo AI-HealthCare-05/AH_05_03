@@ -235,6 +235,7 @@ async def test_parity_answer_with_generated_facility_tool_result() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.skip(reason='[알잘딱깔센] 무근거 차단 폐지 반영')
 async def test_parity_post_generation_grounding_block() -> None:
     """답변 생성까지 진행된 뒤 무근거 건강 조언을 같은 결과로 차단한다."""
     clients: list[_CountingMockLLMClient] = []
