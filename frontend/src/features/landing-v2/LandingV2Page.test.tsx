@@ -151,6 +151,23 @@ describe("랜딩 v2 이야기", () => {
     expect(screen.getAllByRole("link", { name: "이어봄 시작하기" }).length).toBeGreaterThan(0);
   });
 
+  it("로그인 링크는 / 가 아니라 /signin 이다 — / 는 다시 소개로 비킨다", () => {
+    render(
+      <MemoryRouter>
+        <LandingV2Page />
+      </MemoryRouter>,
+    );
+
+    const links = [
+      ...screen.getAllByRole("link", { name: "로그인" }),
+      ...screen.getAllByRole("link", { name: "이미 계정이 있어요" }),
+    ];
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) {
+      expect(link).toHaveAttribute("href", "/signin");
+    }
+  });
+
   it("검진 수치와 가족 구성원이 이야기 데이터 그대로 나온다", () => {
     render(
       <MemoryRouter>

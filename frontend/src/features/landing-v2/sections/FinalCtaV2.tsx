@@ -23,7 +23,7 @@ export function FinalCtaV2() {
           <Link className="lnv2-btn lnv2-btn-primary lnv2-btn-lg" to="/signup">
             이어봄 시작하기
           </Link>
-          <Link className="lnv2-btn lnv2-btn-onDark lnv2-btn-lg" to="/">
+          <Link className="lnv2-btn lnv2-btn-onDark lnv2-btn-lg" to="/signin">
             이미 계정이 있어요
           </Link>
         </div>

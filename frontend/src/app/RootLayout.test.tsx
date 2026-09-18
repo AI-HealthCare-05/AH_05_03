@@ -14,7 +14,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { AuthContext, type AuthContextValue, type AuthStatus } from "./authContext";
@@ -40,8 +40,11 @@ function renderAt(status: AuthStatus, path = "/assessment") {
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/" element={<RootLayout />}>
+            <Route index element={<p>홈 화면</p>} />
+            <Route path="signin" element={<Navigate to="/" replace />} />
             <Route path="assessment" element={<p>판정 화면 내용</p>} />
           </Route>
+          <Route path="/landing" element={<p>소개 페이지</p>} />
         </Routes>
       </MemoryRouter>
     </AuthContext.Provider>,
@@ -63,6 +66,28 @@ describe("RootLayout 로그인 관문", () => {
     expect(screen.getByRole("button", { name: "로그인" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "주 메뉴" })).not.toBeInTheDocument();
     expect(screen.queryByText("판정 화면 내용")).not.toBeInTheDocument();
+  });
+
+  it("로그아웃 상태에서 첫 주소는 소개로 비키고, /signin 에서만 로그인 폼이 뜬다", () => {
+    renderAt("signed-out", "/");
+
+    expect(screen.getByText("소개 페이지")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "로그인" })).not.toBeInTheDocument();
+
+    cleanup();
+    renderAt("signed-out", "/signin");
+
+    expect(screen.getByRole("button", { name: "로그인" })).toBeInTheDocument();
+    expect(screen.queryByText("소개 페이지")).not.toBeInTheDocument();
+    expect(screen.queryByText("홈 화면")).not.toBeInTheDocument();
+    expect(document.querySelector(".preview-shell")).not.toBeInTheDocument();
+  });
+
+  it("로그인한 사람이 /signin 으로 오면 홈으로 보낸다", () => {
+    renderAt("signed-in", "/signin");
+
+    expect(screen.getByText("홈 화면")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "로그인" })).not.toBeInTheDocument();
   });
 
   it("로그인하면 원래 가려던 주소의 화면이 그대로 뜬다", () => {

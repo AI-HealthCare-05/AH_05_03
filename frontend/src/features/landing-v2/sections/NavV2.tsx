@@ -57,7 +57,7 @@ export function NavV2() {
         </nav>
 
         <div className="lnv2-nav-actions">
-          <Link className="lnv2-nav-signin" to="/">
+          <Link className="lnv2-nav-signin" to="/signin">
             로그인
           </Link>
           <Link className="lnv2-btn lnv2-btn-primary lnv2-btn-sm" to="/signup">

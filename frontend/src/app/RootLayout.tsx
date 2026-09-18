@@ -149,21 +149,10 @@ export function RootLayout() {
     return profiles.find((p) => p.opaqueServerRef === activeLinkRef)?.displayName;
   }, [activeLinkRef, profiles]);
 
-  if (isPreviewShellPath(pathname)) {
-    return (
-      <div className="preview-shell">
-        <main id="main-content" tabIndex={-1}>
-          <Suspense fallback={<PageSkeleton />}>
-            <Outlet />
-          </Suspense>
-        </main>
-        <GlobalHealthAssistant />
-      </div>
-    );
-  }
-
   // 갱신 토큰으로 세션을 되살리는 동안 아무것도 그리지 않는다. 로그인 화면을 먼저
   // 띄우면 **이미 로그인한 사용자에게 로그인 화면이 한 번 깜빡인다.**
+  // 시안 셸(`/` 가 시안 18 인 배포 번들)도 이 관문 뒤에 둔다. 셸만 먼저 그리면
+  // 로그아웃 상태의 `/` 가 소개로 비키지 않고 본문이 그대로 열린다.
   if (status === "checking") {
     return (
       <div className="route-loading">
@@ -185,13 +174,27 @@ export function RootLayout() {
     // **사이트 첫 주소에 처음 온 사람에게는 로그인 폼이 아니라 소개 페이지를 준다.**
     // 관문의 성질은 그대로다 — `/assessment` 같은 깊은 링크는 여전히 그 자리에서
     // 로그인 화면을 그리고(주소가 남아 로그인하면 원래 화면이 뜬다), 여기서 비키는
-    // 것은 **더 볼 것이 없는 `/` 하나**뿐이다. 재설정 링크(#reset_token)로 들어온
-    // 경우는 소개를 보여 줄 때가 아니므로 먼저 걸러 낸다.
-    // 로그아웃 안내가 있을 때도 비키지 않는다 — 방금 나간 사람에게 할 말이 있다.
+    // 것은 **더 볼 것이 없는 `/` 하나**뿐이다. 랜딩에서 로그인하려면 `/signin` 으로
+    // 온다 — 그 주소는 `/` 가 아니라서 여기서 소개로 되돌아가지 않는다.
+    // 재설정 링크(#reset_token)로 들어온 경우는 소개를 보여 줄 때가 아니므로 먼저
+    // 걸러 낸다. 로그아웃 안내가 있을 때도 비키지 않는다 — 방금 나간 사람에게 할 말이 있다.
     if (!hasResetToken && pathname === "/" && !signedOutNotice) {
       return <Navigate to="/landing" replace />;
     }
     return <SignInPage onResetComplete={() => setHasResetToken(false)} initialMessage={signedOutNotice} />;
+  }
+
+  if (isPreviewShellPath(pathname)) {
+    return (
+      <div className="preview-shell">
+        <main id="main-content" tabIndex={-1}>
+          <Suspense fallback={<PageSkeleton />}>
+            <Outlet />
+          </Suspense>
+        </main>
+        <GlobalHealthAssistant />
+      </div>
+    );
   }
 
   return (

@@ -103,6 +103,12 @@ export const router = createBrowserRouter([
         element: LOCAL_HOME_IS_PREVIEW18 ? <UiPreview18Page /> : <HomePage />,
       },
       {
+        // 랜딩의 「로그인」이 가리키는 주소. 로그아웃 상태에서 `/` 는 소개로 비키므로
+        // 로그인 폼을 보려면 여기로 와야 한다. 이미 들어와 있으면 홈으로 보낸다.
+        path: "signin",
+        element: <Navigate to="/" replace />,
+      },
+      {
         path: "members/:profileId",
         element: <HomePage />,
       },

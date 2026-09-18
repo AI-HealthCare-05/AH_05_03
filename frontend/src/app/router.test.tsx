@@ -44,6 +44,8 @@ describe("라우트 표", () => {
     expect(children.length).toBeGreaterThan(1);
 
     const paths = children.map((route) => route.path);
+    // 랜딩 「로그인」이 가리키는 주소. 관문 뒤에 있어야 로그인 폼이 뜬다.
+    expect(paths).toContain("signin");
     // 예전에 관문 밖에 서 있던 화면. 다시 나가면 여기서 걸린다.
     expect(paths).toContain("ui-preview");
     // 레이아웃 안에서 잡는 404 도 관문 뒤에 있어야 한다.
