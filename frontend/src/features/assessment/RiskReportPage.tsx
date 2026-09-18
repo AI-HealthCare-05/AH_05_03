@@ -32,6 +32,7 @@ type ReportProps = {
   keeping: boolean;
   saved: string | undefined;
   onReset: () => void;
+  onNew: () => void;
   onOpenDetail: () => void;
 };
 
@@ -50,7 +51,7 @@ function tone(level: RiskLevel) {
   return "unknown";
 }
 
-function ReportHeader({ profileName, reportAt, onReset }: Pick<ReportProps, "profileName" | "reportAt" | "onReset">) {
+function ReportHeader({ profileName, reportAt, onReset, onNew }: Pick<ReportProps, "profileName" | "reportAt" | "onReset" | "onNew">) {
   return (
     <header className="risk-report-header">
       <div>
@@ -58,7 +59,10 @@ function ReportHeader({ profileName, reportAt, onReset }: Pick<ReportProps, "pro
         <h1>{profileName ? `${profileName}님의` : "나의"} 만성질환 위험도 분석</h1>
         <p>{reportAt ? `${new Date(reportAt).toLocaleDateString("ko-KR")} 판정 결과입니다.` : "건강정보를 바탕으로 분석한 결과입니다."}</p>
       </div>
-      <button type="button" className="risk-pill risk-reset" onClick={onReset}>다른 기록으로 분석하기 <span aria-hidden="true">↗</span></button>
+      <div className="risk-report-header-actions">
+        <button type="button" className="risk-new-action" onClick={onNew}>새로운 결과 넣어보기 <span aria-hidden="true">→</span></button>
+        <button type="button" className="risk-other-record" onClick={onReset}>다른 기록으로 분석하기</button>
+      </div>
     </header>
   );
 }
@@ -166,12 +170,11 @@ function MedicalDisclaimer({ result, profiles, activeProfileId, onProfileChange,
 
 export function RiskReportPage(props: ReportProps) {
   return <div className="risk-report-page">
-    <ReportHeader profileName={props.profileName} reportAt={props.reportAt} onReset={props.onReset} />
+    <ReportHeader profileName={props.profileName} reportAt={props.reportAt} onReset={props.onReset} onNew={props.onNew} />
     <AnalysisSummary result={props.result} verdicts={props.verdicts} />
     <DiseaseRiskOverview verdicts={props.verdicts} values={props.values} models={props.models} sharedInputs={props.sharedInputs} onOpenDetail={props.onOpenDetail} />
     <div className={`risk-middle-grid ${props.series.length === 0 ? "is-no-trend" : ""}`}><HealthTrendSection snapshots={props.snapshots} recent={props.recent} series={props.series} tracks={props.tracks} diseaseNames={props.diseaseNames} /><FutureRiskSection verdicts={props.verdicts} matrix={props.matrix} result={props.result} /></div>
     <ExplanationSection verdicts={props.verdicts} values={props.values} result={props.result} onOpenDetail={props.onOpenDetail} />
     <MedicalDisclaimer result={props.result} profiles={props.profiles} activeProfileId={props.activeProfileId} onProfileChange={props.onProfileChange} onKeep={props.onKeep} keeping={props.keeping} saved={props.saved} />
-    <footer className="risk-report-actions"><button type="button" onClick={props.onReset}>새로운 결과 넣어보기 <span aria-hidden="true">→</span></button></footer>
   </div>;
 }

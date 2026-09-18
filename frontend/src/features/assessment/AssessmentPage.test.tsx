@@ -364,6 +364,8 @@ describe("AssessmentPage", () => {
     expect(screen.queryByRole("progressbar", { name: /빈혈 10년 뒤 새로 생길 확률/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /새로운 결과 넣어보기/ }));
     expect(screen.getByRole("heading", { name: "분석에 사용할 건강기록" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /직접 수치 입력하기/ }));
+    expect(screen.getByRole("spinbutton", { name: /나이/ })).toHaveValue(null);
   });
 
   it("처음에는 기록 선택을 먼저 보이고 업로드와 직접 입력을 접어 둔다", async () => {

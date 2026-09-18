@@ -24,6 +24,7 @@ import {
   type FormEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -58,7 +59,6 @@ import {
   FIELD_BY_NAME,
   FIELD_GROUPS,
   FIELD_LABELS,
-  LAB_FIELDS,
   outOfRangeFields,
   profileGenderToSex,
   REQUIRED_FIELDS,
@@ -306,7 +306,9 @@ export function AssessmentPage() {
   const activeProfile = profiles.find((item) => item.id === requestedProfileId) ?? profiles[0];
   const activeProfileId = activeProfile?.id ?? (profiles.length === 0 ? explicitProfileId : undefined);
   const activeProfileIdRef = useRef(activeProfileId);
-  activeProfileIdRef.current = activeProfileId;
+  useLayoutEffect(() => {
+    activeProfileIdRef.current = activeProfileId;
+  }, [activeProfileId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -468,10 +470,6 @@ export function AssessmentPage() {
 
   const missingRequired = useMemo(
     () => REQUIRED_FIELDS.filter((name) => !values[name]),
-    [values],
-  );
-  const labsFilled = useMemo(
-    () => LAB_FIELDS.filter((name) => values[name]).length,
     [values],
   );
   // 눌러 본 뒤에만 표시한다. 채우는 즉시 사라지고, 다시 비우면 다시 뜬다 —
@@ -969,7 +967,7 @@ export function AssessmentPage() {
 
           <form id="assessment-input-form" className="assess-form" onSubmit={submit} noValidate>
             {FIELD_GROUPS.map((group) => (
-              <fieldset key={group.key} className="assess-group">
+              <fieldset key={group.key} className={`assess-group assess-group--${group.key}`}>
                 <legend>{group.title}</legend>
                 {group.note && (
                   <p className="assess-group-note">{group.note}</p>
@@ -1092,17 +1090,6 @@ export function AssessmentPage() {
               </fieldset>
             ))}
 
-            <div className="assess-submit">
-              {/* 필수가 비었다고 잠그지 않는다 — 눌러야 어디가 비었는지 알려 줄 수 있다. */}
-              <button type="submit" disabled={working}>
-                {working ? "분석 중…" : "위험도 분석 시작"}
-              </button>
-              <p className="assess-muted">
-                {missingRequired.length > 0
-                  ? `필수 ${missingRequired.length}개가 남았습니다.`
-                  : `검사값 ${labsFilled}개를 넣었습니다.`}
-              </p>
-            </div>
           </form>
           </section>
 
@@ -1181,6 +1168,25 @@ export function AssessmentPage() {
             setEntryMode("before");
             setResult(undefined);
             setReportAt(undefined);
+            setOpenDetail(false);
+            setError(undefined);
+            setSaved(undefined);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          onNew={() => {
+            setEntryMode("before");
+            setResult(undefined);
+            setReportAt(undefined);
+            setValues({});
+            setSourceRecordId(undefined);
+            setInputMethod(null);
+            setRecordListOpen(false);
+            setReadFields(new Set());
+            rememberDocument(undefined);
+            setScreeningSaved(undefined);
+            setPreset(undefined);
+            setAttempted(false);
+            setRejected({});
             setOpenDetail(false);
             setError(undefined);
             setSaved(undefined);

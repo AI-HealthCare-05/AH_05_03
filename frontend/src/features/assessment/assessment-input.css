@@ -91,6 +91,10 @@ body:has(.risk-input-experience) { background: #faf9fb; }
 .risk-input-experience .assess-form { gap: 24px; }
 .risk-input-experience .assess-group { border: 0; border-top: 1px solid #e9e8ea; border-radius: 0; padding: 20px 0 0; box-shadow: none; background: transparent; }
 .risk-input-experience .assess-group legend { font-size: 17px; font-weight: 500; color: #261b44; }
+.risk-input-experience .assess-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 18px; }
+.risk-input-experience .assess-group--bp .assess-fields,
+.risk-input-experience .assess-group--glucose .assess-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.risk-input-experience .assess-field { min-width: 0; }
 .risk-input-experience .assess-field-label { color: #63627c; }
 .risk-input-experience .assess-field input, .risk-input-experience .assess-field select { min-height: 44px; border-color: #cac4cf; border-radius: 100px; background: #fdfcfe; color: #261b44; padding-inline: 15px; }
 .risk-input-experience .assess-field input:focus-visible, .risk-input-experience .assess-field select:focus-visible { border-color: #635884; box-shadow: 0 0 0 3px #e2dffe; }
@@ -105,6 +109,9 @@ body:has(.risk-input-experience) { background: #faf9fb; }
 .assessment-test-tools .assess-preset.is-active { background: #e2dffe; border-color: #cdbff2; color: #261b44; }
 .assessment-test-tools .assess-preset:hover { border-color: #635884; color: #261b44; }
 .assessment-test-tools .assess-preset-note.is-warning { background: #f4f2f4; color: #63627c; }
+@media (max-width: 900px) {
+  .risk-input-experience .assess-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 700px) {
   .assessment-start-header { padding-bottom: 24px; }
   .assessment-section-title { flex-wrap: wrap; gap: 8px; }
@@ -119,6 +126,11 @@ body:has(.risk-input-experience) { background: #faf9fb; }
   .checkup-selected { align-items: flex-start; }
   .checkup-thumbnail { width: 84px; height: 106px; flex-basis: 84px; }
   .checkup-thumbnail img { max-width: 84px; max-height: 106px; }
+}
+@media (max-width: 420px) {
+  .risk-input-experience .assess-fields,
+  .risk-input-experience .assess-group--bp .assess-fields,
+  .risk-input-experience .assess-group--glucose .assess-fields { grid-template-columns: 1fr; }
 }
 
 .risk-input-experience { max-width: 1080px !important; background: #fdfcfe; border: 1px solid #e9e8ea; border-radius: 24px; padding: 34px 42px; }

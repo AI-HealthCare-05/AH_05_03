@@ -191,10 +191,15 @@
 .risk-explanation-part h3 { display: none; }
 .risk-report-disclaimer { border-bottom: 1px solid #e9e8ea; color: #63627c; font-size: 13px; }
 .risk-report-disclaimer p { margin: 6px 0 12px; }
-.risk-report-actions { display: flex; justify-content: center; padding: 14px 0 0; }
-.risk-report-actions button { min-height: 44px; width: min(100%, 520px); background: #e2dffe; color: #3c315b; border: 0; border-radius: 100px; }
-.risk-report-actions button:hover { background: #cdbff2; }
+.risk-report-header-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex: none; }
+.risk-report-header-actions button { min-height: 44px; }
+.risk-new-action { border: 0; border-radius: 100px; background: #e2dffe; color: #3c315b; padding: 9px 18px; white-space: nowrap; }
+.risk-new-action:hover { background: #cdbff2; }
+.risk-new-action span { margin-left: 14px; }
+.risk-other-record { border: 0; background: transparent; color: #63627c; padding: 8px 4px; text-decoration: underline; text-underline-offset: 3px; }
+.risk-other-record:hover { color: #261b44; }
 .risk-entry-loading { padding: 48px 0; text-align: center; color: #63627c; }
 @media (max-width: 900px) { .risk-summary, .risk-middle-grid { grid-template-columns: 1fr; } .risk-report-page { padding: 24px; } .risk-summary-points { padding: 15px; } }
 @media (max-width: 650px) { .risk-report-page { padding: 18px; } .risk-disease-row { grid-template-columns: minmax(90px, 1fr) 90px 16px; gap: 7px; } .risk-disease-row .risk-row-measure, .risk-disease-row .risk-row-reason { grid-column: 1 / 3; } .risk-trend > .trend-wrap > .trend-grid { grid-template-columns: 1fr; } }
 @media (max-width: 650px) { .risk-middle-grid.is-no-trend .risk-future-list { grid-template-columns: 1fr; } }
+@media (max-width: 650px) { .risk-report-header-actions { align-items: flex-start; margin-top: 16px; } }
