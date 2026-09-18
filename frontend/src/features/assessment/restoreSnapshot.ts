@@ -16,6 +16,9 @@ export function restoreSnapshot(snapshot: Snapshot): { result: AssessmentSummary
     item && item.category && validLevels.has(item.risk_level),
   ) as DiseaseRisk[];
   const values = valuesFromInputs(stored.inputs);
+  if (stored.report?.verdicts?.length && stored.report.summary && stored.report.disease_risks) {
+    return { result: stored.report, values };
+  }
   const insufficient = verdicts.filter((item) => item.risk_level === "INSUFFICIENT_DATA").map((item) => item.key);
   const needsAttention = verdicts.filter((item) => ["VERY_HIGH", "HIGH", "CAUTION"].includes(item.risk_level)).map((item) => item.key);
   const matrixNeedsAttention = matrix.filter((item) => ["VERY_HIGH", "HIGH", "CAUTION"].includes(item.risk_level)).map((item) => item.category);

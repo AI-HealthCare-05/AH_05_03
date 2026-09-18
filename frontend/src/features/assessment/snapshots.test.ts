@@ -179,7 +179,7 @@ describe("saveSnapshot 중복 방지", () => {
     expect(created.calls).toBe(1);
   });
 
-  it("값이 같은데 등급이 바뀌면 새 점이 아니라 2차로 쌓인다", async () => {
+  it("값이 같은데 등급이 바뀌면 예전 결과를 덮지 않고 새 판정을 저장한다", async () => {
     const previous = snapshot("2026-04-01T00:00:00Z", {
       inputs: { age: 52, sbp: 148 },
       levels: { htn: "CAUTION" },
@@ -192,11 +192,11 @@ describe("saveSnapshot 중복 방지", () => {
       RESULT,
     );
 
-    // 같은 입력이므로 기록은 하나다. 등급이 달라진 것을 회차로 남긴다 —
-    // 모델이나 임계값이 갱신됐다는 뜻이고, 그건 이 제품에서 남길 값어치가 있다.
+    // 같은 입력이어도 예전 판정의 상세를 다시 열 수 있어야 한다.
     expect(outcome.kind).toBe("changed");
     expect(outcome.run).toBe(2);
-    expect(created.calls).toBe(0);
+    expect(created.calls).toBe(1);
+    expect(created.updates).toBe(0);
   });
 
   it("첫 기록은 언제나 만든다", async () => {

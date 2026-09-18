@@ -109,7 +109,7 @@ function storeRisk(risk: DiseaseRisk): StoredRisk {
 /**
  * 바로 앞 기록과 **같은 값·같은 등급**인가.
  *
- * 판정하기를 누를 때마다 자동으로 한 점이 쌓인다. 그래서 "지난 판정으로 채우기" 로
+ * 판정하기를 누를 때 새 결과가 남는다. 그래서 "지난 판정으로 채우기" 로
  * 값을 되불러와 다시 판정하면 **한 글자도 안 바뀐 점**이 계속 늘어난다. 실측으로
  * 같은 날 8,603 바이트짜리 행이 두 번 나란히 저장돼 있었다.
  *
@@ -163,6 +163,7 @@ export async function saveSnapshot(
   sourceRecordId?: string,
 ): Promise<SaveOutcome> {
   const payload: AssessmentSnapshotPayload = {
+    report: result,
     inputs: toRequestBody(values) as AssessmentSnapshotPayload["inputs"],
     levels: Object.fromEntries(result.verdicts.map((v) => [v.key, v.risk_level])),
     engines: Object.fromEntries(result.verdicts.map((v) => [v.key, v.engine])),
@@ -177,34 +178,30 @@ export async function saveSnapshot(
     ...(sourceRecordId ? { sourceRecordId } : {}),
   };
 
-  // **입력이 같으면 새 기록을 만들지 않는다.** 기록 하나가 곧 입력값 한 벌이다.
+  // 입력과 등급이 모두 같을 때만 중복으로 본다. 등급이 달라지면 보고서를 별도 보관한다.
   const existing = await listSnapshots(runtime, profileId);
   const latest = existing.at(-1);
   if (latest && sameInputs(latest.payload.inputs, payload.inputs)) {
     const runs = runsOf(latest.payload);
     const unchanged = JSON.stringify(runs.at(-1)?.levels ?? {}) === JSON.stringify(payload.levels ?? {});
-    // 등급까지 같으면 회차를 늘리지 않는다. 같은 값을 같은 모델로 또 돌린 것뿐이라
-    // 남길 것이 "언제 다시 확인했나" 하나다.
-    const nextRuns = unchanged
-      ? runs
-      : [...runs, { at: recordedAt, levels: payload.levels, highestLevel: payload.highestLevel }];
+    // 등급까지 같으면 회차를 늘리지 않는다. 남길 것은 재확인 시각뿐이다.
+    // 등급이 달라진 판정은 옛 결과를 덮지 않고 별도 기록으로 남긴다.
+    // 같은 수치라도 기준/모델이 바뀐 시점의 전체 보고서를 다시 열 수 있어야 한다.
+    if (!unchanged) {
+      payload.runs = [{ at: recordedAt, levels: payload.levels, highestLevel: payload.highestLevel }];
+      payload.checkedAt = recordedAt;
+      const created = await runtime.healthRecords.create<AssessmentSnapshotPayload>({
+        householdId: PRIMARY_HOUSEHOLD_ID, profileId, recordType: "assessment", recordedAt,
+        source, payload, sourceDocumentId,
+      });
+      if (!created.ok) throw new Error(created.error.message);
+      return { snapshot: created.value, kind: "changed", run: runs.length + 1 };
+    }
+    const nextRuns = runs;
     const merged: AssessmentSnapshotPayload = {
       ...latest.payload,
       checkedAt: recordedAt,
       runs: nextRuns,
-      // 등급이 바뀌었으면 카드 원본도 최신으로 바꾼다 — 기록을 열었을 때 마지막으로
-      // 본 화면이 나와야 한다. 안 바뀌었으면 손대지 않는다.
-      ...(unchanged
-        ? {}
-        : {
-            levels: payload.levels,
-            engines: payload.engines,
-            highestLevel: payload.highestLevel,
-            evaluated: payload.evaluated,
-            total: payload.total,
-            verdicts: payload.verdicts,
-            matrix: payload.matrix,
-          }),
     };
     const updated = await runtime.healthRecords.update<AssessmentSnapshotPayload>(latest.id, {
       recordType: "assessment",
@@ -217,7 +214,7 @@ export async function saveSnapshot(
     if (!updated.ok) throw new Error(updated.error.message);
     return {
       snapshot: updated.value,
-      kind: unchanged ? "rechecked" : "changed",
+      kind: "rechecked",
       run: nextRuns.length,
     };
   }

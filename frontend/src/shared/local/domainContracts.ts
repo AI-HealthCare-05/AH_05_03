@@ -110,6 +110,8 @@ export type HealthRecordType =
  * 그날 본 것을 이어야 뜻이 있다.
  */
 export interface AssessmentSnapshotPayload {
+  /** 해당 판정 시점에 받은 전체 응답. 이전 기록에는 없을 수 있다. */
+  report?: import("../../features/assessment/contracts").AssessmentSummaryData;
   /** 그날 넣은 값. 키는 서버 DTO 필드명 그대로다. */
   inputs: Record<string, number | string | boolean>;
   /** 질환별 등급. 키는 `verdicts[].key`. */
@@ -153,19 +155,10 @@ export interface AssessmentSnapshotPayload {
   /**
    * 같은 값으로 다시 채점한 회차.
    *
-   * **기록 하나 = 입력값 한 벌**이다. 판정하기를 누를 때마다 새 기록을 만들면, 값을
-   * 되불러와 다시 돌리는 것만으로 타임라인이 늘어난다(실측: 같은 날 8.6KB 짜리 행이
-   * 두 번). 추적 그래프에서 변화 없는 점은 정보가 아니라 가로축만 먹는다.
-   *
-   * 그렇다고 버리지도 않는다. **같은 값을 다시 채점했는데 등급이 달라졌다면 그건
-   * 모델이나 임계값이 바뀐 증거**이고, 이 제품에서 그건 남길 값어치가 있다
-   * (`snapshots.ts` 머리말 — 번들은 재학습으로, 임계값은 지침 개정으로 바뀐다).
-   *
-   * 그래서 규칙이 셋이다.
-   *
-   *     값이 다르다              새 기록
-   *     값 같고 등급도 같다      회차를 늘리지 않고 `checkedAt` 만 갱신
-   *     값 같고 등급이 다르다    회차를 하나 더 쌓는다 (2차·3차…)
+   * 이전 버전은 같은 입력에서 등급이 바뀌면 이 목록에 회차를 쌓고 기존 보고서를
+   * 덮어썼다. 기존 데이터 읽기용으로 유지한다. 새 판정은 등급이 달라지면 별도
+   * assessment 기록으로 전체 보고서를 저장한다.
+   * 값과 등급이 모두 같은 재확인만 `checkedAt` 을 갱신한다.
    *
    * `runs[0]` 이 1차다. 기록이 만들어질 때 항상 하나 들어간다.
    * **선택 필드다** — 이 필드가 생기기 전 기록에는 없다.
@@ -175,7 +168,7 @@ export interface AssessmentSnapshotPayload {
   checkedAt?: string;
 }
 
-/** 같은 입력을 채점한 한 회차. 등급이 달라졌을 때만 쌓인다. */
+/** 예전 저장 방식에서 같은 입력을 다시 채점한 회차. */
 export interface AssessmentRun {
   /** 이 회차를 채점한 시각. */
   at: string;

@@ -241,17 +241,23 @@ export class ServerHealthRecordService {
     includeDeleted?: boolean;
   }): Promise<LocalResult<HealthRecord[]>> {
     try {
-      const cacheKey = `${input.profileId}:${input.recordType ?? "all"}`;
+      const requestedType = input.recordType ?? (input.recordTypes?.length === 1 ? input.recordTypes[0] : undefined);
+      const cacheKey = `${input.profileId}:${requestedType ?? "all"}`;
       let fetchPromise = this.inFlightQueries.get(cacheKey);
       if (!fetchPromise) {
-        fetchPromise = this.client
-          .listHealthRecords(input.profileId, {
-            recordType: input.recordType,
-            limit: 500,
-          })
-          .finally(() => {
-            this.inFlightQueries.delete(cacheKey);
-          });
+        fetchPromise = (async () => {
+          const all: HealthRecordServerData[] = [];
+          let page: HealthRecordServerData[];
+          do {
+            page = await this.client.listHealthRecords(input.profileId, {
+              recordType: requestedType, limit: 500, offset: all.length,
+            });
+            all.push(...page);
+          } while (page.length === 500);
+          return all;
+        })().finally(() => {
+          this.inFlightQueries.delete(cacheKey);
+        });
         this.inFlightQueries.set(cacheKey, fetchPromise);
       }
 
