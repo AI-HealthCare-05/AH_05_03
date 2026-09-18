@@ -11,6 +11,7 @@
 
 네트워크를 타지 않는다.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -36,13 +37,19 @@ class FakeClient:
         self.calls = 0
 
     async def generate_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
-        if 'tools' in kwargs: del kwargs['tools']
-        if 'tool_executor' in kwargs: del kwargs['tool_executor']
+        if "tools" in kwargs:
+            del kwargs["tools"]
+        if "tool_executor" in kwargs:
+            del kwargs["tool_executor"]
         return await self.generate_structured_response(*args, **kwargs), None
+
     async def stream_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
-        if 'tools' in kwargs: del kwargs['tools']
-        if 'tool_executor' in kwargs: del kwargs['tool_executor']
+        if "tools" in kwargs:
+            del kwargs["tools"]
+        if "tool_executor" in kwargs:
+            del kwargs["tool_executor"]
         return self.stream_structured_response(*args, **kwargs), None
+
     async def generate_structured_response(self, system_instruction, messages, response_schema):  # type: ignore[no-untyped-def]
         self.calls += 1
         if self.fails:

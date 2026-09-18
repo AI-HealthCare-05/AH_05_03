@@ -36,13 +36,19 @@ class MockLLMClient:
         self.fake_json = fake_json
 
     async def generate_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
-        if 'tools' in kwargs: del kwargs['tools']
-        if 'tool_executor' in kwargs: del kwargs['tool_executor']
+        if "tools" in kwargs:
+            del kwargs["tools"]
+        if "tool_executor" in kwargs:
+            del kwargs["tool_executor"]
         return await self.generate_structured_response(*args, **kwargs), None
+
     async def stream_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
-        if 'tools' in kwargs: del kwargs['tools']
-        if 'tool_executor' in kwargs: del kwargs['tool_executor']
+        if "tools" in kwargs:
+            del kwargs["tools"]
+        if "tool_executor" in kwargs:
+            del kwargs["tool_executor"]
         return self.stream_structured_response(*args, **kwargs), None
+
     async def generate_structured_response(self, *args, **kwargs):
         if kwargs.get("response_schema") is HealthAssistantScopeDecision:
             return HealthAssistantScopeDecision(
@@ -63,13 +69,19 @@ class CapturingLLMClient:
         self.system_instruction = ""
 
     async def generate_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
-        if 'tools' in kwargs: del kwargs['tools']
-        if 'tool_executor' in kwargs: del kwargs['tool_executor']
+        if "tools" in kwargs:
+            del kwargs["tools"]
+        if "tool_executor" in kwargs:
+            del kwargs["tool_executor"]
         return await self.generate_structured_response(*args, **kwargs), None
+
     async def stream_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
-        if 'tools' in kwargs: del kwargs['tools']
-        if 'tool_executor' in kwargs: del kwargs['tool_executor']
+        if "tools" in kwargs:
+            del kwargs["tools"]
+        if "tool_executor" in kwargs:
+            del kwargs["tool_executor"]
         return self.stream_structured_response(*args, **kwargs), None
+
     async def generate_structured_response(
         self,
         system_instruction: str,
@@ -734,13 +746,19 @@ async def test_streaming_answers_emergencies_without_calling_the_model() -> None
 
     class Exploding:
         async def generate_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
-            if 'tools' in kwargs: del kwargs['tools']
-            if 'tool_executor' in kwargs: del kwargs['tool_executor']
+            if "tools" in kwargs:
+                del kwargs["tools"]
+            if "tool_executor" in kwargs:
+                del kwargs["tool_executor"]
             return await self.generate_structured_response(*args, **kwargs), None
+
         async def stream_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
-            if 'tools' in kwargs: del kwargs['tools']
-            if 'tool_executor' in kwargs: del kwargs['tool_executor']
+            if "tools" in kwargs:
+                del kwargs["tools"]
+            if "tool_executor" in kwargs:
+                del kwargs["tool_executor"]
             return self.stream_structured_response(*args, **kwargs), None
+
         async def generate_structured_response(self, *args, **kwargs):
             raise AssertionError("모델을 부르면 안 된다")
 
@@ -1456,13 +1474,19 @@ async def test_outdoor_fast_path_integration_han_river() -> None:
 
     class UnexpectedClassifierClient:
         async def generate_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
-            if 'tools' in kwargs: del kwargs['tools']
-            if 'tool_executor' in kwargs: del kwargs['tool_executor']
+            if "tools" in kwargs:
+                del kwargs["tools"]
+            if "tool_executor" in kwargs:
+                del kwargs["tool_executor"]
             return await self.generate_structured_response(*args, **kwargs), None
+
         async def stream_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
-            if 'tools' in kwargs: del kwargs['tools']
-            if 'tool_executor' in kwargs: del kwargs['tool_executor']
+            if "tools" in kwargs:
+                del kwargs["tools"]
+            if "tool_executor" in kwargs:
+                del kwargs["tool_executor"]
             return self.stream_structured_response(*args, **kwargs), None
+
         async def generate_structured_response(self, *args: Any, **kwargs: Any) -> Any:
             raise AssertionError("명시적인 한강 야외 질문은 분류 LLM을 호출하면 안 됩니다.")
 

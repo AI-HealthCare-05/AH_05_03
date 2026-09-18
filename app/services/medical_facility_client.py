@@ -1396,7 +1396,6 @@ class MedicalFacilityClient:
     # 3. 약국 검색 (ErmctInsttInfoInqireService)
     # ==========================================
     async def search_nearby_pharmacy(  # noqa: C901
-
         self,
         latitude: float | None = None,
         longitude: float | None = None,
