@@ -368,9 +368,6 @@ def hard_rule_filter(user_input: str) -> tuple[bool, str | None]:
 
     stripped = user_input.strip()
 
-    # 단순 자음/모음만으로 구성된 무의미한 입력 (예: ㅋㅋ, ㅎㅎ, ㅠㅠ)
-    if re.fullmatch(r"[ㄱ-ㆎ\s]+", stripped) and stripped not in ("ㅇ", "ㅇㅇ", "ㄴ", "ㄴㄴ", "ㅇㅋ"):
-        return False, "유효한 질문을 입력해 주세요."
 
     return True, None
 
@@ -483,7 +480,7 @@ class HealthAssistantBoundaryService:
         # 맥락이 없는 명확한 단답형 입력
         is_short_answer = len(compact) <= 5 and (
             any(c.isdigit() for c in compact)
-            or compact in ("응", "어", "네", "아니", "아니오", "아니요", "맞아", "아님", "없어", "있어", "몰라", "모름", "ㅇ", "ㅇㅇ", "ㄴ", "ㄴㄴ", "ㅇㅋ", "넵", "넹")
+            or compact in ("응", "어", "네", "아니", "아니오", "아니요", "맞아", "아님", "없어", "있어", "몰라", "모름", "ㅇ", "ㅇㅇ", "ㄴ", "ㄴㄴ", "ㅇㅋ", "넵", "넹", "ㄱㄱ", "고고", "응응")
         )
         if is_short_answer:
             return HealthAssistantScopeDecision(
