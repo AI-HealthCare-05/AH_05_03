@@ -11,7 +11,15 @@ export function selectContextRecordTypes(message: string): HealthRecordType[] {
   const looksLikeAdvice =
     /(괜찮|도\s*돼|도\s*됨|먹어도|마셔도|피워도|피해야|주의|위험|문제|추천|어떻게\s*해야)/.test(normalized);
   if (!looksLikeAdvice) return [];
-  if (/(술|음주|알코올|약|복용|타이레놀|진통제|항생제)/.test(normalized)) selected.add("medication");
+  if (/(술|음주|알코올|약|복용|타이레놀|진통제|항생제)/.test(normalized)) {
+    selected.add("medication");
+    // [P1 #6] 술(음주) 관련 질문일 때 과거 건강검진/검사 결과 교차 검증을 위해 추가
+    if (/(술|음주|알코올)/.test(normalized)) {
+      selected.add("health_screening");
+      selected.add("lab_result");
+      selected.add("blood_glucose");
+    }
+  }
   if (/(혈압|맥박)/.test(normalized)) selected.add("blood_pressure");
   if (/(혈당|당뇨|공복)/.test(normalized)) selected.add("blood_glucose");
   if (/(통증|아프|욱신|저리|쑤셔)/.test(normalized)) selected.add("pain");
