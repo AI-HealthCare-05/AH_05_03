@@ -366,6 +366,8 @@ def hard_rule_filter(user_input: str) -> tuple[bool, str | None]:
     if PROFANITY_PATTERN.search(compact):
         return False, "부적절한 비속어 또는 표현이 포함되어 있습니다."
 
+
+
     return True, None
 
 
@@ -477,6 +479,9 @@ class HealthAssistantBoundaryService:
         # 맥락이 없는 명확한 단답형 입력
         is_short_answer = len(compact) <= 5 and (
             any(c.isdigit() for c in compact)
+            or compact in ("응", "어", "네", "아니", "아니오", "아니요", "맞아", "아님", "없어", "있어", "몰라", "모름")
+            or compact in ("응", "어", "네", "아니", "아니오", "아니요", "맞아", "아님", "없어", "있어", "몰라", "모름", "ㅇ", "ㅇㅇ", "ㄴ", "ㄴㄴ", "ㅇㅋ", "넵", "넹")
+            or compact in ("응", "어", "네", "아니", "아니오", "아니요", "맞아", "아님", "없어", "있어", "몰라", "모름", "ㅇ", "ㅇㅇ", "ㄴ", "ㄴㄴ", "ㅇㅋ", "넵", "넹", "ㄱㄱ", "고고", "응응")
             or compact
             in (
                 "응",
