@@ -33,8 +33,8 @@ import { useSectionProgress } from "../../landing/scrollProgress";
  */
 const PILLS = [
   { label: "LDL 167", dx: -196, dy: -22, rot: -11, tone: "lavender" },
-  { label: "혈압 128/82", dx: 178, dy: 18, rot: 9, tone: "paper" },
-  { label: "오른쪽 무릎이 아파요", dx: -150, dy: 24, rot: 6, tone: "paper" },
+  { label: "혈압 128/82", dx: 178, dy: 18, rot: 9, tone: "buttercream" },
+  { label: "오른쪽 무릎이 아파요", dx: -150, dy: 24, rot: 6, tone: "cornflower" },
   { label: "저녁 걷기 6/7일", dx: 202, dy: -16, rot: -8, tone: "mint" },
   { label: "엄마 · 혈압 기록", dx: -170, dy: 26, rot: 11, tone: "blush" },
 ] as const;

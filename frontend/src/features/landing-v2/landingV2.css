@@ -33,32 +33,68 @@
  */
 
 .lnv2-root {
-  /* 표면 — 본문 평면은 Bone, 떠 있는 판은 Paper White */
-  --v2-bone: #f4f2f4;
+  /* 표면 및 캔버스 (Violet Capsule Minimal) */
+  --v2-surface: #faf9fb;
+  --v2-surface-dim: #dadadc;
+  --v2-surface-bright: #faf9fb;
+  --v2-surface-lowest: #ffffff;
+  --v2-surface-low: #f4f3f5;
+  --v2-surface-container: #eeedef;
+  --v2-surface-high: #e8e8ea;
+  --v2-surface-highest: #e3e2e4;
+
   --v2-paper: #fdfcfe;
+  --v2-paper-white: #fdfcfe;
+  --v2-bone: #f4f2f4;
   --v2-ash: #e9e8ea;
   --v2-ash-soft: #f1f0f2;
 
-  /* 오버진 축 — 몰입 구간의 두 깊이 */
+  /* 오버진 축 — 몰입 구간의 깊이 */
   --v2-aubergine: #3c315b;
+  --v2-primary: #261b44;
   --v2-deep: #261b44;
+  --v2-primary-container: #3c315b;
+  --v2-on-primary-container: #a79acb;
+  --v2-inverse-primary: #cdbff2;
+
+  --v2-tertiary: #221260;
+  --v2-tertiary-container: #372b77;
+  --v2-on-tertiary-container: #a297e9;
+
+  --v2-secondary: #5d5c76;
+  --v2-secondary-container: #e2dffe;
+  --v2-on-secondary-container: #63627c;
+  --v2-ghost-lavender: #e2dffe;
   --v2-lavender: #e2dffe;
   --v2-periwinkle: #ab9ff2;
+  --v2-surface-tint: #635884;
 
-  /* 글자 */
+  /* 글자 및 아웃라인 */
   --v2-ink: #1c1c1c;
+  --v2-obsidian: #1c1c1c;
+  --v2-on-surface: #1a1c1d;
+  --v2-on-surface-variant: #49454e;
   --v2-ink-soft: #49454e;
-  /* 캡션·메타 전용 중간 톤. Fog 대신 쓴다(위 머리말 1번). */
   --v2-meta: #605b6a;
-  /* 테두리·아이콘 획 전용. **글자에 쓰지 않는다.** */
   --v2-fog: #86848d;
+  --v2-outline: #7a757f;
+  --v2-outline-variant: #cac4cf;
   --v2-on-dark: #fdfcfe;
   --v2-on-dark-soft: #a79acb;
 
-  /* 파스텔 — 리듬과 상태 배지에만 */
+  /* 파스텔 악센트 — 리듬과 상태 배지 */
   --v2-buttercream: #ffffc4;
   --v2-blush: #ffdadc;
+  --v2-blush-mist: #ffdadc;
+  --v2-cornflower: #4a87f2;
+  --v2-cornflower-pop: #4a87f2;
   --v2-mint: #2ec08b;
+  --v2-mint-signal: #2ec08b;
+
+  /* 에러 */
+  --v2-error: #ba1a1a;
+  --v2-error-container: #ffdad6;
+  --v2-on-error-container: #93000a;
 
   /* 기하학 — 16px 아래 반경은 이 시스템에 없다 */
   --v2-pill: 100px;
@@ -67,13 +103,13 @@
 
   /* 시스템 전체에서 유일한 그림자 — 주 CTA 의 라벤더 발광 */
   --v2-glow: 0 0 4px 0 rgb(226 223 254);
-  --v2-glow-lg: 0 0 10px 0 rgb(226 223 254 / 0.9);
+  --v2-glow-lg: 0 0 8px 0 rgb(226 223 254 / 0.9);
 
   --v2-gutter: clamp(16px, 5vw, 48px);
   --v2-measure: 1200px;
   --v2-font: "DM Sans", Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
-  background: var(--v2-bone);
+  background: var(--v2-paper);
   color: var(--v2-ink);
   font-family: var(--v2-font);
   /* 시스템 전체에 균일한 자간. 이 하나가 "건축적" 인상의 절반이다. */
@@ -194,15 +230,16 @@
   padding: 7px 16px;
   border: 1px solid var(--v2-ash);
   border-radius: var(--v2-pill);
-  background: var(--v2-paper);
+  background: var(--v2-lavender);
   color: var(--v2-aubergine);
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 300;
+  letter-spacing: -0.025em;
 }
 
 .lnv2-chip-onDark {
   border-color: rgb(171 159 242 / 0.4);
-  background: rgb(226 223 254 / 0.08);
+  background: rgb(226 223 254 / 0.12);
   color: var(--v2-lavender);
 }
 
@@ -236,7 +273,7 @@
   border-radius: var(--v2-pill);
   font-family: inherit;
   font-size: 16px;
-  font-weight: 400;
+  font-weight: 300;
   letter-spacing: inherit;
   text-decoration: none;
   cursor: pointer;
@@ -260,12 +297,13 @@
 }
 
 .lnv2-btn-quiet {
-  background: var(--v2-paper);
+  background: var(--v2-bone);
   border-color: var(--v2-ash);
   color: var(--v2-aubergine);
 }
 
 .lnv2-btn-quiet:hover {
+  background: var(--v2-lavender);
   border-color: var(--v2-periwinkle);
 }
 
@@ -308,7 +346,7 @@
 }
 
 /* ---------------------------------------------------------------- */
-/* 상태 배지 — 파스텔 채움 + Obsidian 글자(머리말 2번)                  */
+/* 상태 배지 — Mint Signal / Buttercream / Blush Mist                */
 /* ---------------------------------------------------------------- */
 
 .lnv2-status {
@@ -319,25 +357,25 @@
   border: 1px solid transparent;
   border-radius: var(--v2-pill);
   font-size: 13px;
-  font-weight: 400;
+  font-weight: 300;
   white-space: nowrap;
-  color: var(--v2-ink);
 }
 
-/* 색만으로 뜻을 나르지 않는다 — 글자(정상/주의/관리 필요)가 항상 같이 있고,
-   테두리는 옅은 채움이 Bone 배경에서 사라지지 않게 잡아 준다. */
+/* 상태 배지: Mint Signal (#2ec08b) 채움 + Paper White (#fdfcfe) 글자 */
 .lnv2-status[data-status="normal"] {
   background: var(--v2-mint);
-  border-color: #1fa273;
+  color: var(--v2-paper);
 }
 
 .lnv2-status[data-status="watch"] {
   background: var(--v2-buttercream);
+  color: var(--v2-obsidian);
   border-color: #e4e08a;
 }
 
 .lnv2-status[data-status="manage"] {
   background: var(--v2-blush);
+  color: var(--v2-obsidian);
   border-color: #f0b3b7;
 }
 
@@ -378,11 +416,11 @@
 }
 
 .lnv2-fade-dark {
-  background: linear-gradient(to bottom, var(--v2-bone), var(--v2-deep));
+  background: linear-gradient(to bottom, var(--v2-paper), var(--v2-deep));
 }
 
 .lnv2-fade-light {
-  background: linear-gradient(to bottom, var(--v2-deep), var(--v2-bone));
+  background: linear-gradient(to bottom, var(--v2-deep), var(--v2-paper));
 }
 
 /* ---------------------------------------------------------------- */
@@ -455,15 +493,15 @@
 .lnv2-nav-links a {
   padding: 10px 16px;
   border-radius: var(--v2-pill);
-  color: var(--v2-ink-soft);
+  color: var(--v2-aubergine);
   font-size: 15px;
-  font-weight: 400;
+  font-weight: 300;
   text-decoration: none;
   transition: background-color 0.16s ease, color 0.16s ease;
 }
 
 .lnv2-nav-links a:hover {
-  background: var(--v2-ash);
+  background: var(--v2-lavender);
   color: var(--v2-aubergine);
 }
 
@@ -583,16 +621,34 @@
   color: var(--v2-aubergine);
 }
 
+.lnv2-hero-pill[data-tone="buttercream"] {
+  background: var(--v2-buttercream);
+  border-color: transparent;
+  color: var(--v2-obsidian);
+}
+
+.lnv2-hero-pill[data-tone="cornflower"] {
+  background: var(--v2-cornflower);
+  border-color: transparent;
+  color: var(--v2-paper);
+}
+
 .lnv2-hero-pill[data-tone="mint"] {
   background: var(--v2-mint);
-  border-color: #1fa273;
-  color: var(--v2-ink);
+  border-color: transparent;
+  color: var(--v2-paper);
 }
 
 .lnv2-hero-pill[data-tone="blush"] {
   background: var(--v2-blush);
   border-color: transparent;
-  color: var(--v2-ink);
+  color: var(--v2-obsidian);
+}
+
+.lnv2-hero-pill[data-tone="periwinkle"] {
+  background: var(--v2-periwinkle);
+  border-color: transparent;
+  color: var(--v2-obsidian);
 }
 
 /** 캡슐이 제자리를 찾은 뒤에야 그려지는 한 줄. "하나의 흐름" 쪽이다. */
@@ -906,14 +962,17 @@
 
 .lnv2-insight-step[data-on="true"][data-step="normal"] {
   background: var(--v2-mint);
+  color: var(--v2-paper);
 }
 
 .lnv2-insight-step[data-on="true"][data-step="watch"] {
   background: var(--v2-buttercream);
+  color: var(--v2-obsidian);
 }
 
 .lnv2-insight-step[data-on="true"][data-step="manage"] {
   background: var(--v2-blush);
+  color: var(--v2-obsidian);
 }
 
 .lnv2-insight-note {
@@ -1628,7 +1687,9 @@
   border-radius: var(--v2-pill);
   background: var(--v2-bone);
   font-size: 13px;
-  color: var(--v2-meta);
+  font-weight: 300;
+  color: var(--v2-aubergine);
+  letter-spacing: -0.025em;
 }
 
 .lnv2-family-summary {
