@@ -75,7 +75,7 @@ def shared_classifier_client() -> FallbackChatClient:
 
 
 def build_client(entry: str) -> LLMClientProtocol:
-    """`"openai:gpt-4o-mini"` · `"gemini-3.1-flash-lite"` 한 항목을 클라이언트로.
+    """`"openai:gpt-4o"` · `"gemini-3.5-flash-lite"` 한 항목을 클라이언트로.
 
     접두어가 없으면 Gemini 다 — 목록 대부분이 Gemini 라 그쪽을 기본으로 둔다.
     `DEV_OCR_MODELS` 와 **같은 표기**를 쓴다. 두 목록이 다른 문법을 쓰면 `.env` 를

@@ -122,9 +122,9 @@ def test_missing_key_drops_the_provider(monkeypatch: pytest.MonkeyPatch) -> None
         return FakeClient()
 
     monkeypatch.setattr(chain_module, "build_client", build)
-    built = FallbackChatClient(["gemini-3.5-flash-lite", "openai:gpt-4o-mini"])
-    assert [entry for entry, _ in built.available] == ["openai:gpt-4o-mini"]
-    assert built.primary == "openai:gpt-4o-mini"
+    built = FallbackChatClient(["gemini-3.5-flash-lite", "openai:gpt-4o"])
+    assert [entry for entry, _ in built.available] == ["openai:gpt-4o"]
+    assert built.primary == "openai:gpt-4o"
 
 
 def test_no_usable_provider_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -135,7 +135,7 @@ def test_no_usable_provider_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(chain_module, "build_client", build)
     with pytest.raises(LlmUnavailableError):
-        FallbackChatClient(["gemini-3.5-flash-lite", "openai:gpt-4o-mini"])
+        FallbackChatClient(["gemini-3.5-flash-lite", "openai:gpt-4o"])
 
 
 def test_entry_without_prefix_is_gemini(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -158,5 +158,5 @@ def test_entry_without_prefix_is_gemini(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(chain_module.config, "OPENAI_API_KEY", "y")
 
     chain_module.build_client("gemini-3.1-flash-lite")
-    chain_module.build_client("openai:gpt-4o-mini")
-    assert seen == [("gemini", "gemini-3.1-flash-lite"), ("openai", "gpt-4o-mini")]
+    chain_module.build_client("openai:gpt-4o")
+    assert seen == [("gemini", "gemini-3.1-flash-lite"), ("openai", "gpt-4o")]

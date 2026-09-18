@@ -201,11 +201,11 @@ class Config(BaseSettings):
     # 나간다. ADR-010 의 외부 전송 조건·동의 문구·처리위탁이 같이 갱신돼야 한다.
     # 그래서 기본값은 비어 있고, 켜는 것은 명시적 선택이어야 한다.
     OPENAI_API_KEY: str | None = None
-    # **쓸 수 있는 OpenAI 모델을 여기서 못 박는다.** 팀이 지정한 둘만 허용하고,
+    # **쓸 수 있는 OpenAI 모델을 여기서 못 박는다.** 지정한 목록만 허용하고,
     # 목록에 없는 모델이 `DEV_OCR_MODELS` 에 들어오면 **기동 시점에** 거절한다
     # (아래 `validate_ocr_models`). 오타 하나로 엉뚱한 — 그리고 훨씬 비싼 — 모델을
     # 부르는 사고를 런타임이 아니라 부팅에서 잡으려는 것이다.
-    OPENAI_ALLOWED_MODELS: list[str] = ["gpt-4o-mini", "text-embedding-3-small"]
+    OPENAI_ALLOWED_MODELS: list[str] = ["gpt-4o", "gpt-4o-mini", "text-embedding-3-small"]
     # 문서 인식에 쓸 수 없는 모델. 임베딩 모델은 벡터를 돌려줄 뿐 글을 못 만든다.
     # 허용 목록에는 남겨 둔다 — 나중에 챗봇·RAG 축에서 쓸 자리가 있다.
     OPENAI_EMBEDDING_MODELS: list[str] = ["text-embedding-3-small"]
@@ -259,7 +259,7 @@ class Config(BaseSettings):
     #: 통증 쪽 상수(`OPENAI_PAIN_CHAT_TIMEOUT_SECONDS`)가 이 저장소에 없어 실제로는
     #: `hasattr` 폴백인 10 초로 돌고 있었다. 구조화 JSON 생성에 2.2 초는 짧아
     #: 한 값으로 모으고 12 초로 둔다.
-    OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
+    OPENAI_CHAT_MODEL: str = "gpt-4o"
 
     #: 대화 공급자를 **시도할 순서**. 앞이 막히면 다음으로 넘어간다.
     #:
@@ -271,11 +271,11 @@ class Config(BaseSettings):
     #: 순서 기준은 인식 쪽과 같다. **싼 것을 앞에** 두고 무거운 것을 예비로 남긴다.
     #: 접두어가 없으면 Gemini 다.
     #:
-    #:     HEALTH_ASSISTANT_MODELS=["gemini-3.1-flash-lite","openai:gpt-4o-mini"]
+    #:     HEALTH_ASSISTANT_MODELS=["gemini-3.5-flash-lite","openai:gpt-4o"]
     #:
     #: 키가 없는 공급자는 기동 때가 아니라 **클라이언트를 만들 때 조용히 빠진다** —
     #: 둘을 같이 적어 두고 키 하나만 넣은 상태가 실제로 흔하다.
-    HEALTH_ASSISTANT_MODELS: list[str] = ["gemini-3.5-flash-lite", "openai:gpt-4o-mini"]
+    HEALTH_ASSISTANT_MODELS: list[str] = ["gemini-3.5-flash-lite", "openai:gpt-4o"]
 
     #: 바운더리 판정(범위·근거 종류 분류)이 **따로** 쓸 수 있는 모델 목록.
     #:
@@ -284,7 +284,7 @@ class Config(BaseSettings):
     #: 프롬프트 공격 차단·건강/비건강 구분을 담당하는 안전 경계라, 검증 없이
     #: 저가형 모델을 끼우면 그 경계가 조용히 물러질 수 있다. 바꾸기 전에 반드시
     #: 프롬프트 공격·애매한 개인화 질문 사례로 분류 정확도를 실측한다.
-    HEALTH_ASSISTANT_CLASSIFIER_MODELS: list[str] = ["gemini-3.5-flash-lite", "openai:gpt-4o-mini"]
+    HEALTH_ASSISTANT_CLASSIFIER_MODELS: list[str] = ["gemini-3.5-flash-lite", "openai:gpt-4o"]
 
     LLM_CHAT_TIMEOUT_SECONDS: float = 12.0
     # 문서 인식 작업 큐. 예측 큐와 같은 구조지만 흐르는 것이 수치가 아니라 검진
@@ -303,10 +303,10 @@ class Config(BaseSettings):
     # 한 작업의 원본 총합. 상한이 없으면 큰 파일 여러 장으로 Redis 메모리를 민다.
     DEV_OCR_JOB_MAX_TOTAL_BYTES: int = 30 * 1024 * 1024
     # 외부 호출 한 건의 상한. **없으면 한 건이 큐 전체를 영구히 막는다** —
-    # 실제로 그렇게 멈췄다. 모델 하나당 적용되고, fallback 이 셋이라 최악의
-    # 총 대기는 이 값의 3배다.
+    # 실제로 그렇게 멈췄다. 모델 하나당 적용된다.
     DEV_OCR_CALL_TIMEOUT_SECONDS: float = 45.0
     # 시도 순서. 앞에서부터 시도하고 실패하면 다음으로 넘어간다.
+    # 아래 2026-08-27~28 기록은 당시 선택의 근거이며 현재 운영 순서가 아니다.
     #
     # ## 무료 등급이라는 사실이 나머지를 전부 설명한다
     #
@@ -407,10 +407,13 @@ class Config(BaseSettings):
     # 교차검증해서, 어긋나면 수치로 채택하지 않고 사용자 검토로 돌린다.
     # `크레아티닌`→`크레아틴` 이나 `요소질소`→`요산` 이 그 관문에서 걸린다.
     #
-    # **fallback 이 없다는 것을 알고 쓴다.** `OPENAI_ALLOWED_MODELS` 가 사실상
+    # **당시에는 fallback 이 없었다.** `OPENAI_ALLOWED_MODELS` 가 사실상
     # `gpt-4o-mini` 하나라 이 항목이 막히면 인식 경로 전체가 멈춘다. Gemini 다섯을
     # 예비로 두던 때와 다르다. 더 정확한 모델을 쓰려면 허용 목록을 먼저 늘려야 한다.
-    DEV_OCR_MODELS: list[str] = ["openai:gpt-4o-mini"]
+    # 현재 정책 (2026-09-18): 24장 동일 조건 평가에서 Gemini 는 정확 222/223,
+    # GPT-4o 는 정확 221/223 (둘 다 값 오류·오배정 0). GPT-4o-mini 는
+    # 정확 209/223, 값 오류 1 이었다. Gemini 실패 시 GPT-4o 로 넘어간다.
+    DEV_OCR_MODELS: list[str] = ["gemini-3.5-flash-lite", "openai:gpt-4o"]
     # 첫 청크까지의 상한. 스트리밍에서는 이 값이 실질적인 "이 모델이 응답하는가" 판정이다.
     # 503(용량 부족)은 여기서 걸리고, 걸리면 곧장 다음 모델로 넘어간다.
     #
@@ -495,6 +498,6 @@ class Config(BaseSettings):
                 # 반드시 실패하므로 여기서 이유를 붙여 막는다.
                 raise ValueError(
                     f"{model!r} 은 임베딩 모델이라 문서 인식에 쓸 수 없습니다. "
-                    f"이미지를 읽는 모델을 지정하세요 (예: openai:gpt-4o-mini)."
+                    f"이미지를 읽는 모델을 지정하세요 (예: openai:gpt-4o)."
                 )
         return self

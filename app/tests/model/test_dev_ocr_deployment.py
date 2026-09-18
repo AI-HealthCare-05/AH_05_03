@@ -7,7 +7,8 @@ def test_dev_deployment_enables_configured_gemini_ocr_workers() -> None:
     compose = (ROOT / "infra/docker/docker-compose.dev-mac.yml").read_text(encoding="utf-8")
 
     assert "ENABLE_DEV_OCR_BRIDGE: ${ENABLE_DEV_OCR_BRIDGE:-true}" in compose
-    assert 'DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["gemini-3.5-flash-lite","gemini-3.1-flash-lite"]}' in compose
+    assert 'DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["gemini-3.5-flash-lite","openai:gpt-4o"]}' in compose
+    assert "OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required for OCR fallback}" in compose
     assert compose.count("../../modeling/artifacts/models:/app/models:ro") == 2
     assert "  ai-worker:" in compose
     assert "image: ieobom-dev-ai-worker:current" in compose
@@ -25,3 +26,4 @@ def test_dev_deployer_builds_starts_and_checks_ocr_workers() -> None:
     assert "data['trajectory']['available']" in deployer
     assert "ai_worker/*" in deployer
     assert "- 'ai_worker/**'" in workflow
+    assert "OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}" in workflow

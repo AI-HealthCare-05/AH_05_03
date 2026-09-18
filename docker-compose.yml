@@ -132,12 +132,12 @@ services:
       # 문서에 다른 결과가 나오고, 그건 사용자에게 설명할 수 없는 동작이다.
       # JSON 배열이다 (`CORS_ALLOW_ORIGINS` 와 같은 규칙).
       #
-      # **가벼운 Gemini 를 앞에, gpt-4o-mini 를 예비로.** 어느 실패든 다음 항목으로
+      # **Gemini 를 앞에, gpt-4o 를 예비로.** 어느 실패든 다음 항목으로
       # 넘어간다(`dev_ocr._stream_once` 를 감싸는 루프). 할당량 소진은 공급자마다
       # 알리는 방식이 달라 종류를 가리지 않는다.
-      DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["gemini-3.5-flash-lite","gemini-3.1-flash-lite","openai:gpt-4o-mini"]}
+      DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["gemini-3.5-flash-lite","openai:gpt-4o"]}
       # 대화 공급자 시도 순서. 표기는 위와 같다.
-      HEALTH_ASSISTANT_MODELS: ${HEALTH_ASSISTANT_MODELS:-["gemini-3.5-flash-lite","openai:gpt-4o-mini"]}
+      HEALTH_ASSISTANT_MODELS: ${HEALTH_ASSISTANT_MODELS:-["gemini-3.5-flash-lite","openai:gpt-4o"]}
       DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS: ${DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS:-25}
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
@@ -240,12 +240,12 @@ services:
       # 위 fastapi 와 **같은 기본값**이어야 한다. 한쪽만 바꾸면 동기 경로와 큐 경로가
       # 다른 모델을 쓰게 되고, 두 경로의 결과가 같다는 계약이 조용히 깨진다.
       #
-      # **가벼운 Gemini 를 앞에, gpt-4o-mini 를 예비로.** 어느 실패든 다음 항목으로
+      # **Gemini 를 앞에, gpt-4o 를 예비로.** 어느 실패든 다음 항목으로
       # 넘어간다(`dev_ocr._stream_once` 를 감싸는 루프). 할당량 소진은 공급자마다
       # 알리는 방식이 달라 종류를 가리지 않는다.
-      DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["gemini-3.5-flash-lite","gemini-3.1-flash-lite","openai:gpt-4o-mini"]}
+      DEV_OCR_MODELS: ${DEV_OCR_MODELS:-["gemini-3.5-flash-lite","openai:gpt-4o"]}
       # 대화 공급자 시도 순서. 표기는 위와 같다.
-      HEALTH_ASSISTANT_MODELS: ${HEALTH_ASSISTANT_MODELS:-["gemini-3.5-flash-lite","openai:gpt-4o-mini"]}
+      HEALTH_ASSISTANT_MODELS: ${HEALTH_ASSISTANT_MODELS:-["gemini-3.5-flash-lite","openai:gpt-4o"]}
       DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS: ${DEV_OCR_FIRST_CHUNK_TIMEOUT_SECONDS:-25}
     # FastAPI 와 같은 규칙으로 마운트한다. 재학습해도 이미지 재빌드 없이 반영되고,
     # 무엇보다 두 경로가 **같은 번들 파일**을 읽어야 결과가 갈리지 않는다.

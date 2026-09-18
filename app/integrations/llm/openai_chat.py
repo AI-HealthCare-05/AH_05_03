@@ -18,6 +18,8 @@ JSON 을 내지 못한다. Gemini 의 `response_schema` 와 같은 자리다. Op
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, TypeVar, cast
 
@@ -30,6 +32,7 @@ from app.exceptions import LlmProviderFailedError, LlmTimeoutError, LlmUnavailab
 from app.integrations.llm.protocol import LLMClientProtocol
 
 T = TypeVar("T", bound=BaseModel)
+logger = logging.getLogger(__name__)
 
 
 def _strictify(schema: dict[str, Any]) -> dict[str, Any]:
@@ -58,7 +61,7 @@ def _strictify(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 class OpenAIChatClient(LLMClientProtocol):
-    """`openai:gpt-4o-mini` 같은 항목이 가리키는 공급자."""
+    """`openai:gpt-4o` 같은 항목이 가리키는 공급자."""
 
     def __init__(
         self,
@@ -86,6 +89,9 @@ class OpenAIChatClient(LLMClientProtocol):
             for message in messages
         ]
 
+        return await self._generate_with_payload(payload, response_schema)
+
+    async def _generate_with_payload(self, payload: list[dict[str, Any]], response_schema: type[T]) -> T:
         try:
             completion = await asyncio.wait_for(
                 self.client.chat.completions.create(
@@ -136,6 +142,10 @@ class OpenAIChatClient(LLMClientProtocol):
             {"role": "assistant" if message.role == "assistant" else "user", "content": message.content}
             for message in messages
         ]
+        async for piece in self._stream_with_payload(payload, response_schema):
+            yield piece
+
+    async def _stream_with_payload(self, payload: list[dict[str, Any]], response_schema: type[T]) -> AsyncIterator[str]:
         try:
             stream = await self.client.chat.completions.create(
                 model=self.model_name,
@@ -161,6 +171,93 @@ class OpenAIChatClient(LLMClientProtocol):
         except Exception as ex:
             raise LlmProviderFailedError(f"OpenAI 스트리밍 실패: {type(ex).__name__}") from ex
 
+    async def _prepare_tool_messages(  # noqa: C901 - 공급자 요청·도구 실행 오류를 한 경계에서 처리
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        tools: list[Any],
+        tool_executor: Callable[[str, dict[str, Any]], Awaitable[Any]],
+    ) -> tuple[list[dict[str, Any]] | None, list[Any] | None]:
+        declarations = [declaration for tool in tools for declaration in (tool.function_declarations or [])]
+        if not declarations:
+            return None, None
+        allowed_names = {declaration.name for declaration in declarations}
+        openai_tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": declaration.name,
+                    "description": declaration.description or "",
+                    "parameters": declaration.parameters_json_schema or {"type": "object", "properties": {}},
+                },
+            }
+            for declaration in declarations
+        ]
+        payload: list[dict[str, Any]] = [{"role": "system", "content": system_instruction}]
+        payload.extend(
+            {"role": "assistant" if message.role == "assistant" else "user", "content": message.content}
+            for message in messages
+            if message.content and message.content.strip()
+        )
+        try:
+            completion = await asyncio.wait_for(
+                self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=cast(Any, payload),
+                    tools=cast(Any, openai_tools),
+                    tool_choice="auto",
+                    temperature=0.0,
+                ),
+                timeout=self.timeout,
+            )
+        except TimeoutError as ex:
+            raise LlmTimeoutError() from ex
+        except Exception as ex:
+            raise LlmProviderFailedError(f"OpenAI 도구 판별 호출 실패: {type(ex).__name__}") from ex
+
+        if not completion.choices:
+            raise LlmProviderFailedError("OpenAI 도구 판별 응답이 비어 있습니다.")
+        model_message = completion.choices[0].message
+        calls = model_message.tool_calls or []
+        if not calls:
+            return None, None
+        if any(call.type != "function" for call in calls):
+            raise LlmProviderFailedError("OpenAI 가 지원하지 않는 도구 호출 형식을 반환했습니다.")
+
+        async def execute(call: Any) -> tuple[Any, dict[str, Any]]:
+            name = call.function.name
+            try:
+                if name not in allowed_names:
+                    raise ValueError("허용되지 않은 도구입니다.")
+                args = json.loads(call.function.arguments)
+                if not isinstance(args, dict):
+                    raise ValueError("도구 인자는 JSON 객체여야 합니다.")
+                result = await tool_executor(name, args)
+                body = result.model_dump(mode="json") if hasattr(result, "model_dump") else result
+            except Exception as ex:
+                logger.warning("OpenAI tool execution failed: %s (%s)", name, type(ex).__name__)
+                result = body = {"error": str(ex)}
+            return result, {"role": "tool", "tool_call_id": call.id, "content": json.dumps(body, ensure_ascii=False)}
+
+        function_calls = cast(list[Any], calls)
+        execution = await asyncio.gather(*(execute(call) for call in function_calls))
+        payload.append(
+            {
+                "role": "assistant",
+                "content": model_message.content,
+                "tool_calls": [
+                    {
+                        "id": call.id,
+                        "type": "function",
+                        "function": {"name": call.function.name, "arguments": call.function.arguments},
+                    }
+                    for call in function_calls
+                ],
+            }
+        )
+        payload.extend(tool_message for _, tool_message in execution)
+        return payload, [result for result, _ in execution]
+
     async def generate_structured_response_with_tools(
         self,
         system_instruction: str,
@@ -169,13 +266,14 @@ class OpenAIChatClient(LLMClientProtocol):
         tools: list[Any] | None = None,
         tool_executor: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None,
     ) -> tuple[T, list[Any] | None]:
-        # OpenAI 폴백은 도구 호출(Gemini 포맷)을 아직 변환하지 않는다. 무시하고 진행.
-        res = await self.generate_structured_response(
-            system_instruction=system_instruction,
-            messages=messages,
-            response_schema=response_schema,
+        if tools and tool_executor:
+            payload, results = await self._prepare_tool_messages(system_instruction, messages, tools, tool_executor)
+            if payload is not None:
+                return await self._generate_with_payload(payload, response_schema), results
+        return (
+            await self.generate_structured_response(system_instruction, messages, response_schema),
+            None,
         )
-        return res, None
 
     async def stream_structured_response_with_tools(
         self,
@@ -185,5 +283,8 @@ class OpenAIChatClient(LLMClientProtocol):
         tools: list[Any] | None = None,
         tool_executor: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None,
     ) -> tuple[AsyncIterator[str], list[Any] | None]:
-        # OpenAI 폴백은 도구 호출(Gemini 포맷)을 아직 변환하지 않는다. 무시하고 진행.
+        if tools and tool_executor:
+            payload, results = await self._prepare_tool_messages(system_instruction, messages, tools, tool_executor)
+            if payload is not None:
+                return self._stream_with_payload(payload, response_schema), results
         return self.stream_structured_response(system_instruction, messages, response_schema), None
