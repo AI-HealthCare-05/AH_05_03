@@ -8,8 +8,13 @@ describe("selectContextRecordTypes", () => {
     expect(selectContextRecordTypes("랫풀다운 20kg 10개 3세트")).toEqual([]);
   });
 
-  it("음주 안전 질문에는 복약 기록만 선택한다", () => {
-    expect(selectContextRecordTypes("타이레놀 먹었는데 오늘 술 마셔도 돼?")).toEqual(["medication"]);
+  it("음주 안전 질문에는 복약 기록과 과거 건강검진/검사 결과를 교차 검증한다", () => {
+    expect(selectContextRecordTypes("타이레놀 먹었는데 오늘 술 마셔도 돼?")).toEqual([
+      "medication",
+      "health_screening",
+      "lab_result",
+      "blood_glucose",
+    ]);
   });
 
   it("운동 가능 여부 질문에는 운동과 걷기 기록을 선택한다", () => {

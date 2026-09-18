@@ -1,4 +1,3 @@
-from __future__ import annotations
 """공급자 폴백 계약 — 앞이 막히면 다음이 답한다.
 
 무엇을 고정하려는가
@@ -12,6 +11,7 @@ from __future__ import annotations
 
 네트워크를 타지 않는다.
 """
+from __future__ import annotations
 
 from typing import Any
 

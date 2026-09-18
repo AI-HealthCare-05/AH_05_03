@@ -18,8 +18,8 @@ JSON 을 내지 못한다. Gemini 의 `response_schema` 와 같은 자리다. Op
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
-from typing import Any, TypeVar, cast, Callable, Awaitable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any, TypeVar, cast
 
 from openai import AsyncOpenAI
 from pydantic import BaseModel

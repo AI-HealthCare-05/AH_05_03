@@ -956,7 +956,7 @@ class HealthAssistantBoundaryService:
             notice = "응급 상황이 의심되면 즉시 119에 연락하거나 가까운 응급실을 방문하세요."
             return self._fixed_response(notice, intent="health_advice").model_copy(update={"emergency_notice": notice})
 
-        # [알잘딱깔센] 획일적 무근거 차단 폐지. 
+        # [알잘딱깔센] 획일적 무근거 차단 폐지.
         # 일반 질문은 LLM의 지능적 판단(히스토리 교차 검증)을 존중하여 통과시키고,
         # 법적/의학적 치명도가 매우 높은 특정 고위험군(임신 중 약물/증상)만 최후의 보루로 차단한다.
         # 단, 해당 위험군이라도 실제 승인된 근거(has_evidence)가 있다면 통과시킨다.

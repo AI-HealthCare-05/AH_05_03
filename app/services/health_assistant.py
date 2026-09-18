@@ -44,8 +44,6 @@ from app.services.food_nutrition_tools import (
 from app.services.health_assistant_boundary import (
     _MEDICAL_EVIDENCE_TYPES,
     HealthAssistantBoundaryService,
-    asks_personal_clearance,
-    detect_explicit_protected_contexts,
 )
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.health_knowledge_catalog import HealthKnowledgeClientProtocol, is_alcohol_topic
@@ -1054,7 +1052,7 @@ class HealthAssistantService:
         """음식·식단의 '영양'을 영양제로 오인해 붙인 고정 문구를 제거한다."""
         """음식·식단의 '영양'을 영양제로 오인해 붙인 고정 문구와, LLM이 본문에 포함한 비진단 안전 고지를 제거한다."""
         conversation = " ".join(message.content for message in request.messages if message.role == "user")
-        
+
         # LLM이 본문에 면책 조항을 포함한 경우 제거 (중복 노출 방지)
         disclaimers_to_remove = [
             "본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요.",
@@ -1062,7 +1060,7 @@ class HealthAssistantService:
             "제공해 드린 건강 정보는 참고용이며, 정확한 진단과 치료는 의료기관을 방문하여 전문의와 상담하시기 바랍니다.",
             "본 답변은 의학적 진단을 대신하지 않으며,"
         ]
-        
+
         for disclaimer in disclaimers_to_remove:
             if disclaimer in response.assistant_message:
                 response.assistant_message = response.assistant_message.replace(disclaimer, "").strip()

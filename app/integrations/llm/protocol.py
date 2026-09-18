@@ -1,5 +1,5 @@
-from collections.abc import AsyncIterator
-from typing import Protocol, TypeVar, Callable, Awaitable, Any
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel
 

@@ -139,6 +139,7 @@ select = ["E", "W", "F", "I", "C90", "B", "UP", "N"]
 ignore = ["UP046", "E501"]
 
 [tool.ruff.lint.per-file-ignores]
+"app/tests/**/*.py" = ["E701", "C901"]
 "__init__.py" = ["F401"]
 # `*` 글롭은 `/`를 넘지 않아 versions/ 아래 생성 파일이 그대로 린트된다.
 "app/core/db/migrations/**/*.py" = ["ALL"]

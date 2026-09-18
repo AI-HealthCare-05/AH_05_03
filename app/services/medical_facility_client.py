@@ -1180,7 +1180,7 @@ class MedicalFacilityClient:
                     )
 
             # 현재 진료 중인 병원을 상단으로 정렬, 그 다음 거리순
-            
+
             # 중복 제거 (이름 + 주소 기준)
             seen = set()
             unique_items = []
@@ -1395,7 +1395,8 @@ class MedicalFacilityClient:
     # ==========================================
     # 3. 약국 검색 (ErmctInsttInfoInqireService)
     # ==========================================
-    async def search_nearby_pharmacy(
+    async def search_nearby_pharmacy(  # noqa: C901
+
         self,
         latitude: float | None = None,
         longitude: float | None = None,
@@ -1444,7 +1445,7 @@ class MedicalFacilityClient:
                 items = [item for item in items if item.is_open is True]
 
             # 현재 영업 중인 약국을 상단으로 정렬, 그 다음 거리순
-            
+
             # 중복 제거 (이름 + 주소 기준)
             seen = set()
             unique_items = []

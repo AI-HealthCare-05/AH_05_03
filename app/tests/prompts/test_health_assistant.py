@@ -1,4 +1,5 @@
 import pytest
+
 from app.dtos.health_assistant import ProfileContext
 from app.prompts.health_assistant import build_system_instruction
 from app.prompts.health_assistant_boundary import build_health_assistant_scope_instruction
