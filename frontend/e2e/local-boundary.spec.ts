@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { DEV_FAMILY_HOME_PATH } from "./devFamilyHome";
 import { setupE2eServerMocks } from "./mockServerApis";
 
 /**
@@ -34,7 +35,7 @@ test("프로필과 건강기록은 서버 API(PostgreSQL)를 통해 등록·조�
 
   const state = await setupE2eServerMocks(page);
 
-  await page.goto("/");
+  await page.goto(DEV_FAMILY_HOME_PATH);
   await page.getByRole("button", { name: "첫 구성원 등록" }).click();
   await page.getByRole("textbox", { name: "이름 또는 호칭" }).fill("테스트 가족");
   await page.getByRole("combobox", { name: "관계" }).selectOption("본인");

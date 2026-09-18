@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
+import { DEV_FAMILY_HOME_PATH } from "./devFamilyHome";
 import { setupE2eServerMocks } from "./mockServerApis";
 
 test("남녀 핵심 인체를 먼저 표시하고 세부 레이어와 재방문 캐시를 준비한다", async ({ page }, testInfo) => {
   test.setTimeout(180_000);
-  const appUrl = process.env.E2E_BASE_URL ?? "/";
+  const appUrl = process.env.E2E_BASE_URL ?? DEV_FAMILY_HOME_PATH;
   const failures: string[] = [];
   const browserErrors: string[] = [];
   const maleGlbRequests: string[] = [];
