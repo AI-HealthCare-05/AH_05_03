@@ -70,6 +70,7 @@ class GeminiLLMClient(LLMClientProtocol):
                 parts=[types.Part.from_text(text=m.content)],
             )
             for m in messages
+            if m.content and m.content.strip()
         ]
         try:
             response = await asyncio.wait_for(
@@ -105,6 +106,7 @@ class GeminiLLMClient(LLMClientProtocol):
                 parts=[types.Part.from_text(text=m.content)],
             )
             for m in messages
+            if m.content and m.content.strip()
         ]
 
         async def _stream() -> AsyncIterator[str]:
@@ -140,6 +142,7 @@ class GeminiLLMClient(LLMClientProtocol):
                 parts=[types.Part.from_text(text=m.content)],
             )
             for m in messages
+            if m.content and m.content.strip()
         ]
 
         try:
