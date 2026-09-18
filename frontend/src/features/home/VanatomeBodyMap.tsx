@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
@@ -30,6 +31,7 @@ import {
   type AnatomyLazyLayer,
 } from "./anatomyAtlas";
 import { createAnatomyEvent, parseBodySide, type AnatomyEvent } from "./anatomyEventContracts";
+import { hushBomi, tellBomi } from "../health-assistant/bomiHint";
 import {
   applyCostalCartilageStyle,
   createAdaptiveFlowGuideMaterial,
@@ -59,25 +61,6 @@ import {
   type SprayAgitationState,
 } from "./holographicAnatomyStyle";
 
-const HOLO_SYSTEM_COLORS: Record<string, number> = {
-  cardiovascular: 0xe45f63,
-  cardiac: 0xb96760,
-  arterial: 0xe45f63,
-  venous: 0x38bdf8,
-  digestive: 0xe7a565,
-  endocrine: 0xd28fe2,
-  lymphatic: 0x77c99a,
-  mammary: 0xf0a3bd,
-  muscular: 0xd97865,
-  nervous: 0xf0cf69,
-  reproductive: 0xe895b1,
-  respiratory: 0x9ecce8,
-  urinary: 0xd8a5cc,
-  skeletal: 0xd9f7ff,
-  joints: 0x9fcfd8,
-  connective: 0x9fcfd8,
-  integumentary: 0x4de4ff,
-};
 import {
   resolveAnatomyDisplayInfo,
   type AnatomyDisplayInfo,
@@ -85,8 +68,14 @@ import {
 import { ProceduralBodyMap } from "./ProceduralBodyMap";
 import { fetchCachedAnatomyResource } from "./anatomyResourceCache";
 import type { RegionRisk } from "./bodyRisk";
+import {
+  canOpenDrawerWithoutCoveringHint,
+  invertFocusBarFlip,
+  shouldDockFocusIcons,
+} from "./bodyViewerLayout";
 import { DentalPickerModal } from "./DentalPickerModal";
 import { VanatomeQuickSearch } from "./VanatomeQuickSearch";
+import type { SearchResultItem } from "./AnatomySearchDrawer";
 import { collectDepthHitCandidates, type DepthHitCandidate, type DepthLevel } from "./depthPicker";
 import {
   applyXRayShading,
@@ -105,6 +94,7 @@ import {
   cloneToIsolateGhost,
 } from "./cameraFocusManager";
 import { loadHumanAtlasMeshes } from "./human-atlas/atlasLoader";
+import { ANATOMY_COMPOUND_REGISTRY } from "./anatomyCompoundRegistry";
 
 export type SelectedStructure = {
   name: string;
@@ -119,6 +109,133 @@ export interface StagingItem {
   excluded: boolean;
 }
 type BodyFocus = AnatomyFocus | "leftHand" | "rightHand";
+
+const BODY_FOCUS_PRESETS: { id: BodyFocus; label: string }[] = [
+  { id: "full", label: "전체" },
+  { id: "head", label: "머리" },
+  { id: "upper", label: "상반신" },
+  { id: "lower", label: "하반신" },
+  { id: "leftHand", label: "왼손" },
+  { id: "rightHand", label: "오른손" },
+  { id: "knee", label: "무릎" },
+  { id: "foot", label: "발" },
+];
+
+type ControlHint = {
+  word: string;
+  detail: string;
+};
+
+const BODY_FOCUS_HINTS: Record<BodyFocus, ControlHint> = {
+  full: { word: "전체", detail: "전신을 한눈에 봅니다." },
+  head: { word: "머리", detail: "머리·얼굴을 확대합니다." },
+  upper: { word: "상반신", detail: "가슴·배를 확대합니다." },
+  lower: { word: "하반신", detail: "골반·다리를 확대합니다." },
+  leftHand: { word: "왼손", detail: "왼손을 확대합니다." },
+  rightHand: { word: "오른손", detail: "오른손을 확대합니다." },
+  hand: { word: "손", detail: "손을 확대합니다." },
+  knee: { word: "무릎", detail: "무릎을 확대합니다." },
+  foot: { word: "발", detail: "발을 확대합니다." },
+};
+
+function BodyFocusGlyph({ focus }: { focus: BodyFocus }) {
+  const common = {
+    viewBox: "0 0 24 24",
+    width: 22,
+    height: 22,
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.45,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    preserveAspectRatio: "xMidYMid meet",
+    "aria-hidden": true as const,
+  };
+  switch (focus) {
+    case "full":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="5" r="2.2" />
+          <path d="M8 10.5h8" />
+          <path d="M12 8.2v4.2" />
+          <path d="M8 22V12.2L12 12.4 16 12.2V22" />
+        </svg>
+      );
+    case "head":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="9" r="5.2" />
+          <path d="M9.5 14.6v3.2h5v-3.2" />
+        </svg>
+      );
+    case "upper":
+      return (
+        <svg {...common}>
+          <path d="M5 8.7 9 6.7h6l4 2" />
+          <path d="M8 7.2v9.5h8V7.2" />
+        </svg>
+      );
+    case "lower":
+      return (
+        <svg {...common}>
+          <path d="M8 3.5h8v6.5H8z" />
+          <path d="M9.5 10v11M14.5 10v11" />
+        </svg>
+      );
+    case "leftHand":
+      return (
+        <svg {...common}>
+          <g transform="rotate(180 12 12)">
+            <path d="M14 3.5v7.2" />
+            <path d="M17 6.2v5.6" />
+            <path d="M11 5.4v6.2" />
+            <path d="M8 7v4.6" />
+            <path d="M17.8 10.4v3.2a5.4 5.4 0 0 1-10.8 0v-2.8" />
+          </g>
+        </svg>
+      );
+    case "rightHand":
+      return (
+        <svg {...common}>
+          <g transform="rotate(180 12 12)">
+            <path d="M10 3.5v7.2" />
+            <path d="M7 6.2v5.6" />
+            <path d="M13 5.4v6.2" />
+            <path d="M16 7v4.6" />
+            <path d="M6.2 10.4v3.2a5.4 5.4 0 0 0 10.8 0v-2.8" />
+          </g>
+        </svg>
+      );
+    case "knee":
+      return (
+        <svg {...common}>
+          <path d="M8.2 3.2v17.6" />
+          <path d="M15.8 3.2v17.6" />
+          <circle cx="8.2" cy="13.1" r="2.55" />
+          <circle cx="15.8" cy="13.1" r="2.55" />
+        </svg>
+      );
+    case "foot":
+      return (
+        <svg {...common}>
+          <g transform="rotate(-18 8.1 16.2)">
+            <ellipse cx="8.1" cy="16.4" rx="2.45" ry="4.05" />
+            <circle cx="6.05" cy="11.55" r="0.78" />
+            <circle cx="7.85" cy="10.7" r="0.9" />
+            <circle cx="9.85" cy="10.85" r="0.85" />
+            <circle cx="11.45" cy="12.05" r="0.7" />
+          </g>
+          <g transform="rotate(18 16.1 10.8)">
+            <ellipse cx="16.1" cy="12.05" rx="2.45" ry="4.05" />
+            <circle cx="13.75" cy="7.25" r="0.7" />
+            <circle cx="15.5" cy="6.35" r="0.85" />
+            <circle cx="17.5" cy="6.25" r="0.9" />
+            <circle cx="19.25" cy="7.15" r="0.78" />
+          </g>
+        </svg>
+      );
+  }
+}
 type HandPose = "Open Hand" | "Fist" | "Spread" | "Point";
 
 const CORE_ASSET_TIMEOUT_MS = 45_000;
@@ -197,6 +314,9 @@ export function VanatomeBodyMap({
   isDentalOpen,
   onDentalOpenChange,
   onToothSelectRef,
+  isDarkBg,
+  onDarkBgChange,
+  drawerMode,
 }: {
   profileName: string;
   gender?: "male" | "female" | null;
@@ -210,8 +330,12 @@ export function VanatomeBodyMap({
   isDentalOpen?: boolean;
   onDentalOpenChange?: (open: boolean) => void;
   onToothSelectRef?: React.MutableRefObject<((toothCode: number, toothName: string, shouldSelect?: boolean) => void) | undefined>;
+  isDarkBg?: boolean;
+  onDarkBgChange?: (isDark: boolean) => void;
+  drawerMode?: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [viewerShell, setViewerShell] = useState<HTMLDivElement | null>(null);
   const selectDangerOrganRef = useRef<(
     organKey: string,
     options?: {
@@ -220,6 +344,7 @@ export function VanatomeBodyMap({
       organIntensities?: Record<string, number>;
     },
   ) => boolean>(() => false);
+  const pauseDangerMonitoringRef = useRef<() => void>(() => undefined);
   const onStructureSelectRef = useRef(onStructureSelect);
   useEffect(() => {
     onStructureSelectRef.current = onStructureSelect;
@@ -255,7 +380,11 @@ export function VanatomeBodyMap({
   // 중요 진단 장기(간암, 폐 전이 등)가 지정되면 뼈 없이 피부만 보여주고 해당 장기 붉은색 투시 하이라이트 실행
   useEffect(() => {
     if (!highlightOrganKey) {
+      setManualSelectionMode(false);
       clearSelectionRef.current();
+      return;
+    }
+    if (isManualSelectionModeRef.current) {
       return;
     }
 
@@ -304,6 +433,27 @@ export function VanatomeBodyMap({
   }, [stagedItems]);
   const [isStagedPanelDismissed, setIsStagedPanelDismissed] = useState(false);
   const [hoveredInfo, setHoveredInfo] = useState<AnatomyDisplayInfo | null>(null);
+  const [hoveredControl, setHoveredControl] = useState<ControlHint | null>(null);
+  const showControlHint = (hint: ControlHint) => {
+    setHoveredControl(hint);
+    tellBomi(`${hint.word} — ${hint.detail}`);
+  };
+  const hideControlHint = () => {
+    setHoveredControl(null);
+    hushBomi();
+  };
+  useEffect(() => {
+    if (hoveredControl) return;
+    if (!hoveredInfo) return;
+    tellBomi(`${hoveredInfo.koreanName}. 클릭하면 이 부위를 선택할 수 있어요.`);
+    return () => hushBomi();
+  }, [hoveredControl, hoveredInfo]);
+  const [isManualSelectionMode, setIsManualSelectionMode] = useState(false);
+  const isManualSelectionModeRef = useRef(false);
+  const setManualSelectionMode = (active: boolean) => {
+    isManualSelectionModeRef.current = active;
+    setIsManualSelectionMode(active);
+  };
   const toggleExcludeStagedRef = useRef<(id: string) => void>(() => undefined);
   const [draftPaintedItems, setDraftPaintedItems] = useState<StagingItem[]>([]);
   const confirmDraftPaintedRef = useRef<() => void>(() => undefined);
@@ -315,6 +465,14 @@ export function VanatomeBodyMap({
   const clearPaintRef = useRef<() => void>(() => undefined);
   const [activeFocus, setActiveFocus] = useState<BodyFocus>("full");
   const [pelvicOrganFocus, setPelvicOrganFocus] = useState(false);
+  const applyBodyFocus = (focus: BodyFocus) => {
+    if (pelvicOrganFocus) {
+      setPelvicOrganFocus(false);
+      pelvicOrganFocusRef.current(false);
+    }
+    setActiveFocus(focus);
+    focusCameraRef.current(focus);
+  };
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadError, setLoadError] = useState<string>();
   const [hiddenSystems, setHiddenSystems] = useState<ReadonlySet<string>>(() => new Set());
@@ -350,18 +508,20 @@ export function VanatomeBodyMap({
     });
   };
 
-  const [isCyanGridShellActive, setIsCyanGridShellActive] = useState(false);
-  const [isDarkBgActive, setIsDarkBgActive] = useState(false);
+  const [isDarkBgActive, setIsDarkBgActive] = useState(Boolean(isDarkBg));
   const isDarkBgActiveRef = useRef(isDarkBgActive);
   useEffect(() => {
     isDarkBgActiveRef.current = isDarkBgActive;
   }, [isDarkBgActive]);
 
-  const [isDarkBeigeBgActive, setIsDarkBeigeBgActive] = useState(false);
-  const isDarkBeigeBgActiveRef = useRef(isDarkBeigeBgActive);
   useEffect(() => {
-    isDarkBeigeBgActiveRef.current = isDarkBeigeBgActive;
-  }, [isDarkBeigeBgActive]);
+    if (isDarkBg !== undefined && isDarkBg !== isDarkBgActiveRef.current) {
+      setIsDarkBgActive(isDarkBg);
+      toggleDarkBackgroundRef.current(isDarkBg);
+    }
+  }, [isDarkBg]);
+
+  const isDarkBeigeBgActive = false;
 
   const [isPulseActive, setIsPulseActive] = useState(false);
   const isPulseActiveRef = useRef(isPulseActive);
@@ -369,18 +529,94 @@ export function VanatomeBodyMap({
     isPulseActiveRef.current = isPulseActive;
   }, [isPulseActive]);
 
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isWideViewer, setIsWideViewer] = useState(false);
+  const [isPinnedDrawer, setIsPinnedDrawer] = useState(false);
+  const focusBarRef = useRef<HTMLDivElement>(null);
+  const focusBarBoxRef = useRef<{ left: number; top: number } | null>(null);
+  const wasWideViewerRef = useRef(false);
+  const wasPinnedDrawerRef = useRef(false);
+  const allowFocusBarFlipRef = useRef(false);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      allowFocusBarFlipRef.current = true;
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  useEffect(() => {
+    if (!drawerMode || !viewerShell) return;
+    const update = () => {
+      const { width, height } = viewerShell.getBoundingClientRect();
+      const hint = viewerShell.querySelector(".body-map-hint");
+      const hintWidth = hint instanceof HTMLElement ? hint.getBoundingClientRect().width : 0;
+      setIsWideViewer(shouldDockFocusIcons(width, height, hintWidth));
+      setIsPinnedDrawer(canOpenDrawerWithoutCoveringHint(width, height, hintWidth));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(viewerShell);
+    const hint = viewerShell.querySelector(".body-map-hint");
+    if (hint instanceof HTMLElement) observer.observe(hint);
+    return () => observer.disconnect();
+  }, [drawerMode, viewerShell]);
+
+  useEffect(() => {
+    if (!drawerMode) return;
+    if (isPinnedDrawer && !wasPinnedDrawerRef.current) setIsDrawerOpen(true);
+    if (!isPinnedDrawer && wasPinnedDrawerRef.current) setIsDrawerOpen(false);
+    wasPinnedDrawerRef.current = isPinnedDrawer;
+  }, [drawerMode, isPinnedDrawer]);
+
+  useLayoutEffect(() => {
+    const el = focusBarRef.current;
+    if (!el) return;
+    const nextBox = el.getBoundingClientRect();
+    if (nextBox.width < 8) return;
+    const previousBox = focusBarBoxRef.current;
+    focusBarBoxRef.current = { left: nextBox.left, top: nextBox.top };
+    if (!allowFocusBarFlipRef.current) {
+      wasWideViewerRef.current = isWideViewer;
+      return;
+    }
+    if (!previousBox || wasWideViewerRef.current === isWideViewer) return;
+    wasWideViewerRef.current = isWideViewer;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const { dx, dy } = invertFocusBarFlip(previousBox, nextBox);
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    el.style.transition = "none";
+    el.style.transform = `translate(${dx}px, ${dy}px)`;
+    el.getBoundingClientRect();
+    el.style.transition = "transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)";
+    el.style.transform = "none";
+    const clear = () => {
+      el.style.transition = "";
+      el.style.transform = "";
+    };
+    el.addEventListener("transitionend", clear, { once: true });
+    return () => {
+      el.removeEventListener("transitionend", clear);
+      clear();
+    };
+  }, [isWideViewer]);
+
   const toggleCyanGridShellRef = useRef<(active: boolean) => void>(() => undefined);
   const toggleDarkBackgroundRef = useRef<(active: boolean) => void>(() => undefined);
   const toggleDarkBeigeBackgroundRef = useRef<(active: boolean) => void>(() => undefined);
   const togglePulseRef = useRef<(active: boolean) => void>(() => undefined);
   const [isOnlyConfirmedActive, setIsOnlyConfirmedActive] = useState(false);
+  const isOnlyConfirmedActiveRef = useRef(false);
+  useEffect(() => {
+    isOnlyConfirmedActiveRef.current = isOnlyConfirmedActive;
+  }, [isOnlyConfirmedActive]);
   const toggleOnlyConfirmedRef = useRef<(active: boolean) => void>(() => undefined);
 
   const toggleXRayRef = useRef<(active: boolean) => void>(() => undefined);
   const toggleIsolateRef = useRef<(active: boolean) => void>(() => undefined);
   const focusSelectedMeshRef = useRef<() => void>(() => undefined);
   const selectCandidateMeshRef = useRef<(candidate: DepthHitCandidate) => void>(() => undefined);
-  const selectByAnatomyIdRef = useRef<(anatomyId: string) => boolean>(() => false);
+  const selectByAnatomyIdRef = useRef<(anatomyId: string, item?: SearchResultItem) => boolean>(() => false);
   const selectToothRef = useRef<(toothCode: number, toothName: string, shouldSelect?: boolean) => void>(() => undefined);
   const removeStagedItemRef = useRef<(id: string) => void>(() => undefined);
   const clearAllStagedItemsRef = useRef<() => void>(() => undefined);
@@ -554,9 +790,17 @@ export function VanatomeBodyMap({
 
   useEffect(() => {
     if (!recentlyAddedStagedId || !stagingListRef.current) return;
-    const el = stagingListRef.current.querySelector<HTMLElement>(`[data-staged-id="${recentlyAddedStagedId}"]`);
-    if (el) {
-      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const container = stagingListRef.current;
+    const el = container.querySelector<HTMLElement>(`[data-staged-id="${recentlyAddedStagedId}"]`);
+    if (!el) return;
+    const elTop = el.offsetTop;
+    const elBottom = elTop + el.offsetHeight;
+    const viewTop = container.scrollTop;
+    const viewBottom = viewTop + container.clientHeight;
+    if (elTop < viewTop) {
+      container.scrollTo({ top: elTop, behavior: "smooth" });
+    } else if (elBottom > viewBottom) {
+      container.scrollTo({ top: elBottom - container.clientHeight, behavior: "smooth" });
     }
   }, [recentlyAddedStagedId, stagedItems]);
 
@@ -658,7 +902,7 @@ export function VanatomeBodyMap({
           togglePulseRef,
           toggleOnlyConfirmedRef,
           getIsDarkBackgroundActive: () => isDarkBgActiveRef.current,
-          getIsDarkBeigeBackgroundActive: () => isDarkBeigeBgActiveRef.current,
+          getIsDarkBeigeBackgroundActive: () => false,
           getIsPulseActive: () => isPulseActiveRef.current,
           focusSelectedMeshRef,
           selectCandidateMeshRef,
@@ -688,6 +932,8 @@ export function VanatomeBodyMap({
           getHighlightOrganKey: () => highlightOrganKeyRef.current,
           getHighlightPainIntensity: () => highlightPainIntensityRef.current,
           getHighlightOrganIntensities: () => highlightOrganIntensitiesRef.current,
+          getIsManualSelectionMode: () => isManualSelectionModeRef.current,
+          pauseDangerMonitoringRef,
         });
         cleanupScene = nextCleanupScene;
         if (disposed) cleanupScene();
@@ -732,6 +978,7 @@ export function VanatomeBodyMap({
       selectCandidateMeshRef.current = () => undefined;
       selectByAnatomyIdRef.current = () => false;
       selectDangerOrganRef.current = () => false;
+      pauseDangerMonitoringRef.current = () => undefined;
       selectToothRef.current = () => undefined;
       if (onToothSelectRef) onToothSelectRef.current = undefined;
     };
@@ -766,20 +1013,35 @@ export function VanatomeBodyMap({
     ...draftPaintedItems.map((item) => item.id),
   ]).size;
 
-  return (
-    <section className="body-map-card vanatome-card" aria-label="인체 모니터">
-      <div className="body-map-copy">
-        <p className="section-kicker">인체 모니터</p>
+  const toolsPanel = (
+      <div className={`body-map-copy ${drawerMode ? `vanatome-drawer-panel ${isDrawerOpen ? "is-open" : ""}` : ""}`}>
+        {drawerMode ? (
+          <div className="vanatome-drawer-header">
+            <span className="vanatome-drawer-title">구조 레이어</span>
+            <button
+              type="button"
+              className="vanatome-drawer-close-btn"
+              onClick={() => setIsDrawerOpen(false)}
+              aria-label="도구 서랍 닫기"
+              onMouseEnter={() => showControlHint({ word: "닫기", detail: "도구 서랍을 닫습니다." })}
+              onMouseLeave={hideControlHint}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <p className="section-kicker">인체 모니터</p>
+        )}
         <fieldset className="vanatome-system-layers">
-          <legend>구조 레이어</legend>
+          <legend className={drawerMode ? "visually-hidden" : undefined}>구조 레이어</legend>
           <div className="vanatome-system-layer-actions">
             <button
               type="button"
               disabled={loadProgress < 100}
+              onMouseEnter={() => showControlHint({ word: "켜기", detail: "모든 계통을 다시 보여 줍니다." })}
+              onMouseLeave={hideControlHint}
               onClick={() => {
-                const next = isIsolateActive
-                  ? new Set(["integumentary"])
-                  : new Set<string>();
+                const next = new Set<string>();
                 setHiddenSystems(next);
                 setHiddenSystemsRef.current(next);
               }}
@@ -789,6 +1051,8 @@ export function VanatomeBodyMap({
             <button
               type="button"
               disabled={loadProgress < 100}
+              onMouseEnter={() => showControlHint({ word: "끄기", detail: "모든 계통을 숨깁니다." })}
+              onMouseLeave={hideControlHint}
               onClick={() => {
                 const next = new Set(systemLayers.map((layer) => layer.id));
                 setHiddenSystems(next);
@@ -803,19 +1067,17 @@ export function VanatomeBodyMap({
               const active = !hiddenSystems.has(layer.id);
               const isDisabled =
                 loadProgress < 100 ||
-                !readySystems.has(layer.id) ||
-                (isIsolateActive && layer.id === "integumentary");
+                !readySystems.has(layer.id);
               return (
                 <button
                   key={layer.id}
                   type="button"
                   disabled={isDisabled}
                   aria-pressed={active}
-                  title={
-                    isIsolateActive && layer.id === "integumentary"
-                      ? "유령 필터에서는 외피계를 선택할 수 없습니다"
-                      : undefined
+                  onMouseEnter={() =>
+                    showControlHint({ word: layer.label, detail: `${layer.label} 표시를 켜거나 끕니다.` })
                   }
+                  onMouseLeave={hideControlHint}
                   onClick={() => {
                     setHiddenSystems((current) => {
                       const next = new Set(current);
@@ -832,37 +1094,29 @@ export function VanatomeBodyMap({
             })}
           </div>
         </fieldset>
+        {(!drawerMode || (manifest?.referenceSex === "female"
+          && manifest.assets.some((asset) => asset.visualRole === "organ"))) ? (
         <div className="vanatome-focus-control">
+          {!drawerMode ? (
+            <>
           <span>빠른 확대</span>
           <div className="vanatome-focus-buttons" aria-label="인체 부위 빠른 확대">
-            {(["full", "head", "upper", "lower", "leftHand", "rightHand", "knee", "foot"] as const).map((focus) => (
+            {BODY_FOCUS_PRESETS.map((preset) => (
               <button
-                key={focus}
+                key={preset.id}
                 type="button"
                 disabled={loadProgress < 100}
-                aria-pressed={activeFocus === focus}
-                onClick={() => {
-                  if (pelvicOrganFocus) {
-                    setPelvicOrganFocus(false);
-                    pelvicOrganFocusRef.current(false);
-                  }
-                  setActiveFocus(focus);
-                  focusCameraRef.current(focus);
-                }}
+                aria-pressed={activeFocus === preset.id}
+                onMouseEnter={() => showControlHint(BODY_FOCUS_HINTS[preset.id])}
+                onMouseLeave={hideControlHint}
+                onClick={() => applyBodyFocus(preset.id)}
               >
-                {{
-                  full: "전체",
-                  head: "머리",
-                  upper: "상반신",
-                  lower: "하반신",
-                  knee: "무릎",
-                  foot: "발",
-                  leftHand: "왼손",
-                  rightHand: "오른손",
-                }[focus]}
+                {preset.label}
               </button>
             ))}
           </div>
+            </>
+          ) : null}
           {manifest?.referenceSex === "female"
           && manifest.assets.some((asset) => asset.visualRole === "organ") ? (
             <button
@@ -870,6 +1124,14 @@ export function VanatomeBodyMap({
               type="button"
               disabled={loadProgress < 100}
               aria-pressed={pelvicOrganFocus}
+              onMouseEnter={() =>
+                showControlHint(
+                  pelvicOrganFocus
+                    ? { word: "해제", detail: "골반 장기 확대를 끕니다." }
+                    : { word: "골반", detail: "골반 장기를 확대해 봅니다." },
+                )
+              }
+              onMouseLeave={hideControlHint}
               onClick={() => {
                 const next = !pelvicOrganFocus;
                 setPelvicOrganFocus(next);
@@ -884,6 +1146,7 @@ export function VanatomeBodyMap({
             </button>
           ) : null}
         </div>
+        ) : null}
         {manifest?.assets.some((asset) => asset.animationClips?.length) ? (
           <fieldset className="vanatome-hand-poses">
             <legend>손 포즈</legend>
@@ -908,33 +1171,38 @@ export function VanatomeBodyMap({
             <small>양손에 함께 적용됩니다.</small>
           </fieldset>
         ) : null}
-        <div className="body-map-selection" aria-live="polite">
-          <span style={{ color: !selectedStructure && hoveredInfo ? "#d97706" : undefined, fontWeight: !selectedStructure && hoveredInfo ? 600 : undefined }}>
-            {selectedStructure
+        <div className={`body-map-selection${hoveredControl ? " is-control-hint" : ""}`} aria-live="polite">
+          <span style={{ color: hoveredInfo && !hoveredControl ? "#d97706" : undefined, fontWeight: hoveredInfo && !hoveredControl ? 600 : undefined }}>
+            {hoveredControl || !hoveredInfo
               ? "선택한 구조"
-              : hoveredInfo
-              ? "마우스 오버 부위 (클릭하여 선택)"
-              : "선택한 구조"}
+              : "마우스 오버 부위 (클릭하여 선택)"}
           </span>
-          <strong style={{ color: !selectedStructure && hoveredInfo ? "#b45309" : undefined }}>
-            {selectedStructure
-              ? selectedStructure.name
+          <strong style={{ color: hoveredInfo && !hoveredControl ? "#b45309" : undefined }}>
+            {hoveredControl
+              ? hoveredControl.word
               : hoveredInfo
               ? `${hoveredInfo.koreanName} (${hoveredInfo.canonicalName})`
+              : selectedStructure
+              ? selectedStructure.name
               : "인체에서 구조를 선택하세요"}
           </strong>
           <small>
-            {selectedStructure
-              ? `${selectedStructure.system ? `${selectedStructure.system} · ` : ""}선택 완료 버튼을 눌러 기록에 반영할 수 있습니다.`
+            {hoveredControl
+              ? hoveredControl.detail
               : hoveredInfo
               ? `${hoveredInfo.systemKorean} 계통 · ${hoveredInfo.description || "클릭하면 이 부위가 선택됩니다."}`
+              : selectedStructure
+              ? `${selectedStructure.system ? `${selectedStructure.system} · ` : ""}선택 완료 버튼을 눌러 기록에 반영할 수 있습니다.`
               : "모델 드래그는 회전, 검은 배경 드래그는 상하 카메라 이동, 클릭은 구조 선택입니다."}
           </small>
         </div>
-        <div className="vanatome-mode-actions" style={{ display: "flex", gap: "6px", margin: "12px 0 8px" }}>
+        <div className="vanatome-mode-actions" style={{ display: "flex", gap: "6px", margin: "12px 0" }}>
           <button
             type="button"
             className="secondary-button"
+            aria-label="깊이 기반 선택"
+            onMouseEnter={() => showControlHint({ word: "관통", detail: "클릭한 곳의 겹친 구조를 고릅니다." })}
+            onMouseLeave={hideControlHint}
             style={{
               flex: 1,
               padding: "6px 8px",
@@ -949,11 +1217,14 @@ export function VanatomeBodyMap({
               setInteractionModeRef.current("inspect");
             }}
           >
-            깊이 방향 선택
+            깊이 기반 선택
           </button>
           <button
             type="button"
             className="secondary-button"
+            aria-label="통증 범위 칠하기"
+            onMouseEnter={() => showControlHint({ word: "칠하기", detail: "아픈 범위를 칠합니다." })}
+            onMouseLeave={hideControlHint}
             style={{
               flex: 1,
               padding: "6px 8px",
@@ -966,357 +1237,80 @@ export function VanatomeBodyMap({
             onClick={() => {
               setInteractionMode("paint");
               setInteractionModeRef.current("paint");
-              setIsStagedPanelDismissed(false);
-              setRecentlyAddedStagedId(null);
             }}
           >
             통증 범위 칠하기
           </button>
         </div>
-        <div className="vanatome-precision-toolbar" role="toolbar" aria-label="정밀 해부학 도구">
-          <button
-            type="button"
-            className="toolbar-btn"
-            disabled={loadProgress < 100}
-            onClick={() => searchInputRef.current?.focus()}
-          >
-            부위 검색
-          </button>
-          <button
-            type="button"
-            className="toolbar-btn"
-            disabled={loadProgress < 100 || !selectedStructure}
-            onClick={() => focusSelectedMeshRef.current()}
-          >
-            부위 줌인
-          </button>
-          <button
-            type="button"
-            className={`toolbar-btn ${isXRayActive ? "is-active" : ""}`}
-            disabled={loadProgress < 100}
-            aria-pressed={isXRayActive}
-            onClick={() => {
-              const next = !isXRayActive;
-              setIsXRayActive(next);
-              if (next && isIsolateActive) {
-                setIsIsolateActive(false);
-              }
-              toggleXRayRef.current(next);
-            }}
-          >
-            X-ray 필터
-          </button>
-          <button
-            type="button"
-            className={`toolbar-btn ${isIsolateActive ? "is-active" : ""}`}
-            disabled={loadProgress < 100}
-            aria-pressed={isIsolateActive}
-            onClick={() => {
-              const next = !isIsolateActive;
-              setIsIsolateActive(next);
-              if (next && isXRayActive) {
-                setIsXRayActive(false);
-              }
-              if (next) {
-                setHiddenSystems((current) => {
-                  const updated = new Set(current);
-                  updated.add("integumentary");
-                  updated.delete("skeletal");
-                  updated.delete("muscular");
-                  setHiddenSystemsRef.current(updated);
-                  return updated;
-                });
-              }
-              toggleIsolateRef.current(next);
-            }}
-          >
-            유령 필터
-          </button>
-        </div>
-        <div
-          className="vanatome-test-options"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "6px",
-            background: "rgba(241, 245, 249, 0.7)",
-            border: "1px dashed #cbd5e1",
-            borderRadius: "8px",
-            padding: "8px 10px",
-            marginTop: "6px",
-          }}
-          role="group"
-          aria-label="테스트 스타일 옵션"
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span style={{ fontSize: "0.74rem", fontWeight: 600, color: "#475569" }}>
-              테스트 스타일 옵션
-            </span>
-            <span style={{ fontSize: "0.68rem", color: "#94a3b8" }}>실시간 전환</span>
-          </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-            <button
-              type="button"
-              className={`toolbar-btn ${isCyanGridShellActive ? "is-active" : ""}`}
-              style={{
-                fontSize: "0.74rem",
-                padding: "5px 4px",
-                borderColor: isCyanGridShellActive ? "#06b6d4" : "#cbd5e1",
-                color: isCyanGridShellActive ? "#0891b2" : "#475569",
-                background: isCyanGridShellActive ? "rgba(6, 182, 212, 0.12)" : "#ffffff",
-                fontWeight: isCyanGridShellActive ? 600 : 500,
-                borderRadius: "6px",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-              disabled={loadProgress < 100}
-              aria-pressed={isCyanGridShellActive}
-              title="물빛청색 그리드 와이어프레임 외피 스타일 적용"
-              onClick={() => {
-                const next = !isCyanGridShellActive;
-                setIsCyanGridShellActive(next);
-                toggleCyanGridShellRef.current(next);
-              }}
-            >
-              물빛청색 그리드
-            </button>
-            <button
-              type="button"
-              className={`toolbar-btn ${isDarkBgActive ? "is-active" : ""}`}
-              style={{
-                fontSize: "0.74rem",
-                padding: "5px 4px",
-                borderColor: isDarkBgActive ? "#0284c7" : "#cbd5e1",
-                color: isDarkBgActive ? "#0369a1" : "#475569",
-                background: isDarkBgActive ? "rgba(2, 132, 199, 0.12)" : "#ffffff",
-                fontWeight: isDarkBgActive ? 600 : 500,
-                borderRadius: "6px",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-              disabled={loadProgress < 100}
-              aria-pressed={isDarkBgActive}
-              title="홀로그램 사이안 모델 + 어두운 배경 적용"
-              onClick={() => {
-                const next = !isDarkBgActive;
-                setIsDarkBgActive(next);
-                if (next) {
-                  setIsDarkBeigeBgActive(false);
-                }
-                toggleDarkBackgroundRef.current(next);
-              }}
-            >
-              홀로그램 다크
-            </button>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-            <button
-              type="button"
-              className={`toolbar-btn ${isDarkBeigeBgActive ? "is-active" : ""}`}
-              style={{
-                fontSize: "0.74rem",
-                padding: "5px 4px",
-                borderColor: isDarkBeigeBgActive ? "#d97706" : "#cbd5e1",
-                color: isDarkBeigeBgActive ? "#92400e" : "#475569",
-                background: isDarkBeigeBgActive ? "rgba(245, 158, 11, 0.12)" : "#ffffff",
-                fontWeight: isDarkBeigeBgActive ? 600 : 500,
-                borderRadius: "6px",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "5px",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-              disabled={loadProgress < 100}
-              aria-pressed={isDarkBeigeBgActive}
-              title="투명베이지 색 모델에 배경만 어두운 배경으로 전환"
-              onClick={() => {
-                const next = !isDarkBeigeBgActive;
-                setIsDarkBeigeBgActive(next);
-                if (next) {
-                  setIsDarkBgActive(false);
-                }
-                toggleDarkBeigeBackgroundRef.current(next);
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-block",
-                  width: "7px",
-                  height: "7px",
-                  borderRadius: "50%",
-                  background: "#ba9b7d",
-                  boxShadow: isDarkBeigeBgActive ? "0 0 6px rgba(186, 155, 125, 0.8)" : "none",
-                }}
-              />
-              <span>투명베이지 다크</span>
-            </button>
-            <button
-              type="button"
-              className={`toolbar-btn ${isPulseActive ? "is-active" : ""}`}
-              style={{
-                fontSize: "0.74rem",
-                padding: "5px 4px",
-                borderColor: isPulseActive ? "#ef4444" : "#cbd5e1",
-                color: isPulseActive ? "#dc2626" : "#475569",
-                background: isPulseActive ? "rgba(239, 68, 68, 0.12)" : "#ffffff",
-                fontWeight: isPulseActive ? 600 : 500,
-                borderRadius: "6px",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "5px",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-              disabled={loadProgress < 100}
-              aria-pressed={isPulseActive}
-              title="위험/통증 부위 호흡 펄스 애니메이션 토글 (기본값: 꺼짐)"
-              onClick={() => {
-                const next = !isPulseActive;
-                setIsPulseActive(next);
-                togglePulseRef.current(next);
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-block",
-                  width: "7px",
-                  height: "7px",
-                  borderRadius: "50%",
-                  background: isPulseActive ? "#ef4444" : "#94a3b8",
-                  boxShadow: isPulseActive ? "0 0 6px rgba(239, 68, 68, 0.8)" : "none",
-                }}
-              />
-              <span>호흡 펄스 효과</span>
-            </button>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "6px" }}>
-            <button
-              type="button"
-              className={`toolbar-btn ${isOnlyConfirmedActive ? "is-active" : ""}`}
-              style={{
-                fontSize: "0.74rem",
-                padding: "5px 6px",
-                borderColor: isOnlyConfirmedActive ? "#1d4fb8" : "#cbd5e1",
-                color: isOnlyConfirmedActive ? "#1d4fb8" : "#475569",
-                background: isOnlyConfirmedActive ? "rgba(29, 79, 184, 0.1)" : "#ffffff",
-                fontWeight: isOnlyConfirmedActive ? 600 : 500,
-                borderRadius: "6px",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "5px",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-              disabled={loadProgress < 100}
-              aria-pressed={isOnlyConfirmedActive}
-              title="확정 범위로 선택된 부위만 3D 뷰어에 표시 (기타 모델 숨김)"
-              onClick={() => {
-                const next = !isOnlyConfirmedActive;
-                setIsOnlyConfirmedActive(next);
-                toggleOnlyConfirmedRef.current(next);
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-block",
-                  width: "7px",
-                  height: "7px",
-                  borderRadius: "50%",
-                  background: isOnlyConfirmedActive ? "#1d4fb8" : "#94a3b8",
-                  boxShadow: isOnlyConfirmedActive ? "0 0 6px rgba(29, 79, 184, 0.7)" : "none",
-                }}
-              />
-              <span>확정 범위만 보기</span>
-            </button>
-          </div>
-        </div>
-        <div className="vanatome-actions" style={{ display: "flex", gap: "6px" }}>
-          <button
-            type="button"
-            style={{ flex: 1, padding: "5px 8px", fontSize: "0.8rem" }}
-            disabled={!canUndoDelete}
-            onClick={() => undoDeleteRef.current()}
-            title="작업 되돌리기 (확정/삭제 Undo)"
-          >
-            되돌리기(Undo)
-          </button>
-          <button
-            type="button"
-            style={{ flex: 1, padding: "5px 8px", fontSize: "0.8rem" }}
-            disabled={!canRedoDelete}
-            onClick={() => redoDeleteRef.current()}
-            title="작업 다시 진행 (확정/삭제 Redo)"
-          >
-            다시진행(Redo)
-          </button>
-        </div>
         <div
           className="vanatome-staging-panel"
           style={{
-            margin: "12px 0 0 0",
+            margin: "0",
             padding: "12px",
             background: "rgba(248, 250, 252, 0.95)",
             borderRadius: "12px",
             border: "1px solid #e2e8f0",
-            height: "340px",
-            maxHeight: "340px",
+            height: drawerMode ? "auto" : "340px",
+            maxHeight: drawerMode ? "none" : "340px",
+            flex: drawerMode ? "1 1 auto" : undefined,
+            minHeight: drawerMode ? 0 : undefined,
             boxSizing: "border-box",
             display: "flex",
             flexDirection: "column",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexShrink: 0 }}>
-            <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#1e293b" }}>
+          <div className="vanatome-staging-header">
+            <span className="vanatome-staging-title">
               확정 부위 ({stagedItems.length}개)
             </span>
-            {stagedItems.length > 0 && (
+            <div className="vanatome-actions vanatome-history-actions">
+              <button
+                type="button"
+                className="vanatome-history-btn"
+                disabled={!canUndoDelete}
+                onClick={() => undoDeleteRef.current()}
+                onMouseEnter={() => showControlHint({ word: "되돌리기", detail: "방금 지운 부위를 되돌립니다." })}
+                onMouseLeave={hideControlHint}
+                aria-label="되돌리기"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M9 14 4 9l5-5" />
+                  <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="vanatome-history-btn"
+                disabled={!canRedoDelete}
+                onClick={() => redoDeleteRef.current()}
+                onMouseEnter={() => showControlHint({ word: "다시", detail: "되돌리기를 다시 진행합니다." })}
+                onMouseLeave={hideControlHint}
+                aria-label="다시 진행"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m15 14 5-5-5-5" />
+                  <path d="M20 9H9.5a5.5 5.5 0 0 0-5.5 5.5v0A5.5 5.5 0 0 0 9.5 20H13" />
+                </svg>
+              </button>
               <button
                 type="button"
                 className="vanatome-stage-clear-btn"
-                style={{
-                  padding: "2px 8px",
-                  fontSize: "0.72rem",
-                  borderRadius: "4px",
-                  border: "1px solid #f43f5e",
-                  color: "#be123c",
-                  background: "#fff1f2",
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                  fontWeight: 600,
-                  transition: "background-color 0.15s ease, border-color 0.15s ease",
-                }}
+                disabled={stagedItems.length === 0}
                 onClick={() => clearAllStagedItemsRef.current()}
-                title="확정 부위 전체 일괄 삭제"
+                onMouseEnter={() => showControlHint({ word: "비우기", detail: "담아 둔 부위를 모두 지웁니다." })}
+                onMouseLeave={hideControlHint}
                 aria-label="확정 부위 일괄 삭제"
               >
-                일괄 삭제
+                E
               </button>
-            )}
+            </div>
           </div>
           {stagedItems.length > 0 ? (
             <div
               ref={stagingListRef}
-              style={{ display: "flex", flexDirection: "column", gap: "6px", flex: 1, minHeight: 0, overflowY: "auto" }}
+              className="vanatome-staging-list"
+              style={{ display: "flex", flexDirection: "column", gap: "6px", flex: 1, minHeight: 0, minWidth: 0, width: "100%", overflowX: "hidden", overflowY: "auto" }}
             >
               {stagedItems.map((item) => {
                 const isRecentlyAdded = recentlyAddedStagedId === item.id;
@@ -1338,6 +1332,10 @@ export function VanatomeBodyMap({
                       alignItems: "center",
                       gap: "6px",
                       flexShrink: 0,
+                      minWidth: 0,
+                      maxWidth: "100%",
+                      overflow: "hidden",
+                      boxSizing: "border-box",
                       transition: "all 0.2s ease",
                     }}
                   >
@@ -1345,7 +1343,7 @@ export function VanatomeBodyMap({
 
                       <div
                         style={{
-                          fontSize: "0.8rem",
+                          fontSize: "0.8125rem",
                           fontWeight: 600,
                           color: isRecentlyAdded ? "#9f1239" : "var(--ink, #0f172a)",
                           whiteSpace: "nowrap",
@@ -1355,12 +1353,12 @@ export function VanatomeBodyMap({
                         title={`${item.info.koreanName} (${item.info.canonicalName})`}
                       >
                         {item.info.koreanName}
-                        <span style={{ fontWeight: 400, fontSize: "0.74rem", color: "#64748b", marginLeft: "4px" }}>
+                        <span style={{ fontWeight: 400, fontSize: "0.8125rem", color: "#64748b", marginLeft: "4px" }}>
                           ({item.info.canonicalName})
                         </span>
                       </div>
                       <div
-                        style={{ fontSize: "0.7rem", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                        style={{ fontSize: "0.8125rem", color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                         title={item.info.description}
                       >
                         <span style={{ color: isRecentlyAdded ? "#be123c" : "#64748b", fontWeight: 500 }}>[{item.info.systemKorean}]</span> {item.info.description}
@@ -1371,7 +1369,7 @@ export function VanatomeBodyMap({
                       className="vanatome-stage-remove-btn"
                       style={{
                         padding: "2px 7px",
-                        fontSize: "0.72rem",
+                        fontSize: "0.8125rem",
                         borderRadius: "4px",
                         border: isRecentlyAdded ? "1px solid #f43f5e" : "1px solid var(--line, #cbd5e1)",
                         color: isRecentlyAdded ? "#be123c" : "#64748b",
@@ -1399,7 +1397,7 @@ export function VanatomeBodyMap({
                 alignItems: "center",
                 justifyContent: "center",
                 color: "#64748b",
-                fontSize: "0.76rem",
+                fontSize: "0.8125rem",
                 textAlign: "center",
                 padding: "16px 12px",
                 background: "#f8fafc",
@@ -1419,58 +1417,294 @@ export function VanatomeBodyMap({
           )}
         </div>
       </div>
+  );
+
+  return (
+    <section
+      className={`body-map-card vanatome-card ${drawerMode ? "has-drawer-mode" : ""}${drawerMode && isDrawerOpen ? " is-drawer-open" : ""}`}
+      aria-label="인체 모니터"
+    >
+      {drawerMode
+        ? (viewerShell ? createPortal(toolsPanel, viewerShell) : null)
+        : toolsPanel}
 
       <div className="vanatome-stage-column">
-        <div className={`body-map-viewer vanatome-viewer ${isDarkBgActive ? "is-hologram" : isDarkBeigeBgActive ? "is-dark-beige" : ""}`}>
-          <canvas ref={canvasRef} aria-label="회전 가능한 해부학 인체 모니터" />
-          <VanatomeQuickSearch
-            inputRef={searchInputRef}
-            disabled={loadProgress < 100}
-            onSelectAnatomy={(anatomyId) => {
-              selectByAnatomyIdRef.current(anatomyId);
-            }}
-            onSelectTooth={(toothFdi, koreanName) => {
-              selectToothRef.current(toothFdi, koreanName, true);
-            }}
-          />
-          {highlightOrganKey ? (
-            activeEditingMeshCount === 0 ? (
-              <div
-                className="vanatome-monitoring-glow-pill"
-                onClick={() => {
-                  selectDangerOrganRef.current(highlightOrganKey, {
-                    animateCamera: true,
-                    painIntensity: highlightPainIntensityRef.current,
-                    organIntensities: highlightOrganIntensitiesRef.current,
-                  });
-                }}
-                title="건강 기록 연동 3D 자동 관찰 모드 (클릭하여 전신 모니터링 뷰 복귀)"
-                role="status"
-                aria-label="3D 자동 관찰 모드 활성화됨"
-              >
-                <span className="vanatome-monitoring-glow-dot" />
-                <span className="vanatome-monitoring-glow-title">자동 관찰 모드</span>
-                <span className="vanatome-monitoring-glow-sub">모니터링 뷰</span>
-              </div>
-            ) : (
-              <div className="vanatome-monitoring-glow-pill is-recording" role="status" aria-label="부위 선택 모드">
-                <span className="vanatome-recording-dot" />
-                <span className="vanatome-monitoring-glow-title">
-                  부위 선택 모드 ({activeEditingMeshCount}개 선택)
-                </span>
+        {/* 상단 컨트롤 바 (녹색 영역: 3D 뷰어 위 상단 라인에 자동 관찰 모드와 검색창 배치) */}
+        <div className="vanatome-top-controls-bar">
+          <div className="vanatome-top-left-controls">
+            {highlightOrganKey ? (
+              activeEditingMeshCount === 0 && !isManualSelectionMode ? (
                 <button
                   type="button"
-                  className="vanatome-return-monitoring-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  className="vanatome-monitoring-glow-pill"
+                  onClick={() => {
+                    setManualSelectionMode(true);
+                    pauseDangerMonitoringRef.current();
+                  }}
+                  title="부위 선택 모드로 전환"
+                  aria-label="자동 관찰 모드, 클릭하면 부위 선택 모드로 전환"
+                >
+                  <span className="vanatome-monitoring-glow-dot" />
+                  <span className="vanatome-monitoring-glow-title">자동 관찰 모드</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="vanatome-monitoring-glow-pill is-recording"
+                  onClick={() => {
+                    setManualSelectionMode(false);
                     clearAllStagedItemsRef.current();
                   }}
-                  title="선택된 부위를 비우고 건강 기록 모니터링 관찰 모드로 복귀"
+                  title="자동 관찰 모드로 전환"
+                  aria-label="부위 선택 모드, 클릭하면 자동 관찰 모드로 전환"
                 >
-                  관찰 모드 복귀 ↺
+                  <span className="vanatome-recording-dot" />
+                  <span className="vanatome-monitoring-glow-title">
+                    부위 선택 모드 ({activeEditingMeshCount}개 선택)
+                  </span>
+                  <span className="vanatome-return-monitoring-btn">
+                    관찰 모드 복귀 ↺
+                  </span>
                 </button>
-              </div>
+              )
+            ) : null}
+          </div>
+
+          <div className="vanatome-top-right-controls">
+            <VanatomeQuickSearch
+              inputRef={searchInputRef}
+              disabled={loadProgress < 100}
+              onSelectAnatomy={(anatomyId) => {
+                selectByAnatomyIdRef.current(anatomyId);
+              }}
+              onSelectTooth={(toothFdi, koreanName) => {
+                selectToothRef.current(toothFdi, koreanName, true);
+              }}
+            />
+          </div>
+        </div>
+
+        <div
+          className={`body-map-viewer vanatome-viewer ${isDarkBgActive || isDarkBeigeBgActive ? "is-dark-beige" : ""}${drawerMode && isWideViewer ? " is-wide-viewer" : ""}`}
+          ref={drawerMode ? setViewerShell : undefined}
+          onMouseEnter={() =>
+            tellBomi(
+              interactionMode === "paint"
+                ? "인체 위를 드래그하면 칠하고, 외곽을 드래그하면 돌려 볼 수 있어요."
+                : "외곽을 드래그하면 돌아가고, 배경을 드래그하면 위아래로 움직여요.",
             )
+          }
+          onMouseLeave={hushBomi}
+        >
+          <canvas ref={canvasRef} aria-label="회전 가능한 해부학 인체 모니터" />
+
+          {/* 텍스트 없는 퀵 아이콘 버튼군 (파란색 영역: 화면 우측 상단으로 이동) */}
+          <div className="vanatome-quick-icon-bar" role="toolbar" aria-label="3D 뷰어 퀵 컨트롤">
+            {/* 1. 어두운 배경 토글 버튼 (맨 위쪽 위치) */}
+            <button
+              type="button"
+              className={`vanatome-quick-icon-btn ${isDarkBgActive ? "is-active dark-bg-active" : ""}`}
+              onClick={() => {
+                const next = !isDarkBgActive;
+                setIsDarkBgActive(next);
+                onDarkBgChange?.(next);
+                toggleDarkBackgroundRef.current(next);
+              }}
+              aria-label={isDarkBgActive ? "밝은 배경으로 전환" : "어두운 배경으로 전환"}
+              onMouseEnter={() =>
+                showControlHint(
+                  isDarkBgActive
+                    ? { word: "밝게", detail: "배경을 밝게 바꿉니다." }
+                    : { word: "어둡게", detail: "배경을 어둡게 바꿉니다." },
+                )
+              }
+              onMouseLeave={hideControlHint}
+              aria-pressed={isDarkBgActive}
+              disabled={loadProgress < 100}
+            >
+              {isDarkBgActive ? (
+                /* 태양 아이콘 */
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="5" />
+                  <line x1="12" y1="1" x2="12" y2="3" />
+                  <line x1="12" y1="21" x2="12" y2="23" />
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                  <line x1="1" y1="12" x2="3" y2="12" />
+                  <line x1="21" y1="12" x2="23" y2="12" />
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                </svg>
+              ) : (
+                /* 초승달 아이콘 */
+                <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              )}
+            </button>
+
+            {/* 2. X-ray 필터 토글 */}
+            <button
+              type="button"
+              className={`vanatome-quick-icon-btn ${isXRayActive ? "is-active xray-active" : ""}`}
+              onClick={() => {
+                const next = !isXRayActive;
+                setIsXRayActive(next);
+                if (next && isIsolateActive) {
+                  setIsIsolateActive(false);
+                }
+                toggleXRayRef.current(next);
+              }}
+              aria-label={isXRayActive ? "X-ray 필터 끄기" : "X-ray 필터 켜기 (내부 투시)"}
+              onMouseEnter={() => showControlHint({ word: "X-ray 필터", detail: "내부를 비춰 봅니다." })}
+              onMouseLeave={hideControlHint}
+              aria-pressed={isXRayActive}
+              disabled={loadProgress < 100}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <g transform="rotate(-45 12 12)">
+                  <circle cx="5" cy="9.4" r="2.45" />
+                  <circle cx="5" cy="14.6" r="2.45" />
+                  <path d="M7 10.55h10v2.9H7z" />
+                  <circle cx="19" cy="9.4" r="2.45" />
+                  <circle cx="19" cy="14.6" r="2.45" />
+                </g>
+              </svg>
+            </button>
+
+            {/* 3. 유령 필터 토글 */}
+            <button
+              type="button"
+              className={`vanatome-quick-icon-btn ${isIsolateActive ? "is-active ghost-active" : ""}`}
+              onClick={() => {
+                const next = !isIsolateActive;
+                setIsIsolateActive(next);
+                if (next && isXRayActive) {
+                  setIsXRayActive(false);
+                }
+                if (next) {
+                  setHiddenSystems((current) => {
+                    const updated = new Set(current);
+                    updated.delete("skeletal");
+                    updated.delete("muscular");
+                    setHiddenSystemsRef.current(updated);
+                    return updated;
+                  });
+                }
+                toggleIsolateRef.current(next);
+              }}
+              aria-label={isIsolateActive ? "유령 필터 끄기" : "유령 필터 켜기 (반투명 고스트)"}
+              onMouseEnter={() => showControlHint({ word: "유령 필터", detail: "반투명으로 겹쳐 봅니다." })}
+              onMouseLeave={hideControlHint}
+              aria-pressed={isIsolateActive}
+              disabled={loadProgress < 100}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill={isIsolateActive ? "currentColor" : "none"} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" />
+                <path d="M9 10h.01" />
+                <path d="M15 10h.01" />
+              </svg>
+            </button>
+
+            {/* 4. 아픈곳 강조 토글 (응급실 알람 / 사이렌 비콘 모양) */}
+            <button
+              type="button"
+              className={`vanatome-quick-icon-btn ${isPulseActive ? "is-active pulse-active" : ""}`}
+              onClick={() => {
+                const next = !isPulseActive;
+                setIsPulseActive(next);
+                togglePulseRef.current(next);
+              }}
+              aria-label={isPulseActive ? "아픈곳 강조 끄기" : "아픈곳 강조 켜기 (응급실 알람)"}
+              onMouseEnter={() => showControlHint({ word: "강조", detail: "아픈 곳을 깜빡입니다." })}
+              onMouseLeave={hideControlHint}
+              aria-pressed={isPulseActive}
+              disabled={loadProgress < 100}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill={isPulseActive ? "currentColor" : "none"} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {/* 비콘/사이렌 본체 돔 */}
+                <path d="M7 18h10V11a5 5 0 0 0-10 0v7z" />
+                {/* 하단 베이스 */}
+                <path d="M5 21h14" />
+                {/* 비콘 경보 파선 빔 */}
+                <line x1="12" y1="2" x2="12" y2="4" />
+                <line x1="4.5" y1="6.5" x2="6" y2="8" />
+                <line x1="19.5" y1="6.5" x2="18" y2="8" />
+              </svg>
+            </button>
+
+            {/* 5. 확정 부위만 보기 토글 */}
+            <button
+              type="button"
+              className={`vanatome-quick-icon-btn ${isOnlyConfirmedActive ? "is-active target-active" : ""}`}
+              onClick={() => {
+                const next = !isOnlyConfirmedActive;
+                setIsOnlyConfirmedActive(next);
+                toggleOnlyConfirmedRef.current(next);
+              }}
+              aria-label={isOnlyConfirmedActive ? "전체 부위 함께 보기" : "확정 부위만 보기"}
+              onMouseEnter={() =>
+                showControlHint(
+                  isOnlyConfirmedActive
+                    ? { word: "전체", detail: "모든 부위를 다시 보여 줍니다." }
+                    : { word: "선택 확정 부위만 보기", detail: "담아 둔 부위만 남깁니다." },
+                )
+              }
+              onMouseLeave={hideControlHint}
+              aria-pressed={isOnlyConfirmedActive}
+              disabled={loadProgress < 100}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="6" />
+                <circle cx="12" cy="12" r="2" />
+              </svg>
+            </button>
+
+          </div>
+          {/* 6. 서랍 메뉴는 좌측 상단의 독립 버튼으로 둔다. */}
+          {drawerMode ? (
+            <button
+              type="button"
+              className="vanatome-quick-icon-btn vanatome-drawer-menu-icon"
+              onClick={() => setIsDrawerOpen(true)}
+              aria-label="도구와 하단 안내 열기"
+              onMouseEnter={() => showControlHint({ word: "도구", detail: "레이어와 선택 도구를 엽니다." })}
+              onMouseLeave={hideControlHint}
+              hidden={isDrawerOpen}
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+          ) : null}
+          {drawerMode ? (
+            <div
+              ref={focusBarRef}
+              className={`vanatome-focus-icon-bar${isDrawerOpen ? " is-drawer-open" : ""}${isWideViewer ? " is-docked-br" : ""}`}
+              role="toolbar"
+              aria-label="인체 부위 빠른 확대"
+              hidden={isDrawerOpen && !isWideViewer}
+            >
+              {BODY_FOCUS_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  data-focus={preset.id}
+                  className={`vanatome-quick-icon-btn ${activeFocus === preset.id && !pelvicOrganFocus ? "is-active" : ""}`}
+                  disabled={loadProgress < 100}
+                  aria-pressed={activeFocus === preset.id && !pelvicOrganFocus}
+                  aria-label={preset.label}
+                  onMouseEnter={() => showControlHint(BODY_FOCUS_HINTS[preset.id])}
+                  onMouseLeave={hideControlHint}
+                  onClick={() => applyBodyFocus(preset.id)}
+                >
+                  <BodyFocusGlyph focus={preset.id} />
+                </button>
+              ))}
+            </div>
           ) : null}
           {(!hiddenSystems.has("muscular") || !hiddenSystems.has("digestive")) ? (
             <span
@@ -1496,11 +1730,15 @@ export function VanatomeBodyMap({
                     toggleFasciaHidden();
                   }}
                   aria-pressed={isFasciaHidden}
-                  title={
-                    isFasciaHidden
-                      ? "근막을 다시 표시합니다 (클릭하여 전환)"
-                      : "표면의 근막을 숨겨 내부 인체 구조를 쉽게 선택합니다 (클릭하여 전환)"
+                  onMouseEnter={() =>
+                    showControlHint({
+                      word: isFasciaHidden ? "근막 보이기" : "근막 안보이기",
+                      detail: isFasciaHidden
+                        ? "근막을 다시 보여 줘요."
+                        : "근막을 숨기면 안쪽 근육이 잘 보여요.",
+                    })
                   }
+                  onMouseLeave={hideControlHint}
                 >
                   {isFasciaHidden ? "근막 보이기" : "근막 안보이기"}
                 </button>
@@ -1514,34 +1752,21 @@ export function VanatomeBodyMap({
                     togglePeritoneumHidden();
                   }}
                   aria-pressed={isPeritoneumHidden}
-                  title={
-                    isPeritoneumHidden
-                      ? "복막(대망·소망 등)을 다시 표시합니다 (클릭하여 전환)"
-                      : "복막(대망·소망 등)을 숨겨 내부 소화기(위·장)를 쉽게 선택합니다 (클릭하여 전환)"
+                  onMouseEnter={() =>
+                    showControlHint({
+                      word: isPeritoneumHidden ? "복막 보이기" : "복막 안보이기",
+                      detail: isPeritoneumHidden
+                        ? "복막을 다시 보여 줘요."
+                        : "복막을 숨기면 위·장이 잘 보여요.",
+                    })
                   }
+                  onMouseLeave={hideControlHint}
                 >
                   {isPeritoneumHidden ? "복막 보이기" : "복막 안보이기"}
                 </button>
               ) : null}
-              <span className="body-map-hint-text">
-                {isPeritoneumHidden && isFasciaHidden
-                  ? "근막·복막 숨김 모드 · 심부 장기 및 근육 선택 가능 · 외곽선 회전"
-                  : isPeritoneumHidden
-                    ? "복막 숨김 모드 · 내부 소화기(위·장) 선택 가능 · 외곽선 회전"
-                    : isFasciaHidden
-                      ? "근막 숨김 모드 · 심부 부위 선택 가능 · 외곽선 드래그 회전"
-                      : (interactionMode === "paint"
-                          ? "인체 위 드래그로 스프레이 분사 · 외곽선 회전 · 배경 이동"
-                          : "인체 클릭으로 부위 선택 · 외곽선 드래그로 회전 · 배경 드래그로 상하 이동")}
-              </span>
             </span>
-          ) : (
-            <span className="body-map-hint">
-              {interactionMode === "paint"
-                ? "인체 위 드래그로 스프레이 분사 · 외곽선 드래그로 회전 · 배경 드래그로 상하 이동"
-                : "인체 클릭으로 부위 선택 · 외곽선 드래그로 회전 · 배경 드래그로 상하 이동"}
-            </span>
-          )}
+          ) : null}
 
           {isDentalModalOpen && !onDentalOpenChange ? (
             <DentalPickerModal
@@ -1555,7 +1780,12 @@ export function VanatomeBodyMap({
           ) : null}
         </div>
 
-        <div className="vanatome-bottom-panel" role="region" aria-label="해부학 구조 세부 정보">
+        <div
+          className={`vanatome-bottom-panel${drawerMode && isDrawerOpen ? " is-open" : ""}`}
+          role="region"
+          aria-label="해부학 구조 세부 정보"
+          hidden={Boolean(drawerMode && !isDrawerOpen)}
+        >
           {interactionMode === "inspect" ? (
             depthCandidates.length > 0 ? (
               <div className="bottom-panel-content is-depth">
@@ -1856,7 +2086,7 @@ export function VanatomeBodyMap({
                     type="button"
                     className="panel-action-btn"
                     onClick={() => setIsStagedPanelDismissed(false)}
-                    style={{ padding: "5px 14px", fontSize: "0.78rem" }}
+                    style={{ padding: "5px 14px", fontSize: "0.8125rem" }}
                   >
                     구조 목록 다시 열기
                   </button>
@@ -1936,7 +2166,7 @@ type CreateAnatomySceneOptions = {
   getIsPulseActive?: () => boolean;
   focusSelectedMeshRef: React.MutableRefObject<() => void>;
   selectCandidateMeshRef: React.MutableRefObject<(candidate: DepthHitCandidate) => void>;
-  selectByAnatomyIdRef: React.MutableRefObject<(anatomyId: string) => boolean>;
+  selectByAnatomyIdRef: React.MutableRefObject<(anatomyId: string, item?: SearchResultItem) => boolean>;
   selectToothRef: React.MutableRefObject<(toothCode: number, toothName: string) => void>;
   removeStagedItemRef: React.MutableRefObject<(id: string) => void>;
   clearAllStagedItemsRef: React.MutableRefObject<() => void>;
@@ -1964,6 +2194,8 @@ type CreateAnatomySceneOptions = {
   getHighlightOrganKey?: () => string | undefined;
   getHighlightPainIntensity?: () => number | undefined;
   getHighlightOrganIntensities?: () => Record<string, number> | undefined;
+  getIsManualSelectionMode?: () => boolean;
+  pauseDangerMonitoringRef?: React.MutableRefObject<() => void>;
 };
 
 async function createAnatomyScene(options: CreateAnatomySceneOptions) {
@@ -1987,7 +2219,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     toggleCandidateDepthRef, setAllDepthCandidatesSelectedRef, confirmDepthCandidatesRef, clearDepthCandidatesRef,
     eraseDepthSelectionRef, hoverMeshByNameRef,
     setSelectedDepthCandidateIds, onRecentlyAddedStaged, getHighlightOrganKey, getHighlightPainIntensity,
-    getHighlightOrganIntensities,
+    getHighlightOrganIntensities, getIsManualSelectionMode, pauseDangerMonitoringRef,
   } = options;
   let renderer: THREE.WebGLRenderer;
   try {
@@ -2329,6 +2561,9 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   };
 
   const restoreDangerOrganHighlights = () => {
+    if (getIsManualSelectionMode?.()) {
+      return;
+    }
     dangerPulsingMeshes.forEach((mesh) => {
       applyDangerHighlightToMesh(mesh, mesh.userData.painIntensity ?? currentDangerIntensity);
     });
@@ -2933,11 +3168,21 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   let isXRayMode = false;
   let isIsolateMode = false;
 
+  const createOriginalTransparentMaterials = (
+    source: THREE.Material | THREE.Material[],
+    opacity = 0.35,
+  ) => createGhostMaterial(source, opacity);
+
   const applyConfirmedMaterial = (mesh: THREE.Mesh) => {
     const orig = originalMaterials.get(mesh) ?? mesh.material;
     if (isOnlyConfirmedActive) {
-      mesh.material = orig;
-      mesh.renderOrder = isShellOrSurface(mesh) ? 10 : 20;
+      const shouldBeTransparent =
+        (isXRayMode && !isSkeletonStructure(mesh)) ||
+        (isIsolateMode && isSurfaceStructure(mesh));
+      mesh.material = shouldBeTransparent
+        ? createOriginalTransparentMaterials(orig)
+        : orig;
+      mesh.renderOrder = shouldBeTransparent ? 15 : (isShellOrSurface(mesh) ? 10 : 20);
       return;
     }
     const isSurface = isSurfaceStructure(mesh);
@@ -2960,11 +3205,11 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     if (isPeritoneumHidden && isPeritoneumStructure(mesh)) {
       return;
     }
-    if (isIsolateMode && mesh.userData.structureSystem === "integumentary") {
-      return;
-    }
     const existing = stagedItemsMap.get(mesh.name);
     if (existing && !existing.excluded) {
+      if (isOnlyConfirmedActive) {
+        return;
+      }
       // 이미 선택되어 있는 경우 -> 토글 해제
       selectedMeshes.delete(mesh);
       stagedItemsMap.delete(mesh.name);
@@ -3056,7 +3301,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     }
 
     // 모니터링 대상인 위험 장기는 X-ray 모드나 Isolate 모드에서도 고스트화되지 않고 항상 투시 발광 복원
-    if (dangerOrganMeshes.has(mesh)) {
+    if (!getIsManualSelectionMode?.() && dangerOrganMeshes.has(mesh)) {
       const meshIntensity = mesh.userData.painIntensity ?? currentDangerIntensity;
       if (typeof meshIntensity === "number" && meshIntensity <= 0) {
         const orig = originalMaterials.get(mesh) ?? mesh.material;
@@ -3113,7 +3358,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       return;
     }
 
-    if (isCyanGridShellMode) {
+    if (!getIsManualSelectionMode?.() && isCyanGridShellMode) {
       const sys = String(mesh.userData.structureSystem ?? "");
       const visualRole = String(mesh.userData.visualRole ?? "");
       const isSkin = visualRole === "shell" || sys === "integumentary" || /body-shell|skin/i.test(mesh.name);
@@ -3152,7 +3397,47 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     }
   };
 
+  const restoreOriginalAnatomyAppearance = () => {
+    resetDangerShellColors();
+    dangerOrganMeshes.clear();
+    dangerPulsingMeshes.clear();
+    stopDangerPulse();
+    currentDangerIntensity = undefined;
+
+    if (savedHiddenSystemsBeforeDanger) {
+      hiddenSystems.clear();
+      savedHiddenSystemsBeforeDanger.forEach((sys) => hiddenSystems.add(sys));
+      savedHiddenSystemsBeforeDanger = null;
+      onHiddenSystemsChange(new Set(hiddenSystems));
+    }
+
+    anatomyMeshes.forEach((mesh) => {
+      delete mesh.userData.painIntensity;
+      if (!isMeshSelected(mesh)) {
+        const orig = originalMaterials.get(mesh);
+        if (orig) {
+          materialsOf(orig).forEach((mat) => {
+            if (mat instanceof THREE.MeshStandardMaterial || mat instanceof THREE.MeshLambertMaterial) {
+              mat.wireframe = false;
+              if ("vertexColors" in mat) mat.vertexColors = false;
+              mat.needsUpdate = true;
+            }
+          });
+          mesh.material = orig;
+        }
+        const origOrder = originalRenderOrders.get(mesh);
+        if (origOrder !== undefined) mesh.renderOrder = origOrder;
+      }
+      applyMeshVisibility(mesh);
+    });
+    renderScene();
+  };
+
   const stopDangerOrganHighlight = () => {
+    if (getIsManualSelectionMode?.()) {
+      restoreOriginalAnatomyAppearance();
+      return;
+    }
     resetDangerShellColors();
     const allMeshes = new Set([...dangerOrganMeshes, ...dangerPulsingMeshes]);
     dangerOrganMeshes.clear();
@@ -3176,12 +3461,18 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     }
     renderScene();
   };
+  if (pauseDangerMonitoringRef) {
+    pauseDangerMonitoringRef.current = restoreOriginalAnatomyAppearance;
+  }
 
   const checkAndRestoreAutoDangerMonitoring = (options: {
     animateCamera?: boolean;
     painIntensity?: number;
     organIntensities?: Record<string, number>;
   } = {}) => {
+    if (getIsManualSelectionMode?.()) {
+      return;
+    }
     const key = getHighlightOrganKey?.();
     if (
       stagedItemsMap.size === 0 &&
@@ -3290,11 +3581,17 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   clearPaintRef.current = clearPaint;
 
   const createAdaptiveHoverMaterials = (mesh: THREE.Mesh, orig: THREE.Material | THREE.Material[]) => {
+    // 확정 부위만 보기에서는 다른 표시 모드보다 주황색 호버 피드백을 우선한다.
+    // 이 분기가 없으면 X-ray/격리 모드가 켜진 상태에서 호버가 하늘색으로 바뀐다.
+    if (isOnlyConfirmedActive) {
+      return createHoverMaterials(orig);
+    }
+
     // 모니터링 투시 대상인 위험 장기는 일반 노란색으로 바뀌지 않고 강렬한 붉은빛 호버 피드백 유지
     if (dangerPulsingMeshes.has(mesh)) {
       return createDangerOrganHoverMaterials(orig);
     }
-    if (isCyanGridShellMode) {
+    if (!getIsManualSelectionMode?.() && isCyanGridShellMode) {
       const sys = String(mesh.userData.structureSystem ?? "");
       const visualRole = String(mesh.userData.visualRole ?? "");
       const isSkin = visualRole === "shell" || sys === "integumentary" || /body-shell|skin/i.test(mesh.name);
@@ -3885,21 +4182,34 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       ghostMaterialsMap.clear();
     }
     isXRayMode = active;
+    const createFilterTransparentMaterial = isOnlyConfirmedActive
+      ? createOriginalTransparentMaterials
+      : createSelectedTransparentMaterials;
+    const createFilterSelectedMaterial = isOnlyConfirmedActive
+      ? (orig: THREE.Material | THREE.Material[]) => orig
+      : createSelectedMaterials;
     if (active) {
       ghostMaterialsMap.clear();
       applyXRayShading(anatomyMeshes, {
         originalMaterials,
         ghostMaterialsMap,
         selectedMeshes,
-        createSelectedTransparentMaterial: createSelectedTransparentMaterials,
-        createSelectedMaterial: createSelectedMaterials,
+        createSelectedTransparentMaterial: createFilterTransparentMaterial,
+        createSelectedMaterial: createFilterSelectedMaterial,
       });
     } else {
-      restoreXRayShading(anatomyMeshes, originalMaterials, selectedMeshes, createSelectedMaterials);
+      restoreXRayShading(
+        anatomyMeshes,
+        originalMaterials,
+        selectedMeshes,
+        createFilterSelectedMaterial,
+      );
       ghostMaterialsMap.clear();
     }
 
-    restoreDangerOrganHighlights();
+    if (!isOnlyConfirmedActive) {
+      restoreDangerOrganHighlights();
+    }
 
     renderScene();
   };
@@ -3911,16 +4221,15 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       ghostMaterialsMap.clear();
     }
     isIsolateMode = active;
+    const createFilterTransparentMaterial = isOnlyConfirmedActive
+      ? createOriginalTransparentMaterials
+      : createSelectedTransparentMaterials;
+    const createFilterSelectedMaterial = isOnlyConfirmedActive
+      ? (orig: THREE.Material | THREE.Material[]) => orig
+      : createSelectedMaterials;
     if (active) {
-      // 투시모드 활성화 시:
-      // 1. 외피계(integumentary)는 숨김(비활성화)
-      // 2. 골격계(skeletal)와 근육계(muscular)는 기본으로 추가 켬
-      // 3. 신경계, 림프계 등 다른 레이어의 속성은 그대로 유지
+      // 투시모드 활성화 시 골격계·근육계는 기본으로 켠다. 외피계는 숨기지 않는다.
       let changed = false;
-      if (!hiddenSystems.has("integumentary")) {
-        hiddenSystems.add("integumentary");
-        changed = true;
-      }
       if (hiddenSystems.has("skeletal")) {
         hiddenSystems.delete("skeletal");
         changed = true;
@@ -3938,15 +4247,22 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         originalMaterials,
         ghostMaterialsMap,
         isSurfaceMesh: isSurfaceStructure,
-        createSelectedTransparentMaterial: createSelectedTransparentMaterials,
-        createSelectedMaterial: createSelectedMaterials,
+        createSelectedTransparentMaterial: createFilterTransparentMaterial,
+        createSelectedMaterial: createFilterSelectedMaterial,
       });
     } else {
-      restoreIsolateShading(anatomyMeshes, originalMaterials, selectedMeshes, createSelectedMaterials);
+      restoreIsolateShading(
+        anatomyMeshes,
+        originalMaterials,
+        selectedMeshes,
+        createFilterSelectedMaterial,
+      );
       ghostMaterialsMap.clear();
     }
 
-    restoreDangerOrganHighlights();
+    if (!isOnlyConfirmedActive) {
+      restoreDangerOrganHighlights();
+    }
 
     renderScene();
   };
@@ -4024,7 +4340,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       });
     }
     const curKey = getHighlightOrganKey?.();
-    if (curKey) {
+    if (curKey && !getIsManualSelectionMode?.()) {
       selectDangerOrganRef.current(curKey, {
         painIntensity: getHighlightPainIntensity?.(),
         organIntensities: getHighlightOrganIntensities?.(),
@@ -4038,30 +4354,31 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     const isDark = mode === "dark-hologram";
     const isDarkBeige = mode === "dark-beige";
 
-    // 1. 배경 & IBL & 톤 매핑
+    // 1. 배경 & IBL & 톤 매핑 (배경만 어둡게, PBR 톤매핑 유지)
     scene.background = isDark || isDarkBeige ? null : new THREE.Color(0xf2f3f3);
-    scene.environment = isDark ? null : env.texture;
-    renderer.toneMapping = isDark ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
-    if (!isDark) {
-      renderer.toneMappingExposure = isDarkBeige ? 1.18 : 1.12;
-    }
+    scene.environment = env.texture;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = isDark ? 1.25 : isDarkBeige ? 1.18 : 1.12;
 
-    // 2. 조명 전환 (다크 홀로그램 vs 투명베이지 다크 vs 라이트 스튜디오 3점 조명)
+    // 2. 조명 전환 (다크 모드: 인체 색상이 선명히 보이도록 부드럽고 자연스러운 조명)
     if (isDark) {
-      hemiLight.color.setHex(0xb9f6ff);
-      hemiLight.groundColor.setHex(0x18344b);
-      hemiLight.intensity = 1.8;
+      hemiLight.color.setHex(0xffffff);
+      hemiLight.groundColor.setHex(0x2d3748);
+      hemiLight.intensity = 1.35;
 
-      keyLight.color.setHex(0xbff8ff);
-      keyLight.intensity = 2.2;
-      keyLight.position.set(3, 5, 5);
+      keyLight.color.setHex(0xfffaf0);
+      keyLight.intensity = 2.6;
+      keyLight.position.set(-2, 4, 3);
 
-      fillLight.color.setHex(0x38bdf8);
-      fillLight.intensity = 1.4;
+      rimLight.color.setHex(0xf1f5f9);
+      rimLight.intensity = 2.4;
+      rimLight.position.set(2, 2, -3);
+      rimLight.visible = true;
+
+      fillLight.color.setHex(0x94a3b8);
+      fillLight.intensity = 0.9;
       fillLight.position.set(-4, 1, 3);
       fillLight.visible = true;
-
-      rimLight.visible = false;
     } else if (isDarkBeige) {
       hemiLight.color.setHex(0xfff7ed);
       hemiLight.groundColor.setHex(0x1e293b);
@@ -4097,7 +4414,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       fillLight.visible = false;
     }
 
-    // 3. 해부학 메쉬 머티리얼 전환
+    // 3. 해부학 메쉬 머티리얼: 물빛청색 홀로그램 대신 원래의 고유 해부학 색상(피부, 뼈, 장기) 유지
     anatomyMeshes.forEach((mesh) => {
       const origMat = originalMaterials.get(mesh);
       const materialsToUpdate = origMat ? materialsOf(origMat) : materialsOf(mesh.material);
@@ -4116,97 +4433,47 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         }
 
         if (isShell) {
-          if (isDark) {
-            mat.vertexColors = false;
-            mat.metalness = 0;
-            mat.roughness = 0.48;
-            mat.color.setHex(0x4de4ff);
-            mat.emissive.setHex(0x0b7895);
-            mat.emissiveIntensity = 0.75;
-            mat.transparent = true;
-            mat.opacity = 0.17;
-            mat.depthWrite = false;
-            mat.wireframe = true;
-            mat.side = THREE.DoubleSide;
-          } else {
-            mat.vertexColors = false;
-            mat.metalness = 0.0;
-            mat.roughness = isDarkBeige ? 0.78 : 0.85;
-            mat.color.setHex(ORGAN_COLORS.integumentary);
-            mat.emissive.setHex(isDarkBeige ? 0x221710 : 0x000000);
-            mat.emissiveIntensity = isDarkBeige ? 0.1 : 0.0;
-            mat.transparent = true;
-            mat.opacity = isDarkBeige ? 0.16 : 0.12;
-            mat.depthWrite = false;
-            mat.wireframe = isCyanGridShellMode;
-            mat.side = THREE.DoubleSide;
-          }
+          mat.vertexColors = false;
+          mat.metalness = 0.0;
+          mat.roughness = isDark ? 0.8 : isDarkBeige ? 0.78 : 0.85;
+          mat.color.setHex(ORGAN_COLORS.integumentary);
+          mat.emissive.setHex(isDark ? 0x181622 : isDarkBeige ? 0x221710 : 0x000000);
+          mat.emissiveIntensity = isDark ? 0.06 : isDarkBeige ? 0.1 : 0.0;
+          mat.transparent = true;
+          mat.opacity = isDark ? 0.18 : isDarkBeige ? 0.16 : 0.12;
+          mat.depthWrite = false;
+          mat.wireframe = Boolean(!getIsManualSelectionMode?.() && isCyanGridShellMode);
+          mat.side = THREE.DoubleSide;
         } else if (isSkeleton) {
-          if (isDark) {
-            mat.vertexColors = false;
-            mat.metalness = 0;
-            mat.roughness = 0.48;
-            mat.color.setHex(0xd9f7ff);
-            mat.emissive.setHex(0x17475a);
-            mat.emissiveIntensity = 0.55;
-            mat.opacity = 0.72;
-            mat.transparent = true;
-            mat.depthWrite = true;
-            mat.wireframe = false;
-          } else {
-            mat.vertexColors = false;
-            mat.metalness = 0.0;
-            mat.roughness = 0.72;
-            mat.color.setHex(ORGAN_COLORS.skeletal);
-            mat.emissive.setHex(isDarkBeige ? 0x181510 : 0x000000);
-            mat.emissiveIntensity = isDarkBeige ? 0.06 : 0.0;
-            mat.opacity = 0.96;
-            mat.transparent = true;
-            mat.depthWrite = true;
-            mat.wireframe = false;
-          }
+          mat.vertexColors = false;
+          mat.metalness = 0.0;
+          mat.roughness = 0.72;
+          mat.color.setHex(ORGAN_COLORS.skeletal);
+          mat.emissive.setHex(isDark ? 0x14121a : isDarkBeige ? 0x181510 : 0x000000);
+          mat.emissiveIntensity = isDark ? 0.05 : isDarkBeige ? 0.06 : 0.0;
+          mat.opacity = 0.96;
+          mat.transparent = true;
+          mat.depthWrite = true;
+          mat.wireframe = false;
         } else if (isJoint) {
-          if (isDark) {
-            mat.vertexColors = false;
-            mat.metalness = 0;
-            mat.roughness = 0.48;
-            mat.color.setHex(0x9fcfd8);
-            mat.emissive.setHex(0x244b52);
-            mat.emissiveIntensity = 0.55;
-            mat.opacity = 0.68;
-            mat.transparent = true;
-            mat.depthWrite = true;
-            mat.wireframe = false;
-          } else {
-            mat.vertexColors = false;
-            mat.metalness = 0.0;
-            mat.roughness = 0.72;
-            mat.color.setHex(ORGAN_COLORS.joints);
-            mat.emissive.setHex(0x000000);
-            mat.emissiveIntensity = 0.0;
-            mat.opacity = 0.68;
-            mat.transparent = true;
-            mat.depthWrite = true;
-            mat.wireframe = false;
-          }
+          mat.vertexColors = false;
+          mat.metalness = 0.0;
+          mat.roughness = 0.72;
+          mat.color.setHex(ORGAN_COLORS.joints);
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 0.0;
+          mat.opacity = 0.68;
+          mat.transparent = true;
+          mat.depthWrite = true;
+          mat.wireframe = false;
         } else if (sys === "mammary") {
-          if (isDark) {
-            mat.color.setHex(0xf0a3bd);
-            mat.emissive.setHex(0x562332);
-            mat.emissiveIntensity = 0.42;
-            mat.transparent = true;
-            mat.opacity = 0.38;
-            mat.depthWrite = false;
-            mat.side = THREE.FrontSide;
-          } else {
-            mat.color.setHex(ORGAN_COLORS.mammary);
-            mat.emissive.setHex(0x000000);
-            mat.emissiveIntensity = 0.0;
-            mat.transparent = true;
-            mat.opacity = 0.38;
-            mat.depthWrite = false;
-            mat.side = THREE.FrontSide;
-          }
+          mat.color.setHex(ORGAN_COLORS.mammary);
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 0.0;
+          mat.transparent = true;
+          mat.opacity = 0.38;
+          mat.depthWrite = false;
+          mat.side = THREE.FrontSide;
         } else {
           const rawSys = String(mesh.userData.anatomySystem ?? sys);
           let effectiveSys = sys;
@@ -4221,42 +4488,27 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
             effectiveSys = resolveVascularSystem(testName, "cardiovascular");
           }
 
-          if (isDark) {
-            const holoColor =
-              HOLO_SYSTEM_COLORS[effectiveSys] ??
-              HOLO_SYSTEM_COLORS[sys] ??
-              ORGAN_COLORS[effectiveSys] ??
-              ORGAN_COLORS[sys];
-            if (holoColor) mat.color.setHex(holoColor);
-            if (effectiveSys === "venous") {
-              mat.emissive.setHex(0x0c313a);
-            } else if (effectiveSys === "arterial") {
-              mat.emissive.setHex(0x4a1217);
-            } else {
-              mat.emissive.setHex(0x0c313a);
-            }
-            mat.emissiveIntensity = 0.38;
-            mat.roughness = 0.48;
-            mat.metalness = 0;
-          } else {
-            const pbrColor = ORGAN_COLORS[effectiveSys] ?? ORGAN_COLORS[sys];
-            if (pbrColor) mat.color.setHex(pbrColor);
-            mat.emissive.setHex(0x000000);
-            mat.emissiveIntensity = 0.0;
-            mat.roughness =
-              effectiveSys === "arterial" || effectiveSys === "venous" || effectiveSys === "cardiac"
-                ? 0.62
-                : sys === "muscular"
-                  ? 0.86
-                  : 0.70;
-            mat.metalness = 0;
-          }
+          const pbrColor = ORGAN_COLORS[effectiveSys] ?? ORGAN_COLORS[sys];
+          if (pbrColor) mat.color.setHex(pbrColor);
+          mat.emissive.setHex(0x000000);
+          mat.emissiveIntensity = 0.0;
+          mat.roughness =
+            effectiveSys === "arterial" || effectiveSys === "venous" || effectiveSys === "cardiac"
+              ? 0.62
+              : sys === "muscular"
+                ? 0.86
+                : 0.70;
+          mat.metalness = 0;
         }
         mat.needsUpdate = true;
       });
 
       if (!selectedMeshes.has(mesh) && !ghostMaterialsMap.has(mesh)) {
-        if (mesh.userData.painIntensity && Number(mesh.userData.painIntensity) > 0) {
+        if (
+          !getIsManualSelectionMode?.() &&
+          mesh.userData.painIntensity &&
+          Number(mesh.userData.painIntensity) > 0
+        ) {
           applyDangerHighlightToMesh(mesh, Number(mesh.userData.painIntensity));
         } else {
           mesh.material = origMat ?? mesh.material;
@@ -4274,7 +4526,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   };
 
   toggleDarkBackgroundRef.current = (active: boolean) => {
-    applyThemeStyling(active ? "dark-hologram" : "light");
+    applyThemeStyling(active ? "dark-beige" : "light");
     renderScene();
   };
 
@@ -4290,6 +4542,18 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     stagedItemsMap.forEach((item) => {
       if (item.mesh) applyConfirmedMaterial(item.mesh);
     });
+    if (hoveredMesh) {
+      if (!isMeshSelected(hoveredMesh)) {
+        restoreMeshMaterial(hoveredMesh);
+      } else if (isOnlyConfirmedActive) {
+        if (!originalRenderOrders.has(hoveredMesh)) {
+          originalRenderOrders.set(hoveredMesh, hoveredMesh.renderOrder);
+        }
+        hoveredMesh.renderOrder = 25;
+        const orig = originalMaterials.get(hoveredMesh) ?? hoveredMesh.material;
+        hoveredMesh.material = createAdaptiveHoverMaterials(hoveredMesh, orig);
+      }
+    }
     renderScene();
   };
 
@@ -4317,21 +4581,140 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     requestAnimationFrame(animateZoom);
   };
 
-  selectByAnatomyIdRef.current = (anatomyId: string) => {
-    const cleanTarget = anatomyId.toLowerCase();
-    const target = anatomyMeshes.find((m) => {
-      const id = (m.userData.anatomyId ?? m.name).toLowerCase();
-      return id === cleanTarget || id.includes(cleanTarget);
-    });
-    if (target) {
-      if (isFasciaHidden && isFasciaStructure(target)) {
-        return false;
+  selectByAnatomyIdRef.current = (anatomyId: string, item?: SearchResultItem) => {
+    // 0. 가상 미세 부위(신장 피질·수질 등)로 fallbackTarget이 지정된 경우 부모 장기로 전환
+    let effectiveAnatomyId = anatomyId;
+    let effectiveItem = item;
+    if (item?.fallbackTarget) {
+      effectiveAnatomyId = item.fallbackTarget.id;
+      const compoundInfo = ANATOMY_COMPOUND_REGISTRY[effectiveAnatomyId];
+      if (compoundInfo) {
+        effectiveItem = {
+          id: compoundInfo.id,
+          sourceKey: `vanatome:compound:${compoundInfo.id}`,
+          koreanName: compoundInfo.koreanName,
+          canonicalName: compoundInfo.canonicalName,
+          system: compoundInfo.system,
+          systemKorean: compoundInfo.systemKorean,
+          description: compoundInfo.description,
+          category: "anatomy",
+          isCompound: compoundInfo.isCompound,
+          childMeshIds: compoundInfo.children,
+          has3DMesh: true,
+        };
       }
-      if (isPeritoneumHidden && isPeritoneumStructure(target)) {
-        return false;
+    }
+
+    const cleanTarget = effectiveAnatomyId.toLowerCase().replace(/[\s-]+/g, "_");
+    const cleanTargetRaw = effectiveAnatomyId.toLowerCase();
+
+    // 1. 복합 장기(Compound Organ) 체크: 심장(heart), 신장(kidneys), 폐(lungs) 등
+    const compound = ANATOMY_COMPOUND_REGISTRY[effectiveAnatomyId] || ANATOMY_COMPOUND_REGISTRY[cleanTargetRaw];
+    if (compound && compound.children.length > 0) {
+      // 해당 계통 자동 켜기
+      if (compound.system && hiddenSystems.has(compound.system)) {
+        hiddenSystems.delete(compound.system);
+        onHiddenSystemsChange(new Set(hiddenSystems));
+        anatomyMeshes.forEach(applyMeshVisibility);
+      }
+
+      // 하위 모든 메쉬 수집
+      const matchedMeshes: THREE.Mesh[] = [];
+      for (const childId of compound.children) {
+        const cleanChild = childId.toLowerCase().replace(/[\s-]+/g, "_");
+        const cleanChildRaw = childId.toLowerCase();
+        const found = anatomyMeshes.filter((m) => {
+          const mName = m.name.toLowerCase();
+          const aId = String(m.userData.anatomyId ?? "").toLowerCase();
+          return (
+            mName.includes(cleanChild) ||
+            mName.includes(cleanChildRaw) ||
+            aId.includes(cleanChild) ||
+            aId.includes(cleanChildRaw)
+          );
+        });
+        matchedMeshes.push(...found);
+      }
+
+      if (matchedMeshes.length > 0) {
+        // 중복 제거
+        const uniqueMeshes = Array.from(new Set(matchedMeshes));
+        for (const m of uniqueMeshes) {
+          m.visible = true;
+          selectSingleMesh(m);
+        }
+        onRecentlyAddedStaged?.(uniqueMeshes[0].name);
+
+        const bounds = calculateFocusBounds(uniqueMeshes);
+        const targetPos = calculateTargetCameraPosition(bounds, camera);
+        camera.position.copy(targetPos);
+        controls.target.copy(bounds.center);
+        controls.update();
+        renderScene();
+        return true;
+      }
+    }
+
+    // 2. 단일 메쉬 또는 단일 장기 탐색
+    if (effectiveItem?.system && hiddenSystems.has(effectiveItem.system)) {
+      hiddenSystems.delete(effectiveItem.system);
+      onHiddenSystemsChange(new Set(hiddenSystems));
+      anatomyMeshes.forEach(applyMeshVisibility);
+    }
+
+    let target = anatomyMeshes.find((m) => {
+      const mName = m.name.toLowerCase();
+      const aId = String(m.userData.anatomyId ?? "").toLowerCase();
+      const sLabel = String(m.userData.structureLabel ?? "").toLowerCase();
+      return (
+        mName === cleanTarget ||
+        mName === cleanTargetRaw ||
+        aId === cleanTarget ||
+        aId === cleanTargetRaw ||
+        sLabel === cleanTarget ||
+        sLabel === cleanTargetRaw ||
+        mName.includes(cleanTarget) ||
+        mName.includes(cleanTargetRaw) ||
+        aId.includes(cleanTarget)
+      );
+    });
+
+    if (!target && effectiveItem?.canonicalName) {
+      const canon = effectiveItem.canonicalName.toLowerCase().replace(/[\s-]+/g, "_");
+      const canonRaw = effectiveItem.canonicalName.toLowerCase();
+      target = anatomyMeshes.find((m) => {
+        const mName = m.name.toLowerCase();
+        const aId = String(m.userData.anatomyId ?? "").toLowerCase();
+        const info = resolveAnatomyDisplayInfo(m.name, String(m.userData.structureSystem ?? ""));
+        return (
+          mName === canon ||
+          mName === canonRaw ||
+          mName.includes(canon) ||
+          mName.includes(canonRaw) ||
+          aId.includes(canon) ||
+          info.canonicalName.toLowerCase() === canonRaw ||
+          info.canonicalName.toLowerCase().includes(canonRaw)
+        );
+      });
+    }
+
+    if (!target && effectiveItem?.koreanName) {
+      target = anatomyMeshes.find((m) => {
+        const info = resolveAnatomyDisplayInfo(m.name, String(m.userData.structureSystem ?? ""));
+        return info.koreanName === effectiveItem.koreanName || info.koreanName.includes(effectiveItem.koreanName);
+      });
+    }
+
+    if (target) {
+      const sys = String(target.userData.structureSystem ?? "");
+      if (sys && hiddenSystems.has(sys)) {
+        hiddenSystems.delete(sys);
+        onHiddenSystemsChange(new Set(hiddenSystems));
+        anatomyMeshes.forEach(applyMeshVisibility);
       }
       target.visible = true;
       selectSingleMesh(target);
+      onRecentlyAddedStaged?.(target.name);
       const bounds = calculateFocusBounds([target]);
       const targetPos = calculateTargetCameraPosition(bounds, camera);
       camera.position.copy(targetPos);
@@ -5433,23 +5816,27 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     }
 
     // 상태별 재질 및 renderOrder 복원
-    const stagedItem =
-      stagedItemsMap.get(m.name) ||
-      Array.from(stagedItemsMap.values()).find((it) => it.mesh === m);
-    if (stagedItem && !stagedItem.excluded && selectedMeshes.has(m)) {
-      const isSurface = isSurfaceStructure(m);
-      if (isIsolateMode && isSurface) {
-        m.material = createSelectedTransparentMaterials(orig);
-        m.renderOrder = 15;
-      } else {
-        m.material = createSelectedMaterials(orig);
-        m.renderOrder = 20;
-      }
-    } else if (selectedDepthCandidateNames.has(m.name)) {
-      m.material = createCandidatePreviewMaterials(orig);
-      m.renderOrder = 18;
+    if (isOnlyConfirmedActive) {
+      applyConfirmedMaterial(m);
     } else {
-      restoreMeshMaterial(m);
+      const stagedItem =
+        stagedItemsMap.get(m.name) ||
+        Array.from(stagedItemsMap.values()).find((it) => it.mesh === m);
+      if (stagedItem && !stagedItem.excluded && selectedMeshes.has(m)) {
+        const isSurface = isSurfaceStructure(m);
+        if (isIsolateMode && isSurface) {
+          m.material = createSelectedTransparentMaterials(orig);
+          m.renderOrder = 15;
+        } else {
+          m.material = createSelectedMaterials(orig);
+          m.renderOrder = 20;
+        }
+      } else if (selectedDepthCandidateNames.has(m.name)) {
+        m.material = createCandidatePreviewMaterials(orig);
+        m.renderOrder = 18;
+      } else {
+        restoreMeshMaterial(m);
+      }
     }
 
     externalHoveredMesh = undefined;
@@ -5491,12 +5878,40 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       }
 
       if (!targetMesh) {
-        targetMesh = anatomyMeshes.find(
-          (m) =>
-            m.name.toLowerCase() === cleanName ||
-            String(m.userData.anatomyId ?? "").toLowerCase() === cleanName ||
-            String(m.userData.structureLabel ?? "").toLowerCase() === cleanName,
-        );
+        // 복합 장기(Compound Organ) 체크: heart, kidneys 등
+        const compound = ANATOMY_COMPOUND_REGISTRY[cleanName] || ANATOMY_COMPOUND_REGISTRY[target];
+        if (compound && compound.children.length > 0) {
+          const firstChild = compound.children[0].toLowerCase();
+          targetMesh = anatomyMeshes.find((m) => {
+            const mName = m.name.toLowerCase();
+            const aId = String(m.userData.anatomyId ?? "").toLowerCase();
+            return mName.includes(firstChild) || aId.includes(firstChild);
+          });
+        }
+      }
+
+      if (!targetMesh) {
+        const cleanNameRaw = target.toLowerCase();
+        const cleanName = cleanNameRaw.replace(/[\s-]+/g, "_");
+        targetMesh = anatomyMeshes.find((m) => {
+          const mName = m.name.toLowerCase();
+          const aId = String(m.userData.anatomyId ?? "").toLowerCase();
+          const sLabel = String(m.userData.structureLabel ?? "").toLowerCase();
+          const info = resolveAnatomyDisplayInfo(m.name, String(m.userData.structureSystem ?? ""));
+          return (
+            mName === cleanName ||
+            mName === cleanNameRaw ||
+            aId === cleanName ||
+            aId === cleanNameRaw ||
+            sLabel === cleanName ||
+            sLabel === cleanNameRaw ||
+            mName.includes(cleanName) ||
+            mName.includes(cleanNameRaw) ||
+            aId.includes(cleanName) ||
+            info.canonicalName.toLowerCase().includes(cleanNameRaw) ||
+            info.koreanName.includes(target)
+          );
+        });
       }
     }
 
@@ -5555,15 +5970,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       const shouldHideInViewer = isHidden || (isFasciaHidden && isFascia) || (isPeritoneumHidden && isPeritoneum);
       if (!item.excluded && !shouldHideInViewer) {
         selectedMeshes.add(item.mesh);
-        const orig = originalMaterials.get(item.mesh) ?? item.mesh.material;
-        const isSurface = isSurfaceStructure(item.mesh);
-        if (isIsolateMode && isSurface) {
-          item.mesh.material = createSelectedTransparentMaterials(orig);
-          item.mesh.renderOrder = 15;
-        } else {
-          item.mesh.material = createSelectedMaterials(orig);
-          item.mesh.renderOrder = 20;
-        }
+        applyConfirmedMaterial(item.mesh);
       } else {
         selectedMeshes.delete(item.mesh);
         const orig = originalMaterials.get(item.mesh);
@@ -5576,13 +5983,13 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     }
 
     // 3. X-Ray / Isolate 모드 셰이딩 재적용 (선택된 메쉬 보호)
-    if (isXRayMode) {
+    if (!isOnlyConfirmedActive && isXRayMode) {
       applyXRayShading(anatomyMeshes, {
         originalMaterials,
         ghostMaterialsMap,
         selectedMeshes,
       });
-    } else if (isIsolateMode) {
+    } else if (!isOnlyConfirmedActive && isIsolateMode) {
       applyIsolateShading(anatomyMeshes, selectedMeshes, {
         originalMaterials,
         ghostMaterialsMap,
@@ -5592,7 +5999,9 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       });
     }
 
-    restoreDangerOrganHighlights();
+    if (!isOnlyConfirmedActive) {
+      restoreDangerOrganHighlights();
+    }
 
     setCostalCartilageFocus(
       activeBodyFocus === "upper" && !hiddenSystems.has("muscular"),
@@ -5924,8 +6333,14 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       }
       const mesh = hitMesh;
       if (mesh !== hoveredMesh) {
-        if (hoveredMesh && !isMeshSelected(hoveredMesh)) {
-          restoreMeshMaterial(hoveredMesh);
+        if (hoveredMesh) {
+          if (isOnlyConfirmedActive) {
+            applyConfirmedMaterial(hoveredMesh);
+          } else if (!isMeshSelected(hoveredMesh)) {
+            restoreMeshMaterial(hoveredMesh);
+          } else {
+            applyConfirmedMaterial(hoveredMesh);
+          }
         }
 
         hoveredMesh = mesh;
@@ -5933,11 +6348,11 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         if (mesh) {
           const info = resolveAnatomyDisplayInfo(mesh.name, String(mesh.userData.structureSystem ?? ""));
           onHoverStructure(info);
-          if (!isMeshSelected(mesh)) {
+          if (!isMeshSelected(mesh) || isOnlyConfirmedActive) {
             if (!originalRenderOrders.has(mesh)) {
               originalRenderOrders.set(mesh, mesh.renderOrder);
             }
-            mesh.renderOrder = dangerPulsingMeshes.has(mesh) ? 25 : 15;
+            mesh.renderOrder = dangerPulsingMeshes.has(mesh) ? 25 : 25;
             const orig = originalMaterials.get(mesh) ?? mesh.material;
             mesh.material = createAdaptiveHoverMaterials(mesh, orig);
           }
@@ -5946,8 +6361,14 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       }
       canvas.style.cursor = "pointer";
     } else {
-      if (hoveredMesh && !isMeshSelected(hoveredMesh)) {
-        restoreMeshMaterial(hoveredMesh);
+      if (hoveredMesh) {
+        if (isOnlyConfirmedActive) {
+          applyConfirmedMaterial(hoveredMesh);
+        } else if (!isMeshSelected(hoveredMesh)) {
+          restoreMeshMaterial(hoveredMesh);
+        } else {
+          applyConfirmedMaterial(hoveredMesh);
+        }
         hoveredMesh = undefined;
         renderScene();
       }
@@ -5995,8 +6416,14 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
     pendingHoverEvent = null;
     lastHoverClientX = -9999;
     lastHoverClientY = -9999;
-    if (hoveredMesh && !isMeshSelected(hoveredMesh)) {
-      restoreMeshMaterial(hoveredMesh);
+    if (hoveredMesh) {
+      if (isOnlyConfirmedActive) {
+        applyConfirmedMaterial(hoveredMesh);
+      } else if (!isMeshSelected(hoveredMesh)) {
+        restoreMeshMaterial(hoveredMesh);
+      } else {
+        applyConfirmedMaterial(hoveredMesh);
+      }
       renderScene();
     }
     hoveredMesh = undefined;
@@ -6242,6 +6669,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         onDepthCandidatesChange([]);
         onRecentlyAddedStaged?.(null);
       }
+      handleHover(event);
     }
   };
   const handlePointerCancel = (event: PointerEvent) => {
