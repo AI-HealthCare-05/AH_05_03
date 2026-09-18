@@ -80,6 +80,7 @@ describe("RootLayout 로그인 관문", () => {
     expect(screen.getByRole("button", { name: "로그인" })).toBeInTheDocument();
     expect(screen.queryByText("소개 페이지")).not.toBeInTheDocument();
     expect(screen.queryByText("홈 화면")).not.toBeInTheDocument();
+    expect(document.querySelector(".preview-shell")).not.toBeInTheDocument();
   });
 
   it("로그인한 사람이 /signin 으로 오면 홈으로 보낸다", () => {

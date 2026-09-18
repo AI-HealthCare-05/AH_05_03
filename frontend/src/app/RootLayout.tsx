@@ -149,21 +149,10 @@ export function RootLayout() {
     return profiles.find((p) => p.opaqueServerRef === activeLinkRef)?.displayName;
   }, [activeLinkRef, profiles]);
 
-  if (isPreviewShellPath(pathname)) {
-    return (
-      <div className="preview-shell">
-        <main id="main-content" tabIndex={-1}>
-          <Suspense fallback={<PageSkeleton />}>
-            <Outlet />
-          </Suspense>
-        </main>
-        <GlobalHealthAssistant />
-      </div>
-    );
-  }
-
   // 갱신 토큰으로 세션을 되살리는 동안 아무것도 그리지 않는다. 로그인 화면을 먼저
   // 띄우면 **이미 로그인한 사용자에게 로그인 화면이 한 번 깜빡인다.**
+  // 시안 셸(`/` 가 시안 18 인 배포 번들)도 이 관문 뒤에 둔다. 셸만 먼저 그리면
+  // 로그아웃 상태의 `/` 가 소개로 비키지 않고 본문이 그대로 열린다.
   if (status === "checking") {
     return (
       <div className="route-loading">
@@ -193,6 +182,19 @@ export function RootLayout() {
       return <Navigate to="/landing" replace />;
     }
     return <SignInPage onResetComplete={() => setHasResetToken(false)} initialMessage={signedOutNotice} />;
+  }
+
+  if (isPreviewShellPath(pathname)) {
+    return (
+      <div className="preview-shell">
+        <main id="main-content" tabIndex={-1}>
+          <Suspense fallback={<PageSkeleton />}>
+            <Outlet />
+          </Suspense>
+        </main>
+        <GlobalHealthAssistant />
+      </div>
+    );
   }
 
   return (
