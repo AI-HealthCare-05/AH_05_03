@@ -66,9 +66,9 @@ import {
   getLastOpenedProfileId,
   setLastOpenedProfileId,
 } from "./healthAssistantLogic";
+import { BomiAvatar } from "./BomiAvatar";
 import { FoodNutritionCard } from "./FoodNutritionCard";
 import { MedicationCard } from "./MedicationCard";
-import bomiChickIcon from "./assets/bomi-chick.png";
 import "./healthAssistantDrawer.css";
 
 /**
@@ -2044,10 +2044,10 @@ export function HealthAssistantDrawer({
             </span>
           )}
           <span className="assistant-avatar" aria-hidden="true">
-            <img src={bomiChickIcon} alt="" className="assistant-avatar-mascot" />
+            <BomiAvatar mood="idle" className="assistant-avatar-mascot" />
           </span>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <div className="assistant-header-name">
               <h3>봄이 · 건강 비서</h3>
               {contextLabel && (
                 <span className="channel-talk-context-tag" title="현재 화면 연동">
@@ -2243,7 +2243,7 @@ export function HealthAssistantDrawer({
             <div key={msg.id} className={`assistant-message-row ${msg.role}`}>
               {msg.role === "assistant" && (
                 <span className="msg-avatar" aria-hidden="true">
-                  <img src={bomiChickIcon} alt="" className="msg-avatar-mascot" />
+                  <BomiAvatar mood="idle" still className="msg-avatar-mascot" />
                 </span>
               )}
               <div className="msg-bubble-wrap">

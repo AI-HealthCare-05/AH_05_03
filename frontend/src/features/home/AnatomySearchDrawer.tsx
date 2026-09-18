@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ANATOMY_DICTIONARY } from "./anatomyKoreanDictionary";
+import { ANATOMY_DICTIONARY, ANATOMY_SEARCH_OMIT_KEYS } from "./anatomyKoreanDictionary";
+import { ANATOMY_COMPOUND_REGISTRY } from "./anatomyCompoundRegistry";
+import { compoundCoversKorean, parseSearchSide, queryWithoutSide, sideKoreanPrefix } from "./anatomySearchQuery";
 import { ADULT_TEETH } from "./dentalPickerLogic";
 
 export interface SearchResultItem {
@@ -43,8 +45,10 @@ export function AnatomySearchDrawer({
     const q = query.trim().toLowerCase();
     if (!q) return [];
 
-    const tokens = q.split(/\s+/).filter(Boolean);
-    const cleanQ = q.replace(/\s+/g, "");
+    const side = parseSearchSide(q);
+    const organQ = (queryWithoutSide(query).trim() || query.trim()).toLowerCase();
+    const tokens = organQ.split(/\s+/).filter(Boolean);
+    const cleanQ = organQ.replace(/\s+/g, "");
 
     const matchesSearch = (haystack: string) => {
       const lower = haystack.toLowerCase();
@@ -98,6 +102,7 @@ export function AnatomySearchDrawer({
 
     // 2. 해부학 용어 사전 매칭
     for (const [key, entry] of Object.entries(ANATOMY_DICTIONARY)) {
+      if (ANATOMY_SEARCH_OMIT_KEYS.has(key)) continue;
       const haystack = `${key} ${entry.korean} ${entry.canonical} ${entry.systemKorean} ${entry.description}`;
       let matched = matchesSearch(haystack);
       if (!matched) {
@@ -109,11 +114,17 @@ export function AnatomySearchDrawer({
         }
       }
       if (matched) {
+        if (Object.values(ANATOMY_COMPOUND_REGISTRY).some((organ) => compoundCoversKorean(organ, entry.korean))) {
+          continue;
+        }
+        if (results.some((item) => item.system === entry.system && item.koreanName.replace(/^(?:좌측|우측)\s+/u, "") === entry.korean)) {
+          continue;
+        }
         results.push({
-          id: key,
+          id: side ? `${key}.${side === "right" ? "r" : "l"}` : key,
           sourceKey: `vanatome:1.0:${key}`,
-          koreanName: entry.korean,
-          canonicalName: entry.canonical,
+          koreanName: side ? `${sideKoreanPrefix(side)}${entry.korean}` : entry.korean,
+          canonicalName: side ? `${entry.canonical}${side === "right" ? ".r" : ".l"}` : entry.canonical,
           system: entry.system,
           systemKorean: entry.systemKorean,
           description: entry.description,

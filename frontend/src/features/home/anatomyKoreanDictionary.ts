@@ -24,6 +24,12 @@ export interface DictionaryEntry {
 }
 
 /**
+ * 의학 용어집에는 있으나 Z-Anatomy 메쉬가 없는 항목.
+ * 검색 목록에 올리지 않는다 — 고르면 선택할 표면이 없다.
+ */
+export const ANATOMY_SEARCH_OMIT_KEYS = new Set(["renal cortex", "renal medulla"]);
+
+/**
  * 주요 근육, 골격, 인대, 관절 및 장기 해부학 표준 명칭 사전
  */
 export const ANATOMY_DICTIONARY: Record<string, DictionaryEntry> = {
@@ -127,20 +133,6 @@ export const ANATOMY_DICTIONARY: Record<string, DictionaryEntry> = {
     system: "urinary",
     systemKorean: "비뇨기계",
     description: "방광에 저장된 소변을 몸 밖으로 배출하는 통로입니다.",
-  },
-  "renal cortex": {
-    korean: "신장 피질",
-    canonical: "Renal Cortex",
-    system: "urinary",
-    systemKorean: "비뇨기계",
-    description: "신장의 바깥쪽 층으로 사구체와 네프론이 위치하여 혈액을 여과합니다.",
-  },
-  "renal medulla": {
-    korean: "신장 수질",
-    canonical: "Renal Medulla",
-    system: "urinary",
-    systemKorean: "비뇨기계",
-    description: "신장의 안쪽 층으로 집합관이 헨레고리를 거쳐 소변을 신우로 모읍니다.",
   },
   "renal artery": {
     korean: "신동맥",

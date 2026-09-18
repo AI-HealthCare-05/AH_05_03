@@ -1,15 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ANATOMY_DICTIONARY } from "./anatomyKoreanDictionary";
+import { ANATOMY_DICTIONARY, ANATOMY_SEARCH_OMIT_KEYS } from "./anatomyKoreanDictionary";
+import { ANATOMY_COMPOUND_REGISTRY } from "./anatomyCompoundRegistry";
+import {
+  childLaterality,
+  childOfficialMeshHint,
+  compoundCoversKorean,
+  parseSearchSide,
+  queryWithoutSide,
+  sideKoreanPrefix,
+} from "./anatomySearchQuery";
 import { ADULT_TEETH } from "./dentalPickerLogic";
 import type { SearchResultItem } from "./AnatomySearchDrawer";
 
 interface VanatomeQuickSearchProps {
-  onSelectAnatomy: (anatomyId: string) => void;
+  onSelectAnatomy: (anatomyId: string, item?: SearchResultItem) => void;
+  onHoverAnatomy?: (anatomyId: string | null, item?: SearchResultItem | null) => void;
   onSelectTooth?: (toothFdi: number, koreanName: string) => void;
   inputRef?: React.RefObject<HTMLInputElement | null>;
   disabled?: boolean;
 }
-
 const SYSTEM_COLORS: Record<string, string> = {
   nervous: "#eab308", // 노란색 (신경계)
   skeletal: "#06b6d4", // 청록색 (골격계)
@@ -24,9 +33,9 @@ const SYSTEM_COLORS: Record<string, string> = {
 };
 
 const COMMON_ALIASES: Record<string, string[]> = {
-  "회전근개": ["supraspinatus", "infraspinatus", "subscapularis", "teres minor"],
+  "회전근개": ["rotator-cuff", "supraspinatus", "infraspinatus", "subscapularis", "teres minor"],
   "어깨": ["deltoid", "supraspinatus", "infraspinatus", "subscapularis", "teres minor", "scapula", "clavicle", "trapezius", "humerus"],
-  "오십견": ["supraspinatus", "infraspinatus", "subscapularis", "teres minor"],
+  "오십견": ["rotator-cuff", "supraspinatus", "infraspinatus", "subscapularis", "teres minor"],
   "허리": ["vertebra", "erector spinae", "quadratus lumborum", "sacrum", "latissimus dorsi"],
   "목": ["vertebra", "cervical", "sternocleidomastoid", "splenius capitis", "trapezius"],
   "경추": ["cervical", "atlas", "axis", "vertebra"],
@@ -39,13 +48,16 @@ const COMMON_ALIASES: Record<string, string[]> = {
   "상완신경총": ["brachial plexus", "roots of brachial plexus"],
   "신경": ["nerve", "nervous", "ulnar", "brachial", "spinal_cord"],
   "간": ["liver"],
-  "폐": ["lung"],
+  "폐": ["lungs", "lung"],
   "심장": ["heart"],
   "위": ["stomach"],
+  "콩팥": ["kidneys", "kidney", "renal"],
+  "신장": ["kidneys", "kidney", "renal"],
 };
 
 export function VanatomeQuickSearch({
   onSelectAnatomy,
+  onHoverAnatomy,
   onSelectTooth,
   inputRef: externalInputRef,
   disabled = false,
@@ -58,23 +70,26 @@ export function VanatomeQuickSearch({
   const inputRef = externalInputRef || localInputRef;
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 외부 클릭 시 드롭다운 닫기
+  // 외부 클릭 시 드롭다운 닫기 & 호버 해제
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
+        onHoverAnatomy?.(null, null);
       }
     };
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
+  }, [onHoverAnatomy]);
 
   const searchResults = useMemo<SearchResultItem[]>(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
 
-    const tokens = q.split(/\s+/).filter(Boolean);
-    const cleanQ = q.replace(/\s+/g, "");
+    const side = parseSearchSide(q);
+    const organQ = (queryWithoutSide(query).trim() || query.trim()).toLowerCase();
+    const tokens = organQ.split(/\s+/).filter(Boolean);
+    const cleanQ = organQ.replace(/\s+/g, "");
 
     const matchesSearch = (haystack: string) => {
       const lower = haystack.toLowerCase();
@@ -84,9 +99,10 @@ export function VanatomeQuickSearch({
       return false;
     };
 
-    const results: SearchResultItem[] = [];
+    // 중복 방지를 위한 Map 자료구조 (key: 중복 불가 고유 키)
+    const resultsMap = new Map<string, SearchResultItem>();
 
-    // 1. 치아 검색
+    // 1. 치아 검색 (fdiNumber 기준 중복 방지)
     for (const tooth of ADULT_TEETH) {
       const toothHaystack = `${tooth.shortCode} ${tooth.koreanName} ${tooth.commonName} ${tooth.quadrant} 치아`;
       let matched = matchesSearch(toothHaystack);
@@ -96,22 +112,83 @@ export function VanatomeQuickSearch({
         if (cleanQ.includes("어금니") && (tooth.commonName.includes("Molar") || tooth.koreanName.includes("구치"))) matched = true;
       }
       if (matched) {
-        results.push({
-          id: `tooth_${tooth.fdiNumber}`,
-          sourceKey: `dental:fdi:${tooth.fdiNumber}`,
-          koreanName: tooth.koreanName,
-          canonicalName: tooth.commonName,
-          system: "dental",
-          systemKorean: "치아/구강",
-          description: `${tooth.shortCode} (${tooth.quadrant})`,
-          category: "dental",
-          approxPoint: tooth.approxPoint,
-        });
+        const dedupeKey = `dental:${tooth.fdiNumber}`;
+        if (!resultsMap.has(dedupeKey)) {
+          resultsMap.set(dedupeKey, {
+            id: `tooth_${tooth.fdiNumber}`,
+            sourceKey: `dental:fdi:${tooth.fdiNumber}`,
+            koreanName: tooth.koreanName,
+            canonicalName: tooth.commonName,
+            system: "dental",
+            systemKorean: "치아/구강",
+            description: `${tooth.shortCode} (${tooth.quadrant})`,
+            category: "dental",
+            approxPoint: tooth.approxPoint,
+            has3DMesh: true,
+          });
+        }
       }
     }
 
-    // 2. 해부학 용어 사전
+    // 2. 공식 해부학 복합 장기 레지스트리 (Compound Organs: 심장, 신장, 폐, 위 등 최우선 인덱싱)
+    for (const [orgId, organ] of Object.entries(ANATOMY_COMPOUND_REGISTRY)) {
+      const aliasStr = organ.aliases.join(" ");
+      const haystack = `${orgId} ${organ.koreanName} ${organ.canonicalName} ${organ.systemKorean} ${organ.description} ${aliasStr}`;
+      let matched = matchesSearch(haystack);
+      if (!matched) {
+        for (const [aliasKey, targetKeys] of Object.entries(COMMON_ALIASES)) {
+          if (cleanQ.includes(aliasKey) && targetKeys.some((tk) => orgId.toLowerCase().includes(tk) || organ.canonicalName.toLowerCase().includes(tk))) {
+            matched = true;
+            break;
+          }
+        }
+      }
+      if (matched) {
+        if (side) {
+          const sideChildren = organ.children.filter((childId) => childLaterality(childId) === side);
+          if (sideChildren.length > 0) {
+            for (const childId of sideChildren) {
+          const meshHint = childOfficialMeshHint(childId, organ.id);
+              const baseKorean = organ.koreanName.replace(/\s*\([^)]*\)\s*$/u, "").trim();
+              resultsMap.set(`part:${childId}`, {
+                id: childId,
+                sourceKey: `vanatome:official:${childId}`,
+                koreanName: `${sideKoreanPrefix(side)}${baseKorean}`,
+                canonicalName: meshHint,
+                system: organ.system,
+                systemKorean: organ.systemKorean,
+                description: organ.description,
+                category: "anatomy",
+                isCompound: false,
+                childMeshIds: [childId],
+                has3DMesh: true,
+              });
+            }
+            continue;
+          }
+        }
+        const dedupeKey = `compound:${organ.system}:${organ.id}`;
+        if (!resultsMap.has(dedupeKey)) {
+          resultsMap.set(dedupeKey, {
+            id: organ.id,
+            sourceKey: `vanatome:compound:${organ.id}`,
+            koreanName: organ.koreanName,
+            canonicalName: organ.canonicalName,
+            system: organ.system,
+            systemKorean: organ.systemKorean,
+            description: organ.description,
+            category: "anatomy",
+            isCompound: organ.isCompound,
+            childMeshIds: organ.children,
+            has3DMesh: true,
+          });
+        }
+      }
+    }
+
+    // 3. 해부학 세부 파츠 사전 (개별 메쉬 및 미세 조직 구조)
     for (const [key, entry] of Object.entries(ANATOMY_DICTIONARY)) {
+      if (ANATOMY_SEARCH_OMIT_KEYS.has(key)) continue;
       const haystack = `${key} ${entry.korean} ${entry.canonical} ${entry.systemKorean} ${entry.description}`;
       let matched = matchesSearch(haystack);
       if (!matched) {
@@ -123,31 +200,40 @@ export function VanatomeQuickSearch({
         }
       }
       if (matched) {
-        results.push({
-          id: key,
-          sourceKey: `vanatome:1.0:${key}`,
-          koreanName: entry.korean,
-          canonicalName: entry.canonical,
-          system: entry.system,
-          systemKorean: entry.systemKorean,
-          description: entry.description,
-          category: "anatomy",
-        });
+        if (Object.values(ANATOMY_COMPOUND_REGISTRY).some((organ) => compoundCoversKorean(organ, entry.korean))) {
+          continue;
+        }
+        const dedupeKey = `${entry.system}:${entry.korean.toLowerCase()}`;
+        if (!resultsMap.has(dedupeKey)) {
+          const meshId = side ? `${key}.${side === "right" ? "r" : "l"}` : key;
+          resultsMap.set(dedupeKey, {
+            id: meshId,
+            sourceKey: `vanatome:1.0:${meshId}`,
+            koreanName: side ? `${sideKoreanPrefix(side)}${entry.korean}` : entry.korean,
+            canonicalName: side ? `${entry.canonical}${side === "right" ? ".r" : ".l"}` : entry.canonical,
+            system: entry.system,
+            systemKorean: entry.systemKorean,
+            description: entry.description,
+            category: "anatomy",
+            has3DMesh: true,
+          });
+        }
       }
-      if (results.length >= 30) break;
+      if (resultsMap.size >= 30) break;
     }
 
-    return results;
+    return Array.from(resultsMap.values());
   }, [query]);
 
   const handleSelect = (item: SearchResultItem) => {
+    onHoverAnatomy?.(null, null);
     if (item.category === "dental") {
       const fdi = Number(item.id.replace("tooth_", ""));
       if (Number.isFinite(fdi)) {
         onSelectTooth?.(fdi, item.koreanName);
       }
     } else {
-      onSelectAnatomy(item.id);
+      onSelectAnatomy(item.id, item);
     }
     setQuery(item.koreanName);
     setIsOpen(false);
@@ -158,10 +244,14 @@ export function VanatomeQuickSearch({
 
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIndex((prev) => (prev < searchResults.length - 1 ? prev + 1 : 0));
+      const nextIdx = activeIndex < searchResults.length - 1 ? activeIndex + 1 : 0;
+      setActiveIndex(nextIdx);
+      onHoverAnatomy?.(searchResults[nextIdx].id, searchResults[nextIdx]);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActiveIndex((prev) => (prev > 0 ? prev - 1 : searchResults.length - 1));
+      const prevIdx = activeIndex > 0 ? activeIndex - 1 : searchResults.length - 1;
+      setActiveIndex(prevIdx);
+      onHoverAnatomy?.(searchResults[prevIdx].id, searchResults[prevIdx]);
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (activeIndex >= 0 && activeIndex < searchResults.length) {
@@ -171,6 +261,7 @@ export function VanatomeQuickSearch({
       }
     } else if (e.key === "Escape") {
       setIsOpen(false);
+      onHoverAnatomy?.(null, null);
     }
   };
 
@@ -191,6 +282,9 @@ export function VanatomeQuickSearch({
             setQuery(e.target.value);
             setIsOpen(true);
             setActiveIndex(-1);
+            if (!e.target.value.trim()) {
+              onHoverAnatomy?.(null, null);
+            }
           }}
           onFocus={() => {
             if (query.trim()) setIsOpen(true);
@@ -208,6 +302,7 @@ export function VanatomeQuickSearch({
             onClick={() => {
               setQuery("");
               setIsOpen(false);
+              onHoverAnatomy?.(null, null);
               inputRef.current?.focus();
             }}
             title="검색어 지우기"
@@ -230,11 +325,17 @@ export function VanatomeQuickSearch({
               const isActive = idx === activeIndex;
               return (
                 <button
-                  key={`${item.id}-${idx}`}
+                  key={`${item.system}-${item.canonicalName}-${idx}`}
                   type="button"
                   className={`vanatome-quick-search-item ${isActive ? "is-active" : ""}`}
                   onClick={() => handleSelect(item)}
-                  onMouseEnter={() => setActiveIndex(idx)}
+                  onMouseEnter={() => {
+                    setActiveIndex(idx);
+                    onHoverAnatomy?.(item.id, item);
+                  }}
+                  onMouseLeave={() => {
+                    onHoverAnatomy?.(null, null);
+                  }}
                   role="option"
                   aria-selected={isActive}
                 >
@@ -246,6 +347,7 @@ export function VanatomeQuickSearch({
                         aria-hidden="true"
                       />
                       {item.koreanName}
+                      {item.isCompound ? <span className="vanatome-quick-search-item-badge">복합 장기</span> : null}
                     </span>
                     <span className="vanatome-quick-search-item-system">
                       {item.systemKorean}
@@ -253,7 +355,7 @@ export function VanatomeQuickSearch({
                   </div>
                   <div className="vanatome-quick-search-item-canonical">
                     {item.canonicalName}
-                    {item.description ? ` · ${item.description}` : ""}
+                    {item.fallbackTarget ? ` → 클릭 시 ${item.fallbackTarget.koreanName} 선택` : item.description ? ` · ${item.description}` : ""}
                   </div>
                 </button>
               );

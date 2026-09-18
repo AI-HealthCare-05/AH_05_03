@@ -1,43 +1,49 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
 import { BOMI_AVATARS, type BomiMood } from "./bomiMood";
+import spritesheet from "./assets/bomi/spritesheet.webp";
+import "./bomiAvatar.css";
 
 export function BomiAvatar({
   mood,
   className,
+  size = "md",
+  still = false,
 }: {
   mood: BomiMood;
   className?: string;
+  size?: "md" | "lg";
+  still?: boolean;
 }) {
-  const [hasError, setHasError] = useState(false);
+  const [useStill, setUseStill] = useState(still);
 
-  if (hasError) {
+  useEffect(() => {
+    if (still) return;
+    const probe = new Image();
+    probe.onerror = () => setUseStill(true);
+    probe.src = spritesheet;
+  }, [still]);
+
+  if (still || useStill) {
     return (
-      <svg
+      <img
+        src={BOMI_AVATARS[mood]}
+        alt=""
         className={className}
-        width="28"
-        height="28"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        data-bomi-mood={mood}
+        data-bomi-still=""
+        loading="eager"
+        decoding="async"
         aria-hidden="true"
-      >
-        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-      </svg>
+      />
     );
   }
 
   return (
-    <img
-      src={BOMI_AVATARS[mood]}
-      alt="봄이"
-      className={className}
+    <span
+      className={`bomi-avatar-sprite${size === "lg" ? " is-lg" : ""}${className ? ` ${className}` : ""}`}
       data-bomi-mood={mood}
-      loading="eager"
-      decoding="async"
-      onError={() => setHasError(true)}
+      style={{ backgroundImage: `url(${spritesheet})` }}
       aria-hidden="true"
     />
   );

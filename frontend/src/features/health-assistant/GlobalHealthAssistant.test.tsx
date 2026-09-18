@@ -73,6 +73,7 @@ describe("GlobalHealthAssistant (채널톡 스타일 전역 연속형 건강 비
     const launcherBtn = screen.getByRole("button", { name: /건강 비서 봄이와 대화하기/i });
     expect(launcherBtn).toBeInTheDocument();
     expect(launcherBtn).toHaveClass("channel-talk-launcher-btn");
+    expect(launcherBtn.querySelector("[data-bomi-mood]")).not.toBeNull();
   });
 
   it("런처 클릭 시 채널톡 스타일 플로팅 팝오버가 열리고 대화창과 현재 페이지 맥락이 표시된다", async () => {

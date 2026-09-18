@@ -17,6 +17,7 @@ describe("StitchCapsuleNav", () => {
     const links = within(screen.getByRole("navigation", { name: "주 메뉴" })).getAllByRole("link");
     expect(links.map((link) => link.textContent)).toEqual(STITCH_PRIMARY_NAV.map((item) => item.label));
     expect(links.map((link) => link.getAttribute("href"))).toEqual(["/", "/pain-diary", "/assessment", "/health-data3"]);
+    expect(links.every((link) => link.classList.contains("up15-nav-btn"))).toBe(true);
   });
 
   it("현재 위치는 한 곳만 표시한다", () => {

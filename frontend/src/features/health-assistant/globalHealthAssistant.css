@@ -13,26 +13,28 @@
 }
 
 .channel-talk-launcher-btn {
-  width: 60px;
-  height: 60px;
-  border-radius: var(--card-radius, 22px);
+  width: 62px;
+  height: 62px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 0;
   border: none;
   cursor: pointer;
   outline: none;
   position: relative;
-  background: linear-gradient(135deg, var(--blue-600, #2463eb) 0%, var(--blue-700, #1d4fb8) 100%);
-  color: #ffffff;
+  background: transparent;
+  color: var(--up15-aubergine, #3c315b);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 24px rgba(29, 79, 184, 0.35), 0 2px 6px rgba(0, 0, 0, 0.08);
-  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.22s ease, background 0.2s ease;
+  box-shadow: none;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
   user-select: none;
 }
 
 .channel-talk-launcher-btn:hover {
   transform: scale(1.08) translateY(-2px);
-  box-shadow: 0 12px 32px rgba(29, 79, 184, 0.45), 0 4px 10px rgba(0, 0, 0, 0.12);
+  box-shadow: none;
 }
 
 .channel-talk-launcher-btn:active {
@@ -40,12 +42,14 @@
 }
 
 .channel-talk-launcher-btn.is-open {
-  background: var(--ink, #172033);
-  box-shadow: 0 8px 20px rgba(23, 32, 51, 0.3);
+  background: transparent;
+  color: var(--up15-aubergine, #3c315b);
+  box-shadow: none;
 }
 
 .channel-talk-launcher-btn svg,
-.channel-talk-launcher-btn img {
+.channel-talk-launcher-btn img,
+.channel-talk-launcher-btn .bomi-avatar-sprite {
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
 }
 
@@ -58,10 +62,15 @@
 }
 
 .icon-chat-mascot {
-  width: 40px;
-  height: auto;
+  width: 48px;
+  height: 52px;
   object-fit: contain;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.28));
+  filter: drop-shadow(0 2px 8px rgba(38, 27, 68, 0.22));
+}
+
+.icon-chat-mascot.bomi-avatar-sprite {
+  --bomi-cell-w: 48px;
+  --bomi-cell-h: 52px;
 }
 
 .channel-talk-launcher-btn:hover .icon-chat-mascot {
@@ -260,6 +269,8 @@
   padding: 3px 9px;
   border-radius: 9999px;
   font-size: 11px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* 모바일 화면 (768px 이하) 대응 */
@@ -270,9 +281,10 @@
   }
 
   .channel-talk-launcher-btn {
-    width: 54px;
-    height: 54px;
-    border-radius: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 0;
+    background: transparent;
   }
 
   .channel-talk-tooltip {

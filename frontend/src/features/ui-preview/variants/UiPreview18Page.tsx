@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { useLocalDomain } from "../../../app/localDomainContext";
+import { isVariantBarPath } from "../../../app/localHomeSwap";
 import { TREND_SERIES } from "../../assessment/snapshots";
 import { useHealthTimeSeries } from "../../data/useHealthTimeSeries";
 import type { HealthRecord } from "../../../shared/local/domainContracts";
@@ -254,7 +255,7 @@ function formatDateToLocalKey(date: Date): string {
 export function UiPreview18Page() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const isPreview = pathname.startsWith("/ui-preview") || pathname === "/";
+  const isPreview = isVariantBarPath(pathname);
   const { runtime, profiles } = useLocalDomain();
 
   const [selectedProfileId, setSelectedProfileId] = useState("");

@@ -95,6 +95,7 @@ import {
 } from "./cameraFocusManager";
 import { loadHumanAtlasMeshes } from "./human-atlas/atlasLoader";
 import { ANATOMY_COMPOUND_REGISTRY } from "./anatomyCompoundRegistry";
+import { childOfficialMeshHint, meshLooksLikeSide, parseSearchSide } from "./anatomySearchQuery";
 
 export type SelectedStructure = {
   name: string;
@@ -1474,8 +1475,8 @@ export function VanatomeBodyMap({
             <VanatomeQuickSearch
               inputRef={searchInputRef}
               disabled={loadProgress < 100}
-              onSelectAnatomy={(anatomyId) => {
-                selectByAnatomyIdRef.current(anatomyId);
+              onSelectAnatomy={(anatomyId, item) => {
+                selectByAnatomyIdRef.current(anatomyId, item);
               }}
               onSelectTooth={(toothFdi, koreanName) => {
                 selectToothRef.current(toothFdi, koreanName, true);
@@ -4582,7 +4583,8 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
   };
 
   selectByAnatomyIdRef.current = (anatomyId: string, item?: SearchResultItem) => {
-    // 0. 가상 미세 부위(신장 피질·수질 등)로 fallbackTarget이 지정된 경우 부모 장기로 전환
+    // 0. 예전 검색이 메쉬 없는 항목에 fallbackTarget 을 실어 보내던 경로.
+    // 피질·수질은 목록에서 뺐지만, 남은 폴백이 있으면 부모 장기로 전환한다.
     let effectiveAnatomyId = anatomyId;
     let effectiveItem = item;
     if (item?.fallbackTarget) {
@@ -4626,11 +4628,14 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         const found = anatomyMeshes.filter((m) => {
           const mName = m.name.toLowerCase();
           const aId = String(m.userData.anatomyId ?? "").toLowerCase();
+          const meshHint = childOfficialMeshHint(childId, compound.id).toLowerCase();
           return (
             mName.includes(cleanChild) ||
             mName.includes(cleanChildRaw) ||
             aId.includes(cleanChild) ||
-            aId.includes(cleanChildRaw)
+            aId.includes(cleanChildRaw) ||
+            mName.includes(meshHint) ||
+            aId.includes(meshHint)
           );
         });
         matchedMeshes.push(...found);
@@ -4662,11 +4667,13 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
       anatomyMeshes.forEach(applyMeshVisibility);
     }
 
+    const requestedSide = parseSearchSide(`${effectiveAnatomyId} ${effectiveItem?.koreanName ?? ""} ${effectiveItem?.canonicalName ?? ""}`);
+
     let target = anatomyMeshes.find((m) => {
       const mName = m.name.toLowerCase();
       const aId = String(m.userData.anatomyId ?? "").toLowerCase();
       const sLabel = String(m.userData.structureLabel ?? "").toLowerCase();
-      return (
+      const hit = (
         mName === cleanTarget ||
         mName === cleanTargetRaw ||
         aId === cleanTarget ||
@@ -4677,6 +4684,9 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         mName.includes(cleanTargetRaw) ||
         aId.includes(cleanTarget)
       );
+      if (!hit) return false;
+      if (requestedSide && !meshLooksLikeSide(m.name, aId, requestedSide)) return false;
+      return true;
     });
 
     if (!target && effectiveItem?.canonicalName) {
@@ -4686,7 +4696,7 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
         const mName = m.name.toLowerCase();
         const aId = String(m.userData.anatomyId ?? "").toLowerCase();
         const info = resolveAnatomyDisplayInfo(m.name, String(m.userData.structureSystem ?? ""));
-        return (
+        const hit = (
           mName === canon ||
           mName === canonRaw ||
           mName.includes(canon) ||
@@ -4695,13 +4705,19 @@ async function createAnatomyScene(options: CreateAnatomySceneOptions) {
           info.canonicalName.toLowerCase() === canonRaw ||
           info.canonicalName.toLowerCase().includes(canonRaw)
         );
+        if (!hit) return false;
+        if (requestedSide && !meshLooksLikeSide(m.name, aId, requestedSide)) return false;
+        return true;
       });
     }
 
     if (!target && effectiveItem?.koreanName) {
       target = anatomyMeshes.find((m) => {
+        const aId = String(m.userData.anatomyId ?? "").toLowerCase();
         const info = resolveAnatomyDisplayInfo(m.name, String(m.userData.structureSystem ?? ""));
-        return info.koreanName === effectiveItem.koreanName || info.koreanName.includes(effectiveItem.koreanName);
+        if (info.koreanName !== effectiveItem.koreanName) return false;
+        if (requestedSide && !meshLooksLikeSide(m.name, aId, requestedSide)) return false;
+        return true;
       });
     }
 

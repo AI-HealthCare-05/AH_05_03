@@ -90,4 +90,21 @@ describe("AnatomySearchDrawer", () => {
 
     expect(screen.getByRole("button", { name: /극상근/ })).toBeInTheDocument();
   });
+
+  it("신장 피질·수질은 메쉬가 없어 검색 결과에 올리지 않는다", () => {
+    render(
+      <AnatomySearchDrawer
+        isOpen={true}
+        onClose={() => {}}
+        onSelectResult={() => {}}
+      />,
+    );
+
+    const input = screen.getByPlaceholderText(/부위명 검색/);
+    fireEvent.change(input, { target: { value: "신장 피질" } });
+    expect(screen.queryByRole("button", { name: /신장 피질/u })).not.toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: "신장 수질" } });
+    expect(screen.queryByRole("button", { name: /신장 수질/u })).not.toBeInTheDocument();
+  });
 });

@@ -376,23 +376,30 @@
   font-size: 15px;
   font-weight: 700;
   color: var(--blue-700, #1d4fb8);
-  background: var(--blue-50, #f4f7ff);
-  border: 1px solid var(--blue-100, #eaf1ff);
-  border-radius: 50%;
-  width: 38px;
-  height: 38px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  width: 40px;
+  min-width: 40px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow: visible;
   flex-shrink: 0;
 }
 
 .assistant-avatar-mascot {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 30%;
+  width: 40px;
+  height: 44px;
+  object-fit: contain;
+  object-position: center;
+}
+
+.assistant-avatar .bomi-avatar-sprite,
+.assistant-avatar-mascot.bomi-avatar-sprite {
+  --bomi-cell-w: 40px;
+  --bomi-cell-h: 44px;
 }
 
 .assistant-header-title h3 {
@@ -403,6 +410,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
+}
+
+.assistant-header-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .target-profile-pill {
@@ -563,23 +579,28 @@
   font-size: 13px;
   font-weight: 700;
   color: var(--blue-700, #1d4fb8);
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background-color: var(--blue-50, #f4f7ff);
-  border: 1px solid var(--blue-100, #eaf1ff);
+  width: 32px;
+  height: 35px;
+  border-radius: 0;
+  background-color: transparent;
+  border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .msg-avatar-mascot {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center 30%;
+  width: 32px;
+  height: 35px;
+  object-fit: contain;
+  object-position: center;
+}
+
+.msg-avatar .bomi-avatar-sprite {
+  --bomi-cell-w: 32px;
+  --bomi-cell-h: 35px;
 }
 
 .msg-bubble {
