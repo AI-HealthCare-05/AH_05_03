@@ -37,6 +37,7 @@ import {
   UiPreview16Page,
   UiPreview17Page,
   UiPreview18Page,
+  HealthData3Page,
 } from "./lazyRoutes";
 import { LOCAL_HOME_IS_PREVIEW18 } from "./localHomeSwap";
 import { RootLayout } from "./RootLayout";
@@ -145,6 +146,10 @@ export const router = createBrowserRouter([
         // `insights` 에만 있던 유일한 자리라 같이 옮겼다.
         path: "health-data",
         element: <HealthDataPage />,
+      },
+      {
+        path: "health-data3",
+        element: <HealthData3Page />,
       },
       {
         // 옛 주소. 북마크·지난 링크가 404 가 되면 사용자는 기능이 사라진 줄 안다

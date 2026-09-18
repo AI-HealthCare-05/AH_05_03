@@ -113,6 +113,10 @@
   position: relative;
 }
 
+.channel-talk-tooltip.is-hint {
+  background: rgba(60, 49, 91, 0.94);
+}
+
 .channel-talk-tooltip::after {
   content: "";
   position: absolute;

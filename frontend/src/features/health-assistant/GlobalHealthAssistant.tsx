@@ -87,6 +87,7 @@ export function GlobalHealthAssistant() {
   const [hasUnread, setHasUnread] = useState(true);
   const [showTooltip, setShowTooltip] = useState(true);
   const [tooltipMessage, setTooltipMessage] = useState(TOOLTIP_MESSAGES[0]);
+  const [hoverHint, setHoverHint] = useState<string | null>(null);
 
   // 현재 선택된 프로필 (가족 홈이나 다른 화면과 동기화)
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(() => {
@@ -109,11 +110,20 @@ export function GlobalHealthAssistant() {
       setHasUnread(false);
       setShowTooltip(false);
     };
+    const handleBomiHint = (e: Event) => {
+      const text = (e as CustomEvent<{ text?: string }>).detail?.text?.trim();
+      if (text) setHoverHint(text);
+    };
+    const handleBomiHintClear = () => setHoverHint(null);
     window.addEventListener("ieobom:profile-changed", handleProfileChange);
     window.addEventListener("ieobom:open-assistant", handleOpenAssistant);
+    window.addEventListener("ieobom:bomi-hint", handleBomiHint);
+    window.addEventListener("ieobom:bomi-hint-clear", handleBomiHintClear);
     return () => {
       window.removeEventListener("ieobom:profile-changed", handleProfileChange);
       window.removeEventListener("ieobom:open-assistant", handleOpenAssistant);
+      window.removeEventListener("ieobom:bomi-hint", handleBomiHint);
+      window.removeEventListener("ieobom:bomi-hint-clear", handleBomiHintClear);
     };
   }, []);
 
@@ -209,9 +219,9 @@ export function GlobalHealthAssistant() {
     <>
       {/* 1. 채널톡 스타일 우측 하단 상시 플로팅 런처 버튼 */}
       <div className="channel-talk-launcher">
-        {showTooltip && !isOpen && (
-          <div className="channel-talk-tooltip" role="status">
-            <span>{tooltipMessage}</span>
+        {(hoverHint || (showTooltip && !isOpen)) && (
+          <div className={`channel-talk-tooltip${hoverHint ? " is-hint" : ""}`} role="status">
+            <span>{hoverHint ?? tooltipMessage}</span>
           </div>
         )}
         <button
