@@ -1052,7 +1052,21 @@ class HealthAssistantService:
         request: HealthAssistantChatRequest,
     ) -> HealthAssistantResponse:
         """음식·식단의 '영양'을 영양제로 오인해 붙인 고정 문구를 제거한다."""
+        """음식·식단의 '영양'을 영양제로 오인해 붙인 고정 문구와, LLM이 본문에 포함한 비진단 안전 고지를 제거한다."""
         conversation = " ".join(message.content for message in request.messages if message.role == "user")
+        
+        # LLM이 본문에 면책 조항을 포함한 경우 제거 (중복 노출 방지)
+        disclaimers_to_remove = [
+            "본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요.",
+            "※ 본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요.",
+            "제공해 드린 건강 정보는 참고용이며, 정확한 진단과 치료는 의료기관을 방문하여 전문의와 상담하시기 바랍니다.",
+            "본 답변은 의학적 진단을 대신하지 않으며,"
+        ]
+        
+        for disclaimer in disclaimers_to_remove:
+            if disclaimer in response.assistant_message:
+                response.assistant_message = response.assistant_message.replace(disclaimer, "").strip()
+
         if any(keyword in conversation for keyword in _SUPPLEMENT_TOPIC_KEYWORDS):
             return response
         if not response.assistant_message.startswith(_SUPPLEMENT_DISCLAIMER):
@@ -1271,9 +1285,12 @@ class HealthAssistantService:
                 outdoor_conditions=prepared.outdoor_conditions,
                 messages=request.messages,
             )
-            yield "delta", {"text": response.assistant_message}
-            yield "result", response.model_dump(mode="json")
-            return
+            # 만약 enforce_grounding 이 차단(고정 응답)을 하지 않아 빈 문자열이 그대로 반환되었다면,
+            # LLM이 직접 대답할 수 있도록 흐름을 이어간다.
+            if response.assistant_message:
+                yield "delta", {"text": response.assistant_message}
+                yield "result", response.model_dump(mode="json")
+                return
 
         if generated_tool_results:
             from app.dtos.food_nutrition import FoodNutritionSearchResult

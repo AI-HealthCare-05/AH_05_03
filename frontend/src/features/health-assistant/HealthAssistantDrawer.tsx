@@ -2489,9 +2489,9 @@ export function HealthAssistantDrawer({
             </div>
           )}
 
-          <p className="assistant-data-notice">
-            ※ 본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요.
-          </p>
+          <div className="assistant-data-notice">
+            <p>※ 본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요.</p>
+          </div>
           <form
             className="assistant-input-form"
             onSubmit={(e: FormEvent) => {
