@@ -293,7 +293,7 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>) {
   await user.selectOptions(screen.getByRole("combobox", { name: /성별/ }), "M");
   await retype(user, /^키/, "173");
   await retype(user, /체중/, "78");
-  await user.selectOptions(screen.getByRole("combobox", { name: /전반적 건강/ }), "3");
+  await user.click(within(screen.getByRole("radiogroup", { name: /전반적 건강/ })).getByRole("radio", { name: /3.*보통/ }));
   // 혈압·공복혈당도 필수다. 검진결과지에서 옮겨 적는 화면이라 이 값들은 거의
   // 항상 손에 있고, 있는 값을 안 받으면 고혈압·당뇨를 추정으로만 답하게 된다.
   await retype(user, /수축기/, "128");
@@ -357,15 +357,69 @@ describe("AssessmentPage", () => {
       levels: { htn: "HIGH", anemia: "NORMAL" }, engines: { htn: "E1", anemia: "E2" },
       bmi: RESPONSE.bmi, evaluated: 2, total: 2, highestLevel: "HIGH",
       verdicts: RESPONSE.verdicts.map((item) => ({ ...item, reference: item.reference ? { probability: item.reference.probability } : null })), matrix: Object.values(RESPONSE.disease_risks),
+      runs: [
+        { at: "2026-09-16T09:00:00+09:00", levels: { htn: "CAUTION" }, highestLevel: "CAUTION" },
+        { at: "2026-09-17T09:00:00+09:00", levels: { htn: "HIGH" }, highestLevel: "HIGH" },
+      ],
     } }], { profileId: "p-1" });
 
     expect(await screen.findByRole("heading", { name: /만성질환 위험도 분석/ })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "분석에 사용할 건강기록" })).not.toBeInTheDocument();
     expect(screen.queryByRole("progressbar", { name: /빈혈 10년 뒤 새로 생길 확률/ })).not.toBeInTheDocument();
+    await user.click(screen.getByText("이전 판정 결과 보기"));
+    expect(screen.getByText("2건")).toBeInTheDocument();
+    await user.click(screen.getByText("이 기록의 이전 판정 등급 1건"));
+    expect(screen.getByText(/고혈압: 주의/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /새로운 결과 넣어보기/ }));
     expect(screen.getByRole("heading", { name: "분석에 사용할 건강기록" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /이전 판정 결과로 돌아가기/ }));
+    expect(screen.getByRole("heading", { name: /만성질환 위험도 분석/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /새로운 결과 넣어보기/ }));
     await user.click(screen.getByRole("button", { name: /직접 수치 입력하기/ }));
     expect(screen.getByRole("spinbutton", { name: /나이/ })).toHaveValue(null);
+  });
+
+  it("저장된 판정이 8건을 넘어도 전체 이력을 열고 지난 보고서로 돌아간다", async () => {
+    const user = userEvent.setup();
+    const payload = {
+      inputs: { age: 54, sex: "M", self_rated_health: 3 },
+      levels: { htn: "HIGH" }, engines: { htn: "E1" },
+      bmi: RESPONSE.bmi, evaluated: 2, total: 2, highestLevel: "HIGH",
+      verdicts: RESPONSE.verdicts, matrix: Object.values(RESPONSE.disease_risks), report: RESPONSE,
+    };
+    renderWithRecords(Array.from({ length: 10 }, (_, index) => ({
+      recordType: "assessment", recordedAt: `2026-09-${String(index + 1).padStart(2, "0")}T09:00:00+09:00`, payload,
+    })), { profileId: "p-1" });
+
+    const history = await screen.findByText("이전 판정 결과 보기");
+    await user.click(history);
+    expect(screen.getByText("10건")).toBeInTheDocument();
+    expect(document.querySelectorAll(".risk-report-history li")).toHaveLength(10);
+    await user.click(screen.getByRole("button", { name: /2026\. 9\. 1\./ }));
+    expect(screen.getByText(/2026\. 9\. 1\. 판정 결과입니다/)).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: /빈혈 10년 뒤 새로 생길 확률/ })).toBeInTheDocument();
+  });
+
+  it("상세가 없는 과거 기록은 저장된 수치로 다시 입력하고 현재 보고서로 복귀한다", async () => {
+    const user = userEvent.setup();
+    renderWithRecords([
+      { recordType: "assessment", recordedAt: "2026-08-01T09:00:00+09:00", payload: {
+        inputs: { age: 54, sex: "M", self_rated_health: 3 }, levels: { htn: "CAUTION" }, engines: { htn: "E1" },
+        bmi: 26, evaluated: 1, total: 1, highestLevel: "CAUTION",
+      } },
+      { recordType: "assessment", recordedAt: "2026-09-17T09:00:00+09:00", payload: {
+        inputs: { age: 54, sex: "M", self_rated_health: 3 }, levels: { htn: "HIGH" }, engines: { htn: "E1" },
+        bmi: RESPONSE.bmi, evaluated: 2, total: 2, highestLevel: "HIGH", report: RESPONSE,
+        verdicts: RESPONSE.verdicts, matrix: Object.values(RESPONSE.disease_risks),
+      } },
+    ], { profileId: "p-1" });
+    await screen.findByRole("heading", { name: /만성질환 위험도 분석/ });
+    await user.click(screen.getByText("이전 판정 결과 보기"));
+    await user.click(screen.getByRole("button", { name: /2026\. 8\. 1\./ }));
+    expect(screen.getByRole("heading", { name: "분석에 사용할 건강기록" })).toBeInTheDocument();
+    expect(screen.getByText(/이전 판정에는 상세 결과가 저장되지 않았습니다/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /이전 판정 결과로 돌아가기/ }));
+    expect(screen.getByRole("heading", { name: /만성질환 위험도 분석/ })).toBeInTheDocument();
   });
 
   it("처음에는 기록 선택을 먼저 보이고 업로드와 직접 입력을 접어 둔다", async () => {
@@ -381,6 +435,35 @@ describe("AssessmentPage", () => {
     await user.click(screen.getByRole("button", { name: /직접 수치 입력/ }));
     expect(screen.getByRole("spinbutton", { name: /나이/ })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "검진표 업로드" })).not.toBeInTheDocument();
+  });
+
+  it("프로필 생년월일과 성별을 기본값으로 채우고 건강상태를 1~5 중 고른다", async () => {
+    const user = userEvent.setup();
+    function WithProfile() {
+      const { runtime, createProfile } = useLocalDomain();
+      const started = useRef(false);
+      const [ready, setReady] = useState(false);
+      useEffect(() => {
+        if (!runtime || started.current) return;
+        started.current = true;
+        void createProfile({ displayName: "가족", relationship: "가족", birthDate: "1990-01-01", gender: "female" }).then((profile) => {
+          localStorage.setItem("ieobom:selected-profile-id", profile.id);
+          setReady(true);
+        });
+      }, [runtime, createProfile]);
+      return ready ? <AssessmentPage /> : null;
+    }
+    render(<MemoryRouter initialEntries={["/assessment"]}><AuthContext.Provider value={authValue()}><LocalDomainProvider databaseName={`ieobom-assess-test-${crypto.randomUUID()}`}><WithProfile /></LocalDomainProvider></AuthContext.Provider></MemoryRouter>);
+    await user.click(await screen.findByRole("button", { name: /직접 수치 입력하기/ }));
+    expect(screen.getByRole("spinbutton", { name: /나이/ })).toHaveValue(36);
+    expect(screen.getByRole("combobox", { name: /성별/ })).toHaveValue("F");
+    const rating = screen.getByRole("radiogroup", { name: /전반적 건강/ });
+    expect(within(rating).getAllByRole("radio")).toHaveLength(5);
+    await user.click(within(rating).getByRole("radio", { name: /2.*좋음/ }));
+    expect(within(rating).getByRole("radio", { name: /2.*좋음/ })).toBeChecked();
+    expect([...document.querySelectorAll(".assess-group--basic .assess-field-label")].map((label) => label.textContent?.trim())).toEqual([
+      "나이 * 세", "성별 *", "전반적 건강 *", "키 * cm", "체중 * kg", "허리둘레 cm",
+    ]);
   });
 
   it("필수 수치가 준비돼 있으면 접힌 입력을 열지 않고 판정할 수 있다", async () => {
@@ -467,6 +550,8 @@ describe("AssessmentPage", () => {
     const opener = await screen.findByRole("button", { name: /고혈압 상세 근거 보기/ });
     await user.click(opener);
     const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("heading", { name: /고혈압 판정 근거/ })).toBeInTheDocument();
+    expect(within(dialog).queryByText("빈혈")).not.toBeInTheDocument();
     expect(within(dialog).getAllByText(/대한고혈압학회/).length).toBeGreaterThan(0);
     expect(within(dialog).getByText(/AUROC 는 "100명 중 몇 명을 맞힌다"가 아닙니다/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole("button", { name: "닫기" }));
@@ -716,7 +801,7 @@ describe("AssessmentPage", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: /성별/ }), "M");
     await retype(user, /^키/, "173");
     await retype(user, /체중/, "78");
-    await user.selectOptions(screen.getByRole("combobox", { name: /전반적 건강/ }), "3");
+    await user.click(within(screen.getByRole("radiogroup", { name: /전반적 건강/ })).getByRole("radio", { name: /3.*보통/ }));
     await user.click(screen.getByRole("button", { name: /이 기록으로 분석하기/ }));
 
     expect(assess).not.toHaveBeenCalled();
@@ -805,7 +890,7 @@ describe("테스트 프로필과 자세히 보기", () => {
     expect(screen.getByRole("combobox", { name: /성별/ })).toHaveValue("M");
     expect(screen.getByRole("spinbutton", { name: /^키/ })).toHaveValue(172);
     expect(screen.getByRole("spinbutton", { name: /체중/ })).toHaveValue(84);
-    expect(screen.getByRole("combobox", { name: /전반적 건강/ })).toHaveValue("4");
+    expect(within(screen.getByRole("radiogroup", { name: /전반적 건강/ })).getByRole("radio", { name: /4.*나쁨/ })).toBeChecked();
     // 이 프로필이 노리는 값
     expect(screen.getByRole("spinbutton", { name: /공복혈당/ })).toHaveValue(148);
     // 필수를 다 채웠어도 서버를 부르지 않는다.

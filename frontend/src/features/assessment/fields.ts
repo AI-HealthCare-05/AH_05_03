@@ -58,8 +58,6 @@ export const FIELD_GROUPS: FieldGroup[] = [
           { value: "F", label: "여성" },
         ],
       },
-      { name: "height_cm", label: "키", kind: "number", unit: "cm", min: 101, max: 229, step: 0.1, required: true },
-      { name: "weight_kg", label: "체중", kind: "number", unit: "kg", min: 26, max: 299, step: 0.1, required: true },
       {
         name: "self_rated_health",
         label: "전반적 건강",
@@ -68,6 +66,8 @@ export const FIELD_GROUPS: FieldGroup[] = [
         options: SELF_RATED,
         hint: "평소 본인의 건강이 어떻다고 느끼시나요",
       },
+      { name: "height_cm", label: "키", kind: "number", unit: "cm", min: 101, max: 229, step: 0.1, required: true },
+      { name: "weight_kg", label: "체중", kind: "number", unit: "kg", min: 26, max: 299, step: 0.1, required: true },
       { name: "waist_cm", label: "허리둘레", kind: "number", unit: "cm", min: 41, max: 199, step: 0.1 },
     ],
   },

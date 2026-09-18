@@ -34,6 +34,8 @@ type ReportProps = {
   onReset: () => void;
   onNew: () => void;
   onOpenDetail: () => void;
+  onOpenDisease: (key: string) => void;
+  onOpenHistory: (snapshot: Snapshot) => void;
 };
 
 const statusName: Record<RiskLevel, string> = {
@@ -92,14 +94,14 @@ function AnalysisSummary({ result, verdicts }: Pick<ReportProps, "result" | "ver
   );
 }
 
-function DiseaseRiskOverview({ verdicts, values, models, sharedInputs, onOpenDetail }: Pick<ReportProps, "verdicts" | "values" | "models" | "sharedInputs" | "onOpenDetail">) {
+function DiseaseRiskOverview({ verdicts, values, models, sharedInputs, onOpenDisease }: Pick<ReportProps, "verdicts" | "values" | "models" | "sharedInputs" | "onOpenDisease">) {
   const [expanded, setExpanded] = useState(false);
   return (
     <section className="risk-report-section" aria-labelledby="risk-overview-heading">
       <div className="risk-section-heading"><h2 id="risk-overview-heading">주요 질환별 위험도</h2><button type="button" className="risk-link" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}>{expanded ? "간단히 보기" : "전체 결과 보기"} <span aria-hidden="true">›</span></button></div>
       <div className="risk-disease-list">
         {(expanded ? verdicts : verdicts.slice(0, 5)).map((verdict) => {
-          return <button type="button" className="risk-disease-row" key={verdict.key} onClick={onOpenDetail} aria-label={`${verdict.name} 상세 근거 보기`}><strong>{verdict.name}</strong><span className={`risk-status ${tone(verdict.risk_level)}`}>{statusName[verdict.risk_level]}</span><span className="risk-row-measure">{verdict.reason || LEVEL_LABEL[verdict.risk_level]}</span><span className="risk-row-reason">{verdict.display_label}</span><span aria-hidden="true">›</span></button>;
+          return <button type="button" className="risk-disease-row" key={verdict.key} onClick={() => onOpenDisease(verdict.key)} aria-label={`${verdict.name} 상세 근거 보기`}><strong>{verdict.name}</strong><span className={`risk-status ${tone(verdict.risk_level)}`}>{statusName[verdict.risk_level]}</span><span className="risk-row-measure">{verdict.reason || LEVEL_LABEL[verdict.risk_level]}</span><span className="risk-row-reason">{verdict.display_label}</span><span aria-hidden="true">›</span></button>;
         })}
       </div>
       {expanded && <div className="risk-expanded-results">
@@ -168,11 +170,40 @@ function MedicalDisclaimer({ result, profiles, activeProfileId, onProfileChange,
   return <details className="risk-report-disclaimer"><summary>의학적 안내사항</summary><p>이 결과는 건강정보에 대한 참고 자료이며 진단이나 처방을 대신하지 않습니다.</p>{saved && <p role="status">{saved}</p>}{profiles.length ? <div className="risk-save"><label>기록 대상 <select value={activeProfileId ?? ""} onChange={(event) => onProfileChange(event.target.value)}>{profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.displayName}</option>)}</select></label><button type="button" className="risk-pill" onClick={onKeep} disabled={keeping}>{keeping ? "저장 중…" : "판정 기록 다시 남기기"}</button></div> : <p>변화 추이를 남기려면 가족 홈에서 구성원을 등록해 주세요.</p>}{result.disclaimers.map((line) => <p key={line}>{line}</p>)}</details>;
 }
 
+function ReportHistory({ snapshots, onOpenHistory }: Pick<ReportProps, "snapshots" | "onOpenHistory">) {
+  if (!snapshots.length) return null;
+  const historyCount = snapshots.reduce((count, snapshot) => count + Math.max(1, snapshot.payload.runs?.length ?? 0), 0);
+  return <details className="risk-report-history">
+    <summary>이전 판정 결과 보기 <span>{historyCount}건</span></summary>
+    <ul>{[...snapshots].reverse().map((snapshot) => {
+      const olderRuns = snapshot.payload.runs?.slice(0, -1) ?? [];
+      return <li key={snapshot.id}>
+        <button type="button" onClick={() => onOpenHistory(snapshot)}>
+          <time dateTime={snapshot.recordedAt}>{new Date(snapshot.payload.checkedAt || snapshot.recordedAt).toLocaleString("ko-KR")}</time>
+          <span>{Object.values(snapshot.payload.levels).filter((level) => level === "HIGH" || level === "VERY_HIGH").length}개 관찰 필요</span>
+          <span aria-hidden="true">›</span>
+        </button>
+        {olderRuns.length > 0 && <details className="risk-legacy-runs">
+          <summary>이 기록의 이전 판정 등급 {olderRuns.length}건</summary>
+          <ul>{olderRuns.map((run, index) => <li key={`${run.at}-${index}`}>
+            <time dateTime={run.at || snapshot.recordedAt}>{new Date(run.at || snapshot.recordedAt).toLocaleString("ko-KR")}</time>
+            <span>{Object.entries(run.levels).map(([key, level]) =>
+              `${snapshot.payload.verdicts?.find((item) => item.key === key)?.name ?? key}: ${LEVEL_LABEL[level as RiskLevel] ?? level}`,
+            ).join(" · ")}</span>
+            <small>이전 저장 방식의 등급 기록 · 상세 근거 없음</small>
+          </li>)}</ul>
+        </details>}
+      </li>;
+    })}</ul>
+  </details>;
+}
+
 export function RiskReportPage(props: ReportProps) {
   return <div className="risk-report-page">
     <ReportHeader profileName={props.profileName} reportAt={props.reportAt} onReset={props.onReset} onNew={props.onNew} />
+    <ReportHistory snapshots={props.snapshots} onOpenHistory={props.onOpenHistory} />
     <AnalysisSummary result={props.result} verdicts={props.verdicts} />
-    <DiseaseRiskOverview verdicts={props.verdicts} values={props.values} models={props.models} sharedInputs={props.sharedInputs} onOpenDetail={props.onOpenDetail} />
+    <DiseaseRiskOverview verdicts={props.verdicts} values={props.values} models={props.models} sharedInputs={props.sharedInputs} onOpenDisease={props.onOpenDisease} />
     <div className={`risk-middle-grid ${props.series.length === 0 ? "is-no-trend" : ""}`}><HealthTrendSection snapshots={props.snapshots} recent={props.recent} series={props.series} tracks={props.tracks} diseaseNames={props.diseaseNames} /><FutureRiskSection verdicts={props.verdicts} matrix={props.matrix} result={props.result} /></div>
     <ExplanationSection verdicts={props.verdicts} values={props.values} result={props.result} onOpenDetail={props.onOpenDetail} />
     <MedicalDisclaimer result={props.result} profiles={props.profiles} activeProfileId={props.activeProfileId} onProfileChange={props.onProfileChange} onKeep={props.onKeep} keeping={props.keeping} saved={props.saved} />

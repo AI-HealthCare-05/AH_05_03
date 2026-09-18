@@ -256,6 +256,7 @@ export function AssessmentPage() {
   const [readFields, setReadFields] = useState<Set<string>>(new Set());
   // 예측 근거 전체 리포트를 열었는가. 질환 하나가 아니라 열 장을 한 화면에 세운다.
   const [openDetail, setOpenDetail] = useState(false);
+  const [detailDiseaseKey, setDetailDiseaseKey] = useState<string>();
   /**
    * 적재된 모델의 입력 목록. 카드의 "모델이 쓰지 않은 입력" 을 계산하는 데 쓴다.
    *
@@ -283,6 +284,7 @@ export function AssessmentPage() {
   }, [values]);
   const [result, setResult] = useState<AssessmentSummaryData>();
   const [reportAt, setReportAt] = useState<string>();
+  const [returnReport, setReturnReport] = useState<{ profileId: string; result: AssessmentSummaryData; values: Record<string, string>; reportAt?: string; sourceRecordId?: string }>();
   const [entryLoading, setEntryLoading] = useState(true);
   const [entryMode, setEntryMode] = useState<"auto" | "before">(() => {
     const state = location.state as { withDocument?: boolean; prefill?: unknown; startNew?: boolean } | null;
@@ -305,6 +307,14 @@ export function AssessmentPage() {
   const requestedProfileId = explicitProfileId ?? storedProfileId;
   const activeProfile = profiles.find((item) => item.id === requestedProfileId) ?? profiles[0];
   const activeProfileId = activeProfile?.id ?? (profiles.length === 0 ? explicitProfileId : undefined);
+  const profileDefaults = () => {
+    const defaults: Record<string, string> = {};
+    const sex = profileGenderToSex(activeProfile?.gender);
+    const age = activeProfile?.birthDate ? calculateAgeFromBirthDate(activeProfile.birthDate) : undefined;
+    if (sex) defaults.sex = sex;
+    if (age !== undefined && age >= 19 && age <= 100) defaults.age = String(age);
+    return defaults;
+  };
   const activeProfileIdRef = useRef(activeProfileId);
   useLayoutEffect(() => {
     activeProfileIdRef.current = activeProfileId;
@@ -884,8 +894,32 @@ export function AssessmentPage() {
     () => sharedRefining(verdicts, values, models),
     [verdicts, values, models],
   );
-  const historyList = [...snapshots].reverse().slice(0, 8);
+  const historyList = [...snapshots].reverse();
   const historyLabels = disambiguatedTimes(historyList.map((item) => item.recordedAt));
+  const openSnapshot = (snapshot: Snapshot) => {
+    const restored = restoreSnapshot(snapshot);
+    if (restored) {
+      setValues(restored.values);
+      setResult(restored.result);
+      setReportAt(snapshot.payload.checkedAt || snapshot.recordedAt);
+      setSourceRecordId(snapshot.payload.sourceRecordId);
+      setOpenDetail(false);
+      setDetailDiseaseKey(undefined);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      if (result && activeProfileId) setReturnReport({ profileId: activeProfileId, result, values, reportAt, sourceRecordId });
+      setEntryMode("before");
+      setResult(undefined);
+      setReportAt(undefined);
+      setValues({ ...profileDefaults(), ...valuesFromInputs(snapshot.payload.inputs ?? {}) });
+      setSourceRecordId(undefined);
+      setInputMethod("manual");
+      setError("이전 판정에는 상세 결과가 저장되지 않았습니다. 저장된 수치로 다시 분석해 주세요.");
+      return;
+    }
+    setError(undefined);
+    setSaved(undefined);
+  };
 
   const changeProfile = (id: string) => {
     if (id === activeProfileId || !profiles.some((item) => item.id === id)) return;
@@ -895,6 +929,7 @@ export function AssessmentPage() {
     setResult(undefined);
     setReportAt(undefined);
     setValues({});
+    setReturnReport(undefined);
     setSourceRecordId(undefined);
     setSnapshots([]);
     setValueRecords([]);
@@ -919,6 +954,18 @@ export function AssessmentPage() {
             <p className="assessment-kicker">위험 판정</p>
             <h1>건강정보로 위험도를 확인하세요</h1>
             <p>최근 기록을 선택하거나 새 검진표·수치를 추가해 분석을 시작하세요.</p>
+            {(returnReport?.profileId === activeProfileId || snapshots.some((snapshot) => restoreSnapshot(snapshot))) && <button type="button" className="assessment-return-link" onClick={() => {
+              if (returnReport?.profileId === activeProfileId) {
+                setValues(returnReport.values);
+                setResult(returnReport.result);
+                setReportAt(returnReport.reportAt);
+                setSourceRecordId(returnReport.sourceRecordId);
+                setError(undefined);
+              } else {
+                const latest = [...snapshots].reverse().find((snapshot) => restoreSnapshot(snapshot));
+                if (latest) openSnapshot(latest);
+              }
+            }}>이전 판정 결과로 돌아가기 <span aria-hidden="true">→</span></button>}
           </header>
 
           <section className="assessment-source" aria-labelledby="assessment-source-title">
@@ -984,6 +1031,18 @@ export function AssessmentPage() {
                     ) => {
                       fieldRefs.current[field.name] = node;
                     };
+                    if (field.name === "self_rated_health") return <div key={field.name} className={`assess-field assess-health-field ${blank ? "is-blank" : ""}`}>
+                      <span className="assess-field-label" id="health-rating-label">{field.label}<em aria-label="필수"> *</em></span>
+                      <div className="assess-health-options" role="radiogroup" aria-labelledby="health-rating-label" aria-invalid={blank || undefined}>
+                        {field.options?.map((option, index) => <label key={option.value} className="assess-health-option">
+                          <input type="radio" name={field.name} value={option.value} checked={values[field.name] === option.value} ref={index === 0 ? hold : undefined} onChange={() => setField(field.name, option.value)} required={field.required} />
+                          <span>{option.value}</span>
+                          <small>{option.label.split(" · ")[1]}</small>
+                        </label>)}
+                      </div>
+                      {field.hint && <span className="assess-hint">{field.hint}</span>}
+                      {blank && <span className="assess-blank-hint">채워 주세요</span>}
+                    </div>;
                     return (
                       <label
                         key={field.name}
@@ -1012,6 +1071,7 @@ export function AssessmentPage() {
                             </span>
                           )}
                         </span>
+                        {(field.name === "age" && activeProfile?.birthDate || field.name === "sex" && activeProfile?.gender) && <small className="assess-profile-default">프로필에서 자동 입력</small>}
                         {field.kind === "number" && (
                           <input
                             ref={hold}
@@ -1096,30 +1156,9 @@ export function AssessmentPage() {
           {snapshots.length > 0 && <section className="assessment-previous" aria-labelledby="assessment-previous-title">
             <div className="assessment-section-title"><div><span>03</span><h2 id="assessment-previous-title">이전에 분석한 결과</h2></div></div>
             <ul className="assessment-previous-list">{historyList.slice(0, 3).map((snapshot, index) => {
-              const restored = restoreSnapshot(snapshot);
-              return <li key={snapshot.id}><button type="button" onClick={() => {
-                if (restored) {
-                  setValues(restored.values);
-                  setResult(restored.result);
-                  setReportAt(snapshot.payload.checkedAt || snapshot.recordedAt);
-                  setSourceRecordId(snapshot.payload.sourceRecordId);
-                } else {
-                  setValues(valuesFromInputs(snapshot.payload.inputs ?? {}));
-                  setSourceRecordId(undefined);
-                  setInputMethod("manual");
-                }
-                setError(undefined);
-                setSaved(undefined);
-              }}><time dateTime={snapshot.recordedAt}>{historyLabels[index]}</time><strong>만성질환 위험도 분석</strong><LevelBadge level={snapshot.payload.highestLevel as RiskLevel} /><span aria-hidden="true">›</span></button></li>;
+              return <li key={snapshot.id}><button type="button" onClick={() => openSnapshot(snapshot)}><time dateTime={snapshot.recordedAt}>{historyLabels[index]}</time><strong>만성질환 위험도 분석</strong><LevelBadge level={snapshot.payload.highestLevel as RiskLevel} /><span aria-hidden="true">›</span></button></li>;
             })}</ul>
-            {snapshots.length > 3 && <details className="assessment-history"><summary>이전 결과 모두 보기 <span>{snapshots.length}건</span></summary><ul>{historyList.slice(3).map((snapshot, index) => <li key={snapshot.id}><button type="button" onClick={() => {
-              const restored = restoreSnapshot(snapshot);
-              if (!restored) return;
-              setValues(restored.values);
-              setResult(restored.result);
-              setReportAt(snapshot.payload.checkedAt || snapshot.recordedAt);
-              setSourceRecordId(snapshot.payload.sourceRecordId);
-            }}><time dateTime={snapshot.recordedAt}>{historyLabels[index + 3]}</time><LevelBadge level={snapshot.payload.highestLevel as RiskLevel} /></button></li>)}</ul></details>}
+            {snapshots.length > 3 && <details className="assessment-history"><summary>이전 결과 모두 보기 <span>{snapshots.length}건</span></summary><ul>{historyList.slice(3).map((snapshot, index) => <li key={snapshot.id}><button type="button" onClick={() => openSnapshot(snapshot)}><time dateTime={snapshot.recordedAt}>{historyLabels[index + 3]}</time><LevelBadge level={snapshot.payload.highestLevel as RiskLevel} /></button></li>)}</ul></details>}
           </section>}
 
           <div className="assessment-start-action">
@@ -1164,20 +1203,24 @@ export function AssessmentPage() {
           onKeep={keep}
           keeping={keeping}
           saved={saved}
+          onOpenHistory={openSnapshot}
           onReset={() => {
+            if (activeProfileId) setReturnReport({ profileId: activeProfileId, result, values, reportAt, sourceRecordId });
             setEntryMode("before");
             setResult(undefined);
             setReportAt(undefined);
             setOpenDetail(false);
+            setDetailDiseaseKey(undefined);
             setError(undefined);
             setSaved(undefined);
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           onNew={() => {
+            if (activeProfileId) setReturnReport({ profileId: activeProfileId, result, values, reportAt, sourceRecordId });
             setEntryMode("before");
             setResult(undefined);
             setReportAt(undefined);
-            setValues({});
+            setValues(profileDefaults());
             setSourceRecordId(undefined);
             setInputMethod(null);
             setRecordListOpen(false);
@@ -1188,11 +1231,13 @@ export function AssessmentPage() {
             setAttempted(false);
             setRejected({});
             setOpenDetail(false);
+            setDetailDiseaseKey(undefined);
             setError(undefined);
             setSaved(undefined);
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
-          onOpenDetail={() => setOpenDetail(true)}
+          onOpenDetail={() => { setDetailDiseaseKey(undefined); setOpenDetail(true); }}
+          onOpenDisease={(key) => { setDetailDiseaseKey(key); setOpenDetail(true); }}
         />
       )}
 
@@ -1204,7 +1249,7 @@ export function AssessmentPage() {
       {/* 같은 이유로 결과가 없으면 닫는다. `result` 를 캡처해 두면 다시 판정한 뒤에도
           옛 리포트가 열린 채 남는다. */}
       {openDetail && result ? (
-        <DetailReport result={result} values={values} models={models} onClose={() => setOpenDetail(false)} />
+        <DetailReport result={result} values={values} models={models} diseaseKey={detailDiseaseKey} onClose={() => { setOpenDetail(false); setDetailDiseaseKey(undefined); }} />
       ) : null}
 
       {/* **카드를 눌러 펼친 모습.** 기록 화면의 자세히와 **같은 컴포넌트**다 —

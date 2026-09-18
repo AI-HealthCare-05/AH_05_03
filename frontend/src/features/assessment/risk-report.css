@@ -160,6 +160,18 @@
 
 /* The report is a document: hierarchy comes from type, alignment, and dividers. */
 .risk-report-page { gap: 0; background: #fdfcfe; border: 1px solid #e9e8ea; border-radius: 24px; padding: 32px 42px; }
+.risk-report-history { border-top: 1px solid #e9e8ea; border-bottom: 1px solid #e9e8ea; padding: 4px 0; color: #3c315b; }
+.risk-report-history summary { min-height: 44px; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+.risk-report-history summary span { color: #63627c; }
+.risk-report-history ul { margin: 0; padding: 0 0 8px; list-style: none; max-height: 320px; overflow-y: auto; }
+.risk-report-history li { border-top: 1px solid #e9e8ea; }
+.risk-report-history li button { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 20px; padding: 8px 2px; border: 0; background: transparent; color: #261b44; text-align: left; cursor: pointer; }
+.risk-report-history li button:hover, .risk-report-history li button:focus-visible { background: #f4f2f4; }
+.risk-report-history li button span:last-child { margin-left: auto; }
+.risk-legacy-runs { padding: 0 0 10px 12px; color: #63627c; font-size: 12px; }
+.risk-legacy-runs summary { min-height: 36px; font-size: 12px; }
+.risk-legacy-runs ul { max-height: none; padding-left: 12px; }
+.risk-legacy-runs li { display: grid; gap: 3px; padding: 8px 2px; }
 .risk-report-header { padding: 0 0 22px; align-items: center; }
 .risk-breadcrumb { margin-bottom: 12px; }
 .risk-report-header h1 { font-size: clamp(25px, 2.5vw, 32px); font-weight: 500; }

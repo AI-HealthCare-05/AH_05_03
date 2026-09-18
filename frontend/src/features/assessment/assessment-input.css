@@ -88,6 +88,16 @@ body:has(.risk-page) { background: #faf9fb; }
 .checkup-lightbox-pages img { display: block; max-width: 100%; height: auto; object-fit: contain; }
 .assessment-manual-head h2 { margin: 0 0 5px; font-size: 21px; font-weight: 400; }
 .assessment-manual-head p { margin: 0 0 24px; font-size: 13px; color: #63627c; }
+.assessment-return-link { display: inline-flex; align-items: center; gap: 12px; margin-top: 15px; padding: 8px 0; min-height: 44px; border: 0; border-bottom: 1px solid #635884; background: transparent; color: #3c315b; font: inherit; font-size: 14px; cursor: pointer; }
+.assess-health-field { grid-column: span 3; }
+.assess-health-options { display: flex; flex-wrap: wrap; gap: 9px; margin: 4px 0; }
+.assess-health-option { position: relative; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.risk-input-experience .assess-health-option input[type="radio"] { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; opacity: 0; }
+.assess-health-option span { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #cac4cf; border-radius: 50%; background: #fdfcfe; color: #3c315b; font-weight: 600; }
+.assess-health-option small { color: #63627c; font-size: 12px; }
+.assess-health-option input:checked + span { background: #3c315b; border-color: #3c315b; color: #fdfcfe; }
+.assess-health-option input:focus-visible + span { outline: 3px solid #cdbff2; outline-offset: 2px; }
+.assess-profile-default { color: #635884; font-size: 11px; }
 .risk-input-experience .assess-form { gap: 24px; }
 .risk-input-experience .assess-group { border: 0; border-top: 1px solid #e9e8ea; border-radius: 0; padding: 20px 0 0; box-shadow: none; background: transparent; }
 .risk-input-experience .assess-group legend { font-size: 17px; font-weight: 500; color: #261b44; }
@@ -110,9 +120,11 @@ body:has(.risk-page) { background: #faf9fb; }
 .assessment-test-tools .assess-preset:hover { border-color: #635884; color: #261b44; }
 .assessment-test-tools .assess-preset-note.is-warning { background: #f4f2f4; color: #63627c; }
 @media (max-width: 900px) {
+  .assess-health-field { grid-column: span 2; }
   .risk-input-experience .assess-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 700px) {
+  .assess-health-field { grid-column: 1; }
   .assessment-start-header { padding-bottom: 24px; }
   .assessment-section-title { flex-wrap: wrap; gap: 8px; }
   .assessment-record-choice { display: block; padding-left: 15px; }

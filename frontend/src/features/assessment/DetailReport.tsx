@@ -61,12 +61,15 @@ export function DetailReport({
   values,
   models = [],
   onClose,
+  diseaseKey,
 }: {
   result: AssessmentSummaryData;
   values: Record<string, string>;
   models?: ModelSpec[];
   onClose: () => void;
+  diseaseKey?: string;
 }) {
+  const focused = result.verdicts.find((verdict) => verdict.key === diseaseKey);
   const scored = result.verdicts.filter(
     (verdict) => verdict.reference?.probability !== null && verdict.reference?.probability !== undefined,
   );
@@ -78,6 +81,13 @@ export function DetailReport({
   );
 
   return (
+    focused ? <Modal title={`${focused.name} 판정 근거`} className="detail-modal" onClose={onClose}>
+      <section className="detail-condition">
+        <h4>{focused.name}<span className={`assess-badge ${LEVEL_CLASS[focused.risk_level]}`}>{LEVEL_LABEL[focused.risk_level]}</span></h4>
+        <p>{focused.reason || focused.display_label}</p>
+        <Evidence verdict={focused} values={values} models={models} />
+      </section>
+    </Modal> :
     <Modal title="예측 근거 한눈에" kicker="열세 칸 비교" className="detail-modal" onClose={onClose}>
       <p className="detail-meta">
         BMI {result.bmi} · 입력 {result.inputs_provided}/{result.inputs_total}개 ·{" "}
