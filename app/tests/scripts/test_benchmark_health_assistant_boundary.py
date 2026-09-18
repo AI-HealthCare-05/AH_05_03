@@ -152,6 +152,20 @@ async def test_swallowed_live_classifier_failure_is_reported_as_error() -> None:
     class FailingLiveClient:
         model_name = "test-model"
 
+        async def generate_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
+            if "tools" in kwargs:
+                del kwargs["tools"]
+            if "tool_executor" in kwargs:
+                del kwargs["tool_executor"]
+            return await self.generate_structured_response(*args, **kwargs), None
+
+        async def stream_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
+            if "tools" in kwargs:
+                del kwargs["tools"]
+            if "tool_executor" in kwargs:
+                del kwargs["tool_executor"]
+            return self.stream_structured_response(*args, **kwargs), None
+
         async def generate_structured_response(self, *args: Any, **kwargs: Any) -> Any:
             raise LlmProviderFailedError("synthetic provider failure")
 

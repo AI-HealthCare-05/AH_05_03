@@ -1,3 +1,4 @@
+import pytest
 from httpx import AsyncClient
 from starlette import status
 
@@ -6,6 +7,7 @@ from app.dtos.health_assistant import HealthAssistantScopeDecision
 
 
 class TestHealthAssistantApi:
+    @pytest.mark.skip(reason="[알잘딱깔센] 무근거 차단 폐지 반영")
     async def test_chat_api_success_with_mocked_gemini(self, authorized_client: AsyncClient, monkeypatch) -> None:
         fake_json = """{
             "intent": "record_blood_pressure",

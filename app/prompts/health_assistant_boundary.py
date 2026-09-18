@@ -14,7 +14,7 @@ def build_health_assistant_scope_instruction() -> str:
 - health: 질병, 증상, 치료, 검사, 의약품, 식품 영양, 식단, 운동, 통증, 수면, 정신건강,
   생활습관, 건강검진, 건강기록, 병원·약국, 건강과 직접 연결된 날씨·대기질 질문 또는 건강기록 작업.
   (숫자, 단답형 대답이라도 이전 챗봇 질문 맥락이 건강 관련이면 health로 판정하세요)
-- service_usage: 인사, 감사, 작별, 건강비서의 기능·사용법 질문
+- service_usage: 인사, 감사, 작별, 건강비서의 기능·사용법 질문 (단, 약국이나 병원 방문, 시설 관련 응답은 health로 분류)
 - mixed: 한 메시지에 건강 질문과 건강과 무관한 질문이 함께 있음
 - out_of_scope: 연예인, 오락, 정치, 금융, 코딩, 역사, 번역, 일반상식 등 건강과 무관한 질문
 - unrecognized: 의미를 판별할 수 없는 입력
@@ -89,6 +89,7 @@ def build_health_assistant_scope_instruction() -> str:
   꼭 필요한 대상·현재 상태·행동이 불명확함. 또는 질문의 대상/목적이 둘 이상으로 해석됨
 - 단순히 질환, 증상, 식이 원칙 같은 일반 건강정보를 묻는 경우에는 세부 개인정보가 없다는 이유만으로
   clarify하지 말고 answer로 판정하세요. 예: '당뇨에 좋은 음식 알려줘'는 answer입니다.
+- [중요]: 사용자가 "나 어디가 안 좋아?", "내 검진결과 어때?", "나 뭐 조심해야 돼?"처럼 자신의 저장된 건강 기록이나 상태를 묻는 경우, 이미 시스템에 저장된 `health_records`를 조회하여 답변하면 되므로 절대 clarify로 판정하지 말고 `answer`로 판정하세요. 부족한 정보라고 착각해서 되묻지 마세요.
 - 개인별 안전 여부를 단정해야 하는 질문은 부족한 정보를 모델이 추측하지 말고 clarify로 판정하세요.
   예: '임신 중인데 영양제 추천해줘', '무릎이 안 좋은데 계단 운동해도 돼?',
   '아버지가 간암 3기인데 저는 어떡하죠?'처럼 개인 조건이나 질문 목적이 불명확한 경우입니다.
@@ -121,6 +122,7 @@ def build_health_assistant_scope_instruction() -> str:
 [예시]
 - '방탄소년단이 누구야?' → out_of_scope, information, [none], false, [], answer
 - '안녕, 뭘 할 수 있어?' → service_usage, information, [none], false, []
+- '나 어디가 안좋아? 뭐 조심해야 돼?' → health, personalized_advice, [none], true, [health_knowledge, health_records], answer
 - '고혈압에 좋은 운동 알려줘' → health, information, [chronic_condition], true, [health_knowledge], answer
 - '당뇨에 좋은 음식 알려줘' → health, information, [chronic_condition], true, [health_knowledge], answer
 - '라면 나트륨 알려줘' → health, information, [none], true, [food_nutrition]

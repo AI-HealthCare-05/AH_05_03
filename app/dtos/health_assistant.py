@@ -331,7 +331,8 @@ class HealthAssistantLlmResponse(BaseModel):
         description="사용자가 이미 수행한 사실을 명확히 말했고 필수 필드가 모두 있어 즉시 로컬 저장해야 하는지 여부",
     )
     suggested_quick_replies: list[str] = Field(
-        default_factory=list, description="사용자가 누르기 편한 추천 빠른 답변 목록"
+        default_factory=list,
+        description="사용자가 누르기 편한 추천 빠른 답변 목록. 주의: 약국/병원/응급실 방문을 권유했다면 반드시 '주변 약국 검색해줘' 또는 '근처 병원 찾아줘'와 같은 시설 검색 유도어를 포함하고, '약국 방문할게요'와 같이 모호한 표현은 추천어로 쓰지 마세요.",
     )
     emergency_notice: str | None = Field(default=None, description="응급 증상 감지 시 119 또는 응급실 안내 메시지")
     safety_disclaimer: str | None = Field(

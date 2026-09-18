@@ -18,7 +18,7 @@ JSON 을 내지 못한다. Gemini 의 `response_schema` 와 같은 자리다. Op
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, TypeVar, cast
 
 from openai import AsyncOpenAI
@@ -160,3 +160,30 @@ class OpenAIChatClient(LLMClientProtocol):
                     yield piece
         except Exception as ex:
             raise LlmProviderFailedError(f"OpenAI 스트리밍 실패: {type(ex).__name__}") from ex
+
+    async def generate_structured_response_with_tools(
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        response_schema: type[T],
+        tools: list[Any] | None = None,
+        tool_executor: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None,
+    ) -> tuple[T, list[Any] | None]:
+        # OpenAI 폴백은 도구 호출(Gemini 포맷)을 아직 변환하지 않는다. 무시하고 진행.
+        res = await self.generate_structured_response(
+            system_instruction=system_instruction,
+            messages=messages,
+            response_schema=response_schema,
+        )
+        return res, None
+
+    async def stream_structured_response_with_tools(
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        response_schema: type[T],
+        tools: list[Any] | None = None,
+        tool_executor: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None,
+    ) -> tuple[AsyncIterator[str], list[Any] | None]:
+        # OpenAI 폴백은 도구 호출(Gemini 포맷)을 아직 변환하지 않는다. 무시하고 진행.
+        return self.stream_structured_response(system_instruction, messages, response_schema), None

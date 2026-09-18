@@ -19,6 +19,25 @@
 
 ---
 
+## 공개 랜딩페이지 (`/landing`)
+
+로그인 관문 밖에 있는 소개 화면이다. 구조·재사용 범위·스크롤 구현은 [docs/52 공개 랜딩페이지](../docs/52_landing_page.md)에 있다.
+
+- 코드: `src/features/landing/`
+- 건강기록 계층(`useLocalDomain`·`serverApiClient`·`shared/local`)을 **import 하지 않는다.** 화면의 수치는 `landingStory.ts` 의 예시 시나리오 하나뿐이고, 이 경계는 `LandingPage.test.tsx` 가 지킨다.
+- 3D 인체·정원·챗봇 런처는 앱이 쓰는 자산(`/vendor/vanatome`, `features/challenge/GardenArt`, `globalHealthAssistant.css`)을 그대로 쓴다. 랜딩용 대체물을 새로 만들지 않는다.
+- 디스플레이 타이포 2단과 `landing-*` 표면색은 `DESIGN.md` 에 적혀 있고 **랜딩 밖에서는 쓰지 않는다.**
+
+### 대안 시안 (`/landing-v2`)
+
+같은 이야기를 **다른 디자인 시스템 한 벌**(딥 오버진 단색 · 굵기 300~400 · 100px 캡슐)로 구현한 비교용 화면이다. 배경과 경계, 하나를 고른 뒤 다른 하나를 지우는 방법은 [docs/53 랜딩페이지 v2](../docs/53_landing_page_v2.md)에 있다.
+
+- 코드: `src/features/landing-v2/` — 문구·예시 수치·3D 장면·스크롤 엔진은 전부 `src/features/landing/` 의 **같은 파일**을 쓴다. 다른 것은 표현 계층뿐이다.
+- 토큰은 `--v2-*` 로 새로 세우고 앱 토큰을 상속하지 않는다. `landingV2.css` 의 모든 선택자가 `.lnv2-` 를 포함하는 것을 테스트가 지킨다.
+- 로그아웃 상태의 `/` 는 **여전히 `/landing`(v1)로 간다.** 정본이 정해지기 전에 기본 동작을 바꾸지 않는다.
+
+---
+
 ## 건강기록 등록
 
 Manyfast의 `F-HTRDKQ 건강 기록 등록`과 상세 명세 4개를 구현한 첫 로컬 도메인 화면이다.

@@ -96,7 +96,9 @@ async def _inject_24h_memory(
         # `cast` 로 덮으면 예상 밖의 값이 그대로 통과해 `gemini.py` 에서 조용히 틀리므로
         # 실제로 좁힌다.
         request.messages = [
-            ChatMessage(role="assistant" if m.role == "assistant" else "user", content=m.content) for m in db_msgs
+            ChatMessage(role="assistant" if m.role == "assistant" else "user", content=m.content)
+            for m in db_msgs
+            if m.content and m.content.strip()
         ]
 
 
@@ -192,6 +194,14 @@ async def stream_chat_with_assistant(
                     content=assistant_text,
                     metadata=final_payload,
                 )
+                if assistant_text and assistant_text.strip():
+                    await chat_session_service.add_message(
+                        account=account,
+                        session_id=request.session_id,
+                        role="assistant",
+                        content=assistant_text,
+                        metadata=final_payload,
+                    )
         except Exception as error:  # noqa: BLE001 - 이미 200 이라 프레임으로 알린다
             # 200 으로 열린 뒤에는 오류 봉투를 쓸 수 없다. 프런트가 읽을 수 있게
             # `error` 프레임으로 알리고 끊는다 — 조용히 끝나면 화면이 영영 기다린다.

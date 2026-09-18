@@ -1,5 +1,5 @@
-from collections.abc import AsyncIterator
-from typing import Protocol, TypeVar
+from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any, Protocol, TypeVar
 
 from pydantic import BaseModel
 
@@ -28,3 +28,21 @@ class LLMClientProtocol(Protocol):
         공급자가 알 일이 아니고, 같은 조각에서 뽑을 것이 화면마다 다를 수 있다.
         """
         ...
+
+    async def generate_structured_response_with_tools(
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        response_schema: type[T],
+        tools: list[Any] | None = None,
+        tool_executor: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None,
+    ) -> tuple[T, list[Any] | None]: ...
+
+    async def stream_structured_response_with_tools(
+        self,
+        system_instruction: str,
+        messages: list[ChatMessage],
+        response_schema: type[T],
+        tools: list[Any] | None = None,
+        tool_executor: Callable[[str, dict[str, Any]], Awaitable[Any]] | None = None,
+    ) -> tuple[AsyncIterator[str], list[Any] | None]: ...

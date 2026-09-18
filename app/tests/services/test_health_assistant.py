@@ -35,6 +35,20 @@ class MockLLMClient:
     def __init__(self, fake_json: str):
         self.fake_json = fake_json
 
+    async def generate_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
+        if "tools" in kwargs:
+            del kwargs["tools"]
+        if "tool_executor" in kwargs:
+            del kwargs["tool_executor"]
+        return await self.generate_structured_response(*args, **kwargs), None
+
+    async def stream_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
+        if "tools" in kwargs:
+            del kwargs["tools"]
+        if "tool_executor" in kwargs:
+            del kwargs["tool_executor"]
+        return self.stream_structured_response(*args, **kwargs), None
+
     async def generate_structured_response(self, *args, **kwargs):
         if kwargs.get("response_schema") is HealthAssistantScopeDecision:
             return HealthAssistantScopeDecision(
@@ -53,6 +67,20 @@ class MockLLMClient:
 class CapturingLLMClient:
     def __init__(self) -> None:
         self.system_instruction = ""
+
+    async def generate_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
+        if "tools" in kwargs:
+            del kwargs["tools"]
+        if "tool_executor" in kwargs:
+            del kwargs["tool_executor"]
+        return await self.generate_structured_response(*args, **kwargs), None
+
+    async def stream_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
+        if "tools" in kwargs:
+            del kwargs["tools"]
+        if "tool_executor" in kwargs:
+            del kwargs["tool_executor"]
+        return self.stream_structured_response(*args, **kwargs), None
 
     async def generate_structured_response(
         self,
@@ -717,6 +745,20 @@ async def test_streaming_answers_emergencies_without_calling_the_model() -> None
     """응급 표현은 모델을 부르기 전에 잡는다. 그때도 화면 계약은 같다."""
 
     class Exploding:
+        async def generate_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
+            if "tools" in kwargs:
+                del kwargs["tools"]
+            if "tool_executor" in kwargs:
+                del kwargs["tool_executor"]
+            return await self.generate_structured_response(*args, **kwargs), None
+
+        async def stream_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
+            if "tools" in kwargs:
+                del kwargs["tools"]
+            if "tool_executor" in kwargs:
+                del kwargs["tool_executor"]
+            return self.stream_structured_response(*args, **kwargs), None
+
         async def generate_structured_response(self, *args, **kwargs):
             raise AssertionError("모델을 부르면 안 된다")
 
@@ -1431,6 +1473,20 @@ async def test_outdoor_fast_path_integration_han_river() -> None:
     """판정의 outdoor 요구가 한강 지오코딩과 야외조건 조회까지 이어진다."""
 
     class UnexpectedClassifierClient:
+        async def generate_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
+            if "tools" in kwargs:
+                del kwargs["tools"]
+            if "tool_executor" in kwargs:
+                del kwargs["tool_executor"]
+            return await self.generate_structured_response(*args, **kwargs), None
+
+        async def stream_structured_response_with_tools(self, *args: Any, **kwargs: Any) -> tuple[Any, Any]:
+            if "tools" in kwargs:
+                del kwargs["tools"]
+            if "tool_executor" in kwargs:
+                del kwargs["tool_executor"]
+            return self.stream_structured_response(*args, **kwargs), None
+
         async def generate_structured_response(self, *args: Any, **kwargs: Any) -> Any:
             raise AssertionError("명시적인 한강 야외 질문은 분류 LLM을 호출하면 안 됩니다.")
 

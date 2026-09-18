@@ -44,8 +44,6 @@ from app.services.food_nutrition_tools import (
 from app.services.health_assistant_boundary import (
     _MEDICAL_EVIDENCE_TYPES,
     HealthAssistantBoundaryService,
-    asks_personal_clearance,
-    detect_explicit_protected_contexts,
 )
 from app.services.health_assistant_safety import HealthAssistantSafetyService
 from app.services.health_knowledge_catalog import HealthKnowledgeClientProtocol, is_alcohol_topic
@@ -1052,7 +1050,21 @@ class HealthAssistantService:
         request: HealthAssistantChatRequest,
     ) -> HealthAssistantResponse:
         """음식·식단의 '영양'을 영양제로 오인해 붙인 고정 문구를 제거한다."""
+        """음식·식단의 '영양'을 영양제로 오인해 붙인 고정 문구와, LLM이 본문에 포함한 비진단 안전 고지를 제거한다."""
         conversation = " ".join(message.content for message in request.messages if message.role == "user")
+
+        # LLM이 본문에 면책 조항을 포함한 경우 제거 (중복 노출 방지)
+        disclaimers_to_remove = [
+            "본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요.",
+            "※ 본 서비스는 의료 진단이나 처방을 대신하지 않습니다. 이상 징후가 있을 경우 의료진과 상담하세요.",
+            "제공해 드린 건강 정보는 참고용이며, 정확한 진단과 치료는 의료기관을 방문하여 전문의와 상담하시기 바랍니다.",
+            "본 답변은 의학적 진단을 대신하지 않으며,",
+        ]
+
+        for disclaimer in disclaimers_to_remove:
+            if disclaimer in response.assistant_message:
+                response.assistant_message = response.assistant_message.replace(disclaimer, "").strip()
+
         if any(keyword in conversation for keyword in _SUPPLEMENT_TOPIC_KEYWORDS):
             return response
         if not response.assistant_message.startswith(_SUPPLEMENT_DISCLAIMER):
@@ -1120,43 +1132,8 @@ class HealthAssistantService:
 
         tools = self._get_tools(request)
 
-        # 민감 개인 허가 질문(임신, 만성질환, 증상 등)에서
-        # health_knowledge가 요구되는데 사전 적재된 근거가 없으면 날씨만으로 메인 LLM을 호출하지 않는다.
-        # (날씨만으로 운동 허가를 단정하거나 stream 시 위험 delta가 사전 누출되는 것을 방지)
-        effective_contexts = (set(boundary.decision.clinical_contexts) - {"none"}) | detect_explicit_protected_contexts(
-            request.messages
-        )
-        asks_advice = boundary.decision.request_kind == "personalized_advice" or asks_personal_clearance(
-            request.messages
-        )
-        is_sensitive_clearance = asks_advice and bool(effective_contexts)
-
-        if is_sensitive_clearance and ("health_knowledge" in boundary.decision.required_evidence_types):
-            available_preloaded = HealthAssistantBoundaryService.available_evidence_types(preloaded_results, None)
-            if "health_knowledge" not in available_preloaded:
-                return self.boundary_service.enforce_grounding(
-                    boundary.decision,
-                    HealthAssistantResponse(intent="health_advice", assistant_message=""),
-                    tool_result=preloaded_results or None,
-                    outdoor_conditions=outdoor_conditions,
-                    messages=request.messages,
-                )
-
-        if (
-            boundary.decision.requires_authoritative_evidence
-            and not tools
-            and not outdoor_conditions
-            and not preloaded_results
-        ):
-            # 근거가 필요한 질문인데 준비된 근거·도구가 없으면 메인 LLM을
-            # 호출해도 무근거 답변만 생성하므로 여기서 안전 응답으로 끝낸다.
-            return self.boundary_service.enforce_grounding(
-                boundary.decision,
-                HealthAssistantResponse(intent="health_advice", assistant_message=""),
-                tool_result=None,
-                outdoor_conditions=None,
-                messages=request.messages,
-            )
+        # [알잘딱깔센] 민감 개인 허가 질문에 대한 사전 차단 로직 제거
+        # 임신 주차 계산, 알레르기 대체 약품 추천 등 고도의 추론을 위해 무조건 LLM에 컨텍스트를 넘긴다.
 
         return _PreparedExecution(
             request=request,
@@ -1306,9 +1283,12 @@ class HealthAssistantService:
                 outdoor_conditions=prepared.outdoor_conditions,
                 messages=request.messages,
             )
-            yield "delta", {"text": response.assistant_message}
-            yield "result", response.model_dump(mode="json")
-            return
+            # 만약 enforce_grounding 이 차단(고정 응답)을 하지 않아 빈 문자열이 그대로 반환되었다면,
+            # LLM이 직접 대답할 수 있도록 흐름을 이어간다.
+            if response.assistant_message:
+                yield "delta", {"text": response.assistant_message}
+                yield "result", response.model_dump(mode="json")
+                return
 
         if generated_tool_results:
             from app.dtos.food_nutrition import FoodNutritionSearchResult
