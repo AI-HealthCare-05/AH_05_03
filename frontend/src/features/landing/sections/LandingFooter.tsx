@@ -24,7 +24,7 @@ export function LandingFooter() {
           <a href="#challenge">건강 챌린지</a>
           <a href="#family">가족 건강</a>
           <Link to="/signup">시작하기</Link>
-          <Link to="/">로그인</Link>
+          <Link to="/signin">로그인</Link>
         </nav>
 
         <div className="ln-footer-notes">

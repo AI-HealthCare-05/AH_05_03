@@ -47,7 +47,7 @@ export function LandingNav() {
         </nav>
 
         <div className="ln-nav-actions">
-          <Link className="ln-nav-signin" to="/">
+          <Link className="ln-nav-signin" to="/signin">
             로그인
           </Link>
           <Link className="ln-button ln-button-primary ln-button-sm" to="/signup">

@@ -21,7 +21,7 @@ export function FinalCta() {
           <Link className="ln-button ln-button-primary ln-button-lg" to="/signup">
             이어봄 시작하기
           </Link>
-          <Link className="ln-button ln-button-ghost ln-button-lg" to="/">
+          <Link className="ln-button ln-button-ghost ln-button-lg" to="/signin">
             이미 계정이 있어요
           </Link>
         </div>
