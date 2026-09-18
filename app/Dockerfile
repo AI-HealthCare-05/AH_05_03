@@ -65,4 +65,4 @@ COPY ./chronic_disease_engine ./chronic_disease_engine
 # 빌드된 SPA. `app/apis/spa.py` 의 FRONTEND_DIST 기본값과 같은 경로여야 한다.
 COPY --from=frontend /frontend/dist ./static
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "3"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "3", "--proxy-headers", "--forwarded-allow-ips", "*"]
