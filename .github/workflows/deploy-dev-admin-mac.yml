@@ -39,6 +39,7 @@ jobs:
       IEOBOM_DEV_CORS_ALLOW_ORIGINS: ${{ vars.IEOBOM_DEV_CORS_ALLOW_ORIGINS }}
       IEOBOM_DEV_REFRESH_COOKIE_SECURE: ${{ vars.IEOBOM_DEV_REFRESH_COOKIE_SECURE }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       KMA_API_KEY: ${{ secrets.KMA_API_KEY }}
       AIRKOREA_API_KEY: ${{ secrets.AIRKOREA_API_KEY }}
       KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
@@ -92,6 +93,7 @@ jobs:
           fi
           declare -a keys=(
             "GEMINI_API_KEY"
+            "OPENAI_API_KEY"
             "KMA_API_KEY"
             "AIRKOREA_API_KEY"
             "KAKAO_REST_API_KEY"

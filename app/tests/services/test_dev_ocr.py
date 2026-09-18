@@ -9,7 +9,7 @@ from fastapi import UploadFile
 from starlette.datastructures import Headers
 
 from app.core import config
-from app.exceptions import OcrUnavailableError, OcrUnsupportedTypeError
+from app.exceptions import OcrProviderFailedError, OcrUnavailableError, OcrUnsupportedTypeError
 from app.services import dev_ocr
 from app.services.dev_ocr import DevOcrService, recognize_parts, stream_parts
 
@@ -271,10 +271,10 @@ async def test_does_not_wait_when_the_quota_is_truly_spent(gemini_models, monkey
     assert calls[:2] == list(_GEMINI_MODELS[:2]), calls
 
 
-# -- 실제로 배포되는 경로 (OpenAI 단독) --------------------------------
+# -- OpenAI 단독 경로 (예비 공급자의 독립 동작 검증) -----------------------
 #
 # 위 시험들은 목록을 Gemini 로 고정해 **공급자와 무관한** 조율 로직을 잰다.
-# 여기서는 `config.DEV_OCR_MODELS` 기본값 그대로, 즉 배포되는 경로를 지난다.
+# 여기서는 목록을 OpenAI 하나로 고정해 Gemini 키 없이도 예비 공급자가 동작하는지 잰다.
 
 
 def _fake_openai_streaming(payload: str, chunk_size: int | None = None):
@@ -303,7 +303,7 @@ def _fake_openai_streaming(payload: str, chunk_size: int | None = None):
 
 @pytest.fixture
 def openai_only(monkeypatch):
-    monkeypatch.setattr(dev_ocr, "_MODELS", ("openai:gpt-4o-mini",))
+    monkeypatch.setattr(dev_ocr, "_MODELS", ("openai:gpt-4o",))
     monkeypatch.setattr(config, "ENABLE_DEV_OCR_BRIDGE", True)
     monkeypatch.setattr(config, "OPENAI_API_KEY", "sk-test")
     # Gemini 키가 **없어도** 열려야 한다. 이게 안 되면 목록을 갈아 끼운 의미가 없다.
@@ -361,3 +361,68 @@ async def test_misread_name_does_not_become_a_measurement(openai_only, monkeypat
 
     assert result["measurements"]["values"] == {}
     assert len(result["measurements"]["review"]) == 1
+
+
+@pytest.fixture
+def gemini_then_gpt(monkeypatch):
+    models = ("gemini-3.5-flash-lite", "openai:gpt-4o")
+    monkeypatch.setattr(dev_ocr, "_MODELS", models)
+    monkeypatch.setattr(config, "ENABLE_DEV_OCR_BRIDGE", True)
+    monkeypatch.setattr(dev_ocr.ocr_providers, "require_any", lambda _models: None)
+    return models
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("gemini_error", [None, TimeoutError(), RuntimeError("503 provider failure")])
+async def test_gemini_then_gpt_success_timeout_or_provider_failure(gemini_then_gpt, monkeypatch, gemini_error) -> None:
+    calls: list[str] = []
+
+    async def fake_stream_once(entry, files):
+        calls.append(entry)
+        if entry == gemini_then_gpt[0] and gemini_error is not None:
+            raise gemini_error
+        yield _PAYLOAD, ""
+
+    monkeypatch.setattr(dev_ocr, "_stream_once", fake_stream_once)
+    result = await recognize_parts([(b"image", "image/png")])
+
+    assert calls == list(gemini_then_gpt if gemini_error else gemini_then_gpt[:1])
+    assert result["measurements"]["values"] == {"fasting_glucose": 100.0, "ast": 35.0}
+
+
+@pytest.mark.asyncio
+async def test_gemini_quota_retries_then_gpt(gemini_then_gpt, monkeypatch) -> None:
+    calls: list[str] = []
+    slept: list[float] = []
+
+    async def fake_stream_once(entry, files):
+        calls.append(entry)
+        if entry == gemini_then_gpt[0]:
+            raise RuntimeError("429 RESOURCE_EXHAUSTED. Please retry in 1.0s.")
+        yield _PAYLOAD, ""
+
+    async def fake_sleep(seconds):
+        slept.append(seconds)
+
+    monkeypatch.setattr(dev_ocr, "_stream_once", fake_stream_once)
+    monkeypatch.setattr(asyncio, "sleep", fake_sleep)
+    result = await recognize_parts([(b"image", "image/png")])
+
+    assert calls == [gemini_then_gpt[0], gemini_then_gpt[0], gemini_then_gpt[1]]
+    assert slept == [1.0]
+    assert result["measurements"]["values"]["fasting_glucose"] == 100.0
+
+
+@pytest.mark.asyncio
+async def test_both_ocr_providers_fail_clearly(gemini_then_gpt, monkeypatch) -> None:
+    calls: list[str] = []
+
+    async def fake_stream_once(entry, files):
+        calls.append(entry)
+        raise TimeoutError("provider timeout")
+        yield "", ""  # pragma: no cover - keeps this an async generator
+
+    monkeypatch.setattr(dev_ocr, "_stream_once", fake_stream_once)
+    with pytest.raises(OcrProviderFailedError, match="문서 구조화에 실패"):
+        await recognize_parts([(b"image", "image/png")])
+    assert calls == list(gemini_then_gpt)

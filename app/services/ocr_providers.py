@@ -95,7 +95,7 @@ class OpenAIProvider:
     이미지는 base64 data URL(`image_url` 파트), PDF 는 `file` 파트로 보낸다.
     PDF 는 예전에 "Files API 가 따로 필요하다" 며 Gemini 로 넘겼는데, Chat Completions
     가 base64 PDF 를 직접 받는다 — gpt-4o 계열은 거기서 텍스트와 페이지 이미지를
-    함께 뽑는다. Gemini 를 목록에서 뺀 이상 이쪽이 PDF 를 받아야 한다.
+    함께 뽑는다. Gemini 실패 시 PDF 도 이 예비 경로가 받을 수 있어야 한다.
     """
 
     def __init__(self, model: str) -> None:

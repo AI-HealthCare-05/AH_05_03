@@ -22,9 +22,9 @@ def test_provider_prefix_is_split_off() -> None:
 
 def test_allowed_openai_model_builds(monkeypatch) -> None:
     monkeypatch.setattr(ocr_providers.config, "OPENAI_API_KEY", "sk-test")
-    built = ocr_providers.build("openai:gpt-4o-mini")
+    built = ocr_providers.build("openai:gpt-4o")
     assert isinstance(built, ocr_providers.OpenAIProvider)
-    assert built.model == "gpt-4o-mini"
+    assert built.model == "gpt-4o"
 
 
 def test_openai_entry_is_skipped_without_a_key(monkeypatch) -> None:
@@ -37,7 +37,7 @@ def test_openai_entry_is_skipped_without_a_key(monkeypatch) -> None:
 def test_model_outside_the_allowlist_is_refused(monkeypatch) -> None:
     monkeypatch.setattr(ocr_providers.config, "OPENAI_API_KEY", "sk-test")
     with pytest.raises(OcrUnavailableError, match="허용하지 않은"):
-        ocr_providers.build("openai:gpt-4o")
+        ocr_providers.build("openai:gpt-4o-unknown")
 
 
 def test_embedding_model_is_refused_for_ocr(monkeypatch) -> None:
@@ -111,7 +111,7 @@ def test_require_any_reports_every_reason_when_none_stands(monkeypatch) -> None:
 
 def test_config_rejects_a_model_outside_the_allowlist() -> None:
     with pytest.raises(ValueError, match="허용하지 않은 OpenAI 모델"):
-        Config(DEV_OCR_MODELS=["openai:gpt-4o"])
+        Config(DEV_OCR_MODELS=["openai:gpt-4o-unknown"])
 
 
 def test_config_rejects_an_embedding_model() -> None:
@@ -125,8 +125,17 @@ def test_config_rejects_an_unknown_provider() -> None:
 
 
 def test_config_accepts_the_intended_mix() -> None:
-    cfg = Config(DEV_OCR_MODELS=["gemini-3.5-flash-lite", "openai:gpt-4o-mini"])
-    assert cfg.DEV_OCR_MODELS == ["gemini-3.5-flash-lite", "openai:gpt-4o-mini"]
+    cfg = Config(DEV_OCR_MODELS=["gemini-3.5-flash-lite", "openai:gpt-4o"])
+    assert cfg.DEV_OCR_MODELS == ["gemini-3.5-flash-lite", "openai:gpt-4o"]
+
+
+def test_current_model_defaults_are_consistent() -> None:
+    cfg = Config()
+    expected = ["gemini-3.5-flash-lite", "openai:gpt-4o"]
+    assert cfg.DEV_OCR_MODELS == expected
+    assert cfg.HEALTH_ASSISTANT_MODELS == expected
+    assert cfg.HEALTH_ASSISTANT_CLASSIFIER_MODELS == expected
+    assert cfg.OPENAI_CHAT_MODEL == "gpt-4o"
 
 
 def test_strictify_marks_every_object_closed() -> None:
