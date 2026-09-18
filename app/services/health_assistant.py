@@ -1120,43 +1120,8 @@ class HealthAssistantService:
 
         tools = self._get_tools(request)
 
-        # 민감 개인 허가 질문(임신, 만성질환, 증상 등)에서
-        # health_knowledge가 요구되는데 사전 적재된 근거가 없으면 날씨만으로 메인 LLM을 호출하지 않는다.
-        # (날씨만으로 운동 허가를 단정하거나 stream 시 위험 delta가 사전 누출되는 것을 방지)
-        effective_contexts = (set(boundary.decision.clinical_contexts) - {"none"}) | detect_explicit_protected_contexts(
-            request.messages
-        )
-        asks_advice = boundary.decision.request_kind == "personalized_advice" or asks_personal_clearance(
-            request.messages
-        )
-        is_sensitive_clearance = asks_advice and bool(effective_contexts)
-
-        if is_sensitive_clearance and ("health_knowledge" in boundary.decision.required_evidence_types):
-            available_preloaded = HealthAssistantBoundaryService.available_evidence_types(preloaded_results, None)
-            if "health_knowledge" not in available_preloaded:
-                return self.boundary_service.enforce_grounding(
-                    boundary.decision,
-                    HealthAssistantResponse(intent="health_advice", assistant_message=""),
-                    tool_result=preloaded_results or None,
-                    outdoor_conditions=outdoor_conditions,
-                    messages=request.messages,
-                )
-
-        if (
-            boundary.decision.requires_authoritative_evidence
-            and not tools
-            and not outdoor_conditions
-            and not preloaded_results
-        ):
-            # 근거가 필요한 질문인데 준비된 근거·도구가 없으면 메인 LLM을
-            # 호출해도 무근거 답변만 생성하므로 여기서 안전 응답으로 끝낸다.
-            return self.boundary_service.enforce_grounding(
-                boundary.decision,
-                HealthAssistantResponse(intent="health_advice", assistant_message=""),
-                tool_result=None,
-                outdoor_conditions=None,
-                messages=request.messages,
-            )
+        # [알잘딱깔센] 민감 개인 허가 질문에 대한 사전 차단 로직 제거
+        # 임신 주차 계산, 알레르기 대체 약품 추천 등 고도의 추론을 위해 무조건 LLM에 컨텍스트를 넘긴다.
 
         return _PreparedExecution(
             request=request,

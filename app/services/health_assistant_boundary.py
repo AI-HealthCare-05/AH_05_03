@@ -956,53 +956,25 @@ class HealthAssistantBoundaryService:
             notice = "응급 상황이 의심되면 즉시 119에 연락하거나 가까운 응급실을 방문하세요."
             return self._fixed_response(notice, intent="health_advice").model_copy(update={"emergency_notice": notice})
 
-        clearance = self._is_personal_medical_clearance(decision, messages)
-        requires_evidence = (
-            decision.requires_authoritative_evidence
-            or response.intent == "health_advice"
-            or response.challenge_draft is not None
-            or clearance
-        )
-
-        if not requires_evidence:
-            return response
-
+        # [알잘딱깔센] 획일적 무근거 차단 폐지. 
+        # 일반 질문은 LLM의 지능적 판단(히스토리 교차 검증)을 존중하여 통과시키고,
+        # 법적/의학적 치명도가 매우 높은 특정 고위험군(임신 중 약물/증상)만 최후의 보루로 차단한다.
+        # 단, 해당 위험군이라도 실제 승인된 근거(has_evidence)가 있다면 통과시킨다.
         has_evidence = self.has_required_evidence(
-            decision,
-            tool_result,
-            outdoor_conditions,
-            response.intent,
-            messages=messages,
+            decision, tool_result, outdoor_conditions, response.intent, messages=messages
         )
-
-        # 민감 맥락의 **개인 판단 요청**은 의료 근거로만 통과한다.
-        #
-        # 앞서는 "날씨 말고 뭐라도 있으면 통과" 였는데, 그러면 라면 칼로리나 병원 목록이
-        # 임신 중 달리기 조언의 근거로 통과했다. 반대로 "민감 맥락이면 무조건 의료 근거"
-        # 로 조이면, 증상을 말한 사람의 병원 검색·기록 조회까지 막힌다 — 센티널이 원문의
-        # `아픈`·`임신` 을 잡기 때문에 그 질문들도 민감 맥락으로 잡힌다.
-        #
-        # 가르는 것은 맥락의 유무가 아니라 **판단을 구했는가**다. 그리고 확인하는 것은
-        # 고정된 의료 근거 집합이 아니라 **이 판정이 실제로 요구한 의료 근거**다.
-        if has_evidence and (response.intent == "health_advice" or clearance) and clearance:
-            required_medical = set(decision.required_evidence_types) & _MEDICAL_EVIDENCE_TYPES
-            available = self.available_evidence_types(tool_result, outdoor_conditions)
-            if not required_medical or not required_medical.issubset(available):
-                has_evidence = False
-
         if has_evidence:
             return response
 
         if messages and is_pregnancy_symptom_context(messages):
-            blocked = self._fixed_response(PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE, intent="health_advice")
-        elif messages and (is_pregnancy_medication_question(messages) or is_pregnancy_medication_followup(messages)):
-            blocked = self._fixed_response(PREGNANCY_MEDICATION_EVIDENCE_MESSAGE, intent="health_advice")
-        elif messages and _asks_activity_clearance(messages):
-            blocked = self._clarification_response("exercise_safety_context")
-        else:
-            blocked = self._fixed_response(MISSING_EVIDENCE_MESSAGE, intent="health_advice")
+            return self._fixed_response(PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE, intent="health_advice")
+        if messages and (is_pregnancy_medication_question(messages) or is_pregnancy_medication_followup(messages)):
+            return self._fixed_response(PREGNANCY_MEDICATION_EVIDENCE_MESSAGE, intent="health_advice")
+        if messages and _asks_activity_clearance(messages):
+            return self._clarification_response("exercise_safety_context")
 
-        return blocked
+        # 그 외의 모든 경우, KDCA 근거가 없더라도 LLM의 답변을 신뢰하여 반환한다.
+        return response
 
     @classmethod
     def _has_trusted_facility_notice(cls, tool_result: Any | None, notice: str, intent: str) -> bool:
