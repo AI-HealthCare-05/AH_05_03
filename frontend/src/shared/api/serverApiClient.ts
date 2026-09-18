@@ -210,6 +210,48 @@ export class ServerApiClient {
     return this.request<T>("/dev/ocr/jobs", { method: "POST", authenticated: true, body });
   }
 
+  public createMedicalDocumentSet<T>(profileId: string, files: File[], documentType = "health_screening"): Promise<T> {
+    const body = new FormData();
+    body.set("profile_id", profileId);
+    body.set("document_type", documentType);
+    for (const file of files) body.append("files", file, file.name);
+    return this.request<T>("/medical-document-sets", { method: "POST", authenticated: true, body });
+  }
+
+  public createMedicalDocumentAnalysisJob<T>(documentSetId: string): Promise<T> {
+    return this.request<T>(`/medical-document-sets/${encodeURIComponent(documentSetId)}/analysis-jobs`, {
+      method: "POST",
+      authenticated: true,
+    });
+  }
+
+  public listMedicalDocumentSets<T>(profileId: string, limit = 20, offset = 0): Promise<T> {
+    const query = new URLSearchParams({ profile_id: profileId, limit: String(limit), offset: String(offset) });
+    return this.request<T>(`/medical-document-sets?${query.toString()}`, { authenticated: true });
+  }
+
+  public readMedicalDocumentSet<T>(documentSetId: string): Promise<T> {
+    return this.request<T>(`/medical-document-sets/${encodeURIComponent(documentSetId)}`, { authenticated: true });
+  }
+
+  public readMedicalDocumentAnalysisJob<T>(documentSetId: string, jobId: string): Promise<T> {
+    return this.request<T>(
+      `/medical-document-sets/${encodeURIComponent(documentSetId)}/analysis-jobs/${encodeURIComponent(jobId)}`,
+      { authenticated: true },
+    );
+  }
+
+  public async readMedicalDocumentPage(documentSetId: string, pageId: string): Promise<Blob> {
+    const response = await this.send(
+      `/medical-document-sets/${encodeURIComponent(documentSetId)}/pages/${encodeURIComponent(pageId)}`,
+      { authenticated: true },
+    );
+    if (!response.ok) {
+      throw await toApiError(response);
+    }
+    return response.blob();
+  }
+
   public readDocumentJob<T>(jobId: string): Promise<T> {
     return this.request<T>(`/dev/ocr/jobs/${encodeURIComponent(jobId)}`, { authenticated: true });
   }

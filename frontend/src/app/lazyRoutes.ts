@@ -31,6 +31,60 @@ export const DataManagementPage = lazy(() =>
 export const UiPreviewPage = lazy(() =>
   import("../features/ui-preview/UiPreviewPage").then((m) => ({ default: m.UiPreviewPage })),
 );
+export const UiPreview1Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview1Page").then((m) => ({ default: m.UiPreview1Page })),
+);
+export const UiPreview2Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview2Page").then((m) => ({ default: m.UiPreview2Page })),
+);
+export const UiPreview3Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview3Page").then((m) => ({ default: m.UiPreview3Page })),
+);
+export const UiPreview4Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview4Page").then((m) => ({ default: m.UiPreview4Page })),
+);
+export const UiPreview5Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview5Page").then((m) => ({ default: m.UiPreview5Page })),
+);
+export const UiPreview6Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview6Page").then((m) => ({ default: m.UiPreview6Page })),
+);
+export const UiPreview7Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview7Page").then((m) => ({ default: m.UiPreview7Page })),
+);
+export const UiPreview8Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview8Page").then((m) => ({ default: m.UiPreview8Page })),
+);
+export const UiPreview9Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview9Page").then((m) => ({ default: m.UiPreview9Page })),
+);
+export const UiPreview10Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview10Page").then((m) => ({ default: m.UiPreview10Page })),
+);
+export const UiPreview11Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview11Page").then((m) => ({ default: m.UiPreview11Page })),
+);
+export const UiPreview12Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview12Page").then((m) => ({ default: m.UiPreview12Page })),
+);
+export const UiPreview13Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview13Page").then((m) => ({ default: m.UiPreview13Page })),
+);
+export const UiPreview14Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview14Page").then((m) => ({ default: m.UiPreview14Page })),
+);
+export const UiPreview15Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview15Page").then((m) => ({ default: m.UiPreview15Page })),
+);
+export const UiPreview16Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview16Page").then((m) => ({ default: m.UiPreview16Page })),
+);
+export const UiPreview17Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview17Page").then((m) => ({ default: m.UiPreview17Page })),
+);
+export const UiPreview18Page = lazy(() =>
+  import("../features/ui-preview/variants/UiPreview18Page").then((m) => ({ default: m.UiPreview18Page })),
+);
 export const AccountPage = lazy(() =>
   import("../features/account/AccountPage").then((m) => ({ default: m.AccountPage })),
 );

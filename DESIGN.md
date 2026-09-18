@@ -1,95 +1,100 @@
 ---
 version: alpha
-name: Ieobom
-description: 가족 건강 모니터링 및 만성질환 위험 선별을 위한 신뢰 기반 헬스케어 디자인 시스템
+name: Ieobom Violet Capsule
+description: 이어봄 가족 건강 앱에 적용한 Stitch Violet Capsule Minimal. 이전 파란 키 컬러 정본은 DESIGN.ieobom.md.
 colors:
-  primary: "#1d4fb8"
-  primary-hover: "#173d8f"
-  primary-light: "#eaf1ff"
-  primary-container: "#f4f7ff"
-  secondary: "#5b687e"
-  secondary-strong: "#45536c"
-  neutral: "#172033"
-  surface: "#ffffff"
-  background: "#f5f7fb"
-  border: "#dce3ee"
-  border-soft: "#e8edf5"
-  safe: "#15936e"
-  safe-text: "#0f6b50"
-  safe-soft: "#e7f7f1"
-  warning: "#b06000"
-  warning-text: "#804600"
-  warning-soft: "#fff5e6"
-  danger: "#b43e47"
-  danger-soft: "#fff0f1"
-  garden-leaf: "#6e9b6a"
-  garden-trunk: "#8a6142"
-  landing-cream: "#faf7f3"
-  landing-cream-deep: "#f3ede5"
-  landing-dark: "#0b0f17"
+  aubergine: "#3c315b"
+  ghost-lavender: "#e2dffe"
+  periwinkle: "#ab9ff2"
+  cornflower-pop: "#4a87f2"
+  buttercream: "#ffffc4"
+  blush-mist: "#ffdadc"
+  mint-signal: "#2ec08b"
+  paper-white: "#fdfcfe"
+  obsidian: "#1c1c1c"
+  fog: "#86848d"
+  ash: "#e9e8ea"
+  bone: "#f4f2f4"
+  surface: "#faf9fb"
+  background: "#faf9fb"
+  on-surface: "#1a1c1d"
+  primary: "#261b44"
+  primary-container: "#3c315b"
+  secondary: "#5d5c76"
+  secondary-container: "#e2dffe"
+  error: "#ba1a1a"
+  error-container: "#ffdad6"
+  on-error-container: "#93000a"
+  outline: "#7a757f"
 typography:
+  display:
+    fontFamily: DM Sans, Noto Sans KR, Inter, Pretendard, sans-serif
+    fontSize: 96px
+    fontWeight: "300"
+    lineHeight: "1.0"
+    letterSpacing: -0.025em
   headline-lg:
-    fontFamily: Inter, Pretendard, sans-serif
-    fontSize: 32px
-    fontWeight: 700
-    lineHeight: 1.25
-    letterSpacing: -0.02em
+    fontFamily: DM Sans, Noto Sans KR, Inter, Pretendard, sans-serif
+    fontSize: 64px
+    fontWeight: "300"
+    lineHeight: "1.1"
+    letterSpacing: -0.025em
   headline-md:
-    fontFamily: Inter, Pretendard, sans-serif
-    fontSize: 24px
-    fontWeight: 700
-    lineHeight: 1.3
-    letterSpacing: -0.01em
+    fontFamily: DM Sans, Noto Sans KR, Inter, Pretendard, sans-serif
+    fontSize: 30px
+    fontWeight: "300"
+    lineHeight: "1.21"
+    letterSpacing: -0.025em
   headline-sm:
-    fontFamily: Inter, Pretendard, sans-serif
-    fontSize: 18px
-    fontWeight: 600
-    lineHeight: 1.4
-  body-lg:
-    fontFamily: Inter, Pretendard, sans-serif
-    fontSize: 16px
-    fontWeight: 400
-    lineHeight: 1.5
+    fontFamily: DM Sans, Noto Sans KR, Inter, Pretendard, sans-serif
+    fontSize: 24px
+    fontWeight: "300"
+    lineHeight: "1.25"
+    letterSpacing: -0.025em
+  subheading:
+    fontFamily: DM Sans, Noto Sans KR, Inter, Pretendard, sans-serif
+    fontSize: 20px
+    fontWeight: "300"
+    lineHeight: "1.35"
+    letterSpacing: -0.025em
   body-md:
-    fontFamily: Inter, Pretendard, sans-serif
-    fontSize: 14px
-    fontWeight: 400
-    lineHeight: 1.5
+    fontFamily: DM Sans, Noto Sans KR, Inter, Pretendard, sans-serif
+    fontSize: 16px
+    fontWeight: "400"
+    lineHeight: "1.4"
+    letterSpacing: -0.025em
   body-sm:
-    fontFamily: Inter, Pretendard, sans-serif
-    fontSize: 12px
-    fontWeight: 400
-    lineHeight: 1.4
+    fontFamily: DM Sans, Noto Sans KR, Inter, Pretendard, sans-serif
+    fontSize: 15px
+    fontWeight: "300"
+    lineHeight: "1.4"
+    letterSpacing: -0.025em
   label-md:
-    fontFamily: Inter, Pretendard, sans-serif
+    fontFamily: DM Sans, Noto Sans KR, Inter, Pretendard, sans-serif
+    fontSize: 15px
+    fontWeight: "400"
+    lineHeight: "1.2"
+    letterSpacing: -0.025em
+  caption:
+    fontFamily: DM Sans, Noto Sans KR, Inter, Pretendard, sans-serif
     fontSize: 13px
-    fontWeight: 600
-    lineHeight: 1.2
-  label-sm:
-    fontFamily: Inter, Pretendard, sans-serif
+    fontWeight: "300"
+    lineHeight: "1.35"
+    letterSpacing: -0.025em
+  micro:
+    fontFamily: DM Sans, Noto Sans KR, Inter, Pretendard, sans-serif
     fontSize: 11px
-    fontWeight: 600
-    lineHeight: 1.2
-  display-lg:
-    fontFamily: Inter, Pretendard, sans-serif
-    fontSize: clamp(38px, 6.4vw, 72px)
-    fontWeight: 700
-    lineHeight: 1.08
-    letterSpacing: -0.035em
-  display-md:
-    fontFamily: Inter, Pretendard, sans-serif
-    fontSize: clamp(28px, 4.2vw, 50px)
-    fontWeight: 700
-    lineHeight: 1.16
-    letterSpacing: -0.03em
+    fontWeight: "300"
+    lineHeight: "1.2"
+    letterSpacing: -0.025em
 rounded:
   none: 0px
-  xs: 4px
   sm: 8px
-  md: 12px
-  lg: 16px
-  xl: 22px
-  full: 9999px
+  DEFAULT: 16px
+  md: 24px
+  lg: 32px
+  xl: 48px
+  full: 100px
 spacing:
   xs: 4px
   sm: 8px
@@ -100,178 +105,120 @@ spacing:
   touch-target: 44px
 components:
   button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.surface}"
-    rounded: "{rounded.sm}"
+    backgroundColor: "{colors.ghost-lavender}"
+    textColor: "{colors.aubergine}"
+    rounded: "{rounded.full}"
     height: "{spacing.touch-target}"
-    padding: 16px
-  button-primary-hover:
-    backgroundColor: "{colors.primary-hover}"
-    textColor: "{colors.surface}"
+    padding: 16px 32px
+    shadow: "0 0 24px rgba(171, 159, 242, 0.45), 0 0 8px rgba(226, 223, 254, 0.85)"
   button-secondary:
-    backgroundColor: "{colors.primary-light}"
-    textColor: "{colors.primary}"
-    rounded: "{rounded.sm}"
+    backgroundColor: "{colors.paper-white}"
+    textColor: "{colors.aubergine}"
+    rounded: "{rounded.full}"
     height: "{spacing.touch-target}"
-    padding: 16px
-  button-outline:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.primary}"
-    rounded: "{rounded.sm}"
+    border: "1px solid {colors.ash}"
+  button-danger:
+    backgroundColor: "{colors.blush-mist}"
+    textColor: "{colors.on-error-container}"
+    rounded: "{rounded.full}"
     height: "{spacing.touch-target}"
-    padding: 16px
   card-surface:
-    backgroundColor: "{colors.surface}"
-    rounded: "{rounded.xl}"
-    padding: 24px
-  card-soft:
-    backgroundColor: "{colors.border-soft}"
-    textColor: "{colors.secondary-strong}"
+    backgroundColor: "{colors.paper-white}"
     rounded: "{rounded.md}"
-    padding: 16px
-  divider-line:
-    backgroundColor: "{colors.border}"
-    height: 1px
-  badge-safe:
-    backgroundColor: "{colors.safe-soft}"
-    textColor: "{colors.safe-text}"
+    padding: 24px
+    border: "1px solid {colors.ash}"
+  badge-normal:
+    backgroundColor: "{colors.mint-signal}"
+    textColor: "{colors.paper-white}"
     rounded: "{rounded.full}"
-    padding: 8px
-  badge-warning:
-    backgroundColor: "{colors.warning-soft}"
-    textColor: "{colors.warning-text}"
+  badge-caution:
+    backgroundColor: "{colors.buttercream}"
+    textColor: "{colors.obsidian}"
     rounded: "{rounded.full}"
-    padding: 8px
-  badge-danger:
-    backgroundColor: "{colors.danger-soft}"
-    textColor: "{colors.danger}"
+  badge-high:
+    backgroundColor: "{colors.periwinkle}"
+    textColor: "{colors.aubergine}"
     rounded: "{rounded.full}"
-    padding: 8px
-  gauge-bar-safe:
-    backgroundColor: "{colors.safe}"
+  badge-very-high:
+    backgroundColor: "{colors.blush-mist}"
+    textColor: "{colors.on-error-container}"
     rounded: "{rounded.full}"
-    height: 8px
-  gauge-bar-warning:
-    backgroundColor: "{colors.warning}"
-    rounded: "{rounded.full}"
-    height: 8px
-  garden-art-foliage:
-    backgroundColor: "{colors.garden-leaf}"
-    rounded: "{rounded.lg}"
-  garden-art-trunk:
-    backgroundColor: "{colors.garden-trunk}"
-    rounded: "{rounded.sm}"
   input-text:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.neutral}"
-    rounded: "{rounded.sm}"
+    backgroundColor: "{colors.paper-white}"
+    textColor: "{colors.obsidian}"
+    rounded: "{rounded.full}"
     height: "{spacing.touch-target}"
-    padding: 12px
+    border: "1px solid {colors.ash}"
 ---
 
-# 이어봄 (Ieobom) 디자인 시스템
+# 이어봄 — Violet Capsule Minimal
 
-## Overview
+정본은 이 파일이다. 파란 키 컬러(`#1d4fb8`) 시절 문서는 [`DESIGN.ieobom.md`](DESIGN.ieobom.md)에 백업해 두었다.
 
-이어봄은 **가족 건강 기록과 만성질환 예측 AI(XAIOps)를 하나로 잇는 신뢰 중심의 헬스케어 인터페이스**입니다.
+이어봄은 **가족 건강 기록과 만성질환 예측을 잇는 헬스케어 앱**이다. 시각 언어는 Stitch **Violet Capsule Minimal**(Phantom)이다. 웹3 랜딩의 재질·토큰을 쓰고, 카피·정보 구조는 가족 건강 제품에 맞춘다.
 
-- **대상 사용자**: 30대 자녀부터 60대 부모님까지 3세대가 함께 사용하는 가족 건강 앱입니다. 노안과 시력 저하를 배려한 고대비 타이포그래피와 큼직한 터치 영역(최소 44px)을 필수로 준수합니다.
-- **디자인 철학**:
-  - **신뢰와 따뜻함 (Medical Trust & Warmth)**: 차가운 임상 차트 대신 부드러운 블루·화이트 표면과 온기 있는 카드 레이아웃으로 심리적 부담을 낮춥니다.
-  - **오독 방지 (Misinterpretation Defense)**: 건강 위험도 색상(초록·주황·빨강)은 오직 의학적 선별 판정과 차트에만 제한 사용하며, 일반 행동 점수(챌린지 정원)와 시각적 역할을 엄격히 분리합니다.
-  - **3D 홀로그램 인체 인터랙션 (Vanatome Atlas)**: 정밀 해부학 3D 모델(남녀 전신 메쉬)과 PBR 셰이더를 온디맨드(On-Demand) 방식으로 렌더링하여 고성능 4K 대화면에서도 GPU 과열 없이 매끄럽게 동작합니다.
+- **대상**: 30대 자녀부터 60대 부모님까지. 터치 타깃은 최소 **44px** (시안 검색 아이콘 32px를 그대로 쓰지 않는다).
+- **철학**: 단색 바이올렛 축 + 캡슐 기하 + 속삭이듯 가벼운 타이포(DM Sans 300/350, tracking `-0.025em`). 임상 차트처럼 차가운 파란 크롬을 기본으로 두지 않는다.
 
 ## Colors
 
-색상은 명도 대비와 의료 정보 전달의 정확성을 기준으로 엄격하게 통제됩니다.
+구조 축은 하나다.
 
-- **Primary (`#1d4fb8` / `--blue-700`)**: 주요 CTA 버튼, 활성 상태 탭, 핵심 브랜드 식별색입니다.
-- **Secondary (`#5b687e` / `--muted`)**: 보조 설명문, 타임스탬프, 보조 메타데이터 색상입니다. 흰색 배경뿐 아니라 연한 파랑 배경(`--blue-50`, `--line-soft`, `--blue-100`) 위에서도 WCAG 2.1 AA(최저 4.5:1 이상, 실측 4.79:1)를 만족하도록 보정되었습니다.
-- **Neutral (`#172033` / `--ink`)**: 본문 헤드라인 및 일반 텍스트의 정본 색상입니다.
-- **Surface (`#ffffff`) & Background (`#f5f7fb`)**: 피로도를 낮추는 연한 쿨그레이 배경 위에 순백색 카드를 얹어 컨텐츠 위계를 구성합니다.
-- **의료 위험도 3색 (Medical Risk Colors)**:
-  - **Safe (`#15936e`, 텍스트용 `#0f6b50`)**: 정상/저위험 상태 배지 및 게이지. 텍스트용은 연한 배경(`--safe-soft`) 위에서 4.5:1 이상 대비를 유지하기 위해 전용 토큰을 사용합니다.
-  - **Warning (`#b06000` / `--caution`)**: 주의/중등도 위험.
-  - **Danger (`#b43e47` / `--danger`)**: 고위험 판정 및 위험 장기 투시 하이라이트.
-- **정원 아트 전용 색상 (`--garden-*`)**:
-  - `garden-leaf` (`#6e9b6a`), `garden-trunk` (`#8a6142`): 챌린지 성취 점수로 자라는 나무 일러스트 전용 색상입니다. 상태 색(`--safe`)과의 혼동을 막기 위해 저채도 어스 톤(Earth tone)을 유지합니다.
+- **Aubergine (`#3c315b`)**: 제목, 내비 글자, 아이콘 스트로크, 어두운 모듈.
+- **Ghost Lavender (`#e2dffe`)**: 주요 CTA 면. Paper White 위에 떠 있는 행동 면.
+- **Periwinkle (`#ab9ff2`)**: 보조 강조, 글로우, 「높음」 계열 워시.
+- **Paper White (`#fdfcfe`) / Bone (`#f4f2f4`) / Surface (`#faf9fb`)**: 캔버스와 카드.
+- **Obsidian (`#1c1c1c`)**: 밝은 면의 본문. Fog (`#86848d`)는 보조 문구. Ash (`#e9e8ea`)는 헤어라인.
+- **캔디 악센트** (리듬용, 키 컬러로 늘리지 않음): Buttercream `#ffffc4`, Blush Mist `#ffdadc`, Cornflower Pop `#4a87f2`(희소).
+- **상태**: Mint Signal `#2ec08b`(정상·활성), Blush+`#93000a`(매우 높음·파괴적 확인). **색만으로 상태를 말하지 않는다.** 배지에는 반드시 라벨(`매우 높음`, `주의`)을 둔다. 예전 Primary Blue `#1d4fb8`·선홍 `#ef4444`·차트 초록을 버튼·뱃지 기본값으로 쓰지 않는다.
 
 ## Typography
 
-가독성과 판별력을 극대화하기 위해 시스템 폰트 체계(Inter, Pretendard)를 사용합니다.
+**DM Sans** (+ 한글 **Noto Sans KR**). 기본 무게 300/350, 본문만 400. 모든 단계 letter-spacing `-0.025em`.
 
-- **Headline Large (32px / 700)**: 페이지 최상단 핵심 타이틀 (`가족의 건강 흐름을 한곳에서 이어보세요`).
-- **Headline Medium (24px / 700)**: 섹션 제목 및 프로필 헤더.
-- **Headline Small (18px / 600)**: 카드 제목, 모달 타이틀.
-- **Body Large (16px / 400)**: 주요 건강 수치 설명 및 본문 단락.
-- **Body Medium (14px / 400)**: 입력 폼 레이블, 테이블 본문 셀.
-- **Body Small (12px / 400)**: 각주, 부가 안내, 법적 고지.
-- **Label / Metric (11px~13px / 600)**: 차트 축, 배지, 수치 단위.
+앱 화면의 글자 위계는 이 일곱 칸만 쓴다. **11px 미만은 쓰지 않는다.** 12·14·17px처럼 칸 사이에 끼는 값은 아래 표로 올린다.
 
-### 디스플레이 스케일 — 공개 랜딩페이지 전용
+| 역할 | 크기 | 쓰는 곳 |
+|---|---|---|
+| micro | 11px | 오버라인·배지·단위·차트 눈금 |
+| caption | 13px | 보조 설명·타임스탬프 |
+| label / body-sm | 15px | 내비·버튼·이름·폼 |
+| body-md | 16px | 본문 문단 |
+| subheading | 20px | 카드·패널 제목 |
+| headline-sm | 24px | 화면 제목(좁은 폭) |
+| headline-md | 30px | 화면 제목 |
 
-`Display Large / Medium` 두 단은 **로그인 밖 소개 화면(`/landing`)에서만** 쓴다. 앱 화면의 최상위 제목은 그대로 `Headline Large(32px)`다.
+디스플레이·히어로는 line-height 1.0–1.1. 앱 화면 제목은 24–30px light가 기본이고, 랜딩용 64–96px는 마케팅 면에만 쓴다.
 
-- 왜 더했나: 32px 위가 없어 첫 화면을 세울 수 없었다. 한 화면에 문장 하나만 두는 스크롤 서사에서 32px 제목은 본문처럼 읽힌다.
-- 무엇을 지켰나: 폰트 패밀리·굵기는 그대로이고, `clamp()`의 하한(38px · 28px)이 기존 32px 스케일과 이어진다. 화면 폭에 따라 커지되 상한을 둔다.
-- 어디까지인가: 랜딩 밖에서 이 두 단을 쓰지 않는다. 앱 화면에서 더 큰 제목이 필요하면 그것은 타이포가 아니라 정보 구조 문제다.
+## Layout & Spacing
 
-### 랜딩 표면색 (`landing-*`)
+4px 스케일. 앱 본문 폭은 화면마다 `min(1120–1400px, 100% - 48px)`.
 
-- `landing-cream(#faf7f3)`·`landing-cream-deep(#f3ede5)`: 소개 화면의 따뜻한 아이보리 배경. 앱의 쿨그레이 배경(`background #f5f7fb`)은 데이터 화면의 피로를 줄이는 색이라 "따뜻함"을 만들지 못한다. **상태 색이 아니므로 위험도 오독 위험이 없고**, 앱 화면에서는 쓰지 않는다.
-- `landing-dark(#0b0f17)`: 3D 인체 장면의 배경. Elevation 항목의 3D 캔버스 백드롭(`rgba(15,23,42,0.95)`)과 같은 계열이며, 뷰포트 전체를 덮을 때 쓰는 불투명 값이다.
+- 모바일: 여백 16px, 섹션 간격 48px까지 접힘.
+- 데스크톱: 거터 24px, 카드 안 패딩 24px(앱) / 시안 데스크톱 48px.
 
-### 랜딩 v2 (`/landing-v2`) — 이 문서 밖에 서 있는 대안 시안
+## Elevation
 
-**`/landing-v2` 는 이 디자인 시스템을 따르지 않는다. 그것이 그 화면의 목적이다.**
-
-소개 화면의 방향을 정하려고 **다른 디자인 시스템 한 벌**(Violet Capsule Minimal — 딥 오버진 단색, 굵기 300~400, 100px 캡슐 기하학, DM Sans)을 통째로 구현한 비교용 시안이다. 여기 적힌 Primary Blue·Inter 700·8px 반경 위에 서 있지 않다.
-
-경계는 셋이고 테스트가 지킨다(`features/landing-v2/LandingV2Page.test.tsx`).
-
-- **토큰이 새지 않는다.** 값은 전부 `--v2-*` 로 새로 세우고 앱 토큰(`--blue-700` 등)을 상속하지 않는다. `landingV2.css` 의 모든 선택자는 `.lnv2-` 를 포함한다.
-- **번들이 새지 않는다.** `landingV2.css` 는 `LandingV2Page` 만 import 하며, 라우트 분할로 별도 청크가 된다 — `/landing` 이나 앱 화면을 여는 사람은 받지 않는다.
-- **되돌리기가 한 줄이다.** `features/landing-v2/` 폴더와 `/landing-v2` 라우트를 지우면 끝이다. 로그아웃 상태의 `/` 는 여전히 `/landing`(v1)로 간다.
-
-어느 쪽을 정본으로 세울지 정해지면, **이긴 쪽의 값을 이 문서로 올리고 진 쪽을 지운다.** 두 시스템을 오래 같이 두지 않는다. 자세한 것은 [53번 문서](docs/53_landing_page_v2.md).
-
-## Layout
-
-**반응형 하이브리드 레이아웃**: 모바일 단일 칼럼부터 4K 대화면 3분할 워크스페이스까지 유연하게 대응합니다.
-
-- **4K 모니터링 뷰**: 상단(가족 타임라인 바둑판 매트릭스), 좌하단(3D Vanatome 인체 뷰어 및 해부학 필터 툴바), 우측(봄이 AI 건강비서 및 치아 선택기 캔버스 드로어)의 고정 높이 그리드로 한눈에 가족 건강 상태를 조망합니다.
-- **그리드 간격**: 8px 배수 시스템(4px 보조 스텝)을 기반으로 일관된 수직·수평 리듬을 유지합니다.
-- **접근성 터치 타깃**: 모든 클릭 가능 요소(버튼, 체크박스, 날짜 셀, 프로필 카드)는 최소 **44px × 44px** 이상의 조작 영역을 확보합니다.
-
-## Elevation & Depth
-
-과도한 그림자나 네온 글로우 대신 **톤 레이어링(Tonal Layering)과 부드러운 감쇄 그림자**로 깊이감을 형성합니다.
-
-- **Level 1 (Card Surface)**: `0 10px 32px rgba(35, 61, 112, 0.05)` — 배경 위에 살짝 떠 있는 부드러운 깊이감.
-- **Level 2 (Dropdown / Dialog)**: `0 18px 50px rgba(35, 61, 112, 0.09)` — 모달 대화상자 및 플로팅 패널.
-- **3D 인체 캔버스 컨테이너**: 심도 있는 블랙/다크 블루 백드롭(`rgba(15, 23, 42, 0.95)`)으로 PBR 셰이더와 장기 투시 발광을 극대화합니다.
+방향성 그림자를 쌓지 않는다. 카드는 Ash 1px + Paper/Bone 면. 유일한 상시 그림자는 **Ghost CTA의 바이올렛 글로우**: `0 0 24px rgba(171, 159, 242, 0.45)`.
 
 ## Shapes
 
-친근하고 안정된 느낌을 주는 **소프트 라운디드 렉탱글(Soft Rounded Rectangle)** 언어를 채택합니다.
-
-- **Card Radius (22px / `--card-radius`)**: 가족 홈 대시보드의 주요 패널과 요약 카드를 감싸는 부드러운 곡률.
-- **Interactive Radius (8px~12px)**: 버튼, 입력창, 선택 박스.
-- **Pill (9999px)**: 상태 배지, 태그, 필터 칩.
+클릭 요소·칩·내비는 **캡슐 100px**. 카드·다이얼로그는 **24–32px**. 16px 미만 반경을 새로 만들지 않는다.
 
 ## Components
 
-- **Primary Button**: 주 행동 유도 버튼 (`건강기록 작성`, `프로필 저장`). 높이 44px 이상, 반경 8px, Primary 블루 배경에 백색 텍스트.
-- **Secondary / Ghost Button**: 보조 액션 (`프로필 관리`, `취소`). 연한 파랑 배경 또는 테두리 버튼.
-- **Member Card**: 가족 구성원 탭. 선택 시 두꺼운 블루 테두리와 은은한 그림자로 명확한 포커스 제공.
-- **Timeline Matrix Cell**: 날짜별 관찰 기록 블록. 기록 유무·심각도에 따라 색상과 도트가 부여되며, 키보드 및 스크린리더 `aria-label` 완벽 지원.
-- **Vanatome 3D Viewer**: 3D 해부학 인체 뷰어로, 회전/줌 조작 및 장기 펄스 애니메이션은 GPU 과열 방지를 위해 필요 시에만 수렴 정지(On-demand) 방식으로 렌더링.
+- **Primary CTA**: Ghost Lavender 면, Aubergine 글, 100px, 높이 ≥44px, 바이올렛 글로우. (`판정하기`, `초대`)
+- **Secondary**: Paper + Ash 보더, 또는 Ghost 면 없이 글로우.
+- **Danger**: Blush Mist 면, `#93000a` 글.
+- **Nav pill**: Paper 면, Ash 보더, 활성 탭은 Ghost.
+- **Input**: Paper, Ash 보더, 반경 16–100px, 높이 ≥44px, placeholder Fog.
+- **배지**: 매우 높음=Blush, 높음=Periwinkle 워시, 주의=Buttercream, 정상=Mint 워시. 텍스트 라벨 필수.
 
 ## Do's and Don'ts
 
-- **Do** 모든 텍스트에 대해 WCAG 2.1 AA (4.5:1 이상) 명도 대비를 유지하세요.
-- **Do** 터치 요소는 최소 44px 크기 또는 여백을 보장하여 50~60대 사용자도 편안하게 터치할 수 있게 하세요.
-- **Do** 3D WebGL 렌더링은 반드시 온디맨드(On-Demand) 렌더링과 타임아웃 수렴을 적용하여 GPU 유휴 상태를 보장하세요.
-- **Don't** 상태 색상(빨강/초록/주황)을 의학적 위험 판정 이외의 일반 장식이나 정원 나무 그래픽에 혼용하지 마세요.
-- **Don't** 한 화면에 3개 이상의 폰트 패밀리나 임의의 인라인 색상을 정의하지 마세요.
-- **Don't** 색상 단독으로만 상태를 전달하지 마세요. 반드시 레이블 텍스트(`주의 4개`, `안전`)나 아이콘을 병기하세요.
+- **Do** 본문 대비 WCAG 2.1 AA(4.5:1). Mint 위 흰 글이 작으면 대비가 부족하니 워시+Obsidian을 쓴다.
+- **Do** 터치 44px. 색과 라벨을 같이 쓴다.
+- **Do** 3D WebGL은 온디맨드 렌더.
+- **Don't** `#1d4fb8`를 키 컬러로 되돌리거나, 선홍/차트초록을 기본 뱃지·CTA에 쓰지 않는다.
+- **Don't** 한 화면에 폰트 패밀리를 세 개 이상 섞지 않는다 (DM Sans + Noto Sans KR + 아이콘).
+- **Don't** ui-ux-pro-max `--design-system`이 뽑는 청록·뉴모피즘을 이 파일 대신 쓰지 않는다.

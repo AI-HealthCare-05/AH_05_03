@@ -8,6 +8,7 @@ import { PageSkeleton } from "../shared/ui/Skeleton";
 import { useAuth } from "./authContext";
 import { LocalDomainContext } from "./localDomainContext";
 import { prefetchNavigationRoutes, prefetchRouteFor } from "./prefetchRoutes";
+import { isPreviewShellPath } from "./localHomeSwap";
 import { useRouteTitle } from "./useRouteTitle";
 
 // 가족 홈이 "관리"(구성원·기록·검진표), 건강 데이터가 "지금 어떤가"(수치 추이) 다.
@@ -147,6 +148,19 @@ export function RootLayout() {
     if (!activeLinkRef) return undefined;
     return profiles.find((p) => p.opaqueServerRef === activeLinkRef)?.displayName;
   }, [activeLinkRef, profiles]);
+
+  if (isPreviewShellPath(pathname)) {
+    return (
+      <div className="preview-shell">
+        <main id="main-content" tabIndex={-1}>
+          <Suspense fallback={<PageSkeleton />}>
+            <Outlet />
+          </Suspense>
+        </main>
+        <GlobalHealthAssistant />
+      </div>
+    );
+  }
 
   // 갱신 토큰으로 세션을 되살리는 동안 아무것도 그리지 않는다. 로그인 화면을 먼저
   // 띄우면 **이미 로그인한 사용자에게 로그인 화면이 한 번 깜빡인다.**

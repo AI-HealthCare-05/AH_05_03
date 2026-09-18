@@ -24,7 +24,7 @@ function formatDay(iso: string): string {
   return iso.slice(2, 10).replace(/-/g, ".");
 }
 
-function Sparkline({ series }: { series: TrendSeries }) {
+export function Sparkline({ series }: { series: TrendSeries }) {
   const values = series.points.map((p) => p.value);
   const min = Math.min(...values);
   const max = Math.max(...values);

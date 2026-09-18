@@ -1,0 +1,1323 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap");
+
+/* Stitch Violet Capsule Minimal — 통증 다이어리 · 위험 판정/리포트 · 계정 서브 화면.
+   정본은 DESIGN.md. stitch-shell 라우트에서만 덮는다. */
+
+.app-shell.stitch-shell {
+  --stitch-aubergine: #3c315b;
+  --stitch-ghost: #e2dffe;
+  --stitch-periwinkle: #ab9ff2;
+  --stitch-paper: #fdfcfe;
+  --stitch-surface: #faf9fb;
+  --stitch-obsidian: #1c1c1d;
+  --stitch-fog: #86848d;
+  --stitch-ash: #e9e8ea;
+  --stitch-bone: #f4f2f4;
+  --stitch-mint: #2ec08b;
+  --stitch-blush: #ffdadc;
+  --stitch-buttercream: #ffffc4;
+  --stitch-error-ink: #93000a;
+  --card-radius: 28px;
+  --card-shadow: 0 24px 70px -15px rgba(60, 49, 91, 0.16), 0 0 60px -10px rgba(171, 159, 242, 0.18);
+  background:
+    radial-gradient(900px 420px at 50% -140px, rgba(171, 159, 242, 0.28), transparent 72%),
+    radial-gradient(520px 520px at 100% 42%, rgba(255, 218, 220, 0.26), transparent 70%),
+    radial-gradient(520px 520px at 0% 58%, rgba(255, 255, 196, 0.2), transparent 70%),
+    var(--stitch-surface);
+  color: var(--stitch-obsidian);
+  font-family: "DM Sans", "Noto Sans KR", Inter, Pretendard, sans-serif;
+  letter-spacing: -0.025em;
+  font-weight: 350;
+}
+
+/* 로그인 관문은 헤더 없이 먼저 그려지므로 stitch-shell 을 직접 입힌다. */
+.app-shell.stitch-shell > .signin-shell {
+  flex: 1;
+  background: transparent;
+  padding: 24px 16px 48px;
+}
+
+.stitch-shell .signin-panel {
+  gap: 16px;
+}
+
+.stitch-shell .signin-brand {
+  gap: 16px;
+}
+
+.stitch-shell .signin-brand strong {
+  font-size: 20px;
+  font-weight: 300;
+  color: var(--stitch-aubergine);
+  letter-spacing: -0.025em;
+}
+
+.stitch-shell .signin-brand small {
+  color: var(--stitch-fog);
+  font-size: 13px;
+}
+
+.stitch-shell .signin-panel h1 {
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 1.21;
+  color: var(--stitch-aubergine);
+  letter-spacing: -0.025em;
+}
+
+.stitch-shell .signin-lead {
+  max-width: 65ch;
+  color: var(--stitch-fog);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.stitch-shell .signin-notes {
+  color: var(--stitch-fog);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.stitch-shell .signin-shell .auth-card {
+  margin-top: 0;
+}
+
+.stitch-shell .signin-shell .account-card {
+  border-radius: 24px;
+}
+
+.stitch-shell .signin-shell .section-kicker {
+  display: inline-flex;
+  width: fit-content;
+  margin: 0 0 8px;
+  padding: 8px 16px;
+  border-radius: 100px;
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+}
+
+.stitch-shell .signin-shell .auth-card h2 {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1.25;
+  color: var(--stitch-aubergine);
+  letter-spacing: -0.025em;
+}
+
+.stitch-shell .signin-shell .auth-card > p {
+  color: var(--stitch-fog);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.stitch-shell .signin-shell .product-form label {
+  color: var(--stitch-aubergine);
+  font-weight: 400;
+}
+
+.stitch-shell .signin-shell .product-form input {
+  min-height: 44px;
+  border: 1px solid var(--stitch-ash);
+  border-radius: 100px;
+  background: var(--stitch-paper);
+  color: var(--stitch-obsidian);
+}
+
+.stitch-shell .signin-shell .product-form input:focus {
+  outline: 2px solid var(--stitch-periwinkle);
+  outline-offset: 2px;
+}
+
+.stitch-shell .signin-shell .primary-button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 100px;
+  padding: 12px 32px;
+  font-weight: 400;
+  color: var(--stitch-aubergine);
+  background: var(--stitch-ghost);
+  box-shadow: 0 0 24px rgba(171, 159, 242, 0.45), 0 0 8px rgba(226, 223, 254, 0.85);
+}
+
+.stitch-shell .signin-shell .primary-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--stitch-periwinkle) 55%, var(--stitch-ghost));
+  box-shadow: 0 0 32px rgba(171, 159, 242, 0.65), 0 0 14px rgba(226, 223, 254, 1);
+}
+
+.stitch-shell .signin-shell .password-toggle-button {
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--stitch-aubergine);
+  border-radius: 100px;
+}
+
+.stitch-shell .signin-shell .password-toggle-button:focus-visible {
+  outline: 2px solid var(--stitch-periwinkle);
+}
+
+.stitch-shell .signin-shell .auth-hint,
+.stitch-shell .signin-shell .auth-switch {
+  color: var(--stitch-fog);
+}
+
+.stitch-shell .signin-shell .auth-switch button,
+.stitch-shell .signin-shell .auth-card a {
+  min-height: 44px;
+  padding: 8px 4px;
+  color: var(--stitch-aubergine);
+}
+
+.stitch-shell .signin-shell .error-alert {
+  margin: 0;
+  border-radius: 16px;
+  padding: 12px 16px;
+  color: var(--stitch-error-ink);
+  background: var(--stitch-blush);
+  border: 1px solid color-mix(in srgb, var(--stitch-blush) 70%, var(--stitch-error-ink));
+}
+
+.stitch-shell .signin-shell .success-alert {
+  margin: 0;
+  border-radius: 16px;
+  padding: 12px 16px;
+  color: var(--stitch-aubergine);
+  background: color-mix(in srgb, var(--stitch-mint) 16%, white);
+}
+
+.app-shell.stitch-shell .site-header {
+  background: var(--stitch-paper);
+  border-bottom: 1px solid var(--stitch-ash);
+  box-shadow: none;
+}
+
+.app-shell.stitch-shell .brand-copy strong {
+  color: var(--stitch-aubergine);
+  font-weight: 600;
+}
+
+/* 가족 홈·통증 다이어리·판정·건강 데이터 3 이 같은 캡슐 탭을 쓴다. */
+.stitch-capsule-nav,
+.app-shell.stitch-shell .primary-navigation {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.stitch-capsule-nav a,
+.app-shell.stitch-shell .primary-navigation a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: var(--up15-fog, var(--stitch-fog, #86848d));
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.025em;
+  text-decoration: none;
+  white-space: nowrap;
+  background: transparent;
+  box-shadow: none;
+}
+
+.stitch-capsule-nav a:hover,
+.app-shell.stitch-shell .primary-navigation a:hover {
+  background: var(--stitch-bone, #f4f2f4);
+  color: var(--stitch-aubergine, #3c315b);
+}
+
+.stitch-capsule-nav a.active,
+.app-shell.stitch-shell .primary-navigation a.active {
+  background: var(--stitch-ghost, #e2dffe);
+  color: var(--stitch-aubergine, #3c315b);
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.stitch-capsule-nav a:focus-visible,
+.app-shell.stitch-shell .primary-navigation a:focus-visible {
+  outline: 2px solid var(--stitch-periwinkle, #ab9ff2);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stitch-capsule-nav a,
+  .app-shell.stitch-shell .primary-navigation a {
+    transition: none;
+  }
+}
+
+.up15-brand > .stitch-capsule-nav {
+  padding-left: 24px;
+  margin-left: 10px;
+  border-left: 1px solid var(--up15-ash, #e9e8ea);
+}
+
+/* 시안 15~17 이 `.up15-header-wrapper` 를 97vw 캡슐로 덮는다. 클래스 둘이
+   같아서 나중에 로드된 시안이 이긴다. 제품 헤더는 화면 가로를 다 쓴다. */
+.up15-header-wrapper.stitch-app-header {
+  --up15-aubergine: #3c315b;
+  --up15-ghost-lavender: #e2dffe;
+  --up15-periwinkle: #ab9ff2;
+  --up15-paper-white: #fdfcfe;
+  --up15-obsidian: #1c1c1c;
+  --up15-fog: #86848d;
+  --up15-ash: #e9e8ea;
+  --up15-bone: #f4f2f4;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+}
+
+.up15-header-wrapper.stitch-app-header .up15-header {
+  width: 100%;
+  max-width: none;
+  background: var(--up15-paper-white);
+  border: 0;
+  border-bottom: 1px solid var(--up15-ash);
+  border-radius: 0;
+  padding: 0 clamp(20px, 3vw, 48px);
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.stitch-app-header .up15-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.stitch-app-header .up15-brand-home {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.stitch-app-header .up15-logo-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  box-shadow: none;
+}
+
+.stitch-app-header .up15-logo-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.stitch-app-header .up15-brand-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.stitch-app-header .up15-brand-text-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stitch-app-header .up15-brand-text-row strong {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--up15-aubergine);
+  letter-spacing: -0.03em;
+}
+
+.stitch-app-header .up15-brand-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--up15-periwinkle);
+}
+
+.stitch-app-header .up15-brand-text span {
+  font-size: 11px;
+  color: var(--up15-fog);
+}
+
+.stitch-app-header .up15-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.stitch-app-header .up15-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stitch-app-header .up15-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--up15-aubergine);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.stitch-app-header .up15-icon-btn:hover {
+  background: var(--up15-bone);
+}
+
+.stitch-app-header .up15-bell-dot {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--up15-periwinkle);
+}
+
+.stitch-app-header .up15-user-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 12px 4px 4px;
+  background: var(--up15-paper-white);
+  border: 1px solid var(--up15-ash);
+  border-radius: 10px;
+  box-shadow: none;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+.stitch-app-header a.up15-user-pill:hover {
+  border-color: var(--up15-periwinkle);
+}
+
+.stitch-app-header .up15-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--up15-ghost-lavender);
+  border: 1px solid rgba(171, 159, 242, 0.4);
+  color: var(--up15-aubergine);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.stitch-app-header .up15-user-name {
+  font-size: 13px;
+  color: var(--up15-aubergine);
+  font-weight: 500;
+}
+
+.app-shell.stitch-shell > .site-footer {
+  display: none;
+}
+
+.app-shell.stitch-shell:has(.hd3-root) > #main-content {
+  padding: 0;
+}
+
+/* ── 통증 다이어리 ─────────────────────────────────────────────── */
+
+.stitch-shell .pain-diary-page {
+  background: var(--stitch-bone);
+  gap: 24px;
+  padding: 24px 24px 48px;
+}
+
+.stitch-shell .pain-diary-page .family-switcher-panel {
+  background: var(--stitch-paper);
+  border: 1px solid var(--stitch-ash);
+  border-radius: 28px;
+  box-shadow: none;
+  padding: 24px;
+}
+
+.stitch-shell .pain-diary-main {
+  padding: 0;
+  max-width: 1180px;
+}
+
+.stitch-shell .pain-diary-header,
+.stitch-shell .pain-diary-header > div {
+  display: grid;
+  gap: 8px;
+}
+
+.stitch-shell .pain-diary-header {
+  margin: 0 0 24px;
+}
+
+.stitch-shell .pain-diary-page .error-alert,
+.stitch-shell .pain-diary-page .success-alert,
+.stitch-shell .pain-diary-page .route-loading {
+  margin: 0 0 16px;
+}
+
+.stitch-shell .pain-diary-header .eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: 100px;
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stitch-shell .pain-diary-header h1 {
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 1.21;
+  letter-spacing: -0.025em;
+  color: var(--stitch-aubergine);
+  margin: 0;
+}
+
+.stitch-shell .pain-diary-header .subtext {
+  max-width: 65ch;
+  color: var(--stitch-fog);
+  font-size: 16px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.stitch-shell .pain-diary-layout {
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.86fr);
+  gap: 24px;
+}
+
+.stitch-shell .pain-diary-form-card,
+.stitch-shell .diary-summary-card,
+.stitch-shell .pain-calendar-card {
+  background: var(--stitch-paper);
+  border: 1px solid var(--stitch-ash);
+  border-radius: 24px;
+  box-shadow: none;
+  padding: 24px;
+}
+
+.stitch-shell .pain-diary-form-card .card-header h2 {
+  font-weight: 500;
+  color: var(--stitch-aubergine);
+  letter-spacing: -0.03em;
+}
+
+.stitch-shell .status-tag {
+  border-radius: 100px;
+  padding: 6px 12px;
+  font-weight: 500;
+}
+
+.stitch-shell .status-tag.is-new {
+  background: color-mix(in srgb, var(--stitch-mint) 16%, white);
+  color: #0f6b4c;
+  border-color: color-mix(in srgb, var(--stitch-mint) 40%, white);
+}
+
+.stitch-shell .status-tag.is-edit {
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+  border-color: var(--stitch-periwinkle);
+}
+
+.stitch-shell .day-records-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.stitch-shell .day-record-tab {
+  border-radius: 100px;
+  border: 1px solid var(--stitch-ash);
+  background: var(--stitch-bone);
+  min-height: 44px;
+  padding: 8px 14px;
+}
+
+.stitch-shell .day-record-tab.is-active,
+.stitch-shell .day-record-tab.add-tab.is-active {
+  background: var(--stitch-ghost);
+  border-color: transparent;
+  color: var(--stitch-aubergine);
+}
+
+.stitch-shell .pain-diary-page .button,
+.stitch-shell .pain-diary-page .secondary-button,
+.stitch-shell .pain-diary-page .today-btn,
+.stitch-shell .pain-diary-page .nav-btn {
+  border-radius: 100px;
+  min-height: 44px;
+}
+
+.stitch-shell .pain-diary-page .button-primary,
+.stitch-shell .pain-diary-page .save-btn {
+  background: var(--stitch-aubergine);
+  border-color: var(--stitch-aubergine);
+  color: var(--stitch-ghost);
+  box-shadow: 0 0 24px rgba(171, 159, 242, 0.35);
+}
+
+.stitch-shell .pain-diary-page .button-primary:hover,
+.stitch-shell .pain-diary-page .save-btn:hover {
+  box-shadow: 0 0 32px rgba(171, 159, 242, 0.55);
+}
+
+.stitch-shell .summary-item {
+  background: var(--stitch-bone);
+  border-color: var(--stitch-ash);
+  border-radius: 20px;
+}
+
+.stitch-shell .summary-item.is-selected {
+  background: var(--stitch-ghost);
+  border-color: var(--stitch-periwinkle);
+  box-shadow: none;
+}
+
+.stitch-shell .pain-diary-page .calendar-cell.selected {
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+}
+
+/* ── 위험 판정 / 리포트 ───────────────────────────────────────── */
+
+.stitch-shell .assess-page {
+  gap: 2rem;
+}
+
+.stitch-shell .assess-page.product-page {
+  width: min(1400px, calc(100% - 48px));
+}
+
+.stitch-shell .assess-page .dashboard-heading {
+  display: grid;
+  gap: 12px;
+  padding: 8px 0 4px;
+}
+
+.stitch-shell .assess-page .page-kicker,
+.stitch-shell .assess-page .section-kicker {
+  display: inline-flex;
+  width: fit-content;
+  margin: 0;
+  padding: 6px 14px;
+  border-radius: 100px;
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.stitch-shell .assess-page .dashboard-heading h1 {
+  font-size: clamp(1.75rem, 2.4vw, 2.5rem);
+  font-weight: 300;
+  letter-spacing: -0.04em;
+  color: var(--stitch-aubergine);
+}
+
+.stitch-shell .assess-page .dashboard-heading p {
+  color: var(--stitch-fog);
+}
+
+.stitch-shell .account-page.product-page {
+  width: min(1120px, calc(100% - 48px));
+  padding: 28px 0 96px;
+  font-family: "DM Sans", "Noto Sans KR", Inter, Pretendard, sans-serif;
+  letter-spacing: -0.025em;
+}
+
+.stitch-shell .account-page .dashboard-heading {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.stitch-shell .account-page .page-kicker,
+.stitch-shell .account-page .section-kicker {
+  display: inline-flex;
+  width: fit-content;
+  margin: 0 0 10px;
+  padding: 6px 14px;
+  border-radius: 100px;
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stitch-shell .account-page .dashboard-heading h1,
+.stitch-shell .account-page .account-card h2,
+.stitch-shell .account-page .section-title-row h2,
+.stitch-shell .account-page .membership-panel h3 {
+  color: var(--stitch-aubergine);
+  font-weight: 300;
+  letter-spacing: -0.04em;
+}
+
+.stitch-shell .account-page .dashboard-heading h1 {
+  font-size: clamp(1.75rem, 2.4vw, 2.5rem);
+}
+
+.stitch-shell .account-page .account-card dd,
+.stitch-shell .account-page .membership-identity strong,
+.stitch-shell .account-page .household-list strong {
+  color: var(--stitch-obsidian);
+}
+
+.stitch-shell .account-page .dashboard-heading p:not(.page-kicker),
+.stitch-shell .account-page .account-empty,
+.stitch-shell .account-page .account-card dt,
+.stitch-shell .account-page .account-card small,
+.stitch-shell .account-page .account-help,
+.stitch-shell .account-page .account-help-text {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.stitch-shell .account-page .account-help,
+.stitch-shell .account-page .account-help-text,
+.stitch-shell .account-page .danger-zone > p:not(.section-kicker),
+.stitch-shell .account-page .auth-card > p:not(.section-kicker),
+.stitch-shell .account-page .household-list small,
+.stitch-shell .account-page .invitation-list small,
+.stitch-shell .account-page .invitation-list span,
+.stitch-shell .account-page .membership-identity small,
+.stitch-shell .account-page .membership-state small,
+.stitch-shell .account-page .membership-panel time,
+.stitch-shell .account-page .membership-panel span:not(.current-member-badge):not(.master-badge),
+.stitch-shell .account-page .profile-link-row span {
+  color: var(--stitch-fog);
+}
+
+.stitch-shell .account-page .page-kicker,
+.stitch-shell .account-page .section-kicker,
+.stitch-shell .account-page .current-member-badge {
+  color: var(--stitch-aubergine);
+}
+
+.stitch-shell .account-card {
+  min-width: 0;
+  max-width: 100%;
+  background: var(--stitch-paper);
+  border: 1px solid var(--stitch-ash);
+  box-shadow: 0 8px 28px rgba(60, 49, 91, 0.06);
+  border-radius: 28px;
+  padding: 24px;
+}
+
+.stitch-shell .account-page .account-grid {
+  gap: 18px;
+}
+
+.stitch-shell .account-page .primary-button,
+.stitch-shell .account-page .secondary-button,
+.stitch-shell .account-page .danger-button {
+  min-height: 44px;
+  border-radius: 100px;
+  padding: 10px 18px;
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: -0.025em;
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.stitch-shell .account-page .primary-button,
+.stitch-shell .assess-page button[type="submit"],
+.stitch-shell .assess-page .button-primary {
+  border: 0;
+  color: var(--stitch-aubergine);
+  background: var(--stitch-ghost);
+  box-shadow: 0 0 24px rgba(171, 159, 242, 0.45), 0 0 8px rgba(226, 223, 254, 0.85);
+}
+
+.stitch-shell .account-page .primary-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--stitch-periwinkle) 55%, var(--stitch-ghost));
+  box-shadow: 0 0 32px rgba(171, 159, 242, 0.65), 0 0 14px rgba(226, 223, 254, 1);
+  transform: translateY(-1px);
+}
+
+.stitch-shell .account-page .secondary-button {
+  border: 0;
+  color: var(--stitch-aubergine);
+  background: var(--stitch-ghost);
+}
+
+.stitch-shell .account-page .secondary-button:hover:not(:disabled) {
+  background: #d5d0fb;
+}
+
+.stitch-shell .account-page .danger-button {
+  border: 0;
+  color: var(--stitch-error-ink);
+  background: var(--stitch-blush);
+}
+
+.stitch-shell .account-page .text-danger-button {
+  min-height: 44px;
+  padding: 8px 12px;
+  color: #93000a;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.stitch-shell .account-page .member-delete-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 100px;
+  border: 1px solid var(--stitch-ash);
+  background: var(--stitch-paper);
+  color: var(--stitch-fog);
+}
+
+.stitch-shell .account-page .member-delete-button:hover:not(:disabled) {
+  background: #ffdadc;
+  border-color: #ffdadc;
+  color: #93000a;
+}
+
+.stitch-shell .account-page input,
+.stitch-shell .account-page select {
+  min-height: 44px;
+  border: 1px solid var(--stitch-ash);
+  border-radius: 16px;
+  background: var(--stitch-paper);
+  color: var(--stitch-obsidian);
+}
+
+.stitch-shell .account-page input:focus,
+.stitch-shell .account-page select:focus {
+  outline: 2px solid var(--stitch-periwinkle);
+  outline-offset: 2px;
+}
+
+.stitch-shell .account-page .household-list article,
+.stitch-shell .account-page .membership-panel > div,
+.stitch-shell .account-page .profile-link-row,
+.stitch-shell .account-page .invitation-list p,
+.stitch-shell .account-page .received-invitation {
+  border: 1px solid var(--stitch-ash);
+  border-radius: 20px;
+  background: var(--stitch-bone);
+}
+
+.stitch-shell .account-page .invitation-list {
+  min-width: 0;
+}
+
+.stitch-shell .account-page .invitation-sent-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 12px 16px;
+}
+
+.stitch-shell .account-page .household-list article.is-selected {
+  border-color: transparent;
+  background: var(--stitch-ghost);
+}
+
+.stitch-shell .account-page .current-member-badge {
+  color: var(--stitch-aubergine);
+  background: var(--stitch-ghost);
+}
+
+.stitch-shell .account-page .master-badge {
+  color: var(--stitch-obsidian);
+  background: #ffffc4;
+}
+
+.stitch-shell .account-page .danger-zone {
+  border-color: var(--stitch-blush);
+  background: #fff8f8;
+}
+
+.stitch-shell .account-page .modal-panel {
+  background: var(--stitch-paper);
+  border: 1px solid var(--stitch-ash);
+  border-radius: 28px;
+  box-shadow: 0 24px 60px rgba(60, 49, 91, 0.18);
+}
+
+.stitch-shell .account-page .modal-close {
+  width: 44px;
+  height: 44px;
+  border-radius: 100px;
+  color: var(--stitch-aubergine);
+}
+
+.stitch-shell .account-page .account-backup-hint {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--stitch-bone);
+  border-radius: 16px;
+}
+
+.stitch-shell .account-page .account-backup-hint p {
+  margin: 0 0 0.5rem;
+  font-size: 15px;
+  color: var(--stitch-fog);
+}
+
+.stitch-shell .account-page .invitation-account-gate {
+  border-color: #ffffc4;
+  background: #fffdf0;
+}
+
+.stitch-shell .account-page .alert {
+  border-radius: 20px;
+  border-color: var(--stitch-ash);
+}
+
+.stitch-shell .account-page .success-alert {
+  background: #e7f8f1;
+  color: #0f6b50;
+}
+
+.stitch-shell .account-page .error-alert {
+  background: #ffdadc;
+  color: #93000a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stitch-shell .account-page .primary-button,
+  .stitch-shell .account-page .secondary-button,
+  .stitch-shell .account-page .danger-button {
+    transition: none;
+  }
+
+  .stitch-shell .account-page .primary-button:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
+.stitch-shell .assess-group,
+.stitch-shell .assess-fill,
+.stitch-shell .assess-card,
+.stitch-shell .assess-matrix-grid > *,
+.stitch-shell .health-data-panel {
+  background: var(--stitch-paper);
+  border: 1px solid var(--stitch-ash);
+  border-radius: 28px;
+  box-shadow: none;
+}
+
+.stitch-shell .assess-group {
+  padding: 1.5rem 1.75rem;
+}
+
+.stitch-shell .assess-group legend {
+  color: var(--stitch-aubergine);
+  font-weight: 500;
+}
+
+.stitch-shell .assess-workspace {
+  gap: 32px;
+}
+
+.stitch-shell .assess-cards {
+  gap: 16px;
+}
+
+.stitch-shell .assess-page button[type="submit"],
+.stitch-shell .assess-page .button-primary {
+  border-radius: 100px;
+  min-height: 44px;
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+  border-color: transparent;
+  box-shadow: 0 0 24px rgba(171, 159, 242, 0.45), 0 0 8px rgba(226, 223, 254, 0.85);
+}
+
+.stitch-shell .assess-page .secondary-button {
+  border-radius: 100px;
+  min-height: 44px;
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+  border-color: transparent;
+}
+
+.stitch-shell .assess-fill,
+.stitch-shell .form-notice,
+.stitch-shell .assess-prefilled,
+.stitch-shell .document-panel,
+.stitch-shell .assess-saved-note,
+.stitch-shell .checkup-pane,
+.stitch-shell .assess-presets {
+  background: var(--stitch-paper);
+  border: 1px solid var(--stitch-ash);
+  color: var(--stitch-obsidian);
+  box-shadow: none;
+  border-radius: 28px;
+}
+
+.stitch-shell .assess-page .checkup-pane-head h2,
+.stitch-shell .assess-fill h3,
+.stitch-shell .assess-presets h3 {
+  color: var(--stitch-aubergine);
+  font-weight: 300;
+  letter-spacing: -0.04em;
+}
+
+.stitch-shell .assess-page .checkup-privacy,
+.stitch-shell .assess-page .assess-muted,
+.stitch-shell .assess-fill-copy small {
+  color: var(--stitch-fog);
+}
+
+.stitch-shell .assess-page .checkup-picker {
+  background: var(--stitch-bone);
+  border: 1.5px dashed var(--stitch-periwinkle);
+  border-radius: 24px;
+}
+
+.stitch-shell .assess-page .checkup-picker span {
+  color: var(--stitch-aubergine);
+  font-weight: 500;
+}
+
+.stitch-shell .assess-page .checkup-picker::before {
+  background: var(--stitch-aubergine);
+  color: var(--stitch-ghost);
+  border-radius: 100px;
+}
+
+.stitch-shell .assess-page .checkup-picker:hover,
+.stitch-shell .assess-page .checkup-picker.is-dragging {
+  border-color: var(--stitch-aubergine);
+  background: var(--stitch-ghost);
+}
+
+.stitch-shell .assess-page .checkup-picker:focus-within {
+  border-color: var(--stitch-aubergine);
+  box-shadow: 0 0 0 3px rgba(171, 159, 242, 0.35);
+}
+
+.stitch-shell .assess-page .checkup-zoom button {
+  min-height: 44px;
+  border-radius: 100px;
+  border-color: var(--stitch-ash);
+  color: var(--stitch-aubergine);
+  background: var(--stitch-paper);
+}
+
+.stitch-shell .assess-page .checkup-zoom button.is-active {
+  border-color: transparent;
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+}
+
+.stitch-shell .assess-page .checkup-viewer {
+  background: var(--stitch-bone);
+  border-color: var(--stitch-ash);
+  border-radius: 20px;
+}
+
+.stitch-shell .assess-page .ocr-progress {
+  background: var(--stitch-ghost);
+  border-color: transparent;
+  border-radius: 20px;
+}
+
+.stitch-shell .assess-page .ocr-progress-head strong,
+.stitch-shell .assess-page .ocr-progress-steps li.is-at {
+  color: var(--stitch-aubergine);
+}
+
+.stitch-shell .assess-page .ocr-progress-bar {
+  background: #d5d0fb;
+}
+
+.stitch-shell .assess-page .ocr-progress-bar i,
+.stitch-shell .assess-page .ocr-progress-steps li.is-at .ocr-step-dot {
+  background: var(--stitch-aubergine);
+  box-shadow: none;
+}
+
+.stitch-shell .assess-page .ocr-progress-stream pre {
+  border-color: var(--stitch-ash);
+  background: var(--stitch-paper);
+}
+
+.stitch-shell .assess-page .record-list li {
+  border-bottom-color: var(--stitch-ash);
+}
+
+.stitch-shell .assess-page .record-type-mark {
+  border-radius: 100px;
+  color: var(--stitch-aubergine);
+  background: var(--stitch-ghost);
+}
+
+.stitch-shell .assess-page .record-list p {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+
+.stitch-shell .assess-page .record-row-actions button {
+  min-height: 44px;
+  border-radius: 100px;
+  border-color: transparent;
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+  padding: 8px 14px;
+}
+
+.stitch-shell .assess-history-list {
+  gap: 10px;
+}
+
+.stitch-shell .assess-history-list button {
+  border-radius: 24px;
+  border: 1px solid color-mix(in srgb, var(--stitch-ash) 80%, transparent);
+  background: var(--stitch-paper);
+  box-shadow: 0 8px 24px rgba(60, 49, 91, 0.06);
+}
+
+.stitch-shell .assess-history-list button:hover {
+  border-color: color-mix(in srgb, var(--stitch-periwinkle) 50%, var(--stitch-ash));
+  background: var(--stitch-paper);
+  box-shadow: 0 8px 24px rgba(60, 49, 91, 0.1);
+}
+
+.stitch-shell .assess-badge {
+  border: 0;
+  box-shadow: none;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  padding: 4px 10px;
+}
+
+.stitch-shell .assess-badge.level-very-high {
+  background: var(--stitch-blush);
+  color: var(--stitch-error-ink);
+}
+
+.stitch-shell .assess-badge.level-high {
+  background: color-mix(in srgb, var(--stitch-periwinkle) 34%, var(--stitch-paper));
+  color: var(--stitch-aubergine);
+}
+
+.stitch-shell .assess-badge.level-caution {
+  background: var(--stitch-buttercream);
+  color: var(--stitch-obsidian);
+}
+
+.stitch-shell .assess-badge.level-normal {
+  background: color-mix(in srgb, var(--stitch-mint) 16%, var(--stitch-paper));
+  color: var(--stitch-obsidian);
+}
+
+.stitch-shell .assess-badge.level-unknown {
+  background: var(--stitch-bone);
+  color: var(--stitch-fog);
+}
+
+.stitch-shell .assess-card.level-very-high,
+.stitch-shell .assess-card.level-high {
+  border-color: color-mix(in srgb, var(--stitch-blush) 70%, var(--stitch-ash));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--stitch-blush) 42%, var(--stitch-paper)) 0%, var(--stitch-paper) 56px);
+}
+
+.stitch-shell .assess-card.level-caution {
+  border-color: color-mix(in srgb, var(--stitch-buttercream) 80%, var(--stitch-ash));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--stitch-buttercream) 55%, var(--stitch-paper)) 0%, var(--stitch-paper) 56px);
+}
+
+.stitch-shell .assess-card.level-normal {
+  border-color: color-mix(in srgb, var(--stitch-mint) 35%, var(--stitch-ash));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--stitch-mint) 14%, var(--stitch-paper)) 0%, var(--stitch-paper) 56px);
+}
+
+.stitch-shell .trend-cell.level-very-high {
+  background: var(--stitch-blush);
+  color: var(--stitch-error-ink);
+}
+
+.stitch-shell .trend-cell.level-high {
+  background: color-mix(in srgb, var(--stitch-periwinkle) 34%, var(--stitch-paper));
+  color: var(--stitch-aubergine);
+}
+
+.stitch-shell .trend-cell.level-caution {
+  background: var(--stitch-buttercream);
+  color: var(--stitch-obsidian);
+}
+
+.stitch-shell .trend-cell.level-normal {
+  background: color-mix(in srgb, var(--stitch-mint) 16%, var(--stitch-paper));
+  color: var(--stitch-obsidian);
+}
+
+.stitch-shell .assess-preset {
+  border-radius: 100px;
+  min-height: 44px;
+  border-color: var(--stitch-ash);
+  color: var(--stitch-aubergine);
+  background: var(--stitch-paper);
+}
+
+.stitch-shell .assess-preset:hover {
+  color: var(--stitch-aubergine);
+  border-color: var(--stitch-periwinkle);
+  background: var(--stitch-ghost);
+}
+
+.stitch-shell .assess-preset.is-active {
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+  border-color: transparent;
+  box-shadow: 0 2px 6px rgba(171, 159, 242, 0.25);
+}
+
+.stitch-shell .assess-preset-note.is-warning {
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+  border-radius: 16px;
+}
+
+.stitch-shell .assess-page .assess-submit button,
+.stitch-shell .assess-page button[type="submit"],
+.stitch-shell .assess-page .button-primary {
+  border-radius: 100px;
+  min-height: 44px;
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+  border-color: transparent;
+  box-shadow: 0 0 24px rgba(171, 159, 242, 0.45), 0 0 8px rgba(226, 223, 254, 0.85);
+}
+
+.stitch-shell .assess-page .assess-submit button:hover:not(:disabled),
+.stitch-shell .assess-page button[type="submit"]:hover:not(:disabled),
+.stitch-shell .assess-page .button-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--stitch-periwinkle) 55%, var(--stitch-ghost));
+  box-shadow: 0 0 32px rgba(171, 159, 242, 0.65), 0 0 14px rgba(226, 223, 254, 1);
+}
+
+.stitch-shell .assess-page input,
+.stitch-shell .assess-page select,
+.stitch-shell .assess-page textarea {
+  border-color: var(--stitch-ash);
+  border-radius: 16px;
+  background: var(--stitch-paper);
+}
+
+.stitch-shell .assess-page .assess-field.is-from-document input,
+.stitch-shell .assess-page .assess-field.is-from-document select {
+  border-color: var(--stitch-periwinkle);
+  background: var(--stitch-ghost);
+}
+
+.stitch-shell .assess-page .assess-read-mark {
+  color: var(--stitch-aubergine);
+  background: var(--stitch-ghost);
+}
+
+.stitch-shell .assess-page .assess-missing,
+.stitch-shell .assess-page .assess-evidence-open {
+  color: var(--stitch-aubergine);
+}
+
+.stitch-shell .assess-page .assess-evidence-open {
+  background: var(--stitch-ghost);
+  border-color: transparent;
+  border-radius: 100px;
+}
+
+.stitch-shell .assess-page .engine-e2,
+.stitch-shell .assess-page .engine-e3 {
+  background: var(--stitch-ghost);
+  color: var(--stitch-aubergine);
+}
+
+@media (max-width: 980px) {
+  .stitch-shell .pain-diary-page {
+    padding: 16px 16px 48px;
+  }
+
+  .stitch-shell .pain-diary-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .stitch-shell .pain-diary-main {
+    padding: 0;
+  }
+}
+
+/* 가족 홈과 같은 봄이 런처 — 시안 셸(/)과 stitch 서브페이지가 공유한다. */
+.preview-shell .channel-talk-launcher,
+.app-shell.stitch-shell .channel-talk-launcher {
+  z-index: 1200;
+  bottom: 28px;
+  right: 28px;
+}
+
+.preview-shell .channel-talk-launcher-btn,
+.app-shell.stitch-shell .channel-talk-launcher-btn {
+  width: 62px;
+  height: 62px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--up15-aubergine, var(--stitch-aubergine, #3c315b));
+  box-shadow: none;
+}
+
+.preview-shell .channel-talk-launcher-btn:hover,
+.app-shell.stitch-shell .channel-talk-launcher-btn:hover {
+  box-shadow: none;
+}
+
+.preview-shell .channel-talk-launcher-btn.is-open,
+.app-shell.stitch-shell .channel-talk-launcher-btn.is-open {
+  background: transparent;
+  color: var(--up15-aubergine, var(--stitch-aubergine, #3c315b));
+  box-shadow: none;
+}
+
+.preview-shell .channel-talk-popover,
+.app-shell.stitch-shell .channel-talk-popover {
+  bottom: 104px;
+  right: 28px;
+  z-index: 1200;
+}
