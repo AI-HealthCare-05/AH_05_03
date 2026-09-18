@@ -1,0 +1,1278 @@
+/* 4K Large-Screen Variants & Variant Switcher Styles */
+
+/* Common Variant Switcher Bar — 기본 숨김, 상단 hover/focus 시 펼침 */
+.sp-variant-bar-dock {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  height: 0;
+}
+
+.sp-variant-bar {
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 10px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  box-sizing: border-box;
+  transform: translateY(calc(-100% + 12px));
+  transition: transform 0.2s ease;
+}
+
+.sp-variant-bar-dock:hover .sp-variant-bar,
+.sp-variant-bar-dock:focus-within .sp-variant-bar {
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sp-variant-bar {
+    transition: none;
+  }
+}
+
+.sp-variant-bar-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+}
+
+.sp-variant-bar-tag {
+  background: #3b82f6;
+  color: #ffffff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.sp-variant-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sp-variant-tab {
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: #334155;
+  color: #cbd5e1;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sp-variant-tab:hover {
+  background: #475569;
+  color: #ffffff;
+}
+
+.sp-variant-tab.active {
+  background: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+/* ============================================================
+   Variant 1: 3-Panel Workspace Layout
+   ============================================================ */
+.sp-v1-layout {
+  display: grid;
+  grid-template-columns: 310px 1fr 380px;
+  gap: 24px;
+  max-width: min(97vw, 3600px);
+  margin: 0 auto;
+  padding: 24px 32px 64px;
+  align-items: start;
+}
+
+.sp-v1-left-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sp-v1-member-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: #ffffff;
+  border: 1px solid var(--sp-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sp-v1-member-card:hover,
+.sp-v1-member-card.is-active {
+  border-color: var(--sp-primary);
+  background: #f8fafc;
+  box-shadow: 0 4px 12px rgba(29, 79, 184, 0.08);
+}
+
+.sp-v1-stream-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sp-v1-feed-item {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #ffffff;
+  border-left: 3px solid var(--sp-primary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+  font-size: 13px;
+}
+
+.sp-v1-feed-item.warning {
+  border-left-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.sp-v1-right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: sticky;
+  top: 90px;
+}
+
+.sp-v1-chat-widget {
+  background: #ffffff;
+  border: 1px solid var(--sp-border);
+  border-radius: var(--sp-radius);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  height: 580px;
+  overflow: hidden;
+}
+
+/* Variant 8: evidence-first health data workspace */
+.sp-v8-evidence-grid { display: grid; grid-template-columns: minmax(260px, 0.34fr) minmax(0, 1fr); gap: 24px; }
+.sp-v8-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 24px; box-shadow: 0 1px 4px rgba(15, 23, 42, .04); }
+.sp-v8-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.sp-v8-panel-heading h2 { margin: 3px 0 0; color: #0f172a; font-size: 18px; }
+.sp-v8-eyebrow { color: #1d4fb8; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+.sp-v8-count { border-radius: 999px; background: #eef2f7; color: #5b687e; padding: 4px 9px; font-size: 13px; font-weight: 700; }
+.sp-v8-empty { min-height: 220px; display: grid; place-content: center; gap: 8px; text-align: center; color: #5b687e; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 24px; }
+.sp-v8-empty strong { color: #334155; font-size: 15px; }.sp-v8-empty span { max-width: 440px; font-size: 13px; line-height: 1.6; }
+.sp-v8-document-list { display: grid; gap: 8px; }.sp-v8-document-list button { min-height: 56px; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; text-align: left; padding: 10px 12px; cursor: pointer; }
+.sp-v8-document-list button.is-active { border-color: #1d4fb8; background: #eff6ff; }.sp-v8-document-list strong,.sp-v8-document-list span { display: block; }.sp-v8-document-list span { margin-top: 4px; color: #5b687e; font-size: 11px; }
+.sp-v8-primary-button { min-height: 44px; border: 0; border-radius: 8px; padding: 0 16px; background: #1d4fb8; color: #fff; font-weight: 700; cursor: pointer; }
+.sp-v8-metadata { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1px; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 10px; background: #e2e8f0; }.sp-v8-metadata div { background: #f8fafc; padding: 12px; }.sp-v8-metadata dt { color: #5b687e; font-size: 11px; }.sp-v8-metadata dd { margin: 4px 0 0; color: #0f172a; font-size: 13px; overflow-wrap: anywhere; }
+.sp-v8-section-title { margin: 24px 0 10px; font-size: 14px; color: #0f172a; }.sp-v8-linked-record { display: grid; grid-template-columns: 1fr auto; gap: 6px 18px; border-top: 1px solid #e2e8f0; padding: 14px 0; }.sp-v8-linked-record div:first-child strong,.sp-v8-linked-record div:first-child span { display: block; }.sp-v8-linked-record div:first-child span,.sp-v8-linked-record time { color: #5b687e; font-size: 13px; }.sp-v8-values { grid-column: 1/-1; display: flex; flex-wrap: wrap; gap: 6px; }.sp-v8-values span { background: #eef2f7; border-radius: 5px; padding: 4px 7px; font-size: 11px; }
+.sp-v8-note { color: #5b687e; font-size: 13px; line-height: 1.6; }.sp-v8-lineage-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 10px; margin: 22px 0; }.sp-v8-stage { display: grid; gap: 6px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; }.sp-v8-stage>span { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: #1d4fb8; color: #fff; font-size: 11px; }.sp-v8-stage b { font-size: 18px; }.sp-v8-stage small { color: #5b687e; }
+.sp-v8-audit-summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }.sp-v8-audit-summary div { display: flex; justify-content: space-between; border: 1px solid #e2e8f0; border-radius: 9px; padding: 14px; font-size: 13px; }.sp-v8-audit-summary span { color: #5b687e; }.sp-v8-audit-summary .is-danger { color: #b42318; }.sp-v8-warning,.sp-v8-info { margin-top: 16px; border-radius: 8px; padding: 12px 14px; font-size: 13px; }.sp-v8-warning { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }.sp-v8-info { background: #eff6ff; color: #1d4fb8; border: 1px solid #bfdbfe; }
+@media (max-width: 900px) { .sp-v8-evidence-grid { grid-template-columns: 1fr; }.sp-v8-lineage-grid,.sp-v8-audit-summary { grid-template-columns: 1fr; } }
+
+.sp-v1-chat-header {
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #1d4fb8 0%, #2563eb 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sp-v1-chat-body {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #f8fafc;
+}
+
+.sp-v1-msg {
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 85%;
+}
+
+.sp-v1-msg.bomi {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  align-self: flex-start;
+  color: #1e293b;
+}
+
+.sp-v1-msg.user {
+  background: var(--sp-primary);
+  color: #ffffff;
+  align-self: flex-end;
+}
+
+.sp-v1-chat-input-bar {
+  padding: 12px 16px;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 8px;
+}
+
+.sp-v1-chat-input {
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  outline: none;
+}
+
+.sp-v1-chat-input:focus {
+  border-color: var(--sp-primary);
+}
+
+/* ============================================================
+   Variant 2: Fluid 4K Wide & 12-Month Extended Chart
+   ============================================================ */
+.sp-v2-container {
+  max-width: min(97vw, 3600px);
+  margin: 0 auto;
+  padding: 28px 36px 64px;
+}
+
+.sp-v2-wide-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.sp-v2-stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.sp-v2-stat-card {
+  background: #ffffff;
+  border: 1px solid var(--sp-border);
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+
+.sp-v2-stat-card .val {
+  font-size: 38px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  margin: 8px 0 4px;
+}
+
+/* ============================================================
+   Variant 3: 2D Dashboard + 3D Vanatome Split View
+   ============================================================ */
+.sp-v3-layout {
+  display: grid;
+  grid-template-columns: 1.25fr 0.75fr;
+  gap: 28px;
+  max-width: min(98vw, 3600px);
+  margin: 0 auto;
+  padding: 24px 32px 64px;
+  align-items: start;
+}
+
+.sp-v3-3d-panel {
+  position: sticky;
+  top: 90px;
+  background: #0f172a;
+  border-radius: 20px;
+  border: 1px solid #1e293b;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  height: calc(100vh - 120px);
+  min-height: 750px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sp-v3-3d-header {
+  padding: 16px 20px;
+  background: rgba(15, 23, 42, 0.8);
+  border-bottom: 1px solid #334155;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sp-v3-3d-canvas-box {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, #1e293b 0%, #0b0f19 100%);
+}
+
+.sp-v3-3d-overlay-badge {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid #38bdf8;
+  color: #e0f2fe;
+  padding: 12px 18px;
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  font-size: 13px;
+}
+
+/* ============================================================
+   Variant 4: Wallboard / TV Ambient Fullscreen
+   ============================================================ */
+.sp-v4-wallboard {
+  min-height: 100vh;
+  background: #f1f5f9;
+  padding: 24px 36px 48px;
+  max-width: 100%;
+}
+
+.sp-v4-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  background: #ffffff;
+  padding: 18px 32px;
+  border-radius: 16px;
+  border: 1px solid var(--sp-border);
+}
+
+.sp-v4-clock {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--sp-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.sp-v4-grid-4col {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.sp-v4-col {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sp-v4-card {
+  background: #ffffff;
+  border: 1px solid var(--sp-border);
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+
+.sp-v4-card-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ============================================================
+   Variant 5: Main Real Components Full-Width Fluid Layout (No Mockups)
+   ============================================================ */
+.sp-v5-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 100vh;
+  background: #f8fafc;
+  padding: 0 0 64px;
+  box-sizing: border-box;
+}
+
+.sp-v5-content {
+  width: 100%;
+  padding: 24px 32px 48px;
+  box-sizing: border-box;
+}
+
+.sp-v5-top-banner {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+  background: #ffffff;
+  padding: 24px 32px;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+}
+
+.sp-v5-title-zone h1 {
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 4px 0 6px;
+  letter-spacing: -0.02em;
+}
+
+.sp-v5-title-zone p {
+  color: #64748b;
+  font-size: 14px;
+  margin: 0;
+}
+
+.sp-v5-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sp-v5-member-strip-wrapper {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px 28px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+}
+
+.sp-v5-member-strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.sp-v5-member-strip-header h2 {
+  font-size: 17px;
+  font-weight: 800;
+  color: #1e293b;
+  margin: 0;
+}
+
+.sp-v5-member-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.sp-v5-member-grid .member-card {
+  margin: 0;
+  width: 100%;
+}
+
+.sp-v5-selected-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding: 0 4px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.sp-v5-selected-bar h2 {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.sp-v5-metric-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.sp-v5-metric-bar .metric-card {
+  min-width: 160px;
+  padding: 12px 20px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+}
+
+.sp-v5-main-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+}
+
+@media (min-width: 1360px) {
+  .sp-v5-main-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(480px, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+}
+
+.sp-v5-left-col {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.sp-v5-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+  position: sticky;
+  top: 70px;
+}
+
+.sp-v5-sticky-body-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+  padding: 16px;
+}
+
+.sp-v5-sticky-body-card .vanatome-card,
+.sp-v5-sticky-body-card .body-map-card {
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.sp-v5-sticky-body-card .vanatome-viewer,
+.sp-v5-sticky-body-card .body-map-viewer {
+  height: 560px !important;
+}
+
+.sp-v5-active-record-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+}
+
+.sp-v5-active-record-card h3 {
+  font-size: 16px;
+  font-weight: 750;
+  color: #1e293b;
+  margin: 0 0 10px;
+}
+
+.sp-v5-active-record-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.sp-v5-records-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  padding: 24px 28px;
+}
+
+.sp-v5-records-card .records-panel {
+  margin: 0;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+/* ============================================================
+   Variant 6: Seamless Tile Dashboard with Lock / Unlock
+   ============================================================ */
+.sp-v6-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 100vh;
+  background: #f8fafc;
+  padding: 0 0 64px;
+  box-sizing: border-box;
+}
+
+.sp-v6-content {
+  width: 100%;
+  padding: 20px 32px 48px;
+  box-sizing: border-box;
+}
+
+/* Lock / Unlock Control Bar */
+.sp-v6-control-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding: 14px 24px;
+  border-radius: 14px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  transition: all 0.2s ease;
+}
+
+.sp-v6-control-bar.is-unlocked {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.12);
+}
+
+.sp-v6-status-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sp-v6-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.sp-v6-status-badge.locked {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.sp-v6-status-badge.unlocked {
+  background: #3b82f6;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+  animation: sp-pulse 2s infinite ease-in-out;
+}
+
+@keyframes sp-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+.sp-v6-status-desc {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.sp-v6-control-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sp-v6-preset-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sp-v6-preset-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.sp-v6-lock-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sp-v6-lock-toggle-btn.btn-lock {
+  background: #0f172a;
+  color: #ffffff;
+  border: none;
+}
+
+.sp-v6-lock-toggle-btn.btn-lock:hover {
+  background: #1e293b;
+}
+
+.sp-v6-lock-toggle-btn.btn-unlock {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+}
+
+.sp-v6-lock-toggle-btn.btn-unlock:hover {
+  background: #1d4ed8;
+}
+
+/* Seamless Bento Grid Layout */
+.sp-v6-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 20px;
+  width: 100%;
+}
+
+/* Tile Shell */
+.sp-v6-tile {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* When Locked: ZERO evidence of being a customizable tile */
+.sp-v6-tile.is-locked {
+  border: 1px solid #e2e8f0;
+}
+
+/* When Unlocked: Visible edit handles and subtle dashed guide */
+.sp-v6-tile.is-unlocked {
+  border: 2px dashed #3b82f6;
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.12);
+  cursor: grab;
+}
+
+.sp-v6-tile.is-unlocked:active {
+  cursor: grabbing;
+}
+
+.sp-v6-tile.is-dragover {
+  border-color: #f59e0b;
+  background: #fffbeb;
+  transform: scale(0.99);
+}
+
+/* Tile Edit Bar (Only visible when unlocked) */
+.sp-v6-tile-edit-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #eff6ff;
+  border-bottom: 1px solid #bfdbfe;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.sp-v6-tile-drag-handle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: grab;
+}
+
+.sp-v6-tile-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sp-v6-tile-btn {
+  background: #ffffff;
+  border: 1px solid #93c5fd;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e40af;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.sp-v6-tile-btn:hover {
+  background: #dbeafe;
+}
+
+/* Tile Inner Content */
+.sp-v6-tile-body {
+  padding: 20px 24px;
+  flex: 1;
+}
+
+.sp-v6-tile-body.no-padding {
+  padding: 0;
+}
+
+/* Specific Tile Sizing Classes on 12-col grid */
+.col-span-12 { grid-column: span 12; }
+.col-span-8 { grid-column: span 8; }
+.col-span-7 { grid-column: span 7; }
+.col-span-6 { grid-column: span 6; }
+.col-span-5 { grid-column: span 5; }
+.col-span-4 { grid-column: span 4; }
+
+.sp-v6-tile .vanatome-card,
+.sp-v6-tile .body-map-card {
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.sp-v6-tile .vanatome-viewer,
+.sp-v6-tile .body-map-viewer {
+  height: 560px !important;
+}
+
+.sp-v6-tile .records-panel {
+  margin: 0;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+/* Members tile styling inside bento grid */
+.sp-v6-members-tile-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.col-span-4 .sp-v5-member-grid {
+  grid-template-columns: 1fr;
+}
+
+.col-span-6 .sp-v5-member-grid {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+/* ============================================================
+   Variant 7: Interactive Mouse Resizable Grid & Standard Sizes
+   ============================================================ */
+.col-span-3 { grid-column: span 3; }
+.col-span-9 { grid-column: span 9; }
+.col-span-10 { grid-column: span 10; }
+.col-span-11 { grid-column: span 11; }
+.col-span-2 { grid-column: span 2; }
+.col-span-1 { grid-column: span 1; }
+
+/* Force start a new row so tiles do not pull up into upper vacancies */
+.break-row {
+  grid-column-start: 1 !important;
+}
+
+.sp-v7-btn-active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #1d4ed8 !important;
+}
+
+/* Drag Resizer on Edge */
+.sp-v7-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 14px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.sp-v7-resize-handle::after {
+  content: "";
+  width: 4px;
+  height: 36px;
+  border-radius: 2px;
+  background: #93c5fd;
+  transition: all 0.15s ease;
+}
+
+.sp-v7-resize-handle:hover,
+.sp-v7-resize-handle.is-active {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.sp-v7-resize-handle:hover::after,
+.sp-v7-resize-handle.is-active::after {
+  background: #2563eb;
+  height: 60px;
+  width: 5px;
+}
+
+/* Col Stepper in Edit Bar */
+.sp-v7-col-stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 1px 4px;
+}
+
+.sp-v7-col-stepper button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1d4ed8;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+
+.sp-v7-col-stepper button:hover:not(:disabled) {
+  background: #dbeafe;
+}
+
+.sp-v7-col-stepper button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.sp-v7-col-value {
+  font-size: 11px;
+  font-weight: 750;
+  color: #1e3a8a;
+  min-width: 44px;
+  text-align: center;
+}
+
+/* Standard Spec Presets Selector */
+.sp-v7-spec-select {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid #93c5fd;
+  background: #ffffff;
+  color: #1e40af;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Density Profiles for Empty Space Management */
+.sp-v7-tile.density-dense {
+  padding: 0;
+}
+.sp-v7-tile.density-dense .sp-v6-tile-body {
+  padding: 10px 14px;
+}
+.sp-v7-tile.density-dense .records-panel {
+  padding: 12px 14px !important;
+}
+.sp-v7-tile.density-dense .record-list {
+  gap: 8px !important;
+}
+
+.sp-v7-tile.density-compact {
+  padding: 0;
+}
+.sp-v7-tile.density-compact .sp-v6-tile-body {
+  padding: 16px 20px;
+}
+
+.sp-v7-tile.density-spacious .sp-v6-tile-body {
+  padding: 28px 32px;
+}
+
+/* ============================================================
+   반응형 타일 시스템 (Responsive Bento Grid Specification)
+   - 4K 대화면 (≥ 1200px): 12컬럼 자유 리사이즈 & 자유 조립
+   - 태블릿 (768px ~ 1199px): 2열 분할 그리드 (6열 / 12열)
+   - 스마트폰 모바일 (≤ 768px): 1열 전폭(100%) 스택 + 최소 안전 스펙 보장
+   ============================================================ */
+
+/* 1. 태블릿 브레이크포인트 (768px ~ 1200px) */
+@media (max-width: 1200px) {
+  .sp-v6-bento-grid {
+    gap: 16px !important;
+  }
+  .col-span-7,
+  .col-span-8,
+  .col-span-9,
+  .col-span-10,
+  .col-span-11,
+  .col-span-12 {
+    grid-column: span 12 !important;
+  }
+  .col-span-3,
+  .col-span-4,
+  .col-span-5,
+  .col-span-6 {
+    grid-column: span 6 !important;
+  }
+}
+
+/* 2. 스마트폰 모바일 브레이크포인트 (≤ 768px) */
+@media (max-width: 768px) {
+  /* 상단 네비게이터 가로 스크롤 보장 */
+  .sp-variant-bar {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 8px 14px !important;
+    gap: 8px !important;
+  }
+  .sp-variant-tabs {
+    flex-shrink: 0 !important;
+  }
+
+  /* 상단 컨트롤 바 모바일 최적화 */
+  .sp-v6-controls-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    padding: 12px 14px !important;
+  }
+  .sp-v6-header-actions {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  .sp-v6-preset-btn {
+    font-size: 11px !important;
+    padding: 4px 8px !important;
+  }
+  .sp-v6-lock-toggle-btn {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 44px !important; /* 터치 타깃 44px */
+  }
+
+  /* 그리드 컨테이너 -> 1열(Single-Column) 세로 스택으로 강제 전환 */
+  .sp-v6-bento-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+    width: 100% !important;
+  }
+
+  /* 모든 타일: 강제 1열 전폭 (100%) 스택 */
+  .sp-v6-tile,
+  .sp-v7-tile {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    border-radius: 14px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* 모바일 안전 내부 패딩 (24px -> 14px~16px) */
+  .sp-v6-tile-body,
+  .sp-v6-members-tile-body,
+  .records-panel {
+    padding: 14px 16px !important;
+  }
+
+  /* 모바일 터치 스크롤 충돌 방지를 위해 리사이즈 핸들 숨김 */
+  .sp-v7-resize-handle {
+    display: none !important;
+  }
+
+  /* 타일 편집 바 모바일 압축 */
+  .sp-v6-tile-edit-bar {
+    padding: 6px 10px !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    font-size: 11px !important;
+  }
+  .sp-v6-tile-actions {
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+  }
+  .sp-v6-tile-btn {
+    padding: 3px 6px !important;
+    font-size: 11px !important;
+  }
+  .sp-v7-col-stepper {
+    padding: 1px 3px !important;
+  }
+  .sp-v7-spec-select {
+    font-size: 11px !important;
+  }
+
+  /* 타일 내부 1: 가족 구성원 선택 (가로 스크롤 스트립 Swiper) */
+  .sp-v7-tile[data-tile-id="members"] .sp-v5-member-grid,
+  .sp-v6-tile[data-tile-id="members"] .sp-v5-member-grid,
+  .sp-v5-member-grid {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding-bottom: 6px !important;
+    gap: 10px !important;
+  }
+  .sp-v5-member-grid .member-card {
+    flex: 0 0 160px !important;
+    min-width: 160px !important;
+    width: 160px !important;
+    margin: 0 !important;
+  }
+  .sp-v5-member-strip-header {
+    margin-bottom: 10px !important;
+  }
+  .sp-v5-member-strip-header span {
+    display: none !important; /* 모바일에서 긴 부제 숨김 */
+  }
+
+  /* 타일 내부 2: 모니터링 매트릭스 표 (가로 스크롤 보장) */
+  .sp-v7-tile[data-tile-id="monitoring"] .sp-v6-tile-body,
+  .sp-v6-tile[data-tile-id="monitoring"] .sp-v6-tile-body,
+  .monitoring-table-container,
+  .family-monitoring-grid {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* 타일 내부 3: 3D 인체 해부도 모바일 수직 스택 & 터치 영역 확보 */
+  .sp-v7-tile[data-tile-id="bodymap"] .vanatome-grid,
+  .sp-v6-tile[data-tile-id="bodymap"] .vanatome-grid,
+  .vanatome-card,
+  .body-map-card {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+  .sp-v7-tile[data-tile-id="bodymap"] canvas,
+  .sp-v6-tile[data-tile-id="bodymap"] canvas {
+    min-height: 380px !important;
+    height: 380px !important;
+    touch-action: none !important;
+  }
+
+  /* 타일 내부 4: 최근 건강기록 및 판정 근거 (100% 전폭 리스트) */
+  .record-list {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .record-card {
+    width: 100% !important;
+    min-height: 44px !important;
+  }
+
+  /* 타일 내부 5: 건강 수치 추적 대시보드 10대 지표 (모바일 2열 미니 그리드) */
+  .sp-v7-tile[data-tile-id="trends"] .trend-grid,
+  .sp-v7-trends-tile-body .trend-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+  .sp-v7-trends-tile-body .trend-card {
+    padding: 8px 10px 4px !important;
+  }
+}
+
+/* Trends Tile Base Styles */
+.sp-v7-trends-tile-body .trend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.sp-v7-trends-tile-body .trend-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 14px 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+/* Phase 1: Single Metric & Family Comparison Tile Styles */
+.sp-v7-single-metric-tile-body,
+.sp-v7-family-comparison-tile-body {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.single-metric-card-container .trend-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+
+.sp-free-tile .single-metric-card-container .trend-card,
+.sp-free-layout.is-locked .single-metric-card-container .trend-card {
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 8px 0 !important;
+  background: transparent !important;
+}
+
+.family-comparison-chart-container svg {
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #f1f5f9;
+}
+
+.sp-free-tile .family-comparison-chart-container svg,
+.sp-free-layout.is-locked .family-comparison-chart-container svg {
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+/* 3. 소형 스마트폰 (≤ 430px) */
+@media (max-width: 430px) {
+  .sp-v6-tile-body,
+  .sp-v6-members-tile-body,
+  .records-panel {
+    padding: 12px 12px !important;
+  }
+  .sp-v5-member-grid .member-card {
+    flex: 0 0 145px !important;
+    min-width: 145px !important;
+    width: 145px !important;
+  }
+  .sp-v7-tile[data-tile-id="trends"] .trend-grid,
+  .sp-v7-trends-tile-body .trend-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

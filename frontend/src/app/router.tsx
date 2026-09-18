@@ -19,7 +19,26 @@ import {
   LandingV2Page,
   PainDiaryPage,
   UiPreviewPage,
+  UiPreview1Page,
+  UiPreview2Page,
+  UiPreview3Page,
+  UiPreview4Page,
+  UiPreview5Page,
+  UiPreview6Page,
+  UiPreview7Page,
+  UiPreview8Page,
+  UiPreview9Page,
+  UiPreview10Page,
+  UiPreview11Page,
+  UiPreview12Page,
+  UiPreview13Page,
+  UiPreview14Page,
+  UiPreview15Page,
+  UiPreview16Page,
+  UiPreview17Page,
+  UiPreview18Page,
 } from "./lazyRoutes";
+import { LOCAL_HOME_IS_PREVIEW18 } from "./localHomeSwap";
 import { RootLayout } from "./RootLayout";
 
 export const router = createBrowserRouter([
@@ -80,7 +99,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <HomePage />,
+        element: LOCAL_HOME_IS_PREVIEW18 ? <UiPreview18Page /> : <HomePage />,
       },
       {
         path: "members/:profileId",
@@ -157,6 +176,78 @@ export const router = createBrowserRouter([
         // 링크를 뺐어도 주소는 살아 있으므로 링크를 빼는 것으로는 막히지 않는다.
         path: "ui-preview",
         element: <UiPreviewPage />,
+      },
+      {
+        path: "ui-preview1",
+        element: <UiPreview1Page />,
+      },
+      {
+        path: "ui-preview2",
+        element: <UiPreview2Page />,
+      },
+      {
+        path: "ui-preview3",
+        element: <UiPreview3Page />,
+      },
+      {
+        path: "ui-preview4",
+        element: <UiPreview4Page />,
+      },
+      {
+        path: "ui-preview5",
+        element: <UiPreview5Page />,
+      },
+      {
+        path: "ui-preview6",
+        element: <UiPreview6Page />,
+      },
+      {
+        path: "ui-preview7",
+        element: <UiPreview7Page />,
+      },
+      {
+        path: "ui-preview8",
+        element: <UiPreview8Page />,
+      },
+      {
+        path: "ui-preview9",
+        element: <UiPreview9Page />,
+      },
+      {
+        path: "ui-preview10",
+        element: <UiPreview10Page />,
+      },
+      {
+        path: "ui-preview11",
+        element: <UiPreview11Page />,
+      },
+      {
+        path: "ui-preview12",
+        element: <UiPreview12Page />,
+      },
+      {
+        path: "ui-preview13",
+        element: <UiPreview13Page />,
+      },
+      {
+        path: "ui-preview14",
+        element: <UiPreview14Page />,
+      },
+      {
+        path: "ui-preview15",
+        element: <UiPreview15Page />,
+      },
+      {
+        path: "ui-preview16",
+        element: <UiPreview16Page />,
+      },
+      {
+        path: "ui-preview17",
+        element: <UiPreview17Page />,
+      },
+      {
+        path: "ui-preview18",
+        element: LOCAL_HOME_IS_PREVIEW18 ? <HomePage /> : <UiPreview18Page />,
       },
       // 레이아웃 안에서 잡는 404. 헤더와 내비게이션이 남아 있어야 사용자가
       // 막다른 길에 서지 않는다. 주소를 잘못 친 경우도 여기로 온다.

@@ -1,0 +1,502 @@
+.sp-v3-free-root { min-height: 100vh; background: #f4f7fb; }
+.sp-v3-free-page { width: min(100% - 48px, 2200px); margin: 0 auto; padding: 28px 0 64px; }
+.sp-v3-free-intro { display: flex; justify-content: space-between; align-items: end; margin-bottom: 20px; }
+.sp-v3-free-intro span { color: #1d4fb8; font-size: 11px; font-weight: 800; letter-spacing: .09em; }
+.sp-v3-free-intro h1 { margin: 5px 0; font-size: 32px; color: #0f172a; }.sp-v3-free-intro p,.sp-v3-free-intro time { margin: 0; color: #5b687e; font-size: 13px; }
+.sp-free-layout {
+  border: 1px solid #dbe3ef;
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(15,23,42,.05);
+}
+
+.sp-free-toolbar {
+  min-height: 66px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 18px;
+  border-bottom: 1px solid #dbe3ef;
+  background: #fff;
+}
+.sp-free-toolbar strong,
+.sp-free-toolbar span { display: block; }
+.sp-free-toolbar strong { color: #0f172a; font-size: 14px; }
+.sp-free-toolbar span { margin-top: 3px; color: #5b687e; font-size: 11px; }
+.sp-free-toolbar>div:last-child { display: flex; gap: 8px; }
+.sp-free-toolbar button { min-height: 44px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #334155; padding: 0 14px; font-weight: 700; cursor: pointer; }
+.sp-free-toolbar button.primary { border-color: #1d4fb8; background: #1d4fb8; color: #fff; }
+.sp-free-toolbar button:disabled { opacity: .45; cursor: default; }
+
+.sp-free-canvas {
+  position: relative;
+  width: 100%;
+  min-height: 760px;
+  background-color: #f8fbff;
+  background-image: radial-gradient(circle,#9acdf3 1.25px,transparent 1.35px);
+  background-size: calc((100% + 12px)/12) 44px;
+  touch-action: none;
+  overflow: hidden;
+}
+
+/* 잠금(Locked) 상태: 캔버스 배경과 타일이 완전히 일체화되고, 테두리·그림자·이음새가 감쪽같이 사라짐 */
+.sp-free-layout.is-locked {
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+}
+
+.sp-free-layout.is-locked .sp-free-toolbar {
+  border-bottom: 1px solid #f1f5f9;
+  background: #ffffff;
+}
+
+.sp-free-layout.is-locked .sp-free-canvas {
+  background-image: none !important;
+  background-color: #ffffff !important;
+}
+
+.sp-free-tile,
+.sp-free-preview {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 12px;
+}
+
+.sp-free-tile {
+  display: flex;
+  flex-direction: column;
+  z-index: 2;
+  border: 1px solid #dbe3ef;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(15,23,42,.06);
+  overflow: hidden;
+  transition: box-shadow .15s ease;
+}
+
+.is-editing .sp-free-tile {
+  border-style: dashed;
+  border-color: #73b7ef;
+}
+
+.is-editing .sp-free-tile:hover {
+  box-shadow: 0 8px 24px rgba(15,23,42,.1);
+}
+
+/* 잠금 모드: 테두리, 그림자, 모서리 곡률 완전 제거하여 타일간 이음새가 감쪽같이 사라지도록 일체화 */
+.sp-free-layout.is-locked .sp-free-tile {
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  background: #ffffff !important;
+  transition: none !important;
+}
+
+.sp-free-layout.is-locked .sp-free-tile:hover {
+  box-shadow: none !important;
+}
+
+/* 타일 내부 컴포넌트들의 개별 테두리/그림자/외부마진 무력화 (타일 및 캔버스와 완벽 일체화) */
+.sp-free-tile .vanatome-card,
+.sp-free-tile .body-map-card,
+.sp-free-tile .family-monitoring-workspace,
+.sp-free-tile .records-panel,
+.sp-free-tile .sp-modern-card,
+.sp-free-tile .trend-card,
+.sp-free-tile .single-metric-card-container,
+.sp-free-tile .single-metric-card-container .trend-card,
+.sp-free-tile .single-metric-chart-wrap,
+.sp-free-tile .family-comparison-chart-container,
+.sp-free-tile .family-comparison-chart-container svg {
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  background: transparent !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  border-radius: 0 !important;
+}
+
+.sp-free-tile .vanatome-viewer,
+.sp-free-tile .body-map-viewer {
+  height: 560px !important;
+}
+
+.sp-free-layout.is-locked .sp-free-content {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.sp-free-tile-controls {
+  flex: 0 0 auto;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 3px 8px;
+  border-bottom: 1px solid #bfdbfe;
+  background: #eff6ff;
+  flex-wrap: wrap;
+}
+
+.sp-free-drag {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 100px;
+  border: 0;
+  background: transparent;
+  color: #1d4fb8;
+  padding: 2px 4px;
+  cursor: grab;
+  font-weight: 800;
+  font-size: 13px;
+  text-align: left;
+}
+
+.sp-free-drag:active {
+  cursor: grabbing;
+}
+
+.sp-free-drag span {
+  font-size: 13px;
+  line-height: 1;
+  color: #3b82f6;
+}
+
+.sp-free-drag strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 0.25배, 0.5배, 1배 가로 프리셋 버튼군 */
+.sp-free-scale-group {
+  display: inline-flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 1px;
+  gap: 1px;
+  height: 26px;
+  box-sizing: border-box;
+}
+
+.sp-free-scale-btn {
+  border: none;
+  background: transparent;
+  padding: 0 7px;
+  height: 100%;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e3a8a;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.sp-free-scale-btn:hover:not(.active) {
+  background: #dbeafe;
+  color: #1d4fb8;
+}
+
+.sp-free-scale-btn.active {
+  background: #1d4fb8;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(29, 79, 184, 0.35);
+}
+
+/* 가로/세로 미세 스텝퍼 */
+.sp-free-stepper {
+  display: inline-flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  height: 26px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.sp-free-stepper-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  padding-left: 5px;
+}
+
+.sp-free-stepper button {
+  background: transparent;
+  border: none;
+  padding: 0 7px;
+  height: 100%;
+  font-size: 13px;
+  font-weight: 800;
+  color: #1d4fb8;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.sp-free-stepper button:hover:not(:disabled) {
+  background: #eff6ff;
+  color: #1d4fb8;
+}
+
+.sp-free-stepper button:disabled {
+  color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.sp-free-stepper-val {
+  font-size: 11px;
+  font-weight: 700;
+  color: #0f172a;
+  min-width: 32px;
+  text-align: center;
+  user-select: none;
+}
+
+/* 차트 내용물 축소/확대 배율 (Zoom: 50%, 75%, 100%) */
+.sp-free-zoom-group {
+  display: inline-flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  height: 26px;
+  padding: 1px 3px;
+  gap: 2px;
+  box-sizing: border-box;
+}
+
+.sp-free-zoom-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  margin-right: 1px;
+}
+
+.sp-free-zoom-btn {
+  border: none;
+  background: transparent;
+  padding: 0 5px;
+  height: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sp-free-zoom-btn:hover:not(.active) {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.sp-free-zoom-btn.active {
+  background: #0284c7;
+  color: #ffffff;
+  font-weight: 800;
+}
+
+/* 위치 미세 이동 (상하좌우) */
+.sp-free-nudge-group {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #ffffff;
+  height: 26px;
+}
+
+.sp-free-nudge-group button {
+  border: none;
+  border-left: 1px solid #e2e8f0;
+  background: transparent;
+  padding: 0 6px;
+  height: 100%;
+  color: #1d4fb8;
+  font-weight: 800;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.sp-free-nudge-group button:first-child {
+  border-left: none;
+}
+
+.sp-free-nudge-group button:hover {
+  background: #dbeafe;
+}
+
+.sp-free-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #93c5fd #f8fafc;
+}
+
+.sp-free-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.sp-free-content::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 4px;
+}
+
+.sp-free-content::-webkit-scrollbar-thumb {
+  background: #93c5fd;
+  border-radius: 4px;
+}
+
+/* 리사이즈 핸들: 좌측, 우측, 하단, 코너 */
+.sp-free-resize-left {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 14px;
+  width: 14px;
+  border: 0;
+  background: transparent;
+  cursor: ew-resize;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 2px;
+  transition: background 0.15s ease;
+}
+
+.sp-free-resize-left::after {
+  content: "⋮";
+  font-size: 11px;
+  font-weight: 800;
+  color: #94a3b8;
+  opacity: 0.45;
+  transition: color 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
+}
+
+.sp-free-resize-left:hover,
+.sp-free-resize-left:active {
+  background: rgba(29, 79, 184, 0.18);
+  border-left: 3px solid #1d4fb8;
+}
+
+.sp-free-resize-left:hover::after,
+.sp-free-resize-left:active::after {
+  color: #1d4fb8;
+  opacity: 1;
+  transform: scale(1.25);
+}
+
+.sp-free-resize-right {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 14px;
+  width: 14px;
+  border: 0;
+  background: transparent;
+  cursor: ew-resize;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 2px;
+  transition: background 0.15s ease;
+}
+
+.sp-free-resize-right::after {
+  content: "⋮";
+  font-size: 11px;
+  font-weight: 800;
+  color: #94a3b8;
+  opacity: 0.45;
+  transition: color 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
+}
+
+.sp-free-resize-right:hover,
+.sp-free-resize-right:active {
+  background: rgba(29, 79, 184, 0.18);
+  border-right: 3px solid #1d4fb8;
+}
+
+.sp-free-resize-right:hover::after,
+.sp-free-resize-right:active::after {
+  color: #1d4fb8;
+  opacity: 1;
+  transform: scale(1.25);
+}
+
+.sp-free-resize-bottom {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 12px;
+  border: 0;
+  background: transparent;
+  cursor: ns-resize;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+
+.sp-free-resize-bottom::after {
+  content: "";
+  width: 44px;
+  height: 3px;
+  background: #cbd5e1;
+  border-radius: 2px;
+  transition: background 0.15s ease, width 0.15s ease;
+}
+
+.sp-free-resize-bottom:hover,
+.sp-free-resize-bottom:active {
+  background: rgba(29, 79, 184, 0.15);
+  border-bottom: 2px solid #1d4fb8;
+}
+
+.sp-free-resize-bottom:hover::after,
+.sp-free-resize-bottom:active::after {
+  background: #1d4fb8;
+  width: 64px;
+}
+
+.sp-free-resize-corner {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  background: linear-gradient(135deg, transparent 0 48%, #1d4fb8 49% 56%, transparent 57% 65%, #1d4fb8 66% 73%, transparent 74%);
+  cursor: nwse-resize;
+  z-index: 20;
+}
+.sp-free-preview { z-index: 20; display: grid; place-items: center; border: 2px solid; pointer-events: none; }.sp-free-preview.is-allowed { border-color: #1d4fb8; background: rgba(29,79,184,.14); color: #1d4fb8; }.sp-free-preview.is-blocked { border-color: #b42318; background: rgba(180,35,24,.16); color: #b42318; }.sp-free-preview span { border-radius: 6px; background: #fff; padding: 6px 10px; font-size: 13px; font-weight: 800; }
+.sp-free-panel { height: 100%; box-sizing: border-box; padding: 16px; background: #fff; }.sp-free-panel h2 { margin: 0 0 12px; color: #0f172a; font-size: 16px; }.sp-free-panel.is-warning { background: #fffaf4; }.sp-free-panel.is-dark { background: #071827; color: #fff; }.sp-free-panel.is-dark h2 { color: #fff; }
+.sp-free-action-row { min-height: 48px; width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 8px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; padding: 0 12px; color: #334155; cursor: pointer; }.sp-free-action-row b { color: #1d4fb8; font-size: 11px; }
+.sp-free-family { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }.sp-free-family div { display: grid; place-items: center; gap: 4px; text-align: center; }.sp-free-family div>span { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: #dbeafe; color: #1d4fb8; font-weight: 800; }.sp-free-family strong { font-size: 13px; }.sp-free-family small { color: #5b687e; font-size: 11px; }
+.sp-free-body { display: grid; place-items: center; text-align: center; gap: 8px; }.sp-free-silhouette { height: 250px; display: grid; place-items: center; color: #5ee7f1; font-size: 210px; line-height: 1; text-shadow: 0 0 30px #22d3ee; }.sp-free-body b { color: #ffb650; }.sp-free-body p { color: #b8c5d1; font-size: 13px; line-height: 1.55; }.sp-free-body button { min-height: 44px; border: 1px solid #5b687e; border-radius: 8px; background: #102b3c; color: #fff; padding: 0 16px; }
+.sp-free-metric strong { display: block; color: #0f172a; font-size: 30px; }.sp-free-metric span { color: #5b687e; font-size: 13px; }.sp-free-metric svg { width: 100%; height: 100px; margin-top: 8px; color: #1d4fb8; }.sp-free-progress>strong { color: #1d4fb8; }.sp-free-progress>div { height: 8px; margin: 12px 0; border-radius: 99px; background: #dbeafe; overflow: hidden; }.sp-free-progress i { display: block; width: 66%; height: 100%; background: #1d4fb8; }.sp-free-progress p { margin: 8px 0; font-size: 13px; }.sp-free-focus-card { width: 100%; min-height: 90px; display: grid; grid-template-columns: 1fr auto; align-items: center; border: 1px solid #bfdbfe; border-radius: 10px; background: #eff6ff; color: #0f172a; padding: 14px; text-align: left; cursor: pointer; }.sp-free-focus-card strong { grid-row: 1/3; grid-column: 2; color: #1d4fb8; font-size: 27px; }.sp-free-focus-card small { color: #5b687e; }.sp-free-records { margin: 0; padding: 0; list-style: none; }.sp-free-records li { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid #e2e8f0; font-size: 13px; }.sp-free-records span { color: #5b687e; }
+@media (max-width: 900px) { .sp-v3-free-page { width: min(100% - 24px,2200px); }.sp-free-canvas { overflow-x: auto; }.sp-free-toolbar,.sp-v3-free-intro { align-items: flex-start; flex-direction: column; gap: 12px; padding-block: 12px; } }
