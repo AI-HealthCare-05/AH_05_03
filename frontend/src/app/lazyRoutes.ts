@@ -85,6 +85,9 @@ export const UiPreview17Page = lazy(() =>
 export const UiPreview18Page = lazy(() =>
   import("../features/ui-preview/variants/UiPreview18Page").then((m) => ({ default: m.UiPreview18Page })),
 );
+export const HealthData3Page = lazy(() =>
+  import("../features/health-data/HealthData3Page").then((m) => ({ default: m.HealthData3Page })),
+);
 export const AccountPage = lazy(() =>
   import("../features/account/AccountPage").then((m) => ({ default: m.AccountPage })),
 );

@@ -17,6 +17,7 @@ const ROUTE_LOADERS: ReadonlyArray<readonly [prefix: string, load: Loader]> = [
   ["/assessment", () => import("../features/assessment/AssessmentPage")],
   ["/pain-diary", () => import("../features/pain-diary/PainDiaryPage")],
   ["/health-data", () => import("../features/health-data/HealthDataPage")],
+  ["/health-data3", () => import("../features/health-data/HealthData3Page")],
   ["/account", () => import("../features/account/AccountPage")],
   ["/challenge", () => import("../features/challenge/ChallengeSetupPage")],
   ["/data", () => import("../features/data/DataManagementPage")],
