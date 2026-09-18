@@ -13,6 +13,10 @@ export interface SearchResultItem {
   description: string;
   category: "anatomy" | "dental";
   approxPoint?: [number, number, number];
+  fallbackTarget?: SearchResultItem;
+  isCompound?: boolean;
+  childMeshIds?: string[];
+  has3DMesh?: boolean;
 }
 
 interface AnatomySearchDrawerProps {

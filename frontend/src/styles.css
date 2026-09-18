@@ -1968,6 +1968,11 @@ main:focus {
   max-height: 100%;
 }
 
+.has-drawer-mode.is-drawer-open .vanatome-drawer-menu-icon,
+.vanatome-drawer-menu-icon[hidden] {
+  display: none !important;
+}
+
 .vanatome-viewer {
   height: clamp(620px, 75vh, 860px);
   min-height: 620px;

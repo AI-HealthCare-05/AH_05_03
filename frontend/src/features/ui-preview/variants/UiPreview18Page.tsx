@@ -264,6 +264,7 @@ export function UiPreview18Page() {
   const [documentSets, setDocumentSets] = useState<MedicalDocumentSet[]>([]);
   const [openDocumentSet, setOpenDocumentSet] = useState<MedicalDocumentSet>();
   const [selectedOrgan] = useState<string>("stomach"); // 컨셉안: 명치/소화기계
+  const [isDarkBodyBg, setIsDarkBodyBg] = useState(false);
 
   // 타임라인 반응형 동적 일수 및 자정 롤오버 상태
   const [dateOffsetDays, setDateOffsetDays] = useState(0);
@@ -1113,6 +1114,9 @@ export function UiPreview18Page() {
                     gender={activeProfile?.gender}
                     risks={bodyRisks}
                     highlightOrganKey={selectedOrgan}
+                    isDarkBg={isDarkBodyBg}
+                    onDarkBgChange={setIsDarkBodyBg}
+                    drawerMode={true}
                   />
                 </Suspense>
               </div>
