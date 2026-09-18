@@ -43,7 +43,7 @@ describe("StitchAppHeader", () => {
       "가족 홈",
       "통증 다이어리",
       "위험 판정 / 리포트",
-      "건강 데이터",
+      "건강 데이터 3",
     ]);
     expect(within(nav).getByRole("link", { name: "통증 다이어리" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: /계정 관리/u })).toHaveTextContent("오성민(test@example.com)");
