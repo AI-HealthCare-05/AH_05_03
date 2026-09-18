@@ -8,10 +8,9 @@ import {
 } from "./localHomeSwap";
 
 describe("isPreviewShellPath", () => {
-  it("vite 개발에서는 루트가 기존 홈 셸이고 ui-preview18 은 시안 셸이다", () => {
-    if (LOCAL_HOME_IS_PREVIEW18) return;
-    expect(isPreviewShellPath("/")).toBe(false);
-    expect(isPreviewShellPath("/ui-preview18")).toBe(true);
+  it("루트(/)는 시안 18 셸이고 ui-preview18 은 기존 홈 셸이다", () => {
+    expect(isPreviewShellPath("/")).toBe(true);
+    expect(isPreviewShellPath("/ui-preview18")).toBe(false);
     expect(isPreviewShellPath("/ui-preview17")).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
-/** nginx 배포 번들에서 시안 18을 `/`에, vite 개발(`/`·5173)에서 기존 홈을 `/`에 둔다. */
-export const LOCAL_HOME_IS_PREVIEW18 = !import.meta.env.DEV;
+/** 시안 18(새 UI)을 기본 홈(`/`)에 두고, 기존 가족 홈은 `/ui-preview18`에 둔다. */
+export const LOCAL_HOME_IS_PREVIEW18 = true;
 
 export function isPreviewShellPath(pathname: string): boolean {
   if (LOCAL_HOME_IS_PREVIEW18) {
