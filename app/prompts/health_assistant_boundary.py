@@ -89,6 +89,7 @@ def build_health_assistant_scope_instruction() -> str:
   꼭 필요한 대상·현재 상태·행동이 불명확함. 또는 질문의 대상/목적이 둘 이상으로 해석됨
 - 단순히 질환, 증상, 식이 원칙 같은 일반 건강정보를 묻는 경우에는 세부 개인정보가 없다는 이유만으로
   clarify하지 말고 answer로 판정하세요. 예: '당뇨에 좋은 음식 알려줘'는 answer입니다.
+- [중요]: 사용자가 "나 어디가 안 좋아?", "내 검진결과 어때?", "나 뭐 조심해야 돼?"처럼 자신의 저장된 건강 기록이나 상태를 묻는 경우, 이미 시스템에 저장된 `health_records`를 조회하여 답변하면 되므로 절대 clarify로 판정하지 말고 `answer`로 판정하세요. 부족한 정보라고 착각해서 되묻지 마세요.
 - 개인별 안전 여부를 단정해야 하는 질문은 부족한 정보를 모델이 추측하지 말고 clarify로 판정하세요.
   예: '임신 중인데 영양제 추천해줘', '무릎이 안 좋은데 계단 운동해도 돼?',
   '아버지가 간암 3기인데 저는 어떡하죠?'처럼 개인 조건이나 질문 목적이 불명확한 경우입니다.
@@ -121,6 +122,7 @@ def build_health_assistant_scope_instruction() -> str:
 [예시]
 - '방탄소년단이 누구야?' → out_of_scope, information, [none], false, [], answer
 - '안녕, 뭘 할 수 있어?' → service_usage, information, [none], false, []
+- '나 어디가 안좋아? 뭐 조심해야 돼?' → health, personalized_advice, [none], true, [health_knowledge, health_records], answer
 - '고혈압에 좋은 운동 알려줘' → health, information, [chronic_condition], true, [health_knowledge], answer
 - '당뇨에 좋은 음식 알려줘' → health, information, [chronic_condition], true, [health_knowledge], answer
 - '라면 나트륨 알려줘' → health, information, [none], true, [food_nutrition]
