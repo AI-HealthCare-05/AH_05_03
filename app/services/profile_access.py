@@ -16,7 +16,7 @@ from app.exceptions import (
 )
 from app.models.guardians import GuardianLinkKind
 from app.models.households import HouseholdStatus
-from app.models.profiles import CapabilityGrant, FamilyProfile, LifecycleStatus, MemberRole
+from app.models.profiles import CapabilityGrant, FamilyProfile, LifecycleStatus, MemberRole, OwnershipType
 from app.models.service_accounts import ServiceAccount
 from app.repositories.guardian_repository import GuardianRepository
 from app.repositories.household_repository import HouseholdRepository
@@ -70,7 +70,10 @@ async def build_context(
     legal = await guardian_repo.legal_status_for_account(profile.id, account.id, now=now)
     high_risk_suspended = False
     share_scopes: tuple[str, ...] = ()
-    if profile.adult_transitioned_at is None and profile.adult_transition_pending_at is not None:
+    # 민법상 성년 대기는 보호자 관리형만 민감기록을 멈춘다. 본인 슬롯(local_slot)
+    # 에 생년만 있으면 가구 마스터의 통증·판정까지 같이 403 이 난다.
+    pending_majority = profile.adult_transitioned_at is None and profile.adult_transition_pending_at is not None
+    if pending_majority and profile.ownership_type is OwnershipType.GUARDIAN_MANAGED:
         high_risk_suspended = True
     elif profile.adult_transitioned_at is not None and profile.claimed_account_id != account.id:
         share = await guardian_repo.find_link(profile.id, account.id, GuardianLinkKind.PRODUCT_GUARDIAN)
