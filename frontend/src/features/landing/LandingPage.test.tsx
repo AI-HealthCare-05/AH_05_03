@@ -27,7 +27,11 @@ function landingSourceFiles(directory: string): string[] {
   return entries.flatMap((entry) => {
     const path = resolve(directory, entry.name);
     if (entry.isDirectory()) return landingSourceFiles(path);
-    if (!/\.tsx?$/u.test(entry.name) || entry.name.endsWith(".test.ts") || entry.name.endsWith(".test.tsx")) {
+    if (
+      !/\.tsx?$/u.test(entry.name) ||
+      entry.name.endsWith(".test.ts") ||
+      entry.name.endsWith(".test.tsx")
+    ) {
       return [];
     }
     return [path];
@@ -50,7 +54,10 @@ describe("랜딩페이지 경계", () => {
       const source = readFileSync(file, "utf8");
       for (const token of forbidden) {
         // import 문에서만 본다. 주석에서 이름을 언급하는 것은 막을 이유가 없다.
-        const pattern = new RegExp(`^\\s*import[^;]*${token.replace(/[/.]/gu, "\\$&")}`, "mu");
+        const pattern = new RegExp(
+          `^\\s*import[^;]*${token.replace(/[/.]/gu, "\\$&")}`,
+          "mu",
+        );
         if (pattern.test(source)) offenders.push(`${file} → ${token}`);
       }
     }
@@ -67,8 +74,19 @@ describe("랜딩페이지 이야기", () => {
       </MemoryRouter>,
     );
 
-    const headings = screen.getAllByRole("heading", { level: 2 }).map((node) => node.textContent ?? "");
-    const order = ["검진표", "숫자는 어렵지만", "몸 위에", "알기만 하는", "작은 기록이", "내 건강에서", "물어보면", "오늘부터"];
+    const headings = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((node) => node.textContent ?? "");
+    const order = [
+      "검진표",
+      "숫자는 어렵지만",
+      "몸 위에",
+      "알기만 하는",
+      "작은 기록이",
+      "내 건강에서",
+      "물어보면",
+      "오늘부터",
+    ];
     for (const [index, fragment] of order.entries()) {
       expect(headings[index], `${index}번째 제목`).toContain(fragment);
     }
@@ -81,8 +99,15 @@ describe("랜딩페이지 이야기", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("흩어진 건강 기록을");
-    expect(screen.getAllByRole("link", { name: "이어봄 시작하기" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "흩어진 건강 기록을",
+    );
+    expect(
+      screen.getAllByRole("link", { name: "이어봄 시작하기" }).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("button", { name: /봄이/u }),
+    ).not.toBeInTheDocument();
   });
 
   it("로그인 링크는 / 가 아니라 /signin 이다 — / 는 다시 소개로 비킨다", () => {
@@ -111,10 +136,15 @@ describe("랜딩페이지 이야기", () => {
 
     // 같은 값이 OCR 장면과 해석 장면 양쪽에 있으므로 `getAllBy` 로 센다.
     for (const value of LANDING_VALUES) {
-      expect(screen.getAllByText(value.label).length, value.label).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText(value.label).length,
+        value.label,
+      ).toBeGreaterThan(0);
     }
     for (const member of LANDING_FAMILY) {
-      expect(screen.getByRole("tab", { name: new RegExp(member.name, "u") })).toBeInTheDocument();
+      expect(
+        screen.getByRole("tab", { name: new RegExp(member.name, "u") }),
+      ).toBeInTheDocument();
     }
   });
 
@@ -159,11 +189,17 @@ describe("랜딩페이지 이야기", () => {
 
       for (const scene of BODY_SCENES) {
         if (scene.message) {
-          expect(screen.getByText(scene.message.text), scene.message.text).toBeInTheDocument();
+          expect(
+            screen.getByText(scene.message.text),
+            scene.message.text,
+          ).toBeInTheDocument();
         }
         if (scene.headline) {
           const first = scene.headline.split("\n")[0];
-          expect(screen.getByText(new RegExp(first, "u")), first).toBeInTheDocument();
+          expect(
+            screen.getByText(new RegExp(first, "u")),
+            first,
+          ).toBeInTheDocument();
         }
       }
     } finally {
@@ -181,6 +217,8 @@ describe("랜딩페이지 이야기", () => {
     // 연출(스크롤·WebGL)이 없는 환경에서도 마지막 장면의 기록이 글로 남아야 한다.
     const lastScene = BODY_SCENES[BODY_SCENES.length - 1];
     expect(lastScene.markers.length).toBeGreaterThan(0);
-    expect(screen.getByText(/3D 인체 위에 기록으로 남습니다/u)).toBeInTheDocument();
+    expect(
+      screen.getByText(/3D 인체 위에 기록으로 남습니다/u),
+    ).toBeInTheDocument();
   });
 });

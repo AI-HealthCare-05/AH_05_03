@@ -12,7 +12,11 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { AuthContext, type AuthContextValue, type AuthStatus } from "../../app/authContext";
+import {
+  AuthContext,
+  type AuthContextValue,
+  type AuthStatus,
+} from "../../app/authContext";
 import { SignUpPage } from "./SignUpPage";
 
 afterEach(() => {
@@ -35,7 +39,11 @@ function renderSignUp({
   status = "signed-out" as AuthStatus,
   signIn = spySignIn(),
   from,
-}: { status?: AuthStatus; signIn?: ReturnType<typeof spySignIn>; from?: string } = {}) {
+}: {
+  status?: AuthStatus;
+  signIn?: ReturnType<typeof spySignIn>;
+  from?: string;
+} = {}) {
   const value: AuthContextValue = {
     status,
     signIn,
@@ -44,7 +52,11 @@ function renderSignUp({
   };
   render(
     <AuthContext.Provider value={value}>
-      <MemoryRouter initialEntries={[{ pathname: "/signup", state: from ? { from } : null }]}>
+      <MemoryRouter
+        initialEntries={[
+          { pathname: "/signup", state: from ? { from } : null },
+        ]}
+      >
         <Routes>
           <Route path="/signup" element={<SignUpPage />} />
           <Route path="*" element={<Landed />} />
@@ -64,7 +76,9 @@ describe("SignUpPage", () => {
     await user.type(screen.getByLabelText("비밀번호"), "Password123!{Enter}");
 
     expect(signIn).toHaveBeenCalledTimes(1);
-    expect(signIn).toHaveBeenCalledWith("new@example.com", "Password123!", { signUpFirst: true });
+    expect(signIn).toHaveBeenCalledWith("new@example.com", "Password123!", {
+      signUpFirst: true,
+    });
   });
 
   it("가입 화면에도 submit 이 하나뿐이다", () => {
@@ -75,6 +89,15 @@ describe("SignUpPage", () => {
       .filter((button) => (button as HTMLButtonElement).type === "submit");
     expect(submits).toHaveLength(1);
     expect(submits[0]).toHaveAccessibleName("가입하기");
+    expect(
+      document.querySelector(".app-shell.stitch-shell > .signin-shell"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /봄이/u }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/이메일과 비밀번호만 있으면 됩니다/u),
+    ).not.toBeInTheDocument();
   });
 
   it("로그인한 상태로 오면 원래 가려던 주소로 비킨다", () => {
@@ -101,7 +124,10 @@ describe("SignUpPage", () => {
     renderSignUp({ from: "/assessment" });
 
     // 관문은 주소가 없다. 원래 주소로 돌아가면 거기서 관문이 다시 뜬다.
-    expect(screen.getByRole("link", { name: "로그인" })).toHaveAttribute("href", "/assessment");
+    expect(screen.getByRole("link", { name: "로그인" })).toHaveAttribute(
+      "href",
+      "/assessment",
+    );
   });
 
   it("실패하면 이유를 적는다", async () => {
@@ -115,6 +141,8 @@ describe("SignUpPage", () => {
     await user.type(screen.getByLabelText("이메일"), "member@example.com");
     await user.type(screen.getByLabelText("비밀번호"), "Password123!{Enter}");
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("이미 존재하는 이메일입니다.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "이미 존재하는 이메일입니다.",
+    );
   });
 });

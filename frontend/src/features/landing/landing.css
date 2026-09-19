@@ -15,25 +15,30 @@
  */
 
 .ln-root {
-  --ln-cream: #faf7f3;
-  --ln-cream-deep: #f3ede5;
-  --ln-ink: var(--ink, #172033);
-  --ln-muted: var(--muted, #5b687e);
-  --ln-primary: var(--blue-700, #1d4fb8);
-  --ln-primary-hover: var(--blue-800, #173d8f);
-  --ln-line: var(--line, #dce3ee);
-  --ln-dark: #0b0f17;
-  --ln-dark-soft: #141b28;
-  --ln-on-dark: #f2f5fa;
-  --ln-on-dark-muted: #9fb0c8;
-  --ln-line-start: var(--blue-500, #3976f6);
-  --ln-line-end: var(--blue-700, #1d4fb8);
+  --ln-cream: #faf9fb;
+  --ln-cream-deep: #f4f2f4;
+  --ln-ink: #1c1c1c;
+  --ln-muted: #49454e;
+  --ln-aubergine: #3c315b;
+  --ln-ghost: #e2dffe;
+  --ln-periwinkle: #ab9ff2;
+  --ln-primary: #261b44;
+  --ln-primary-hover: #3c315b;
+  --ln-line: #e9e8ea;
+  --ln-dark: #261b44;
+  --ln-dark-soft: #3c315b;
+  --ln-on-dark: #fdfcfe;
+  --ln-on-dark-muted: #c9c4d6;
+  --ln-line-start: #ab9ff2;
+  --ln-line-end: #3c315b;
   --ln-gutter: clamp(20px, 5vw, 72px);
   --ln-measure: 1180px;
 
   background: var(--ln-cream);
   color: var(--ln-ink);
-  font-family: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "DM Sans", "Noto Sans KR", Inter, Pretendard, sans-serif;
+  letter-spacing: -0.025em;
+  font-weight: 350;
   /* **`hidden` 이면 안 된다.** `overflow-x: hidden` 은 이 요소를 스크롤 컨테이너로
      만들고, 그러면 안쪽 `position: sticky` 가 **뷰포트가 아니라 이 요소**에 붙는다 —
      고정 구간이 통째로 안 먹어서 장면이 전부 빈 화면으로 지나갔다(실측).
@@ -115,7 +120,7 @@
 }
 
 .ln-eyebrow-dark {
-  color: #8fb6ff;
+  color: var(--ln-ghost);
 }
 
 .ln-section-head {
@@ -158,12 +163,12 @@
 }
 
 .ln-button-primary {
-  background: var(--ln-primary);
-  color: #ffffff;
+  background: var(--ln-ghost);
+  color: var(--ln-aubergine);
 }
 
 .ln-button-primary:hover {
-  background: var(--ln-primary-hover);
+  background: var(--ln-periwinkle);
 }
 
 .ln-button-ghost {
@@ -374,6 +379,10 @@
 }
 
 .ln-hero-visual {
+  --ln-line-end: color-mix(in srgb, var(--ln-aubergine) 38%, var(--ln-periwinkle));
+  --ln-hero-line-mid: color-mix(in srgb, var(--ln-periwinkle) 62%, var(--ln-aubergine));
+  --ln-hero-dot-deep: color-mix(in srgb, var(--ln-aubergine) 52%, var(--ln-periwinkle));
+  --ln-hero-dot-soft: color-mix(in srgb, var(--ln-periwinkle) 86%, var(--ln-aubergine));
   width: min(880px, 100%);
   transform: scale(calc(1 + var(--ln-progress) * 0.42)) translateY(calc(var(--ln-progress) * -26px));
   opacity: clamp(0, calc(1 - var(--ln-progress) * 1.5), 1);
@@ -403,14 +412,14 @@
 }
 
 .ln-hero-dot {
-  fill: var(--ln-primary);
+  fill: var(--ln-hero-dot-deep);
   opacity: 0;
   transform: translate(calc(var(--dx) * 1px), calc(var(--dy) * 1px));
   animation: ln-gather 1.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .ln-hero-dot:nth-child(2n) {
-  fill: var(--ln-line-start);
+  fill: var(--ln-hero-dot-soft);
 }
 
 .ln-hero-dot:nth-of-type(1) { animation-delay: 0.15s; }
@@ -544,7 +553,7 @@
   position: absolute;
   inset: 2px 0;
   border-radius: 6px;
-  background: var(--blue-50, #f4f7ff);
+  background: color-mix(in srgb, var(--ln-ghost) 55%, #fff);
   opacity: calc(var(--lit) * (1 - var(--moved)));
 }
 
@@ -628,7 +637,7 @@
   gap: 2px;
   padding: 10px 12px;
   border-radius: 10px;
-  background: var(--blue-50, #f4f7ff);
+  background: color-mix(in srgb, var(--ln-ghost) 55%, #fff);
   opacity: var(--in);
   transform: translateY(calc((1 - var(--in)) * 10px));
 }
@@ -1365,7 +1374,7 @@
 }
 
 .ln-family-tab.is-active {
-  background: var(--blue-50, #f4f7ff);
+  background: color-mix(in srgb, var(--ln-ghost) 55%, #fff);
   color: var(--ln-primary);
 }
 
@@ -1380,7 +1389,7 @@
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: var(--blue-100, #eaf1ff);
+  background: color-mix(in srgb, var(--ln-ghost) 78%, #fff);
   color: var(--ln-primary);
   font-size: 15px;
   font-weight: 700;
@@ -1425,7 +1434,7 @@
   gap: 12px;
   padding: 18px;
   border-radius: 14px;
-  background: var(--blue-50, #f4f7ff);
+  background: color-mix(in srgb, var(--ln-ghost) 55%, #fff);
 }
 
 .ln-family-highlight-label {

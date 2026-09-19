@@ -17,7 +17,6 @@
 
 import { useEffect } from "react";
 
-import { LandingAssistant } from "./LandingAssistant";
 import "./landing.css";
 import { usePrefersReducedMotion } from "./scrollProgress";
 import { AssistantSection } from "./sections/AssistantSection";
@@ -64,7 +63,6 @@ export function LandingPage() {
       </main>
 
       <LandingFooter />
-      <LandingAssistant />
     </div>
   );
 }
