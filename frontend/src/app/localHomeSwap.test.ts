@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  isPreviewShellPath,
-  isStitchShellPath,
-  isVariantBarPath,
-  LOCAL_HOME_IS_PREVIEW18,
-} from "./localHomeSwap";
+import { isPreviewShellPath, isStitchShellPath, isVariantBarPath } from "./localHomeSwap";
 
 describe("isPreviewShellPath", () => {
   it("루트(/)는 시안 18 셸이고 ui-preview18 은 기존 홈 셸이다", () => {
