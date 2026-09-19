@@ -1,6 +1,6 @@
 # 공개 랜딩페이지 — 구조와 경계
 
-> 최종 갱신: 2026-09-16
+> 최종 갱신: 2026-09-20
 > 코드 위치: `frontend/src/features/landing/`
 > 관련 문서: [DESIGN.md](../DESIGN.md) · [34번 규칙 문서](34_project_rules_and_workflow.md) · [17 Three.js 인체 컨텍스트](17_threejs_human_body_dashboard_context.md) · [38 챌린지 정원 구현](38_challenge_garden_implementation.md) · [43 챗봇 질문 설계](43_chatbot_question_design.md)
 
@@ -10,7 +10,7 @@
 
 ## 0. 세 문장 요약
 
-`/landing` 은 스크롤만으로 서비스 전체 흐름(검진표 → 해석 → 몸의 기록 → 챌린지 → 변화 → 가족)을 보여 주는 공개 소개 화면이다. 앱의 기능을 흉내 낸 화면이 아니라 **앱의 자산을 그대로 쓰는 발표 계층**이다 — 3D 인체는 앱과 같은 Vanatome 아틀라스를, 정원은 `features/challenge/GardenArt` 를, 챗봇 런처는 `globalHealthAssistant.css` 를 쓴다. 기기·서버의 건강기록은 한 줄도 읽지 않으며, 그 경계는 테스트가 지킨다.
+`/landing` 은 스크롤만으로 서비스 전체 흐름(검진표 → 해석 → 몸의 기록 → 챌린지 → 변화 → 가족)을 보여 주는 공개 소개 화면이다. 히어로는 연꽃 마크와 한 줄 차트다. 앱의 기능을 흉내 낸 화면이 아니라 **앱의 자산을 그대로 쓰는 발표 계층**이다 — 3D 인체는 앱과 같은 Vanatome 아틀라스를, 정원은 `features/challenge/GardenArt` 를 쓴다. 챗봇은 본문 소개 섹션만 두고 플로팅 런처는 두지 않는다. 기기·서버의 건강기록은 한 줄도 읽지 않으며, 그 경계는 테스트가 지킨다.
 
 ---
 
@@ -19,6 +19,7 @@
 | 주소 | 로그인 | 화면 |
 |---|---|---|
 | `/landing` | 불필요 | 소개 페이지 |
+| `/landing-v2` | — | `/landing` 으로 이동(예전 캡슐 시안 주소) |
 | `/signup` | 불필요 | 가입 |
 | `/` (로그아웃 상태) | — | `/landing` 으로 이동 |
 | `/` (로그인 상태) | 필요 | 가족 홈 |
@@ -42,16 +43,16 @@
 |---|---|---|
 | 3D 인체 | `/vendor/vanatome` 아틀라스(GLB) · `anatomyAtlas`(매니페스트·메시 적응) · `anatomyResourceCache` · `holographicAnatomyStyle`(PBR 재질·통증 팔레트) | 스크롤 타임라인 장면 하나 (`scene/LandingBodyScene.tsx`) |
 | 챌린지 정원 | `features/challenge/GardenArt` 의 `Tree` · `TreeKey` 계약 | — |
-| 챗봇 | `globalHealthAssistant.css` 런처 스타일 · `bomi-chick.png` | 미리보기 패널(`LandingAssistant.tsx`) |
+| 챗봇 | `landingStory` 의 예시 대화 | 본문 소개 섹션. 플로팅 런처 없음 |
 | 검진 항목 이름 | `shared/local/recordSummary.ts` 와 같은 필드명·한글 라벨 | 예시 값 |
 
 ### 3-1. `VanatomeBodyMap` 을 그대로 걸지 않은 이유
 
 앱의 인체 뷰어는 **도구**다 — 계통 필터 툴바, 구조 검색, 치아 선택기, 깊이 피킹, 초점별 지연 로드(머리 확대 시 738개 구조 추가)가 한 몸이고 프로필·판정 위험도를 입력으로 받는다. 랜딩에는 그중 필요한 것이 없고, 오히려 "한 장면에 메시지 하나" 를 깨뜨린다. 그래서 **자산과 로더·재질은 공유하고 조작 UI 는 두지 않는** 발표용 장면을 따로 두었다. `features/home/` 쪽 파일은 한 줄도 고치지 않았다.
 
-### 3-2. `GlobalHealthAssistant` 를 걸지 않은 이유
+### 3-2. 플로팅 봄이를 두지 않는 이유
 
-그 컴포넌트는 로컬 도메인 런타임과 활성 프로필이 없으면 스스로 `null` 을 반환한다(로그인 뒤에만 뜬다). 랜딩은 관문 밖이라 프로필이 없다. 런처의 생김새·마스코트·CSS 는 앱의 것을 그대로 쓰고, 내용만 미리 준비한 세 질문으로 둔다. 패널 머리에 "미리보기" 를 적어 실제 대화인 척하지 않는다.
+봄이는 인증된 제품 화면의 `GlobalHealthAssistant` 만 띄운다. 공개 랜딩에는 챗봇 소개 섹션만 두고, 미리보기 런처는 붙이지 않는다.
 
 ## 4. 장면 구성
 

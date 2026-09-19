@@ -16,10 +16,21 @@ afterEach(cleanup);
 
 describe("WallPairPage 경계", () => {
   it("useLocalDomain 과 로컬 건강기록 계층을 import 하지 않는다", () => {
-    const source = readFileSync(resolve(import.meta.dirname, "WallPairPage.tsx"), "utf8");
-    const forbidden = ["useLocalDomain", "localDomainContext", "shared/local/", "local-domain/"];
+    const source = readFileSync(
+      resolve(import.meta.dirname, "WallPairPage.tsx"),
+      "utf8",
+    );
+    const forbidden = [
+      "useLocalDomain",
+      "localDomainContext",
+      "shared/local/",
+      "local-domain/",
+    ];
     const offenders = forbidden.filter((token) => {
-      const pattern = new RegExp(`^\\s*import[^;]*${token.replace(/[/.]/gu, "\\$&")}`, "mu");
+      const pattern = new RegExp(
+        `^\\s*import[^;]*${token.replace(/[/.]/gu, "\\$&")}`,
+        "mu",
+      );
       return pattern.test(source);
     });
     expect(offenders).toEqual([]);
@@ -34,7 +45,14 @@ describe("WallPairPage 경계", () => {
         </Routes>
       </MemoryRouter>,
     );
-    expect(screen.getByRole("heading", { name: "거실 대시보드 연결" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "이 가구에 연결" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "거실 대시보드 연결" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "이 가구에 연결" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /봄이/u }),
+    ).not.toBeInTheDocument();
   });
 });

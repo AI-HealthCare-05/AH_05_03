@@ -10,6 +10,10 @@
  * 표 자체를 시험한다.
  */
 
+/// <reference types="node" />
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { router } from "./router";
@@ -21,20 +25,26 @@ import { router } from "./router";
  * - `/landing` 공개 소개 페이지. 같은 조건이다 — `features/landing` 은
  *   `useLocalDomain` 도 `serverApiClient` 도 부르지 않고 예시 시나리오만 그린다.
  *   그 조건은 `features/landing/LandingPage.test.tsx` 가 따로 지킨다.
- * - `/landing-v2` 같은 소개 페이지의 대안 디자인 시안. 자격도 같고, 화면에 쓰는
- *   예시 데이터도 v1 과 같은 파일이다 —
- *   `features/landing-v2/LandingV2Page.test.tsx` 가 그 조건을 따로 지킨다.
+ * - `/landing-v2` 예전 캡슐 시안 주소. 화면이 아니라 `/landing` 으로 보낸다.
  * - `/wall/pair` · `/wall` 공용 벽. 마스터 로그인 세션 없이 기기 토큰만 쓰고
  *   `useLocalDomain` 으로 건강기록을 읽지 않는다. `WallPairPage.test.tsx` 가 지킨다.
  */
-const OUTSIDE_THE_GATE = ["/signup", "/landing", "/landing-v2", "/wall/pair", "/wall"];
+const OUTSIDE_THE_GATE = [
+  "/signup",
+  "/landing",
+  "/landing-v2",
+  "/wall/pair",
+  "/wall",
+];
 
 describe("라우트 표", () => {
-    it("관문 밖에 있는 것은 가입·소개·벽 화면들뿐이다", () => {
+  it("관문 밖에 있는 것은 가입·소개·벽 화면들뿐이다", () => {
     const layout = router.routes.filter((route) => route.path === "/");
     expect(layout).toHaveLength(1);
 
-    const outside = router.routes.filter((route) => route.path !== "/").map((route) => route.path);
+    const outside = router.routes
+      .filter((route) => route.path !== "/")
+      .map((route) => route.path);
     // 가입은 링크로 건네야 해서 주소가 필요하고, 기기 안 건강기록을 읽지 않는다.
     // 그 조건을 못 갖춘 화면이 여기 늘면 로그인 없이 열리는 문이 하나 더 생긴다.
     expect(outside).toEqual(OUTSIDE_THE_GATE);
@@ -52,5 +62,19 @@ describe("라우트 표", () => {
     expect(paths).toContain("ui-preview");
     // 레이아웃 안에서 잡는 404 도 관문 뒤에 있어야 한다.
     expect(paths).toContain("*");
+  });
+
+  it("공개 기본 /landing 은 차트 히어로 페이지이고 캡슐 시안이 아니다", () => {
+    const source = readFileSync(resolve(import.meta.dirname, "router.tsx"), "utf8");
+    const landingBlock = source.slice(source.indexOf('path: "/landing"'), source.indexOf('path: "/landing-v2"'));
+    expect(landingBlock).toMatch(/<LandingPage \/>/u);
+    expect(source).not.toMatch(/LandingV2Page/u);
+    expect(source).not.toMatch(/features\/landing-v2/u);
+  });
+
+  it("예전 /landing-v2 주소는 소개 페이지로 보낸다", () => {
+    const source = readFileSync(resolve(import.meta.dirname, "router.tsx"), "utf8");
+    const v2Block = source.slice(source.indexOf('path: "/landing-v2"'));
+    expect(v2Block).toMatch(/<Navigate to="\/landing" replace \/>/u);
   });
 });

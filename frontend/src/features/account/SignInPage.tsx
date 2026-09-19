@@ -7,7 +7,10 @@ import { type FormEvent, useState } from "react";
 import { useAuth } from "../../app/authContext";
 import { serverApiClient } from "../../shared/api/serverApiClient";
 import { AuthCard, type AuthMode } from "./AuthCard";
-import { getPendingInvitation, readAndPreserveInvitation } from "./invitationStorage";
+import {
+  getPendingInvitation,
+  readAndPreserveInvitation,
+} from "./invitationStorage";
 
 /** 초대 링크로 들어왔다면 그 이메일로만 수락할 수 있다. 관문에서 미리 채워 준다. */
 function invitationEmail(): string | undefined {
@@ -33,7 +36,9 @@ export function SignInPage({
   const { signIn } = useAuth();
   const [resetInfo, setResetInfo] = useState(readResetToken);
   const [resetEmail] = useState(() => readResetToken()?.email);
-  const [mode, setMode] = useState<AuthMode>(() => (resetInfo ? "reset-password" : "signin"));
+  const [mode, setMode] = useState<AuthMode>(() =>
+    resetInfo ? "reset-password" : "signin",
+  );
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string>();
   const [message, setMessage] = useState<string | undefined>(initialMessage);
@@ -48,13 +53,19 @@ export function SignInPage({
 
     try {
       if (mode === "signin" || mode === "signup") {
-        await signIn(String(form.get("email") ?? ""), String(form.get("password") ?? ""), {
-          signUpFirst: mode === "signup",
-        });
+        await signIn(
+          String(form.get("email") ?? ""),
+          String(form.get("password") ?? ""),
+          {
+            signUpFirst: mode === "signup",
+          },
+        );
       } else if (mode === "forgot-password") {
         const email = String(form.get("email") ?? "");
         await serverApiClient.requestPasswordReset(email);
-        setMessage("입력하신 이메일로 비밀번호 재설정 링크를 전송했습니다. 메일함을 확인해 주세요.");
+        setMessage(
+          "입력하신 이메일로 비밀번호 재설정 링크를 전송했습니다. 메일함을 확인해 주세요.",
+        );
       } else if (mode === "reset-password") {
         const password = String(form.get("password") ?? "");
         const confirm = String(form.get("passwordConfirm") ?? "");
@@ -63,7 +74,9 @@ export function SignInPage({
         }
         const token = resetInfo?.token;
         if (!token) {
-          throw new Error("유효한 재설정 토큰이 없습니다. 비밀번호 찾기를 다시 진행해 주세요.");
+          throw new Error(
+            "유효한 재설정 토큰이 없습니다. 비밀번호 찾기를 다시 진행해 주세요.",
+          );
         }
         await serverApiClient.confirmPasswordReset(token, password);
         // URL hash 정리: 대기 중인 초대가 있다면 해당 해시를 복원하여 로그인 후에도 토큰이 전달되도록 한다
@@ -74,17 +87,31 @@ export function SignInPage({
             token: pending.token,
             ...(pending.email ? { email: pending.email } : {}),
           }).toString();
-          window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#${nextHash}`);
+          window.history.replaceState(
+            null,
+            "",
+            `${window.location.pathname}${window.location.search}#${nextHash}`,
+          );
         } else {
-          window.history.replaceState(null, "", window.location.pathname + window.location.search);
+          window.history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search,
+          );
         }
         setResetInfo(undefined);
         onResetComplete?.();
-        setMessage("비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해 주세요.");
+        setMessage(
+          "비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해 주세요.",
+        );
         setMode("signin");
       }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "작업을 완료하지 못했습니다.");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "작업을 완료하지 못했습니다.",
+      );
     } finally {
       setWorking(false);
     }
@@ -101,58 +128,68 @@ export function SignInPage({
     // 로그인 카드는 이미 가입한 이메일을 쓰라고 안내한다. 그 위에 서비스·저장
     // 설명까지 반복하면 첫 행동보다 문단이 먼저 보이므로 로그인 모드에서는 뺀다.
     signin: undefined,
-    signup: "이메일과 비밀번호만 있으면 됩니다. 건강기록은 계정에 저장되고, 나와 가족 구성원만 열람합니다.",
-    "forgot-password": "가입하신 이메일로 비밀번호 재설정 링크를 받아 새 비밀번호를 설정할 수 있습니다.",
+    signup: undefined,
+    "forgot-password":
+      "가입하신 이메일로 비밀번호 재설정 링크를 받아 새 비밀번호를 설정할 수 있습니다.",
     "reset-password": "새로 사용할 비밀번호를 입력하여 계정 보안을 복원하세요.",
   }[mode];
 
   return (
-    <div className="signin-shell">
-      <div className="signin-panel">
-        <div className="signin-brand">
-          <img className="brand-mark" src="/ieobom-icon.png" alt="" aria-hidden="true" width={42} height={42} />
-          <div>
-            <strong>이어봄</strong>
-            <small>우리 가족 건강기록</small>
+    <div className="app-shell stitch-shell">
+      <div className="signin-shell">
+        <div className="signin-panel">
+          <div className="signin-brand">
+            <img
+              className="brand-mark"
+              src="/ieobom-icon.png"
+              alt=""
+              aria-hidden="true"
+              width={42}
+              height={42}
+            />
+            <div>
+              <strong>이어봄</strong>
+              <small>우리 가족 건강기록</small>
+            </div>
           </div>
-        </div>
 
-        <h1>{headingText}</h1>
-        {leadText ? <p className="signin-lead">{leadText}</p> : null}
+          <h1>{headingText}</h1>
+          {leadText ? <p className="signin-lead">{leadText}</p> : null}
 
-        {error ? (
-          <p className="alert error-alert" role="alert">
-            {error}
-          </p>
-        ) : null}
+          {error ? (
+            <p className="alert error-alert" role="alert">
+              {error}
+            </p>
+          ) : null}
 
-        {message ? (
-          <p className="alert success-alert" role="status">
-            {message}
-          </p>
-        ) : null}
+          {message ? (
+            <p className="alert success-alert" role="status">
+              {message}
+            </p>
+          ) : null}
 
-        <AuthCard
-          key={`${mode}-${resetInfo?.email ?? resetEmail ?? invited ?? ""}`}
-          mode={mode}
-          working={working}
-          invitationEmail={resetInfo?.email ?? resetEmail ?? invited}
-          onSubmit={submit}
-          onSwitchMode={(targetMode) => {
-            setError(undefined);
-            setMessage(undefined);
-            setMode(targetMode);
-          }}
-        />
+          <AuthCard
+            key={`${mode}-${resetInfo?.email ?? resetEmail ?? invited ?? ""}`}
+            mode={mode}
+            working={working}
+            invitationEmail={resetInfo?.email ?? resetEmail ?? invited}
+            onSubmit={submit}
+            onSwitchMode={(targetMode) => {
+              setError(undefined);
+              setMessage(undefined);
+              setMode(targetMode);
+            }}
+          />
 
-        {/* 세 줄 전부 ADR-011 이전의 약속이었다. 지금은 건강기록도 서버 정본이므로
+          {/* 세 줄 전부 ADR-011 이전의 약속이었다. 지금은 건강기록도 서버 정본이므로
             "서버에는 계정만" 은 틀리고, 대신 실제로 성립하는 것을 적는다 — 어디에
             저장되는지, 누가 볼 수 있는지, 원본 서류는 어떻게 되는지. */}
-        <ul className="signin-notes">
-          <li>건강기록·프로필·판정 결과는 로그인한 계정에 저장됩니다.</li>
-          <li>검진표 원본은 보관하지 않고, 읽어 들이는 동안에만 씁니다.</li>
-          <li>같은 가정 구성원 외에는 열람할 수 없습니다.</li>
-        </ul>
+          <ul className="signin-notes">
+            <li>건강기록·프로필·판정 결과는 로그인한 계정에 저장됩니다.</li>
+            <li>검진표 원본은 보관하지 않고, 읽어 들이는 동안에만 씁니다.</li>
+            <li>같은 가정 구성원 외에는 열람할 수 없습니다.</li>
+          </ul>
+        </div>
       </div>
     </div>
   );

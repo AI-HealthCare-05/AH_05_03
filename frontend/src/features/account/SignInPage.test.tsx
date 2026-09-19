@@ -22,7 +22,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function renderSignIn(signIn = vi.fn().mockResolvedValue(undefined), initialMessage?: string) {
+function renderSignIn(
+  signIn = vi.fn().mockResolvedValue(undefined),
+  initialMessage?: string,
+) {
   const value: AuthContextValue = {
     status: "signed-out",
     signIn,
@@ -47,7 +50,9 @@ describe("SignInPage", () => {
 
     expect(signIn).toHaveBeenCalledTimes(1);
     // `signUpFirst` 가 참이면 서버가 409 "이미 존재하는 이메일입니다" 를 돌려준다.
-    expect(signIn).toHaveBeenCalledWith("member@example.com", "Password123!", { signUpFirst: false });
+    expect(signIn).toHaveBeenCalledWith("member@example.com", "Password123!", {
+      signUpFirst: false,
+    });
   });
 
   it("로그인 화면에는 submit 이 하나뿐이다", () => {
@@ -58,10 +63,23 @@ describe("SignInPage", () => {
       .filter((button) => (button as HTMLButtonElement).type === "submit");
     expect(submits).toHaveLength(1);
     expect(submits[0]).toHaveAccessibleName("로그인");
-    expect(screen.queryByText(/질환 예측과 검진표 인식은 서비스 계정이 있어야/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/질환 예측과 검진표 인식은 서비스 계정이 있어야/),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("서비스 계정")).not.toBeInTheDocument();
-    expect(document.querySelector(".auth-account-icon")).not.toBeInTheDocument();
-    expect(document.querySelector(".signin-brand .brand-mark")).toHaveAttribute("src", "/ieobom-icon.png");
+    expect(
+      document.querySelector(".auth-account-icon"),
+    ).not.toBeInTheDocument();
+    expect(document.querySelector(".signin-brand .brand-mark")).toHaveAttribute(
+      "src",
+      "/ieobom-icon.png",
+    );
+    expect(
+      document.querySelector(".app-shell.stitch-shell > .signin-shell"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /봄이/u }),
+    ).not.toBeInTheDocument();
   });
 
   it("회원가입을 누르면 가입 화면으로 바뀌고 거기서 가입한다", async () => {
@@ -69,18 +87,25 @@ describe("SignInPage", () => {
     const signIn = renderSignIn();
 
     await user.click(screen.getByRole("button", { name: "회원가입" }));
-    expect(screen.getByRole("heading", { name: "이어봄 시작하기" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "이어봄 시작하기" }),
+    ).toBeInTheDocument();
     // 되돌아가는 링크는 "로그인" 이지만 submit 은 여전히 하나뿐이어야 한다.
     const submits = screen
       .getAllByRole("button")
       .filter((button) => (button as HTMLButtonElement).type === "submit");
     expect(submits).toHaveLength(1);
     expect(submits[0]).toHaveAccessibleName("가입하기");
+    expect(
+      screen.queryByText(/이메일과 비밀번호만 있으면 됩니다/u),
+    ).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText("이메일"), "new@example.com");
     await user.type(screen.getByLabelText("비밀번호"), "Password123!{Enter}");
 
-    expect(signIn).toHaveBeenCalledWith("new@example.com", "Password123!", { signUpFirst: true });
+    expect(signIn).toHaveBeenCalledWith("new@example.com", "Password123!", {
+      signUpFirst: true,
+    });
   });
 
   it("가입 화면에서도 로그인으로 되돌아갈 수 있다", async () => {
@@ -90,16 +115,26 @@ describe("SignInPage", () => {
     await user.click(screen.getByRole("button", { name: "회원가입" }));
     await user.click(screen.getByRole("button", { name: "로그인" }));
 
-    expect(screen.getByRole("heading", { name: "로그인하고 시작하세요" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "로그인하고 시작하세요" }),
+    ).toBeInTheDocument();
   });
 
   it("실패하면 이유를 적고, 화면을 바꾸면 지운다", async () => {
     const user = userEvent.setup();
-    renderSignIn(vi.fn().mockRejectedValue(new Error("이메일 또는 비밀번호가 올바르지 않습니다.")));
+    renderSignIn(
+      vi
+        .fn()
+        .mockRejectedValue(
+          new Error("이메일 또는 비밀번호가 올바르지 않습니다."),
+        ),
+    );
 
     await user.type(screen.getByLabelText("이메일"), "member@example.com");
     await user.type(screen.getByLabelText("비밀번호"), "wrongpass1{Enter}");
-    expect(await screen.findByRole("alert")).toHaveTextContent("이메일 또는 비밀번호가 올바르지 않습니다.");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "이메일 또는 비밀번호가 올바르지 않습니다.",
+    );
 
     await user.click(screen.getByRole("button", { name: "회원가입" }));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -109,73 +144,121 @@ describe("SignInPage", () => {
     // **`AccountPage` 가 markSignedOut(message) 로 실어 보낸 문구가 실제로
     // 여기서 뜨는지 확인한다.** 회원 탈퇴가 성공했는데도 화면이 곧장 로그인
     // 화면으로 바뀌어 버려 아무 확인도 못 보던 결함의 수리 대상이다.
-    renderSignIn(vi.fn().mockResolvedValue(undefined), "회원 탈퇴가 완료되었습니다. 건강정보는 보존됩니다.");
+    renderSignIn(
+      vi.fn().mockResolvedValue(undefined),
+      "회원 탈퇴가 완료되었습니다. 건강정보는 보존됩니다.",
+    );
 
-    expect(screen.getByRole("status")).toHaveTextContent("회원 탈퇴가 완료되었습니다. 건강정보는 보존됩니다.");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "회원 탈퇴가 완료되었습니다. 건강정보는 보존됩니다.",
+    );
   });
 
   it("초대 링크로 들어오면 그 이메일을 미리 채운다", () => {
-    window.history.replaceState(null, "", "/#invitation=inv-1&token=tok-1&email=invited%40example.com");
+    window.history.replaceState(
+      null,
+      "",
+      "/#invitation=inv-1&token=tok-1&email=invited%40example.com",
+    );
     renderSignIn();
 
     expect(screen.getByLabelText("이메일")).toHaveValue("invited@example.com");
-    expect(screen.getByText(/invited@example.com 주소로 초대받았습니다/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/invited@example.com 주소로 초대받았습니다/),
+    ).toBeInTheDocument();
   });
 
   it("비밀번호 찾기를 누르면 링크 요청 화면으로 전환되고 전송 완료 메시지를 보여준다", async () => {
     const user = userEvent.setup();
-    const { serverApiClient } = await import("../../shared/api/serverApiClient");
-    const spy = vi.spyOn(serverApiClient, "requestPasswordReset").mockResolvedValue(undefined);
+    const { serverApiClient } =
+      await import("../../shared/api/serverApiClient");
+    const spy = vi
+      .spyOn(serverApiClient, "requestPasswordReset")
+      .mockResolvedValue(undefined);
 
     renderSignIn();
 
     await user.click(screen.getByRole("button", { name: "비밀번호 찾기" }));
-    expect(screen.getByRole("heading", { name: "비밀번호 찾기", level: 1 })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "비밀번호 찾기", level: 1 }),
+    ).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("이메일"), "lost@example.com");
     await user.click(screen.getByRole("button", { name: "재설정 링크 받기" }));
 
     expect(spy).toHaveBeenCalledWith("lost@example.com");
-    expect(await screen.findByRole("status")).toHaveTextContent("비밀번호 재설정 링크를 전송했습니다");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "비밀번호 재설정 링크를 전송했습니다",
+    );
   });
 
   it("비밀번호 재설정 링크로 들어오면 새 비밀번호 설정 화면이 열리고 변경을 완료한다", async () => {
     const user = userEvent.setup();
-    window.history.replaceState(null, "", "/#reset_token=valid_tok&email=reset%40example.com");
+    window.history.replaceState(
+      null,
+      "",
+      "/#reset_token=valid_tok&email=reset%40example.com",
+    );
 
-    const { serverApiClient } = await import("../../shared/api/serverApiClient");
-    const spy = vi.spyOn(serverApiClient, "confirmPasswordReset").mockResolvedValue(undefined);
+    const { serverApiClient } =
+      await import("../../shared/api/serverApiClient");
+    const spy = vi
+      .spyOn(serverApiClient, "confirmPasswordReset")
+      .mockResolvedValue(undefined);
 
     renderSignIn();
 
-    expect(screen.getByRole("heading", { name: "새 비밀번호 설정", level: 1 })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "새 비밀번호 설정", level: 1 }),
+    ).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("새 비밀번호"), "NewPassword123!");
-    await user.type(screen.getByLabelText("새 비밀번호 확인"), "NewPassword123!");
+    await user.type(
+      screen.getByLabelText("새 비밀번호 확인"),
+      "NewPassword123!",
+    );
     await user.click(screen.getByRole("button", { name: "비밀번호 변경하기" }));
 
     expect(spy).toHaveBeenCalledWith("valid_tok", "NewPassword123!");
-    expect(await screen.findByRole("status")).toHaveTextContent("비밀번호가 성공적으로 변경되었습니다");
-    expect(screen.getByRole("heading", { name: "로그인하고 시작하세요", level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "비밀번호가 성공적으로 변경되었습니다",
+    );
+    expect(
+      screen.getByRole("heading", { name: "로그인하고 시작하세요", level: 1 }),
+    ).toBeInTheDocument();
   });
 
   it("초대 상태에서 비밀번호를 재설정하면 완료 후 초대 해시를 복원한다", async () => {
     const user = userEvent.setup();
     // 1. 초대 링크로 진입하여 스토리지에 초대 정보 보존
-    window.history.replaceState(null, "", "/#invitation=inv-target&token=tok-target&email=target%40example.com");
+    window.history.replaceState(
+      null,
+      "",
+      "/#invitation=inv-target&token=tok-target&email=target%40example.com",
+    );
     const { readAndPreserveInvitation } = await import("./invitationStorage");
     readAndPreserveInvitation();
 
     // 2. 메일의 비밀번호 재설정 링크 클릭으로 hash 교체
-    window.history.replaceState(null, "", "/#reset_token=reset123&email=target%40example.com");
+    window.history.replaceState(
+      null,
+      "",
+      "/#reset_token=reset123&email=target%40example.com",
+    );
 
-    const { serverApiClient } = await import("../../shared/api/serverApiClient");
-    vi.spyOn(serverApiClient, "confirmPasswordReset").mockResolvedValue(undefined);
+    const { serverApiClient } =
+      await import("../../shared/api/serverApiClient");
+    vi.spyOn(serverApiClient, "confirmPasswordReset").mockResolvedValue(
+      undefined,
+    );
 
     renderSignIn();
 
     await user.type(screen.getByLabelText("새 비밀번호"), "NewPassword123!");
-    await user.type(screen.getByLabelText("새 비밀번호 확인"), "NewPassword123!");
+    await user.type(
+      screen.getByLabelText("새 비밀번호 확인"),
+      "NewPassword123!",
+    );
     await user.click(screen.getByRole("button", { name: "비밀번호 변경하기" }));
 
     // 3. 재설정 완료 후 URL 해시에 초대 토큰이 복원되어야 함
