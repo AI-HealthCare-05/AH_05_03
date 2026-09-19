@@ -14,6 +14,7 @@ import sys
 #:
 #: 경로 구조는 남기고 id 만 지운다 — 어느 엔드포인트가 몇 번 불렸는지는 그대로 본다.
 _JOB_ID_IN_PATH = re.compile(r"(/api/v1/(?:predictions|dev/ocr)/jobs/)[A-Za-z0-9_-]{8,}")
+_OPS_RECOVERY_HEADER = re.compile(r"(?i)(x-ops-recovery-key\s*[:=]\s*)\S+")
 
 
 class MaskJobIds(logging.Filter):
@@ -25,9 +26,14 @@ class MaskJobIds(logging.Filter):
 
     @staticmethod
     def _scrub(value: object) -> object:
-        if isinstance(value, str) and "/jobs/" in value:
-            return _JOB_ID_IN_PATH.sub(r"\1***", value)
-        return value
+        if not isinstance(value, str):
+            return value
+        text = value
+        if "/jobs/" in text:
+            text = _JOB_ID_IN_PATH.sub(r"\1***", text)
+        if "ops-recovery-key" in text.lower():
+            text = _OPS_RECOVERY_HEADER.sub(r"\1***", text)
+        return text
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.msg = self._scrub(record.msg)

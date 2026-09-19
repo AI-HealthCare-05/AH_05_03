@@ -26,17 +26,22 @@ from app.exceptions import (
     InvitationSelfNotAllowedError,
     InvitationStateConflictError,
     InvitationTokenInvalidError,
+    ProfileClaimConflictError,
+    ProfileNotFoundError,
     ProfileReferenceAlreadyUsedError,
     TokenStoreUnavailableError,
     VersionMismatchError,
 )
 from app.models.family_invitations import FamilyInvitation, InvitationStatus
 from app.models.households import HouseholdStatus
+from app.models.profiles import LifecycleStatus
 from app.models.service_accounts import ServiceAccount
 from app.repositories.family_invitation_repository import FamilyInvitationRepository
 from app.repositories.household_repository import HouseholdRepository
+from app.repositories.profile_repository import ProfileRepository
 from app.services.households import get_household_repository
 from app.services.invitation_store import InvitationStore
+from app.services.profiles import get_profile_repository
 
 
 def get_family_invitation_repository(session: SessionDep) -> FamilyInvitationRepository:
@@ -49,11 +54,13 @@ class FamilyInvitationService:
         session: SessionDep,
         invitation_repo: Annotated[FamilyInvitationRepository, Depends(get_family_invitation_repository)],
         household_repo: Annotated[HouseholdRepository, Depends(get_household_repository)],
+        profile_repo: Annotated[ProfileRepository, Depends(get_profile_repository)],
         invitation_store: Annotated[InvitationStore, Depends(get_invitation_store)],
     ) -> None:
         self.session = session
         self.invitation_repo = invitation_repo
         self.household_repo = household_repo
+        self.profile_repo = profile_repo
         self.invitation_store = invitation_store
 
     async def create(
@@ -75,6 +82,7 @@ class FamilyInvitationService:
         await self.invitation_store.enforce_create_rate(account.id, email)
         now = datetime.now(tz=timezone.utc)
         await self._reject_reused_profile_ref(household.id, email, request.target_profile_ref, now)
+        await self._reject_claim_conflict(household.id, email, request.target_profile_id)
 
         raw_token = secrets.token_urlsafe(config.FAMILY_INVITATION_TOKEN_BYTES)
         invitation = FamilyInvitation(
@@ -83,6 +91,7 @@ class FamilyInvitationService:
             inviter_account_id=account.id,
             invitee_email=email,
             target_profile_ref=request.target_profile_ref,
+            target_profile_id=request.target_profile_id,
             token_hash=self.invitation_store.hash_token(raw_token),
             expires_at=now + timedelta(days=config.FAMILY_INVITATION_EXPIRE_DAYS),
         )
@@ -123,6 +132,25 @@ class FamilyInvitationService:
         ):
             raise InvitationAlreadyPendingError()
         raise ProfileReferenceAlreadyUsedError()
+
+    async def _reject_claim_conflict(
+        self, household_id: uuid.UUID, email: str, target_profile_id: uuid.UUID | None
+    ) -> None:
+        if target_profile_id is None:
+            return
+        profile = await self.profile_repo.get(target_profile_id)
+        if profile is None or profile.household_id != household_id:
+            raise ProfileNotFoundError()
+        other = await self.profile_repo.find_active_claim(household_id, account_email=email)
+        if other is not None and other.id != profile.id:
+            raise ProfileClaimConflictError()
+        if profile.claimed_account_id is None:
+            return
+        if profile.lifecycle_status is LifecycleStatus.UNSHARED and (profile.account_email or "").lower() == email:
+            return
+        if (profile.account_email or "").lower() == email:
+            raise ProfileClaimConflictError("이미 이 프로필에 연결된 계정입니다.")
+        raise ProfileClaimConflictError()
 
     async def list_for_account(self, account: ServiceAccount) -> FamilyInvitationListData:
         invitations = await self.invitation_repo.list_for_account(account.id, account.email)

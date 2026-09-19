@@ -88,6 +88,7 @@ app = [
     # 떼면 uvloop 이 조용히 사라지고 asyncio 기본 루프로 떨어진다 — **테스트는
     # 전부 통과한다.** 성능만 나빠지고 아무 데도 안 찍히는 종류의 회귀라 명시한다.
     "uvicorn[standard]>=0.40.0",
+    "argon2-cffi>=25.1.0",
 ]
 dev = [
     "catboost>=1.2",

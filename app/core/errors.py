@@ -61,6 +61,12 @@ class ErrorCode(StrEnum):
     HOUSEHOLD_NOT_FOUND = "HOUSEHOLD_NOT_FOUND"
     HOUSEHOLD_MEMBERSHIP_REQUIRED = "HOUSEHOLD_MEMBERSHIP_REQUIRED"
     HOUSEHOLD_STATE_CONFLICT = "HOUSEHOLD_STATE_CONFLICT"
+    HOUSEHOLD_MASTER_REQUIRED = "HOUSEHOLD_MASTER_REQUIRED"
+    PAIRING_NOT_FOUND = "PAIRING_NOT_FOUND"
+    PAIRING_EXPIRED = "PAIRING_EXPIRED"
+    PAIRING_CONSUMED = "PAIRING_CONSUMED"
+    DEVICE_NOT_FOUND = "DEVICE_NOT_FOUND"
+    DEVICE_REVOKED = "DEVICE_REVOKED"
     ACTIVE_MEMBERS_REMAIN = "ACTIVE_MEMBERS_REMAIN"
     MEMBERSHIP_STATE_CONFLICT = "MEMBERSHIP_STATE_CONFLICT"
     INVITATION_NOT_FOUND = "INVITATION_NOT_FOUND"
@@ -76,6 +82,7 @@ class ErrorCode(StrEnum):
     PROFILE_ALREADY_LINKED = "PROFILE_ALREADY_LINKED"
     PROFILE_REF_ALREADY_CLAIMED = "PROFILE_REF_ALREADY_CLAIMED"
     PROFILE_LINK_INVITATION_MISMATCH = "PROFILE_LINK_INVITATION_MISMATCH"
+    PROFILE_CLAIM_CONFLICT = "PROFILE_CLAIM_CONFLICT"
     # --- challenge -------------------------------------------------
     CHALLENGE_NOT_FOUND = "CHALLENGE_NOT_FOUND"
     # --- chat sessions ---------------------------------------------
@@ -84,6 +91,15 @@ class ErrorCode(StrEnum):
     PROFILE_NOT_FOUND = "PROFILE_NOT_FOUND"
     HEALTH_RECORD_NOT_FOUND = "HEALTH_RECORD_NOT_FOUND"
     PROFILE_ACCESS_DENIED = "PROFILE_ACCESS_DENIED"
+    LEGAL_GUARDIAN_REQUIRED = "LEGAL_GUARDIAN_REQUIRED"
+    LEGAL_GUARDIAN_UNVERIFIED = "LEGAL_GUARDIAN_UNVERIFIED"
+    MINOR_DELETION_STATE_CONFLICT = "MINOR_DELETION_STATE_CONFLICT"
+    ADULT_TRANSITION_NOT_DUE = "ADULT_TRANSITION_NOT_DUE"
+    PROFILE_CLAIM_REQUIRED = "PROFILE_CLAIM_REQUIRED"
+    OPS_RECOVERY_FORBIDDEN = "OPS_RECOVERY_FORBIDDEN"
+    PIN_INVALID = "PIN_INVALID"
+    PIN_LOCKED = "PIN_LOCKED"
+    PIN_WEAK = "PIN_WEAK"
     # --- 멱등성·낙관적 잠금 (docs/03_api_spec.md §2.4·§2.5) ----------
     IDEMPOTENCY_KEY_REUSED = "IDEMPOTENCY_KEY_REUSED"
     VERSION_MISMATCH = "VERSION_MISMATCH"
@@ -127,6 +143,12 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     ErrorCode.HOUSEHOLD_NOT_FOUND: status.HTTP_404_NOT_FOUND,
     ErrorCode.HOUSEHOLD_MEMBERSHIP_REQUIRED: status.HTTP_403_FORBIDDEN,
     ErrorCode.HOUSEHOLD_STATE_CONFLICT: status.HTTP_409_CONFLICT,
+    ErrorCode.HOUSEHOLD_MASTER_REQUIRED: status.HTTP_403_FORBIDDEN,
+    ErrorCode.PAIRING_NOT_FOUND: status.HTTP_404_NOT_FOUND,
+    ErrorCode.PAIRING_EXPIRED: status.HTTP_410_GONE,
+    ErrorCode.PAIRING_CONSUMED: status.HTTP_409_CONFLICT,
+    ErrorCode.DEVICE_NOT_FOUND: status.HTTP_404_NOT_FOUND,
+    ErrorCode.DEVICE_REVOKED: status.HTTP_403_FORBIDDEN,
     ErrorCode.ACTIVE_MEMBERS_REMAIN: status.HTTP_409_CONFLICT,
     ErrorCode.MEMBERSHIP_STATE_CONFLICT: status.HTTP_409_CONFLICT,
     ErrorCode.INVITATION_NOT_FOUND: status.HTTP_404_NOT_FOUND,
@@ -142,11 +164,21 @@ ERROR_STATUS: dict[ErrorCode, int] = {
     ErrorCode.PROFILE_ALREADY_LINKED: status.HTTP_409_CONFLICT,
     ErrorCode.PROFILE_REF_ALREADY_CLAIMED: status.HTTP_409_CONFLICT,
     ErrorCode.PROFILE_LINK_INVITATION_MISMATCH: status.HTTP_409_CONFLICT,
+    ErrorCode.PROFILE_CLAIM_CONFLICT: status.HTTP_409_CONFLICT,
     ErrorCode.CHALLENGE_NOT_FOUND: status.HTTP_404_NOT_FOUND,
     ErrorCode.CHAT_SESSION_NOT_FOUND: status.HTTP_404_NOT_FOUND,
     ErrorCode.PROFILE_NOT_FOUND: status.HTTP_404_NOT_FOUND,
     ErrorCode.HEALTH_RECORD_NOT_FOUND: status.HTTP_404_NOT_FOUND,
     ErrorCode.PROFILE_ACCESS_DENIED: status.HTTP_403_FORBIDDEN,
+    ErrorCode.LEGAL_GUARDIAN_REQUIRED: status.HTTP_403_FORBIDDEN,
+    ErrorCode.LEGAL_GUARDIAN_UNVERIFIED: status.HTTP_403_FORBIDDEN,
+    ErrorCode.MINOR_DELETION_STATE_CONFLICT: status.HTTP_409_CONFLICT,
+    ErrorCode.ADULT_TRANSITION_NOT_DUE: status.HTTP_409_CONFLICT,
+    ErrorCode.PROFILE_CLAIM_REQUIRED: status.HTTP_409_CONFLICT,
+    ErrorCode.OPS_RECOVERY_FORBIDDEN: status.HTTP_403_FORBIDDEN,
+    ErrorCode.PIN_INVALID: status.HTTP_401_UNAUTHORIZED,
+    ErrorCode.PIN_LOCKED: status.HTTP_429_TOO_MANY_REQUESTS,
+    ErrorCode.PIN_WEAK: status.HTTP_422_UNPROCESSABLE_CONTENT,
     ErrorCode.IDEMPOTENCY_KEY_REUSED: status.HTTP_409_CONFLICT,
     ErrorCode.VERSION_MISMATCH: status.HTTP_412_PRECONDITION_FAILED,
 }
@@ -184,6 +216,12 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.HOUSEHOLD_NOT_FOUND: "가정을 찾을 수 없습니다.",
     ErrorCode.HOUSEHOLD_MEMBERSHIP_REQUIRED: "해당 가정의 활성 구성원만 수행할 수 있습니다.",
     ErrorCode.HOUSEHOLD_STATE_CONFLICT: "현재 상태에서는 가정을 변경할 수 없습니다.",
+    ErrorCode.HOUSEHOLD_MASTER_REQUIRED: "가정 마스터만 수행할 수 있습니다.",
+    ErrorCode.PAIRING_NOT_FOUND: "페어링 코드를 찾을 수 없습니다.",
+    ErrorCode.PAIRING_EXPIRED: "페어링 코드가 만료되었습니다.",
+    ErrorCode.PAIRING_CONSUMED: "이미 사용된 페어링 코드입니다.",
+    ErrorCode.DEVICE_NOT_FOUND: "벽 기기를 찾을 수 없습니다.",
+    ErrorCode.DEVICE_REVOKED: "철회된 벽 기기입니다.",
     ErrorCode.ACTIVE_MEMBERS_REMAIN: "다른 활성 구성원이 있어 가정을 폐쇄할 수 없습니다.",
     ErrorCode.MEMBERSHIP_STATE_CONFLICT: "현재 상태에서는 멤버십을 변경할 수 없습니다.",
     ErrorCode.INVITATION_NOT_FOUND: "초대를 찾을 수 없습니다.",
@@ -199,11 +237,21 @@ DEFAULT_MESSAGE: dict[ErrorCode, str] = {
     ErrorCode.PROFILE_ALREADY_LINKED: "이 가정에서 계정에 이미 활성 프로필 연결이 있습니다.",
     ErrorCode.PROFILE_REF_ALREADY_CLAIMED: "이 프로필 참조값은 이미 연결에 사용되었습니다.",
     ErrorCode.PROFILE_LINK_INVITATION_MISMATCH: "초대와 프로필 연결 정보가 일치하지 않습니다.",
+    ErrorCode.PROFILE_CLAIM_CONFLICT: "이 프로필은 이미 다른 계정에 연결되어 있습니다. 이름만으로 합치지 않습니다.",
     ErrorCode.CHALLENGE_NOT_FOUND: "그런 챌린지가 없습니다.",
     ErrorCode.CHAT_SESSION_NOT_FOUND: "대화 세션을 찾을 수 없습니다.",
     ErrorCode.PROFILE_NOT_FOUND: "프로필을 찾을 수 없습니다.",
     ErrorCode.HEALTH_RECORD_NOT_FOUND: "건강 기록을 찾을 수 없습니다.",
     ErrorCode.PROFILE_ACCESS_DENIED: "해당 프로필에 접근할 권한이 없습니다.",
+    ErrorCode.LEGAL_GUARDIAN_REQUIRED: "법정대리인 확인이 끝난 뒤에만 할 수 있습니다. 보호자 역할만으로는 부족합니다.",
+    ErrorCode.LEGAL_GUARDIAN_UNVERIFIED: "법정대리인 확인이 없거나 만료되었습니다.",
+    ErrorCode.MINOR_DELETION_STATE_CONFLICT: "지금 상태에서는 이 삭제 요청을 바꿀 수 없습니다.",
+    ErrorCode.ADULT_TRANSITION_NOT_DUE: "성년 전환 시점이 아니거나 본인 계정 재인증이 없습니다. PIN·보호자 체크로는 끝내지 않습니다.",
+    ErrorCode.PROFILE_CLAIM_REQUIRED: "성년 전환은 본인 프로필 연결(claim)이 있는 계정으로만 할 수 있습니다.",
+    ErrorCode.OPS_RECOVERY_FORBIDDEN: "운영 복구 권한이 없습니다. 가구 마스터로는 실행할 수 없습니다.",
+    ErrorCode.PIN_INVALID: "PIN이 다릅니다.",
+    ErrorCode.PIN_LOCKED: "PIN을 여러 번 틀려 잠시 잠겼습니다.",
+    ErrorCode.PIN_WEAK: "생년월일·연속 숫자처럼 쉬운 PIN은 쓸 수 없습니다.",
     ErrorCode.IDEMPOTENCY_KEY_REUSED: "이미 다른 요청에 사용된 Idempotency-Key입니다.",
     ErrorCode.VERSION_MISMATCH: "다른 곳에서 먼저 변경되었습니다. 최신 상태를 다시 불러온 뒤 시도해 주세요.",
 }
