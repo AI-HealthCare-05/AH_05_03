@@ -20,7 +20,7 @@ interface StitchCapsuleNavProps {
 
 export function StitchCapsuleNav({
   ariaLabel = "주 메뉴",
-  className = "stitch-capsule-nav",
+  className = "up15-nav stitch-capsule-nav",
   id,
   navRef,
 }: StitchCapsuleNavProps) {
@@ -31,7 +31,7 @@ export function StitchCapsuleNav({
           key={item.to}
           to={item.to}
           end={item.end}
-          className={({ isActive }) => (isActive ? "active" : undefined)}
+          className={({ isActive }) => (isActive ? "up15-nav-btn active" : "up15-nav-btn")}
           onMouseEnter={() => prefetchRouteFor(item.to)}
           onFocus={() => prefetchRouteFor(item.to)}
           onTouchStart={() => prefetchRouteFor(item.to)}

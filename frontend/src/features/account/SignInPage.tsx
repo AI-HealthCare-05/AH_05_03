@@ -98,11 +98,9 @@ export function SignInPage({
   }[mode];
 
   const leadText = {
-    // **가입 전에 하는 약속이라 가장 조심해야 하는 문구다.** 예전에는 "건강정보는
-    // 계정이 아니라 이 브라우저에 암호화해 보관합니다" 였는데, ADR-011 로 정본이
-    // PostgreSQL 로 옮겨간 뒤(2026-09-04) 사실이 아니다. 동의 직전 화면에서 틀린
-    // 약속을 하는 것이 이 축에서 가장 무거운 결함이었다.
-    signin: "질환 예측과 검진표 인식은 서비스 계정이 있어야 씁니다. 건강기록은 계정에 저장되어 기기를 바꿔도 이어집니다.",
+    // 로그인 카드는 이미 가입한 이메일을 쓰라고 안내한다. 그 위에 서비스·저장
+    // 설명까지 반복하면 첫 행동보다 문단이 먼저 보이므로 로그인 모드에서는 뺀다.
+    signin: undefined,
     signup: "이메일과 비밀번호만 있으면 됩니다. 건강기록은 계정에 저장되고, 나와 가족 구성원만 열람합니다.",
     "forgot-password": "가입하신 이메일로 비밀번호 재설정 링크를 받아 새 비밀번호를 설정할 수 있습니다.",
     "reset-password": "새로 사용할 비밀번호를 입력하여 계정 보안을 복원하세요.",
@@ -112,7 +110,7 @@ export function SignInPage({
     <div className="signin-shell">
       <div className="signin-panel">
         <div className="signin-brand">
-          <img className="brand-mark" src="/ieobom-icon.svg" alt="" aria-hidden="true" width={42} height={42} />
+          <img className="brand-mark" src="/ieobom-icon.png" alt="" aria-hidden="true" width={42} height={42} />
           <div>
             <strong>이어봄</strong>
             <small>우리 가족 건강기록</small>
@@ -120,7 +118,7 @@ export function SignInPage({
         </div>
 
         <h1>{headingText}</h1>
-        <p className="signin-lead">{leadText}</p>
+        {leadText ? <p className="signin-lead">{leadText}</p> : null}
 
         {error ? (
           <p className="alert error-alert" role="alert">

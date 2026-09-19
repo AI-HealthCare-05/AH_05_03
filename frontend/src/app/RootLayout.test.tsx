@@ -95,17 +95,17 @@ describe("RootLayout 로그인 관문", () => {
 
     expect(screen.getByText("판정 화면 내용")).toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "주 메뉴" })).toBeInTheDocument();
+    expect(document.querySelector(".app-shell.stitch-shell")).toBeInTheDocument();
   });
 
-  it("메뉴에 가족 홈·건강 데이터가 있고, 계정은 상단 이메일 링크로 연결된다", () => {
-    // **"건강 현황" 은 2026-09-10 에 "건강 데이터" 로 합쳤다.** 판정 스냅샷 추이와
-    // 기기 안 기록 추이가 화면 둘로 갈려 있었다 — 하나로 모았다.
-    // **주 메뉴에서 '계정' 링크를 빼고 헤더 이메일 링크로 일원화했다.**
+  it("Stitch 제품 메뉴에 네 제품 탭이 있고, 계정은 상단 계정 칩으로 연결된다", () => {
     renderAt("signed-in");
 
     const navigation = screen.getByRole("navigation", { name: "주 메뉴" });
     expect(navigation).toHaveTextContent("가족 홈");
-    expect(navigation).toHaveTextContent("건강 데이터");
+    expect(navigation).toHaveTextContent("통증 다이어리");
+    expect(navigation).toHaveTextContent("위험 판정 / 리포트");
+    expect(navigation).toHaveTextContent("건강 데이터 3");
     expect(navigation).not.toHaveTextContent("챌린지");
     expect(navigation).not.toHaveTextContent("계정");
 
@@ -134,7 +134,7 @@ describe("RootLayout 로그인 관문", () => {
       .filter((link) => link.getAttribute("aria-current") === "page");
 
     expect(current).toHaveLength(1);
-    expect(current[0]).toHaveTextContent("질환 예측");
+    expect(current[0]).toHaveTextContent("위험 판정 / 리포트");
   });
 
   /**

@@ -35,6 +35,7 @@
   flex: 1;
   background: transparent;
   padding: 24px 16px 48px;
+  font-size: 15px;
 }
 
 .stitch-shell .signin-panel {
@@ -116,7 +117,9 @@
 
 .stitch-shell .signin-shell .product-form label {
   color: var(--stitch-aubergine);
+  font-size: 15px;
   font-weight: 400;
+  line-height: 1.2;
 }
 
 .stitch-shell .signin-shell .product-form input {
@@ -125,6 +128,7 @@
   border-radius: 100px;
   background: var(--stitch-paper);
   color: var(--stitch-obsidian);
+  font-size: 15px;
 }
 
 .stitch-shell .signin-shell .product-form input:focus {
@@ -137,6 +141,7 @@
   border: 0;
   border-radius: 100px;
   padding: 12px 32px;
+  font-size: 15px;
   font-weight: 400;
   color: var(--stitch-aubergine);
   background: var(--stitch-ghost);
@@ -162,6 +167,23 @@
 .stitch-shell .signin-shell .auth-hint,
 .stitch-shell .signin-shell .auth-switch {
   color: var(--stitch-fog);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.stitch-shell .signin-shell .auth-switch-links {
+  display: grid;
+  gap: 0;
+  margin-top: 8px;
+}
+
+.stitch-shell .signin-shell .auth-switch-links .auth-switch {
+  min-height: 44px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 4px;
 }
 
 .stitch-shell .signin-shell .auth-switch button,
@@ -1295,8 +1317,8 @@
 
 .preview-shell .channel-talk-launcher-btn,
 .app-shell.stitch-shell .channel-talk-launcher-btn {
-  width: 62px;
-  height: 62px;
+  width: 96px;
+  height: 104px;
   border-radius: 0;
   background: transparent;
   color: var(--up15-aubergine, var(--stitch-aubergine, #3c315b));
@@ -1317,7 +1339,7 @@
 
 .preview-shell .channel-talk-popover,
 .app-shell.stitch-shell .channel-talk-popover {
-  bottom: 104px;
+  bottom: 144px;
   right: 28px;
   z-index: 1200;
 }

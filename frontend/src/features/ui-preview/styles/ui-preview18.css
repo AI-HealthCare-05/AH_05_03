@@ -144,15 +144,18 @@
   color: var(--up15-fog);
 }
 
-.up15-nav {
+.up15-nav,
+.stitch-capsule-nav {
   display: flex;
   align-items: center;
   gap: 4px;
   padding-left: 24px;
+  margin-left: 10px;
   border-left: 1px solid var(--up15-ash);
 }
 
-.up15-nav-btn {
+.up15-nav-btn,
+.stitch-capsule-nav a {
   padding: 8px 14px;
   border-radius: 8px;
   border: 0;
@@ -166,14 +169,17 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
 }
 
-.up15-nav-btn:hover {
+.up15-nav-btn:hover,
+.stitch-capsule-nav a:hover {
   color: var(--up15-aubergine);
   background: var(--up15-bone);
 }
 
-.up15-nav-btn.active {
+.up15-nav-btn.active,
+.stitch-capsule-nav a.active {
   background: var(--up15-ghost-lavender);
   color: var(--up15-aubergine);
   box-shadow: none;
@@ -1191,6 +1197,8 @@ a.up15-user-pill:hover {
   border-radius: 100px;
   padding: 3px 10px;
   font-size: 11px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* 챗봇 헤더 */
@@ -1207,9 +1215,8 @@ a.up15-user-pill:hover {
 }
 
 .channel-talk-popover.up15-assistant-scope .assistant-avatar {
-  background: var(--up15-ghost-lavender);
-  border-color: var(--up15-periwinkle);
-  color: var(--up15-aubergine);
+  background: transparent;
+  border: none;
 }
 
 .channel-talk-popover.up15-assistant-scope .target-profile-pill {
@@ -1799,6 +1806,18 @@ a.up15-user-pill:hover {
   overflow: hidden !important;
 }
 
+.up15-body-viewport .vanatome-quick-search-item-badge {
+  margin-left: 6px;
+  padding: 2px 7px;
+  border: 1px solid var(--up15-ash);
+  border-radius: 100px;
+  background: var(--up15-ghost-lavender);
+  color: var(--up15-aubergine);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
 .up15-body-viewport .vanatome-quick-search-item-system {
   color: var(--up15-fog) !important;
   white-space: nowrap !important;
@@ -2202,11 +2221,14 @@ a.up15-user-pill:hover {
     ". lower ."
     ". knee ."
     ". foot ." !important;
+  align-content: start !important;
+  justify-content: start !important;
   gap: var(--vanatome-overlay-gap) !important;
   width: calc(var(--vanatome-overlay-btn) * 3 + var(--vanatome-overlay-gap) * 2) !important;
   min-width: calc(var(--vanatome-overlay-btn) * 3 + var(--vanatome-overlay-gap) * 2) !important;
   max-width: calc(var(--vanatome-overlay-btn) * 3 + var(--vanatome-overlay-gap) * 2) !important;
-  max-height: calc(100% - var(--vanatome-overlay-inset) - var(--vanatome-overlay-btn) - var(--vanatome-overlay-gap) - 8px);
+  height: auto !important;
+  max-height: none !important;
   overflow: visible;
   pointer-events: none;
 }
@@ -2230,6 +2252,7 @@ a.up15-user-pill:hover {
   left: auto !important;
   right: var(--vanatome-overlay-inset) !important;
   bottom: 40px !important;
+  height: auto !important;
   z-index: 26 !important;
   max-height: none;
   overflow: visible;
@@ -2798,4 +2821,3 @@ a.up15-user-pill:hover {
     flex: 1 1 auto;
   }
 }
-

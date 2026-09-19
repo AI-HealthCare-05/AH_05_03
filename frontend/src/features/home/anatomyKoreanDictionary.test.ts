@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getUnregisteredAnatomyList, resolveAnatomyDisplayInfo } from "./anatomyKoreanDictionary";
+import { ANATOMY_DICTIONARY, ANATOMY_SEARCH_OMIT_KEYS, getUnregisteredAnatomyList, resolveAnatomyDisplayInfo } from "./anatomyKoreanDictionary";
 
 describe("anatomyKoreanDictionary", () => {
   it("Fascia lata.l 메쉬명을 좌측 대퇴근막 및 라틴어 병기 레이블로 해석한다", () => {
@@ -102,6 +102,13 @@ describe("anatomyKoreanDictionary", () => {
     // 미등록 레지스트리에 원문이 기록되었는지 확인
     const list = getUnregisteredAnatomyList();
     expect(list).toContain(unknownRaw);
+  });
+
+  it("메쉬가 없는 신장 피질·수질은 사전과 검색 제외 목록에서 같이 뺀다", () => {
+    expect(ANATOMY_DICTIONARY["renal cortex"]).toBeUndefined();
+    expect(ANATOMY_DICTIONARY["renal medulla"]).toBeUndefined();
+    expect(ANATOMY_SEARCH_OMIT_KEYS.has("renal cortex")).toBe(true);
+    expect(ANATOMY_SEARCH_OMIT_KEYS.has("renal medulla")).toBe(true);
   });
 });
 

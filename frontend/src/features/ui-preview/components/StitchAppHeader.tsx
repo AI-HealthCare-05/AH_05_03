@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 
 import { StitchAccountChip } from "./StitchAccountChip";
 import { StitchCapsuleNav } from "./StitchCapsuleNav";
+import "../styles/ui-preview18.css";
 
 function HeaderIcon({ name }: { name: "search" | "bell" }) {
   const paths = {

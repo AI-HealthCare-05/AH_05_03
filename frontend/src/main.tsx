@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { AppProviders } from "./app/AppProviders";
 import "./styles.css";
+import "./features/ui-preview/styles/stitch-healthcare-subpages.css";
 
 const rootElement = document.getElementById("root");
 

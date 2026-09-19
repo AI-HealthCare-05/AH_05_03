@@ -4,8 +4,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { LocalDomainContext } from "../../app/localDomainContext";
 import type { FamilyProfile } from "../../shared/local/domainContracts";
 import { ChatLoadingSkeleton } from "../../shared/ui/Skeleton";
+import { BomiAvatar } from "./BomiAvatar";
 import { HealthAssistantDrawer } from "./HealthAssistantDrawer";
-import bomiChickIcon from "./assets/bomi-chick.png";
+import { pickLauncherMood } from "./bomiMood";
 import "./globalHealthAssistant.css";
 
 const ASSISTANT_STORAGE_KEY = "ieobom:global-assistant-open";
@@ -88,6 +89,7 @@ export function GlobalHealthAssistant() {
   const [showTooltip, setShowTooltip] = useState(true);
   const [tooltipMessage, setTooltipMessage] = useState(TOOLTIP_MESSAGES[0]);
   const [hoverHint, setHoverHint] = useState<string | null>(null);
+  const [hoveringLauncher, setHoveringLauncher] = useState(false);
 
   // 현재 선택된 프로필 (가족 홈이나 다른 화면과 동기화)
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(() => {
@@ -228,11 +230,21 @@ export function GlobalHealthAssistant() {
           type="button"
           className={`channel-talk-launcher-btn ${isOpen ? "is-open" : ""}`}
           onClick={handleToggle}
+          onMouseEnter={() => setHoveringLauncher(true)}
+          onMouseLeave={() => setHoveringLauncher(false)}
           aria-label={isOpen ? "건강 비서 닫기" : "건강 비서 봄이와 대화하기"}
           title={isOpen ? "닫기" : "봄이 · 건강 비서"}
         >
-          {/* 봄이 마스코트 아이콘 */}
-          <img src={bomiChickIcon} alt="" className="icon-chat icon-chat-mascot" aria-hidden="true" />
+          <BomiAvatar
+            mood={pickLauncherMood({
+              isOpen,
+              hasUnread,
+              showTooltip,
+              hovering: hoveringLauncher,
+            })}
+            interactive
+            className="icon-chat icon-chat-mascot"
+          />
 
           {/* 닫기 X 아이콘 */}
           <svg

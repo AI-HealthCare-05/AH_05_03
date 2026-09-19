@@ -12,7 +12,7 @@ export function LandingFooter() {
     <footer className="ln-footer">
       <div className="ln-container ln-footer-inner">
         <div className="ln-footer-brand">
-          <img src="/ieobom-icon.svg" alt="" width={36} height={36} aria-hidden="true" />
+          <img src="/ieobom-icon.png" alt="" width={36} height={36} aria-hidden="true" />
           <div>
             <strong>이어봄</strong>
             <p>흩어진 건강 기록을 하나로 잇습니다.</p>

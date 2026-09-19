@@ -105,7 +105,9 @@ export function LocalDomainProvider({
           return;
         }
 
-        // 실제 앱 모드: 로그인 상태(signed-in)일 때만 서버(PostgreSQL) 우선
+        // 실제 앱 모드: 로그인 상태(signed-in)일 때는 PostgreSQL 만 쓴다.
+        // 가정 목록이 실패했는데 IndexedDB 로 내려가면 화면은 로그인한 것처럼
+        // 보이면서 건강기록·챗봇이 0건이다 — 정본은 서버에 그대로 있다.
         let activeHouseholdId: string | undefined;
         if (authStatus === "signed-in") {
           try {
@@ -117,9 +119,13 @@ export function LocalDomainProvider({
               const created = await serverApiClient.createHousehold();
               activeHouseholdId = created.id;
             }
-          } catch {
-            // 비로그인 상태이거나 서버 연결 불가/E2E 모드
-            activeHouseholdId = undefined;
+          } catch (err) {
+            if (disposed) return;
+            setRuntime(undefined);
+            setProfiles([]);
+            setHiddenProfiles([]);
+            setError(errorMessage(err, "가정 정보를 불러오지 못했습니다. 다시 로그인해 주세요."));
+            return;
           }
         }
         if (disposed) return;
@@ -212,26 +218,10 @@ export function LocalDomainProvider({
             if (hiddenResult.ok) setHiddenProfiles(hiddenResult.value);
             setError(undefined);
           } else {
-            // 가정이 유효하지 않거나 멤버십이 없는 경우 새 가정을 생성하거나 로컬 fallback
-            try {
-              const created = await serverApiClient.createHousehold();
-              if (disposed) return;
-              setHouseholdId(created.id);
-              activeRuntime = createServerDomainRuntime(created.id, serverApiClient);
-              setRuntime(activeRuntime);
-              setProfiles([]);
-              setError(undefined);
-            } catch {
-              setHouseholdId(PRIMARY_HOUSEHOLD_ID);
-              activeRuntime = await createLocalDomainRuntime("ieobom-local");
-              if (disposed) {
-                activeRuntime.close();
-                return;
-              }
-              setRuntime(activeRuntime);
-              setProfiles([]);
-              setError(undefined);
-            }
+            // 프로필 목록 실패를 새 가정 생성으로 넘기지 않는다. 기존 가구와 서버의
+            // 건강기록·대화가 그대로인데 빈 가구를 만들면 화면만 0건이 된다.
+            setError(result.error.message);
+            setProfiles([]);
           }
           if (hiddenResult.ok) setHiddenProfiles(hiddenResult.value);
         } else {

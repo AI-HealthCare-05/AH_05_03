@@ -16,7 +16,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
-import bomiChickIcon from "../health-assistant/assets/bomi-chick.png";
+import { BomiAvatar } from "../health-assistant/BomiAvatar";
 import "../health-assistant/globalHealthAssistant.css";
 import { ASSISTANT_TURNS } from "./landingStory";
 
@@ -75,7 +75,7 @@ export function LandingAssistant() {
       {open ? (
         <aside className="ln-assistant-panel" id={panelId} role="dialog" aria-label="봄이 건강 비서 미리보기">
           <header className="ln-assistant-panel-head">
-            <img src={bomiChickIcon} alt="" width={28} height={28} aria-hidden="true" />
+            <BomiAvatar mood="idle" still />
             <span>
               <strong>봄이</strong>
               <small>건강 비서 · 미리보기</small>
@@ -125,7 +125,7 @@ export function LandingAssistant() {
           aria-controls={panelId}
           aria-label={open ? "건강 비서 미리보기 닫기" : "건강 비서 봄이 미리보기 열기"}
         >
-          <img src={bomiChickIcon} alt="" className="icon-chat icon-chat-mascot" aria-hidden="true" />
+          <BomiAvatar mood="idle" className="icon-chat icon-chat-mascot" />
           <svg
             className="icon-close"
             width="28"

@@ -3,12 +3,13 @@ import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { SignInPage } from "../features/account/SignInPage";
 import { GlobalHealthAssistant } from "../features/health-assistant/GlobalHealthAssistant";
+import { StitchAppHeader } from "../features/ui-preview/components/StitchAppHeader";
 import { serverApiClient } from "../shared/api/serverApiClient";
 import { PageSkeleton } from "../shared/ui/Skeleton";
 import { useAuth } from "./authContext";
 import { LocalDomainContext } from "./localDomainContext";
 import { prefetchNavigationRoutes, prefetchRouteFor } from "./prefetchRoutes";
-import { isPreviewShellPath } from "./localHomeSwap";
+import { isPreviewShellPath, isStitchShellPath } from "./localHomeSwap";
 import { useRouteTitle } from "./useRouteTitle";
 
 // 가족 홈이 "관리"(구성원·기록·검진표), 건강 데이터가 "지금 어떤가"(수치 추이) 다.
@@ -39,6 +40,7 @@ const NAVIGATION = [
 
 const ROUTE_TITLES = [
   ...NAVIGATION,
+  { to: "/health-data3", label: "건강 데이터 3", end: false },
   { to: "/challenge", label: "챌린지", end: false },
   { to: "/account", label: "계정", end: false },
 ] as const;
@@ -197,8 +199,10 @@ export function RootLayout() {
     );
   }
 
+  const stitchShell = isStitchShellPath(pathname);
+
   return (
-    <div className="app-shell">
+    <div className={stitchShell ? "app-shell stitch-shell" : "app-shell"}>
       {/* **본문 건너뛰기.** 헤더에 브랜드 + 주 메뉴 7개 + 계정 + 로그아웃이 있어서,
           키보드나 낭독기로 들어온 사람은 화면마다 그 열 개를 다시 지나야 본문에
           닿는다. 첫 탭에서 건너뛸 자리를 준다 — 평소에는 화면 밖에 있고 포커스를
@@ -206,62 +210,66 @@ export function RootLayout() {
       <a className="skip-to-main" href="#main-content">
         본문으로 건너뛰기
       </a>
-      <header className="site-header">
-        <div className="header-inner">
-          <NavLink className="brand" to="/">
-            <img className="brand-mark" src="/ieobom-icon.svg" alt="" aria-hidden="true" width={42} height={42} />
-            <span className="brand-copy">
-              <strong>이어봄</strong>
-              <small>우리 가족 건강기록</small>
-            </span>
-          </NavLink>
+      {stitchShell ? (
+        <StitchAppHeader displayName={matchedProfileName ?? profiles[0]?.displayName} navRef={navigationRef} />
+      ) : (
+        <header className="site-header">
+          <div className="header-inner">
+            <NavLink className="brand" to="/">
+              <img className="brand-mark" src="/ieobom-icon.png" alt="" aria-hidden="true" width={42} height={42} />
+              <span className="brand-copy">
+                <strong>이어봄</strong>
+                <small>우리 가족 건강기록</small>
+              </span>
+            </NavLink>
 
           {/* 예전에는 좁은 화면에서 햄버거 버튼 뒤로 접혀 있었다. 항목이 셋뿐이라
               접을 이유가 없고, 한 번 더 눌러야 보이는 메뉴는 그만큼 덜 눌린다.
               언제나 탭으로 펼쳐 두고 좁은 화면에서는 헤더 아래 줄로 내린다. */}
-          <nav
-            id="primary-navigation"
-            className="primary-navigation"
-            aria-label="주 메뉴"
-            ref={navigationRef}
-          >
-            {NAVIGATION.map((item) => (
-              <NavLink
-                key={`${item.to}-${item.label}`}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) => (isActive ? "active" : "")}
-                // 손이 닿은 시점(hover·focus·터치 시작)은 실제로 누르기 200~300ms 전이다.
-                // 그 사이에 청크를 받아 두면 누른 뒤에는 폴백 없이 바로 그려진다.
-                onMouseEnter={() => prefetchRouteFor(item.to)}
-                onFocus={() => prefetchRouteFor(item.to)}
-                onTouchStart={() => prefetchRouteFor(item.to)}
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </nav>
+            <nav
+              id="primary-navigation"
+              className="primary-navigation"
+              aria-label="주 메뉴"
+              ref={navigationRef}
+            >
+              {NAVIGATION.map((item) => (
+                <NavLink
+                  key={`${item.to}-${item.label}`}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) => (isActive ? "active" : "")}
+                  // 손이 닿은 시점(hover·focus·터치 시작)은 실제로 누르기 200~300ms 전이다.
+                  // 그 사이에 청크를 받아 두면 누른 뒤에는 폴백 없이 바로 그려진다.
+                  onMouseEnter={() => prefetchRouteFor(item.to)}
+                  onFocus={() => prefetchRouteFor(item.to)}
+                  onTouchStart={() => prefetchRouteFor(item.to)}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
 
           {/* 예전에는 여기가 `/account` 로 가는 "내 계정" 링크였는데, 주 메뉴에 이미
               "계정" 이 있어서 같은 곳으로 가는 문이 둘이었다. 헤더에서 실제로 필요한
               것은 **지금 누구로 들어와 있는가** 와 나가는 문이다. */}
-          <div className="header-status">
-            {email ? (
-              <NavLink
-                to="/account"
-                className="header-account"
-                title={`계정 관리 (${email})`}
-                aria-label={`계정 관리 (${email})`}
-              >
-                {matchedProfileName ? `${matchedProfileName} (${email})` : email}
-              </NavLink>
-            ) : null}
-            <button type="button" className="header-signout" onClick={() => void signOut()}>
-              로그아웃
-            </button>
+            <div className="header-status">
+              {email ? (
+                <NavLink
+                  to="/account"
+                  className="header-account"
+                  title={`계정 관리 (${email})`}
+                  aria-label={`계정 관리 (${email})`}
+                >
+                  {matchedProfileName ? `${matchedProfileName} (${email})` : email}
+                </NavLink>
+              ) : null}
+              <button type="button" className="header-signout" onClick={() => void signOut()}>
+                로그아웃
+              </button>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       <main id="main-content" tabIndex={-1}>
         {/* 라우트가 lazy 라 청크를 받는 동안 잠깐 빈다. 폴백을 안 두면 React 가
@@ -277,20 +285,22 @@ export function RootLayout() {
         </Suspense>
       </main>
 
-      <footer className="site-footer">
-        <div>
-          <strong>이어봄</strong>
-          {/* **"기기 안에만" 이었다.** ADR-011 로 건강기록 정본이 PostgreSQL 로 옮겨
+      {!stitchShell ? (
+        <footer className="site-footer">
+          <div>
+            <strong>이어봄</strong>
+            {/* **"기기 안에만" 이었다.** ADR-011 로 건강기록 정본이 PostgreSQL 로 옮겨
               갔는데(2026-09-04) 이 문구만 남아 있었다. 이 줄이 모든 화면 아래에 있어서
               틀린 약속이 가장 넓게 퍼지던 자리다. */}
-          <span>건강기록은 내 계정에, 나와 가족만 열람</span>
-        </div>
-        {/* **개발용 화면은 개발 빌드에만 낸다.** 게이트가 없어서 배포본 푸터에 그대로
+            <span>건강기록은 내 계정에, 나와 가족만 열람</span>
+          </div>
+          {/* **개발용 화면은 개발 빌드에만 낸다.** 게이트가 없어서 배포본 푸터에 그대로
             나가고 있었다(7개 라우트 중 6개에서 확인). `import.meta.env.DEV` 는 Vite 가
             `vite build` 에서 `false` 로 정적 치환하므로 운영 번들에서는 이 분기와 링크가
             함께 사라진다 — 숨기는 것이 아니라 빠진다. */}
-        {import.meta.env.DEV ? <NavLink to="/dev/architecture">개발용 데이터 경계 확인</NavLink> : null}
-      </footer>
+          {import.meta.env.DEV ? <NavLink to="/dev/architecture">개발용 데이터 경계 확인</NavLink> : null}
+        </footer>
+      ) : null}
 
       {/* 채널톡 스타일 전역 연속형 건강 비서 (어느 화면에서나 유지되는 플로팅 챗봇) */}
       <GlobalHealthAssistant />

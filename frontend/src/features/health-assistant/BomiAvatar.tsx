@@ -1,43 +1,99 @@
-import { useState } from "react";
+/**
+ * 봄이 아바타. CSS `steps()` 무한 재생 대신 RAF 상태 머신으로 한 줄만 돌린다.
+ * 잡아당기기는 런처만 켠다. 채팅창 안은 `interactive={false}`.
+ */
+
+import { useEffect, useRef, useState } from "react";
+
 import { BOMI_AVATARS, type BomiMood } from "./bomiMood";
+import { moodToServiceState } from "./bomiSpriteMap";
+import spritesheet from "./assets/bomi/spritesheet.webp";
+import { useBomiAnimator } from "./useBomiAnimator";
+import { useBomiDrag, type BomiDragPose } from "./useBomiDrag";
+import "./bomiAvatar.css";
 
 export function BomiAvatar({
   mood,
   className,
+  size = "md",
+  still = false,
+  interactive = false,
 }: {
   mood: BomiMood;
   className?: string;
+  size?: "md" | "lg";
+  still?: boolean;
+  interactive?: boolean;
 }) {
-  const [hasError, setHasError] = useState(false);
+  const [useStill, setUseStill] = useState(still);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const elRef = useRef<HTMLSpanElement>(null);
+  const poseRef = useRef<BomiDragPose>({
+    x: 0,
+    y: 0,
+    rotate: 0,
+    scaleX: 1,
+    scaleY: 1,
+    dragging: false,
+    vx: 0,
+    vy: 0,
+    dizzyPlays: 0,
+  });
 
-  if (hasError) {
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReducedMotion(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    if (still) return;
+    const probe = new Image();
+    probe.onerror = () => setUseStill(true);
+    probe.src = spritesheet;
+  }, [still]);
+
+  const live = !still && !useStill;
+  useBomiAnimator(elRef, {
+    enabled: live,
+    reducedMotion,
+    serviceState: moodToServiceState(mood),
+    poseRef,
+  });
+  useBomiDrag(elRef, {
+    enabled: live && interactive,
+    reducedMotion,
+    poseRef,
+  });
+
+  if (still || useStill) {
     return (
-      <svg
+      <img
+        src={BOMI_AVATARS[mood]}
+        alt=""
         className={className}
-        width="28"
-        height="28"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        data-bomi-mood={mood}
+        data-bomi-still=""
+        loading="eager"
+        decoding="async"
         aria-hidden="true"
-      >
-        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-      </svg>
+        draggable={false}
+      />
     );
   }
 
+  const sizeClass = size === "lg" ? " is-lg" : "";
+  const extra = className ? ` ${className}` : "";
+
   return (
-    <img
-      src={BOMI_AVATARS[mood]}
-      alt="봄이"
-      className={className}
+    <span
+      ref={elRef}
+      className={`bomi-avatar bomi-avatar-sprite${sizeClass}${interactive ? " is-interactive" : ""}${extra}`}
       data-bomi-mood={mood}
-      loading="eager"
-      decoding="async"
-      onError={() => setHasError(true)}
+      data-bomi-state="idle"
+      style={{ backgroundImage: `url(${spritesheet})` }}
       aria-hidden="true"
     />
   );

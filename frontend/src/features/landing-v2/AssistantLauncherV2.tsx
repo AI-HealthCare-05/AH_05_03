@@ -21,7 +21,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
-import bomiChickIcon from "../health-assistant/assets/bomi-chick.png";
+import { BomiAvatar } from "../health-assistant/BomiAvatar";
 import { ASSISTANT_TURNS } from "../landing/landingStory";
 
 interface Line {
@@ -82,7 +82,7 @@ export function AssistantLauncherV2() {
       {open ? (
         <aside className="lnv2-panel" id={panelId} role="dialog" aria-label="봄이 건강 비서 미리보기">
           <header className="lnv2-panel-head">
-            <img src={bomiChickIcon} alt="" width={28} height={28} aria-hidden="true" />
+            <BomiAvatar mood="idle" still />
             <span className="lnv2-panel-who">
               <strong>봄이</strong>
               <small>건강 비서 · 미리보기</small>
@@ -132,7 +132,7 @@ export function AssistantLauncherV2() {
         aria-controls={panelId}
         aria-label={open ? "건강 비서 미리보기 닫기" : "건강 비서 봄이 미리보기 열기"}
       >
-        <img src={bomiChickIcon} alt="" width={30} height={30} aria-hidden="true" />
+        <BomiAvatar mood="idle" />
         <span className="lnv2-launcher-word">봄이에게 묻기</span>
       </button>
     </div>

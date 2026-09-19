@@ -1,0 +1,45 @@
+/* Codex v2 시트: 셀 192×208, 8열×11행. 표시는 원본 비율(기본 50% = 96×104). */
+.bomi-avatar {
+  --bomi-cell-w: 96px;
+  --bomi-cell-h: 104px;
+  display: inline-block;
+  width: var(--bomi-cell-w);
+  height: var(--bomi-cell-h);
+  flex: 0 0 auto;
+  background-repeat: no-repeat;
+  background-size: calc(var(--bomi-cell-w) * 8) calc(var(--bomi-cell-h) * 11);
+  background-position: 0 0;
+  image-rendering: auto;
+  transform-origin: 50% 85%;
+  will-change: transform, background-position;
+  user-select: none;
+  -webkit-user-drag: none;
+  touch-action: none;
+  transition: none;
+  pointer-events: none;
+}
+
+.bomi-avatar.is-lg {
+  --bomi-cell-w: 144px;
+  --bomi-cell-h: 156px;
+}
+
+.bomi-avatar.is-interactive {
+  cursor: grab;
+  pointer-events: auto;
+}
+
+.bomi-avatar.is-interactive[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+html.bomi-is-dragging,
+html.bomi-is-dragging * {
+  cursor: grabbing !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bomi-avatar {
+    will-change: auto;
+  }
+}
