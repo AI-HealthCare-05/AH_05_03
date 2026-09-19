@@ -74,7 +74,7 @@ def test_env_aliases_map_to_prod() -> None:
 
 def test_production_cannot_enable_ops_recovery() -> None:
     with pytest.raises(ValidationError, match="OPS_RECOVERY_ENABLED"):
-        Config(ENV="prod", OPS_RECOVERY_ENABLED=True)
+        Config.model_validate({"ENV": "prod", "OPS_RECOVERY_ENABLED": True})
 
 
 def test_break_glass_accepts_current_and_previous_key_before_expiry(monkeypatch) -> None:
@@ -133,11 +133,11 @@ def test_all_forwarded_hops_trusted_falls_back_to_peer(monkeypatch) -> None:
 
 def test_invalid_previous_key_expiry_fails_closed() -> None:
     with pytest.raises(ValidationError):
-        Config(OPS_CIVIL_MAJORITY_RECOVERY_KEY_PREVIOUS_EXPIRES_AT="not-a-date")
+        Config.model_validate({"OPS_CIVIL_MAJORITY_RECOVERY_KEY_PREVIOUS_EXPIRES_AT": "not-a-date"})
 
 
 def test_prod_config_disables_docs_and_boots() -> None:
-    cfg = Config(ENV="prod", OPS_RECOVERY_ENABLED=False)
+    cfg = Config.model_validate({"ENV": "prod", "OPS_RECOVERY_ENABLED": False})
     assert cfg.ENV is Env.PROD
     assert cfg.API_DOCS_ENABLED is False
     assert cfg.OPS_RECOVERY_ENABLED is False
@@ -149,7 +149,7 @@ def test_prod_openapi_schema_omits_ops_recovery_path() -> None:
 
     from app.apis.v1.ops_recovery_routers import ops_recovery_router
 
-    cfg = Config(ENV="prod", OPS_RECOVERY_ENABLED=False, API_DOCS_ENABLED=True)
+    cfg = Config.model_validate({"ENV": "prod", "OPS_RECOVERY_ENABLED": False, "API_DOCS_ENABLED": True})
     app = FastAPI()
     if cfg.ENV is not Env.PROD:
         app.include_router(ops_recovery_router, prefix="/api/v1")
