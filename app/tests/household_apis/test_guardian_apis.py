@@ -375,6 +375,45 @@ class TestGuardianAPIs:
         kept = await client.get(f"/api/v1/health-records/{rec.json()['data']['id']}", headers=headers)
         assert kept.status_code == status.HTTP_403_FORBIDDEN
 
+    async def test_local_slot_civil_majority_self_keeps_record_access(self, client: AsyncClient) -> None:
+        headers = await _login(client, "guard-self-slot@example.com")
+        household_id = await _household(client, headers)
+        majority_birth = date(date.today().year - CIVIL_MAJORITY_AGE_YEARS - 1, 1, 15).isoformat()
+        created = await client.post(
+            "/api/v1/profiles",
+            headers=headers,
+            json={
+                "household_id": household_id,
+                "display_name": "나",
+                "relationship": "본인",
+                "birth_date": majority_birth,
+            },
+        )
+        assert created.status_code == status.HTTP_201_CREATED
+        profile = created.json()["data"]
+        assert profile["ownership_type"] == "local_slot"
+        rec = await client.post(
+            "/api/v1/health-records",
+            headers=headers,
+            json={
+                "profile_id": profile["id"],
+                "record_type": "blood_pressure",
+                "recorded_at": "2026-09-01T00:00:00Z",
+                "source": "manual",
+                "payload": {"systolic": 110, "diastolic": 70},
+            },
+        )
+        assert rec.status_code == status.HTTP_201_CREATED
+        listed = await client.get(f"/api/v1/profiles?household_id={household_id}", headers=headers)
+        assert listed.status_code == status.HTTP_200_OK
+        got = await client.get(f"/api/v1/profiles/{profile['id']}", headers=headers)
+        assert got.status_code == status.HTTP_200_OK
+        assert got.json()["data"]["adult_transition_pending_at"] is not None
+        listed_records = await client.get(f"/api/v1/health-records?profile_id={profile['id']}", headers=headers)
+        assert listed_records.status_code == status.HTTP_200_OK
+        kept = await client.get(f"/api/v1/health-records/{rec.json()['data']['id']}", headers=headers)
+        assert kept.status_code == status.HTTP_200_OK
+
     async def test_adult_transition_blocked_before_majority(self, client: AsyncClient) -> None:
         headers = await _login(client, "guard-young@example.com")
         household_id = await _household(client, headers)
