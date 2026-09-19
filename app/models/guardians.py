@@ -170,6 +170,6 @@ class CivilMajorityTransition(TimestampMixin, Base):
         ),
         CheckConstraint(
             "review_status IN ('active', 'invalidated', 'needs_review')",
-            name="civil_majority_transition_review_status",
+            name="review_status",
         ),
     )

@@ -65,7 +65,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.CheckConstraint(
             "review_status IN ('active', 'invalidated', 'needs_review')",
-            name="civil_majority_transition_review_status",
+            name=op.f("ck_civil_majority_transitions_review_status"),
         ),
     )
     op.create_index("ix_civil_majority_transitions_household_id", "civil_majority_transitions", ["household_id"])
