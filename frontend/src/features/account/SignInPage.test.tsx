@@ -58,6 +58,10 @@ describe("SignInPage", () => {
       .filter((button) => (button as HTMLButtonElement).type === "submit");
     expect(submits).toHaveLength(1);
     expect(submits[0]).toHaveAccessibleName("로그인");
+    expect(screen.queryByText(/질환 예측과 검진표 인식은 서비스 계정이 있어야/)).not.toBeInTheDocument();
+    expect(screen.queryByText("서비스 계정")).not.toBeInTheDocument();
+    expect(document.querySelector(".auth-account-icon")).not.toBeInTheDocument();
+    expect(document.querySelector(".signin-brand .brand-mark")).toHaveAttribute("src", "/ieobom-icon.png");
   });
 
   it("회원가입을 누르면 가입 화면으로 바뀌고 거기서 가입한다", async () => {
@@ -195,4 +199,3 @@ describe("SignInPage", () => {
     expect(passwordInput).toHaveAttribute("type", "password");
   });
 });
-

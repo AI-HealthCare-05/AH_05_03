@@ -183,7 +183,7 @@ export function AuthCard({
 
   return (
     <section className="account-card auth-card">
-      <p className="section-kicker">{invitationEmail ? "가족 초대" : "서비스 계정"}</p>
+      {invitationEmail ? <p className="section-kicker">가족 초대</p> : null}
       <h2>{signup ? "서비스 계정 만들기" : "로그인"}</h2>
       <p>
         {invitationEmail
