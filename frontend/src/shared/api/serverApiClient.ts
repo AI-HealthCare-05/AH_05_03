@@ -11,6 +11,13 @@ import type {
   FamilyInvitationCreatedData,
   FamilyInvitationData,
   FamilyInvitationListData,
+  DevicePairingCreatedData,
+  AccountAuditEventData,
+  PinLockAlertData,
+  HouseholdDeviceClaimedData,
+  HouseholdDeviceData,
+  MemberPinIssueData,
+  MemberSessionData,
   HouseholdData,
   HouseholdMembershipData,
   HouseholdMembershipListItemData,
@@ -446,6 +453,87 @@ export class ServerApiClient {
     });
   }
 
+  public getProfileDeletionPreview(profileId: string): Promise<{
+    profile_id: string;
+    ownership_type: string;
+    lifecycle_status: string;
+    record_count: number;
+    recommended_action: "purge_empty" | "trash" | "forbidden" | "minor_review";
+    backup_hint: string;
+    purge_after: string | null;
+  }> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/deletion-preview`, { authenticated: true });
+  }
+
+  public archiveProfile(profileId: string): Promise<ProfileServerData> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/archives`, {
+      method: "POST",
+      authenticated: true,
+    });
+  }
+
+  public restoreProfileLifecycle(profileId: string): Promise<ProfileServerData> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/restorations`, {
+      method: "POST",
+      authenticated: true,
+    });
+  }
+
+  public requestProfileDeletion(profileId: string): Promise<{
+    profile_id: string;
+    lifecycle_status: string;
+    purged: boolean;
+    purge_after: string | null;
+  } | void> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/deletion-requests`, {
+      method: "POST",
+      authenticated: true,
+    });
+  }
+
+  public requestMinorDeletion(profileId: string, note?: string): Promise<{
+    id: string;
+    profile_id: string;
+    status: string;
+    legal_hold: boolean;
+  }> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/minor-deletion-requests`, {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify(note ? { note } : {}),
+    });
+  }
+
+  public startLegalGuardianVerification(profileId: string): Promise<{
+    id: string;
+    kind: string;
+    verification_status: string;
+  }> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/legal-guardian-verifications`, {
+      method: "POST",
+      authenticated: true,
+    });
+  }
+
+  public completeCivilMajority(profileId: string, password: string): Promise<ProfileServerData> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/civil-majority-transitions`, {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  public correctBirthDate(
+    profileId: string,
+    body: { birth_date: string; reason: string; password?: string },
+  ): Promise<{ id: string; previous_birth_date: string | null; new_birth_date: string }> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/birth-date-corrections`, {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify(body),
+    });
+  }
+
   public async syncProfiles(
     profiles: Array<{
       id: string;
@@ -643,6 +731,127 @@ export class ServerApiClient {
     return this.request(`/households/${encodeURIComponent(householdId)}`, { authenticated: true });
   }
 
+  public createDevicePairing(householdId: string, password: string): Promise<DevicePairingCreatedData> {
+    return this.request(`/households/${encodeURIComponent(householdId)}/device-pairings`, {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  public async listHouseholdDevices(householdId: string): Promise<HouseholdDeviceData[]> {
+    const result = await this.request<{ items: HouseholdDeviceData[] }>(
+      `/households/${encodeURIComponent(householdId)}/devices`,
+      { authenticated: true },
+    );
+    return result.items;
+  }
+
+  public async listAuditEvents(householdId: string): Promise<AccountAuditEventData[]> {
+    const result = await this.request<{ items: AccountAuditEventData[] }>(
+      `/households/${encodeURIComponent(householdId)}/audit-events`,
+      { authenticated: true },
+    );
+    return result.items;
+  }
+
+  public async listPinLockAlerts(householdId: string): Promise<PinLockAlertData[]> {
+    const result = await this.request<{ items: PinLockAlertData[] }>(
+      `/households/${encodeURIComponent(householdId)}/pin-lock-alerts`,
+      { authenticated: true },
+    );
+    return result.items;
+  }
+
+  public acknowledgePinLockAlert(householdId: string, alertId: string): Promise<PinLockAlertData> {
+    return this.request(
+      `/households/${encodeURIComponent(householdId)}/pin-lock-alerts/${encodeURIComponent(alertId)}/acknowledgements`,
+      {
+        method: "POST",
+        authenticated: true,
+      },
+    );
+  }
+
+  public emergencyRevokeHouseholdDevices(householdId: string, password: string): Promise<{
+    id: string;
+    household_id: string;
+    revoked_device_count: number;
+    revoked_session_count: number;
+  }> {
+    return this.request(`/households/${encodeURIComponent(householdId)}/emergency-device-revocations`, {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  public revokeHouseholdDevice(householdId: string, deviceId: string, password: string, rowVersion?: number): Promise<void> {
+    const headers: Record<string, string> = {};
+    if (rowVersion !== undefined) headers["If-Match"] = ifMatchHeader(rowVersion);
+    return this.request(`/households/${encodeURIComponent(householdId)}/devices/${encodeURIComponent(deviceId)}`, {
+      method: "DELETE",
+      authenticated: true,
+      headers,
+      body: JSON.stringify({ password }),
+    });
+  }
+
+  public claimHouseholdDevice(input: {
+    pairingCode: string;
+    householdId: string;
+    displayName: string;
+    deviceRef: string;
+  }): Promise<HouseholdDeviceClaimedData> {
+    return this.request("/household-devices", {
+      method: "POST",
+      body: JSON.stringify({
+        pairing_code: input.pairingCode,
+        household_id: input.householdId,
+        display_name: input.displayName,
+        device_ref: input.deviceRef,
+      }),
+    });
+  }
+
+  public issueMemberPin(profileId: string): Promise<MemberPinIssueData> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/pin-credentials`, {
+      method: "POST",
+      authenticated: true,
+    });
+  }
+
+  public unshareProfile(profileId: string, password?: string): Promise<void> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/household-unshares`, {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify({ password: password ?? null }),
+    });
+  }
+
+  public discardMemberPin(profileId: string): Promise<void> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/pin-credentials`, {
+      method: "DELETE",
+      authenticated: true,
+    });
+  }
+
+  public createMemberSession(profileId: string, pin: string): Promise<MemberSessionData> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/member-sessions`, {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify({ pin }),
+    });
+  }
+
+  public replaceMemberPin(profileId: string, currentPin: string, newPin: string): Promise<void> {
+    return this.request(`/profiles/${encodeURIComponent(profileId)}/pin-replacements`, {
+      method: "POST",
+      authenticated: true,
+      body: JSON.stringify({ current_pin: currentPin, new_pin: newPin }),
+    });
+  }
+
   public async listHouseholdMemberships(householdId: string): Promise<HouseholdMembershipListItemData[]> {
     const result = await this.request<{ items: HouseholdMembershipListItemData[] }>(
       `/households/${encodeURIComponent(householdId)}/memberships`,
@@ -685,6 +894,7 @@ export class ServerApiClient {
     householdId: string;
     inviteeEmail: string;
     targetProfileRef: string;
+    targetProfileId?: string;
   }): Promise<FamilyInvitationCreatedData> {
     return this.request("/family-invitations", {
       method: "POST",
@@ -694,6 +904,7 @@ export class ServerApiClient {
         household_id: input.householdId,
         invitee_email: input.inviteeEmail,
         target_profile_ref: input.targetProfileRef,
+        ...(input.targetProfileId ? { target_profile_id: input.targetProfileId } : {}),
       }),
     });
   }
@@ -722,12 +933,16 @@ export class ServerApiClient {
     });
   }
 
-  public createProfileLink(invitationId: string, localProfileRef: string): Promise<ProfileLinkData> {
+  public createProfileLink(invitationId: string, localProfileRef: string, profileId?: string): Promise<ProfileLinkData> {
     return this.request("/profile-links", {
       method: "POST",
       authenticated: true,
       headers: { "Idempotency-Key": newIdempotencyKey() },
-      body: JSON.stringify({ invitation_id: invitationId, local_profile_ref: localProfileRef }),
+      body: JSON.stringify({
+        invitation_id: invitationId,
+        local_profile_ref: localProfileRef,
+        ...(profileId ? { profile_id: profileId } : {}),
+      }),
     });
   }
 

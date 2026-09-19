@@ -24,11 +24,13 @@ import { router } from "./router";
  * - `/landing-v2` 같은 소개 페이지의 대안 디자인 시안. 자격도 같고, 화면에 쓰는
  *   예시 데이터도 v1 과 같은 파일이다 —
  *   `features/landing-v2/LandingV2Page.test.tsx` 가 그 조건을 따로 지킨다.
+ * - `/wall/pair` · `/wall` 공용 벽. 마스터 로그인 세션 없이 기기 토큰만 쓰고
+ *   `useLocalDomain` 으로 건강기록을 읽지 않는다. `WallPairPage.test.tsx` 가 지킨다.
  */
-const OUTSIDE_THE_GATE = ["/signup", "/landing", "/landing-v2"];
+const OUTSIDE_THE_GATE = ["/signup", "/landing", "/landing-v2", "/wall/pair", "/wall"];
 
 describe("라우트 표", () => {
-  it("관문 밖에 있는 것은 가입과 소개 화면들뿐이다", () => {
+    it("관문 밖에 있는 것은 가입·소개·벽 화면들뿐이다", () => {
     const layout = router.routes.filter((route) => route.path === "/");
     expect(layout).toHaveLength(1);
 

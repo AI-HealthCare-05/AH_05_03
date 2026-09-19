@@ -41,6 +41,9 @@ async def test_family_profile_and_health_records_crud(db_session: AsyncSession) 
     assert profile.id is not None
     assert profile.status == "active"
     assert profile.row_version == 1
+    assert profile.ownership_type.value == "local_slot"
+    assert profile.lifecycle_status.value == "active"
+    assert profile.member_role.value == "adult_member"
 
     # 3. 건강기록 추가 (JSONB payload)
     record = HealthRecord(

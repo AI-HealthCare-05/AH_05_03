@@ -1,28 +1,47 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 
-import { useLocalDomain } from "../../../app/localDomainContext";
-import { isVariantBarPath } from "../../../app/localHomeSwap";
-import { TREND_SERIES } from "../../assessment/snapshots";
-import { useHealthTimeSeries } from "../../data/useHealthTimeSeries";
-import type { HealthRecord } from "../../../shared/local/domainContracts";
-import { VariantBar } from "../components/VariantBar";
-import { StitchAppHeader } from "../components/StitchAppHeader";
-import { VitalTrendChartPanel } from "../components/VitalTrendChartPanel";
-import { Modal } from "../../../shared/ui/Modal";
-import { serverApiClient } from "../../../shared/api/serverApiClient";
-import { regionRisks, type RegionRisk } from "../../home/bodyRisk";
-import { hushBomi, tellBomi } from "../../health-assistant/bomiHint";
-import "../styles/shadcn-preview-variants.css";
-import "../styles/ui-preview18.css";
+import { useAuth } from "../../app/authContext";
+import { useLocalDomain } from "../../app/localDomainContext";
+import { TREND_SERIES } from "../assessment/snapshots";
+import { useHealthTimeSeries } from "../data/useHealthTimeSeries";
+import type { FamilyProfile, Gender, HealthRecord } from "../../shared/local/domainContracts";
+import { StitchAppHeader } from "../ui-preview/components/StitchAppHeader";
+import { VitalTrendChartPanel } from "../ui-preview/components/VitalTrendChartPanel";
+import { BirthDateInput } from "../../shared/ui/BirthDateInput";
+import { Modal } from "../../shared/ui/Modal";
+import { serverApiClient } from "../../shared/api/serverApiClient";
+import { regionRisks, type RegionRisk } from "./bodyRisk";
+import { hushBomi, tellBomi } from "../health-assistant/bomiHint";
+import {
+  createPinRecord,
+  generateTemporaryPin,
+  isPinSessionFresh,
+  isWeakPin,
+  roleFromRelationship,
+  roleLabel,
+  verifyPin,
+} from "./memberPin";
+import {
+  clearPinSession,
+  deletePinRecord,
+  readPinRecord,
+  readPinSession,
+  writePinRecord,
+  writePinSession,
+} from "./memberPinStore";
+import "../ui-preview/styles/shadcn-preview-variants.css";
+import "../ui-preview/styles/ui-preview18.css";
 
 const VanatomeBodyMap = lazy(() =>
-  import("../../home/VanatomeBodyMap").then((module) => ({
+  import("./VanatomeBodyMap").then((module) => ({
     default: module.VanatomeBodyMap,
   })),
 );
 
 type Period = "30d" | "90d" | "1y" | "all";
+
+const RELATIONSHIPS = ["본인", "배우자", "자녀", "부모", "형제·자매", "기타"];
 
 type MedicalDocumentPage = {
   id: string;
@@ -52,7 +71,7 @@ type MedicalDocumentSetList = {
 function Icon({
   name,
 }: {
-  name: "ghost" | "search" | "bell" | "arrow-right" | "check" | "chevron-right" | "plus" | "send" | "close" | "activity";
+  name: "ghost" | "search" | "bell" | "arrow-right" | "check" | "chevron-right" | "plus" | "send" | "close" | "activity" | "more";
 }) {
   const paths: Record<string, React.ReactNode> = {
     ghost: (
@@ -97,6 +116,13 @@ function Icon({
       </>
     ),
     activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />,
+    more: (
+      <>
+        <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
+        <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+        <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
+      </>
+    ),
   };
 
   return (
@@ -252,13 +278,37 @@ function formatDateToLocalKey(date: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-export function UiPreview18Page() {
+export function FamilyHomePage() {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
-  const isPreview = isVariantBarPath(pathname);
-  const { runtime, profiles } = useLocalDomain();
+  const { status: authStatus, email: authEmail } = useAuth();
+  const { runtime, profiles, hiddenProfiles, createProfile, updateProfile, hideProfile, restoreProfile, deleteEmptyProfile, refreshProfiles } =
+    useLocalDomain();
+  const localStorageReady = Boolean(runtime);
 
   const [selectedProfileId, setSelectedProfileId] = useState("");
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [profileEditDialogOpen, setProfileEditDialogOpen] = useState(false);
+  const [managedProfileId, setManagedProfileId] = useState("");
+  const [issuedPin, setIssuedPin] = useState<{ profileId: string; displayName: string; pin: string }>();
+  const [pinChallengeProfile, setPinChallengeProfile] = useState<FamilyProfile>();
+  const [pinInput, setPinInput] = useState("");
+  const [pinChangeOpen, setPinChangeOpen] = useState(false);
+  const [newPin, setNewPin] = useState("");
+  const [newPinConfirm, setNewPinConfirm] = useState("");
+  const [profileLifecycleAction, setProfileLifecycleAction] = useState<"hide" | "archive" | "delete" | "unshare">();
+  const [deletionPreview, setDeletionPreview] = useState<{
+    record_count: number;
+    recommended_action: "purge_empty" | "trash" | "forbidden" | "minor_review";
+    backup_hint: string;
+  }>();
+  const [unsharePassword, setUnsharePassword] = useState("");
+  const [civilPassword, setCivilPassword] = useState("");
+  const [birthCorrectionReason, setBirthCorrectionReason] = useState("");
+  const [hiddenProfilesDialogOpen, setHiddenProfilesDialogOpen] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileActionError, setProfileActionError] = useState<string>();
+  const [actorTouchedAt, setActorTouchedAt] = useState(0);
+  const [verifiedPin, setVerifiedPin] = useState("");
   const [period, setPeriod] = useState<Period>("1y");
   const [metricKey, setMetricKey] = useState("sbp");
   const [records, setRecords] = useState<HealthRecord[]>([]);
@@ -380,13 +430,311 @@ export function UiPreview18Page() {
     return dates;
   }, [dateOffsetDays, todayLocalKey, activeSpanDays]);
 
-  const activeProfile = profiles.find((p) => p.id === selectedProfileId) ?? profiles[0];
+  const activeProfile = profiles.find((p) => p.id === selectedProfileId);
+  const managedProfile = profiles.find((p) => p.id === managedProfileId);
 
   useEffect(() => {
-    if (!selectedProfileId && profiles[0]) {
-      setSelectedProfileId(profiles[0].id);
+    if (profiles.length === 0) {
+      if (selectedProfileId) setSelectedProfileId("");
+      return;
     }
+    if (selectedProfileId && profiles.some((profile) => profile.id === selectedProfileId)) {
+      return;
+    }
+    const grandfather = profiles.find((profile) => !readPinRecord(profile.id));
+    if (grandfather) {
+      setSelectedProfileId(grandfather.id);
+      return;
+    }
+    if (selectedProfileId) setSelectedProfileId("");
   }, [profiles, selectedProfileId]);
+
+  useEffect(() => {
+    if (!selectedProfileId || !readPinRecord(selectedProfileId)) return;
+    const mark = () => setActorTouchedAt(Date.now());
+    if (!actorTouchedAt) mark();
+    const timer = window.setInterval(() => {
+      if (actorTouchedAt && !isPinSessionFresh(actorTouchedAt)) {
+        setSelectedProfileId("");
+        clearPinSession();
+      }
+    }, 5_000);
+    window.addEventListener("pointerdown", mark);
+    window.addEventListener("keydown", mark);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("pointerdown", mark);
+      window.removeEventListener("keydown", mark);
+    };
+  }, [selectedProfileId, actorTouchedAt]);
+
+  useEffect(() => {
+    if (!selectedProfileId) return;
+    try {
+      localStorage.setItem("ieobom:selected-profile-id", selectedProfileId);
+    } catch {
+      // ignore
+    }
+    window.dispatchEvent(new CustomEvent("ieobom:profile-changed", { detail: { profileId: selectedProfileId } }));
+  }, [selectedProfileId]);
+
+  function requestSelectProfile(profile: FamilyProfile) {
+    const record = readPinRecord(profile.id);
+    if (!record) {
+      setSelectedProfileId(profile.id);
+      return;
+    }
+    if (selectedProfileId === profile.id && isPinSessionFresh(actorTouchedAt)) {
+      if (record.mustChange) {
+        setProfileActionError(undefined);
+        setPinChangeOpen(true);
+      }
+      return;
+    }
+    setPinChallengeProfile(profile);
+    setPinInput("");
+    setProfileActionError(undefined);
+  }
+
+  function clearActorIf(profileId: string) {
+    if (selectedProfileId === profileId) setSelectedProfileId("");
+    const session = readPinSession();
+    if (session?.profileId === profileId) clearPinSession();
+  }
+
+  async function issueTemporaryPin(profile: FamilyProfile) {
+    if (authStatus === "signed-in") {
+      const issued = await serverApiClient.issueMemberPin(profile.id);
+      clearActorIf(profile.id);
+      setIssuedPin({ profileId: profile.id, displayName: profile.displayName, pin: issued.temporary_pin });
+      return;
+    }
+    const pin = generateTemporaryPin(profile.birthDate);
+    const record = await createPinRecord(profile.id, pin, roleFromRelationship(profile.relationship), {
+      mustChange: true,
+      birthDate: profile.birthDate,
+    });
+    writePinRecord(record);
+    clearActorIf(profile.id);
+    setIssuedPin({ profileId: profile.id, displayName: profile.displayName, pin });
+  }
+
+  async function submitProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSavingProfile(true);
+    setProfileActionError(undefined);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    try {
+      const relationship = String(form.get("relationship") ?? "");
+      const birthDate = optionalDate(form.get("birthDate"));
+      const profile = await createProfile({
+        displayName: String(form.get("displayName") ?? ""),
+        relationship,
+        birthDate,
+        gender: optionalGender(form.get("gender")),
+      });
+      await issueTemporaryPin(profile);
+      setProfileDialogOpen(false);
+      formElement.reset();
+    } catch (caught) {
+      setProfileActionError(caught instanceof Error ? caught.message : "구성원을 저장하지 못했습니다.");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function submitProfileUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!managedProfile) return;
+    setSavingProfile(true);
+    setProfileActionError(undefined);
+    const form = new FormData(event.currentTarget);
+    const birthDate = optionalDate(form.get("birthDate"));
+    try {
+      if (authStatus === "signed-in" && birthDate && birthDate !== managedProfile.birthDate) {
+        if (birthCorrectionReason.trim().length === 0) {
+          setProfileActionError("생년월일을 바꾸려면 정정 사유가 필요합니다. PIN으로는 고치지 않습니다.");
+          return;
+        }
+        await serverApiClient.correctBirthDate(managedProfile.id, {
+          birth_date: birthDate,
+          reason: birthCorrectionReason.trim(),
+          password: managedProfile.accountEmail && authEmail === managedProfile.accountEmail ? civilPassword || undefined : undefined,
+        });
+      }
+      await updateProfile(managedProfile.id, {
+        displayName: String(form.get("displayName") ?? ""),
+        relationship: String(form.get("relationship") ?? ""),
+        birthDate: authStatus === "signed-in" && birthDate !== managedProfile.birthDate
+          ? (managedProfile.birthDate ?? undefined)
+          : (birthDate ?? undefined),
+        gender: optionalGender(form.get("gender")),
+        accountEmail: managedProfile.accountEmail,
+        expectedVersion: managedProfile.version,
+      });
+      setBirthCorrectionReason("");
+      setProfileEditDialogOpen(false);
+    } catch (caught) {
+      setProfileActionError(caught instanceof Error ? caught.message : "프로필을 수정하지 못했습니다.");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function confirmProfileLifecycle() {
+    if (!managedProfile || !profileLifecycleAction) return;
+    setSavingProfile(true);
+    setProfileActionError(undefined);
+    try {
+      if (profileLifecycleAction === "delete") {
+        if (authStatus === "signed-in" && deletionPreview?.recommended_action === "minor_review") {
+          await serverApiClient.requestMinorDeletion(managedProfile.id);
+        } else {
+          await deleteEmptyProfile(managedProfile.id);
+          deletePinRecord(managedProfile.id);
+          clearActorIf(managedProfile.id);
+          setManagedProfileId("");
+        }
+      } else if (profileLifecycleAction === "archive") {
+        if (authStatus === "signed-in") {
+          await serverApiClient.archiveProfile(managedProfile.id);
+          await refreshProfiles();
+        } else {
+          await hideProfile(managedProfile.id, managedProfile.version);
+        }
+      } else if (profileLifecycleAction === "unshare" && authStatus === "signed-in") {
+        const needsKick = Boolean(managedProfile.accountEmail);
+        await serverApiClient.unshareProfile(managedProfile.id, needsKick ? unsharePassword : undefined);
+        deletePinRecord(managedProfile.id);
+        await refreshProfiles();
+      } else {
+        await hideProfile(managedProfile.id, managedProfile.version);
+        if (profileLifecycleAction === "unshare") {
+          deletePinRecord(managedProfile.id);
+          if (authStatus === "signed-in") await serverApiClient.discardMemberPin(managedProfile.id);
+        }
+      }
+      clearActorIf(managedProfile.id);
+      setManagedProfileId("");
+      setProfileLifecycleAction(undefined);
+      setUnsharePassword("");
+      setDeletionPreview(undefined);
+    } catch (caught) {
+      setProfileActionError(caught instanceof Error ? caught.message : "프로필 상태를 변경하지 못했습니다.");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function restoreHiddenProfile(profile: FamilyProfile) {
+    setSavingProfile(true);
+    setProfileActionError(undefined);
+    try {
+      const restored = await restoreProfile(profile.id, profile.version);
+      if (!readPinRecord(restored.id)) setSelectedProfileId(restored.id);
+      if (hiddenProfiles.length === 1) setHiddenProfilesDialogOpen(false);
+    } catch (caught) {
+      setProfileActionError(caught instanceof Error ? caught.message : "숨긴 프로필을 복원하지 못했습니다.");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function submitPinChallenge(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!pinChallengeProfile) return;
+    const stored = readPinRecord(pinChallengeProfile.id);
+    if (!stored) {
+      if (authStatus !== "signed-in") {
+        setSelectedProfileId(pinChallengeProfile.id);
+        setPinChallengeProfile(undefined);
+        return;
+      }
+    }
+    setSavingProfile(true);
+    setProfileActionError(undefined);
+    try {
+      if (authStatus === "signed-in") {
+        const session = await serverApiClient.createMemberSession(pinChallengeProfile.id, pinInput);
+        setVerifiedPin(pinInput);
+        writePinSession({ profileId: pinChallengeProfile.id, unlockedAt: Date.now() });
+        setSelectedProfileId(pinChallengeProfile.id);
+        setActorTouchedAt(Date.now());
+        setPinInput("");
+        setPinChallengeProfile(undefined);
+        setPinChangeOpen(session.must_change);
+        return;
+      }
+      if (!stored) return;
+      const result = await verifyPin(stored, pinInput);
+      writePinRecord(result.record);
+      if (!result.ok) {
+        setProfileActionError(result.message);
+        return;
+      }
+      writePinSession({ profileId: pinChallengeProfile.id, unlockedAt: Date.now() });
+      setSelectedProfileId(pinChallengeProfile.id);
+      setActorTouchedAt(Date.now());
+      setPinInput("");
+      setPinChallengeProfile(undefined);
+      setPinChangeOpen(result.record.mustChange);
+    } catch (caught) {
+      setProfileActionError(caught instanceof Error ? caught.message : "PIN을 확인하지 못했습니다.");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function submitPinChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const profile = activeProfile ?? pinChallengeProfile;
+    if (!profile) return;
+    if (newPin !== newPinConfirm) {
+      setProfileActionError("같은 PIN을 한 번 더 입력하세요.");
+      return;
+    }
+    setSavingProfile(true);
+    setProfileActionError(undefined);
+    try {
+      if (authStatus === "signed-in") {
+        await serverApiClient.replaceMemberPin(profile.id, verifiedPin || pinInput, newPin);
+        setVerifiedPin(newPin);
+        writePinSession({ profileId: profile.id, unlockedAt: Date.now() });
+        setPinChangeOpen(false);
+        setNewPin("");
+        setNewPinConfirm("");
+        return;
+      }
+      const record = await createPinRecord(profile.id, newPin, roleFromRelationship(profile.relationship), {
+        mustChange: false,
+        birthDate: profile.birthDate,
+      });
+      writePinRecord(record);
+      writePinSession({ profileId: profile.id, unlockedAt: Date.now() });
+      setPinChangeOpen(false);
+      setNewPin("");
+      setNewPinConfirm("");
+    } catch (caught) {
+      setProfileActionError(caught instanceof Error ? caught.message : "PIN을 바꾸지 못했습니다.");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function reissueManagedPin() {
+    if (!managedProfile) return;
+    setSavingProfile(true);
+    setProfileActionError(undefined);
+    try {
+      await issueTemporaryPin(managedProfile);
+      setProfileEditDialogOpen(false);
+    } catch (caught) {
+      setProfileActionError(caught instanceof Error ? caught.message : "임시 PIN을 발급하지 못했습니다.");
+    } finally {
+      setSavingProfile(false);
+    }
+  }
 
   const fromDate = useMemo(() => {
     if (period === "all") return undefined;
@@ -465,9 +813,6 @@ export function UiPreview18Page() {
 
   return (
     <div className="up15-root">
-      {/* 레이아웃 비교 바 */}
-      {isPreview ? <VariantBar current="v18" /> : null}
-
       <StitchAppHeader displayName={activeProfile?.displayName} />
 
       {/* Main 4K Ultra-Wide Content */}
@@ -547,56 +892,75 @@ export function UiPreview18Page() {
                   <strong style={{ fontSize: "15px", color: "var(--up15-aubergine)", display: "block" }}>우리 가족 구성원</strong>
                   <span style={{ fontSize: "11px", color: "var(--up15-fog)" }}>카드를 선택해 개별 건강 타임라인으로 즉시 전환합니다.</span>
                 </div>
-                <button
-                  type="button"
-                  style={{ background: "none", border: 0, color: "var(--up15-aubergine)", fontSize: "13px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
-                  onClick={() => void navigate("/account")}
-                >
-                  가족 관리 <Icon name="chevron-right" />
-                </button>
+                <div className="up17-member-head-actions">
+                  {hiddenProfiles.length > 0 ? (
+                    <button
+                      type="button"
+                      className="up17-member-head-link"
+                      onClick={() => {
+                        setProfileActionError(undefined);
+                        setHiddenProfilesDialogOpen(true);
+                      }}
+                    >
+                      숨긴 프로필 {hiddenProfiles.length}명
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="up17-member-head-link"
+                    onClick={() => void navigate("/account")}
+                  >
+                    가족 관리 <Icon name="chevron-right" />
+                  </button>
+                </div>
               </div>
 
-              <div className="up17-member-grid">
-                {/* 1. 본인 */}
-                <div
-                  className={`up17-member-cell ${(!selectedProfileId || selectedProfileId === profiles[0]?.id) ? "selected" : ""}`}
-                  onClick={() => profiles[0] && setSelectedProfileId(profiles[0].id)}
-                >
-                  <span className="up15-member-status-dot" style={{ background: "var(--up15-mint-signal)" }} />
-                  <div className="up15-cell-avatar">오성</div>
-                  <strong style={{ fontSize: "13px", color: "var(--up15-aubergine)", marginTop: "2px" }}>오성민</strong>
-                  <span className="up15-cell-desc">본인</span>
-                </div>
-
-                {/* 2. 엄마 */}
-                <div className="up17-member-cell">
-                  <span className="up15-member-status-dot" style={{ background: "var(--up15-mint-signal)" }} />
-                  <div className="up15-cell-avatar">김다</div>
-                  <strong style={{ fontSize: "13px", color: "var(--up15-aubergine)", marginTop: "2px" }}>김다원</strong>
-                  <span className="up15-cell-desc">배우자</span>
-                </div>
-
-                {/* 3. 아빠 */}
-                <div className="up17-member-cell">
-                  <span className="up15-member-status-dot" style={{ background: "var(--up15-buttercream)", border: "1px solid var(--up15-aubergine)" }} />
-                  <div className="up15-cell-avatar">오진</div>
-                  <strong style={{ fontSize: "13px", color: "var(--up15-aubergine)", marginTop: "2px" }}>오진철</strong>
-                  <span className="up15-cell-desc">부모</span>
-                </div>
-
-                {/* 4. 자녀 */}
-                <div className="up17-member-cell">
-                  <span className="up15-member-status-dot" style={{ background: "var(--up15-mint-signal)" }} />
-                  <div className="up15-cell-avatar">오민</div>
-                  <strong style={{ fontSize: "13px", color: "var(--up15-aubergine)", marginTop: "2px" }}>오민재</strong>
-                  <span className="up15-cell-desc">자녀</span>
-                </div>
-
-                {/* 구성원 추가 */}
+              <div className="up17-member-grid" role="list">
+                {profiles.map((profile) => {
+                  const selected = profile.id === selectedProfileId;
+                  const pinProtected = Boolean(readPinRecord(profile.id));
+                  return (
+                    <div
+                      key={profile.id}
+                      role="listitem"
+                      className={`up17-member-cell${selected ? " selected" : ""}`}
+                    >
+                      <button
+                        type="button"
+                        className="up17-member-select"
+                        aria-pressed={selected}
+                        aria-label={`${profile.displayName} · ${profile.relationship}`}
+                        onClick={() => requestSelectProfile(profile)}
+                      >
+                        <span className="up15-member-status-dot" style={{ background: "var(--up15-mint-signal)" }} />
+                        <div className="up15-cell-avatar">{memberInitials(profile.displayName)}</div>
+                        <strong className="up17-member-cell-name">{profile.displayName}</strong>
+                        <span className="up15-cell-desc">{profile.relationship}</span>
+                        {pinProtected ? <span className="up17-member-pin-mark">PIN</span> : null}
+                      </button>
+                      <button
+                        type="button"
+                        className="up17-member-manage"
+                        aria-label={`${profile.displayName} 프로필 관리`}
+                        onClick={() => {
+                          setManagedProfileId(profile.id);
+                          setProfileActionError(undefined);
+                          setProfileEditDialogOpen(true);
+                        }}
+                      >
+                        <Icon name="more" />
+                      </button>
+                    </div>
+                  );
+                })}
                 <button
                   type="button"
                   className="up17-member-add-btn"
-                  onClick={() => void navigate("/")}
+                  disabled={!localStorageReady || savingProfile}
+                  onClick={() => {
+                    setProfileActionError(undefined);
+                    setProfileDialogOpen(true);
+                  }}
                 >
                   <div style={{ width: "38px", height: "38px", borderRadius: "50%", background: "#fff", border: "1px solid var(--up15-ash)", display: "grid", placeItems: "center", marginBottom: "4px" }}>
                     <Icon name="plus" />
@@ -1140,6 +1504,494 @@ export function UiPreview18Page() {
       {openDocumentSet ? (
         <MedicalDocSetModal documentSet={openDocumentSet} onClose={() => setOpenDocumentSet(undefined)} />
       ) : null}
+
+      {profileDialogOpen ? (
+        <Modal className="up17-modal" kicker="가족 구성원 로컬 프로필" title="구성원 추가" onClose={() => setProfileDialogOpen(false)}>
+          <form className="product-form" onSubmit={(event) => void submitProfile(event)}>
+            <p className="form-notice">저장하면 임시 위임 PIN을 한 번만 보여 줍니다. PIN은 이 기기에서 누구로 쓰는지만 가르며, 건강정보 암호화 열쇠가 아닙니다.</p>
+            {profileActionError ? <div className="alert error-alert" role="alert">{profileActionError}</div> : null}
+            <label>
+              이름 또는 호칭
+              <input name="displayName" maxLength={50} required placeholder="예: 나, 엄마, 민준" autoFocus />
+            </label>
+            <label>
+              관계
+              <select name="relationship" required defaultValue="">
+                <option value="" disabled>관계를 선택하세요</option>
+                {RELATIONSHIPS.map((relationship) => (
+                  <option key={relationship}>{relationship}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              성별
+              <select name="gender" defaultValue="">
+                <option value="" disabled>남성 또는 여성</option>
+                <option value="male">남성</option>
+                <option value="female">여성</option>
+              </select>
+            </label>
+            <BirthDateInput />
+            <div className="form-actions">
+              <button className="secondary-button" type="button" onClick={() => setProfileDialogOpen(false)}>취소</button>
+              <button className="primary-button" type="submit" disabled={savingProfile}>
+                {savingProfile ? "저장 중…" : "프로필 저장"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {profileEditDialogOpen && managedProfile ? (
+        <Modal
+          className="up17-modal"
+          kicker="가족 구성원"
+          title={`${managedProfile.displayName} 프로필 관리`}
+          onClose={() => setProfileEditDialogOpen(false)}
+        >
+          <form className="product-form" onSubmit={(event) => void submitProfileUpdate(event)}>
+            <p className="form-notice">
+              역할은 {roleLabel(roleFromRelationship(managedProfile.relationship))}입니다. 위임 PIN은 마스터가 원문을 다시 볼 수 없고 재발급만 할 수 있습니다.
+            </p>
+            {managedProfile.ownershipType === "guardian_managed" || roleFromRelationship(managedProfile.relationship) === "self_only" ? (
+              <p className="form-notice" role="note">
+                제품 보호자는 기록·PIN을 도울 수 있습니다. 법정대리인 확인과는 다르며, 체크만으로는 확인이 끝나지 않습니다.
+              </p>
+            ) : null}
+            {profileActionError ? <div className="alert error-alert" role="alert">{profileActionError}</div> : null}
+            {managedProfile.accountEmail ? (
+              <p className="form-notice" role="status">이메일 연결 · 계정 소유</p>
+            ) : null}
+            <label>
+              이름 또는 호칭
+              <input name="displayName" maxLength={50} required defaultValue={managedProfile.displayName} autoFocus />
+            </label>
+            <label>
+              관계
+              <select name="relationship" required defaultValue={managedProfile.relationship}>
+                {RELATIONSHIPS.map((relationship) => (
+                  <option key={relationship}>{relationship}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              성별
+              <select name="gender" defaultValue={managedProfile.gender ?? ""}>
+                <option value="" disabled>남성 또는 여성</option>
+                <option value="male">남성</option>
+                <option value="female">여성</option>
+              </select>
+            </label>
+            <BirthDateInput defaultValue={managedProfile.birthDate ?? ""} />
+            {authStatus === "signed-in" ? (
+              <label>
+                생년월일 정정 사유
+                <input
+                  value={birthCorrectionReason}
+                  onChange={(event) => setBirthCorrectionReason(event.target.value)}
+                  maxLength={80}
+                  placeholder="바꿀 때만 필요합니다"
+                />
+              </label>
+            ) : null}
+            {managedProfile.accountEmail ? (
+              <label>
+                연동 계정
+                <input type="text" readOnly disabled defaultValue={managedProfile.accountEmail} />
+              </label>
+            ) : null}
+            <div className="form-actions">
+              <button className="secondary-button" type="button" onClick={() => setProfileEditDialogOpen(false)}>취소</button>
+              <button className="primary-button" type="submit" disabled={savingProfile}>
+                {savingProfile ? "저장 중…" : "변경사항 저장"}
+              </button>
+            </div>
+          </form>
+          <section className="profile-lifecycle-zone" aria-labelledby="profile-pin-heading">
+            <h3 id="profile-pin-heading">위임 PIN</h3>
+            <p>구성원이 최초에 자기 번호로 바꿉니다. 미성년·잠긴 PIN은 여기서 임시 번호를 다시 만들 수 있습니다.</p>
+            <div className="profile-lifecycle-actions">
+              <button className="secondary-button" type="button" disabled={savingProfile} onClick={() => void reissueManagedPin()}>
+                {readPinRecord(managedProfile.id) ? "임시 PIN 재발급" : "위임 PIN 발급"}
+              </button>
+            </div>
+          </section>
+          <section className="profile-lifecycle-zone" aria-labelledby="profile-lifecycle-heading">
+            <h3 id="profile-lifecycle-heading">프로필 정리</h3>
+            <p>숨기기는 소속과 기록을 건드리지 않습니다. 보관은 목록에서만 빼고 복구할 수 있습니다. 기록이 있으면 30일 휴지통입니다. 가족 공유에서 제외와 회원탈퇴는 다른 동작입니다.</p>
+            <div className="profile-lifecycle-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  setProfileActionError(undefined);
+                  setProfileEditDialogOpen(false);
+                  setProfileLifecycleAction("hide");
+                }}
+              >
+                벽에서 숨기기
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  setProfileActionError(undefined);
+                  setProfileEditDialogOpen(false);
+                  setProfileLifecycleAction("archive");
+                }}
+              >
+                프로필 보관하기
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  setProfileActionError(undefined);
+                  setProfileEditDialogOpen(false);
+                  setProfileLifecycleAction("unshare");
+                }}
+              >
+                가족 공유에서 제외
+              </button>
+              <button
+                className="danger-button"
+                type="button"
+                onClick={() => {
+                  setProfileActionError(undefined);
+                  setDeletionPreview(undefined);
+                  setProfileEditDialogOpen(false);
+                  setProfileLifecycleAction("delete");
+                  if (authStatus === "signed-in") {
+                    void serverApiClient.getProfileDeletionPreview(managedProfile.id).then(setDeletionPreview).catch((caught: unknown) => {
+                      setProfileActionError(caught instanceof Error ? caught.message : "삭제 영향을 확인하지 못했습니다.");
+                    });
+                  }
+                }}
+              >
+                프로필 삭제 요청
+              </button>
+              {authStatus === "signed-in"
+                && (managedProfile.ownershipType === "guardian_managed" || roleFromRelationship(managedProfile.relationship) === "self_only") ? (
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={savingProfile}
+                  onClick={() => {
+                    void (async () => {
+                      setSavingProfile(true);
+                      setProfileActionError(undefined);
+                      try {
+                        const started = await serverApiClient.startLegalGuardianVerification(managedProfile.id);
+                        setProfileActionError(
+                          started.verification_status === "verified"
+                            ? "법정대리인 확인이 완료되었습니다."
+                            : "법정대리인 확인을 접수했습니다. 공급자가 없으면 대기만 하고, 체크만으로는 완료되지 않습니다.",
+                        );
+                      } catch (caught: unknown) {
+                        setProfileActionError(caught instanceof Error ? caught.message : "법정대리인 확인을 시작하지 못했습니다.");
+                      } finally {
+                        setSavingProfile(false);
+                      }
+                    })();
+                  }}
+                >
+                  법정대리인 확인 시작
+                </button>
+              ) : null}
+            </div>
+            {managedProfile.accountEmail ? (
+              <p>연결된 성인 프로필은 본인만 삭제할 수 있습니다. 회원탈퇴는 계정 화면의 DELETE /account입니다.</p>
+            ) : null}
+            {authStatus === "signed-in"
+              && (managedProfile.ownershipType === "guardian_managed" || roleFromRelationship(managedProfile.relationship) === "self_only")
+              && !managedProfile.adultTransitionedAt ? (
+              <div className="profile-lifecycle-actions">
+                <p>
+                  만 19세 성년 전환은 본인 계정 재인증과 프로필 연결이 필요합니다. 벽 PIN이나 보호자 체크로는 끝나지 않습니다.
+                  {managedProfile.adultTransitionPendingAt
+                    ? " 지금은 대기 상태입니다. 보호자 고위험 권한은 멈추고 기록은 그대로 둡니다."
+                    : null}
+                </p>
+                {managedProfile.accountEmail && authEmail && managedProfile.accountEmail === authEmail ? (
+                  <>
+                    <label>
+                      계정 비밀번호
+                      <input
+                        type="password"
+                        autoComplete="current-password"
+                        value={civilPassword}
+                        onChange={(event) => setCivilPassword(event.target.value)}
+                      />
+                    </label>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={savingProfile || civilPassword.length === 0}
+                      onClick={() => {
+                        void (async () => {
+                          setSavingProfile(true);
+                          setProfileActionError(undefined);
+                          try {
+                            await serverApiClient.completeCivilMajority(managedProfile.id, civilPassword);
+                            await refreshProfiles();
+                            setCivilPassword("");
+                            setProfileEditDialogOpen(false);
+                          } catch (caught: unknown) {
+                            setProfileActionError(caught instanceof Error ? caught.message : "성년 전환을 반영하지 못했습니다.");
+                          } finally {
+                            setSavingProfile(false);
+                          }
+                        })();
+                      }}
+                    >
+                      성년 전환
+                    </button>
+                  </>
+                ) : (
+                  <p>계정이 없으면 대기만 하고, 연결한 본인이 개인 화면에서 전환합니다.</p>
+                )}
+              </div>
+            ) : null}
+          </section>
+        </Modal>
+      ) : null}
+
+      {profileLifecycleAction && managedProfile ? (
+        <Modal
+          className="up17-modal"
+          title={
+            profileLifecycleAction === "hide"
+              ? "프로필을 목록에서 숨길까요?"
+              : profileLifecycleAction === "archive"
+                ? "프로필을 보관할까요?"
+                : profileLifecycleAction === "unshare"
+                  ? "가족 공유에서 제외할까요?"
+                  : "프로필 삭제 요청"
+          }
+          onClose={() => setProfileLifecycleAction(undefined)}
+        >
+          <div className="profile-confirmation">
+            {profileLifecycleAction === "hide" ? (
+              <p><strong>{managedProfile.displayName}</strong> 프로필과 연결 기록·소속은 유지됩니다. 현재 가족 목록에서만 보이지 않습니다.</p>
+            ) : profileLifecycleAction === "archive" ? (
+              <p><strong>{managedProfile.displayName}</strong> 프로필을 일반 목록에서 제외합니다. 기록은 남고 숨김·보관 목록에서 복구할 수 있습니다.</p>
+            ) : profileLifecycleAction === "unshare" ? (
+              <p><strong>{managedProfile.displayName}</strong> 계정과 개인 기록은 삭제하지 않습니다. 가족 공유에서 제외하면 이 집 멤버십·위임 PIN·공용 기기 세션을 바로 회수합니다.</p>
+            ) : (
+              <>
+                <p><strong>{managedProfile.displayName}</strong> 프로필 삭제 요청입니다. 빈 미연결 슬롯만 바로 지우고, 기록이 있으면 30일 휴지통에 둡니다. 회원탈퇴와 다릅니다.</p>
+                {deletionPreview?.recommended_action === "forbidden" || deletionPreview?.recommended_action === "minor_review" ? (
+                  <p>보호자 관리형 프로필은 법정대리인 확인 뒤에만 삭제 검토를 넣을 수 있습니다. 바로 지우지 않습니다.</p>
+                ) : null}
+                {deletionPreview ? (
+                  <p>
+                    건강기록 {deletionPreview.record_count}건. {deletionPreview.backup_hint}
+                    {deletionPreview.recommended_action === "forbidden" ? " 지금은 삭제할 수 없습니다." : null}
+                    {deletionPreview.recommended_action === "minor_review" ? " 확인이 끝나면 검토만 접수됩니다." : null}
+                  </p>
+                ) : null}
+              </>
+            )}
+            {profileLifecycleAction === "unshare" && authStatus === "signed-in" && managedProfile.accountEmail ? (
+              <label>
+                관리자 비밀번호
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={unsharePassword}
+                  onChange={(event) => setUnsharePassword(event.target.value)}
+                  required
+                />
+              </label>
+            ) : null}
+            {profileActionError ? <div className="alert error-alert" role="alert">{profileActionError}</div> : null}
+            <div className="form-actions">
+              <button className="secondary-button" type="button" onClick={() => setProfileLifecycleAction(undefined)}>취소</button>
+              <button
+                className={profileLifecycleAction === "delete" ? "danger-button" : "primary-button"}
+                type="button"
+                disabled={
+                  savingProfile
+                  || (profileLifecycleAction === "delete" && deletionPreview?.recommended_action === "forbidden")
+                  || (
+                    profileLifecycleAction === "unshare"
+                    && authStatus === "signed-in"
+                    && Boolean(managedProfile.accountEmail)
+                    && unsharePassword.length === 0
+                  )
+                }
+                onClick={() => void confirmProfileLifecycle()}
+              >
+                {savingProfile
+                  ? "처리 중…"
+                  : profileLifecycleAction === "hide"
+                    ? "프로필 숨기기"
+                    : profileLifecycleAction === "archive"
+                      ? "보관하기"
+                      : profileLifecycleAction === "unshare"
+                        ? "공유에서 제외"
+                        : deletionPreview?.recommended_action === "trash"
+                          ? "휴지통으로 보내기"
+                          : deletionPreview?.recommended_action === "minor_review"
+                            ? "삭제 검토 요청"
+                            : "삭제 요청"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {issuedPin ? (
+        <Modal
+          className="up17-modal"
+          kicker="위임 PIN"
+          title="이번만 보이는 임시 PIN"
+          onClose={() => setIssuedPin(undefined)}
+        >
+          <div className="profile-confirmation">
+            <p><strong>{issuedPin.displayName}</strong>에게 이 번호를 전하세요. 마스터는 원문을 다시 조회할 수 없고 재발급만 가능합니다.</p>
+            <p className="up17-pin-reveal" aria-label="임시 PIN">{issuedPin.pin}</p>
+            <div className="form-actions">
+              <button className="primary-button" type="button" onClick={() => setIssuedPin(undefined)}>확인했습니다</button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {pinChallengeProfile ? (
+        <Modal
+          className="up17-modal"
+          kicker="위임 PIN"
+          title={`${pinChallengeProfile.displayName} PIN`}
+          onClose={() => {
+            setPinChallengeProfile(undefined);
+            setPinInput("");
+            setProfileActionError(undefined);
+          }}
+        >
+          <form className="product-form" onSubmit={(event) => void submitPinChallenge(event)}>
+            <p className="form-notice">PIN은 권한 전환용입니다. 건강정보 암호화 열쇠가 아닙니다.</p>
+            {profileActionError ? <div className="alert error-alert" role="alert">{profileActionError}</div> : null}
+            <label>
+              구성원 PIN
+              <input
+                name="memberPin"
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                minLength={6}
+                required
+                value={pinInput}
+                onChange={(event) => setPinInput(event.target.value)}
+                autoFocus
+              />
+            </label>
+            <div className="form-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  setPinChallengeProfile(undefined);
+                  setPinInput("");
+                }}
+              >
+                취소
+              </button>
+              <button className="primary-button" type="submit" disabled={savingProfile}>
+                {savingProfile ? "확인 중…" : "이 구성원으로"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {pinChangeOpen ? (
+        <Modal
+          className="up17-modal"
+          kicker="위임 PIN"
+          title="내 PIN 정하기"
+          onClose={() => {
+            setPinChangeOpen(false);
+            setNewPin("");
+            setNewPinConfirm("");
+            setProfileActionError(undefined);
+          }}
+        >
+          <form className="product-form" onSubmit={(event) => void submitPinChange(event)}>
+            <p className="form-notice">생년월일·연속 숫자처럼 쉬운 번호는 쓸 수 없습니다. 6자리 이상 숫자입니다.</p>
+            {profileActionError ? <div className="alert error-alert" role="alert">{profileActionError}</div> : null}
+            <label>
+              새 PIN
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="new-password"
+                minLength={6}
+                required
+                value={newPin}
+                onChange={(event) => setNewPin(event.target.value)}
+                autoFocus
+              />
+            </label>
+            <label>
+              새 PIN 확인
+              <input
+                type="password"
+                inputMode="numeric"
+                autoComplete="new-password"
+                minLength={6}
+                required
+                value={newPinConfirm}
+                onChange={(event) => setNewPinConfirm(event.target.value)}
+              />
+            </label>
+            <div className="form-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  setPinChangeOpen(false);
+                  setNewPin("");
+                  setNewPinConfirm("");
+                }}
+              >
+                나중에
+              </button>
+              <button className="primary-button" type="submit" disabled={savingProfile || isWeakPin(newPin, activeProfile?.birthDate)}>
+                {savingProfile ? "저장 중…" : "PIN 저장"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      ) : null}
+
+      {hiddenProfilesDialogOpen ? (
+        <Modal className="up17-modal" kicker="가족 구성원 로컬 프로필" title="숨김·보관 프로필" onClose={() => setHiddenProfilesDialogOpen(false)}>
+          <div className="hidden-profiles-content">
+            <p className="form-notice">숨김·보관·휴지통 프로필의 기록은 아직 있습니다. 복원하면 가족 목록에 다시 나옵니다.</p>
+            {profileActionError ? <div className="alert error-alert" role="alert">{profileActionError}</div> : null}
+            <div className="hidden-profile-list">
+              {hiddenProfiles.map((profile) => (
+                <article key={profile.id} className="hidden-profile-row">
+                  <div>
+                    <strong>{profile.displayName}</strong>
+                    <small>{profile.relationship}</small>
+                  </div>
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={savingProfile}
+                    aria-label={`${profile.displayName} 프로필 복원`}
+                    onClick={() => void restoreHiddenProfile(profile)}
+                  >
+                    {savingProfile ? "처리 중…" : "복원"}
+                  </button>
+                </article>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }
@@ -1215,4 +2067,18 @@ function MedicalDocSetModal({
   );
 }
 
-export default UiPreview18Page;
+function memberInitials(displayName: string): string {
+  return displayName.trim().slice(0, 2);
+}
+
+function optionalDate(value: FormDataEntryValue | null): `${number}-${number}-${number}` | undefined {
+  const date = String(value ?? "");
+  return date ? (date as `${number}-${number}-${number}`) : undefined;
+}
+
+function optionalGender(value: FormDataEntryValue | null): Gender | null {
+  const str = String(value ?? "");
+  return str === "male" || str === "female" ? str : null;
+}
+
+export default FamilyHomePage;

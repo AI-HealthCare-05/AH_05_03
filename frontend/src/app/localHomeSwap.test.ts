@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import { isPreviewShellPath, isStitchShellPath, isVariantBarPath } from "./localHomeSwap";
 
 describe("isPreviewShellPath", () => {
-  it("루트(/)는 시안 18 셸이고 ui-preview18 은 기존 홈 셸이다", () => {
+  it("루트(/)와 시안 주소는 자체 상단 바 셸이다", () => {
     expect(isPreviewShellPath("/")).toBe(true);
-    expect(isPreviewShellPath("/ui-preview18")).toBe(false);
     expect(isPreviewShellPath("/ui-preview17")).toBe(true);
+    expect(isPreviewShellPath("/account")).toBe(false);
   });
 });
 

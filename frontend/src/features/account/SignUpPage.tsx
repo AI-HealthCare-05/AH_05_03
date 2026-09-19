@@ -20,8 +20,7 @@
  * 관문 밖에 있어도 되는 이유
  * --------------------------
  * 이 화면은 기기 안 건강기록을 읽지 않는다(`useLocalDomain` 을 쓰지 않는다).
- * 관문 밖에 둘 수 있는 화면의 조건이 그것이고, `router.test.tsx` 가 그 예외를
- * 이 하나로 못 박는다.
+ * 같은 조건의 다른 주소는 `router.test.tsx` 의 `OUTSIDE_THE_GATE` 가 지킨다.
  */
 
 import { type FormEvent, useState } from "react";

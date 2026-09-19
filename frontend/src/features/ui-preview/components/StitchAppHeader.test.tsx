@@ -36,7 +36,7 @@ describe("StitchAppHeader", () => {
     expect(screen.getByText("우리 가족 웰니스 케어")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "기록 검색" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "알림" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "로그아웃" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "로그아웃" })).not.toBeInTheDocument();
 
     const nav = screen.getByRole("navigation", { name: "주 메뉴" });
     expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual([
@@ -46,6 +46,6 @@ describe("StitchAppHeader", () => {
       "건강 데이터 3",
     ]);
     expect(within(nav).getByRole("link", { name: "통증 다이어리" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: /계정 관리/u })).toHaveTextContent("오성민(test@example.com)");
+    expect(screen.getByRole("button", { name: /계정 메뉴/u })).toHaveTextContent("오성민(test@example.com)");
   });
 });

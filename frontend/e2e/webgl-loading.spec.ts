@@ -18,7 +18,7 @@ test("남녀 핵심 인체를 먼저 표시하고 세부 레이어와 재방문 
     if (message.type() === "error") browserErrors.push(message.text());
   });
 
-  await setupE2eServerMocks(page);
+  const state = await setupE2eServerMocks(page);
   await page.route("**/vanatome-official-complete-*.glb", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1_500));
     await route.continue();
@@ -29,10 +29,13 @@ test("남녀 핵심 인체를 먼저 표시하고 세부 레이어와 재방문 
   });
 
   await page.goto(appUrl);
-  await page.getByRole("button", { name: "첫 구성원 등록" }).click();
+  await page.getByRole("button", { name: "구성원 추가" }).click();
   await page.getByRole("textbox", { name: "이름 또는 호칭" }).fill("WebGL 진단");
   await page.getByRole("combobox", { name: "관계" }).selectOption("본인");
   await page.getByRole("button", { name: "프로필 저장" }).click();
+  await page.getByRole("button", { name: "확인했습니다" }).click();
+  await expect(page.getByRole("button", { name: "WebGL 진단 · 본인" })).toBeVisible();
+  await page.goto(`/members/${state.profiles[0].id}`);
   await expect(page.getByRole("heading", { name: "WebGL 진단님의 건강기록" })).toBeVisible();
 
   await expect(page.locator(".vanatome-loading")).toHaveCount(0);

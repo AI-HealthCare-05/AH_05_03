@@ -182,6 +182,42 @@ class HouseholdStateConflictError(AppError):
     error_code = ErrorCode.HOUSEHOLD_STATE_CONFLICT
 
 
+class HouseholdMasterRequiredError(AppError):
+    error_code = ErrorCode.HOUSEHOLD_MASTER_REQUIRED
+
+
+class PairingNotFoundError(AppError):
+    error_code = ErrorCode.PAIRING_NOT_FOUND
+
+
+class PairingExpiredError(AppError):
+    error_code = ErrorCode.PAIRING_EXPIRED
+
+
+class PairingConsumedError(AppError):
+    error_code = ErrorCode.PAIRING_CONSUMED
+
+
+class DeviceNotFoundError(AppError):
+    error_code = ErrorCode.DEVICE_NOT_FOUND
+
+
+class DeviceRevokedError(AppError):
+    error_code = ErrorCode.DEVICE_REVOKED
+
+
+class PinInvalidError(AppError):
+    error_code = ErrorCode.PIN_INVALID
+
+
+class PinLockedError(AppError):
+    error_code = ErrorCode.PIN_LOCKED
+
+
+class PinWeakError(AppError):
+    error_code = ErrorCode.PIN_WEAK
+
+
 class HouseholdHasOtherMembersError(AppError):
     error_code = ErrorCode.ACTIVE_MEMBERS_REMAIN
 
@@ -246,6 +282,10 @@ class ProfileLinkInvitationMismatchError(AppError):
     error_code = ErrorCode.PROFILE_LINK_INVITATION_MISMATCH
 
 
+class ProfileClaimConflictError(AppError):
+    error_code = ErrorCode.PROFILE_CLAIM_CONFLICT
+
+
 class RateLimitedError(AppError):
     error_code = ErrorCode.RATE_LIMITED
 
@@ -275,6 +315,30 @@ class HealthRecordPayloadValidationError(AppError):
 
 class ProfileAccessDeniedError(AppError):
     error_code = ErrorCode.PROFILE_ACCESS_DENIED
+
+
+class LegalGuardianRequiredError(AppError):
+    error_code = ErrorCode.LEGAL_GUARDIAN_REQUIRED
+
+
+class LegalGuardianUnverifiedError(AppError):
+    error_code = ErrorCode.LEGAL_GUARDIAN_UNVERIFIED
+
+
+class MinorDeletionStateConflictError(AppError):
+    error_code = ErrorCode.MINOR_DELETION_STATE_CONFLICT
+
+
+class AdultTransitionNotDueError(AppError):
+    error_code = ErrorCode.ADULT_TRANSITION_NOT_DUE
+
+
+class ProfileClaimRequiredError(AppError):
+    error_code = ErrorCode.PROFILE_CLAIM_REQUIRED
+
+
+class OpsRecoveryForbiddenError(AppError):
+    error_code = ErrorCode.OPS_RECOVERY_FORBIDDEN
 
 
 # --- 멱등성·낙관적 잠금 (docs/03_api_spec.md §2.4·§2.5) --------------------

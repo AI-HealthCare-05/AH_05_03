@@ -4,14 +4,13 @@
 
 프론트엔드 작업(컴포넌트, 스타일, 레이아웃, UI/UX) 시 루트의 [`DESIGN.md`](../DESIGN.md)를 **단일 진실 원천(SSOT)**으로 준수한다.
 
-1. **키 컬러 2개 이하 유지**:
-   - Primary Blue: `#1d4fb8` (`--blue-700`), hover `#173d8f` (`--blue-800`), light `#eaf1ff` (`--blue-100`), container `#f4f7ff` (`--blue-50`)
-   - Secondary Slate: `#5b687e` (`--muted`), strong `#45536c` (`--muted-strong`)
-   - Neutral/Ink: `#172033` (`--ink`), Surface: `#ffffff`, Background: `#f5f7fb`
-   - 상태 색상(초록/주황/빨강)은 의학적 선별 판정과 차트에만 제한 사용하며 일반 장식/버튼/UI에 혼용 금지.
+1. **키 컬러는 `DESIGN.md` Violet Capsule**:
+   - Aubergine `#3c315b`, Ghost Lavender `#e2dffe`, Periwinkle `#ab9ff2`
+   - Paper White `#fdfcfe` / Bone `#f4f2f4` / Surface `#faf9fb`, Obsidian `#1c1c1c`, Fog `#86848d`, Ash `#e9e8ea`
+   - 상태 색(Mint `#2ec08b`, Blush `#ffdadc`)은 라벨과 같이 쓰고, 예전 Primary Blue `#1d4fb8`를 CTA·키커에 쓰지 않는다.
 2. **타이포그래피 통일**:
-   - `Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
-   - 스케일 8단계: Headline(32/24/18px), Body(16/14/12px), Label(13/11px). 임의의 폰트/사이즈 정의 금지.
+   - `DM Sans, Noto Sans KR` (기본 무게 300/350, 본문 400, tracking `-0.025em`)
+   - 앱 스케일: 11 / 13 / 15 / 16 / 20 / 24 / 30px. 임의의 폰트/사이즈 정의 금지.
 3. **스켈레톤 UI 표준**:
    - 단순 텍스트("불러오는 중")나 스피너 대신 전역 `Skeleton` 컴포넌트 및 쉬머 애니메이션을 적용한다.
 4. **접근성 터치 타깃**:
@@ -35,6 +34,15 @@
 - 코드: `src/features/landing-v2/` — 문구·예시 수치·3D 장면·스크롤 엔진은 전부 `src/features/landing/` 의 **같은 파일**을 쓴다. 다른 것은 표현 계층뿐이다.
 - 토큰은 `--v2-*` 로 새로 세우고 앱 토큰을 상속하지 않는다. `landingV2.css` 의 모든 선택자가 `.lnv2-` 를 포함하는 것을 테스트가 지킨다.
 - 로그아웃 상태의 `/` 는 **여전히 `/landing`(v1)로 간다.** 정본이 정해지기 전에 기본 동작을 바꾸지 않는다.
+
+---
+
+## 공용 벽 (`/wall`, `/wall/pair`)
+
+로그인 관문 밖이다. 마스터 계정 JWT가 아니라 페어링으로 받은 기기 토큰만 쓴다. `useLocalDomain`으로 건강기록을 읽지 않으며, 가족 개요(이름·관계)만 그린다. 구성원 PIN 세션은 새로고침에 복원하지 않는다.
+
+- 코드: `src/features/home/WallPairPage.tsx`, `WallOverviewPage.tsx`, `WallDevicesCard.tsx`, `HouseholdAuditCard.tsx`
+- 마스터는 `/account`에서 계정 비밀번호로 코드를 만들고 원격·비상 철회한다. PIN 잠금 알림과 감사 목록에는 PIN 원문이 없다.
 
 ---
 

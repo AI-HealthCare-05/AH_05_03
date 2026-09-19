@@ -1,7 +1,5 @@
 import { Link } from "react-router-dom";
 
-import { LOCAL_HOME_IS_PREVIEW18 } from "../../../app/localHomeSwap";
-
 export interface VariantBarProps {
   current: "default" | "v1" | "v2" | "v3" | "v4" | "v5" | "v6" | "v7" | "v8" | "v9" | "v10" | "v11" | "v12" | "v13" | "v14" | "v15" | "v16" | "v17" | "v18";
 }
@@ -131,20 +129,12 @@ export function VariantBar({ current }: VariantBarProps) {
           시안 17: 4K 멀티위젯 + 원본 비율 복원
         </Link>
         <Link
-          to={LOCAL_HOME_IS_PREVIEW18 ? "/" : "/ui-preview18"}
+          to="/"
           className={`sp-variant-tab ${current === "v18" ? "active" : ""}`}
           style={current === "v18" ? { background: "#3c315b", color: "#fff", fontWeight: 700 } : {}}
         >
-          시안 18: 인체 통증 매핑 (서랍 메뉴 & 퀵 아이콘)
+          가족 홈
         </Link>
-        {LOCAL_HOME_IS_PREVIEW18 ? (
-        <Link
-          to="/ui-preview18"
-          className="sp-variant-tab"
-        >
-          기존 홈
-        </Link>
-        ) : null}
         <Link
           to="/health-data3"
           className="sp-variant-tab"

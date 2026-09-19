@@ -1726,6 +1726,7 @@ ai = [
 ]
 app = [
     { name = "alembic" },
+    { name = "argon2-cffi" },
     { name = "asyncpg" },
     { name = "bcrypt" },
     { name = "email-validator" },
@@ -1802,6 +1803,7 @@ ai = [
 ]
 app = [
     { name = "alembic", specifier = ">=1.14.0" },
+    { name = "argon2-cffi", specifier = ">=25.1.0" },
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "bcrypt", specifier = "<=4.0.1" },
     { name = "email-validator", specifier = ">=2.2" },

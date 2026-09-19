@@ -46,6 +46,7 @@ _AUTH_ERRORS = (
         ErrorCode.PROFILE_ALREADY_LINKED,
         ErrorCode.PROFILE_REF_ALREADY_CLAIMED,
         ErrorCode.PROFILE_LINK_INVITATION_MISMATCH,
+        ErrorCode.PROFILE_CLAIM_CONFLICT,
         ErrorCode.IDEMPOTENCY_KEY_REUSED,
     ),
     summary="수락한 초대와 기존 로컬 프로필 연결",
