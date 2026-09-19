@@ -7,7 +7,9 @@
 > 서버 API: [03_api_spec.md](03_api_spec.md), [OpenAPI 3.1](api/openapi.yaml)
 >
 > 로컬 물리 스키마: [10_local_data_contract.md](10_local_data_contract.md)
-> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md), [ADR-006](adr/0006-lifecycle-scoped-profile-reference.md)
+> 아키텍처 결정: [ADR-001](adr/0001-web-local-first-architecture.md), [ADR-004](adr/0004-family-invitation-state-and-redis-boundary.md), [ADR-006](adr/0006-lifecycle-scoped-profile-reference.md), [ADR-011](adr/0011-postgresql-health-data-and-server-ai.md)
+>
+> 계정·위임 PIN·공용 기기 스키마는 [08 정책](08_account_profile_policy.md) §11–12와 [ADR-012](adr/0012-delegated-member-pin-not-vault-dek.md)(**승인**)가 용어를 정한다. `family_profiles` 소유권·생명주기·역할, `capability_grants`, `account_audit_events`는 [#189](https://github.com/AI-HealthCare-05/AH_05_03/issues/189)에서 서버에 넣었다. `member_pin_credentials`·`household_devices`·`member_sessions`는 [#190](https://github.com/AI-HealthCare-05/AH_05_03/issues/190)·[#191](https://github.com/AI-HealthCare-05/AH_05_03/issues/191)이다. 조회 API는 [#195](https://github.com/AI-HealthCare-05/AH_05_03/issues/195)다.
 
 ## 1. 물리적 경계
 
@@ -39,6 +41,9 @@ erDiagram
     service_accounts ||--o{ api_idempotency_keys : sends
     service_accounts o|--o{ account_audit_events : acts
     households o|--o{ account_audit_events : scopes
+    households ||--o{ family_profiles : contains
+    family_profiles ||--o{ capability_grants : grants
+    service_accounts o|--o{ family_profiles : claims
 ```
 
 ### 2.1 `service_accounts`
@@ -167,7 +172,45 @@ WebRTC 기술검증 후에만 API에서 사용한다. 현재 DDL에는 후순위
 
 ### 2.9 `account_audit_events`
 
-계정·구독·초대·연결 상태 변경만 기록한다. `metadata jsonb`에는 건강정보를 넣을 수 없으며 코드 리뷰와 DTO allowlist로 통제한다.
+계정·구독·초대·연결·프로필 소유권 상태 변경만 기록한다. `metadata jsonb`에는 건강정보를 넣을 수 없으며 코드 리뷰와 DTO allowlist로 통제한다.
+
+### 2.10 `family_profiles` 소유권 (#189)
+
+건강기록의 대상 행이다. 기존 `status`(목록 필터)와 `lifecycle_status`는 함께 움직인다.
+
+| 컬럼 | 규칙 |
+|---|---|
+| `ownership_type` | `local_slot`, `claimed_adult`, `guardian_managed`. 관계·생년·이메일·claim으로 서버가 추론한다. |
+| `lifecycle_status` | `active`, `hidden`, `archived`, `unshared`, `pending_delete`, `deleted` |
+| `purge_after` · `purged_at` · `purge_hold_reason` | 휴지통 만료. hold가 있으면 `POST /profile-purge-jobs`가 건너뛴다 |
+| `member_role` | `adult_member`, `self_only`, `restricted`. 관계가 바뀌면 즉시 다시 평가한다. |
+| `claimed_account_id` | 연결된 성인 계정. 같은 집 활성 claim은 계정당 하나. 초대 수락+`profile_id` claim(#192)이 채운다 |
+| `adult_transitioned_at` | 만 19세 성년 전환 완료. 본인 claim+계정 재인증만. PIN·보호자 체크 불가 |
+| `privacy_self_determined_at` | 만 14세 개인정보 자기결정 표시. 성년 전환이 아니다 |
+| `adult_transition_pending_at` | 만 19세인데 claim이 없을 때. 기록 유지, 상세 건강 읽기·쓰기 등 고위험 권한 중지 |
+
+`households.session_epoch`는 비상 철회 때 증가한다. 벽 기기·구성원 세션은 발급 시점 epoch를 들고 매 요청에 비교한다. `civil_majority_transitions`는 성년 전환 이력이다. 물리 삭제하지 않고 `invalidated_at`으로만 무효화한다. `guardian_links`의 공유 재승인은 capability 목록과 `share_expires_at`이 있다.
+
+`capability_grants`는 역할 묶음 위에 allow/deny를 덮는다. 민감 API는 프런트 버튼이 아니라 `app/services/profile_capabilities.py`가 거절한다. 마스터는 연결된 성인 프로필을 숨길 수 있다. 빈 `local_slot`은 즉시 파기하고, 기록이 있으면 30일 `pending_delete` 뒤 파기다. 연결된 성인 프로필 파기는 본인(`PURGE_CLAIMED`)만. 보호자 관리형은 법정대리인 확인 뒤에만 삭제 *검토*를 넣고, 확인 공급자가 없으면 `pending`만 만든다. `DELETE /account`(#64)와 섞지 않는다.
+
+### 2.13 `guardian_links` · `minor_deletion_requests` (#194)
+
+제품 보호자와 법정대리인 확인은 같은 행에 섞지 않는다. `kind`가 `product_guardian` | `legal_representative`. 확인 상태 `unverified` | `pending` | `verified` | `expired`. 자가 표시(`self_attested`)는 `verified`가 되지 않는다. 연령 경계는 `app/services/minor_policy.py`의 `kr-household-minor-v2`(만 14세 자기결정 · 만 19세 성년)이며 법률 결론이 아니다. `birth_date_corrections`는 생년월일 정정 감사다.
+
+미성년 삭제 요청은 `submitted` → `under_review`/`rejected`/`appealed` → `approved`. 승인은 즉시 파기가 아니라 30일 휴지통이다. `legal_hold`면 `purge_hold_reason`을 남긴다.
+
+### 2.11 `household_device_pairings` · `household_devices` (#190)
+
+공용 벽 등록용이다. `registered_devices`(WebRTC)와 표를 섞지 않는다. 페어링 코드·기기 토큰은 SHA-256만 저장한다. 원문 토큰은 claim 응답에 한 번만 나간다.
+
+| 표 | 규칙 |
+|---|---|
+| `household_device_pairings` | 8자 코드 해시, 5분 TTL, `consumed_at` 후 재사용 거부. 마스터 재인증으로만 발급 |
+| `household_devices` | `device_ref` 43–86, `token_hash` 유일, `status` active\|revoked. 철회 후 다음 요청 `DEVICE_REVOKED` |
+
+### 2.12 `member_pin_credentials` · `member_sessions` (#191)
+
+구성원 위임 PIN이다. 원문은 저장하지 않고 Argon2id 해시만 둔다. 세션 토큰도 해시만 남긴다. 벽 기기에 묶인 세션은 다른 기기·다른 가구에서 재사용하지 못한다.
 
 ## 3. PostgreSQL 무결성 규칙
 

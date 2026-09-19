@@ -14,11 +14,13 @@ ADR은 당시의 선택뿐 아니라 선택하지 않은 방향과 그 이유를
 | [004](0004-family-invitation-state-and-redis-boundary.md) | 가족 초대 상태와 Redis 책임 경계 | **제안** | 2026-08-19 | 구현은 끝났으나 승인 절차가 남았다 |
 | [005](0005-vite-spa-local-first-frontend-foundation.md) | Vite SPA 기반 로컬 우선 프론트엔드 | 승인 | 2026-08-19 | |
 | [006](0006-lifecycle-scoped-profile-reference.md) | 연결 생명주기 단위의 일회용 프로필 참조값 | 승인 | 2026-08-19 | |
-| [007](0007-account-scoped-encrypted-local-vault.md) | 공용 브라우저에서 계정별 암호화 로컬 보관함 분리 | 승인 | 2026-08-20 | |
+| [007](0007-account-scoped-encrypted-local-vault.md) | 공용 브라우저에서 계정별 암호화 로컬 보관함 분리 | 대체됨 | 2026-08-20 | 건강정보 정본·로컬 보관함은 011. PIN≠DEK는 012 |
 | [008](0008-temporary-cloud-ocr-baseline.md) | 개발 검증용 클라우드 OCR 기준선 허용 | 승인 | 2026-08-20 | 기본 엔진의 자리는 010이 채운다. Redis payload 기각은 010 §6이 조건부 대체 |
 | [009](0009-per-disease-models-and-server-inference-path.md) | 만성질환 예측 모델 구조와 추론 실행 위치 | **제안** | 2026-08-25 | 11번 문서 §2 실행 위치 표의 금지 두 행을 대체 |
 | [010](0010-checkup-document-ocr-path.md) | 건강문서 인식 경로 — OCR 파이프라인과 멀티모달 직송 | **제안** | 2026-08-25 | 24번 문서 §2·§3.2의 서버 OCR 폐기 판정을 대체 |
 | [011](0011-postgresql-health-data-and-server-ai.md) | PostgreSQL 건강정보 정본과 서버 AI 처리로 전환 | 승인 | 2026-09-04 | 001·002·007을 대체하고 005·008을 부분 대체 |
+| [012](0012-delegated-member-pin-not-vault-dek.md) | 구성원 위임 PIN은 인가 층이며 보관함 DEK가 아니다 | 승인 | 2026-09-19 | 007이 미룬 PIN 조합. 성년 전환은 013 |
+| [013](0013-privacy-self-determination-and-civil-majority.md) | 개인정보 자기결정(만 14세)과 민법상 성년(만 19세)을 가른다 | 승인 | 2026-09-19 | 012의 PIN≠본인확인. 정책 `kr-household-minor-v2` |
 
 새 ADR을 추가하면 이 표에 한 줄을 같이 넣는다. 번호는 이 표의 마지막 번호 + 1이고, 같은 번호를 두 브랜치에서 동시에 쓰지 않는다.
 

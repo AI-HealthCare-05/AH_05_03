@@ -81,7 +81,8 @@
 - 완료: 선택한 구성원의 허용 기록만 포함하는 암호화 이전 파일과 병합 가져오기
 - 후속: 실제 이메일 공급자 워커, 멱등성·`If-Match`, 관리자 역할 확정 후 타 구성원 제거
 - 후속: 프로필 비교·충돌 해결 UI, 250MiB급 스트리밍 이전, OPFS staging 복구·고아 정리
-- 최우선 보안 후속: [ADR-007](adr/0007-account-scoped-encrypted-local-vault.md)에 따라 무작위 보관함별 IndexedDB·OPFS·DEK 격리, 로컬 잠금·계정 전환 잠금, 소유자 미지정 레거시 보관함 이전을 구현한다. 완료 전 공용 브라우저 프로필 사용은 지원하지 않는다.
+- 최우선 보안 후속(역사): [ADR-007](adr/0007-account-scoped-encrypted-local-vault.md) 로컬 보관함 격리는 [ADR-011](adr/0011-postgresql-health-data-and-server-ai.md)이 정본을 서버로 옮기며 대체했다.
+- 2026-09 계정 Epic [#187](https://github.com/AI-HealthCare-05/AH_05_03/issues/187): 정책·ADR-012 승인은 [#188](https://github.com/AI-HealthCare-05/AH_05_03/issues/188), 연령 이중 경계는 [ADR-013](adr/0013-privacy-self-determination-and-civil-majority.md), capability는 [#189](https://github.com/AI-HealthCare-05/AH_05_03/issues/189), 벽 기기는 [#190](https://github.com/AI-HealthCare-05/AH_05_03/issues/190), 서버 PIN은 [#191](https://github.com/AI-HealthCare-05/AH_05_03/issues/191), 이메일 claim·가족 공유 해제는 [#192](https://github.com/AI-HealthCare-05/AH_05_03/issues/192), 프로필 생명주기·휴지통은 [#193](https://github.com/AI-HealthCare-05/AH_05_03/issues/193), 미성년 보호자·법정대리 확인은 [#194](https://github.com/AI-HealthCare-05/AH_05_03/issues/194), 감사·위협모델·E2E 보안 게이트와 개발·스테이징 성년 전환 break-glass는 [#195](https://github.com/AI-HealthCare-05/AH_05_03/issues/195). [#195](https://github.com/AI-HealthCare-05/AH_05_03/issues/195)를 닫아도 프로덕션 운영자 개인 계정·MFA/패스키·전용 capability·1회용 승인 토큰·2인 승인은 후속 [#196](https://github.com/AI-HealthCare-05/AH_05_03/issues/196)이다. 가족 홈의 브라우저 PIN은 인가 임시 경로이며 DEK가 아니다.
 - 병렬 기술검증: [ADR-008](adr/0008-temporary-cloud-ocr-baseline.md)의 합성·비식별 Naver OCR 기준선과 [로컬 OCR 대체 챌린지](16_ocr_cloud_baseline_local_replacement_challenge.md)를 공통 엔진 계약·평가 데이터셋으로 진행한다.
 
 ### Sprint 6 (9/14~9/20, 배포 & QA & 성능개선)
