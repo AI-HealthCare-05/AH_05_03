@@ -96,7 +96,9 @@ class CivilMajorityInvalidationRequest(BaseRequestModel):
     profile_id: uuid.UUID
     reason: str = Field(..., min_length=1, max_length=80)
     operator_id: str = Field(..., min_length=1, max_length=80, description="호출자 주장값. 검증된 운영자 ID가 아니다")
-    ticket_ref: str = Field(..., min_length=1, max_length=80, description="호출자 주장 티켓. 발급 시스템을 검증하지 않는다")
+    ticket_ref: str = Field(
+        ..., min_length=1, max_length=80, description="호출자 주장 티켓. 발급 시스템을 검증하지 않는다"
+    )
     previous_birth_date: str | None = Field(default=None, max_length=10)
     new_birth_date: str | None = Field(default=None, max_length=10)
     idempotency_key: str = Field(..., min_length=8, max_length=80)
