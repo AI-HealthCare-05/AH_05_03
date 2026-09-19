@@ -19,4 +19,11 @@ describe("BomiAvatar", () => {
     expect(still).toBeInstanceOf(HTMLImageElement);
     expect(still).not.toHaveClass("bomi-avatar-sprite");
   });
+
+  it("채팅창 기본은 잡아당길 수 없고 런처만 interactive 다", () => {
+    const { container, rerender } = render(<BomiAvatar mood="idle" />);
+    expect(container.querySelector(".bomi-avatar")).not.toHaveClass("is-interactive");
+    rerender(<BomiAvatar mood="idle" interactive />);
+    expect(container.querySelector(".bomi-avatar")).toHaveClass("is-interactive");
+  });
 });

@@ -242,6 +242,7 @@ export function GlobalHealthAssistant() {
               showTooltip,
               hovering: hoveringLauncher,
             })}
+            interactive
             className="icon-chat icon-chat-mascot"
           />
 

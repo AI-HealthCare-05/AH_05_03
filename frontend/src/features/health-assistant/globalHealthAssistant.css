@@ -13,8 +13,8 @@
 }
 
 .channel-talk-launcher-btn {
-  width: 62px;
-  height: 62px;
+  width: 96px;
+  height: 104px;
   min-width: 44px;
   min-height: 44px;
   border-radius: 0;
@@ -48,9 +48,20 @@
 }
 
 .channel-talk-launcher-btn svg,
-.channel-talk-launcher-btn img,
-.channel-talk-launcher-btn .bomi-avatar-sprite {
+.channel-talk-launcher-btn img {
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+}
+
+.channel-talk-launcher-btn .bomi-avatar-sprite,
+.channel-talk-launcher-btn .bomi-avatar {
+  transition: none;
+}
+
+.channel-talk-launcher-btn:has(.bomi-avatar[data-dragging="true"]),
+.channel-talk-launcher-btn:has(.bomi-avatar[data-dragging="true"]):hover,
+.channel-talk-launcher-btn:has(.bomi-avatar[data-dragging="true"]):active {
+  transform: none;
+  transition: none;
 }
 
 .channel-talk-launcher-btn.is-open .icon-chat {
@@ -62,15 +73,15 @@
 }
 
 .icon-chat-mascot {
-  width: 48px;
-  height: 52px;
+  width: 96px;
+  height: 104px;
   object-fit: contain;
   filter: drop-shadow(0 2px 8px rgba(38, 27, 68, 0.22));
 }
 
 .icon-chat-mascot.bomi-avatar-sprite {
-  --bomi-cell-w: 48px;
-  --bomi-cell-h: 52px;
+  --bomi-cell-w: 96px;
+  --bomi-cell-h: 104px;
 }
 
 .channel-talk-launcher-btn:hover .icon-chat-mascot {
@@ -151,7 +162,7 @@
 /* 2. 채널톡 스타일 플로팅 메신저 팝오버 패널 */
 .channel-talk-popover {
   position: fixed;
-  bottom: 96px;
+  bottom: 144px;
   right: 24px;
   width: 420px;
   max-width: calc(100vw - 36px);
@@ -281,8 +292,8 @@
   }
 
   .channel-talk-launcher-btn {
-    width: 56px;
-    height: 56px;
+    width: 96px;
+    height: 104px;
     border-radius: 0;
     background: transparent;
   }

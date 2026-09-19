@@ -387,6 +387,7 @@
   justify-content: center;
   overflow: visible;
   flex-shrink: 0;
+  pointer-events: none;
 }
 
 .assistant-avatar-mascot {
@@ -586,6 +587,7 @@
   border: none;
   display: flex;
   align-items: center;
+  pointer-events: none;
   justify-content: center;
   flex-shrink: 0;
   overflow: visible;

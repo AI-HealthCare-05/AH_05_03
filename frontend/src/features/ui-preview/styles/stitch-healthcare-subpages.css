@@ -1317,8 +1317,8 @@
 
 .preview-shell .channel-talk-launcher-btn,
 .app-shell.stitch-shell .channel-talk-launcher-btn {
-  width: 62px;
-  height: 62px;
+  width: 96px;
+  height: 104px;
   border-radius: 0;
   background: transparent;
   color: var(--up15-aubergine, var(--stitch-aubergine, #3c315b));
@@ -1339,7 +1339,7 @@
 
 .preview-shell .channel-talk-popover,
 .app-shell.stitch-shell .channel-talk-popover {
-  bottom: 104px;
+  bottom: 144px;
   right: 28px;
   z-index: 1200;
 }

@@ -1,71 +1,45 @@
-/* Codex v2 시트: 셀 192×208, 8열×11행. 표시는 셀의 1/4(48×52) 또는 1/2(96×104). */
-.bomi-avatar-sprite {
-  --bomi-cell-w: 48px;
-  --bomi-cell-h: 52px;
-  --bomi-row: 0;
+/* Codex v2 시트: 셀 192×208, 8열×11행. 표시는 원본 비율(기본 50% = 96×104). */
+.bomi-avatar {
+  --bomi-cell-w: 96px;
+  --bomi-cell-h: 104px;
   display: inline-block;
   width: var(--bomi-cell-w);
   height: var(--bomi-cell-h);
   flex: 0 0 auto;
   background-repeat: no-repeat;
   background-size: calc(var(--bomi-cell-w) * 8) calc(var(--bomi-cell-h) * 11);
+  background-position: 0 0;
   image-rendering: auto;
+  transform-origin: 50% 85%;
+  will-change: transform, background-position;
+  user-select: none;
+  -webkit-user-drag: none;
+  touch-action: none;
+  transition: none;
   pointer-events: none;
 }
 
-.bomi-avatar-sprite.is-lg {
-  --bomi-cell-w: 96px;
-  --bomi-cell-h: 104px;
+.bomi-avatar.is-lg {
+  --bomi-cell-w: 144px;
+  --bomi-cell-h: 156px;
 }
 
-.bomi-avatar-sprite[data-bomi-mood="idle"],
-.bomi-avatar-sprite[data-bomi-mood="wink"] {
-  --bomi-row: 0;
-  animation: bomi-strip-6 2.8s steps(6) infinite;
+.bomi-avatar.is-interactive {
+  cursor: grab;
+  pointer-events: auto;
 }
 
-.bomi-avatar-sprite[data-bomi-mood="happy"],
-.bomi-avatar-sprite[data-bomi-mood="love"] {
-  --bomi-row: 3;
-  animation: bomi-strip-8 2.2s steps(8) infinite;
+.bomi-avatar.is-interactive[data-dragging="true"] {
+  cursor: grabbing;
 }
 
-.bomi-avatar-sprite[data-bomi-mood="thinking"] {
-  --bomi-row: 6;
-  animation: bomi-strip-8 2.8s steps(8) infinite;
-}
-
-.bomi-avatar-sprite[data-bomi-mood="listen"] {
-  --bomi-row: 8;
-  animation: bomi-strip-8 2.6s steps(8) infinite;
-}
-
-.bomi-avatar-sprite[data-bomi-mood="alert"] {
-  --bomi-row: 5;
-  animation: bomi-strip-8 2s steps(8) infinite;
-}
-
-@keyframes bomi-strip-6 {
-  from {
-    background-position: 0 calc(var(--bomi-row) * var(--bomi-cell-h) * -1);
-  }
-  to {
-    background-position: calc(var(--bomi-cell-w) * -6) calc(var(--bomi-row) * var(--bomi-cell-h) * -1);
-  }
-}
-
-@keyframes bomi-strip-8 {
-  from {
-    background-position: 0 calc(var(--bomi-row) * var(--bomi-cell-h) * -1);
-  }
-  to {
-    background-position: calc(var(--bomi-cell-w) * -8) calc(var(--bomi-row) * var(--bomi-cell-h) * -1);
-  }
+html.bomi-is-dragging,
+html.bomi-is-dragging * {
+  cursor: grabbing !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bomi-avatar-sprite {
-    animation: none !important;
-    background-position: 0 calc(var(--bomi-row) * var(--bomi-cell-h) * -1);
+  .bomi-avatar {
+    will-change: auto;
   }
 }
