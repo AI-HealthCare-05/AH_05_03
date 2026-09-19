@@ -38,7 +38,6 @@ from app.dtos.health_records import (
 from app.exceptions import (
     HealthRecordNotFoundError,
     HealthRecordPayloadValidationError,
-    HouseholdMembershipRequiredError,
     HouseholdNotFoundError,
     ProfileNotFoundError,
 )
@@ -50,6 +49,7 @@ from app.repositories.household_repository import HouseholdRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.services import record_prefill
 from app.services.ocr_measurements import extract as extract_ocr_measurements
+from app.services.profile_access import build_context, require_record_access
 
 _SEOUL = ZoneInfo("Asia/Seoul")
 
@@ -127,16 +127,29 @@ class HealthRecordService:
         with contextlib.suppress(Exception):
             await self.redis.publish(channel, json.dumps(payload))
 
-    async def _verify_profile_access(self, profile_id: uuid.UUID, account: ServiceAccount) -> uuid.UUID:
+    async def _verify_profile_access(
+        self,
+        profile_id: uuid.UUID,
+        account: ServiceAccount,
+        *,
+        write: bool = False,
+        actor_profile_id: uuid.UUID | None = None,
+    ) -> uuid.UUID:
         profile = await self.profile_repo.get(profile_id)
         if profile is None:
             raise ProfileNotFoundError()
         household = await self.household_repo.get(profile.household_id)
         if household is None or household.status is not HouseholdStatus.ACTIVE:
             raise HouseholdNotFoundError()
-        is_member = await self.household_repo.has_active_membership(profile.household_id, account.id)
-        if not is_member:
-            raise HouseholdMembershipRequiredError()
+        ctx = await build_context(
+            session=self.session,
+            household_repo=self.household_repo,
+            profile_repo=self.profile_repo,
+            account=account,
+            profile=profile,
+            actor_profile_id=actor_profile_id,
+        )
+        require_record_access(ctx, write=write)
         return profile.household_id
 
     @staticmethod
@@ -154,7 +167,7 @@ class HealthRecordService:
                 raise HealthRecordPayloadValidationError(f"유효하지 않은 3D 해부학 이벤트 규격입니다: {e}") from e
 
     async def create_record(self, account: ServiceAccount, req: HealthRecordCreateRequest) -> HealthRecordData:
-        household_id = await self._verify_profile_access(req.profile_id, account)
+        household_id = await self._verify_profile_access(req.profile_id, account, write=True)
         self._validate_record_payload(req.payload)
 
         record = HealthRecord(
@@ -540,7 +553,7 @@ class HealthRecordService:
         record = await self.record_repo.get(record_id)
         if record is None or record.status == "deleted":
             raise HealthRecordNotFoundError()
-        household_id = await self._verify_profile_access(record.profile_id, account)
+        household_id = await self._verify_profile_access(record.profile_id, account, write=True)
 
         if req.record_type is not None:
             record.record_type = req.record_type
@@ -572,7 +585,7 @@ class HealthRecordService:
         record = await self.record_repo.get(record_id)
         if record is None or record.status == "deleted":
             raise HealthRecordNotFoundError()
-        household_id = await self._verify_profile_access(record.profile_id, account)
+        household_id = await self._verify_profile_access(record.profile_id, account, write=True)
 
         await self.record_repo.soft_delete(record)
         record.row_version += 1
@@ -587,7 +600,7 @@ class HealthRecordService:
         results: list[HealthRecordData] = []
         affected_households: set[uuid.UUID] = set()
         for r in req.records:
-            household_id = await self._verify_profile_access(r.profile_id, account)
+            household_id = await self._verify_profile_access(r.profile_id, account, write=True)
             affected_households.add(household_id)
             self._validate_record_payload(r.payload)
             model = HealthRecord(

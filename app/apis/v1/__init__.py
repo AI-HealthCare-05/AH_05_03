@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.apis.v1.account_audit_routers import account_audit_router
 from app.apis.v1.account_routers import account_router
 from app.apis.v1.assessment_summary_routers import assessment_summary_router
 from app.apis.v1.auth_routers import auth_router
@@ -7,25 +8,37 @@ from app.apis.v1.challenge_routers import challenge_router
 from app.apis.v1.chat_session_routers import chat_session_router
 from app.apis.v1.dev_ocr_routers import dev_ocr_router
 from app.apis.v1.family_invitation_routers import family_invitation_router
+from app.apis.v1.guardian_routers import guardian_router
 from app.apis.v1.health_assistant_routers import health_assistant_router
 from app.apis.v1.health_record_routers import health_record_router
+from app.apis.v1.household_device_routers import household_device_router
 from app.apis.v1.household_event_routers import household_event_router
 from app.apis.v1.household_routers import household_router
+from app.apis.v1.member_pin_routers import member_pin_router
+from app.apis.v1.ops_recovery_routers import ops_recovery_router
 from app.apis.v1.pain_chat_routers import pain_chat_router
 from app.apis.v1.prediction_job_routers import prediction_job_router
 from app.apis.v1.prediction_routers import prediction_router
 from app.apis.v1.profile_link_routers import profile_link_router
-from app.apis.v1.profile_routers import profile_router
+from app.apis.v1.profile_routers import profile_purge_router, profile_router
 from app.apis.v1.rule_assessment_routers import rule_assessment_router
 from app.apis.v1.subscription_routers import subscription_router
+from app.services.ops_recovery_policy import should_mount_ops_recovery_router
 
 v1_routers = APIRouter(prefix="/api/v1")
 v1_routers.include_router(auth_router)
 v1_routers.include_router(account_router)
 v1_routers.include_router(subscription_router)
 v1_routers.include_router(household_router)
+v1_routers.include_router(household_device_router)
+v1_routers.include_router(account_audit_router)
+v1_routers.include_router(member_pin_router)
 v1_routers.include_router(household_event_router)
 v1_routers.include_router(profile_router)
+v1_routers.include_router(profile_purge_router)
+v1_routers.include_router(guardian_router)
+if should_mount_ops_recovery_router():
+    v1_routers.include_router(ops_recovery_router)
 v1_routers.include_router(health_record_router)
 v1_routers.include_router(family_invitation_router)
 v1_routers.include_router(profile_link_router)

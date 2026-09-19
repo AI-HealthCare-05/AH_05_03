@@ -31,6 +31,9 @@ class FamilyInvitation(TimestampMixin, Base):
     )
     invitee_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     target_profile_ref: Mapped[str] = mapped_column(String(86), nullable=False)
+    target_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("family_profiles.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     token_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False, unique=True)
     status: Mapped[InvitationStatus] = mapped_column(
         SAEnum(

@@ -2,10 +2,11 @@ import os
 import uuid
 import zoneinfo
 from dataclasses import field
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.utils.enums import StrEnum
@@ -76,6 +77,22 @@ class Config(BaseSettings):
     # access 토큰 denylist 조회에만 적용되는 비상 스위치.
     # 회전·등록·무효화는 이 값과 무관하게 항상 fail-closed다.
     AUTH_FAIL_OPEN_ON_REDIS_ERROR: bool = False
+
+    # 개발·스테이징 break-glass 전용. 기본 꺼짐. 프로덕션 계열 환경에서는 켜면 기동이 실패한다.
+    # 키는 Secret Manager → 환경 변수로만 주입한다. 저장소·로그·감사에 원문을 두지 않는다.
+    OPS_RECOVERY_ENABLED: bool = False
+    OPS_CIVIL_MAJORITY_RECOVERY_KEY: str = ""
+    # 회전 중 이전 키. 새 키를 KEY에 넣은 뒤 이 칸에 옛 값을 둔다. 만료 시각이 없으면 이전 키는 거절한다.
+    OPS_CIVIL_MAJORITY_RECOVERY_KEY_PREVIOUS: str = ""
+    OPS_CIVIL_MAJORITY_RECOVERY_KEY_PREVIOUS_EXPIRES_AT: datetime | None = None
+    # 감사에 남기는 키 세대 이름. 비밀 원문이 아니다.
+    OPS_CIVIL_MAJORITY_RECOVERY_KEY_ID: str = "v1"
+    OPS_RECOVERY_RATE_LIMIT: int = 5
+    OPS_RECOVERY_RATE_WINDOW_SECONDS: int = 3600
+    # 비어 있으면 X-Forwarded-For 를 무시하고 소켓 peer 만 본다.
+    OPS_RECOVERY_TRUSTED_PROXY_IPS: str = ""
+    AUDIT_EVENT_RETENTION_DAYS: int = 365
+    PIN_LOCK_ALERT_COOLDOWN_SECONDS: int = 900
 
     # --- family invitations -----------------------------------------
     FAMILY_INVITATION_EXPIRE_DAYS: int = 7
@@ -461,6 +478,38 @@ class Config(BaseSettings):
     REFRESH_COOKIE_PATH: str = "/"
     REFRESH_COOKIE_SECURE: bool = True
     REFRESH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
+
+    @field_validator("ENV", mode="before")
+    @classmethod
+    def normalize_env(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        key = value.strip().lower()
+        if key in {"prod", "production", "prd", "live"}:
+            return Env.PROD
+        if key in {"dev", "development", "staging", "stage"}:
+            return Env.DEV
+        if key in {"local", "test"}:
+            return Env.LOCAL
+        return value
+
+    @field_validator("OPS_CIVIL_MAJORITY_RECOVERY_KEY_PREVIOUS_EXPIRES_AT", mode="before")
+    @classmethod
+    def empty_previous_expiry(cls, value: object) -> object:
+        if value == "":
+            return None
+        return value
+
+    @model_validator(mode="after")
+    def reject_ops_recovery_in_production(self) -> "Config":
+        if self.ENV is Env.PROD and self.OPS_RECOVERY_ENABLED:
+            raise ValueError(
+                "프로덕션 계열 환경에서는 OPS_RECOVERY_ENABLED 를 켤 수 없습니다. "
+                "성년 전환 복구는 운영자 계정·MFA·전용 capability가 준비되기 전에 활성화하지 않습니다."
+            )
+        if self.ENV is Env.PROD:
+            self.API_DOCS_ENABLED = False
+        return self
 
     @model_validator(mode="after")
     def validate_browser_security(self) -> "Config":

@@ -42,17 +42,22 @@ async def _event_stream(
     redis: Redis,
     household_id: uuid.UUID,
     request: Request,
+    *,
+    connected_epoch: int,
 ) -> AsyncGenerator[str, None]:
     channel = f"{config.REDIS_KEY_PREFIX}:household:{household_id}:events"
+    epoch_key = f"{config.REDIS_KEY_PREFIX}:household:{household_id}:session_epoch"
     pubsub = redis.pubsub()
     await pubsub.subscribe(channel)
     try:
-        # 최초 연결 확인 프레임 전송
-        yield f"event: connected\ndata: {json.dumps({'household_id': str(household_id)})}\n\n"
+        yield f"event: connected\ndata: {json.dumps({'household_id': str(household_id), 'session_epoch': connected_epoch})}\n\n"
 
         while not await request.is_disconnected():
             try:
-                # 15초 동안 메시지를 기다린다. 없으면 타임아웃 예외가 발생한다.
+                current = await redis.get(epoch_key)
+                if current is not None and int(current) > connected_epoch:
+                    yield f"event: devices_revoked\ndata: {json.dumps({'household_id': str(household_id), 'session_epoch': int(current)})}\n\n"
+                    break
                 msg = await pubsub.get_message(ignore_subscribe_messages=True, timeout=15.0)
                 if msg and msg.get("type") == "message":
                     raw_data = msg.get("data")
@@ -114,7 +119,7 @@ async def stream_household_events(
         raise HouseholdStreamUnavailableError("실시간 이벤트 서비스를 이용할 수 없습니다.")
 
     return StreamingResponse(
-        _event_stream(redis, household_id, request),
+        _event_stream(redis, household_id, request, connected_epoch=household.session_epoch),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",

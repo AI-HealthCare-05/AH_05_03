@@ -41,6 +41,7 @@ _AUTH_ERRORS = (
         ErrorCode.HOUSEHOLD_NOT_FOUND,
         ErrorCode.HOUSEHOLD_MEMBERSHIP_REQUIRED,
         ErrorCode.PROFILE_NOT_FOUND,
+        ErrorCode.PROFILE_ACCESS_DENIED,
     ),
     summary="건강 기록 생성",
 )

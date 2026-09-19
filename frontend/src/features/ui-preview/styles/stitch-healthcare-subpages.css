@@ -422,6 +422,10 @@
   background: var(--up15-periwinkle);
 }
 
+.stitch-app-header .up15-account-menu {
+  position: relative;
+}
+
 .stitch-app-header .up15-user-pill {
   display: flex;
   align-items: center;
@@ -435,8 +439,10 @@
   text-decoration: none;
   color: inherit;
   cursor: pointer;
+  font: inherit;
 }
 
+.stitch-app-header button.up15-user-pill:hover,
 .stitch-app-header a.up15-user-pill:hover {
   border-color: var(--up15-periwinkle);
 }

@@ -1,3 +1,4 @@
+import hashlib
 from dataclasses import dataclass
 from typing import Annotated
 
@@ -22,6 +23,7 @@ from app.models.service_accounts import ServiceAccount, ServiceAccountStatus
 from app.repositories.service_account_repository import ServiceAccountRepository
 from app.repositories.subscription_repository import SubscriptionRepository
 from app.services.jwt import JwtService, account_id_from_payload
+from app.services.profile_access import actor_household_id, record_audit
 from app.services.token_store import TokenStore
 
 # 이메일이 존재하지 않을 때도 verify_password를 반드시 실행한다.
@@ -99,6 +101,7 @@ class AuthService:
         password_ok = await verify_password_async(data.password, password_hash)
 
         if not account or not password_ok:
+            await self._audit_login(account, data.email, succeeded=False)
             raise CredentialsInvalidError()
 
         # **정지·해지 상태를 여기서 구분해 알리지 않는다.** `AccountSuspendedError`
@@ -109,9 +112,24 @@ class AuthService:
         # 상태 축만 비어 있었다. 같은 계정으로 인증된 뒤(`refresh`)의 상태
         # 확인은 다르다 — 그때는 호출자가 이미 그 계정임을 증명한 뒤다.
         if account.status in (ServiceAccountStatus.SUSPENDED, ServiceAccountStatus.CLOSED):
+            await self._audit_login(account, data.email, succeeded=False)
             raise CredentialsInvalidError()
 
+        await self._audit_login(account, data.email, succeeded=True)
         return account
+
+    async def _audit_login(self, account: ServiceAccount | None, email: str, *, succeeded: bool) -> None:
+        household_id = await actor_household_id(self.session, account.id) if account is not None else None
+        await record_audit(
+            self.session,
+            actor_account_id=account.id if account is not None else None,
+            household_id=household_id,
+            event_type="auth.login_succeeded" if succeeded else "auth.login_failed",
+            target_ref=hashlib.sha256(email.strip().lower().encode()).hexdigest()[:16],
+            target_type="service_account",
+            event_metadata={"outcome": "ok" if succeeded else "denied"},
+        )
+        await self.session.commit()
 
     async def login(self, account: ServiceAccount) -> IssuedTokens:
         # ERD service_accounts에 last_login 컬럼이 없으므로 갱신하지 않는다.

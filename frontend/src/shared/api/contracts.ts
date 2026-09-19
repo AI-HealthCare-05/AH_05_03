@@ -83,6 +83,7 @@ export interface ProfileLinkData {
   household_id: string;
   account_id: string;
   invitation_id: string | null;
+  profile_id?: string | null;
   local_profile_ref: string;
   status: "active" | "unlinked";
   linked_at: string;
@@ -96,6 +97,7 @@ export interface FamilyInvitationData {
   inviter_account_id: string;
   invitee_email: string;
   target_profile_ref: string;
+  target_profile_id?: string | null;
   status: "pending" | "accepted" | "declined" | "expired" | "cancelled";
   expires_at: string;
   accepted_by_account_id: string | null;
@@ -173,6 +175,12 @@ export interface ProfileServerData {
   gender: "male" | "female" | null;
   account_email?: string | null;
   status: "active" | "hidden" | "deleted";
+  ownership_type?: string;
+  lifecycle_status?: string;
+  adult_transitioned_at?: string | null;
+  adult_transition_pending_at?: string | null;
+  privacy_self_determined_at?: string | null;
+  purge_after?: string | null;
   row_version: number;
   created_at: string;
   updated_at: string;
@@ -180,6 +188,73 @@ export interface ProfileServerData {
 
 export interface ProfileServerListData {
   items: ProfileServerData[];
+}
+
+export interface HouseholdDeviceData {
+  id: string;
+  household_id: string;
+  display_name: string;
+  status: "active" | "revoked";
+  last_seen_at: string | null;
+  created_at: string;
+  row_version: number;
+}
+
+export interface DevicePairingCreatedData {
+  pairing_id: string;
+  household_id: string;
+  code: string;
+  expires_at: string;
+}
+
+export interface AccountAuditEventData {
+  id: string;
+  event_type: string;
+  target_type: string | null;
+  target_ref: string | null;
+  actor_account_id: string | null;
+  occurred_at: string;
+  metadata: Record<string, string>;
+}
+
+export interface PinLockAlertData {
+  id: string;
+  profile_id: string;
+  attempts: string | null;
+  occurred_at: string;
+}
+
+export interface HouseholdDeviceClaimedData {
+  id: string;
+  household_id: string;
+  display_name: string;
+  device_token: string;
+  status: "active" | "revoked";
+  row_version: number;
+  created_at: string;
+}
+
+export interface WallProfileCardData {
+  id: string;
+  display_name: string;
+  relationship: string;
+  member_role: string;
+}
+
+export interface MemberPinIssueData {
+  profile_id: string;
+  temporary_pin: string;
+  must_change: boolean;
+}
+
+export interface MemberSessionData {
+  id: string;
+  profile_id: string;
+  household_id: string;
+  member_role: string;
+  must_change: boolean;
+  session_token: string;
+  expires_at: string;
 }
 
 export interface HealthRecordServerData {

@@ -13,7 +13,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -109,7 +109,9 @@ describe("RootLayout 로그인 관문", () => {
     expect(navigation).not.toHaveTextContent("챌린지");
     expect(navigation).not.toHaveTextContent("계정");
 
-    const accountLink = screen.getByRole("link", { name: /계정 관리/u });
+    const trigger = screen.getByRole("button", { name: /계정 메뉴/u });
+    fireEvent.click(trigger);
+    const accountLink = screen.getByRole("menuitem", { name: "가족 접근" });
     expect(accountLink).toHaveAttribute("href", "/account");
   });
 

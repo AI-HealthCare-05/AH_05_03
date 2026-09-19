@@ -1,11 +1,6 @@
-/** 시안 18(새 UI)을 기본 홈(`/`)에 두고, 기존 가족 홈은 `/ui-preview18`에 둔다. */
-export const LOCAL_HOME_IS_PREVIEW18 = true;
-
+/** 제품 홈(`/`)과 시안 주소는 자체 상단 바를 그려 RootLayout 헤더를 겹치지 않는다. */
 export function isPreviewShellPath(pathname: string): boolean {
-  if (LOCAL_HOME_IS_PREVIEW18) {
-    if (pathname === "/" || pathname === "") return true;
-    if (pathname === "/ui-preview18") return false;
-  }
+  if (pathname === "/" || pathname === "") return true;
   return pathname.startsWith("/ui-preview");
 }
 

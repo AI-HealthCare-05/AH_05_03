@@ -32,6 +32,10 @@ export function toClientProfile(server: ProfileServerData): FamilyProfile {
     createdAt: server.created_at,
     updatedAt: server.updated_at,
     version: server.row_version,
+    ownershipType: server.ownership_type,
+    adultTransitionedAt: server.adult_transitioned_at ?? null,
+    adultTransitionPendingAt: server.adult_transition_pending_at ?? null,
+    privacySelfDeterminedAt: server.privacy_self_determined_at ?? null,
   };
 }
 
@@ -159,35 +163,20 @@ export class ServerProfileService {
 
   public async restore(profileId: string): Promise<LocalResult<FamilyProfile>> {
     try {
-      const updated = await this.client.updateProfile(profileId, { status: "active" });
+      const updated = await this.client.restoreProfileLifecycle(profileId);
       return success(toClientProfile(updated));
     } catch (err) {
       return failure("NOT_FOUND", err instanceof Error ? err.message : "프로필 복원 실패");
     }
   }
 
-  public async softDelete(profileId: string): Promise<LocalResult<FamilyProfile>> {
+  public async deleteEmpty(profileId: string): Promise<LocalResult<void>> {
     try {
-      const updated = await this.client.updateProfile(profileId, { status: "deleted" });
-      return success(toClientProfile(updated));
+      await this.client.requestProfileDeletion(profileId);
+      return success(undefined);
     } catch (err) {
       return failure("NOT_FOUND", err instanceof Error ? err.message : "프로필 삭제 실패");
     }
-  }
-
-  public async purge(profileId: string): Promise<LocalResult<void>> {
-    try {
-      await this.client.deleteProfile(profileId);
-      return success(undefined);
-    } catch (err) {
-      return failure("NOT_FOUND", err instanceof Error ? err.message : "프로필 영구 삭제 실패");
-    }
-  }
-
-  public async deleteEmpty(profileId: string): Promise<LocalResult<void>> {
-    const res = await this.softDelete(profileId);
-    if (!res.ok) return failure(res.error.code, res.error.message);
-    return success(undefined);
   }
 
   public async setServerReference(profileId: string): Promise<LocalResult<FamilyProfile>> {

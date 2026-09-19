@@ -12,6 +12,7 @@ _PROFILE_REF_PATTERN = r"^[A-Za-z0-9_-]{43,86}$"
 class ProfileLinkCreateRequest(BaseRequestModel):
     invitation_id: uuid.UUID
     local_profile_ref: str = Field(min_length=43, max_length=86, pattern=_PROFILE_REF_PATTERN)
+    profile_id: uuid.UUID | None = None
 
 
 class ProfileLinkData(BaseSerializerModel):
@@ -19,6 +20,7 @@ class ProfileLinkData(BaseSerializerModel):
     household_id: uuid.UUID
     account_id: uuid.UUID
     invitation_id: uuid.UUID | None
+    profile_id: uuid.UUID | None = None
     local_profile_ref: str
     status: ProfileLinkStatus
     linked_at: datetime

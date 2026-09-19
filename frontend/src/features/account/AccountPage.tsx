@@ -14,6 +14,8 @@ import type {
 } from "../../shared/api/contracts";
 import { toClientProfile } from "../../shared/api/serverDomainRuntime";
 import { serverApiClient } from "../../shared/api/serverApiClient";
+import { WallDevicesCard } from "../home/WallDevicesCard";
+import { HouseholdAuditCard } from "../home/HouseholdAuditCard";
 import type { FamilyProfile } from "../../shared/local/domainContracts";
 import {
   getPendingInvitation,
@@ -96,6 +98,7 @@ type Confirmation =
 interface LinkRecovery {
   invitationId: string;
   profileRef: string;
+  profileId?: string | null;
 }
 
 export function AccountPage() {
@@ -197,7 +200,12 @@ export function AccountPage() {
       const localResult = await runtime.profiles.setServerReference(profile.id, reference, "pending");
       if (!localResult.ok) throw new Error(localResult.error.message);
       try {
-        await serverApiClient.createInvitation({ householdId, inviteeEmail, targetProfileRef: reference });
+        await serverApiClient.createInvitation({
+          householdId,
+          inviteeEmail,
+          targetProfileRef: reference,
+          targetProfileId: profile.id,
+        });
         saveInvitationMapping({
           reference,
           profileId: profile.id,
@@ -224,9 +232,13 @@ export function AccountPage() {
     await run(async () => {
       await serverApiClient.acceptInvitation(invitationId, token, invitation.row_version);
       try {
-        await linkAcceptedInvitation(invitationId, invitation.target_profile_ref);
+        await linkAcceptedInvitation(invitationId, invitation.target_profile_ref, invitation.target_profile_id);
       } catch (caught) {
-        setLinkRecovery({ invitationId, profileRef: invitation.target_profile_ref });
+        setLinkRecovery({
+          invitationId,
+          profileRef: invitation.target_profile_ref,
+          profileId: invitation.target_profile_id,
+        });
         throw new Error(
           `초대는 수락됐지만 프로필 연결이 끝나지 않았습니다. 아래 재시도를 이용하세요. ${messageFrom(caught, "")}`,
           { cause: caught },
@@ -292,18 +304,21 @@ export function AccountPage() {
   async function retryProfileLink() {
     if (!linkRecovery) return;
     await run(async () => {
-      await linkAcceptedInvitation(linkRecovery.invitationId, linkRecovery.profileRef);
+      await linkAcceptedInvitation(linkRecovery.invitationId, linkRecovery.profileRef, linkRecovery.profileId);
       setLinkRecovery(undefined);
       setMessage("중단됐던 서비스 계정 연결을 완료했습니다. 현재 기기는 건강정보 연결 대기 상태입니다.");
     });
   }
 
-  async function linkAcceptedInvitation(invitationId: string, profileRef: string) {
+  async function linkAcceptedInvitation(invitationId: string, profileRef: string, profileId?: string | null) {
     const serverLinks = await serverApiClient.listProfileLinks();
     const existingLink = serverLinks.find(
       (item) => item.status === "active" && (item.invitation_id === invitationId || item.local_profile_ref === profileRef),
     );
-    if (!existingLink) await serverApiClient.createProfileLink(invitationId, profileRef);
+    if (!existingLink) {
+      if (profileId) await serverApiClient.createProfileLink(invitationId, profileRef, profileId);
+      else await serverApiClient.createProfileLink(invitationId, profileRef);
+    }
     await loadAccountData();
   }
 
@@ -475,6 +490,8 @@ export function AccountPage() {
             onCreate={createHousehold}
             onConfirm={setConfirmation}
           />
+          <WallDevicesCard households={households} currentAccountId={account.account.id} working={working} />
+          <HouseholdAuditCard households={households} currentAccountId={account.account.id} />
           <InvitationCard households={households} profiles={profiles} invitations={invitations} working={working} onSend={sendInvitation} onAccept={acceptAndLink} onDecline={declineInvitation} onCancel={(invitation) => setConfirmation({ kind: "cancel-invitation", invitation })} linkRecovery={linkRecovery} onRetry={retryProfileLink} />
           <section className="account-card account-wide"><p className="section-kicker">서비스 계정 연결</p><h2>연결된 프로필 참조</h2>{links.filter((item) => item.status === "active").length === 0 ? <p className="account-empty">활성 연결이 없습니다.</p> : links.filter((item) => item.status === "active").map((link) => <div className="profile-link-row" key={link.id}><code>{link.local_profile_ref.slice(0, 12)}…</code><span>계정 연결 완료 · 기기 연결 대기</span><button className="secondary-button" type="button" disabled={working} onClick={() => setConfirmation({ kind: "unlink-profile", link })}>연결 해제</button></div>)}</section>
           <section className="account-card account-wide danger-zone"><p className="section-kicker">회원 탈퇴</p><h2>이어봄에서 탈퇴하기</h2><p>인증·구독·서버 연결 상태를 종료합니다. 기기에 저장된 건강정보는 삭제되지 않습니다.</p><button className="danger-button" type="button" onClick={() => setConfirmation({ kind: "close-account" })}>회원 탈퇴</button></section>
