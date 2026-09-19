@@ -49,7 +49,7 @@ test("프로필과 건강기록은 서버 API(PostgreSQL)를 통해 등록·조�
   // 1. 프로필이 서버 API를 통해 저장되었는지 검증
   expect(state.profiles).toHaveLength(1);
   expect(state.profiles[0].display_name).toBe("테스트 가족");
-  expect(apiRequests.some((req) => req.startsWith("POST /api/v1/profiles"))).toBe(true);
+  expect(apiRequests.filter((req) => req === "POST /api/v1/profiles")).toHaveLength(1);
 
   await page.goto(`/members/${state.profiles[0].id}`);
   await expect(page.getByRole("heading", { name: "테스트 가족님의 건강기록" })).toBeVisible({
