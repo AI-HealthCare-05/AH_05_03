@@ -55,6 +55,7 @@ class Household(TimestampMixin, Base):
         nullable=False,
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    session_epoch: Mapped[int] = mapped_column(BigInteger, default=1, server_default="1", nullable=False)
     row_version: Mapped[int] = mapped_column(BigInteger, default=1, server_default="1", nullable=False)
 
     __table_args__ = (
@@ -111,6 +112,9 @@ class ProfileLink(TimestampMixin, Base):
     )
     invitation_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("family_invitations.id", ondelete="RESTRICT"), unique=True
+    )
+    profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("family_profiles.id", ondelete="SET NULL"), nullable=True, index=True
     )
     local_profile_ref: Mapped[str] = mapped_column(String(86), nullable=False)
     status: Mapped[ProfileLinkStatus] = mapped_column(
