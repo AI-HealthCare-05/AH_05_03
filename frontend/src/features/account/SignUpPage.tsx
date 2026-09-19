@@ -75,7 +75,7 @@ export function SignUpPage() {
     <div className="signin-shell">
       <div className="signin-panel">
         <div className="signin-brand">
-          <img className="brand-mark" src="/ieobom-icon.svg" alt="" aria-hidden="true" width={42} height={42} />
+          <img className="brand-mark" src="/ieobom-icon.png" alt="" aria-hidden="true" width={42} height={42} />
           <div>
             <strong>이어봄</strong>
             <small>우리 가족 건강기록</small>

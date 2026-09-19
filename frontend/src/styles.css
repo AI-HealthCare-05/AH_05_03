@@ -244,7 +244,7 @@ main {
   height: 42px;
   display: block;
   border-radius: 14px;
-  box-shadow: 0 10px 24px rgba(36, 99, 235, 0.24);
+  box-shadow: none;
   flex-shrink: 0;
   object-fit: contain;
 }

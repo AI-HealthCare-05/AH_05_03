@@ -34,7 +34,7 @@ export function LandingNav() {
     <header className={`ln-nav${lifted ? " is-lifted" : ""}`}>
       <div className="ln-nav-inner">
         <Link className="ln-nav-brand" to="/landing">
-          <img src="/ieobom-icon.svg" alt="" width={32} height={32} aria-hidden="true" />
+          <img src="/ieobom-icon.png" alt="" width={32} height={32} aria-hidden="true" />
           <span>이어봄</span>
         </Link>
 
