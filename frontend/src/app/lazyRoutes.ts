@@ -82,14 +82,17 @@ export const UiPreview16Page = lazy(() =>
 export const UiPreview17Page = lazy(() =>
   import("../features/ui-preview/variants/UiPreview17Page").then((m) => ({ default: m.UiPreview17Page })),
 );
-export const UiPreview18Page = lazy(() =>
-  import("../features/ui-preview/variants/UiPreview18Page").then((m) => ({ default: m.UiPreview18Page })),
+export const FamilyHomePage = lazy(() =>
+  import("../features/home/FamilyHomePage").then((m) => ({ default: m.FamilyHomePage })),
 );
 export const HealthData3Page = lazy(() =>
   import("../features/health-data/HealthData3Page").then((m) => ({ default: m.HealthData3Page })),
 );
 export const AccountPage = lazy(() =>
   import("../features/account/AccountPage").then((m) => ({ default: m.AccountPage })),
+);
+export const PainDiaryPage = lazy(() =>
+  import("../features/pain-diary/PainDiaryPage").then((m) => ({ default: m.PainDiaryPage })),
 );
 /**
  * 공개 랜딩페이지. 로그인한 사람은 평생 한 번도 열지 않는 화면이라 앱 번들과
@@ -106,6 +109,9 @@ export const LandingPage = lazy(() =>
 export const LandingV2Page = lazy(() =>
   import("../features/landing-v2/LandingV2Page").then((m) => ({ default: m.LandingV2Page })),
 );
-export const PainDiaryPage = lazy(() =>
-  import("../features/pain-diary/PainDiaryPage").then((m) => ({ default: m.PainDiaryPage })),
+export const WallPairPage = lazy(() =>
+  import("../features/home/WallPairPage").then((m) => ({ default: m.WallPairPage })),
+);
+export const WallOverviewPage = lazy(() =>
+  import("../features/home/WallOverviewPage").then((m) => ({ default: m.WallOverviewPage })),
 );

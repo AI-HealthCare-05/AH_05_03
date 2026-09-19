@@ -36,12 +36,13 @@ test("프로필과 건강기록은 서버 API(PostgreSQL)를 통해 등록·조�
   const state = await setupE2eServerMocks(page);
 
   await page.goto(DEV_FAMILY_HOME_PATH);
-  await page.getByRole("button", { name: "첫 구성원 등록" }).click();
+  await page.getByRole("button", { name: "구성원 추가" }).click();
   await page.getByRole("textbox", { name: "이름 또는 호칭" }).fill("테스트 가족");
   await page.getByRole("combobox", { name: "관계" }).selectOption("본인");
   await page.getByRole("button", { name: "프로필 저장" }).click();
+  await page.getByRole("button", { name: "확인했습니다" }).click();
 
-  await expect(page.getByRole("heading", { name: "테스트 가족님의 건강기록" })).toBeVisible({
+  await expect(page.getByRole("button", { name: "테스트 가족 · 본인" })).toBeVisible({
     timeout: HEAVY_RENDER_TIMEOUT,
   });
 
@@ -49,6 +50,11 @@ test("프로필과 건강기록은 서버 API(PostgreSQL)를 통해 등록·조�
   expect(state.profiles).toHaveLength(1);
   expect(state.profiles[0].display_name).toBe("테스트 가족");
   expect(apiRequests.some((req) => req.startsWith("POST /api/v1/profiles"))).toBe(true);
+
+  await page.goto(`/members/${state.profiles[0].id}`);
+  await expect(page.getByRole("heading", { name: "테스트 가족님의 건강기록" })).toBeVisible({
+    timeout: HEAVY_RENDER_TIMEOUT,
+  });
 
   // 2. 건강기록 작성
   await page.getByRole("button", { name: "첫 기록 작성하기" }).click();

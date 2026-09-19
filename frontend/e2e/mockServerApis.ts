@@ -45,6 +45,7 @@ export interface MockServerState {
 export async function setupE2eServerMocks(
   page: Page,
   initialState?: Partial<MockServerState>,
+  options?: { resetStorage?: boolean },
 ): Promise<MockServerState> {
   const state: MockServerState = {
     households: initialState?.households ?? [
@@ -55,15 +56,17 @@ export async function setupE2eServerMocks(
     painRecords: initialState?.painRecords ?? [],
   };
 
-  await page.addInitScript(() => {
-    try {
-      window.localStorage?.clear();
-      window.sessionStorage?.clear();
-      window.indexedDB?.deleteDatabase("ieobom-local");
-    } catch {
-      // ignore
-    }
-  });
+  if (options?.resetStorage !== false) {
+    await page.addInitScript(() => {
+      try {
+        window.localStorage?.clear();
+        window.sessionStorage?.clear();
+        window.indexedDB?.deleteDatabase("ieobom-local");
+      } catch {
+        // ignore
+      }
+    });
+  }
 
   // 0. Fallback for unhandled /api/v1/* requests (lowest priority since registered first in Playwright)
   await page.route(
