@@ -701,7 +701,7 @@ def extract(tables: list[dict[str, Any]] | None) -> ExtractionResult:
     _resolve_duplicates(duplicated, accepted, review)
 
     return ExtractionResult(
-        values={name: row.value for name, row in accepted.items()},
+        values={name: row.value for name, row in accepted.items() if row.value is not None},
         review=review,
         unused=unused,
         unmatched=unmatched,
