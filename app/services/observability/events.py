@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any
 
-TraceKind = Literal["chatbot", "document_vision"]
+from app.services.observability.privacy import ChatOutcome, assert_allowlisted_chatbot_metadata
 
 
 def chatbot_metadata(
@@ -10,47 +10,39 @@ def chatbot_metadata(
     account_alias: str | None,
     session_alias: str | None,
     model: str | None,
-    tool_names: list[str] | None,
+    offered_tool_names: list[str] | None,
+    called_tool_names: list[str] | None,
     measurement_codes: list[str] | None,
-    error: bool,
+    outcome: ChatOutcome,
 ) -> dict[str, Any]:
-    return {
+    called = list(called_tool_names or [])
+    codes = list(measurement_codes or [])
+    payload = {
         "kind": "chatbot",
         "account": account_alias,
         "session": session_alias,
         "model": model,
-        "tool_names": list(tool_names or []),
-        "tool_count": len(tool_names or []),
-        "measurement_codes": list(measurement_codes or []),
-        "measurement_count": len(measurement_codes or []),
-        "error": error,
+        "offered_tool_names": list(offered_tool_names or []),
+        "called_tool_names": called,
+        "tool_call_count": len(called),
+        "measurement_codes": codes,
+        "measurement_count": len(codes),
+        "outcome": outcome,
         "exact_values_logged": False,
+        "langfuse_export": False,
     }
-
-
-def document_vision_metadata(
-    *,
-    account_alias: str | None,
-    job_alias: str | None,
-    model: str | None,
-    page_count: int | None,
-    success: bool,
-) -> dict[str, Any]:
-    return {
-        "kind": "document_vision",
-        "account": account_alias,
-        "job": job_alias,
-        "model": model,
-        "page_count": page_count,
-        "success": success,
-        "exact_values_logged": False,
-    }
+    assert_allowlisted_chatbot_metadata(payload)
+    return payload
 
 
 def production_measurement_observation(codes: list[str], source: str) -> dict[str, Any]:
-    return {
+    from app.services.observability.privacy import assert_allowlisted_measurement_observation
+
+    payload = {
         "measurement_codes": list(codes),
         "measurement_count": len(codes),
         "source": source,
         "exact_values_logged": False,
     }
+    assert_allowlisted_measurement_observation(payload)
+    return payload

@@ -3,7 +3,7 @@ import re
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import httpx
 
@@ -73,6 +73,13 @@ from app.services.outdoor_conditions_tools import execute_outdoor_conditions_too
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_obs_name(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9_]", "_", name.lower()).strip("_")
+    if slug and re.fullmatch(r"[a-z][a-z0-9_]{0,63}", slug[:64]):
+        return slug[:64]
+    return "unknown_tool"
+
+
 def _observability_tool_names(tools: list[Any] | None) -> list[str]:
     names: list[str] = []
     for tool in tools or []:
@@ -81,9 +88,9 @@ def _observability_tool_names(tools: list[Any] | None) -> list[str]:
             name = tool.get("name")
             if name is None and isinstance(fn, dict):
                 name = fn.get("name")
-            names.append(str(name or "tool"))
+            names.append(_sanitize_obs_name(str(name or "tool")))
             continue
-        names.append(str(getattr(tool, "name", None) or "tool"))
+        names.append(_sanitize_obs_name(str(getattr(tool, "name", None) or "tool")))
     return names
 
 
@@ -1159,6 +1166,41 @@ class HealthAssistantService:
             tools=tools,
         )
 
+    def _llm_model_label(self) -> str | None:
+        client = self.llm_client
+        last = getattr(client, "last_success_entry", None)
+        if last:
+            return str(last)
+        name = getattr(client, "model_name", None) or getattr(client, "model", None)
+        if name:
+            return str(name)
+        primary = getattr(client, "primary", None)
+        return str(primary) if primary else None
+
+    def _observe_assistant_turn(
+        self,
+        *,
+        request: HealthAssistantChatRequest,
+        account: ServiceAccount | None,
+        offered_tools: list[Any] | None,
+        called_tool_names: list[str],
+        outcome: Literal["non_streaming_success", "streaming_success"],
+    ) -> None:
+        try:
+            from app.services.observability.chat_trace import record_health_assistant_turn
+
+            session_id = str(request.session_id) if request.session_id else None
+            record_health_assistant_turn(
+                account_id=str(account.id) if account else None,
+                session_id=session_id,
+                model=self._llm_model_label(),
+                offered_tool_names=_observability_tool_names(offered_tools),
+                called_tool_names=[_sanitize_obs_name(name) for name in called_tool_names],
+                outcome=outcome,
+            )
+        except Exception:
+            logger.debug("health assistant observability skipped", exc_info=True)
+
     async def respond(
         self,
         request: HealthAssistantChatRequest,
@@ -1173,7 +1215,10 @@ class HealthAssistantService:
         response: HealthAssistantResponse
         client_any = cast(Any, self.llm_client)
 
+        called_tool_names: list[str] = []
+
         async def tool_executor(name: str, args: dict[str, Any]) -> Any:
+            called_tool_names.append(name)
             return await self._execute_tool(
                 name,
                 args,
@@ -1218,16 +1263,13 @@ class HealthAssistantService:
             outdoor_conditions=prepared.outdoor_conditions,
             messages=request.messages,
         )
-        try:
-            from app.services.observability.chat_trace import record_health_assistant_turn
-
-            record_health_assistant_turn(
-                account_id=str(account.id) if account else None,
-                model=getattr(self.llm_client, "model", None),
-                tool_names=_observability_tool_names(prepared.tools),
-            )
-        except Exception:
-            logger.debug("health assistant observability skipped", exc_info=True)
+        self._observe_assistant_turn(
+            request=request,
+            account=account,
+            offered_tools=prepared.tools,
+            called_tool_names=called_tool_names,
+            outcome="non_streaming_success",
+        )
         return grounded
 
     async def _get_stream_generator(
@@ -1269,8 +1311,10 @@ class HealthAssistantService:
 
         request = prepared.request
         raw = ""
+        called_tool_names: list[str] = []
 
         async def tool_executor(name: str, args: dict[str, Any]) -> Any:
+            called_tool_names.append(name)
             return await self._execute_tool(
                 name,
                 args,
@@ -1341,6 +1385,13 @@ class HealthAssistantService:
                         outdoor_conditions=prepared.outdoor_conditions,
                         messages=request.messages,
                     )
+                    self._observe_assistant_turn(
+                        request=request,
+                        account=account,
+                        offered_tools=prepared.tools,
+                        called_tool_names=called_tool_names,
+                        outcome="streaming_success",
+                    )
                     yield "delta", {"text": validated.assistant_message}
                     yield "result", validated.model_dump(mode="json")
                     return
@@ -1362,6 +1413,13 @@ class HealthAssistantService:
                         tool_result=tool_result,
                         outdoor_conditions=prepared.outdoor_conditions,
                         messages=request.messages,
+                    )
+                    self._observe_assistant_turn(
+                        request=request,
+                        account=account,
+                        offered_tools=prepared.tools,
+                        called_tool_names=called_tool_names,
+                        outcome="streaming_success",
                     )
                     yield "delta", {"text": validated.assistant_message}
                     yield "result", validated.model_dump(mode="json")
@@ -1389,6 +1447,13 @@ class HealthAssistantService:
         )
         # 생성 중인 문장을 먼저 전송하면 최종 safety/grounding이 차단해도
         # 이미 사용자에게 노출된다. 검증된 문장만 delta로 내보낸다.
+        self._observe_assistant_turn(
+            request=request,
+            account=account,
+            offered_tools=prepared.tools,
+            called_tool_names=called_tool_names,
+            outcome="streaming_success",
+        )
         yield "delta", {"text": validated.assistant_message}
         yield "result", validated.model_dump(mode="json")
 
