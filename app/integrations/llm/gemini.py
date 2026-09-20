@@ -21,6 +21,7 @@ from app.core import config
 from app.dtos.health_assistant import ChatMessage
 from app.exceptions import LlmProviderFailedError, LlmTimeoutError, LlmUnavailableError
 from app.integrations.llm.protocol import LLMClientProtocol
+from app.services.agent_tools.project import ToolPolicyError, project_for_model
 from app.services.observability.privacy import mask_for_provider
 
 T = TypeVar("T", bound=BaseModel)
@@ -165,10 +166,13 @@ class GeminiLLMClient(LLMClientProtocol):
             fc_args = fc.args or {}
             try:
                 tool_res = await tool_executor(fc_name, fc_args)
-                result_payload = tool_res.model_dump(mode="json") if hasattr(tool_res, "model_dump") else tool_res
-            except Exception as e:
-                logger.warning("Gemini tool execution failed name=%s type=%s", fc_name, type(e).__name__)
-                tool_res = result_payload = {"error": mask_for_provider(str(e))}
+                result_payload = project_for_model(fc_name, tool_res)
+            except ToolPolicyError as ex:
+                logger.warning("Gemini tool blocked name=%s reason=%s", fc_name, ex.reason)
+                tool_res = result_payload = ex.model_payload()
+            except Exception:
+                logger.warning("Gemini tool execution failed name=%s", fc_name)
+                tool_res = result_payload = {"error": "TOOL_EXECUTION_FAILED"}
             part = types.Part.from_function_response(
                 name=fc_name,
                 response={"result": result_payload},
