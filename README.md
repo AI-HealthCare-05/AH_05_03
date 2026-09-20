@@ -17,6 +17,7 @@
 
 | 문서 | 내용 | 담당 |
 |---|---|---|
+| [docs/00_terminology.md](docs/00_terminology.md) | 설계 용어. 서류 판독은 OCR이 아니라 멀티모달 LLM Vision | 전체 |
 | [docs/01_requirements.md](docs/01_requirements.md) | 요구사항 정의서 (문제정의, 기능/비기능 요구사항, AI 실험 계획) | 오성민 |
 | [docs/02_erd.md](docs/02_erd.md) | ERD 초안 | 초안: 조현승 |
 | [docs/03_api_spec.md](docs/03_api_spec.md) | 서버 REST API·로컬 기능 상세 목표 계약 | 권민재 |
@@ -41,6 +42,7 @@
 | [docs/22_two_engines_comparison.md](docs/22_two_engines_comparison.md) | **규칙 엔진 ↔ ML 모델 실측 비교와 데모 두 화면** | 데이터·ML |
 | [docs/23_multi_disease_model_design.md](docs/23_multi_disease_model_design.md) | 다질환 모델 설계 — 타깃 정의, 누출 차단, tier 분리 | 데이터·ML |
 | [docs/24_ocr_implementation_alignment.md](docs/24_ocr_implementation_alignment.md) | OCR 챌린지 구현 정렬·개발 진행 설계 | 데이터·ML·백엔드 |
+| [docs/54_agent_baseline.md](docs/54_agent_baseline.md) | 에이전트 도입 구현 기준안 (권한 먼저, 필수 자료 미리 준비, Vision 분리) | 전체 |
 | [docs/adr/0001-web-local-first-architecture.md](docs/adr/0001-web-local-first-architecture.md) | 데스크톱 앱에서 웹 기반 로컬 우선 서비스로 전환한 아키텍처 결정 | 전체 |
 | [docs/adr/0002-separate-server-api-and-local-domain-contract.md](docs/adr/0002-separate-server-api-and-local-domain-contract.md) | 서버 REST API와 브라우저 Local Domain API를 분리한 아키텍처 결정 | 전체 |
 | [docs/adr/0003-web-authentication-token-transport.md](docs/adr/0003-web-authentication-token-transport.md) | Access JWT와 HttpOnly Refresh Cookie를 선택한 인증 결정 | 전체 |
@@ -49,7 +51,9 @@
 | [docs/adr/0006-lifecycle-scoped-profile-reference.md](docs/adr/0006-lifecycle-scoped-profile-reference.md) | 연결 생명주기 단위의 일회용 프로필 참조값 결정 | 전체 |
 | [docs/adr/0007-account-scoped-encrypted-local-vault.md](docs/adr/0007-account-scoped-encrypted-local-vault.md) | 공용 브라우저의 계정별 암호화 로컬 보관함 격리 결정 | 전체 |
 | [docs/adr/0008-temporary-cloud-ocr-baseline.md](docs/adr/0008-temporary-cloud-ocr-baseline.md) | 합성·비식별 문서의 임시 Naver OCR 기준선 허용 결정 | 전체 |
-| [docs/adr/0009-postgresql-health-data-and-server-ai.md](docs/adr/0009-postgresql-health-data-and-server-ai.md) | PostgreSQL 건강정보 정본과 서버 ML·AI 도구 호출 전환 결정 | 전체 |
+| [docs/adr/0011-postgresql-health-data-and-server-ai.md](docs/adr/0011-postgresql-health-data-and-server-ai.md) | PostgreSQL 건강정보 정본과 서버 ML·AI 도구 호출 전환 결정 | 전체 |
+| [docs/adr/0014-document-vision-not-ocr.md](docs/adr/0014-document-vision-not-ocr.md) | 건강서류 판독을 OCR이 아니라 멀티모달 LLM Vision으로 부른다 | 전체 |
+| [docs/adr/0015-bounded-agent-on-policy-and-evidence.md](docs/adr/0015-bounded-agent-on-policy-and-evidence.md) | 에이전트는 정책·근거 파이프라인 위의 bounded 루프 | 전체 |
 | [docs/adr/README.md](docs/adr/README.md) | ADR 추가·대체·대안 기록 원칙 | 전체 |
 | [docs/legacy/desktop-app/2026-08-18-pre-web-prd.md](docs/legacy/desktop-app/2026-08-18-pre-web-prd.md) | 웹 버전 완성 후 재검토할 데스크톱·Wi-Fi 동기화 구버전 백업 | 전체 |
 
