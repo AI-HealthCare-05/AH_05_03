@@ -211,6 +211,8 @@ def test_chat_contents_mask_resident_id_before_gemini() -> None:
     from app.integrations.llm.gemini import _contents_from_messages
 
     contents = _contents_from_messages([ChatMessage(role="user", content=f"주민번호 {CANARY_RESIDENT_ID} 입니다")])
-    text = contents[0].parts[0].text
+    parts = contents[0].parts
+    assert parts is not None
+    text = parts[0].text or ""
     assert CANARY_RESIDENT_ID not in text
     assert "[redacted_rid]" in text

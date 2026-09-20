@@ -60,7 +60,9 @@ def test_openai_now_takes_pdf_because_nothing_else_will() -> None:
     거기에 `application/pdf` 를 넣어 살렸다. 이게 빠지면 사용자는 PDF 를 **올릴 수는
     있는데 절대 처리되지 않는** 조합을 만난다.
     """
-    assert "application/pdf" in ocr_providers.config.OPENAI_SUPPORTED_MIME_TYPES
+    from app.core import config
+
+    assert "application/pdf" in config.OPENAI_SUPPORTED_MIME_TYPES
     part = ocr_providers._part(b"%PDF-1.4 dummy", "application/pdf")
     assert part["type"] == "file"
     # 확장자로 형식을 판단하므로 `filename` 이 빠지면 400 이다.
