@@ -6,7 +6,7 @@ import pytest
 from app.core import config
 from app.dtos.health_assistant import ChatMessage, HealthAssistantResponse
 from app.dtos.health_knowledge import HealthKnowledgeItem, HealthKnowledgeSearchResult
-from app.dtos.health_record_query import AlcoholConsultationSnapshot
+from app.dtos.health_record_query import PersonalHealthSnapshot
 from app.services.health_assistant_boundary import HealthAssistantBoundaryService
 from app.services.health_knowledge_catalog import HealthKnowledgeCatalogClient, is_alcohol_topic
 from app.services.kdca_health_info_client import KdcaHealthInfoClient, _candidate_keywords, _is_relevant
@@ -55,7 +55,7 @@ def test_grounding_accepts_alcohol_answer_only_when_both_evidence_types_exist() 
         retrieved_at=datetime.now(ZoneInfo("Asia/Seoul")),
         message="",
     )
-    snapshot = AlcoholConsultationSnapshot(message="기록 없음", missing_sections=["blood_pressure", "liver_tests"])
+    snapshot = PersonalHealthSnapshot(message="기록 없음", missing_sections=["blood_pressure", "liver_tests"])
     response = HealthAssistantResponse(intent="health_advice", assistant_message="오늘은 피하는 편이 안전합니다.")
 
     allowed = boundary.enforce_grounding(

@@ -17,7 +17,7 @@ from app.dtos.health_assistant import (
     UserLocation,
 )
 from app.dtos.health_knowledge import HealthKnowledgeSearchResult
-from app.dtos.health_record_query import AlcoholConsultationSnapshot
+from app.dtos.health_record_query import PersonalHealthSnapshot
 from app.dtos.health_records import HealthRecordPrefillData
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
 from app.exceptions import LlmProviderFailedError
@@ -341,19 +341,19 @@ class HealthAssistantService:
         *,
         account: ServiceAccount | None,
         profile_context: ProfileContext | None,
-    ) -> AlcoholConsultationSnapshot:
+    ) -> PersonalHealthSnapshot:
         """복약·간기능·혈압 등 개인화 상담에 필요한 건강기록 스냅샷을 조회한다."""
-        snapshot: AlcoholConsultationSnapshot | None = None
+        snapshot: PersonalHealthSnapshot | None = None
         if account is not None and profile_context is not None and self.health_record_service is not None:
             profile_id = self._parse_profile_id(profile_context.profile_id)
             if profile_id is not None:
                 try:
-                    snapshot = await self.health_record_service.get_alcohol_consultation_snapshot(account, profile_id)
+                    snapshot = await self.health_record_service.get_personal_health_snapshot(account, profile_id)
                 except Exception as ex:
                     logger.warning("개인 건강기록 스냅샷 조회 실패: %s", ex)
 
         if snapshot is None:
-            snapshot = AlcoholConsultationSnapshot(
+            snapshot = PersonalHealthSnapshot(
                 message="현재 프로필에서 개인화 상담에 활용할 최근 기록을 찾지 못했습니다.",
                 missing_sections=["blood_pressure", "liver_tests", "recent_medications"],
             )
@@ -995,7 +995,7 @@ class HealthAssistantService:
             return
         from app.dtos.food_nutrition import FoodNutritionSearchResult
         from app.dtos.health_knowledge import HealthKnowledgeSearchResult
-        from app.dtos.health_record_query import AlcoholConsultationSnapshot, HealthRecordQueryResult
+        from app.dtos.health_record_query import HealthRecordQueryResult, PersonalHealthSnapshot
         from app.dtos.medication import MedicationSearchResult
 
         if isinstance(tool_result, FoodNutritionSearchResult):
@@ -1003,8 +1003,8 @@ class HealthAssistantService:
                 response.food_nutrition_search_result = tool_result
         elif isinstance(tool_result, HealthKnowledgeSearchResult):
             response.health_knowledge_search_result = tool_result
-        elif isinstance(tool_result, AlcoholConsultationSnapshot):
-            response.alcohol_consultation_snapshot = tool_result
+        elif isinstance(tool_result, PersonalHealthSnapshot):
+            response.personal_health_snapshot = tool_result
         elif isinstance(tool_result, HealthRecordQueryResult):
             response.intent = "query_records"
             response.health_record_query_result = tool_result

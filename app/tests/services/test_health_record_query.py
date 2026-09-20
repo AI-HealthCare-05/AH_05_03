@@ -237,7 +237,7 @@ async def test_alcohol_snapshot_collects_latest_bp_liver_exercise_and_medication
     )
     await db_session.flush()
 
-    result = await service.get_alcohol_consultation_snapshot(
+    result = await service.get_personal_health_snapshot(
         owner,
         profile.id,
         now=datetime(2026, 9, 10, 12, 0, tzinfo=_SEOUL),

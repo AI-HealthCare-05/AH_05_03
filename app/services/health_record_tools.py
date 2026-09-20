@@ -7,15 +7,15 @@ from google.genai import types
 from pydantic import ValidationError
 
 from app.dtos.health_record_query import (
-    AlcoholConsultationSnapshot,
     HealthRecordQueryArguments,
     HealthRecordQueryResult,
+    PersonalHealthSnapshot,
 )
 from app.models.service_accounts import ServiceAccount
 from app.services.health_records import HealthRecordService
 
 QUERY_HEALTH_RECORDS_TOOL_NAME = "query_health_records"
-GET_ALCOHOL_CONSULTATION_SNAPSHOT_TOOL_NAME = "get_alcohol_consultation_snapshot"
+GET_ALCOHOL_CONSULTATION_SNAPSHOT_TOOL_NAME = "get_personal_health_snapshot"
 
 QUERY_HEALTH_RECORDS_DECLARATION = types.FunctionDeclaration(
     name=QUERY_HEALTH_RECORDS_TOOL_NAME,
@@ -115,7 +115,7 @@ async def execute_alcohol_consultation_tool(
     account: ServiceAccount,
     profile_id: uuid.UUID,
     record_service: HealthRecordService,
-) -> AlcoholConsultationSnapshot | None:
+) -> PersonalHealthSnapshot | None:
     if name != GET_ALCOHOL_CONSULTATION_SNAPSHOT_TOOL_NAME:
         return None
-    return await record_service.get_alcohol_consultation_snapshot(account, profile_id)
+    return await record_service.get_personal_health_snapshot(account, profile_id)

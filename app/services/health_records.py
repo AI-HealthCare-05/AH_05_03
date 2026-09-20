@@ -15,7 +15,6 @@ from app.core.db.session import SessionDep
 from app.core.redis.client import get_redis_optional
 from app.dtos.anatomy_event import AnatomyEvent
 from app.dtos.health_record_query import (
-    AlcoholConsultationSnapshot,
     ConsultationActivity,
     ConsultationBloodPressure,
     ConsultationLabValue,
@@ -24,6 +23,7 @@ from app.dtos.health_record_query import (
     HealthRecordQueryMatch,
     HealthRecordQueryPeriod,
     HealthRecordQueryResult,
+    PersonalHealthSnapshot,
 )
 from app.dtos.health_records import (
     HealthRecordCreateRequest,
@@ -325,13 +325,13 @@ class HealthRecordService:
             message=message,
         )
 
-    async def get_alcohol_consultation_snapshot(
+    async def get_personal_health_snapshot(
         self,
         account: ServiceAccount,
         profile_id: uuid.UUID,
         *,
         now: datetime | None = None,
-    ) -> AlcoholConsultationSnapshot:
+    ) -> PersonalHealthSnapshot:
         """음주 상담에 필요한 최근 사실만 인증된 프로필 범위에서 조회한다."""
 
         await self._verify_profile_access(profile_id, account)
@@ -391,7 +391,7 @@ class HealthRecordService:
             if facts
             else "현재 프로필에서 음주 상담에 활용할 최근 기록을 찾지 못했습니다."
         )
-        return AlcoholConsultationSnapshot(
+        return PersonalHealthSnapshot(
             blood_pressure=blood_pressure,
             liver_tests=liver_tests,
             today_activities=today_activities,

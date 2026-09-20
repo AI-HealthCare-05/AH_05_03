@@ -16,7 +16,7 @@ from app.dtos.health_assistant import (
     HealthIntent,
 )
 from app.dtos.health_knowledge import HealthKnowledgeSearchResult
-from app.dtos.health_record_query import AlcoholConsultationSnapshot, HealthRecordQueryResult
+from app.dtos.health_record_query import HealthRecordQueryResult, PersonalHealthSnapshot
 from app.dtos.health_records import HealthRecordPrefillData
 from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.medication import MedicationSearchResult
@@ -1027,7 +1027,7 @@ class HealthAssistantBoundaryService:
                 available.add("medication")
         if isinstance(tool_result, FacilitySearchResult):
             available.add("facility")
-        if isinstance(tool_result, (HealthRecordQueryResult, AlcoholConsultationSnapshot, HealthRecordPrefillData)):
+        if isinstance(tool_result, (HealthRecordQueryResult, PersonalHealthSnapshot, HealthRecordPrefillData)):
             available.add("health_records")
         return available
 

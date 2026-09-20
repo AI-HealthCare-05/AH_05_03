@@ -14,7 +14,7 @@ from app.dtos.health_assistant import (
     HealthAssistantScopeDecision,
 )
 from app.dtos.health_knowledge import HealthKnowledgeItem, HealthKnowledgeSearchResult
-from app.dtos.health_record_query import AlcoholConsultationSnapshot
+from app.dtos.health_record_query import PersonalHealthSnapshot
 from app.dtos.medical_facility import FacilityItem, FacilitySearchResult
 from app.dtos.medication import DrugInfo, MedicationSearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult, WeatherConditions
@@ -1327,7 +1327,7 @@ def test_symptom_clearance_is_blocked_when_only_health_records_are_grounded() ->
     assert not _grounding_verdict(
         question="무릎이 아픈데 산책해도 돼?",
         required=["health_records"],
-        tool_result=AlcoholConsultationSnapshot(message="기록 조회"),
+        tool_result=PersonalHealthSnapshot(message="기록 조회"),
         outdoor=None,
     )
 

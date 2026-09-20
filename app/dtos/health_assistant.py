@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.dtos.food_nutrition import FoodNutritionSearchResult
 from app.dtos.health_knowledge import HealthKnowledgeSearchResult
-from app.dtos.health_record_query import AlcoholConsultationSnapshot, HealthRecordQueryResult
+from app.dtos.health_record_query import HealthRecordQueryResult, PersonalHealthSnapshot
 from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.medication import MedicationSearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
@@ -350,7 +350,7 @@ class HealthAssistantResponse(HealthAssistantLlmResponse):
         default=None,
         description="PostgreSQL이 계산한 장기 건강기록 조건별 집계 결과",
     )
-    alcohol_consultation_snapshot: AlcoholConsultationSnapshot | None = Field(
+    personal_health_snapshot: PersonalHealthSnapshot | None = Field(
         default=None,
         description="음주 상담을 위해 인증된 PostgreSQL에서 조회한 개인 건강기록 스냅샷",
     )

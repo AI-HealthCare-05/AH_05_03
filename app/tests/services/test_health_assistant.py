@@ -668,10 +668,10 @@ async def test_health_assistant_service_links_alcohol_question_with_recent_medic
     mock_client = MockLLMClient(fake_json)
 
     class FakeHealthRecordService:
-        async def get_alcohol_consultation_snapshot(self, account: Any, profile_id: uuid.UUID) -> Any:
-            from app.dtos.health_record_query import AlcoholConsultationSnapshot, ConsultationMedication
+        async def get_personal_health_snapshot(self, account: Any, profile_id: uuid.UUID) -> Any:
+            from app.dtos.health_record_query import ConsultationMedication, PersonalHealthSnapshot
 
-            return AlcoholConsultationSnapshot(
+            return PersonalHealthSnapshot(
                 recent_medications=[
                     ConsultationMedication(
                         name="타이레놀",
@@ -1370,11 +1370,9 @@ async def test_health_records_evidence_is_loaded_from_boundary_decision_for_foll
             ],
         )
     )
-    from app.dtos.health_record_query import AlcoholConsultationSnapshot as _Snapshot
+    from app.dtos.health_record_query import PersonalHealthSnapshot as _Snapshot
 
-    record_service.get_alcohol_consultation_snapshot = AsyncMock(
-        return_value=_Snapshot(message="최근 기록을 확인했습니다.")
-    )
+    record_service.get_personal_health_snapshot = AsyncMock(return_value=_Snapshot(message="최근 기록을 확인했습니다."))
     service = HealthAssistantService(
         health_record_service=cast(HealthRecordService, record_service),
     )

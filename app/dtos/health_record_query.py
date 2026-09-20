@@ -80,7 +80,7 @@ class ConsultationMedication(BaseModel):
     dosage: str | None = None
 
 
-class AlcoholConsultationSnapshot(BaseModel):
+class PersonalHealthSnapshot(BaseModel):
     topic: Literal["alcohol"] = "alcohol"
     blood_pressure: ConsultationBloodPressure | None = None
     liver_tests: list[ConsultationLabValue] = Field(default_factory=list)

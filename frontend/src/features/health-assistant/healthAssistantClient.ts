@@ -235,7 +235,7 @@ export interface HealthKnowledgeSearchResult {
   errors: string[];
 }
 
-export interface AlcoholConsultationSnapshot {
+export interface PersonalHealthSnapshot {
   topic: "alcohol";
   blood_pressure?: { systolic: number; diastolic?: number | null; measured_at: string } | null;
   liver_tests: Array<{ metric: "ast" | "alt" | "ggt"; value: number; unit: string; measured_at: string }>;
@@ -312,7 +312,7 @@ export interface HealthAssistantResponse {
   challenge_draft?: ChallengeDraft | null;
   query_draft?: QueryDraft | null;
   health_record_query_result?: HealthRecordQueryResult | null;
-  alcohol_consultation_snapshot?: AlcoholConsultationSnapshot | null;
+  personal_health_snapshot?: PersonalHealthSnapshot | null;
   health_knowledge_search_result?: HealthKnowledgeSearchResult | null;
   facility_search_draft?: FacilitySearchResult | null;
   outdoor_conditions?: OutdoorConditionsResult | null;
