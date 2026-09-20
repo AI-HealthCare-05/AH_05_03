@@ -62,9 +62,7 @@ def test_chatbot_metadata_rejects_identity_alias() -> None:
 
 
 def test_canary_still_catches_leaked_blob() -> None:
-    assert contains_sensitive_canary(
-        {"prompt": f"환자 {CANARY_RESIDENT_ID} 공복혈당 {CANARY_GLUCOSE_VALUE} mg/dL"}
-    )
+    assert contains_sensitive_canary({"prompt": f"환자 {CANARY_RESIDENT_ID} 공복혈당 {CANARY_GLUCOSE_VALUE} mg/dL"})
 
 
 def test_allowed_metadata_separates_offered_and_called_tools() -> None:

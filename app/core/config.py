@@ -538,9 +538,7 @@ class Config(BaseSettings):
                     "프로덕션 계열(ENV=prod/production/prd/live)에서는 OBSERVABILITY_EXACT_VALUES 를 켤 수 없습니다."
                 )
             if not self.SYNTHETIC_DATA_ONLY:
-                raise ValueError(
-                    "정확한 수치 관찰은 SYNTHETIC_DATA_ONLY=true 인 합성 데이터 환경에서만 허용합니다."
-                )
+                raise ValueError("정확한 수치 관찰은 SYNTHETIC_DATA_ONLY=true 인 합성 데이터 환경에서만 허용합니다.")
         return self
 
     @model_validator(mode="after")
