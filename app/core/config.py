@@ -184,6 +184,17 @@ class Config(BaseSettings):
         "http://127.0.0.1:5173",
     ]
 
+    # --- 관찰 (#204). 기본 끔. 켜면 metadata_only HTTP ingest만 한다. SDK 없음.
+    LANGFUSE_ENABLED: bool = False
+    LANGFUSE_PUBLIC_KEY: str | None = None
+    LANGFUSE_SECRET_KEY: str | None = None
+    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+    # 정확한 수치를 관찰에 남기려면 합성 데이터 전용이어야 한다. 프로덕션에서는 기동 실패.
+    SYNTHETIC_DATA_ONLY: bool = False
+    OBSERVABILITY_EXACT_VALUES: bool = False
+    # JWT SECRET_KEY 와 분리한다. LANGFUSE_ENABLED 이면 필수.
+    OBSERVABILITY_HMAC_SECRET: str | None = None
+
     # --- Gemini OCR development bridge -----------------------------
     # 개발·시연에서만 명시적으로 켜는 외부 문서 인식 브리지다.
     ENABLE_DEV_OCR_BRIDGE: bool = False
@@ -509,6 +520,32 @@ class Config(BaseSettings):
             )
         if self.ENV is Env.PROD:
             self.API_DOCS_ENABLED = False
+        return self
+
+    @model_validator(mode="after")
+    def validate_observability_secrets(self) -> "Config":
+        hmac_secret = (self.OBSERVABILITY_HMAC_SECRET or "").strip()
+        if self.LANGFUSE_ENABLED and len(hmac_secret) < 32:
+            raise ValueError(
+                "LANGFUSE_ENABLED 이면 OBSERVABILITY_HMAC_SECRET 을 32자 이상으로 따로 둬야 합니다. "
+                "SECRET_KEY 를 재사용하지 않습니다."
+            )
+        if self.LANGFUSE_ENABLED:
+            public = (self.LANGFUSE_PUBLIC_KEY or "").strip()
+            secret = (self.LANGFUSE_SECRET_KEY or "").strip()
+            if not public or not secret:
+                raise ValueError("LANGFUSE_ENABLED 이면 LANGFUSE_PUBLIC_KEY 와 LANGFUSE_SECRET_KEY 가 필요합니다.")
+            self.LANGFUSE_PUBLIC_KEY = public
+            self.LANGFUSE_SECRET_KEY = secret
+        if hmac_secret:
+            self.OBSERVABILITY_HMAC_SECRET = hmac_secret
+        if self.OBSERVABILITY_EXACT_VALUES:
+            if self.ENV is Env.PROD:
+                raise ValueError(
+                    "프로덕션 계열(ENV=prod/production/prd/live)에서는 OBSERVABILITY_EXACT_VALUES 를 켤 수 없습니다."
+                )
+            if not self.SYNTHETIC_DATA_ONLY:
+                raise ValueError("정확한 수치 관찰은 SYNTHETIC_DATA_ONLY=true 인 합성 데이터 환경에서만 허용합니다.")
         return self
 
     @model_validator(mode="after")

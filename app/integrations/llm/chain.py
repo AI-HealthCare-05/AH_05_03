@@ -106,6 +106,7 @@ class FallbackChatClient(LLMClientProtocol):
                 logger.info("대화 공급자 제외 — 키 없음: %s", entry)
         if not self.available:
             raise LlmUnavailableError("쓸 수 있는 대화 공급자가 없습니다. API 키를 확인해 주세요.")
+        self.last_success_entry: str | None = None
 
     @property
     def primary(self) -> str:
@@ -120,11 +121,13 @@ class FallbackChatClient(LLMClientProtocol):
         last: Exception | None = None
         for index, (entry, client) in enumerate(self.available):
             try:
-                return await client.generate_structured_response(
+                result = await client.generate_structured_response(
                     system_instruction=system_instruction,
                     messages=messages,
                     response_schema=response_schema,
                 )
+                self.last_success_entry = entry
+                return result
             except Exception as error:  # noqa: BLE001 - 어떤 실패든 다음 공급자로 넘긴다
                 last = error
                 remaining = len(self.available) - index - 1
@@ -164,6 +167,7 @@ class FallbackChatClient(LLMClientProtocol):
                     response_schema=response_schema,
                 ):
                     started = True
+                    self.last_success_entry = entry
                     yield piece
                 return
             except Exception as error:  # noqa: BLE001 - 첫 조각 전이면 다음 공급자로
@@ -192,18 +196,21 @@ class FallbackChatClient(LLMClientProtocol):
         for index, (entry, client) in enumerate(self.available):
             try:
                 if hasattr(client, "generate_structured_response_with_tools"):
-                    return await client.generate_structured_response_with_tools(
+                    result = await client.generate_structured_response_with_tools(
                         system_instruction=system_instruction,
                         messages=messages,
                         response_schema=response_schema,
                         tools=tools,
                         tool_executor=tool_executor,
                     )
+                    self.last_success_entry = entry
+                    return result
                 res = await client.generate_structured_response(
                     system_instruction=system_instruction,
                     messages=messages,
                     response_schema=response_schema,
                 )
+                self.last_success_entry = entry
                 return res, None
             except Exception as error:  # noqa: BLE001
                 last = error
@@ -233,13 +240,16 @@ class FallbackChatClient(LLMClientProtocol):
         for index, (entry, client) in enumerate(self.available):
             try:
                 if hasattr(client, "stream_structured_response_with_tools"):
-                    return await client.stream_structured_response_with_tools(
+                    result = await client.stream_structured_response_with_tools(
                         system_instruction=system_instruction,
                         messages=messages,
                         response_schema=response_schema,
                         tools=tools,
                         tool_executor=tool_executor,
                     )
+                    self.last_success_entry = entry
+                    return result
+                self.last_success_entry = entry
                 return (
                     client.stream_structured_response(
                         system_instruction=system_instruction,
