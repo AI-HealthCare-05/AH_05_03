@@ -184,6 +184,16 @@ class Config(BaseSettings):
         "http://127.0.0.1:5173",
     ]
 
+    # --- 관찰 (Langfuse). 기본은 끔. 켜도 프로덕션은 metadata_only 만 보낸다. #204
+    LANGFUSE_ENABLED: bool = False
+    LANGFUSE_PUBLIC_KEY: str | None = None
+    LANGFUSE_SECRET_KEY: str | None = None
+    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+    # 합성 평가 환경에서만 True. 프로덕션·개발 실데이터에서는 수치 원문을 남기지 않는다.
+    OBSERVABILITY_EXACT_VALUES: bool = False
+    # 비우면 SECRET_KEY 로 HMAC 가명을 만든다. 관찰 전용 키를 쓰는 편이 낫다.
+    OBSERVABILITY_HMAC_SECRET: str | None = None
+
     # --- Gemini OCR development bridge -----------------------------
     # 개발·시연에서만 명시적으로 켜는 외부 문서 인식 브리지다.
     ENABLE_DEV_OCR_BRIDGE: bool = False

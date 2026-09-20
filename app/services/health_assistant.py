@@ -73,6 +73,20 @@ from app.services.outdoor_conditions_tools import execute_outdoor_conditions_too
 logger = logging.getLogger(__name__)
 
 
+def _observability_tool_names(tools: list[Any] | None) -> list[str]:
+    names: list[str] = []
+    for tool in tools or []:
+        if isinstance(tool, dict):
+            fn = tool.get("function")
+            name = tool.get("name")
+            if name is None and isinstance(fn, dict):
+                name = fn.get("name")
+            names.append(str(name or "tool"))
+            continue
+        names.append(str(getattr(tool, "name", None) or "tool"))
+    return names
+
+
 @dataclass(frozen=True)
 class _PreparedExecution:
     request: HealthAssistantChatRequest
@@ -1197,13 +1211,24 @@ class HealthAssistantService:
         if prepared.outdoor_conditions and not response.outdoor_conditions:
             response.outdoor_conditions = prepared.outdoor_conditions
         validated_response = self.safety_service.validate_response(response)
-        return self.boundary_service.enforce_grounding(
+        grounded = self.boundary_service.enforce_grounding(
             prepared.decision,
             validated_response,
             tool_result=tool_result,
             outdoor_conditions=prepared.outdoor_conditions,
             messages=request.messages,
         )
+        try:
+            from app.services.observability.chat_trace import record_health_assistant_turn
+
+            record_health_assistant_turn(
+                account_id=str(account.id) if account else None,
+                model=getattr(self.llm_client, "model", None),
+                tool_names=_observability_tool_names(prepared.tools),
+            )
+        except Exception:
+            logger.debug("health assistant observability skipped", exc_info=True)
+        return grounded
 
     async def _get_stream_generator(
         self,
