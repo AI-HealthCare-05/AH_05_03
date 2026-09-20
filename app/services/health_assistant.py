@@ -511,7 +511,6 @@ class HealthAssistantService:
         # 개인 건강기록 스냅샷은 아직 음주 주제만 구현돼 있다. 다른 주제의 개인기록
         # 스냅샷이 생기면 여기에 분기를 추가하면 된다.
         if "health_records" in required and is_alcohol_topic(raw_query):
-        if "health_records" in required and is_alcohol_topic(raw_query):
             snapshot = await self._fetch_alcohol_snapshot(
                 account=account,
                 profile_context=profile_context,
