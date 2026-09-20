@@ -63,6 +63,27 @@ def test_chatbot_metadata_rejects_identity_alias() -> None:
 
 def test_canary_still_catches_leaked_blob() -> None:
     assert contains_sensitive_canary({"prompt": f"환자 {CANARY_RESIDENT_ID} 공복혈당 {CANARY_GLUCOSE_VALUE} mg/dL"})
+    assert contains_sensitive_canary({"prompt": "연락처 016-4803-4207"})
+
+
+def test_canary_ignores_langfuse_ids_that_look_like_phone_fragments() -> None:
+    envelope = {
+        "batch": [
+            {
+                "id": "168c9016-4803-4207-8b3a-6f0670e4734b",
+                "timestamp": "2026-09-20T10:26:28.985478+00:00",
+                "type": "trace-create",
+                "body": {
+                    "id": "168c9016-4803-4207-8b3a-6f0670e4734b",
+                    "timestamp": "2026-09-20T10:26:28.985478+00:00",
+                    "name": "chatbot",
+                    "userId": "account_ad500b930e092923989488c238df71f6",
+                    "metadata": {"measurement_codes": ["fasting_glucose"]},
+                },
+            }
+        ]
+    }
+    assert contains_sensitive_canary(envelope) is False
 
 
 def test_allowed_metadata_separates_offered_and_called_tools() -> None:

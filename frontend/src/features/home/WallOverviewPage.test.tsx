@@ -9,6 +9,7 @@ import { WallOverviewPage } from "./WallOverviewPage";
 afterEach(() => {
   cleanup();
   window.localStorage?.clear();
+  window.sessionStorage?.clear();
   vi.unstubAllGlobals();
 });
 
@@ -67,6 +68,13 @@ describe("WallOverviewPage", () => {
     await user.type(screen.getByLabelText("구성원 PIN"), "482913");
     await user.click(screen.getByRole("button", { name: "이 구성원으로" }));
     expect(await screen.findByText(/지금 오성민 권한입니다/u)).toBeInTheDocument();
+    const stored = JSON.parse(sessionStorage.getItem("ieobom:member-pin-session") ?? "{}") as {
+      sessionToken?: string;
+      expiresAt?: string;
+    };
+    expect(stored.sessionToken).toBe("member-session");
+    expect(stored.expiresAt).toBeTruthy();
+    expect(localStorage.getItem("ieobom:member-pin-session")).toBeNull();
 
     unmount();
     render(

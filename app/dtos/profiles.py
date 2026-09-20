@@ -81,6 +81,7 @@ class ProfileData(BaseSerializerModel):
     row_version: int
     created_at: datetime
     updated_at: datetime
+    pin_configured: bool
 
 
 class ProfileListData(BaseSerializerModel):

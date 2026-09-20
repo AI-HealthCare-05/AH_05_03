@@ -1,6 +1,6 @@
 # 이어봄 에이전트 도입 기준안
 
-- 상태: 구현 전 기준안 (2026-09-20)
+- 상태: 1–3단계 코드 있음 (Langfuse metadata-only, 도구 계약, 권한 게이트). 러너(#207)는 구현 전.
 - 결정: [ADR-0015](adr/0015-bounded-agent-on-policy-and-evidence.md)
 - 관련: [ADR-0014](adr/0014-document-vision-not-ocr.md), [ADR-0011](adr/0011-postgresql-health-data-and-server-ai.md), [ADR-0012](adr/0012-delegated-member-pin-not-vault-dek.md), [ADR-0013](adr/0013-privacy-self-determination-and-civil-majority.md), [00_terminology.md](00_terminology.md), [08_account_profile_policy.md](08_account_profile_policy.md), [55_tool_registry.md](55_tool_registry.md)
 
@@ -24,6 +24,8 @@
 8. 확정된 Vision 결과만 에이전트 도구로 제한 조회
 
 러너가 처음 생기는 시점부터 세션 시작과 **각 도구 실행 직전**에 다시 검사한다. 위임 PIN·역할은 실행 중 철회될 수 있다(ADR-0012).
+
+현재 Health Assistant API 주체는 서비스 계정 JWT다. PIN 행위자는 `X-Member-Session-Token`으로만 붙인다. 벽 기기 토큰을 이 라우터에 같이 받지 않는다. `/wall`에는 봄이가 없고, 벽+PIN 챗봇 경로와 테스트가 생기기 전에는 3단계를 완료로 보지 않는다. 멤버 세션 원문은 Langfuse·로그에 남기지 않는다.
 
 ```python
 allowed_tools = policy.allowed_tools(

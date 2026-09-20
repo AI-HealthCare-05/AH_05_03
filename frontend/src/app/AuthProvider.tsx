@@ -8,6 +8,7 @@
 
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 
+import { clearPinSession } from "../features/home/memberPinStore";
 import { serverApiClient } from "../shared/api/serverApiClient";
 import { AuthContext, type AuthStatus } from "./authContext";
 import { readAndPreserveInvitation } from "../features/account/invitationStorage";
@@ -77,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback(async (address: string, password: string, options?: { signUpFirst?: boolean }) => {
+    clearPinSession();
     if (options?.signUpFirst) await serverApiClient.signUp(address, password);
     await serverApiClient.login(address, password);
     const account = await serverApiClient.getAccount();
@@ -89,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const markSignedOut = useCallback((message?: string) => {
+    clearPinSession();
     setEmail(undefined);
     setAccountId(undefined);
     setStatus("signed-out");

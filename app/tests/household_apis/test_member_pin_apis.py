@@ -26,7 +26,9 @@ def _device_ref() -> str:
 class TestMemberPinAPIs:
     async def test_plaintext_never_returns_after_issue(self, client: AsyncClient) -> None:
         headers = await _login(client, "pin-master@example.com")
-        _, profile_id = await _household_and_profile(client, headers)
+        household_id, profile_id = await _household_and_profile(client, headers)
+        created = await client.get(f"/api/v1/profiles/{profile_id}", headers=headers)
+        assert created.json()["data"]["pin_configured"] is False
         issued = await client.post(f"/api/v1/profiles/{profile_id}/pin-credentials", headers=headers)
         assert issued.status_code == 201
         pin = issued.json()["data"]["temporary_pin"]
@@ -35,6 +37,9 @@ class TestMemberPinAPIs:
         body = listed.text
         assert pin not in body
         assert "pin_hash" not in listed.json()["data"]
+        assert listed.json()["data"]["pin_configured"] is True
+        listed_all = await client.get(f"/api/v1/profiles?household_id={household_id}", headers=headers)
+        assert listed_all.json()["data"]["items"][0]["pin_configured"] is True
 
     async def test_hashes_are_independent_and_wrong_household_is_rejected(self, client: AsyncClient) -> None:
         alice = await _login(client, "pin-alice@example.com")

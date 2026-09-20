@@ -15,6 +15,7 @@ import type {
   HealthRecordServerData,
   ProfileServerData,
 } from "./contracts";
+import { parseServerPinConfigured } from "./pinConfigured";
 
 export function toClientProfile(server: ProfileServerData): FamilyProfile {
   return {
@@ -36,6 +37,7 @@ export function toClientProfile(server: ProfileServerData): FamilyProfile {
     adultTransitionedAt: server.adult_transitioned_at ?? null,
     adultTransitionPendingAt: server.adult_transition_pending_at ?? null,
     privacySelfDeterminedAt: server.privacy_self_determined_at ?? null,
+    pinConfigured: parseServerPinConfigured(server.pin_configured),
   };
 }
 

@@ -19,6 +19,23 @@ def test_sanitize_drops_pin_token_and_health_keys() -> None:
     assert "Password123!" not in cleaned.values()
 
 
+def test_sanitize_keeps_masked_policy_actor_fields() -> None:
+    cleaned = sanitize_audit_metadata(
+        {
+            "session_type": "pin",
+            "pin_session_valid": "true",
+            "actor_profile_alias": "session_ab" + "c" * 30,
+            "session_token": "must-not-keep",
+            "pin": "123456",
+        }
+    )
+    assert cleaned["session_type"] == "pin"
+    assert cleaned["pin_session_valid"] == "true"
+    assert cleaned["actor_profile_alias"].startswith("session_")
+    assert "must-not-keep" not in cleaned.values()
+    assert "123456" not in cleaned.values()
+
+
 def test_sanitize_allowlist_walks_nested_and_arrays() -> None:
     cleaned = sanitize_audit_metadata(
         {

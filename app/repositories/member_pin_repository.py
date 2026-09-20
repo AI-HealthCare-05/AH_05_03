@@ -21,6 +21,14 @@ class MemberPinRepository:
             select(MemberPinCredential).where(MemberPinCredential.profile_id == profile_id)
         )
 
+    async def list_configured_profile_ids(self, profile_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+        if not profile_ids:
+            return set()
+        rows = await self.session.scalars(
+            select(MemberPinCredential.profile_id).where(MemberPinCredential.profile_id.in_(profile_ids))
+        )
+        return set(rows.all())
+
     async def add_credential(self, credential: MemberPinCredential) -> MemberPinCredential:
         self.session.add(credential)
         await self.session.flush()
@@ -46,6 +54,9 @@ class MemberPinRepository:
     async def delete_credential(self, profile_id: uuid.UUID) -> None:
         await self.revoke_sessions(profile_id)
         await self.session.execute(delete(MemberPinCredential).where(MemberPinCredential.profile_id == profile_id))
+
+    async def get_session(self, session_id: uuid.UUID) -> MemberSession | None:
+        return await self.session.get(MemberSession, session_id)
 
     async def get_session_by_token_hash(self, token_hash: str) -> MemberSession | None:
         return await self.session.scalar(select(MemberSession).where(MemberSession.token_hash == token_hash))
