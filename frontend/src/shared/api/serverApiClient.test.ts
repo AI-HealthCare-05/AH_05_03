@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { clearPinSession, writeServerPinSession } from "../../features/home/memberPinStore";
 import { ServerApiClient } from "./serverApiClient";
+
+afterEach(() => {
+  sessionStorage.clear();
+});
 
 function success<T>(data: T): Response {
   return Response.json({ data, message: "ok", success: true });
@@ -194,6 +199,46 @@ describe("ServerApiClient", () => {
     });
     expect(record.id).toBe("record-1");
     expect(fetcher.mock.calls[2]?.[0]).toBe("/api/v1/health-records");
+  });
+
+  it("건강 비서 일반·스트리밍 요청에 구성원 세션 헤더를 붙인다", async () => {
+    writeServerPinSession({
+      profileId: "profile-1",
+      sessionToken: "member-session-raw",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        success({ access_token: "access", token_type: "bearer", expires_in: 900 }),
+      )
+      .mockResolvedValueOnce(success({ assistant_message: "ok" }))
+      .mockResolvedValueOnce(
+        new Response("event: result\ndata: {\"ok\":true}\n\n", {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      );
+    const client = new ServerApiClient(fetcher);
+    await client.login("member@example.com", "Password123!");
+
+    await client.healthAssistantChat({ messages: [{ role: "user", content: "안녕" }] });
+    await client.streamHealthAssistantChat(
+      { messages: [{ role: "user", content: "안녕" }] },
+      () => {},
+    );
+
+    const chatHeaders = new Headers(fetcher.mock.calls[1]?.[1]?.headers);
+    const streamHeaders = new Headers(fetcher.mock.calls[2]?.[1]?.headers);
+    expect(chatHeaders.get("X-Member-Session-Token")).toBe("member-session-raw");
+    expect(streamHeaders.get("X-Member-Session-Token")).toBe("member-session-raw");
+    expect(String(fetcher.mock.calls[1]?.[0])).toBe("/api/v1/health-assistant/chat");
+    expect(String(fetcher.mock.calls[2]?.[0])).toBe("/api/v1/health-assistant/chat/stream");
+
+    clearPinSession();
+    fetcher.mockResolvedValueOnce(success({ assistant_message: "ok" }));
+    await client.healthAssistantChat({ messages: [{ role: "user", content: "안녕" }] });
+    expect(new Headers(fetcher.mock.calls[3]?.[1]?.headers).has("X-Member-Session-Token")).toBe(false);
   });
 });
 

@@ -25,6 +25,8 @@
 
 러너가 처음 생기는 시점부터 세션 시작과 **각 도구 실행 직전**에 다시 검사한다. 위임 PIN·역할은 실행 중 철회될 수 있다(ADR-0012).
 
+현재 Health Assistant API 주체는 서비스 계정 JWT다. PIN 행위자는 `X-Member-Session-Token`으로만 붙인다. 벽 기기 토큰을 이 라우터에 같이 받지 않는다. `/wall`에는 봄이가 없고, 벽+PIN 챗봇 경로와 테스트가 생기기 전에는 3단계를 완료로 보지 않는다. 멤버 세션 원문은 Langfuse·로그에 남기지 않는다.
+
 ```python
 allowed_tools = policy.allowed_tools(
     account_id=account.id,

@@ -62,7 +62,9 @@
 
 같은 Origin을 가족이 함께 쓸 수 있다. **마스터 재인증**이 기기를 가구에 묶고, **구성원 PIN**이 그 기기 안에서 행위자를 가른다. PIN으로 새 기기를 등록하지 않는다. 브라우저 `localStorage` PIN 해시는 로그아웃 임시 경로다. 로그인·벽 기기는 서버 `member_pin_credentials`(#191)가 정본이다.
 
-구현: `POST /households/{id}/device-pairings` → 벽의 `/wall/pair`에서 claim → `/wall` 개요. 기기 토큰은 `ieobom:wall-device`에 두고 계정 refresh와 섞지 않는다. 새로고침은 구성원 PIN 세션을 복원하지 않는다. 원격 철회 다음 요청은 `DEVICE_REVOKED`다.
+구현: `POST /households/{id}/device-pairings` → 벽의 `/wall/pair`에서 claim → `/wall` 개요. 기기 토큰은 `ieobom:wall-device`에 두고 계정 refresh와 섞지 않는다. 구성원 PIN 세션 원문은 `sessionStorage`(`ieobom:member-pin-session`)에만 두고, 만료·잠금·프로필 전환·로그아웃에서 지운다. 새로고침은 벽 개요 UI의 구성원 선택을 복원하지 않는다. 원격 철회 다음 요청은 `DEVICE_REVOKED`다.
+
+건강 비서(`/api/v1/health-assistant/*`)는 계정 JWT 주체다. 벽 기기 Bearer와 PIN 세션 헤더를 한 라우터에 임의로 섞지 않는다. `/wall`에는 봄이 서랍이 없고, 벽에서 챗봇을 쓰려면 기기 주체 전용 경로와 경로 테스트가 먼저다(#206 완료 조건).
 
 ## 4. 가족 계정 초대와 프로필 연결
 

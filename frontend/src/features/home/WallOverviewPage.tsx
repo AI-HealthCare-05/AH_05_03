@@ -1,11 +1,11 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-import type { WallProfileCardData } from "../../shared/api/contracts";
+import type { MemberSessionData, WallProfileCardData } from "../../shared/api/contracts";
 import { ServerApiError } from "../../shared/api/serverApiClient";
 import { Modal } from "../../shared/ui/Modal";
 import { PIN_SESSION_MS, isPinSessionFresh } from "./memberPin";
-import { clearPinSession, writePinSession } from "./memberPinStore";
+import { clearPinSession, writeServerPinSession } from "./memberPinStore";
 import { clearWallDevice, readWallDevice } from "./wallDeviceStore";
 import "../ui-preview/styles/ui-preview18.css";
 
@@ -85,7 +85,7 @@ export function WallOverviewPage() {
     event.preventDefault();
     if (!binding || !pinProfile) return;
     try {
-      await deviceRequest(
+      const session = await deviceRequest<MemberSessionData>(
         "/household-devices/me/member-sessions",
         binding.deviceToken,
         {
@@ -93,7 +93,14 @@ export function WallOverviewPage() {
           body: JSON.stringify({ profile_id: pinProfile.id, pin: pinInput }),
         },
       );
-      writePinSession({ profileId: pinProfile.id, unlockedAt: Date.now() });
+      if (!session?.session_token || !session.expires_at) {
+        throw new Error("구성원 세션을 만들지 못했습니다.");
+      }
+      writeServerPinSession({
+        profileId: session.profile_id,
+        sessionToken: session.session_token,
+        expiresAt: session.expires_at,
+      });
       setSelectedId(pinProfile.id);
       setUnlockedAt(Date.now());
       setPinInput("");

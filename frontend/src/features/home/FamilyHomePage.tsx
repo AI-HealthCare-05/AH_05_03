@@ -29,6 +29,7 @@ import {
   readPinSession,
   writePinRecord,
   writePinSession,
+  writeServerPinSession,
 } from "./memberPinStore";
 import "../ui-preview/styles/shadcn-preview-variants.css";
 import "../ui-preview/styles/ui-preview18.css";
@@ -443,6 +444,8 @@ export function FamilyHomePage() {
     }
     const grandfather = profiles.find((profile) => !readPinRecord(profile.id));
     if (grandfather) {
+      const session = readPinSession();
+      if (session && session.profileId !== grandfather.id) clearPinSession();
       setSelectedProfileId(grandfather.id);
       return;
     }
@@ -481,6 +484,8 @@ export function FamilyHomePage() {
   function requestSelectProfile(profile: FamilyProfile) {
     const record = readPinRecord(profile.id);
     if (!record) {
+      const session = readPinSession();
+      if (session && session.profileId !== profile.id) clearPinSession();
       setSelectedProfileId(profile.id);
       return;
     }
@@ -658,7 +663,11 @@ export function FamilyHomePage() {
       if (authStatus === "signed-in") {
         const session = await serverApiClient.createMemberSession(pinChallengeProfile.id, pinInput);
         setVerifiedPin(pinInput);
-        writePinSession({ profileId: pinChallengeProfile.id, unlockedAt: Date.now() });
+        writeServerPinSession({
+          profileId: session.profile_id,
+          sessionToken: session.session_token,
+          expiresAt: session.expires_at,
+        });
         setSelectedProfileId(pinChallengeProfile.id);
         setActorTouchedAt(Date.now());
         setPinInput("");
@@ -699,8 +708,13 @@ export function FamilyHomePage() {
     try {
       if (authStatus === "signed-in") {
         await serverApiClient.replaceMemberPin(profile.id, verifiedPin || pinInput, newPin);
+        const session = await serverApiClient.createMemberSession(profile.id, newPin);
         setVerifiedPin(newPin);
-        writePinSession({ profileId: profile.id, unlockedAt: Date.now() });
+        writeServerPinSession({
+          profileId: session.profile_id,
+          sessionToken: session.session_token,
+          expiresAt: session.expires_at,
+        });
         setPinChangeOpen(false);
         setNewPin("");
         setNewPinConfirm("");

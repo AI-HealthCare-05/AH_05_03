@@ -33,8 +33,14 @@ import type {
   RecordPrefillData,
   RecordValuesData,
 } from "./contracts";
+import { clearPinSession, memberSessionToken } from "../../features/home/memberPinStore";
 
 type FetchLike = typeof fetch;
+
+function memberSessionRequestHeaders(): Record<string, string> {
+  const token = memberSessionToken();
+  return token ? { "X-Member-Session-Token": token } : {};
+}
 
 interface RequestOptions extends RequestInit {
   authenticated?: boolean;
@@ -109,11 +115,15 @@ export class ServerApiClient {
   }
 
   public async logout(): Promise<void> {
-    await this.request<null>("/auth/logout", {
-      method: "POST",
-      authenticated: true,
-    });
-    this.accessToken = undefined;
+    try {
+      await this.request<null>("/auth/logout", {
+        method: "POST",
+        authenticated: true,
+      });
+    } finally {
+      this.accessToken = undefined;
+      clearPinSession();
+    }
   }
 
   public isAuthenticated(): boolean {
@@ -186,15 +196,14 @@ export class ServerApiClient {
   }
 
   /**
-   * 건강 비서 대화. **인증이 붙는다.**
-   *
-   * PR #27 의 클라이언트는 맨 `fetch` 로 불렀는데 project 의 이 경로는 401 을 낸다 —
-   * 대화 본문에 증상과 수치가 실리므로 그게 맞는 동작이다. 토큰 갱신도 여기로 모은다.
+   * 건강 비서 대화. **계정 JWT가 붙는다.** PIN 행위자면 `X-Member-Session-Token`을
+   * 같이 보낸다. 원문은 로그에 남기지 않는다.
    */
   public healthAssistantChat<T>(body: Record<string, unknown>): Promise<T> {
     return this.request<T>("/health-assistant/chat", {
       method: "POST",
       authenticated: true,
+      headers: memberSessionRequestHeaders(),
       body: JSON.stringify(body),
     });
   }
@@ -301,7 +310,7 @@ export class ServerApiClient {
    *
    * `EventSource` 를 안 쓰는 이유는 문서 인식 쪽과 같다 — 헤더를 못 붙여서
    * `Authorization` 을 쿼리스트링에 실어야 하고, 그러면 토큰이 nginx 액세스 로그와
-   * 브라우저 히스토리에 남는다.
+   * 브라우저 히스토리에 남는다. PIN 세션이 있으면 `X-Member-Session-Token`도 헤더로만 보낸다.
    */
   public async streamHealthAssistantChat(
     body: Record<string, unknown>,
@@ -311,7 +320,7 @@ export class ServerApiClient {
     const response = await this.send("/health-assistant/chat/stream", {
       method: "POST",
       authenticated: true,
-      headers: { Accept: "text/event-stream" },
+      headers: { Accept: "text/event-stream", ...memberSessionRequestHeaders() },
       body: JSON.stringify(body),
       signal,
     });
