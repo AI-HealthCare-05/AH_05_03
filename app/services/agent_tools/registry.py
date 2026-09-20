@@ -92,7 +92,6 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         limits=_LOW,
         source_module="app.services.health_record_tools",
     ),
-
     ToolSpec(
         name="search_nearby_emergency_room",
         access="read",
