@@ -276,7 +276,6 @@ export function HealthAssistantDrawer({
   contextLabel,
   onRecordSaved,
   onNavigateToRecords,
-  onNavigateToDiary,
   dragHandleProps,
 }: HealthAssistantDrawerProps) {
   // 초기 메시지는 이전 세션이 있으면 복원하고, 없으면 환영 메시지로 시작한다.
@@ -1789,102 +1788,6 @@ export function HealthAssistantDrawer({
     }
   }
 
-  // 툴콜링(format_pain_diary) 결과 통증 다이어리 로컬 저장
-  async function savePainDiaryFromTool(
-    tool: PainDiaryToolCall,
-    msgId: string,
-  ): Promise<boolean> {
-    if (!runtime || !profile || !tool.body_area) return false;
-    if (tool.intensity == null) {
-      setError("통증 강도를 0~10 사이에서 선택해 주세요.");
-      return false;
-    }
-    setLoading(true);
-    try {
-      const recordDate = tool.date_str
-        ? new Date(`${tool.date_str}T12:00:00`).toISOString()
-        : new Date().toISOString();
-
-      let anatomyEvent: AnatomyEvent | undefined;
-      const suspectedIds = tool.suspected_anatomy_ids || [];
-      if (suspectedIds.length > 0) {
-        const primaryId = suspectedIds[0];
-        const primaryLabel =
-          primaryId === "cervical_spine"
-            ? "경추 (C1~C7) 및 신경근"
-            : primaryId === "nervous"
-            ? "중추 및 말초 신경계"
-            : tool.body_area || "원인 의심 해부학 부위";
-        try {
-          anatomyEvent = createAnatomyEvent({
-            atlas: {
-              id: "vanatome-human-atlas",
-              version: "1.0",
-              referenceSex: profile.gender === "male" ? "male" : "female",
-            },
-            concept: {
-              canonicalConceptId: primaryId,
-              sourceKey: `inferred:${primaryId}`,
-              sourceMeshId: primaryId === "cervical_spine" ? "skeleton-cervical-vertebra" : primaryId,
-              label: primaryLabel,
-              system: tool.suspected_system || "nervous",
-              mappingStatus: "canonical",
-            },
-            relatedConcepts: suspectedIds.slice(1).map((id) => ({
-              canonicalConceptId: id,
-              sourceKey: `inferred:${id}`,
-              sourceMeshId: id === "nervous" ? "nervous-system" : id,
-              label: id === "nervous" ? "신경계 및 척수근" : id,
-              system: tool.suspected_system || "nervous",
-              side: "midline",
-              mappingStatus: "canonical",
-            })),
-            inputSource: "ai_inference",
-            state: "confirmed",
-            uncertainty: tool.clinical_reasoning || undefined,
-            provenance: "clinical_ai_inferred",
-            clinicalReasoning: tool.clinical_reasoning || undefined,
-          });
-        } catch (err) {
-          console.warn("[HealthAssistantDrawer] createAnatomyEvent failed:", err);
-        }
-      }
-
-      const result = await runtime.healthRecords.create({
-        householdId: PRIMARY_HOUSEHOLD_ID,
-        profileId: profile.id,
-        recordType: "pain",
-        recordedAt: recordDate,
-        source: "local_ai",
-        payload: {
-          type: "pain",
-          bodyArea: tool.body_area,
-          intensity: tool.intensity,
-          sensation: tool.sensation || undefined,
-          aggravatingFactors: tool.aggravating_factors || undefined,
-          note: tool.formatted_diary,
-          suspectedAnatomyIds: tool.suspected_anatomy_ids,
-          suspectedSystem: tool.suspected_system,
-          clinicalReasoning: tool.clinical_reasoning,
-          anatomyEvent,
-        },
-      });
-
-      if (!result.ok) throw new Error(result.error.message);
-
-      setMessages((prev) =>
-        prev.map((m) => (m.id === msgId ? { ...m, saved: true } : m)),
-      );
-      if (onRecordSaved) await onRecordSaved();
-      return true;
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "통증 다이어리 저장에 실패했습니다.");
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }
-
   // 검진/검사 서류 결과 로컬 저장 (원본 이미지 문서 보관 연계)
   async function saveLabResult(draft: LabResultDraft, msgId: string, imageFile?: File) {
     if (!runtime || !profile) return;
@@ -2313,32 +2216,15 @@ export function HealthAssistantDrawer({
                   />
                 )}
 
-                {/* 통증 초안 확인 카드 */}
-                {msg.responseDraft?.pain_draft &&
-                  msg.responseDraft.needs_confirmation &&
-                  msg.responseDraft.missing_fields.length === 0 &&
-                  msg.role === "assistant" && (
-                  <PainConfirmationCard
-                    draft={msg.responseDraft.pain_draft}
+                {/* 통증 기록 카드 (통합) */}
+                {msg.role === "assistant" &&
+                  ((msg.responseDraft?.pain_draft && msg.responseDraft.needs_confirmation && msg.responseDraft.missing_fields.length === 0) ||
+                    msg.responseDraft?.pain_diary_tool) && (
+                  <PainRecordCard
+                    painDraft={msg.responseDraft.pain_draft}
+                    painDiaryTool={msg.responseDraft.pain_diary_tool}
                     saved={Boolean(msg.saved)}
-                    onSave={(updated) => savePain(updated, msg.id)}
-                  />
-                )}
-
-                {/* 통증 다이어리 툴콜링(format_pain_diary) 카드 */}
-                {msg.responseDraft?.pain_diary_tool && msg.role === "assistant" && (
-                  <PainDiaryToolCard
-                    toolCall={msg.responseDraft.pain_diary_tool}
-                    saved={Boolean(msg.saved)}
-                    onSave={(updated) => savePainDiaryFromTool(updated, msg.id)}
-                    onNavigateToDiary={(dateKey) => {
-                      onClose();
-                      if (onNavigateToDiary) {
-                        onNavigateToDiary(dateKey);
-                      } else {
-                        window.location.href = `/pain-diary?date=${dateKey}`;
-                      }
-                    }}
+                    onSave={(draft) => savePain(draft, msg.id)}
                   />
                 )}
 
@@ -3187,115 +3073,156 @@ function MedicationConfirmationCard({
   );
 }
 
-function PainIntensityField({
-  intensity,
-  onChange,
-}: {
-  intensity: number | null;
-  onChange: (value: number) => void;
-}) {
-  const shown = intensity ?? 5;
-  const percent = (shown / 10) * 100;
-  return (
-    <label className="pain-intensity-field">
-      <span className="pain-intensity-label-row">
-        <span>통증 강도</span>
-        <span className="pain-intensity-pill">{intensity == null ? "미선택" : `${intensity}점`}</span>
-      </span>
-      <span className="pain-intensity-control">
-        <span className="pain-intensity-hint">좌우로 밀어 강도를 고르세요</span>
-        <input
-          type="range"
-          className="pain-intensity-slider"
-          min={0}
-          max={10}
-          step={1}
-          aria-label="통증 강도"
-          aria-valuemin={0}
-          aria-valuemax={10}
-          aria-valuenow={shown}
-          aria-valuetext={intensity == null ? "아직 선택하지 않음" : `${intensity}점`}
-          value={shown}
-          style={{ ["--pain-pct" as string]: `${percent}%` }}
-          onChange={(event) => onChange(Number(event.currentTarget.value))}
-          onPointerDown={() => {
-            if (intensity == null) onChange(5);
-          }}
-        />
-        <span className="pain-intensity-ends" aria-hidden="true">
-          <span>0 약함</span>
-          <span>10 심함</span>
-        </span>
-      </span>
-    </label>
-  );
+const BILATERAL_PARTS = [
+  "무릎", "눈", "귀", "어깨", "팔", "손", "발", "다리",
+  "고관절", "팔꿈치", "손목", "발목", "종아리", "허벅지",
+  "갈비뼈", "가슴", "폐", "신장", "편도",
+];
+
+function parseSide(bodyArea: string): { part: string; sides: ("left" | "right")[] } {
+  const t = bodyArea.trim();
+  if (t.startsWith("양쪽 ")) return { part: t.slice(3), sides: ["left", "right"] };
+  if (t.startsWith("왼쪽 ") || t.startsWith("좌측 ")) return { part: t.replace(/^(왼쪽|좌측)\s*/, ""), sides: ["left"] };
+  if (t.startsWith("오른쪽 ") || t.startsWith("우측 ")) return { part: t.replace(/^(오른쪽|우측)\s*/, ""), sides: ["right"] };
+  return { part: t, sides: [] };
 }
 
-function PainConfirmationCard({
-  draft,
+function composeSide(part: string, sides: ("left" | "right")[]): string {
+  if (sides.length === 2) return `양쪽 ${part}`;
+  if (sides.length === 1) return sides[0] === "left" ? `왼쪽 ${part}` : `오른쪽 ${part}`;
+  return part;
+}
+
+function PainRecordCard({
+  painDraft,
+  painDiaryTool,
   saved,
   onSave,
 }: {
-  draft: PainDraft;
+  painDraft?: PainDraft | null;
+  painDiaryTool?: PainDiaryToolCall | null;
   saved: boolean;
   onSave: (updated: PainDraft) => void;
 }) {
-  const [bodyArea, setBodyArea] = useState(draft.body_area);
-  const [intensity, setIntensity] = useState<number | null>(draft.intensity ?? null);
-  const [sensation, setSensation] = useState(draft.sensation ?? "");
-  const [note, setNote] = useState(draft.note ?? "");
+  const source = painDraft || painDiaryTool;
+  const initialArea = source?.body_area || "";
+  const { part: initPart, sides: initSides } = useMemo(() => parseSide(initialArea), [initialArea]);
+
+  const [step, setStep] = useState<"confirm" | "form" | "dismissed">("confirm");
+  const [bodyPart, setBodyPart] = useState(initPart);
+  const [sides, setSides] = useState<("left" | "right")[]>(initSides);
+  const [intensity, setIntensity] = useState<number | null>(source?.intensity ?? null);
+  const [note, setNote] = useState(painDraft?.note || painDiaryTool?.formatted_diary || "");
+
+  if (!source) return null;
+
+  const showSides = BILATERAL_PARTS.some((bp) => bodyPart.includes(bp));
+  const finalArea = composeSide(bodyPart, showSides ? sides : []);
 
   if (saved) {
     return (
-      <div className="draft-confirm-card is-saved">
-        <span className="saved-badge">안전하게 저장되었습니다.</span>
-        <p><strong>{bodyArea}</strong>: {intensity == null ? "강도 미입력" : `강도 ${intensity}/10`} {sensation ? `(${sensation})` : ""}</p>
+      <div className="pain-record-card pain-record-saved">
+        <span className="pain-record-saved-badge">통증 기록 저장 완료</span>
+        <p className="pain-record-saved-summary">
+          <strong>{finalArea}</strong>
+          {intensity != null && <span> · 강도 {intensity}/10</span>}
+        </p>
+      </div>
+    );
+  }
+
+  if (step === "dismissed") return null;
+
+  if (step === "confirm") {
+    return (
+      <div className="pain-record-card pain-record-confirm">
+        <p className="pain-record-question">통증일기에 기록할까요?</p>
+        <div className="pain-record-confirm-btns">
+          <button type="button" className="pain-record-yes" onClick={() => setStep("form")}>네</button>
+          <button type="button" className="pain-record-no" onClick={() => setStep("dismissed")}>아니요</button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="draft-confirm-card">
-      <div className="card-header">
-        <strong>통증 기록 확인</strong>
-        <small>부위와 강도를 확인하고 저장해 주세요</small>
-      </div>
-      <div className="card-inputs">
-        <label>
-          통증 부위
+    <div className="pain-record-card pain-record-form">
+      <div className="pain-record-title">통증 일기</div>
+
+      <label className="pain-record-field">
+        <span className="pain-record-label">부위</span>
+        <input
+          value={bodyPart}
+          onChange={(e) => {
+            setBodyPart(e.target.value);
+            if (!BILATERAL_PARTS.some((bp) => e.target.value.includes(bp))) setSides([]);
+          }}
+          placeholder="무릎, 허리, 어깨 등"
+        />
+      </label>
+
+      {showSides && (
+        <div className="pain-record-sides">
+          {(["left", "right"] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`pain-side-chip${sides.includes(s) ? " active" : ""}`}
+              onClick={() => setSides((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s])}
+            >
+              {s === "left" ? "왼쪽" : "오른쪽"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <label className="pain-record-field">
+        <span className="pain-record-label">
+          통증 강도{intensity != null ? ` ${intensity}` : ""}
+        </span>
+        <div className="pain-record-slider">
+          <span className="pain-record-slider-edge">0 약함</span>
           <input
-            value={bodyArea}
-            onChange={(e) => setBodyArea(e.target.value)}
-            placeholder="오른쪽 무릎, 허리, 어깨 등"
+            type="range" min="0" max="10" step="1"
+            aria-label="통증 강도"
+            value={intensity ?? 5}
+            onChange={(e) => setIntensity(Number(e.target.value))}
+            onClick={(e) => { if (intensity == null) setIntensity(Number((e.target as HTMLInputElement).value)); }}
           />
-        </label>
-        <PainIntensityField intensity={intensity} onChange={setIntensity} />
-        <label>
-          통증 양상
-          <input
-            value={sensation}
-            onChange={(e) => setSensation(e.target.value)}
-            placeholder="욱신거림, 찌르는 듯함 등"
-          />
-        </label>
-        {note && (
-          <label>
-            메모
-            <input
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="특이사항"
-            />
-          </label>
-        )}
-      </div>
+          <span className="pain-record-slider-edge">10 심함</span>
+        </div>
+      </label>
+
+      <label className="pain-record-field">
+        <span className="pain-record-label">메모 <span className="pain-record-opt">(선택)</span></span>
+        <textarea
+          rows={2}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="욱신거림, 넘어졌다, 운동 후 등"
+        />
+      </label>
+
       <button
         type="button"
-        className="confirm-save-btn"
-        disabled={!bodyArea || intensity == null}
-        onClick={() => onSave({ ...draft, body_area: bodyArea, intensity, sensation, note })}
+        className="pain-record-save"
+        disabled={!bodyPart.trim() || intensity == null}
+        onClick={() =>
+          onSave({
+            body_area: finalArea,
+            intensity,
+            sensation: painDraft?.sensation || painDiaryTool?.sensation || undefined,
+            note: note.trim() || undefined,
+            onset_at: painDiaryTool?.date_str ? `${painDiaryTool.date_str}T12:00:00` : painDraft?.onset_at,
+            anatomy_concept_id: painDraft?.anatomy_concept_id || painDiaryTool?.anatomy_concept_id,
+            anatomy_label: painDraft?.anatomy_label || painDiaryTool?.anatomy_label,
+            suspected_anatomy_ids: painDraft?.suspected_anatomy_ids || painDiaryTool?.suspected_anatomy_ids,
+            suspected_system: painDraft?.suspected_system || painDiaryTool?.suspected_system,
+            clinical_reasoning: painDraft?.clinical_reasoning || painDiaryTool?.clinical_reasoning,
+          })
+        }
       >
-        통증 기록에 저장하기
+        저장
       </button>
     </div>
   );
@@ -4039,121 +3966,3 @@ function FacilitySearchResultCard({ draft }: { draft: FacilitySearchResult }) {
   );
 }
 
-function PainDiaryToolCard({
-  toolCall,
-  saved,
-  onSave,
-  onNavigateToDiary,
-}: {
-  toolCall: PainDiaryToolCall;
-  saved: boolean;
-  onSave: (updated: PainDiaryToolCall) => void;
-  onNavigateToDiary: (dateKey: string) => void;
-}) {
-  const todayStr = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
-  const [diaryDate, setDiaryDate] = useState(toolCall.date_str || todayStr);
-  const [bodyArea, setBodyArea] = useState(toolCall.body_area || "");
-  const [intensity, setIntensity] = useState<number | null>(toolCall.intensity ?? null);
-  const [sensation, setSensation] = useState(toolCall.sensation || "");
-  const [aggravatingFactors, setAggravatingFactors] = useState(toolCall.aggravating_factors || "");
-  const [formattedDiary, setFormattedDiary] = useState(toolCall.formatted_diary || "");
-
-  if (saved) {
-    return (
-      <div className="draft-confirm-card is-saved pain-tool-card">
-        <span className="saved-badge">통증 다이어리에 저장했습니다</span>
-        <p>
-          <strong>{bodyArea}</strong> ({diaryDate}): {intensity == null ? "강도 미입력" : `강도 ${intensity}점`} {sensation ? `(${sensation})` : ""}
-        </p>
-        <p className="tool-saved-diary">{formattedDiary}</p>
-        <button
-          type="button"
-          className="view-diary-btn"
-          onClick={() => onNavigateToDiary(diaryDate)}
-        >
-          통증 다이어리에서 확인
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="draft-confirm-card pain-tool-card">
-      <div className="card-header">
-        <strong>통증 일기 정리</strong>
-        <small>맞춤법을 교정하고 정리한 일기입니다. 통증 강도 선택 후 저장해 주세요.</small>
-      </div>
-
-      <div className="card-inputs">
-        <label>
-          일기 본문
-          <textarea
-            className="formatted-diary-textarea"
-            rows={4}
-            value={formattedDiary}
-            onChange={(e) => setFormattedDiary(e.target.value)}
-            placeholder="맞춤법이 교정된 통증 일기 본문"
-          />
-        </label>
-
-        <label>
-          통증 부위
-          <input
-            value={bodyArea}
-            onChange={(e) => setBodyArea(e.target.value)}
-            placeholder="팔꿈치, 왼쪽 고관절 등"
-          />
-        </label>
-
-        <PainIntensityField intensity={intensity} onChange={setIntensity} />
-
-        <div className="pain-tool-grid">
-          <label>
-            기록 날짜
-            <input
-              type="date"
-              value={diaryDate}
-              onChange={(e) => setDiaryDate(e.target.value)}
-            />
-          </label>
-          <label>
-            통증 양상
-            <input
-              value={sensation}
-              onChange={(e) => setSensation(e.target.value)}
-              placeholder="욱신거림, 이물감 등"
-            />
-          </label>
-          <label className="grid-full-col">
-            악화 요인
-            <input
-              value={aggravatingFactors}
-              onChange={(e) => setAggravatingFactors(e.target.value)}
-              placeholder="웨이트 트레이닝 후 등"
-            />
-          </label>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        className="confirm-save-btn"
-        disabled={!bodyArea.trim() || !formattedDiary.trim() || intensity == null}
-        onClick={() =>
-          onSave({
-            ...toolCall,
-            tool_name: "format_pain_diary",
-            date_str: diaryDate,
-            body_area: bodyArea.trim(),
-            intensity,
-            sensation: sensation.trim() || undefined,
-            aggravating_factors: aggravatingFactors.trim() || undefined,
-            formatted_diary: formattedDiary.trim(),
-          })
-        }
-      >
-        통증 다이어리에 저장하기
-      </button>
-    </div>
-  );
-}

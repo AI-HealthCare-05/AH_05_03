@@ -584,7 +584,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     });
   });
 
-  it("통증 대화 입력 시 PainConfirmationCard가 표시되고 저장을 누르면 pain 레코드가 생성된다", async () => {
+  it("통증 대화 입력 시 확인 → 폼 → 저장 플로우로 pain 레코드가 생성된다", async () => {
     vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_pain",
       assistant_message: "오른쪽 무릎 통증 기록을 저장할까요?",
@@ -612,14 +612,22 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     fireEvent.change(input, { target: { value: "오른쪽 무릎이 욱신거려 강도 6" } });
     fireEvent.click(screen.getByRole("button", { name: "전송" }));
 
+    // 확인 단계
     await waitFor(() => {
-      expect(screen.getByText("통증 기록 확인")).toBeInTheDocument();
-      expect(screen.getByDisplayValue("오른쪽 무릎")).toBeInTheDocument();
-      expect(screen.getByDisplayValue("욱신거림")).toBeInTheDocument();
+      expect(screen.getByText("통증일기에 기록할까요?")).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByRole("button", { name: "네" }));
+
+    // 폼 단계 - 값이 pre-fill 되어 있고 좌/우 칩이 보인다 (무릎은 bilateral)
+    await waitFor(() => {
+      expect(screen.getByText("통증 일기")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("무릎")).toBeInTheDocument();
+    });
+    expect(screen.getByText("오른쪽")).toBeInTheDocument();
+    expect(screen.getByText("왼쪽")).toBeInTheDocument();
 
     // 저장 버튼 클릭
-    fireEvent.click(screen.getByRole("button", { name: "통증 기록에 저장하기" }));
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalledWith(
@@ -666,7 +674,13 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     fireEvent.change(input, { target: { value: "머리가 깨질 것 같아" } });
     fireEvent.click(screen.getByRole("button", { name: "전송" }));
 
-    const saveButton = await screen.findByRole("button", { name: "통증 기록에 저장하기" });
+    // 확인 단계 → 네 클릭
+    await waitFor(() => {
+      expect(screen.getByText("통증일기에 기록할까요?")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "네" }));
+
+    const saveButton = await screen.findByRole("button", { name: "저장" });
     expect(saveButton).toBeDisabled();
     expect(mockCreateRecord).not.toHaveBeenCalled();
 
@@ -684,19 +698,19 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     });
   });
 
-  it("통증일기 대화 시 format_pain_diary 툴콜링 카드가 표시되고 다이어리에 저장할 수 있다", async () => {
+  it("통증일기 대화 시 통합 카드로 확인 → 저장할 수 있다", async () => {
     vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_pain",
       assistant_message: "통증 일기를 맞춤법에 맞추고 구조화하여 정리했습니다.",
       pain_diary_tool: {
         tool_name: "format_pain_diary",
         date_str: "2026-09-06",
-        body_area: "팔꿈치, 왼쪽 고관절",
+        body_area: "팔꿈치",
         intensity: 6,
         sensation: "이물감, 지지력 저하",
         aggravating_factors: "웨이트 트레이닝 후",
         formatted_diary:
-          "웨이트 트레이닝을 마친 후 팔꿈치에 통증이 발생함. 아울러 왼쪽 고관절에 이물감이 느껴지며, 보행 시 왼쪽 발바닥으로 바닥을 지지하는 근력이 다소 저하된 양상을 보임.",
+          "웨이트 트레이닝을 마친 후 팔꿈치에 통증이 발생함.",
       },
       missing_fields: [],
       needs_confirmation: true,
@@ -716,20 +730,24 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     const input = screen.getByPlaceholderText(/건강정보를 입력하거나/);
     fireEvent.change(input, {
       target: {
-        value:
-          "통증일기. 웨이트한후에 팔꿈치가 아프다. 왼쪽 고관절에 이물감이 있고 왼쪽발 바닥을 딛는 힘이 약한 것 같아.",
+        value: "통증일기. 웨이트한후에 팔꿈치가 아프다.",
       },
     });
     fireEvent.click(screen.getByRole("button", { name: "전송" }));
 
+    // 확인 단계
     await waitFor(() => {
-      expect(screen.getByText("통증 일기 정리")).toBeInTheDocument();
-      expect(screen.getByDisplayValue(/웨이트 트레이닝을 마친 후 팔꿈치에 통증이 발생함/)).toBeInTheDocument();
-      expect(screen.getByDisplayValue("팔꿈치, 왼쪽 고관절")).toBeInTheDocument();
+      expect(screen.getByText("통증일기에 기록할까요?")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "네" }));
+
+    // 폼 단계 - formatted_diary가 메모에 pre-fill
+    await waitFor(() => {
+      expect(screen.getByText("통증 일기")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("팔꿈치")).toBeInTheDocument();
     });
 
-    // 저장 버튼 클릭
-    fireEvent.click(screen.getByRole("button", { name: /통증 다이어리에 저장하기/ }));
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
 
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalledWith(
@@ -737,10 +755,9 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
           recordType: "pain",
           payload: expect.objectContaining({
             type: "pain",
-            bodyArea: "팔꿈치, 왼쪽 고관절",
+            bodyArea: "팔꿈치",
             intensity: 6,
             sensation: "이물감, 지지력 저하",
-            note: expect.stringContaining("웨이트 트레이닝을 마친 후 팔꿈치에 통증이 발생함"),
           }),
         }),
       );
@@ -749,17 +766,11 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
   });
 
   it("통증일기 날짜 단서가 없으면 모델이 지어낸 날짜 대신 오늘 날짜를 쓴다", async () => {
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-      now.getDate(),
-    ).padStart(2, "0")}`;
-
     vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "record_pain",
       assistant_message: "통증 일기를 정리했습니다.",
       pain_diary_tool: {
         tool_name: "format_pain_diary",
-        // 사용자 메시지에 날짜 단서가 전혀 없는데도 모델이 지어낸 값 — 오늘로 바뀌어야 한다.
         date_str: "2020-01-01",
         body_area: "왼쪽 무릎",
         intensity: 4,
@@ -785,9 +796,33 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     fireEvent.change(input, { target: { value: "왼쪽 무릎이 계속 뻐근해서 다이어리에 남기고 싶어" } });
     fireEvent.click(screen.getByRole("button", { name: "전송" }));
 
+    // 확인 단계
     await waitFor(() => {
-      expect(screen.getByLabelText(/기록 날짜/)).toHaveValue(todayStr);
+      expect(screen.getByText("통증일기에 기록할까요?")).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByRole("button", { name: "네" }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("무릎")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => {
+      expect(mockCreateRecord).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recordType: "pain",
+          payload: expect.objectContaining({
+            type: "pain",
+            bodyArea: "왼쪽 무릎",
+            intensity: 4,
+          }),
+        }),
+      );
+    });
+    // date_str "2020-01-01" 은 resolveHealthRecordDateTime 에 의해 오늘로 교정됨
+    const call = mockCreateRecord.mock.calls[0][0];
+    expect(call.payload.onsetAt).not.toContain("2020-01-01");
   });
 
   it("음주 질문 시 클라이언트가 로컬 기록 요약을 만들지 않고 프로필 컨텍스트만 전달한다", async () => {

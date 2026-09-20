@@ -3091,3 +3091,231 @@
 .medication-field .field-label.warning {
   color: #ef4444;
 }
+
+/* ── 통합 통증 기록 카드 ── */
+.pain-record-card {
+  background: #fdfcfe;
+  border: 1.5px solid #e2dffe;
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pain-record-saved {
+  background: #f8f7fc;
+  border-color: #d4d0f0;
+  gap: 4px;
+  padding: 10px 14px;
+}
+
+.pain-record-saved-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #2ec08b;
+}
+
+.pain-record-saved-summary {
+  font-size: 13px;
+  color: #3c315b;
+  margin: 0;
+}
+
+.pain-record-saved-summary strong {
+  color: #261b44;
+}
+
+/* 확인 단계 */
+.pain-record-confirm {
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.pain-record-question {
+  font-size: 14px;
+  font-weight: 500;
+  color: #261b44;
+  margin: 0;
+}
+
+.pain-record-confirm-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.pain-record-yes,
+.pain-record-no {
+  flex: 1;
+  padding: 8px 0;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.pain-record-yes {
+  background: #3c315b;
+  color: #fff;
+}
+
+.pain-record-yes:hover {
+  background: #261b44;
+}
+
+.pain-record-no {
+  background: #f4f2f4;
+  color: #5d5c76;
+  border-color: #e9e8ea;
+}
+
+.pain-record-no:hover {
+  background: #e9e8ea;
+}
+
+/* 폼 단계 */
+.pain-record-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #261b44;
+}
+
+.pain-record-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pain-record-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #5d5c76;
+}
+
+.pain-record-opt {
+  font-weight: 400;
+  color: #86848d;
+}
+
+.pain-record-field input[type="text"],
+.pain-record-field input:not([type]),
+.pain-record-field textarea {
+  padding: 8px 10px;
+  border: 1px solid #e2dffe;
+  border-radius: 8px;
+  font-size: 13px;
+  background: #fff;
+  color: #261b44;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.pain-record-field input:focus,
+.pain-record-field textarea:focus {
+  border-color: #ab9ff2;
+  box-shadow: 0 0 0 2px rgba(171, 159, 242, 0.15);
+}
+
+.pain-record-field textarea {
+  resize: vertical;
+  min-height: 48px;
+}
+
+/* 좌/우 선택 칩 */
+.pain-record-sides {
+  display: flex;
+  gap: 6px;
+}
+
+.pain-side-chip {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1.5px solid #e2dffe;
+  background: #fff;
+  color: #5d5c76;
+  transition: all 0.15s;
+}
+
+.pain-side-chip:hover {
+  border-color: #ab9ff2;
+}
+
+.pain-side-chip.active {
+  background: #e2dffe;
+  border-color: #ab9ff2;
+  color: #3c315b;
+  font-weight: 600;
+}
+
+/* 슬라이더 */
+.pain-record-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pain-record-slider-edge {
+  font-size: 10px;
+  color: #86848d;
+  white-space: nowrap;
+  min-width: 32px;
+}
+
+.pain-record-slider-edge:last-child {
+  text-align: right;
+}
+
+.pain-record-slider input[type="range"] {
+  flex: 1;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 3px;
+  background: linear-gradient(to right, #e2dffe 0%, #ab9ff2 50%, #3c315b 100%);
+  outline: none;
+}
+
+.pain-record-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #3c315b;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(60, 49, 91, 0.3);
+  cursor: pointer;
+}
+
+/* 저장 버튼 */
+.pain-record-save {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #3c315b;
+  color: #fff;
+  transition: background 0.15s;
+}
+
+.pain-record-save:hover:not(:disabled) {
+  background: #261b44;
+}
+
+.pain-record-save:disabled {
+  background: #e9e8ea;
+  color: #86848d;
+  cursor: not-allowed;
+}
