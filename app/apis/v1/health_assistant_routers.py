@@ -131,7 +131,7 @@ async def chat_with_assistant(
             session_id=request.session_id,
             role="assistant",
             content=data.assistant_message,
-            metadata=data.model_dump(),
+            metadata=data.model_dump(mode="json"),
         )
 
     return ApiResponse(data=data, message="건강 어시스턴트 응답을 처리했습니다.")
