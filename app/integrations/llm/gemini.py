@@ -10,6 +10,7 @@
 
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any, TypeVar, cast
 
@@ -72,6 +73,7 @@ class GeminiLLMClient(LLMClientProtocol):
             for m in messages
             if m.content and m.content.strip()
         ]
+        call_started = time.perf_counter()
         try:
             response = await asyncio.wait_for(
                 self.client.aio.models.generate_content(
@@ -87,11 +89,25 @@ class GeminiLLMClient(LLMClientProtocol):
                 timeout=self.timeout,
             )
             if not response.text:
+                logger.debug("[CHAT_TRACE] gemini_empty_response model=%s", self.model_name)
                 raise LlmProviderFailedError("Gemini 응답 본문이 비어 있습니다.")
+            logger.debug(
+                "[CHAT_TRACE] gemini_call model=%s duration_ms=%.1f",
+                self.model_name,
+                (time.perf_counter() - call_started) * 1000,
+            )
             return response_schema.model_validate_json(response.text)
         except asyncio.TimeoutError as ex:
+            logger.debug("[CHAT_TRACE] gemini_timeout model=%s", self.model_name)
             raise LlmTimeoutError() from ex
         except Exception as ex:
+            # 실패 종류 구분용(예외 클래스·상태코드만. 메시지·원문·토큰 제외). 재발생 동작은 유지.
+            logger.debug(
+                "[CHAT_TRACE] gemini_exception model=%s exc=%s code=%s",
+                self.model_name,
+                type(ex).__name__,
+                getattr(ex, "code", None),
+            )
             raise LlmProviderFailedError(f"Gemini 호출 실패: {type(ex).__name__}") from ex
 
     def stream_structured_response(
@@ -145,6 +161,7 @@ class GeminiLLMClient(LLMClientProtocol):
             if m.content and m.content.strip()
         ]
 
+        first_turn_started = time.perf_counter()
         try:
             first_turn = await asyncio.wait_for(
                 self.client.aio.models.generate_content(
@@ -165,6 +182,11 @@ class GeminiLLMClient(LLMClientProtocol):
             raise LlmProviderFailedError(_format_gemini_error("Gemini 도구 판별 호출 실패", ex)) from ex
 
         function_calls = getattr(first_turn, "function_calls", None)
+        logger.debug(
+            "[CHAT_TRACE] gemini_first_turn duration_ms=%.1f function_calls=%s",
+            (time.perf_counter() - first_turn_started) * 1000,
+            [fc.name for fc in function_calls] if function_calls else [],
+        )
         if not function_calls:
             return None, None
 
@@ -225,6 +247,7 @@ class GeminiLLMClient(LLMClientProtocol):
             )
             return res, None
 
+        second_turn_started = time.perf_counter()
         try:
             second_turn = await asyncio.wait_for(
                 self.client.aio.models.generate_content(
@@ -241,6 +264,10 @@ class GeminiLLMClient(LLMClientProtocol):
             )
             if not second_turn.text:
                 raise LlmProviderFailedError("Gemini 도구 실행 후 응답 본문이 비어 있습니다.")
+            logger.debug(
+                "[CHAT_TRACE] gemini_second_turn duration_ms=%.1f",
+                (time.perf_counter() - second_turn_started) * 1000,
+            )
             return response_schema.model_validate_json(second_turn.text), tool_results
         except asyncio.TimeoutError as ex:
             raise LlmTimeoutError() from ex

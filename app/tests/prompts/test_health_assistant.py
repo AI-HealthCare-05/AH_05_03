@@ -34,6 +34,14 @@ def test_build_system_instruction_forbids_claiming_location_was_checked() -> Non
     assert "실제 위치를 확인하거나 날씨·대기질을 조회한 것처럼 말하지 마세요" in instruction
 
 
+def test_build_system_instruction_does_not_invent_profile_location_settings() -> None:
+    instruction = build_system_instruction()
+
+    assert "프로필에는 거주지나 현재 위치를 저장하는 설정이 없습니다" in instruction
+    assert "브라우저가 이번 요청에 제공한 좌표" in instruction
+    assert "대기질 측정소는 사용자의 거주지가 아닙니다" in instruction
+
+
 @pytest.mark.skip(reason="[알잘딱깔센] 무근거 차단 폐지 반영")
 def test_build_system_instruction_contains_health_condition_guidance() -> None:
     instruction = build_system_instruction()
@@ -83,6 +91,17 @@ def test_scope_instruction_contains_scope_evidence_and_query_builder() -> None:
     assert "clinical_contexts" in instruction
     assert "자유문장 질문을 만들지 말고" in instruction
     assert "특정 음식·제품을 지목하지 않은 질환별 식이 질문" in instruction
+    assert "현재 한 문장에 기록명이나 질환명이 다시 나오지 않았다는" in instruction
+    assert "개인기록을 가리키는 대상이 이어지고 있으면" in instruction
+
+
+def test_system_instruction_keeps_record_interpretation_conversational() -> None:
+    instruction = build_system_instruction()
+
+    assert "저장된 기록을 평가·해석하거나 원인·관리법·대안을 묻는 요청은 `health_advice`" in instruction
+    assert "같은 정보를 다시 조회하라고 돌려보내지 마세요" in instruction
+    assert "하나만 요청하면 가장 실행하기 쉬운 행동 정확히 한 가지만" in instruction
+    assert "화면에 곧 표시된다고 약속하지 마세요" in instruction
 
 
 def test_scope_instruction_defines_request_kind_and_clinical_context_contract() -> None:

@@ -1,9 +1,9 @@
 # ADR-006: 연결 생명주기 단위의 일회용 프로필 참조값
 
-- 상태: 승인
+- 상태: 대체됨 — 로컬 프로필·`opaqueServerRef` 경계는 [ADR-011](0011-postgresql-health-data-and-server-ai.md) 참조
 - 결정일: 2026-08-19
 - 적용 대상: 가족 초대, 서비스 계정·로컬 프로필 연결, 연결 해제·재연결, 프로필 병합과 백업 복구
-- 관련 결정: [ADR-001](0001-web-local-first-architecture.md), [ADR-002](0002-separate-server-api-and-local-domain-contract.md), [ADR-004](0004-family-invitation-state-and-redis-boundary.md)
+- 관련 결정: [ADR-001](0001-web-local-first-architecture.md), [ADR-002](0002-separate-server-api-and-local-domain-contract.md), [ADR-004](0004-family-invitation-state-and-redis-boundary.md), [ADR-011](0011-postgresql-health-data-and-server-ai.md)
 
 ## 배경
 

@@ -187,9 +187,9 @@ C 를 고르면 ADR-007(계정별 암호화 로컬 보관함)과 ADR-001(로컬 
 
 | 항목 | 결정 | 어디 |
 |---|---|---|
-| 챗봇 전송 방식 | SSE | [43](43_chatbot_question_design.md) §5 |
-| 대화 저장 | 로컬 보관함, 6턴 + 규칙 기반 요약 | [43](43_chatbot_question_design.md) §6 |
-| RAG | 개인 이력에는 안 쓴다. 도구 호출 | [43](43_chatbot_question_design.md) §3 |
+| 챗봇 전송 방식 | SSE | [43](43_chatbot_question_design.md) §7 |
+| 대화 저장 | PostgreSQL 세션·메시지, 제한된 최근 문맥 전달 | [43](43_chatbot_question_design.md) §8 · [ADR-011](adr/0011-postgresql-health-data-and-server-ai.md) |
+| RAG | 개인 이력에는 쓰지 않고 인증된 서버 기록을 조회 | [43](43_chatbot_question_design.md) §4 |
 | 예측 큐 | 예측은 큐를 안 탄다 | [ADR-009](adr/0009-per-disease-models-and-server-inference-path.md) §7 |
 | OCR 큐 | 큐를 탄다 (3~6초) | [40](40_ocr_queue_pipeline.md) |
 

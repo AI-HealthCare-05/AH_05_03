@@ -3,7 +3,7 @@
 - 상태: 승인
 - 결정일: 2026-09-04
 - 적용 대상: 사용자·가족 건강정보, 건강문서와 OCR 결과, ML 예측, AI 질의와 도구 호출, 다중 기기 동기화
-- 대체 결정: [ADR-001](0001-web-local-first-architecture.md)의 건강정보 로컬 정본·서버 미전송 결정, [ADR-002](0002-separate-server-api-and-local-domain-contract.md)의 Local Domain 경계, [ADR-005](0005-vite-spa-local-first-frontend-foundation.md)의 로컬 건강정보·로컬 추론 경계, [ADR-007](0007-account-scoped-encrypted-local-vault.md)
+- 대체 결정: [ADR-001](0001-web-local-first-architecture.md)의 건강정보 로컬 정본·서버 미전송 결정, [ADR-002](0002-separate-server-api-and-local-domain-contract.md)의 Local Domain 경계, [ADR-005](0005-vite-spa-local-first-frontend-foundation.md)의 로컬 건강정보·로컬 추론 경계, [ADR-006](0006-lifecycle-scoped-profile-reference.md)의 로컬 프로필·`opaqueServerRef` 경계, [ADR-007](0007-account-scoped-encrypted-local-vault.md)
 - 부분 대체: [ADR-008](0008-temporary-cloud-ocr-baseline.md)의 서버 비저장·브라우저 보관함 저장 조항. 제3자 OCR 전송 고지·동의·비밀값 관리·사용자 검토 원칙은 유지한다.
 - 관련 문서: [ERD](../02_erd.md), [API 명세](../03_api_spec.md), [기술 아키텍처](../05_tech_architecture.md), [로컬 데이터 계약](../10_local_data_contract.md), [ML 모델 계획](../09_chronic_disease_model_plan.md)
 

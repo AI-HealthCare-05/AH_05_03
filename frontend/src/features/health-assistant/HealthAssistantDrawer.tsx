@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, type FormEvent, type ChangeEvent } from "react";
-import type { FamilyProfile, HealthRecord, HealthRecordType } from "../../shared/local/domainContracts";
+import type { FamilyProfile, HealthRecord } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 // PR 은 전용 `DevServerOcrAdapter` 를 썼는데, project 에는 같은 응답을 큐·스트리밍으로
 // 받는 `GeminiOcrAdapter` 가 이미 있다(`text`·`tables` 가 같은 모양이고 `measurements`
@@ -28,7 +28,6 @@ import {
   type UserLocation,
 } from "./healthAssistantClient";
 import { createAnatomyEvent, type AnatomyEvent } from "../home/anatomyEventContracts";
-import { selectContextRecordTypes } from "./healthAssistantContext";
 import {
   containsNewMedicationRecord,
   detectMetricKeyFromQuery,
@@ -333,56 +332,6 @@ export function HealthAssistantDrawer({
    */
   const [ocrValues, setOcrValues] = useState<Record<string, number>>({});
 
-  // 질문에 직접 필요한 종류의 최근 기록만 AI 컨텍스트로 구성한다.
-  async function fetchRecentRecordsSummary(recordTypes: HealthRecordType[]): Promise<string | undefined> {
-    if (!runtime || !profile || recordTypes.length === 0) return undefined;
-    try {
-      const qRes = await runtime.healthRecords.query({
-        profileId: profile.id,
-        recordTypes,
-        includeDeleted: false,
-      });
-      if (!qRes.ok || qRes.value.length === 0) return undefined;
-
-      const recent = [...qRes.value]
-        .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime())
-        .slice(0, 5);
-
-      const summaryList = recent.map((r) => {
-        const p = r.payload as Record<string, unknown>;
-        const dateStr = r.recordedAt.slice(0, 10);
-        if (r.recordType === "medication" || p.medicationName) {
-          return `[${dateStr} 복약] ${p.medicationName} ${p.dosage ?? ""} (${p.takenAt ?? ""})`;
-        }
-        if (r.recordType === "blood_pressure" || p.systolicMmHg) {
-          return `[${dateStr} 혈압] ${p.systolicMmHg}/${p.diastolicMmHg} mmHg (맥박 ${p.pulseBpm ?? "-"})`;
-        }
-        if (r.recordType === "exercise" || p.exerciseName) {
-          return `[${dateStr} 운동] ${p.exerciseName} ${p.weightKg ? `${p.weightKg}kg ` : ""}${p.reps ? `${p.reps}회 ` : ""}${p.sets ? `${p.sets}세트` : ""}`;
-        }
-        if (r.recordType === "pain" || p.bodyArea) {
-          return `[${dateStr} 통증] ${p.bodyArea}${typeof p.intensity === "number" ? ` 강도 ${p.intensity}/10` : " (강도 미입력)"}`;
-        }
-        if (r.recordType === "health_screening" || r.recordType === "lab_result") {
-          const name = (p.screeningName as string) ?? (p.testName as string) ?? "검진";
-          const items = Array.isArray(p.items)
-            ? (p.items as Array<Record<string, unknown>>)
-                .filter((item) => item?.testName && item?.value)
-                .map((item) => `${item.testName} ${item.value}${item.unit ?? ""}`)
-                .slice(0, 8)
-                .join(", ")
-            : "";
-          const desc = items || (p.itemsSummary as string) || (p.summary as string) || (p.note as string) || "";
-          return `[${dateStr} 검진/검사] ${name}${desc ? `: ${desc}` : ""}`.slice(0, 150);
-        }
-        return `[${dateStr} ${r.recordType}] ${p.note ?? ""}`;
-      });
-
-      return summaryList.join("; ");
-    } catch {
-      return undefined;
-    }
-  }
 
   // 인사말은 초기 상태에서 만든다(위 `useState` 참조). effect 로 넣으면 첫 렌더 뒤
   // 한 번 더 그리게 되고 그 사이 한 프레임 동안 빈 대화가 보인다.
@@ -1015,14 +964,6 @@ export function HealthAssistantDrawer({
       // "직전 답변이 정보를 더 물었는가(missing_fields)"로 판단한다: 되물음에 대한
       // 답변일 때만 그 직전 왕복(질문·되물음)을 함께 보고, 그게 아니면 이번에
       // 보낸 메시지 하나만 본다.
-      const prevAssistantMsg = messages[messages.length - 1];
-      const isFollowUpAnswer =
-        prevAssistantMsg?.role === "assistant" && (prevAssistantMsg.responseDraft?.missing_fields.length ?? 0) > 0;
-      const recentConversationText = (isFollowUpAnswer ? nextMessages.slice(-3) : [userMsg])
-        .map((message) => message.content)
-        .join("\n");
-      const contextRecordTypes = selectContextRecordTypes(recentConversationText);
-      const recentSummary = await fetchRecentRecordsSummary(contextRecordTypes);
       // 야외 질문일 때만 브라우저 위치 권한을 요청한다. 좌표는 이 API 요청에만 쓰고
       // 채팅/프로필의 로컬 저장소에는 남기지 않는다.
       const locationAttempt = await outdoorLocationPromise;
@@ -1118,7 +1059,6 @@ export function HealthAssistantDrawer({
           profile_name: profile.displayName,
           relationship: profile.relationship,
           birth_year: profile.birthDate ? parseInt(profile.birthDate.slice(0, 4), 10) : undefined,
-          recent_records_summary: recentSummary,
         },
         undefined,
         sessionId ?? undefined,
