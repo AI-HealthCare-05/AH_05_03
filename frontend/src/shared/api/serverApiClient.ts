@@ -211,9 +211,16 @@ export class ServerApiClient {
    * 봉투 처리를 공짜로 얻고, 무엇보다 **상대 경로**를 쓰게 된다. 절대 주소를 박으면
    * nginx 를 건너뛰고 교차 출처가 되며, `:8000` 은 루프백에만 묶여 있어 배포에서 죽는다.
    */
-  public enqueueDocumentJob<T>(file: Blob, fileName: string): Promise<T> {
+  public enqueueDocumentJob<T>(file: Blob | Blob[], fileName?: string): Promise<T> {
+    const files = Array.isArray(file) ? file : [file];
     const body = new FormData();
-    body.append("file", file, fileName);
+    files.forEach((part, index) => {
+      const name =
+        (part instanceof File && part.name) ||
+        (files.length === 1 ? fileName : undefined) ||
+        `page-${index + 1}`;
+      body.append("files", part, name);
+    });
     return this.request<T>("/dev/ocr/jobs", { method: "POST", authenticated: true, body });
   }
 

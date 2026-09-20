@@ -323,6 +323,7 @@ export function HealthAssistantDrawer({
   const [ocrReviewItems, setOcrReviewItems] = useState<OcrReviewItem[]>([]);
   const [ocrModalError, setOcrModalError] = useState<string>();
   const [ocrImageFile, setOcrImageFile] = useState<File | null>(null);
+  const [ocrImageFiles, setOcrImageFiles] = useState<File[]>([]);
   const [ocrImagePreviewUrl, setOcrImagePreviewUrl] = useState<string | null>(null);
   /**
    * 인식기가 준 **판정 칸 이름 → 값** 맵.
@@ -717,13 +718,15 @@ export function HealthAssistantDrawer({
 
   if (!isOpen || !profile) return null;
 
-  // 이미지 파일 선택 핸들러 (+ 버튼 클릭 시 OCR 모달 즉시 실행)
+  // 서류 선택 핸들러. 같은 검사의 여러 장은 순서를 유지한 하나의 묶음으로 읽는다.
   async function handleImageSelect(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
+    const file = files[0];
+    event.target.value = "";
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      setError("이미지 파일(JPG, PNG, WEBP)만 업로드할 수 있습니다.");
+    if (files.some((candidate) => !candidate.type.startsWith("image/") && candidate.type !== "application/pdf")) {
+      setError("이미지(JPG, PNG, WEBP) 또는 PDF 서류만 업로드할 수 있습니다.");
       return;
     }
 
@@ -735,6 +738,7 @@ export function HealthAssistantDrawer({
 
     // 모달을 열고 서류 분석 시작
     setOcrImageFile(file);
+    setOcrImageFiles(files);
     setOcrImagePreviewUrl(previewUrl);
     setOcrModalOpen(true);
     setOcrModalWorking(true);
@@ -744,7 +748,7 @@ export function HealthAssistantDrawer({
 
     try {
       const ocrAdapter = new GeminiOcrAdapter();
-      const ocrResult = await ocrAdapter.recognize(file, file.name);
+      const ocrResult = await ocrAdapter.recognize(files, file.name);
       const items = extractReviewItems(ocrResult.tables);
       setOcrValues(ocrResult.measurements?.values ?? {});
       const structuredText = reviewItemsToText(items);
@@ -775,6 +779,7 @@ export function HealthAssistantDrawer({
     if (imagePreview) URL.revokeObjectURL(imagePreview);
     setSelectedImage(null);
     setImagePreview(null);
+    setOcrImageFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -818,19 +823,22 @@ export function HealthAssistantDrawer({
 
   // 모달에서 서류 확정 저장 핸들러
   async function handleConfirmOcrModalSave(draft: LabResultDraft, items: OcrReviewItem[]) {
-    if (!runtime || !profile || !ocrImageFile) return;
+    const filesToSave = ocrImageFiles.length > 0 ? ocrImageFiles : ocrImageFile ? [ocrImageFile] : [];
+    if (!runtime || !profile || filesToSave.length === 0) return;
     setOcrModalWorking(true);
     try {
       let primaryDocumentId: string | undefined;
       if (runtime.documents) {
-        const savedDoc = await runtime.documents.save({
-          householdId: PRIMARY_HOUSEHOLD_ID,
-          profileId: profile.id,
-          file: ocrImageFile,
-          fileName: ocrImageFile.name,
-        });
-        if (!savedDoc.ok) throw new Error(savedDoc.error.message);
-        primaryDocumentId = savedDoc.value.id;
+        for (const file of filesToSave) {
+          const savedDoc = await runtime.documents.save({
+            householdId: PRIMARY_HOUSEHOLD_ID,
+            profileId: profile.id,
+            file,
+            fileName: file.name,
+          });
+          if (!savedDoc.ok) throw new Error(savedDoc.error.message);
+          primaryDocumentId ??= savedDoc.value.id;
+        }
       }
 
       const finalNote = [
@@ -867,9 +875,9 @@ export function HealthAssistantDrawer({
       const userMsg: ExtendedChatMessage = {
         id: messageId("user"),
         role: "user",
-        content: `검사 서류(${ocrImageFile.name})를 업로드하여 기록했습니다.`,
+        content: `검사 서류(${filesToSave.map((item) => item.name).join(", ")})를 업로드하여 기록했습니다.`,
         imageBlobUrl: ocrImagePreviewUrl ?? undefined,
-        imageFile: ocrImageFile,
+        imageFile: filesToSave[0],
       };
 
       const assistantMsg: ExtendedChatMessage = {
@@ -880,7 +888,7 @@ export function HealthAssistantDrawer({
           : `${draft.recorded_at}에 실시된 ${draft.screening_name || "건강검진"} 수치가 건강기록에 저장되었습니다. 원본 이미지는 보관되지 않습니다.`,
         attachedDocuments: primaryDocumentId ? [{
           id: primaryDocumentId,
-          fileName: ocrImageFile.name,
+          fileName: filesToSave.map((item) => item.name).join(", "),
         }] : undefined,
       };
 
@@ -2475,8 +2483,16 @@ export function HealthAssistantDrawer({
             <div className="assistant-selected-image-bar">
               <img src={imagePreview} alt="선택된 이미지 미리보기" className="image-thumb" />
               <div className="image-info">
-                <strong>{selectedImage.name}</strong>
-                <small>{(selectedImage.size / 1024 / 1024).toFixed(2)} MB</small>
+                <strong>
+                  {ocrImageFiles.length > 1
+                    ? `${selectedImage.name} 외 ${ocrImageFiles.length - 1}장`
+                    : selectedImage.name}
+                </strong>
+                <small>
+                  {ocrImageFiles.length > 1
+                    ? `${ocrImageFiles.length}장 · ${(ocrImageFiles.reduce((sum, item) => sum + item.size, 0) / 1024 / 1024).toFixed(2)} MB`
+                    : `${(selectedImage.size / 1024 / 1024).toFixed(2)} MB`}
+                </small>
               </div>
               <button
                 type="button"
@@ -2503,7 +2519,8 @@ export function HealthAssistantDrawer({
             <input
               type="file"
               ref={fileInputRef}
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              multiple
               style={{ display: "none" }}
               onChange={handleImageSelect}
             />
@@ -2583,7 +2600,7 @@ export function HealthAssistantDrawer({
             key={`${ocrImagePreviewUrl}:${ocrReviewDraft ? "draft" : "empty"}`}
             profileName={profile.displayName}
             imageUrl={ocrImagePreviewUrl}
-            fileName={ocrImageFile?.name ?? "검진 서류"}
+            fileName={ocrImageFiles.length > 1 ? `${ocrImageFiles[0]?.name} 외 ${ocrImageFiles.length - 1}장` : (ocrImageFile?.name ?? "검진 서류")}
             draft={ocrReviewDraft}
             items={ocrReviewItems}
             error={ocrModalError}
@@ -2627,7 +2644,7 @@ export function HealthAssistantDrawer({
           key={`${ocrImagePreviewUrl}:${ocrReviewDraft ? "draft" : "empty"}`}
           profileName={profile.displayName}
           imageUrl={ocrImagePreviewUrl}
-          fileName={ocrImageFile?.name ?? "검진 서류"}
+          fileName={ocrImageFiles.length > 1 ? `${ocrImageFiles[0]?.name} 외 ${ocrImageFiles.length - 1}장` : (ocrImageFile?.name ?? "검진 서류")}
           draft={ocrReviewDraft}
           items={ocrReviewItems}
           error={ocrModalError}
