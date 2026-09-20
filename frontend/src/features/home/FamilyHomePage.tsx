@@ -23,8 +23,10 @@ import {
   verifyPin,
 } from "./memberPin";
 import {
+  PIN_STATUS_UNAVAILABLE_MESSAGE,
   clearPinSession,
   deletePinRecord,
+  profilePinGate,
   readPinRecord,
   readPinSession,
   writePinRecord,
@@ -285,6 +287,7 @@ export function FamilyHomePage() {
   const { runtime, profiles, hiddenProfiles, createProfile, updateProfile, hideProfile, restoreProfile, deleteEmptyProfile, refreshProfiles } =
     useLocalDomain();
   const localStorageReady = Boolean(runtime);
+  const signedIn = authStatus === "signed-in";
 
   const [selectedProfileId, setSelectedProfileId] = useState("");
   const [profileDialogOpen, setProfileDialogOpen] = useState(false);
@@ -442,7 +445,7 @@ export function FamilyHomePage() {
     if (selectedProfileId && profiles.some((profile) => profile.id === selectedProfileId)) {
       return;
     }
-    const grandfather = profiles.find((profile) => !readPinRecord(profile.id));
+    const grandfather = profiles.find((profile) => profilePinGate(profile, signedIn) === "open");
     if (grandfather) {
       const session = readPinSession();
       if (session && session.profileId !== grandfather.id) clearPinSession();
@@ -450,10 +453,18 @@ export function FamilyHomePage() {
       return;
     }
     if (selectedProfileId) setSelectedProfileId("");
-  }, [profiles, selectedProfileId]);
+  }, [profiles, selectedProfileId, signedIn]);
 
   useEffect(() => {
-    if (!selectedProfileId || !readPinRecord(selectedProfileId)) return;
+    const selected = profiles.find((profile) => profile.id === selectedProfileId);
+    const gate = selected ? profilePinGate(selected, signedIn) : "open";
+    if (gate === "blocked") {
+      setSelectedProfileId("");
+      clearPinSession();
+      setProfileActionError(PIN_STATUS_UNAVAILABLE_MESSAGE);
+      return;
+    }
+    if (gate !== "challenge") return;
     const mark = () => setActorTouchedAt(Date.now());
     if (!actorTouchedAt) mark();
     const timer = window.setInterval(() => {
@@ -469,7 +480,7 @@ export function FamilyHomePage() {
       window.removeEventListener("pointerdown", mark);
       window.removeEventListener("keydown", mark);
     };
-  }, [selectedProfileId, actorTouchedAt]);
+  }, [selectedProfileId, actorTouchedAt, profiles, signedIn]);
 
   useEffect(() => {
     if (!selectedProfileId) return;
@@ -481,16 +492,30 @@ export function FamilyHomePage() {
     window.dispatchEvent(new CustomEvent("ieobom:profile-changed", { detail: { profileId: selectedProfileId } }));
   }, [selectedProfileId]);
 
+  useEffect(() => {
+    if (!signedIn) return;
+    const blocked = profiles.some((profile) => profilePinGate(profile, true) === "blocked");
+    setProfileActionError((current) => {
+      if (blocked) return PIN_STATUS_UNAVAILABLE_MESSAGE;
+      return current === PIN_STATUS_UNAVAILABLE_MESSAGE ? undefined : current;
+    });
+  }, [profiles, signedIn]);
+
   function requestSelectProfile(profile: FamilyProfile) {
-    const record = readPinRecord(profile.id);
-    if (!record) {
-      const session = readPinSession();
-      if (session && session.profileId !== profile.id) clearPinSession();
+    const gate = profilePinGate(profile, signedIn);
+    if (gate === "blocked") {
+      setProfileActionError(PIN_STATUS_UNAVAILABLE_MESSAGE);
+      return;
+    }
+    const session = readPinSession();
+    if (session && session.profileId !== profile.id) clearPinSession();
+    if (gate === "open") {
       setSelectedProfileId(profile.id);
       return;
     }
     if (selectedProfileId === profile.id && isPinSessionFresh(actorTouchedAt)) {
-      if (record.mustChange) {
+      const record = readPinRecord(profile.id);
+      if (!signedIn && record?.mustChange) {
         setProfileActionError(undefined);
         setPinChangeOpen(true);
       }
@@ -511,6 +536,7 @@ export function FamilyHomePage() {
     if (authStatus === "signed-in") {
       const issued = await serverApiClient.issueMemberPin(profile.id);
       clearActorIf(profile.id);
+      await refreshProfiles();
       setIssuedPin({ profileId: profile.id, displayName: profile.displayName, pin: issued.temporary_pin });
       return;
     }
@@ -617,7 +643,10 @@ export function FamilyHomePage() {
         await hideProfile(managedProfile.id, managedProfile.version);
         if (profileLifecycleAction === "unshare") {
           deletePinRecord(managedProfile.id);
-          if (authStatus === "signed-in") await serverApiClient.discardMemberPin(managedProfile.id);
+          if (authStatus === "signed-in") {
+            await serverApiClient.discardMemberPin(managedProfile.id);
+            await refreshProfiles();
+          }
         }
       }
       clearActorIf(managedProfile.id);
@@ -637,7 +666,7 @@ export function FamilyHomePage() {
     setProfileActionError(undefined);
     try {
       const restored = await restoreProfile(profile.id, profile.version);
-      if (!readPinRecord(restored.id)) setSelectedProfileId(restored.id);
+      if (profilePinGate(restored, signedIn) === "open") setSelectedProfileId(restored.id);
       if (hiddenProfiles.length === 1) setHiddenProfilesDialogOpen(false);
     } catch (caught) {
       setProfileActionError(caught instanceof Error ? caught.message : "숨긴 프로필을 복원하지 못했습니다.");
@@ -649,13 +678,11 @@ export function FamilyHomePage() {
   async function submitPinChallenge(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!pinChallengeProfile) return;
-    const stored = readPinRecord(pinChallengeProfile.id);
-    if (!stored) {
-      if (authStatus !== "signed-in") {
-        setSelectedProfileId(pinChallengeProfile.id);
-        setPinChallengeProfile(undefined);
-        return;
-      }
+    const stored = signedIn ? undefined : readPinRecord(pinChallengeProfile.id);
+    if (!stored && !signedIn) {
+      setSelectedProfileId(pinChallengeProfile.id);
+      setPinChallengeProfile(undefined);
+      return;
     }
     setSavingProfile(true);
     setProfileActionError(undefined);
@@ -929,10 +956,29 @@ export function FamilyHomePage() {
                 </div>
               </div>
 
+              {profileActionError && !profileDialogOpen && !profileEditDialogOpen ? (
+                <div className="alert error-alert" role="alert">
+                  {profileActionError}
+                  {profileActionError === PIN_STATUS_UNAVAILABLE_MESSAGE ? (
+                    <button
+                      type="button"
+                      className="up17-member-head-link"
+                      onClick={() => {
+                        setProfileActionError(undefined);
+                        void refreshProfiles();
+                      }}
+                    >
+                      목록 새로고침
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div className="up17-member-grid" role="list">
                 {profiles.map((profile) => {
                   const selected = profile.id === selectedProfileId;
-                  const pinProtected = Boolean(readPinRecord(profile.id));
+                  const pinGate = profilePinGate(profile, signedIn);
+                  const pinProtected = pinGate !== "open";
                   return (
                     <div
                       key={profile.id}
@@ -1626,7 +1672,7 @@ export function FamilyHomePage() {
             <p>구성원이 최초에 자기 번호로 바꿉니다. 미성년·잠긴 PIN은 여기서 임시 번호를 다시 만들 수 있습니다.</p>
             <div className="profile-lifecycle-actions">
               <button className="secondary-button" type="button" disabled={savingProfile} onClick={() => void reissueManagedPin()}>
-                {readPinRecord(managedProfile.id) ? "임시 PIN 재발급" : "위임 PIN 발급"}
+                {profilePinGate(managedProfile, signedIn) === "open" ? "위임 PIN 발급" : "임시 PIN 재발급"}
               </button>
             </div>
           </section>

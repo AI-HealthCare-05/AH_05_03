@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  PIN_STATUS_UNAVAILABLE_MESSAGE,
   clearPinSession,
   memberSessionToken,
+  profilePinGate,
   readPinSession,
   writePinRecord,
   writePinSession,
@@ -56,5 +58,25 @@ describe("memberPinStore", () => {
     });
     clearPinSession();
     expect(memberSessionToken()).toBeUndefined();
+  });
+
+  it("로그인 상태에서는 서버 pinConfigured만 PIN 게이트로 쓰고, 누락은 잠근다", () => {
+    writePinRecord({
+      profileId: "local-only",
+      saltB64: "c2FsdA==",
+      hashB64: "aGFzaA==",
+      iterations: 1,
+      mustChange: false,
+      failedAttempts: 0,
+      lockedUntil: null,
+      role: "adult_member",
+    });
+    expect(profilePinGate({ id: "server-pin" }, true)).toBe("blocked");
+    expect(profilePinGate({ id: "server-pin", pinConfigured: "unknown" }, true)).toBe("blocked");
+    expect(profilePinGate({ id: "server-pin", pinConfigured: true }, true)).toBe("challenge");
+    expect(profilePinGate({ id: "local-only", pinConfigured: false }, true)).toBe("open");
+    expect(profilePinGate({ id: "local-only" }, false)).toBe("challenge");
+    expect(profilePinGate({ id: "no-local" }, false)).toBe("open");
+    expect(PIN_STATUS_UNAVAILABLE_MESSAGE).toContain("새로고침");
   });
 });

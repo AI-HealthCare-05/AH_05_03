@@ -38,6 +38,8 @@ export interface FamilyProfile {
   adultTransitionedAt?: string | null;
   adultTransitionPendingAt?: string | null;
   privacySelfDeterminedAt?: string | null;
+  /** 서버 자격 증명 존재. 로그인 게이트 정본. 확인 불가면 `"unknown"`. */
+  pinConfigured?: boolean | "unknown";
 }
 
 export interface FamilyHistory {

@@ -21,6 +21,14 @@ class MemberPinRepository:
             select(MemberPinCredential).where(MemberPinCredential.profile_id == profile_id)
         )
 
+    async def list_configured_profile_ids(self, profile_ids: list[uuid.UUID]) -> set[uuid.UUID]:
+        if not profile_ids:
+            return set()
+        rows = await self.session.scalars(
+            select(MemberPinCredential.profile_id).where(MemberPinCredential.profile_id.in_(profile_ids))
+        )
+        return set(rows.all())
+
     async def add_credential(self, credential: MemberPinCredential) -> MemberPinCredential:
         self.session.add(credential)
         await self.session.flush()

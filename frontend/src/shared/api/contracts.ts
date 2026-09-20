@@ -184,6 +184,7 @@ export interface ProfileServerData {
   row_version: number;
   created_at: string;
   updated_at: string;
+  pin_configured: boolean;
 }
 
 export interface ProfileServerListData {

@@ -14,6 +14,7 @@ export interface MockServerState {
     created_at: string;
     updated_at: string;
     row_version: number;
+    pin_configured?: boolean;
   }>;
   healthRecords: Array<{
     id: string;
@@ -266,6 +267,7 @@ export async function setupE2eServerMocks(
               created_at: now,
               updated_at: now,
               row_version: 1,
+              pin_configured: false,
             };
             state.profiles.push(newProfile);
           }
@@ -279,13 +281,16 @@ export async function setupE2eServerMocks(
         if (url.pathname !== "/api/v1/profiles") {
           if (url.pathname.endsWith("/pin-credentials")) {
             const match = url.pathname.match(/\/api\/v1\/profiles\/([^/?]+)\/pin-credentials$/);
+            const profileId = match?.[1] ?? "unknown";
+            const profile = state.profiles.find((p) => p.id === profileId);
+            if (profile) profile.pin_configured = true;
             return route.fulfill({
               status: 201,
               contentType: "application/json",
               body: JSON.stringify({
                 success: true,
                 data: {
-                  profile_id: match?.[1] ?? "unknown",
+                  profile_id: profileId,
                   temporary_pin: "482910",
                   must_change: true,
                 },
@@ -309,6 +314,7 @@ export async function setupE2eServerMocks(
           created_at: now,
           updated_at: now,
           row_version: 1,
+          pin_configured: false,
         };
         state.profiles.push(newProfile);
         return route.fulfill({

@@ -76,7 +76,12 @@ from app.services.profile_capabilities import (
     ProfileCapability,
     infer_ownership,
 )
-from app.services.profiles import PROFILE_TRASH_DAYS, get_household_repository, get_profile_repository
+from app.services.profiles import (
+    PROFILE_TRASH_DAYS,
+    get_household_repository,
+    get_profile_repository,
+    serialize_profile,
+)
 
 _OPEN = {
     MinorDeletionStatus.SUBMITTED.value,
@@ -380,7 +385,7 @@ class GuardianService:
         )
         await self.session.commit()
         await self.session.refresh(profile)
-        return ProfileData.model_validate(profile)
+        return await serialize_profile(self.session, profile)
 
     async def complete_civil_majority(
         self, account: ServiceAccount, profile_id: uuid.UUID, req: CivilMajorityTransitionRequest
@@ -400,7 +405,7 @@ class GuardianService:
             raise ProfileAccessDeniedError()
         existing = await self.guardian_repo.get_active_transition(profile.id)
         if profile.adult_transitioned_at is not None:
-            return ProfileData.model_validate(profile)
+            return await serialize_profile(self.session, profile)
         now = datetime.now(tz=timezone.utc)
         profile.adult_transitioned_at = now
         profile.adult_transition_pending_at = None
@@ -438,7 +443,7 @@ class GuardianService:
         )
         await self.session.commit()
         await self.session.refresh(profile)
-        return ProfileData.model_validate(profile)
+        return await serialize_profile(self.session, profile)
 
     async def reapprove_guardian_share(
         self, account: ServiceAccount, profile_id: uuid.UUID, req: GuardianShareReapprovalRequest

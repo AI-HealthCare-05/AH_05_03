@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from fastapi import Depends
 from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db.session import SessionDep
 from app.dtos.profiles import (
@@ -54,6 +55,26 @@ PROFILE_TRASH_DAYS = 30
 _BACKUP_HINT = (
     "삭제 전에 계정 화면에서 건강기록 내보내기를 권장합니다. 회원탈퇴(DELETE /account)와 프로필 삭제는 다릅니다."
 )
+
+
+class _ProfileOrmData(ProfileData):
+    """ORM 직렬화 중간값. pin_configured는 자격 증명 조회로만 채운다."""
+
+    pin_configured: bool = False
+
+
+async def serialize_profile(
+    session: AsyncSession,
+    profile: FamilyProfile,
+    *,
+    pin_configured_ids: set[uuid.UUID] | None = None,
+) -> ProfileData:
+    staged = _ProfileOrmData.model_validate(profile)
+    if pin_configured_ids is None:
+        configured = await MemberPinRepository(session).get_credential(profile.id) is not None
+    else:
+        configured = profile.id in pin_configured_ids
+    return ProfileData.model_validate({**staged.model_dump(), "pin_configured": configured})
 
 
 def get_profile_repository(session: SessionDep) -> ProfileRepository:
@@ -158,7 +179,7 @@ class ProfileService:
         )
         await self.session.commit()
         await self.session.refresh(created)
-        return ProfileData.model_validate(created)
+        return await serialize_profile(self.session, created)
 
     async def list_profiles(
         self, account: ServiceAccount, household_id: uuid.UUID, include_hidden: bool = False
@@ -169,7 +190,10 @@ class ProfileService:
             apply_age_flags(profile)
         if self.session.dirty:
             await self.session.commit()
-        return ProfileListData(items=[ProfileData.model_validate(p) for p in profiles])
+        pin_ids = await MemberPinRepository(self.session).list_configured_profile_ids([p.id for p in profiles])
+        return ProfileListData(
+            items=[await serialize_profile(self.session, p, pin_configured_ids=pin_ids) for p in profiles]
+        )
 
     async def get_profile(
         self,
@@ -188,7 +212,7 @@ class ProfileService:
         if self.session.dirty:
             await self.session.commit()
             await self.session.refresh(profile)
-        return ProfileData.model_validate(profile)
+        return await serialize_profile(self.session, profile)
 
     def _apply_status_update(self, profile: FamilyProfile, req: ProfileUpdateRequest, ctx: CapabilityContext) -> None:
         if req.status == "deleted":
@@ -265,7 +289,7 @@ class ProfileService:
             )
         await self.session.commit()
         await self.session.refresh(profile)
-        return ProfileData.model_validate(profile)
+        return await serialize_profile(self.session, profile)
 
     async def delete_profile(
         self,
@@ -354,7 +378,7 @@ class ProfileService:
         await self.session.commit()
 
     async def sync_profiles(self, account: ServiceAccount, req: ProfileSyncRequest) -> ProfileListData:
-        results: list[ProfileData] = []
+        results: list[FamilyProfile] = []
         for p in req.profiles:
             await self._verify_household_access(p.household_id, account)
             lifecycle = lifecycle_from_status(p.status)
@@ -373,9 +397,12 @@ class ProfileService:
             )
             self._stamp_ownership(model)
             saved = await self.profile_repo.upsert(model)
-            results.append(ProfileData.model_validate(saved))
+            results.append(saved)
         await self.session.commit()
-        return ProfileListData(items=results)
+        pin_ids = await MemberPinRepository(self.session).list_configured_profile_ids([p.id for p in results])
+        return ProfileListData(
+            items=[await serialize_profile(self.session, p, pin_configured_ids=pin_ids) for p in results]
+        )
 
     async def _load_profile(self, profile_id: uuid.UUID, *, for_update: bool = False) -> FamilyProfile:
         profile = (
@@ -432,7 +459,7 @@ class ProfileService:
         )
         await self.session.commit()
         await self.session.refresh(profile)
-        return ProfileData.model_validate(profile)
+        return await serialize_profile(self.session, profile)
 
     async def restore_profile(
         self, account: ServiceAccount, profile_id: uuid.UUID, *, expected_version: int | None = None
@@ -453,7 +480,7 @@ class ProfileService:
         )
         await self.session.commit()
         await self.session.refresh(profile)
-        return ProfileData.model_validate(profile)
+        return await serialize_profile(self.session, profile)
 
     async def request_deletion(
         self, account: ServiceAccount, profile_id: uuid.UUID, *, expected_version: int | None = None

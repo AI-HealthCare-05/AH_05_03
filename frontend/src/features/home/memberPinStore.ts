@@ -28,6 +28,22 @@ function sessionStorageOrUndefined(): Storage | undefined {
   }
 }
 
+export type ProfilePinGate = "open" | "challenge" | "blocked";
+
+export const PIN_STATUS_UNAVAILABLE_MESSAGE = "프로필 PIN 상태를 확인하지 못했습니다. 목록을 새로고침하세요.";
+
+export function profilePinGate(
+  profile: { id: string; pinConfigured?: boolean | "unknown" },
+  signedIn: boolean,
+): ProfilePinGate {
+  if (!signedIn) {
+    return readPinRecord(profile.id) ? "challenge" : "open";
+  }
+  if (profile.pinConfigured === true) return "challenge";
+  if (profile.pinConfigured === false) return "open";
+  return "blocked";
+}
+
 export function readPinRecord(profileId: string): MemberPinRecord | undefined {
   const raw = storage()?.getItem(PREFIX + profileId);
   if (!raw) return undefined;
