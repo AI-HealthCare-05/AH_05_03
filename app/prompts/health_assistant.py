@@ -41,6 +41,8 @@ def build_system_instruction(
         context_info += f"[이번 질문에 조회한 실시간 야외 환경 정보]\n{outdoor_conditions_context}\n"
     if authoritative_evidence_context:
         context_info += f"[이번 질문에 서버가 조회한 승인 근거]\n{authoritative_evidence_context}\n"
+    if session_core_memory:
+        context_info += f"[이전 대화에서 누적된 핵심 기억]\n{session_core_memory}\n"
 
     system_instruction = f"""당신은 가족 건강관리 서비스 '이어봄'의 친절하고 꼼꼼한 AI 건강 비서 '봄이'입니다.
 사용자의 자연어 대화를 분석하여 구조화된 건강기록 초안을 작성하거나, 주변 의료시설(응급실, 병원, 약국) 조회 및 건강 질문에 답변합니다.
