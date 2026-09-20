@@ -1,3 +1,44 @@
+/* Violet Capsule — 봄이 대화/OCR은 홈과 같은 토큰을 쓴다.
+   전역 --blue-* 는 예전 홈 블루라 여기서만 덮어쓴다. */
+.health-assistant-backdrop,
+.health-assistant-drawer,
+.health-assistant-embedded-container,
+.health-assistant-popover-container,
+.ocr-split-modal-backdrop {
+  --blue-800: #2d2446;
+  --blue-700: #3c315b;
+  --blue-600: #4a87f2;
+  --blue-500: #ab9ff2;
+  --blue-100: #e2dffe;
+  --blue-50: #f4f2f4;
+  --bomi-aubergine: #3c315b;
+  --bomi-ghost: #e2dffe;
+  --bomi-periwinkle: #ab9ff2;
+  --bomi-cornflower: #4a87f2;
+  --bomi-paper: #fdfcfe;
+  --bomi-obsidian: #1c1c1c;
+  --bomi-fog: #86848d;
+  --bomi-ash: #e9e8ea;
+  --bomi-bone: #f4f2f4;
+}
+
+.health-assistant-drawer .primary-button,
+.ocr-split-modal .primary-button {
+  border: 1px solid var(--blue-700);
+  background: linear-gradient(145deg, var(--blue-600), var(--blue-700));
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--blue-700) 22%, transparent);
+}
+
+.health-assistant-drawer .primary-button:hover:not(:disabled),
+.ocr-split-modal .primary-button:hover:not(:disabled) {
+  box-shadow: 0 13px 28px color-mix(in srgb, var(--blue-700) 28%, transparent);
+}
+
+.health-assistant-drawer .secondary-button,
+.ocr-split-modal .secondary-button {
+  color: var(--blue-700);
+}
+
 /* 드로어 배경 및 모달 백드롭 */
 .health-assistant-backdrop {
   position: fixed;
@@ -29,7 +70,7 @@
   width: 100%;
   max-width: 460px;
   height: 100%;
-  background-color: #ffffff;
+  background-color: var(--bomi-paper, #fdfcfe);
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
@@ -76,7 +117,9 @@
   z-index: 2;
   inset: 71px 0 0;
   overflow-y: auto;
-  background: #ffffff;
+  background-color: #fdfcfe;
+  background: var(--bomi-paper, #fdfcfe);
+  isolation: isolate;
   padding: 12px 16px 64px;
 }
 
@@ -357,7 +400,7 @@
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid #f1f5f9;
-  background-color: #f8fafc;
+  background-color: #fdfcfe;
 }
 
 .health-assistant-drawer.is-embedded .assistant-header {
@@ -608,23 +651,23 @@
 .msg-bubble {
   padding: 12px 16px;
   border-radius: 14px;
-  font-size: 14px;
+  font-size: 1em;
   line-height: 1.5;
   word-break: break-word;
 }
 
 .user .msg-bubble {
-  background: var(--blue-700, #1d4fb8);
+  background: var(--blue-700, #3c315b);
   color: #ffffff;
   border-bottom-right-radius: 4px;
 }
 
 .assistant .msg-bubble {
-  background: #ffffff;
-  color: #1e293b;
-  border: 1px solid #e2e8f0;
+  background: var(--bomi-paper, #fdfcfe);
+  color: var(--bomi-obsidian, #1c1c1c);
+  border: 1px solid var(--bomi-ash, #e9e8ea);
   border-bottom-left-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--bomi-aubergine, #3c315b) 8%, transparent);
 }
 
 .msg-bubble p {
@@ -724,11 +767,11 @@
 
 /* 확인 카드 (Draft Confirmation Cards) */
 .draft-confirm-card {
-  background-color: #ffffff;
-  border: 1.5px solid var(--blue-600, #2463eb);
-  border-radius: 12px;
+  background-color: var(--bomi-paper, #fdfcfe);
+  border: 1px solid var(--bomi-ash, #e9e8ea);
+  border-radius: 14px;
   padding: 14px;
-  box-shadow: 0 4px 12px rgba(29, 79, 184, 0.08);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--bomi-aubergine, #3c315b) 8%, transparent);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -739,13 +782,13 @@
 }
 
 .draft-confirm-card.is-saved {
-  border-color: #94a3b8;
-  background-color: #f8fafc;
+  border-color: var(--bomi-ash, #e9e8ea);
+  background-color: var(--bomi-paper, #fdfcfe);
   box-shadow: none;
 }
 
 .saved-badge {
-  color: #059669;
+  color: var(--bomi-aubergine, #3c315b);
   font-weight: 700;
   font-size: 13px;
 }
@@ -791,14 +834,21 @@
 
 .card-inputs input,
 .card-inputs textarea {
-  padding: 7px 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--bomi-ash, #e9e8ea);
+  border-radius: 12px;
   font-size: 13px;
   outline: none;
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
+  background: var(--bomi-paper, #fdfcfe);
+  color: var(--bomi-obsidian, #1c1c1c);
+}
+
+.card-inputs textarea {
+  resize: none;
+  line-height: 1.55;
 }
 
 .card-inputs input:focus,
@@ -833,24 +883,90 @@
 .confirm-save-btn {
   width: 100%;
   box-sizing: border-box;
-  background-color: var(--blue-700, #1d4fb8);
-  color: #ffffff;
-  border: none;
-  padding: 10px;
-  border-radius: 8px;
+  background: var(--bomi-aubergine, #3c315b);
+  color: var(--bomi-paper, #fdfcfe);
+  border: 0;
+  padding: 11px 14px;
+  border-radius: 100px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.15s;
+  transition: background-color 0.15s, box-shadow 0.15s;
 }
 
 .confirm-save-btn:hover:not(:disabled) {
-  background-color: var(--blue-800, #173d8f);
+  background: #2a1f42;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--bomi-aubergine, #3c315b) 30%, transparent);
 }
 
 .confirm-save-btn:disabled {
-  background-color: #cbd5e1;
+  background: var(--bomi-ash, #e9e8ea);
+  color: var(--bomi-fog, #86848d);
+  box-shadow: none;
   cursor: not-allowed;
+}
+
+.health-assistant-drawer .pain-tool-card,
+.channel-talk-popover .pain-tool-card,
+.pain-tool-card {
+  border: 1px solid var(--bomi-ash, #e9e8ea) !important;
+  border-left: 1px solid var(--bomi-ash, #e9e8ea) !important;
+  background: var(--bomi-paper, #fdfcfe);
+  border-radius: 18px;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--bomi-ghost, #e2dffe) 50%, transparent);
+}
+
+.pain-tool-card .card-header {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.pain-tool-card .card-header strong {
+  color: var(--bomi-aubergine, #3c315b);
+  font-size: 15px;
+}
+
+.pain-tool-card .card-header small {
+  color: var(--bomi-fog, #86848d);
+}
+
+.formatted-diary-textarea {
+  background: var(--bomi-bone, #f4f2f4) !important;
+  border-color: var(--bomi-ash, #e9e8ea) !important;
+  color: var(--bomi-obsidian, #1c1c1c) !important;
+  line-height: 1.55;
+  font-weight: 400;
+  min-height: 92px;
+  resize: none !important;
+}
+
+.tool-saved-diary {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--bomi-bone, #f4f2f4);
+  border-radius: 12px;
+  color: var(--bomi-obsidian, #1c1c1c);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.view-diary-btn {
+  margin-top: 2px;
+  width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 14px;
+  border-radius: 100px;
+  color: var(--bomi-aubergine, #3c315b);
+  border: 1px solid var(--bomi-ash, #e9e8ea);
+  background: var(--bomi-paper, #fdfcfe);
+  cursor: pointer;
+}
+
+.view-diary-btn:hover {
+  background: var(--bomi-ghost, #e2dffe);
+  border-color: var(--bomi-periwinkle, #ab9ff2);
 }
 
 /* 퀵 리플라이 칩 */
@@ -862,19 +978,19 @@
 }
 
 .chip-btn {
-  background-color: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  color: #334155;
+  background-color: var(--bomi-paper, #fdfcfe);
+  border: 1px solid var(--bomi-ash, #e9e8ea);
+  color: var(--bomi-aubergine, #3c315b);
   padding: 5px 10px;
-  border-radius: 16px;
+  border-radius: 999px;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .chip-btn:hover {
-  background-color: #e2e8f0;
-  border-color: #94a3b8;
+  background-color: var(--bomi-ghost, #e2dffe);
+  border-color: var(--bomi-periwinkle, #ab9ff2);
 }
 
 /* 로컬 조회 뷰 */
@@ -900,7 +1016,7 @@
 .view-all-link {
   background: none;
   border: none;
-  color: #2563eb;
+  color: var(--blue-600);
   font-size: 12px;
   cursor: pointer;
   padding: 0;
@@ -1098,7 +1214,7 @@
   padding: 10px 14px;
   border: 1px solid #cbd5e1;
   border-radius: 24px;
-  font-size: 14px;
+  font-size: 1em;
   outline: none;
   transition: border-color 0.15s;
 }
@@ -1114,7 +1230,7 @@
   padding: 0 18px;
   height: 38px;
   border-radius: 24px;
-  font-size: 14px;
+  font-size: 1em;
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.15s;
@@ -1159,7 +1275,7 @@
   align-self: flex-start;
   background-color: #eff6ff;
   border: 1px solid #bfdbfe;
-  color: #1d4ed8;
+  color: var(--blue-700);
   padding: 3px 8px;
   border-radius: 4px;
   font-size: 11px;
@@ -1248,7 +1364,7 @@
 }
 
 .inline-doc-card:hover {
-  border-color: #3b82f6;
+  border-color: var(--blue-600);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
   transform: translateY(-1px);
 }
@@ -1270,7 +1386,7 @@
 }
 
 .inline-doc-header .doc-badge {
-  background-color: #3b82f6;
+  background-color: var(--blue-600);
   color: #ffffff;
   font-size: 11px;
   font-weight: 600;
@@ -1316,41 +1432,47 @@
   width: 100%;
 }
 
-/* 서류 OCR 2분할 검토 모달 스타일 */
-.ocr-split-modal-backdrop {
-  z-index: 1200;
+/* 서류 OCR 2분할 검토 모달 스타일
+   `.modal-panel` 기본 너비가 520px 이라 클래스 두 개를 같이 써서 덮는다. */
+.modal-backdrop.ocr-split-modal-backdrop {
+  z-index: 2400;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background-color: rgba(15, 23, 42, 0.65);
+  background-color: color-mix(in srgb, var(--bomi-obsidian, #1c1c1c) 55%, transparent);
   backdrop-filter: blur(4px);
 }
 
-.ocr-split-modal {
-  max-width: 960px;
-  width: 100%;
-  max-height: 90vh;
+.modal-panel.ocr-split-modal {
+  width: min(1240px, calc(100vw - 32px));
+  max-width: none;
+  height: min(860px, calc(100dvh - 32px));
+  max-height: none;
   display: flex;
   flex-direction: column;
-  background-color: #ffffff;
-  border-radius: 14px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  background-color: var(--bomi-paper, #fdfcfe);
+  border-radius: 16px;
+  box-shadow: 0 20px 40px color-mix(in srgb, var(--bomi-obsidian, #1c1c1c) 18%, transparent);
   overflow: hidden;
-  padding: 18px 20px;
-  gap: 12px;
+  padding: 16px 18px;
+  gap: 10px;
 }
 
 .ocr-split-modal .modal-heading h2 {
   font-size: 17px;
   margin: 0;
-  color: #0f172a;
+  color: var(--bomi-obsidian, #1c1c1c);
+}
+
+.ocr-split-modal .form-actions {
+  flex-shrink: 0;
 }
 
 .ocr-split-body {
   display: grid;
-  grid-template-columns: 1fr 1.2fr;
-  gap: 16px;
+  grid-template-columns: minmax(280px, 1.15fr) minmax(300px, 1fr);
+  gap: 14px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -1366,35 +1488,86 @@
 .ocr-split-left {
   display: flex;
   flex-direction: column;
-  background-color: #0f172a;
+  background-color: var(--bomi-obsidian, #1c1c1c);
   border-radius: 10px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--bomi-ash, #e9e8ea);
   overflow: hidden;
   min-height: 0;
 }
 
 .ocr-preview-header {
   padding: 8px 12px;
-  background-color: #1e293b;
+  background-color: var(--bomi-aubergine, #3c315b);
   color: #f8fafc;
   font-size: 12px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ocr-preview-page-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #cbd5e1;
+  flex-shrink: 0;
+}
+
+.ocr-preview-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.ocr-preview-nav {
+  flex-shrink: 0;
+  width: 44px;
+  border: 0;
+  background: transparent;
+  color: #f8fafc;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ocr-preview-nav:hover:not(:disabled) {
+  background: rgba(248, 250, 252, 0.08);
+}
+
+.ocr-preview-nav:disabled {
+  color: #64748b;
+  cursor: default;
 }
 
 .ocr-preview-image-scroll {
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
   padding: 10px;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
 }
 
-.ocr-preview-image-scroll img {
+.ocr-preview-image-scroll img,
+.ocr-preview-image-scroll iframe {
   max-width: 100%;
+  max-height: 100%;
+  width: auto;
   height: auto;
+  object-fit: contain;
+  border: 0;
   border-radius: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.ocr-preview-image-scroll iframe {
+  width: 100%;
+  min-height: 360px;
+  background: #fff;
 }
 
 .ocr-split-right {
@@ -1462,10 +1635,10 @@
 .ocr-structured-items {
   display: grid;
   gap: 8px;
-  border: 1px solid #dbe5f6;
+  border: 1px solid var(--bomi-ash, #e9e8ea);
   border-radius: 14px;
   padding: 12px;
-  background: #f8faff;
+  background: var(--bomi-bone, #f4f2f4);
 }
 
 .ocr-structured-items > div:first-child strong,
@@ -1476,23 +1649,71 @@
 .ocr-structured-items > div:first-child small {
   margin-top: 3px;
   color: #718099;
-  font-size: 0.7rem;
+  font-size: max(11px, 0.7rem);
 }
 
 .ocr-structured-item {
   display: grid;
-  grid-template-columns: 1.3fr 0.8fr 0.7fr 1fr;
-  gap: 6px;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+  padding: 8px;
+  background: var(--bomi-paper, #fdfcfe);
+  border: 1px solid var(--bomi-ash, #e9e8ea);
+  border-radius: 10px;
+}
+
+.ocr-item-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ocr-item-field span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--bomi-fog, #86848d);
+}
+
+.ocr-item-field:first-child {
+  grid-column: 1 / -1;
 }
 
 .ocr-structured-item input {
   min-width: 0;
+  width: 100%;
 }
 
-@media (max-width: 760px) {
-  .ocr-structured-item {
-    grid-template-columns: 1fr 1fr;
-  }
+.ocr-raw-details {
+  border: 1px solid var(--bomi-ash, #e9e8ea);
+  border-radius: 10px;
+  padding: 2px 10px 8px;
+  background: var(--bomi-paper, #fdfcfe);
+}
+
+.ocr-raw-details summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bomi-aubergine, #3c315b);
+  padding: 8px 2px;
+}
+
+.ocr-raw-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.ocr-raw-details[open] summary {
+  border-bottom: 1px solid var(--bomi-ash, #e9e8ea);
+  margin-bottom: 8px;
+}
+
+.ocr-raw-details .ocr-raw-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .ocr-edit-fields input:focus,
@@ -1601,7 +1822,7 @@
 
 .trend-diff-badge.is-down {
   background-color: #dbeafe;
-  color: #1d4ed8;
+  color: var(--blue-700);
 }
 
 .trend-diff-badge.is-same {
@@ -1695,7 +1916,7 @@
 }
 
 .trend-normal-hint {
-  font-size: 10.5px;
+  font-size: 11px;
   color: #059669;
   font-weight: 600;
 }
@@ -1756,32 +1977,127 @@
   background-color: #d1fae5;
 }
 
-/* 통증 강도 슬라이더 */
-.pain-intensity-slider-wrap {
+/* 통증 강도: 숫자는 라벨 옆 필, 슬라이더는 한 줄 전체 */
+.pain-intensity-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.pain-intensity-label-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  margin-top: 4px;
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bomi-fog, #86848d);
 }
 
-.pain-intensity-slider-wrap input[type="range"] {
-  flex: 1;
-  min-width: 0;
-  width: 100%;
-  accent-color: #ef4444;
-  cursor: pointer;
-}
-
-.pain-intensity-val {
-  font-size: 13px;
+.pain-intensity-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.25rem;
+  padding: 2px 8px;
+  border-radius: 100px;
+  background: var(--bomi-ghost, #e2dffe);
+  color: var(--bomi-aubergine, #3c315b);
+  font-size: 12px;
   font-weight: 700;
-  color: #ef4444;
-  min-width: 20px;
-  text-align: right;
-  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pain-intensity-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.pain-intensity-hint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bomi-aubergine, #3c315b);
+}
+
+.pain-intensity-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  border-radius: 100px;
+  background: transparent;
+  outline: none;
+  cursor: grab;
+  accent-color: var(--bomi-aubergine, #3c315b);
+}
+
+.pain-intensity-slider:active {
+  cursor: grabbing;
+}
+
+.pain-intensity-slider::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 100px;
+  background: linear-gradient(
+    to right,
+    var(--bomi-aubergine, #3c315b) 0,
+    var(--bomi-aubergine, #3c315b) var(--pain-pct, 50%),
+    var(--bomi-ash, #e9e8ea) var(--pain-pct, 50%),
+    var(--bomi-ash, #e9e8ea) 100%
+  );
+}
+
+.pain-intensity-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: var(--bomi-aubergine, #3c315b);
+  border: 3px solid var(--bomi-paper, #fdfcfe);
+  box-shadow: 0 0 0 1px var(--bomi-periwinkle, #ab9ff2), 0 2px 8px color-mix(in srgb, var(--bomi-aubergine, #3c315b) 28%, transparent);
+  cursor: grab;
+}
+
+.pain-intensity-slider:active::-webkit-slider-thumb {
+  cursor: grabbing;
+}
+
+.pain-intensity-slider::-moz-range-track {
+  height: 10px;
+  border-radius: 100px;
+  background: var(--bomi-ash, #e9e8ea);
+}
+
+.pain-intensity-slider::-moz-range-progress {
+  height: 10px;
+  border-radius: 100px;
+  background: var(--bomi-aubergine, #3c315b);
+}
+
+.pain-intensity-slider::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--bomi-aubergine, #3c315b);
+  border: 3px solid var(--bomi-paper, #fdfcfe);
+  box-shadow: 0 0 0 1px var(--bomi-periwinkle, #ab9ff2);
+  cursor: grab;
+}
+
+.pain-intensity-ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bomi-fog, #86848d);
 }
 
 /* 조회된 건강 기록 깔끔한 표(Table) 스타일 */
@@ -1849,7 +2165,7 @@
 
 .type-tag.tag-blood_pressure {
   background-color: #eff6ff;
-  color: #1e40af;
+  color: var(--blue-800);
   border: 1px solid #bfdbfe;
 }
 
@@ -1935,7 +2251,7 @@
 
 /* 챌린지 제안 카드 스타일 */
 .challenge-draft-card {
-  border-left: 4px solid #3b82f6;
+  border-left: 4px solid var(--blue-600);
   background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
   border-radius: 12px;
   padding: 16px;
@@ -1945,7 +2261,7 @@
 
 .challenge-badge {
   background: #dbeafe;
-  color: #1e40af;
+  color: var(--blue-800);
   font-weight: 700;
   padding: 3px 8px;
   border-radius: 6px;
@@ -1987,7 +2303,7 @@
 
 .draft-day-tag {
   font-weight: 700;
-  color: #2563eb;
+  color: var(--blue-600);
   background: #eff6ff;
   padding: 2px 6px;
   border-radius: 4px;
@@ -2008,7 +2324,7 @@
 }
 
 .save-draft-btn.primary-action-btn {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, var(--blue-600) 0%, var(--blue-700) 100%);
   color: #ffffff;
   font-weight: 700;
   padding: 10px 16px;
@@ -2021,7 +2337,7 @@
 }
 
 .save-draft-btn.primary-action-btn:hover {
-  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  background: linear-gradient(135deg, var(--blue-700) 0%, var(--blue-800) 100%);
   transform: translateY(-1px);
 }
 
@@ -2166,7 +2482,7 @@
 .facility-distance {
   font-size: 12px;
   font-weight: 700;
-  color: #2563eb;
+  color: var(--blue-600);
   white-space: nowrap;
 }
 
@@ -2283,7 +2599,7 @@
 
 .facility-action-btn.map-btn {
   background: #eff6ff;
-  color: #1d4ed8;
+  color: var(--blue-700);
   border-color: #bfdbfe;
 }
 
@@ -2440,7 +2756,7 @@
 }
 
 .stat-pill-warn {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   background: #fef2f2;
   color: #dc2626;
@@ -2691,8 +3007,8 @@
 }
 
 .medication-tab-btn.active {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: var(--blue-600);
+  border-color: var(--blue-600);
   color: #ffffff;
 }
 

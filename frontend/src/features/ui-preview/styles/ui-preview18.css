@@ -1276,11 +1276,13 @@ a.up15-user-pill:hover {
    ========================================================================== */
 .channel-talk-popover.up15-assistant-scope {
   position: fixed;
-  bottom: 104px;
+  bottom: 120px;
   right: 28px;
-  width: min(440px, calc(100vw - 36px));
-  height: 680px;
-  max-height: calc(100vh - 120px);
+  width: var(--bomi-chat-width, min(440px, calc(100vw - 36px)));
+  height: var(--bomi-chat-height, min(680px, calc(100dvh - 64px - 120px)));
+  max-height: calc((100dvh - 64px - 120px) / var(--bomi-chat-scale, 1));
+  font-size: 14px;
+  zoom: var(--bomi-chat-scale, 1);
   background: var(--up15-paper-white);
   border: 1px solid var(--up15-ash);
   border-radius: 28px;
@@ -1299,9 +1301,10 @@ a.up15-user-pill:hover {
 
 /* 상단 맥락 바: Ghost Lavender 배경 + Aubergine 텍스트 */
 .channel-talk-popover.up15-assistant-scope .channel-talk-context-bar {
-  background: var(--up15-bone);
-  border-bottom: 1px solid var(--up15-ash);
-  color: var(--up15-fog);
+  background-color: #f4f2f4;
+  background: var(--up15-bone, var(--bomi-bone, #f4f2f4));
+  border-bottom: 1px solid var(--up15-ash, #e9e8ea);
+  color: var(--up15-fog, #86848d);
   font-size: 13px;
 }
 
@@ -1310,8 +1313,8 @@ a.up15-user-pill:hover {
 }
 
 .channel-talk-popover.up15-assistant-scope .channel-talk-context-tag {
-  background: var(--up15-ghost-lavender);
-  color: var(--up15-aubergine);
+  background: var(--up15-ghost-lavender, #e2dffe);
+  color: var(--up15-aubergine, #3c315b);
   font-weight: 500;
   border-radius: 100px;
   padding: 3px 10px;
@@ -1322,8 +1325,9 @@ a.up15-user-pill:hover {
 
 /* 챗봇 헤더 */
 .channel-talk-popover.up15-assistant-scope .assistant-header {
-  background: var(--up15-paper-white);
-  border-bottom: 1px solid var(--up15-ash);
+  background-color: #fdfcfe;
+  background: var(--up15-paper-white, #fdfcfe);
+  border-bottom: 1px solid var(--up15-ash, #e9e8ea);
   padding: 14px 18px;
 }
 
@@ -1377,7 +1381,8 @@ a.up15-user-pill:hover {
 
 /* 대화 세션 목록 패널 */
 .channel-talk-popover.up15-assistant-scope .chat-session-list {
-  background: var(--up15-paper-white);
+  background-color: #fdfcfe;
+  background: var(--up15-paper-white, #fdfcfe);
 }
 
 .channel-talk-popover.up15-assistant-scope .chat-session-select-btn:hover,
@@ -1405,8 +1410,8 @@ a.up15-user-pill:hover {
 }
 
 .channel-talk-popover.up15-assistant-scope .msg-avatar {
-  background: var(--up15-ghost-lavender);
-  border-color: var(--up15-ash);
+  background: transparent;
+  border: none;
 }
 
 /* 액션 초안 카드 및 통증/기록 저장 버튼 */

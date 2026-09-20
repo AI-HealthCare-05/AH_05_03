@@ -723,7 +723,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     fireEvent.click(screen.getByRole("button", { name: "전송" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/\[Tool Calling\] format_pain_diary/)).toBeInTheDocument();
+      expect(screen.getByText("통증 일기 정리")).toBeInTheDocument();
       expect(screen.getByDisplayValue(/웨이트 트레이닝을 마친 후 팔꿈치에 통증이 발생함/)).toBeInTheDocument();
       expect(screen.getByDisplayValue("팔꿈치, 왼쪽 고관절")).toBeInTheDocument();
     });
@@ -1285,7 +1285,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
           name: "혈압 (수축기/이완기)",
           unit: "mmHg",
           color: "#10b981",
-          secondaryColor: "#3b82f6",
+          secondaryColor: "#4a87f2",
           secondaryName: "이완기",
           normalRange: { max: 120, label: "정상 수축기: 120 이하" },
           points: [

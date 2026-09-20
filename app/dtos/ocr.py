@@ -11,7 +11,9 @@ class OcrMeasurementRow(BaseSerializerModel):
 
     field: str
     label: str
-    value: float
+    # 숫자를 못 읽은 검토 행은 값이 없다. 여기를 필수로 두면 인식은 끝났는데
+    # 결과 조회가 500 이 되어 화면이 분석 중에 멈춘다.
+    value: float | None = None
     unit: str
     source: list[str]
     reason: str | None = None

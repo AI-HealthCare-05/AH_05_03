@@ -1,4 +1,4 @@
-import { Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useContext, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { LocalDomainContext } from "../../app/localDomainContext";
@@ -6,6 +6,16 @@ import type { FamilyProfile } from "../../shared/local/domainContracts";
 import { ChatLoadingSkeleton } from "../../shared/ui/Skeleton";
 import { BomiAvatar } from "./BomiAvatar";
 import { HealthAssistantDrawer } from "./HealthAssistantDrawer";
+import {
+  CHAT_SIZE_STEPS,
+  CHAT_TYPE_SCALE,
+  CHAT_TYPE_STEPS,
+  measureChatFrame,
+  readBomiChatDisplay,
+  stepChatValue,
+  writeBomiChatDisplay,
+  type BomiChatDisplay,
+} from "./bomiChatDisplay";
 import { pickLauncherMood } from "./bomiMood";
 import "./globalHealthAssistant.css";
 
@@ -90,6 +100,12 @@ export function GlobalHealthAssistant() {
   const [tooltipMessage, setTooltipMessage] = useState(TOOLTIP_MESSAGES[0]);
   const [hoverHint, setHoverHint] = useState<string | null>(null);
   const [hoveringLauncher, setHoveringLauncher] = useState(false);
+  const [display, setDisplay] = useState<BomiChatDisplay>(() => readBomiChatDisplay());
+  const [viewport, setViewport] = useState(() => ({
+    width: typeof window === "undefined" ? 1280 : window.innerWidth,
+    height: typeof window === "undefined" ? 800 : window.innerHeight,
+  }));
+  const resizeDrag = useRef<{ startX: number; startWidth: number } | null>(null);
 
   // 현재 선택된 프로필 (가족 홈이나 다른 화면과 동기화)
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(() => {
@@ -174,6 +190,33 @@ export function GlobalHealthAssistant() {
   }, [isOpen, showTooltip]);
 
   // 현재 페이지 맥락 태그
+  useEffect(() => {
+    if (!isOpen) return;
+    function onResize() {
+      setViewport((prev) => {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        if (prev.width === width && prev.height === height) return prev;
+        return { width, height };
+      });
+    }
+    window.addEventListener("resize", onResize);
+    onResize();
+    return () => window.removeEventListener("resize", onResize);
+  }, [isOpen]);
+
+  const persistDisplay = (next: BomiChatDisplay) => {
+    setDisplay(next);
+    writeBomiChatDisplay(next);
+  };
+
+  const chatFrame = useMemo(
+    () => measureChatFrame(display.size, viewport.width, viewport.height, display.widthPx),
+    [display.size, display.widthPx, viewport.height, viewport.width],
+  );
+  const compactViewport = viewport.width <= 768;
+  const typeScale = CHAT_TYPE_SCALE[display.type];
+
   const contextLabel = useMemo(() => {
     const p = location.pathname;
     if (p === "/") return "가족 홈";
@@ -271,19 +314,119 @@ export function GlobalHealthAssistant() {
       {/* 2. 채널톡 스타일 플로팅 메신저 팝오버 창 */}
       {isOpen && (
         <aside
-          className="channel-talk-popover"
+          className="channel-talk-popover up15-assistant-scope"
           role="dialog"
           aria-label="봄이 건강 비서"
           aria-modal="false"
+          data-chat-size={display.size}
+          data-chat-type={display.type}
+          style={
+            compactViewport
+              ? { ["--bomi-chat-scale" as string]: String(typeScale) }
+              : {
+                  width: chatFrame.width / typeScale,
+                  height: chatFrame.height / typeScale,
+                  ["--bomi-chat-width" as string]: `${chatFrame.width / typeScale}px`,
+                  ["--bomi-chat-height" as string]: `${chatFrame.height / typeScale}px`,
+                  ["--bomi-chat-scale" as string]: String(typeScale),
+                }
+          }
         >
-          {/* 컨텍스트 바 — 현재 화면과 연동된 경우에만 표시 */}
-          {contextLabel && (
-            <div className="channel-talk-context-bar">
+          {!compactViewport ? (
+            <button
+              type="button"
+              className="channel-talk-resize"
+              aria-label="대화창 너비 조절. 세로는 비율에 맞춰 따라갑니다."
+              onPointerDown={(event: ReactPointerEvent<HTMLButtonElement>) => {
+                event.preventDefault();
+                event.currentTarget.setPointerCapture(event.pointerId);
+                resizeDrag.current = { startX: event.clientX, startWidth: chatFrame.width };
+              }}
+              onPointerMove={(event: ReactPointerEvent<HTMLButtonElement>) => {
+                if (!resizeDrag.current) return;
+                const widthPx = Math.min(
+                  chatFrame.maxWidth,
+                  Math.max(
+                    chatFrame.minWidth,
+                    resizeDrag.current.startWidth + (resizeDrag.current.startX - event.clientX),
+                  ),
+                );
+                setDisplay((prev) => ({ ...prev, widthPx }));
+              }}
+              onPointerUp={() => {
+                resizeDrag.current = null;
+                setDisplay((prev) => {
+                  writeBomiChatDisplay(prev);
+                  return prev;
+                });
+              }}
+            />
+          ) : null}
+          <div className="channel-talk-context-bar">
+            {contextLabel ? (
               <span className="channel-talk-context-tag">
-                <span style={{ fontSize: "0.7rem" }}>●</span> {contextLabel} 연동
+                <span aria-hidden="true">●</span> {contextLabel} 연동
               </span>
+            ) : (
+              <span className="channel-talk-context-tag is-quiet">봄이</span>
+            )}
+            <div className="channel-talk-display" role="group" aria-label="대화창 표시 설정">
+              <div className="channel-talk-display-cluster">
+                <button
+                  type="button"
+                  aria-label="글자 작게"
+                  disabled={display.type === "md"}
+                  onClick={() => persistDisplay({
+                    ...display,
+                    type: stepChatValue(CHAT_TYPE_STEPS, display.type, -1),
+                  })}
+                >
+                  가-
+                </button>
+                <span>글자</span>
+                <button
+                  type="button"
+                  aria-label="글자 크게"
+                  disabled={display.type === "xl"}
+                  onClick={() => persistDisplay({
+                    ...display,
+                    type: stepChatValue(CHAT_TYPE_STEPS, display.type, 1),
+                  })}
+                >
+                  가+
+                </button>
+              </div>
+              <div className="channel-talk-display-cluster">
+                <button
+                  type="button"
+                  aria-label="창 작게"
+                  disabled={chatFrame.width <= chatFrame.minWidth + 4 && display.size === "md"}
+                  onClick={() => persistDisplay({
+                    size: stepChatValue(CHAT_SIZE_STEPS, display.size, -1),
+                    type: display.type,
+                  })}
+                >
+                  □
+                </button>
+                <span>창</span>
+                <button
+                  type="button"
+                  aria-label="창 크게"
+                  disabled={chatFrame.width >= chatFrame.maxWidth - 4}
+                  onClick={() => {
+                    const nextSize = stepChatValue(CHAT_SIZE_STEPS, display.size, 1);
+                    persistDisplay({
+                      size: nextSize,
+                      type: display.type,
+                      widthPx: nextSize === display.size ? chatFrame.maxWidth : undefined,
+                    });
+                  }}
+                >
+                  ▣
+                </button>
+              </div>
             </div>
-          )}
+          </div>
 
           {/* 챗봇 메신저 본체 */}
           <Suspense fallback={<ChatLoadingSkeleton />}>
