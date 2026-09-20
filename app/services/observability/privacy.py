@@ -18,6 +18,7 @@ _RESIDENT_ID = re.compile(r"\d{6}[-\s]?\d{7}")
 _PHONE = re.compile(r"01[016789]-?\d{3,4}-?\d{4}")
 
 ChatOutcome = Literal["non_streaming_success", "streaming_success"]
+VisionOutcome = Literal["vision_success", "vision_error"]
 
 CHATBOT_ALLOWED_KEYS = frozenset(
     {
@@ -36,6 +37,35 @@ CHATBOT_ALLOWED_KEYS = frozenset(
     }
 )
 CHATBOT_OUTCOMES = frozenset({"non_streaming_success", "streaming_success"})
+
+VISION_ALLOWED_KEYS = frozenset(
+    {
+        "kind",
+        "account",
+        "job",
+        "model",
+        "page_count",
+        "outcome",
+        "exact_values_logged",
+        "langfuse_export",
+    }
+)
+VISION_OUTCOMES = frozenset({"vision_success", "vision_error"})
+LANGFUSE_IO_KEYS = frozenset(
+    {
+        "input",
+        "output",
+        "prompt",
+        "messages",
+        "completion",
+        "exception",
+        "error",
+        "text",
+        "tables",
+        "bytes",
+        "files",
+    }
+)
 
 MEASUREMENT_ALLOWED_KEYS = frozenset(
     {
@@ -73,6 +103,17 @@ def _walk_strings(value: Any) -> list[str]:
     else:
         found.append(str(value))
     return found
+
+
+def mask_for_provider(text: str) -> str:
+    """모델 공급자 경로·예외 문자열용 마스킹. 관찰 allowlist와 별개다."""
+    redacted = _RESIDENT_ID.sub("[redacted_rid]", text)
+    redacted = _PHONE.sub("[redacted_phone]", redacted)
+    redacted = redacted.replace(CANARY_RESIDENT_ID, "[redacted_rid]")
+    redacted = redacted.replace(CANARY_PATIENT_NAME, "[redacted_name]")
+    if CANARY_GLUCOSE_VALUE in redacted and ("mg/dL" in redacted or "glucose" in redacted.lower()):
+        redacted = redacted.replace(CANARY_GLUCOSE_VALUE, "[redacted_value]")
+    return redacted
 
 
 def contains_sensitive_canary(payload: Any) -> bool:
@@ -119,7 +160,7 @@ def assert_allowlisted_chatbot_metadata(payload: dict[str, Any]) -> None:
     if payload["kind"] != "chatbot" or payload["outcome"] not in CHATBOT_OUTCOMES:
         raise ValueError("kind/outcome not allowed")
     if payload["exact_values_logged"] is not False or payload["langfuse_export"] is not False:
-        raise ValueError("chatbot metadata cannot log exact values or export to Langfuse")
+        raise ValueError("chatbot metadata cannot log exact values or include transcript export")
     _require_alias(payload["account"])
     _require_alias(payload["session"])
     model = payload["model"]
@@ -148,6 +189,49 @@ def assert_allowlisted_measurement_observation(payload: dict[str, Any]) -> None:
         raise ValueError("source must be a snake_case code")
     if contains_sensitive_canary(payload):
         raise ValueError("observability payload failed canary")
+
+
+def assert_allowlisted_vision_metadata(payload: dict[str, Any]) -> None:
+    extra = set(payload) - VISION_ALLOWED_KEYS
+    missing = VISION_ALLOWED_KEYS - set(payload)
+    if extra or missing:
+        raise ValueError(f"vision metadata keys must match allowlist extra={extra} missing={missing}")
+    if payload["kind"] != "document_vision" or payload["outcome"] not in VISION_OUTCOMES:
+        raise ValueError("kind/outcome not allowed")
+    if payload["exact_values_logged"] is not False or payload["langfuse_export"] is not False:
+        raise ValueError("vision metadata cannot log exact values or include transcript export")
+    _require_alias(payload["account"])
+    _require_alias(payload["job"])
+    model = payload["model"]
+    if model is not None and (not isinstance(model, str) or not _MODEL_RE.fullmatch(model)):
+        raise ValueError("model must be a short provider identifier")
+    page_count = payload["page_count"]
+    if not isinstance(page_count, int) or page_count < 0:
+        raise ValueError("page_count must be a non-negative int")
+    if contains_sensitive_canary(payload):
+        raise ValueError("observability payload failed canary")
+
+
+def _dict_nodes(value: Any) -> list[dict[str, Any]]:
+    found: list[dict[str, Any]] = []
+    if isinstance(value, dict):
+        found.append(value)
+        for item in value.values():
+            found.extend(_dict_nodes(item))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            found.extend(_dict_nodes(item))
+    return found
+
+
+def assert_metadata_only_envelope(envelope: dict[str, Any]) -> None:
+    """Langfuse ingest JSON에 입력·출력·프롬프트 키가 없어야 한다."""
+    for node in _dict_nodes(envelope):
+        leaked = LANGFUSE_IO_KEYS & set(node)
+        if leaked:
+            raise ValueError(f"langfuse envelope cannot include {sorted(leaked)}")
+    if contains_sensitive_canary(envelope):
+        raise ValueError("langfuse envelope failed canary")
 
 
 def dump_for_canary(payload: Any) -> str:

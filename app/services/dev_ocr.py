@@ -24,6 +24,22 @@ from app.services.ocr_partial import PartialJsonTextReader
 # WARNING 만 파이썬 기본 lastResort 로 새어 나오고 있었다.
 logger = setup_logger("app.dev_ocr")
 
+
+def _observe_vision(*, model: str | None, page_count: int, success: bool, job_id: str | None = None) -> None:
+    """문서 원문·프롬프트는 넘기지 않는다. 관찰 실패는 인식을 깨지 않는다."""
+    try:
+        from app.services.observability.vision_trace import record_document_vision
+
+        record_document_vision(
+            job_id=job_id,
+            model=model,
+            page_count=page_count,
+            outcome="vision_success" if success else "vision_error",
+        )
+    except Exception:
+        logger.debug("document vision observability skipped", exc_info=True)
+
+
 _ALLOWED_CONTENT_TYPES = {
     "image/jpeg": "image/jpeg",
     "image/png": "image/png",
@@ -181,7 +197,11 @@ async def _try_model(
     yield _StreamEvent(kind="result", data=_finalize(result))
 
 
-async def stream_parts(files: list[tuple[bytes, str]]) -> AsyncIterator[_StreamEvent]:
+async def stream_parts(
+    files: list[tuple[bytes, str]],
+    *,
+    job_id: str | None = None,
+) -> AsyncIterator[_StreamEvent]:
     """인식을 스트리밍으로 수행한다. **동기 경로도 이 함수를 쓴다.**
 
     `recognize_parts` 는 이 생성기를 끝까지 돌려 마지막 `result` 만 돌려주는 얇은
@@ -200,6 +220,12 @@ async def stream_parts(files: list[tuple[bytes, str]]) -> AsyncIterator[_StreamE
                     emitted = emitted or event.get("kind") == "delta"
                     yield event
                     if event.get("kind") == "result":
+                        _observe_vision(
+                            model=model_name,
+                            page_count=len(files),
+                            success=True,
+                            job_id=job_id,
+                        )
                         return
             except Exception as error:  # noqa: BLE001 - 어떤 실패든 다음 모델로 넘긴다
                 last_err = error
@@ -227,6 +253,7 @@ async def stream_parts(files: list[tuple[bytes, str]]) -> AsyncIterator[_StreamE
                     yield _StreamEvent(kind="reset")
             break
 
+    _observe_vision(model=None, page_count=len(files), success=False, job_id=job_id)
     if isinstance(last_err, AppError):
         raise last_err
     if last_err:
@@ -295,6 +322,8 @@ def _finalize(result: dict) -> dict:
 async def recognize_parts(
     files: list[tuple[bytes, str]],
     on_event: Callable[[_StreamEvent], Awaitable[None]] | None = None,
+    *,
+    job_id: str | None = None,
 ) -> dict:
     """이미 읽어 둔 (본문, MIME) 목록을 인식한다. **워커가 부르는 진입점이다.**
 
@@ -307,7 +336,7 @@ async def recognize_parts(
     같다** — 동기 경로는 이 인자를 쓰지 않는다.
     """
     result: dict | None = None
-    async for event in stream_parts(files):
+    async for event in stream_parts(files, job_id=job_id):
         if on_event is not None:
             await on_event(event)
         if event.get("kind") == "result":

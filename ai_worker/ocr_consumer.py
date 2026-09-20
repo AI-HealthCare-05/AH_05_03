@@ -149,7 +149,7 @@ class OcrConsumer:
             #
             # **조각 쓰기가 실패해도 인식은 계속한다.** 스트리밍은 UX 이고 결과는
             # 기능이다. Redis 가 잠깐 흔들렸다고 다 끝난 인식을 버리면 그건 손해다.
-            result = await recognize_parts(files, on_event=self._forward(job_id))
+            result = await recognize_parts(files, on_event=self._forward(job_id), job_id=job_id)
         except OcrUnavailableError as error:
             # 브리지 꺼짐·키 없음·형식 미지원은 다시 시도해도 같은 답이다.
             await self.store.fail(job_id, "OCR_UNAVAILABLE")

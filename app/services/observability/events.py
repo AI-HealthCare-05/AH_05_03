@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.observability.privacy import ChatOutcome, assert_allowlisted_chatbot_metadata
+from app.services.observability.privacy import (
+    ChatOutcome,
+    VisionOutcome,
+    assert_allowlisted_chatbot_metadata,
+    assert_allowlisted_vision_metadata,
+)
 
 
 def chatbot_metadata(
@@ -29,9 +34,32 @@ def chatbot_metadata(
         "measurement_count": len(codes),
         "outcome": outcome,
         "exact_values_logged": False,
+        # False = 이 JSON에 프롬프트·응답 원문이 없다. HTTP ingest는 metadata만 싣는다.
         "langfuse_export": False,
     }
     assert_allowlisted_chatbot_metadata(payload)
+    return payload
+
+
+def document_vision_metadata(
+    *,
+    account_alias: str | None,
+    job_alias: str | None,
+    model: str | None,
+    page_count: int,
+    outcome: VisionOutcome,
+) -> dict[str, Any]:
+    payload = {
+        "kind": "document_vision",
+        "account": account_alias,
+        "job": job_alias,
+        "model": model,
+        "page_count": page_count,
+        "outcome": outcome,
+        "exact_values_logged": False,
+        "langfuse_export": False,
+    }
+    assert_allowlisted_vision_metadata(payload)
     return payload
 
 

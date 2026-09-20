@@ -426,3 +426,27 @@ async def test_both_ocr_providers_fail_clearly(gemini_then_gpt, monkeypatch) -> 
     with pytest.raises(OcrProviderFailedError, match="문서 구조화에 실패"):
         await recognize_parts([(b"image", "image/png")])
     assert calls == list(gemini_then_gpt)
+
+
+@pytest.mark.asyncio
+async def test_vision_observation_on_success_has_no_document_text(gemini_models, monkeypatch) -> None:
+    captured: list[dict] = []
+    monkeypatch.setattr(dev_ocr, "_observe_vision", lambda **kwargs: captured.append(kwargs))
+    monkeypatch.setattr(genai, "Client", _fake_client_streaming(_PAYLOAD))
+    await recognize_parts([(b"image", "image/png")])
+    assert captured == [{"model": _GEMINI_MODELS[0], "page_count": 1, "success": True, "job_id": None}]
+
+
+@pytest.mark.asyncio
+async def test_vision_observation_on_failure_omits_error_body(gemini_then_gpt, monkeypatch) -> None:
+    captured: list[dict] = []
+    monkeypatch.setattr(dev_ocr, "_observe_vision", lambda **kwargs: captured.append(kwargs))
+
+    async def fake_stream_once(entry, files):
+        raise TimeoutError("환자 홍길동환자 950101-1234567")
+        yield "", ""  # pragma: no cover
+
+    monkeypatch.setattr(dev_ocr, "_stream_once", fake_stream_once)
+    with pytest.raises(OcrProviderFailedError):
+        await recognize_parts([(b"image", "image/png")], job_id="job-9")
+    assert captured == [{"model": None, "page_count": 1, "success": False, "job_id": "job-9"}]
