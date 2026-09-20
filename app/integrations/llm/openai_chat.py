@@ -30,6 +30,7 @@ from app.core import config
 from app.dtos.health_assistant import ChatMessage
 from app.exceptions import LlmProviderFailedError, LlmTimeoutError, LlmUnavailableError
 from app.integrations.llm.protocol import LLMClientProtocol
+from app.services.agent_tools.project import TOOL_NOT_REGISTERED, ToolPolicyError, project_for_model
 from app.services.observability.privacy import mask_for_provider
 
 T = TypeVar("T", bound=BaseModel)
@@ -230,15 +231,18 @@ class OpenAIChatClient(LLMClientProtocol):
             name = call.function.name
             try:
                 if name not in allowed_names:
-                    raise ValueError("허용되지 않은 도구입니다.")
+                    raise ToolPolicyError(TOOL_NOT_REGISTERED)
                 args = json.loads(call.function.arguments)
                 if not isinstance(args, dict):
                     raise ValueError("도구 인자는 JSON 객체여야 합니다.")
                 result = await tool_executor(name, args)
-                body = result.model_dump(mode="json") if hasattr(result, "model_dump") else result
+                body = project_for_model(name, result)
+            except ToolPolicyError as ex:
+                logger.warning("OpenAI tool blocked name=%s reason=%s", name, ex.reason)
+                result = body = ex.model_payload()
             except Exception as ex:
                 logger.warning("OpenAI tool execution failed: %s (%s)", name, type(ex).__name__)
-                result = body = {"error": mask_for_provider(str(ex))}
+                result = body = {"error": "TOOL_EXECUTION_FAILED"}
             return result, {"role": "tool", "tool_call_id": call.id, "content": json.dumps(body, ensure_ascii=False)}
 
         function_calls = cast(list[Any], calls)

@@ -19,6 +19,16 @@ Risk = Literal["low", "medium", "high"]
 Exposure = Literal["model_selectable", "server_prefetch", "not_agent_callable"]
 CostClass = Literal["low", "medium", "high"]
 
+FACILITY_RESULT_FIELDS = frozenset({"facility_type", "total_count", "message", "items"})
+FACILITY_ITEM_FIELDS = frozenset({"name", "address_summary", "distance_m", "phone_available", "open_now"})
+MEDICATION_RESULT_FIELDS = frozenset({"query", "message", "has_interaction_danger", "items"})
+MEDICATION_ITEM_FIELDS = frozenset({"product_name", "ingredient_summary", "precautions", "source"})
+FOOD_RESULT_FIELDS = frozenset({"query", "message", "items"})
+FOOD_ITEM_FIELDS = frozenset({"food_name", "serving_size", "calories", "nutrient_summary", "source"})
+KNOWLEDGE_RESULT_FIELDS = frozenset({"query", "message", "items"})
+KNOWLEDGE_ITEM_FIELDS = frozenset({"title", "summary", "url", "source"})
+OUTDOOR_RESULT_FIELDS = frozenset({"weather", "air_quality", "errors"})
+LOCATION_RESULT_FORBIDDEN = frozenset({"latitude", "longitude", "phone", "emergency_room_phone"})
 QUERY_HEALTH_RECORDS_RESULT_FIELDS = frozenset(HealthRecordQueryResult.model_fields)
 QUERY_HEALTH_RECORDS_FORBIDDEN_RESULT_FIELDS = frozenset(
     {
@@ -54,6 +64,7 @@ class ToolSpec:
     enabled: bool
     input_fields: frozenset[str]
     result_fields: frozenset[str]
+    item_fields: frozenset[str]
     forbidden_result_fields: frozenset[str]
     limits: ToolLimits
     source_module: str
@@ -79,6 +90,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         enabled=True,
         input_fields=_schema_fields(QUERY_HEALTH_RECORDS_DECLARATION),
         result_fields=QUERY_HEALTH_RECORDS_RESULT_FIELDS,
+        item_fields=frozenset(),
         forbidden_result_fields=QUERY_HEALTH_RECORDS_FORBIDDEN_RESULT_FIELDS,
         limits=_LOW,
         source_module="app.services.health_record_tools",
@@ -102,6 +114,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
                 "message",
             }
         ),
+        item_fields=frozenset(),
         forbidden_result_fields=QUERY_HEALTH_RECORDS_FORBIDDEN_RESULT_FIELDS,
         limits=_LOW,
         source_module="app.services.health_record_tools",
@@ -113,8 +126,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         exposure="model_selectable",
         enabled=True,
         input_fields=_schema_fields(_FACILITY_BY_NAME["search_nearby_emergency_room"]),
-        result_fields=frozenset(),
-        forbidden_result_fields=frozenset(),
+        result_fields=FACILITY_RESULT_FIELDS,
+        item_fields=FACILITY_ITEM_FIELDS,
+        forbidden_result_fields=LOCATION_RESULT_FORBIDDEN,
         limits=_MEDIUM,
         source_module="app.services.medical_facility_tools",
     ),
@@ -125,8 +139,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         exposure="model_selectable",
         enabled=True,
         input_fields=_schema_fields(_FACILITY_BY_NAME["search_nearby_hospital"]),
-        result_fields=frozenset(),
-        forbidden_result_fields=frozenset(),
+        result_fields=FACILITY_RESULT_FIELDS,
+        item_fields=FACILITY_ITEM_FIELDS,
+        forbidden_result_fields=LOCATION_RESULT_FORBIDDEN,
         limits=_MEDIUM,
         source_module="app.services.medical_facility_tools",
     ),
@@ -137,8 +152,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         exposure="model_selectable",
         enabled=True,
         input_fields=_schema_fields(_FACILITY_BY_NAME["search_nearby_pharmacy"]),
-        result_fields=frozenset(),
-        forbidden_result_fields=frozenset(),
+        result_fields=FACILITY_RESULT_FIELDS,
+        item_fields=FACILITY_ITEM_FIELDS,
+        forbidden_result_fields=LOCATION_RESULT_FORBIDDEN,
         limits=_MEDIUM,
         source_module="app.services.medical_facility_tools",
     ),
@@ -149,7 +165,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         exposure="model_selectable",
         enabled=True,
         input_fields=_schema_fields(MEDICATION_TOOL_DECLARATION),
-        result_fields=frozenset(),
+        result_fields=MEDICATION_RESULT_FIELDS,
+        item_fields=MEDICATION_ITEM_FIELDS,
         forbidden_result_fields=frozenset(),
         limits=_MEDIUM,
         source_module="app.services.medication_tools",
@@ -161,7 +178,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         exposure="model_selectable",
         enabled=True,
         input_fields=_schema_fields(FOOD_NUTRITION_TOOL_DECLARATION),
-        result_fields=frozenset(),
+        result_fields=FOOD_RESULT_FIELDS,
+        item_fields=FOOD_ITEM_FIELDS,
         forbidden_result_fields=frozenset(),
         limits=_MEDIUM,
         source_module="app.services.food_nutrition_tools",
@@ -173,7 +191,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         exposure="server_prefetch",
         enabled=True,
         input_fields=_schema_fields(SEARCH_HEALTH_KNOWLEDGE_DECLARATION),
-        result_fields=frozenset(),
+        result_fields=KNOWLEDGE_RESULT_FIELDS,
+        item_fields=KNOWLEDGE_ITEM_FIELDS,
         forbidden_result_fields=frozenset(),
         limits=_MEDIUM,
         source_module="app.services.health_knowledge_tools",
@@ -185,8 +204,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         exposure="server_prefetch",
         enabled=True,
         input_fields=_schema_fields(OUTDOOR_CONDITIONS_TOOL_DECLARATION),
-        result_fields=frozenset(),
-        forbidden_result_fields=frozenset(),
+        result_fields=OUTDOOR_RESULT_FIELDS,
+        item_fields=frozenset(),
+        forbidden_result_fields=LOCATION_RESULT_FORBIDDEN,
         limits=_MEDIUM,
         source_module="app.services.outdoor_conditions_tools",
     ),
@@ -198,6 +218,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         enabled=False,
         input_fields=frozenset(),
         result_fields=frozenset(),
+        item_fields=frozenset(),
         forbidden_result_fields=QUERY_HEALTH_RECORDS_FORBIDDEN_RESULT_FIELDS,
         limits=_HIGH,
         source_module="app.services.dev_ocr",
