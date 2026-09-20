@@ -187,6 +187,31 @@ class _FakeToolClient:
         return wrong_llm_stream(), result
 
 
+def _own_policy_ctx(account_id: uuid.UUID, profile_id: uuid.UUID):
+    from app.models.profiles import MemberRole
+    from app.services.agent_tools.policy import tool_policy_context
+    from app.services.profile_capabilities import ProfileCapability
+
+    return tool_policy_context(
+        account_id=account_id,
+        active_profile_id=profile_id,
+        household_id=uuid.uuid4(),
+        session_type="account",
+        actor_role=MemberRole.ADULT_MEMBER,
+        capabilities={ProfileCapability.VIEW_OWN_RECORDS, ProfileCapability.VIEW_PUBLIC_SUMMARY},
+        minor_policy_state="none",
+        actor_profile_id=profile_id,
+    )
+
+
+class _FixedPolicySource:
+    def __init__(self, ctx: object) -> None:
+        self.ctx = ctx
+
+    async def load(self, **_kwargs: Any) -> object:
+        return self.ctx
+
+
 @pytest.mark.asyncio
 async def test_health_query_stream_uses_authoritative_result_without_facility_event() -> None:
     account = ServiceAccount(id=uuid.uuid4(), email="query@example.com", password_hash="hash")
@@ -194,6 +219,7 @@ async def test_health_query_stream_uses_authoritative_result_without_facility_ev
     service = HealthAssistantService(
         llm_client=cast(Any, _FakeToolClient()),
         health_record_service=cast(HealthRecordService, _FakeRecordService()),
+        policy_source=_FixedPolicySource(_own_policy_ctx(account.id, profile_id)),
     )
     request = HealthAssistantChatRequest(
         messages=[ChatMessage(role="user", content="지난 3개월 동안 혈압 140 넘은 날이 며칠이야?")],

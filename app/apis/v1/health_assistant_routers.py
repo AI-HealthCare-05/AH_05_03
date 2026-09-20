@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import StreamingResponse
 
 from app.core import config
@@ -29,6 +29,7 @@ from app.models.service_accounts import ServiceAccount
 from app.repositories.chat_session_repository import ChatSessionRepository
 from app.repositories.health_record_repository import HealthRecordRepository
 from app.repositories.household_repository import HouseholdRepository
+from app.repositories.member_pin_repository import MemberPinRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.services.chat_session_service import ChatSessionService
 from app.services.health_assistant import HealthAssistantService
@@ -66,6 +67,8 @@ def get_health_assistant_service(
         chat_session_repo=ChatSessionRepository(session),
         profile_repo=ProfileRepository(session),
         household_repo=HouseholdRepository(session),
+        db_session=session,
+        pin_repo=MemberPinRepository(session),
     )
 
 
@@ -115,6 +118,7 @@ async def chat_with_assistant(
     limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
     service: Annotated[HealthAssistantService, Depends(get_health_assistant_service)],
     chat_session_service: Annotated[ChatSessionService, Depends(ChatSessionService)],
+    member_session_token: Annotated[str | None, Header(alias="X-Member-Session-Token")] = None,
 ) -> ApiResponse[HealthAssistantResponse]:
     await limiter.hit(
         "health-assistant",
@@ -125,7 +129,9 @@ async def chat_with_assistant(
     await _inject_24h_memory(request, account, chat_session_service)
 
     client_ip = fastapi_req.client.host if fastapi_req.client else None
-    data = await service.respond(request, account=account, client_ip=client_ip)
+    data = await service.respond(
+        request, account=account, client_ip=client_ip, member_session_token=member_session_token
+    )
 
     if request.session_id is not None:
         await chat_session_service.add_message(
@@ -151,6 +157,7 @@ async def stream_chat_with_assistant(
     limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
     service: Annotated[HealthAssistantService, Depends(get_health_assistant_service)],
     chat_session_service: Annotated[ChatSessionService, Depends(ChatSessionService)],
+    member_session_token: Annotated[str | None, Header(alias="X-Member-Session-Token")] = None,
 ) -> StreamingResponse:
     """`text/event-stream`. 두 이벤트를 보낸다.
 
@@ -179,7 +186,9 @@ async def stream_chat_with_assistant(
     async def frames() -> AsyncIterator[str]:
         final_payload: dict[str, Any] | None = None
         try:
-            async for name, payload in service.stream(request, account=account, client_ip=client_ip):
+            async for name, payload in service.stream(
+                request, account=account, client_ip=client_ip, member_session_token=member_session_token
+            ):
                 if name == "result" and isinstance(payload, dict):
                     final_payload = payload
                 body = json.dumps(payload, ensure_ascii=False)

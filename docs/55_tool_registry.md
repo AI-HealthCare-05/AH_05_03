@@ -3,7 +3,7 @@
 - 상태: 2단계 계약 + 3단계 권한 게이트(#206). 러너(#207)는 아직 없다.
 - 정본: `app/services/agent_tools/registry.py`
 - 모델에 넘기는 결과: `app/services/agent_tools/project.py`
-- 권한: `app/services/agent_tools/policy.py` (`allowed_tools`, `authorize_tool`, 결과 필터)
+- 권한: `app/services/agent_tools/policy.py`. Health Assistant `respond()`/`stream()`이 도구 실행 직전 DB 상태를 다시 읽어 강제한다.
 - 기준: [54_agent_baseline.md](54_agent_baseline.md), [ADR-0015](adr/0015-bounded-agent-on-policy-and-evidence.md)
 
 없는 도구를 이 표에 넣지 않는다. `search_hospital`, RapidOCR, 원본 서류 판독의 대화형 호출은 코드에 없다.
@@ -18,9 +18,11 @@
 
 한도(`max_calls_per_turn`, `timeout_ms`, `cost_class`)는 자리만 둔다. 값은 4단계에서 강제한다.
 
-차단 이유 코드: `TOOL_NOT_REGISTERED`, `TOOL_NOT_MODEL_SELECTABLE`, `TOOL_DISABLED`, `TOOL_NOT_AUTHORIZED`, `TOOL_SCOPE_DENIED`, `TOOL_SESSION_REVOKED`. 사용자 문구는 공통으로 「요청한 기능을 지금은 사용할 수 없습니다.」이다.
+차단 이유 코드: `TOOL_NOT_REGISTERED`, `TOOL_NOT_MODEL_SELECTABLE`, `TOOL_DISABLED`, `TOOL_NOT_AUTHORIZED`, `TOOL_SCOPE_DENIED`, `TOOL_SESSION_REVOKED`, `TOOL_SESSION_CONTEXT_INCOMPLETE`, `TOOL_POLICY_CONTEXT_REQUIRED`. 사용자 문구는 공통으로 「요청한 기능을 지금은 사용할 수 없습니다.」이다.
 
-`query_health_records`가 목록에 있어도 세션 프로필이 아닌 대상, 역할 한도를 넘는 기간, `latest_matches`처럼 좁혀야 하는 필드는 잘린다. `self_only`는 가구 기록을 못 읽고, `restricted`는 음주 스냅샷과 일자별 수치를 못 받으며, 성년 대기 프로필은 본인이 아닐 때 건강기록 도구가 닫힌다. PIN 행위자 변경·epoch 증가·세션 무효는 다음 호출을 `TOOL_SESSION_REVOKED`로 거절한다.
+`allowed_tools()`는 `exposure == model_selectable`만 반환한다. `search_health_knowledge` 같은 서버 선행 도구는 `allowed_prefetch_tools_for()`에 둔다. 건강기록 도구는 정책 컨텍스트 없이 실행하지 않는다. PIN·벽 세션은 행위자 ID와 현재 `session_epoch`가 빠지면 `TOOL_SESSION_CONTEXT_INCOMPLETE`다.
+
+`query_health_records`가 목록에 있어도 세션 프로필이 아닌 대상, 역할 한도를 넘는 기간, `latest_matches`처럼 좁혀야 하는 필드는 잘린다. `self_only`는 가구 기록을 못 읽고, `restricted`는 음주 스냅샷과 일자별 수치를 못 받으며, 성년 대기 프로필은 본인이 아닐 때 건강기록 도구가 닫힌다. PIN 행위자 변경·epoch 증가·세션 무효는 다음 호출을 `TOOL_SESSION_REVOKED`로 거절한다. 컨텍스트는 도구 실행 직전 DB에서 다시 읽는다.
 
 | 이름 | access | risk | 노출 | 사용 | 모델 반환 필드 |
 |---|---|---|---|---|---|

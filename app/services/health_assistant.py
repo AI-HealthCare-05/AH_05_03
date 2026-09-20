@@ -29,6 +29,14 @@ from app.repositories.chat_session_repository import ChatSessionRepository
 from app.repositories.health_record_repository import HealthRecordRepository
 from app.repositories.household_repository import HouseholdRepository
 from app.repositories.profile_repository import ProfileRepository
+from app.services.agent_tools.policy import (
+    HEALTH_RECORD_TOOLS,
+    ToolPolicyAuth,
+    ToolPolicyError,
+    allowed_tools_for,
+    authorize_tool,
+    require_policy_context,
+)
 from app.services.facility_topic import (
     FACILITY_HISTORY_OR_ADVICE_KEYWORDS,
     FACILITY_KEYWORDS,
@@ -73,6 +81,9 @@ from app.services.outdoor_conditions_client import (
 from app.services.outdoor_conditions_tools import execute_outdoor_conditions_tool
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.repositories.member_pin_repository import MemberPinRepository
     from app.services.agent_tools.policy import ToolPolicyContext
 
 logger = logging.getLogger(__name__)
@@ -108,6 +119,7 @@ class _PreparedExecution:
     outdoor_conditions: OutdoorConditionsResult | None
     system_instruction: str
     tools: list[Any] | None
+    policy_auth: ToolPolicyAuth
 
 
 #: 봄이가 먼저 "0~10점 중 몇 점인가요?" 라고 물으면 사용자는 보통 `2` 처럼 숫자만
@@ -241,6 +253,10 @@ class HealthAssistantService:
         profile_repo: ProfileRepository | None = None,
         household_repo: HouseholdRepository | None = None,
         health_record_service: HealthRecordService | None = None,
+        db_session: AsyncSession | None = None,
+        pin_repo: MemberPinRepository | None = None,
+        policy_source: Any | None = None,
+        policy_auth: ToolPolicyAuth | None = None,
     ):
         self._llm_client = llm_client
         self._classifier_llm_client = classifier_llm_client
@@ -256,6 +272,78 @@ class HealthAssistantService:
         self.health_knowledge_client: HealthKnowledgeClientProtocol = health_knowledge_client or KdcaHealthInfoClient()
         self.profile_repo = profile_repo
         self.household_repo = household_repo
+        self.db_session = db_session
+        self.pin_repo = pin_repo
+        self.policy_source = policy_source
+        self._policy_auth = policy_auth
+
+    async def _resolve_policy_auth(self, member_session_token: str | None) -> ToolPolicyAuth:
+        if self._policy_auth is not None:
+            return self._policy_auth
+        if not member_session_token or self.pin_repo is None:
+            return ToolPolicyAuth()
+        from app.services.member_pins import digest_token
+
+        row = await self.pin_repo.get_session_by_token_hash(digest_token(member_session_token))
+        if row is None:
+            return ToolPolicyAuth(session_type="pin")
+        session_type: Literal["pin", "wall"] = "wall" if row.device_id is not None else "pin"
+        return ToolPolicyAuth(
+            session_type=session_type,
+            member_session_id=row.id,
+            bound_pin_actor_id=row.profile_id,
+            bound_issued_epoch=row.issued_session_epoch,
+        )
+
+    async def _load_policy(
+        self,
+        account: ServiceAccount,
+        requested_profile_id: uuid.UUID,
+        auth: ToolPolicyAuth,
+    ) -> ToolPolicyContext | None:
+        if self.policy_source is not None:
+            return await self.policy_source.load(
+                account=account,
+                requested_profile_id=requested_profile_id,
+                auth=auth,
+            )
+        if self.db_session is None or self.profile_repo is None or self.household_repo is None or self.pin_repo is None:
+            return None
+        from app.services.agent_tools.context import DbToolPolicySource
+
+        source = DbToolPolicySource(
+            self.db_session,
+            profile_repo=self.profile_repo,
+            household_repo=self.household_repo,
+            pin_repo=self.pin_repo,
+        )
+        return await source.load(account=account, requested_profile_id=requested_profile_id, auth=auth)
+
+    @staticmethod
+    def _tool_declaration_names(tools: list[Any] | None) -> frozenset[str]:
+        names: set[str] = set()
+        for tool in tools or []:
+            for declaration in getattr(tool, "function_declarations", None) or []:
+                if declaration.name:
+                    names.add(str(declaration.name))
+        return frozenset(names)
+
+    @staticmethod
+    def _filter_tools(tools: list[Any] | None, allowed: frozenset[str]) -> list[Any] | None:
+        if not tools:
+            return None
+        from google.genai import types
+
+        kept: list[Any] = []
+        for tool in tools:
+            decls = [
+                declaration
+                for declaration in (getattr(tool, "function_declarations", None) or [])
+                if declaration.name in allowed
+            ]
+            if decls:
+                kept.append(types.Tool(function_declarations=decls))
+        return kept or None
 
     @staticmethod
     def _get_eval_text(request: HealthAssistantChatRequest) -> str:
@@ -354,6 +442,7 @@ class HealthAssistantService:
         *,
         account: ServiceAccount | None,
         profile_context: ProfileContext | None,
+        policy_auth: ToolPolicyAuth,
     ) -> AlcoholConsultationSnapshot:
         """음주 상담용 개인 건강기록 스냅샷을 조회한다. 조회 실패·데이터 없음도 정직하게 반환한다."""
         snapshot: AlcoholConsultationSnapshot | None = None
@@ -361,7 +450,18 @@ class HealthAssistantService:
             profile_id = self._parse_profile_id(profile_context.profile_id)
             if profile_id is not None:
                 try:
-                    snapshot = await self.health_record_service.get_alcohol_consultation_snapshot(account, profile_id)
+                    policy_ctx = require_policy_context(await self._load_policy(account, profile_id, policy_auth))
+                    authorize_tool(
+                        "get_alcohol_consultation_snapshot",
+                        policy_ctx,
+                        target_profile_id=policy_ctx.active_profile_id,
+                        for_model=False,
+                    )
+                    snapshot = await self.health_record_service.get_alcohol_consultation_snapshot(
+                        account, policy_ctx.active_profile_id
+                    )
+                except ToolPolicyError:
+                    snapshot = None
                 except Exception as ex:
                     logger.warning("음주 상담 스냅샷 조회 실패: %s", ex)
 
@@ -379,6 +479,7 @@ class HealthAssistantService:
         *,
         account: ServiceAccount | None,
         profile_context: ProfileContext | None,
+        policy_auth: ToolPolicyAuth | None = None,
     ) -> tuple[list[Any], str | None]:
         """바운더리 판정이 요구한 근거 종류를 메인 LLM 호출 전에 서버가 직접 채운다.
 
@@ -410,7 +511,12 @@ class HealthAssistantService:
         # 개인 건강기록 스냅샷은 아직 음주 주제만 구현돼 있다. 다른 주제의 개인기록
         # 스냅샷이 생기면 여기에 분기를 추가하면 된다.
         if "health_records" in required and is_alcohol_topic(raw_query):
-            snapshot = await self._fetch_alcohol_snapshot(account=account, profile_context=profile_context)
+        if "health_records" in required and is_alcohol_topic(raw_query):
+            snapshot = await self._fetch_alcohol_snapshot(
+                account=account,
+                profile_context=profile_context,
+                policy_auth=policy_auth or ToolPolicyAuth(),
+            )
             results.append(snapshot)
             snapshot_lines = ["[개인 건강기록 스냅샷]", snapshot.model_dump_json(exclude_none=True)]
 
@@ -946,10 +1052,13 @@ class HealthAssistantService:
         profile_id: uuid.UUID | None = None,
         policy_ctx: ToolPolicyContext | None = None,
     ) -> Any:
-        from app.services.agent_tools.policy import authorize_tool
         from app.services.agent_tools.project import require_model_selectable
 
-        if policy_ctx is not None:
+        if name in HEALTH_RECORD_TOOLS:
+            policy_ctx = require_policy_context(policy_ctx)
+            authorize_tool(name, policy_ctx, target_profile_id=profile_id or policy_ctx.active_profile_id)
+            profile_id = policy_ctx.active_profile_id
+        elif policy_ctx is not None:
             authorize_tool(name, policy_ctx, target_profile_id=profile_id)
         else:
             require_model_selectable(name)
@@ -970,7 +1079,35 @@ class HealthAssistantService:
             return await execute_medication_tool(name, args, self.medication_client)
         return await execute_facility_tool(name, args, self.facility_client)
 
-    def _get_tools(self, request: HealthAssistantChatRequest) -> list[Any] | None:
+    async def _run_authorized_tool(
+        self,
+        name: str,
+        args: dict[str, Any],
+        *,
+        account: ServiceAccount | None,
+        requested_profile_id: uuid.UUID | None,
+        policy_auth: ToolPolicyAuth,
+    ) -> Any:
+        policy_ctx = None
+        if account is not None and requested_profile_id is not None:
+            policy_ctx = await self._load_policy(account, requested_profile_id, policy_auth)
+        try:
+            return await self._execute_tool(
+                name,
+                args,
+                account=account,
+                profile_id=policy_ctx.active_profile_id if policy_ctx is not None else requested_profile_id,
+                policy_ctx=policy_ctx,
+            )
+        except ToolPolicyError as ex:
+            logger.warning("health assistant tool blocked name=%s reason=%s", name, ex.reason)
+            return ex.model_payload()
+
+    def _get_tools(
+        self,
+        request: HealthAssistantChatRequest,
+        allowed: frozenset[str] | None,
+    ) -> list[Any] | None:
         """요청에 필요한 Tool 목록을 반환한다. 불필요한 툴은 포함하지 않는다.
 
         health_knowledge·outdoor는 여기 없다 — LLM이 호출 여부를 그때그때
@@ -979,7 +1116,9 @@ class HealthAssistantService:
         부르기 전에 서버에서 결정론적으로 미리 채운다.
         """
         if self._needs_health_record_query_tool(request):
-            return get_health_record_tools()
+            if allowed is None or "query_health_records" not in allowed:
+                return None
+            return self._filter_tools(get_health_record_tools(), allowed)
         tools: list[Any] = []
         if self._needs_facility_tools(request):
             tools.extend(get_facility_tools())
@@ -987,8 +1126,9 @@ class HealthAssistantService:
             tools.extend(get_medication_tools())
         if self._needs_food_nutrition(request):
             tools.extend(get_food_nutrition_tools())
-
-        return tools if tools else None
+        if allowed is None:
+            return tools if tools else None
+        return self._filter_tools(tools, allowed)
 
     @staticmethod
     def _attach_tool_result_to_response(  # noqa: C901
@@ -1115,6 +1255,7 @@ class HealthAssistantService:
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None,
         client_ip: str | None,
+        member_session_token: str | None = None,
     ) -> HealthAssistantResponse | _PreparedExecution:
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
@@ -1143,11 +1284,17 @@ class HealthAssistantService:
             account_id=account_id,
             request=request,
         )
+        policy_auth = await self._resolve_policy_auth(member_session_token)
+        requested_profile_id = self._parse_profile_id(profile_context.profile_id) if profile_context else None
+        policy_ctx = None
+        if account is not None and requested_profile_id is not None:
+            policy_ctx = await self._load_policy(account, requested_profile_id, policy_auth)
         preloaded_results, authoritative_evidence_context = await self._load_authoritative_evidence(
             request,
             boundary.decision,
             account=account,
             profile_context=profile_context,
+            policy_auth=policy_auth,
         )
         needs_outdoor = "outdoor" in boundary.decision.required_evidence_types
         loc = await self._resolve_request_location(request, needs_outdoor, client_ip)
@@ -1165,7 +1312,7 @@ class HealthAssistantService:
             session_core_memory=request.core_memory,
         )
 
-        tools = self._get_tools(request)
+        tools = self._get_tools(request, allowed_tools_for(policy_ctx) if policy_ctx is not None else None)
 
         # [알잘딱깔센] 민감 개인 허가 질문에 대한 사전 차단 로직 제거
         # 임신 주차 계산, 알레르기 대체 약품 추천 등 고도의 추론을 위해 무조건 LLM에 컨텍스트를 넘긴다.
@@ -1178,6 +1325,7 @@ class HealthAssistantService:
             outdoor_conditions=outdoor_conditions,
             system_instruction=system_instruction,
             tools=tools,
+            policy_auth=policy_auth,
         )
 
     def _llm_model_label(self) -> str | None:
@@ -1220,8 +1368,9 @@ class HealthAssistantService:
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None = None,
         client_ip: str | None = None,
+        member_session_token: str | None = None,
     ) -> HealthAssistantResponse:
-        prepared = await self._prepare_execution(request, account, client_ip)
+        prepared = await self._prepare_execution(request, account, client_ip, member_session_token)
         if isinstance(prepared, HealthAssistantResponse):
             return prepared
 
@@ -1233,13 +1382,15 @@ class HealthAssistantService:
 
         async def tool_executor(name: str, args: dict[str, Any]) -> Any:
             called_tool_names.append(name)
-            return await self._execute_tool(
+            requested = (
+                self._parse_profile_id(prepared.profile_context.profile_id) if prepared.profile_context else None
+            )
+            return await self._run_authorized_tool(
                 name,
                 args,
                 account=account,
-                profile_id=self._parse_profile_id(prepared.profile_context.profile_id)
-                if prepared.profile_context
-                else None,
+                requested_profile_id=requested,
+                policy_auth=prepared.policy_auth,
             )
 
         tool_result: Any | None = prepared.preloaded_results or None
@@ -1316,8 +1467,9 @@ class HealthAssistantService:
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None = None,
         client_ip: str | None = None,
+        member_session_token: str | None = None,
     ) -> AsyncIterator[tuple[str, Any]]:
-        prepared = await self._prepare_execution(request, account, client_ip)
+        prepared = await self._prepare_execution(request, account, client_ip, member_session_token)
         if isinstance(prepared, HealthAssistantResponse):
             yield "delta", {"text": prepared.assistant_message}
             yield "result", prepared.model_dump(mode="json")
@@ -1329,13 +1481,15 @@ class HealthAssistantService:
 
         async def tool_executor(name: str, args: dict[str, Any]) -> Any:
             called_tool_names.append(name)
-            return await self._execute_tool(
+            requested = (
+                self._parse_profile_id(prepared.profile_context.profile_id) if prepared.profile_context else None
+            )
+            return await self._run_authorized_tool(
                 name,
                 args,
                 account=account,
-                profile_id=self._parse_profile_id(prepared.profile_context.profile_id)
-                if prepared.profile_context
-                else None,
+                requested_profile_id=requested,
+                policy_auth=prepared.policy_auth,
             )
 
         stream_gen, generated_tool_result = await self._get_stream_generator(

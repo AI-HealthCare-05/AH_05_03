@@ -14,6 +14,7 @@ from app.dtos.health_record_query import (
 )
 from app.models.profiles import MemberRole
 from app.services.agent_tools.policy import (
+    allowed_prefetch_tools_for,
     allowed_tools,
     authorize_tool,
     constrain_query_arguments,
@@ -26,6 +27,7 @@ from app.services.agent_tools.project import (
     TOOL_NOT_AUTHORIZED,
     TOOL_NOT_MODEL_SELECTABLE,
     TOOL_SCOPE_DENIED,
+    TOOL_SESSION_CONTEXT_INCOMPLETE,
     TOOL_SESSION_REVOKED,
     ToolPolicyError,
 )
@@ -43,6 +45,9 @@ _RESTRICTED_CAPS = frozenset({ProfileCapability.VIEW_OWN_RECORDS, ProfileCapabil
 _PENDING_GUARDIAN_CAPS = frozenset({ProfileCapability.VIEW_PUBLIC_SUMMARY})
 
 
+_UNSET = object()
+
+
 def _ids() -> tuple:
     return uuid4(), uuid4(), uuid4(), uuid4()
 
@@ -53,7 +58,7 @@ def _ctx(
     caps: frozenset[ProfileCapability] = _ADULT_CAPS,
     minor: str = "none",
     pin_session_valid: bool = True,
-    actor_profile_id=None,
+    actor_profile_id: object = _UNSET,
     pin_actor_id=None,
     current_pin_actor_id=None,
     session_epoch: int | None = 1,
@@ -61,6 +66,7 @@ def _ctx(
     session_type: str = "account",
 ):
     account_id, active_profile_id, household_id, actor = _ids()
+    resolved_actor = active_profile_id if actor_profile_id is _UNSET else actor_profile_id
     return tool_policy_context(
         account_id=account_id,
         active_profile_id=active_profile_id,
@@ -70,7 +76,7 @@ def _ctx(
         capabilities=caps,
         minor_policy_state=minor,
         pin_session_valid=pin_session_valid,
-        actor_profile_id=actor_profile_id if actor_profile_id is not None else active_profile_id,
+        actor_profile_id=resolved_actor,  # type: ignore[arg-type]
         pin_actor_id=pin_actor_id,
         current_pin_actor_id=current_pin_actor_id if current_pin_actor_id is not None else pin_actor_id,
         session_epoch=session_epoch,
@@ -109,6 +115,9 @@ def test_allowed_tools_signature_matches_baseline() -> None:
     )
     assert "query_health_records" in names
     assert "search_nearby_hospital" in names
+    assert "search_health_knowledge" not in names
+    assert "get_outdoor_health_conditions" not in names
+    assert "get_alcohol_consultation_snapshot" not in names
     assert "document_vision" not in names
 
 
@@ -137,6 +146,7 @@ def test_restricted_is_narrower_than_self_only() -> None:
     names = allowed_tools_for_ctx(ctx)
     assert "query_health_records" in names
     assert "get_alcohol_consultation_snapshot" not in names
+    assert "get_alcohol_consultation_snapshot" not in allowed_prefetch_tools_for(ctx)
     assert period_limit_months(ctx) == 1
     query = HealthRecordQueryArguments(
         record_type="blood_pressure",
@@ -178,7 +188,11 @@ def test_civil_majority_pending_self_keeps_own_query_with_short_period() -> None
 
 
 def test_pin_revoke_rejects_next_call() -> None:
-    ctx = _ctx(session_type="pin", pin_session_valid=False, pin_actor_id=uuid4())
+    ctx = _ctx(
+        session_type="pin",
+        pin_session_valid=False,
+        pin_actor_id=uuid4(),
+    )
     assert allowed_tools_for_ctx(ctx) == frozenset()
     with pytest.raises(ToolPolicyError) as ex:
         authorize_tool("search_nearby_hospital", ctx)
@@ -194,7 +208,14 @@ def test_pin_actor_change_rejects_next_call() -> None:
 
 
 def test_session_epoch_bump_rejects_next_call() -> None:
-    ctx = _ctx(session_type="wall", session_epoch=1, current_session_epoch=2)
+    actor = uuid4()
+    ctx = _ctx(
+        session_type="wall",
+        session_epoch=1,
+        current_session_epoch=2,
+        pin_actor_id=actor,
+        actor_profile_id=actor,
+    )
     with pytest.raises(ToolPolicyError) as ex:
         authorize_tool("search_medication_info", ctx)
     assert ex.value.reason == TOOL_SESSION_REVOKED
@@ -202,10 +223,30 @@ def test_session_epoch_bump_rejects_next_call() -> None:
 
 def test_prefetch_alcohol_is_not_model_selectable() -> None:
     ctx = _ctx()
+    assert "search_health_knowledge" in allowed_prefetch_tools_for(ctx)
+    assert "get_alcohol_consultation_snapshot" in allowed_prefetch_tools_for(ctx)
+    assert "search_health_knowledge" not in allowed_tools_for_ctx(ctx)
     with pytest.raises(ToolPolicyError) as ex:
         authorize_tool("get_alcohol_consultation_snapshot", ctx, for_model=True)
     assert ex.value.reason == TOOL_NOT_MODEL_SELECTABLE
     authorize_tool("get_alcohol_consultation_snapshot", ctx, for_model=False)
+
+
+def test_pin_session_without_current_epoch_is_incomplete() -> None:
+    ctx = _ctx(
+        session_type="pin",
+        pin_actor_id=uuid4(),
+        session_epoch=1,
+        current_session_epoch=None,
+    )
+    with pytest.raises(ToolPolicyError) as ex:
+        authorize_tool("search_nearby_hospital", ctx)
+    assert ex.value.reason == TOOL_SESSION_CONTEXT_INCOMPLETE
+
+
+def test_missing_actor_is_not_promoted_to_active_profile() -> None:
+    ctx = _ctx(role=MemberRole.SELF_ONLY, caps=_SELF_CAPS, actor_profile_id=None)
+    assert "query_health_records" not in allowed_tools_for_ctx(ctx)
 
 
 def test_document_vision_never_allowed() -> None:

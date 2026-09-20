@@ -112,25 +112,30 @@ async def execute_health_record_tool(
         query = HealthRecordQueryArguments.model_validate(args)
     except ValidationError as ex:
         raise ValueError("건강기록 조회 조건이 허용 범위를 벗어났습니다.") from ex
-    from app.services.agent_tools.policy import authorize_tool, constrain_query_arguments, filter_query_result
-    from app.services.agent_tools.registry import project_health_record_query_result
+    from app.services.agent_tools.policy import (
+        TOOL_POLICY_CONTEXT_REQUIRED,
+        ToolPolicyError,
+        authorize_tool,
+        constrain_query_arguments,
+        filter_query_result,
+    )
 
-    if policy_ctx is not None:
-        query = constrain_query_arguments(query, policy_ctx)
-        authorize_tool(
-            name,
-            policy_ctx,
-            target_profile_id=profile_id,
-            requested_period_months=query.period.value,
-        )
-        result = await record_service.query_numeric_summary(account, profile_id, query)
-        return filter_query_result(
-            result,
-            policy_ctx,
-            target_profile_id=profile_id,
-            requested_period_months=query.period.value,
-        )
-    return project_health_record_query_result(await record_service.query_numeric_summary(account, profile_id, query))
+    if policy_ctx is None:
+        raise ToolPolicyError(TOOL_POLICY_CONTEXT_REQUIRED)
+    query = constrain_query_arguments(query, policy_ctx)
+    authorize_tool(
+        name,
+        policy_ctx,
+        target_profile_id=profile_id,
+        requested_period_months=query.period.value,
+    )
+    result = await record_service.query_numeric_summary(account, profile_id, query)
+    return filter_query_result(
+        result,
+        policy_ctx,
+        target_profile_id=profile_id,
+        requested_period_months=query.period.value,
+    )
 
 
 async def execute_alcohol_consultation_tool(
