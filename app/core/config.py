@@ -184,7 +184,7 @@ class Config(BaseSettings):
         "http://127.0.0.1:5173",
     ]
 
-    # --- 관찰 payload 기반 (#204). Langfuse 전송은 후속. 기본은 끔.
+    # --- 관찰 (#204). 기본 끔. 켜면 metadata_only HTTP ingest만 한다. SDK 없음.
     LANGFUSE_ENABLED: bool = False
     LANGFUSE_PUBLIC_KEY: str | None = None
     LANGFUSE_SECRET_KEY: str | None = None
@@ -530,6 +530,13 @@ class Config(BaseSettings):
                 "LANGFUSE_ENABLED 이면 OBSERVABILITY_HMAC_SECRET 을 32자 이상으로 따로 둬야 합니다. "
                 "SECRET_KEY 를 재사용하지 않습니다."
             )
+        if self.LANGFUSE_ENABLED:
+            public = (self.LANGFUSE_PUBLIC_KEY or "").strip()
+            secret = (self.LANGFUSE_SECRET_KEY or "").strip()
+            if not public or not secret:
+                raise ValueError("LANGFUSE_ENABLED 이면 LANGFUSE_PUBLIC_KEY 와 LANGFUSE_SECRET_KEY 가 필요합니다.")
+            self.LANGFUSE_PUBLIC_KEY = public
+            self.LANGFUSE_SECRET_KEY = secret
         if hmac_secret:
             self.OBSERVABILITY_HMAC_SECRET = hmac_secret
         if self.OBSERVABILITY_EXACT_VALUES:
