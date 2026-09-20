@@ -172,6 +172,24 @@ describe("DocumentPane", () => {
     expect(onRead).not.toHaveBeenCalledWith(expect.objectContaining({ values: { sbp: 148, fasting_glucose: 112 } }));
   });
 
+  it("여러 장을 한 번에 고르면 한 번의 인식으로 넘긴다", async () => {
+    const recognize = vi.spyOn(GeminiOcrAdapter.prototype, "recognize").mockResolvedValue(RECOGNIZED as never);
+    const save = vi.fn().mockResolvedValue({ ok: true, value: { id: "doc-1" } });
+    const user = userEvent.setup();
+    renderPane(stubRuntime(save));
+
+    await user.upload(screen.getByLabelText(/검진표 이미지나 PDF/), [
+      new File(["a"], "앞장.png", { type: "image/png" }),
+      new File(["b"], "뒷장.png", { type: "image/png" }),
+    ]);
+
+    await waitFor(() => expect(recognize).toHaveBeenCalledTimes(1));
+    const sent = recognize.mock.calls[0][0] as File[];
+    expect(sent.map((item) => item.name)).toEqual(["앞장.png", "뒷장.png"]);
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/같은 검사 서류 2장 선택됨/)).toBeInTheDocument();
+  });
+
   it("인식이 실패하면 이유를 화면에 적는다", async () => {
     vi.spyOn(GeminiOcrAdapter.prototype, "recognize").mockRejectedValue(new Error("쓸 수 있는 공급자가 없습니다"));
     const user = userEvent.setup();

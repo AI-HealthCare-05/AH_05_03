@@ -51,7 +51,6 @@ export function DocumentPane({
    */
   onDocument?: (document: LocalDocument | undefined) => void;
 }) {
-  const [document, setDocument] = useState<LocalDocument>();
   const [preview, setPreview] = useState<DocumentPreview>();
   const [reading, setReading] = useState<DocumentReading>();
   /**
@@ -63,6 +62,7 @@ export function DocumentPane({
   const [job, setJob] = useState<{ stage: OcrStage; text: string; restarted: boolean; startedAt: number }>();
   const [error, setError] = useState<string>();
   const [zoom, setZoom] = useState<number>(1);
+  const [selectedFileNames, setSelectedFileNames] = useState<string[]>([]);
 
   // 미리보기를 갈아 끼울 때 이전 것의 `blob:` 을 반드시 놓아 준다. 안 놓으면 원본
   // 바이트가 탭이 닫힐 때까지 메모리에 남는다 — 검진표는 장당 수 MB 다.
@@ -88,7 +88,8 @@ export function DocumentPane({
   }, []);
 
   const take = useCallback(
-    async (file: File | undefined) => {
+    async (files: File[]) => {
+      const file = files[0];
       if (!file) return;
 
       const run = runRef.current + 1;
@@ -99,8 +100,8 @@ export function DocumentPane({
       setReading(undefined);
       setZoom(1);
       swapPreview(undefined);
-      setDocument(undefined);
       onDocument?.(undefined);
+      setSelectedFileNames(files.map((item) => item.name));
 
       const startedAt = Date.now();
       const step = (stage: OcrStage) =>
@@ -117,20 +118,25 @@ export function DocumentPane({
 
         if (runtime?.documents) {
           step("storing");
-          const saved = await runtime.documents.save({
-            householdId,
-            profileId,
-            file,
-            fileName: file.name,
-          });
-          if (!current()) return;
-          if (!saved.ok) throw new Error(saved.error.message);
-          setDocument(saved.value);
-          onDocument?.(saved.value);
+          let stored: LocalDocument | undefined;
+          for (const item of files) {
+            const saved = await runtime.documents.save({
+              householdId,
+              profileId,
+              file: item,
+              fileName: item.name,
+            });
+            if (!current()) return;
+            if (!saved.ok) throw new Error(saved.error.message);
+            stored ??= saved.value;
+          }
+          if (stored) {
+            onDocument?.(stored);
+          }
         }
 
         step("queued");
-        const result = await new GeminiOcrAdapter().recognize(file, file.name, {
+        const result = await new GeminiOcrAdapter().recognize(files, file.name, {
           onProgress: ({ text }) => {
             if (!current()) return;
             // 글자가 하나라도 왔으면 워커가 잡았다는 뜻이다 — 대기에서 읽기로.
@@ -166,11 +172,11 @@ export function DocumentPane({
 
   const pick = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
-      const file = event.currentTarget.files?.[0];
+      const files = Array.from(event.currentTarget.files ?? []);
       // 같은 파일을 다시 고를 수 있어야 한다. 값을 비우지 않으면 두 번째 선택에서
       // `change` 가 아예 안 뜬다.
       event.currentTarget.value = "";
-      void take(file);
+      void take(files);
     },
     [take],
   );
@@ -182,7 +188,7 @@ export function DocumentPane({
     (event: React.DragEvent<HTMLLabelElement>) => {
       event.preventDefault();
       setDragging(false);
-      void take(event.dataTransfer.files?.[0]);
+      void take(Array.from(event.dataTransfer.files));
     },
     [take],
   );
@@ -222,12 +228,18 @@ export function DocumentPane({
         onDragLeave={() => setDragging(false)}
         onDrop={drop}
       >
-        <input type="file" accept="image/*,.pdf,application/pdf" onChange={pick} />
+        <input
+          type="file"
+          accept="image/*,.pdf,application/pdf"
+          multiple
+          aria-label="검진표 이미지나 PDF"
+          onChange={pick}
+        />
         <span>
           {dragging
             ? "여기에 놓으면 읽어 옵니다"
-            : document
-              ? "다른 검진표 고르기 · 끌어다 놓아도 됩니다"
+            : selectedFileNames.length > 0
+              ? `같은 검사 서류 ${selectedFileNames.length}장 선택됨 · 다시 고르기`
               : "검진표 이미지나 PDF 고르기 · 끌어다 놓아도 됩니다"}
         </span>
       </label>
