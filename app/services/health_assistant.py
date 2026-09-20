@@ -940,6 +940,10 @@ class HealthAssistantService:
         account: ServiceAccount | None = None,
         profile_id: uuid.UUID | None = None,
     ) -> Any:
+        from app.services.agent_tools.registry import is_model_selectable
+
+        if not is_model_selectable(name):
+            return None
         if name == "search_food_nutrition":
             return await execute_food_nutrition_tool(name, args, self.food_nutrition_client)
         if name == QUERY_HEALTH_RECORDS_TOOL_NAME:

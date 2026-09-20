@@ -2,7 +2,7 @@
 
 - 상태: 구현 전 기준안 (2026-09-20)
 - 결정: [ADR-0015](adr/0015-bounded-agent-on-policy-and-evidence.md)
-- 관련: [ADR-0014](adr/0014-document-vision-not-ocr.md), [ADR-0011](adr/0011-postgresql-health-data-and-server-ai.md), [ADR-0012](adr/0012-delegated-member-pin-not-vault-dek.md), [ADR-0013](adr/0013-privacy-self-determination-and-civil-majority.md), [00_terminology.md](00_terminology.md), [08_account_profile_policy.md](08_account_profile_policy.md)
+- 관련: [ADR-0014](adr/0014-document-vision-not-ocr.md), [ADR-0011](adr/0011-postgresql-health-data-and-server-ai.md), [ADR-0012](adr/0012-delegated-member-pin-not-vault-dek.md), [ADR-0013](adr/0013-privacy-self-determination-and-civil-majority.md), [00_terminology.md](00_terminology.md), [08_account_profile_policy.md](08_account_profile_policy.md), [55_tool_registry.md](55_tool_registry.md)
 
 현재 제품은 에이전트 루프가 아니다. 문서 Vision은 한 번 판독하는 파이프라인이고, 챗봇은 서버가 필요한 의료 근거를 먼저 준비하고 허용 도구를 **한 차례** 고르는 제한형 tool calling이다. 건강정보 정본은 PostgreSQL이다(ADR-0011). 이 문서는 그 위에 bounded 에이전트를 올릴 때의 개발 기준이다.
 
@@ -15,7 +15,7 @@
 권한 게이트가 러너보다 앞이다. 읽기 전용이라도 가족 건강기록은 민감정보다.
 
 1. Langfuse `metadata_only`와 이중 마스킹 (모델 공급자 / 관찰 데이터)
-2. 기존 도구 목록·입출력 계약 정리 (없는 도구를 가정하지 않는다)
+2. 기존 도구 목록·입출력 계약 정리 (없는 도구를 가정하지 않는다) — [55](55_tool_registry.md)
 3. 도구별 capability·프로필 범위 정책 (PIN 행위자, 역할, 미성년·성년 상태 포함)
 4. 읽기 전용 bounded agent runner
 5. 합성 시나리오 평가

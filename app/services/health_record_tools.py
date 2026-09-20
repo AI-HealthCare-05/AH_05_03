@@ -106,7 +106,9 @@ async def execute_health_record_tool(
         query = HealthRecordQueryArguments.model_validate(args)
     except ValidationError as ex:
         raise ValueError("건강기록 조회 조건이 허용 범위를 벗어났습니다.") from ex
-    return await record_service.query_numeric_summary(account, profile_id, query)
+    from app.services.agent_tools.registry import project_health_record_query_result
+
+    return project_health_record_query_result(await record_service.query_numeric_summary(account, profile_id, query))
 
 
 async def execute_alcohol_consultation_tool(

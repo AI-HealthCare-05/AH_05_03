@@ -43,6 +43,7 @@
 | [docs/23_multi_disease_model_design.md](docs/23_multi_disease_model_design.md) | 다질환 모델 설계 — 타깃 정의, 누출 차단, tier 분리 | 데이터·ML |
 | [docs/24_ocr_implementation_alignment.md](docs/24_ocr_implementation_alignment.md) | OCR 챌린지 구현 정렬·개발 진행 설계 | 데이터·ML·백엔드 |
 | [docs/54_agent_baseline.md](docs/54_agent_baseline.md) | 에이전트 도입 구현 기준안 (권한 먼저, 필수 자료 미리 준비, Vision 분리) | 전체 |
+| [docs/55_tool_registry.md](docs/55_tool_registry.md) | 현재 코드의 챗봇 도구 이름·read/write/risk·입출력 계약 | 전체 |
 | [docs/adr/0001-web-local-first-architecture.md](docs/adr/0001-web-local-first-architecture.md) | 데스크톱 앱에서 웹 기반 로컬 우선 서비스로 전환한 아키텍처 결정 | 전체 |
 | [docs/adr/0002-separate-server-api-and-local-domain-contract.md](docs/adr/0002-separate-server-api-and-local-domain-contract.md) | 서버 REST API와 브라우저 Local Domain API를 분리한 아키텍처 결정 | 전체 |
 | [docs/adr/0003-web-authentication-token-transport.md](docs/adr/0003-web-authentication-token-transport.md) | Access JWT와 HttpOnly Refresh Cookie를 선택한 인증 결정 | 전체 |
