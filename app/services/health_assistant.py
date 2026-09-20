@@ -319,6 +319,40 @@ class HealthAssistantService:
         )
         return await source.load(account=account, requested_profile_id=requested_profile_id, auth=auth)
 
+    async def _record_policy_actor_audit(
+        self,
+        account: ServiceAccount,
+        policy_ctx: ToolPolicyContext | None,
+    ) -> None:
+        """정책 행위자만 남긴다. 토큰·PIN·건강정보 원문은 넣지 않는다."""
+        if self.db_session is None or policy_ctx is None:
+            return
+        from app.core import config
+        from app.services.observability.privacy import hmac_alias
+        from app.services.profile_access import record_audit
+
+        secret = (config.OBSERVABILITY_HMAC_SECRET or "").strip()
+        alias = ""
+        if policy_ctx.actor_profile_id is not None and len(secret) >= 32:
+            alias = hmac_alias("session", str(policy_ctx.actor_profile_id), secret) or ""
+        try:
+            await record_audit(
+                self.db_session,
+                actor_account_id=account.id,
+                household_id=policy_ctx.household_id,
+                event_type="health_assistant.policy_actor",
+                target_ref=alias or "masked",
+                target_type="policy_actor",
+                event_metadata={
+                    "session_type": policy_ctx.session_type,
+                    "pin_session_valid": "true" if policy_ctx.pin_session_valid else "false",
+                    "actor_profile_alias": alias,
+                },
+            )
+            await self.db_session.flush()
+        except Exception:
+            logger.debug("policy actor audit skipped", exc_info=True)
+
     @staticmethod
     def _tool_declaration_names(tools: list[Any] | None) -> frozenset[str]:
         names: set[str] = set()
@@ -1259,6 +1293,14 @@ class HealthAssistantService:
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
             return safety_check
+
+        policy_auth = await self._resolve_policy_auth(member_session_token)
+        early_profile_id = (
+            self._parse_profile_id(request.profile_context.profile_id) if request.profile_context else None
+        )
+        if account is not None and early_profile_id is not None:
+            early_ctx = await self._load_policy(account, early_profile_id, policy_auth)
+            await self._record_policy_actor_audit(account, early_ctx)
 
         boundary = await self.boundary_service.check_request(self.classifier_llm_client, request)
         if boundary.response:

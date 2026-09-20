@@ -24,7 +24,7 @@
 
 `query_health_records`가 목록에 있어도 세션 프로필이 아닌 대상, 역할 한도를 넘는 기간, `latest_matches`처럼 좁혀야 하는 필드는 잘린다. `self_only`는 가구 기록을 못 읽고, `restricted`는 음주 스냅샷과 일자별 수치를 못 받으며, 성년 대기 프로필은 본인이 아닐 때 건강기록 도구가 닫힌다. PIN 행위자 변경·epoch 증가·세션 무효는 다음 호출을 `TOOL_SESSION_REVOKED`로 거절한다. 컨텍스트는 도구 실행 직전 DB에서 다시 읽는다.
 
-인증 모델(#206 제품 경로): 계정 JWT + 선택적 `X-Member-Session-Token`. 프런트는 서버가 준 `session_token`을 sessionStorage에만 두고 일반·스트리밍 챗봇 요청 헤더로 보낸다. 원문은 Langfuse·로그·오류 메시지에 남기지 않는다. 벽 기기 토큰은 계정 JWT가 아니므로 현재 건강 비서 라우터에서 401/`TOKEN_INVALID`다. 벽 기기+PIN으로 봄이를 여는 경로는 아직 없고, 그 경로 테스트가 생기기 전에는 #206을 완료하지 않는다.
+인증 모델(#206 제품 경로): 계정 JWT + 선택적 `X-Member-Session-Token`. 프런트는 서버가 준 `session_token`을 sessionStorage에만 두고 일반·스트리밍 챗봇 요청 헤더로 보낸다. 원문은 Langfuse·로그·오류 메시지에 남기지 않는다. 건강 비서 요청이 정책 컨텍스트를 읽으면 `health_assistant.policy_actor` 감사 이벤트만 남긴다. 필드는 `session_type`, `pin_session_valid`, HMAC `actor_profile_alias`다. 토큰·PIN·건강정보 원문은 없다. 벽 기기 토큰은 계정 JWT가 아니므로 현재 건강 비서 라우터에서 401/`TOKEN_INVALID`다. 벽 기기+PIN으로 봄이를 여는 경로는 아직 없고, 그 경로 테스트가 생기기 전에는 #206을 완료하지 않는다.
 
 | 이름 | access | risk | 노출 | 사용 | 모델 반환 필드 |
 |---|---|---|---|---|---|

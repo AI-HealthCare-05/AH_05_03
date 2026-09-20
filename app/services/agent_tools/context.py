@@ -111,14 +111,22 @@ class DbToolPolicySource:
         requested_profile_id: UUID,
         auth: ToolPolicyAuth,
     ) -> ToolPolicyContext:
+        account_id = account.id
         self.session.expire_all()
+        await self.session.refresh(account, attribute_names=["id"])
         pin = await self._pin_view(auth, requested_profile_id)
         profile = await self.profile_repo.get(pin.active_profile_id)
-        household = await self.household_repo.get(profile.household_id) if profile is not None else None
-        current_session_epoch = household.session_epoch if household is not None else None
+        household = None
+        if profile is not None:
+            await self.session.refresh(profile, attribute_names=["household_id", "id"])
+            household = await self.household_repo.get(profile.__dict__["household_id"])
+        current_session_epoch = None
+        if household is not None:
+            await self.session.refresh(household, attribute_names=["session_epoch"])
+            current_session_epoch = household.__dict__.get("session_epoch")
         if profile is None:
             return tool_policy_context(
-                account_id=account.id,
+                account_id=account_id,
                 active_profile_id=pin.active_profile_id,
                 household_id=pin.active_profile_id,
                 session_type=auth.session_type,
@@ -147,9 +155,9 @@ class DbToolPolicySource:
             actor_profile_id=actor_profile_id,
         )
         return tool_policy_context(
-            account_id=account.id,
-            active_profile_id=profile.id,
-            household_id=profile.household_id,
+            account_id=account_id,
+            active_profile_id=profile.__dict__["id"],
+            household_id=profile.__dict__["household_id"],
             session_type=auth.session_type,
             actor_role=actor_role,
             capabilities=evaluate_capabilities(cap_ctx),

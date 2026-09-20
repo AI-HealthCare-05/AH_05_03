@@ -155,3 +155,86 @@ class TestHealthAssistantAuthSubjects:
         assert chat.json()["error_code"] == "TOKEN_INVALID"
         assert stream.status_code == status.HTTP_401_UNAUTHORIZED
         assert stream.json()["error_code"] == "TOKEN_INVALID"
+
+
+class TestHealthAssistantPolicyActorAudit:
+    async def test_pin_session_writes_masked_policy_actor_audit(self, client: AsyncClient, monkeypatch) -> None:
+        from app.core import config
+        from app.dtos.health_assistant import HealthAssistantLlmResponse, HealthAssistantScopeDecision
+
+        monkeypatch.setattr(config, "OBSERVABILITY_HMAC_SECRET", "observability-hmac-secret-32chars!!")
+
+        class FakeLlm:
+            async def generate_structured_response(self, *args, **kwargs):
+                schema = kwargs.get("response_schema")
+                if schema is None and len(args) >= 3:
+                    schema = args[2]
+                if schema is HealthAssistantScopeDecision:
+                    return HealthAssistantScopeDecision(
+                        scope="health",
+                        requires_authoritative_evidence=False,
+                    )
+                return HealthAssistantLlmResponse(intent="general_chat", assistant_message="안녕하세요.")
+
+            async def generate_structured_response_with_tools(self, *args, **kwargs):
+                return await self.generate_structured_response(*args, **kwargs), None
+
+            def stream_structured_response(self, *args, **kwargs):
+                async def chunks():
+                    yield '{"intent":"general_chat","assistant_message":"안녕하세요."}'
+
+                return chunks()
+
+            async def stream_structured_response_with_tools(self, *args, **kwargs):
+                return self.stream_structured_response(*args, **kwargs), None
+
+        fake = FakeLlm()
+        monkeypatch.setattr("app.services.health_assistant.shared_chat_client", lambda: fake)
+        monkeypatch.setattr("app.services.health_assistant.shared_classifier_client", lambda: fake)
+
+        headers = await _login(client, "policy-actor-audit@example.com")
+        household_id = (await client.post("/api/v1/households", headers=headers)).json()["data"]["id"]
+        profile = await client.post(
+            "/api/v1/profiles",
+            headers=headers,
+            json={"household_id": household_id, "display_name": "구성원", "relationship": "본인"},
+        )
+        profile_id = profile.json()["data"]["id"]
+        issued = await client.post(f"/api/v1/profiles/{profile_id}/pin-credentials", headers=headers)
+        member_pin = issued.json()["data"]["temporary_pin"]
+        opened = await client.post(
+            f"/api/v1/profiles/{profile_id}/member-sessions",
+            headers=headers,
+            json={"pin": member_pin},
+        )
+        assert opened.status_code == status.HTTP_201_CREATED
+        member_headers = {
+            **headers,
+            "X-Member-Session-Token": opened.json()["data"]["session_token"],
+        }
+        chat = await client.post(
+            "/api/v1/health-assistant/chat",
+            headers=member_headers,
+            json={
+                "messages": [{"role": "user", "content": "안녕"}],
+                "profile_context": {"profile_id": profile_id, "profile_name": "구성원"},
+            },
+        )
+        assert chat.status_code == status.HTTP_200_OK
+        all_events = await client.get(
+            f"/api/v1/households/{household_id}/audit-events",
+            headers=headers,
+        )
+        assert all_events.status_code == status.HTTP_200_OK
+        kinds = [item["event_type"] for item in all_events.json()["data"]["items"]]
+        assert "health_assistant.policy_actor" in kinds, kinds
+        actor_event = next(
+            item for item in all_events.json()["data"]["items"] if item["event_type"] == "health_assistant.policy_actor"
+        )
+        meta = actor_event["metadata"]
+        assert meta["session_type"] == "pin"
+        assert meta["pin_session_valid"] == "true"
+        assert meta["actor_profile_alias"]
+        assert profile_id not in meta["actor_profile_alias"]
+        assert "session_token" not in meta
+        assert member_pin not in str(meta)

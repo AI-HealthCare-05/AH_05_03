@@ -54,16 +54,32 @@ async def build_context(
     profile: FamilyProfile,
     actor_profile_id: uuid.UUID | None,
 ) -> CapabilityContext:
-    household = await household_repo.get(profile.household_id)
+    await session.refresh(
+        profile,
+        attribute_names=[
+            "household_id",
+            "id",
+            "ownership_type",
+            "claimed_account_id",
+            "adult_transitioned_at",
+            "adult_transition_pending_at",
+            "member_role",
+        ],
+    )
+    household_id = profile.__dict__["household_id"]
+    household = await household_repo.get(household_id)
     if household is None or household.status is not HouseholdStatus.ACTIVE:
         raise HouseholdNotFoundError()
-    is_member = await household_repo.has_active_membership(profile.household_id, account.id)
+    is_member = await household_repo.has_active_membership(household_id, account.id)
     actor_role: MemberRole | None = None
     if actor_profile_id is not None:
         actor = await profile_repo.get(actor_profile_id)
-        if actor is None or actor.household_id != profile.household_id:
+        if actor is None:
             raise ProfileAccessDeniedError()
-        actor_role = actor.member_role
+        await session.refresh(actor, attribute_names=["household_id", "member_role"])
+        if actor.__dict__["household_id"] != household_id:
+            raise ProfileAccessDeniedError()
+        actor_role = actor.__dict__["member_role"]
     guardian_repo = GuardianRepository(session)
     now = datetime.now(tz=timezone.utc)
     product = await guardian_repo.is_product_guardian(profile.id, account.id)
@@ -209,9 +225,13 @@ _AUDIT_METADATA_ALLOWLIST = frozenset(
         "identity_verified",
         "key_id",
         "env",
+        "session_type",
+        "pin_session_valid",
+        "actor_profile_alias",
     }
 )
 _SECRET_FRAGMENTS = ("pin", "password", "token", "secret", "passcode", "bearer ", "dek")
+_AUDIT_ENUM_VALUE_KEYS = frozenset({"session_type", "pin_session_valid"})
 
 
 def sanitize_audit_metadata(event_metadata: object) -> dict[str, str]:
@@ -229,7 +249,7 @@ def sanitize_audit_metadata(event_metadata: object) -> dict[str, str]:
                     continue
                 text = str(value)[:80]
                 lowered = text.lower()
-                if any(part in lowered for part in _SECRET_FRAGMENTS):
+                if key not in _AUDIT_ENUM_VALUE_KEYS and any(part in lowered for part in _SECRET_FRAGMENTS):
                     continue
                 cleaned[key] = text
             return
