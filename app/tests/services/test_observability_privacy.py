@@ -79,7 +79,7 @@ def test_allowed_metadata_separates_offered_and_called_tools() -> None:
     assert payload["offered_tool_names"] == ["search_hospital", "query_health_records"]
     assert payload["called_tool_names"] == ["search_hospital"]
     assert payload["tool_call_count"] == 1
-    assert payload["langfuse_export"] is False
+    assert payload["transcript_included"] is False
     assert payload["outcome"] == "non_streaming_success"
 
 

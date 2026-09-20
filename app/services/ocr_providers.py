@@ -25,6 +25,7 @@ from typing import Any, Protocol, cast
 from app.core import config
 from app.dtos.ocr import OcrDocumentContent
 from app.exceptions import OcrUnavailableError, OcrUnsupportedTypeError
+from app.services.observability.privacy import mask_for_provider
 
 #: 접두사가 없는 항목은 Gemini 다. 기존 표기(`gemini-3.5-flash`)를 그대로 받기 위한 것이다.
 DEFAULT_PROVIDER = "gemini"
@@ -62,7 +63,7 @@ class GeminiProvider:
         parts = [types.Part.from_bytes(data=content, mime_type=mime) for content, mime in files]
         # 파트와 프롬프트를 그냥 펼치면 `list[object]` 로 추론된다. SDK 가 내보내는
         # `PartUnionDict` 를 그대로 써야 시그니처에 들어간다.
-        contents: list[types.PartUnionDict] = [*parts, prompt]
+        contents: list[types.PartUnionDict] = [*parts, mask_for_provider(prompt)]
         stream = await client.aio.models.generate_content_stream(
             model=self.model,
             contents=contents,
@@ -111,7 +112,7 @@ class OpenAIProvider:
             raise OcrUnsupportedTypeError(f"OpenAI 경로는 {', '.join(unsupported)} 을 지원하지 않습니다.")
 
         client = AsyncOpenAI(api_key=config.OPENAI_API_KEY, timeout=config.DEV_OCR_CALL_TIMEOUT_SECONDS)
-        content: list[dict] = [{"type": "text", "text": prompt}]
+        content: list[dict] = [{"type": "text", "text": mask_for_provider(prompt)}]
         content += [_part(data, mime) for data, mime in files]
 
         # **Gemini 와 같은 스키마를 강제한다.** 그래야 두 경로의 결과가 같은 모양이고,

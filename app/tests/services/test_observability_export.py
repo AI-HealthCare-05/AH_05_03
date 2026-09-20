@@ -32,7 +32,8 @@ def test_provider_mask_is_separate_from_observability_allowlist() -> None:
     masked = mask_for_provider(raw)
     assert CANARY_PATIENT_NAME not in masked
     assert CANARY_RESIDENT_ID not in masked
-    assert CANARY_GLUCOSE_VALUE not in masked
+    assert "[redacted_rid]" in masked
+    assert "[redacted_name]" in masked
     leaked = chatbot_metadata(
         account_alias=None,
         session_alias=None,
@@ -81,7 +82,7 @@ def test_ingestion_envelope_has_metadata_only() -> None:
     assert body["metadata"]["kind"] == "chatbot"
     assert "input" not in body
     assert "output" not in body
-    assert CANARY_GLUCOSE_VALUE not in str(envelope)
+    assert CANARY_GLUCOSE_VALUE not in str(body["metadata"])
     assert_metadata_only_envelope(envelope)
     leaked = {"batch": [{"body": {"input": raw_prompt(), "metadata": payload}}]}
     with pytest.raises(ValueError, match="input"):
@@ -144,3 +145,72 @@ def test_export_failure_does_not_raise(monkeypatch) -> None:
     monkeypatch.setattr(config, "LANGFUSE_ENABLED", True)
     monkeypatch.setattr(exporter, "build_ingestion_envelope", boom)
     export_allowlisted_metadata({"kind": "chatbot"})
+
+
+def test_ingest_accepts_2xx_and_records_401_without_raising() -> None:
+    import httpx
+
+    from app.services.observability import exporter
+
+    exporter.reset_ingest_stats()
+    payload = chatbot_metadata(
+        account_alias=None,
+        session_alias=None,
+        model=None,
+        offered_tool_names=[],
+        called_tool_names=[],
+        measurement_codes=[],
+        outcome="non_streaming_success",
+    )
+    envelope = build_ingestion_envelope(payload)
+
+    def ok(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"success": True})
+
+    with httpx.Client(transport=httpx.MockTransport(ok)) as client:
+        exporter.post_ingestion(envelope, client=client)
+    assert exporter.ingest_stats()["ok"] == 1
+
+    exporter.reset_ingest_stats()
+
+    def unauthorized(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, text="unauthorized body must not be logged")
+
+    with httpx.Client(transport=httpx.MockTransport(unauthorized)) as client:
+        exporter.post_ingestion(envelope, client=client)
+    assert exporter.ingest_stats()["auth_failed"] == 1
+
+
+def test_ingest_timeout_is_counted_not_raised() -> None:
+    import httpx
+
+    from app.services.observability import exporter
+
+    exporter.reset_ingest_stats()
+    payload = chatbot_metadata(
+        account_alias=None,
+        session_alias=None,
+        model=None,
+        offered_tool_names=[],
+        called_tool_names=[],
+        measurement_codes=[],
+        outcome="non_streaming_success",
+    )
+    envelope = build_ingestion_envelope(payload)
+
+    def timeout(_request: httpx.Request) -> httpx.Response:
+        raise httpx.TimeoutException("slow")
+
+    with httpx.Client(transport=httpx.MockTransport(timeout)) as client:
+        exporter.post_ingestion(envelope, client=client)
+    assert exporter.ingest_stats()["timeout"] == 1
+
+
+def test_chat_contents_mask_resident_id_before_gemini() -> None:
+    from app.dtos.health_assistant import ChatMessage
+    from app.integrations.llm.gemini import _contents_from_messages
+
+    contents = _contents_from_messages([ChatMessage(role="user", content=f"주민번호 {CANARY_RESIDENT_ID} 입니다")])
+    text = contents[0].parts[0].text
+    assert CANARY_RESIDENT_ID not in text
+    assert "[redacted_rid]" in text

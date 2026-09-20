@@ -21,13 +21,14 @@ from app.core import config
 from app.dtos.health_assistant import ChatMessage
 from app.exceptions import LlmProviderFailedError, LlmTimeoutError, LlmUnavailableError
 from app.integrations.llm.protocol import LLMClientProtocol
+from app.services.observability.privacy import mask_for_provider
 
 T = TypeVar("T", bound=BaseModel)
 
 
 def _format_gemini_error(prefix: str, ex: Exception) -> str:
     code = getattr(ex, "code", None)
-    msg = getattr(ex, "message", None) or str(ex)
+    msg = mask_for_provider(getattr(ex, "message", None) or str(ex))
     if code == 429 or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
         return f"{prefix}: Gemini 무료 호출 한도(분당 15회)를 초과했습니다. 약 30~50초 후 다시 시도해 주세요."
     if code == 400:
@@ -38,6 +39,17 @@ def _format_gemini_error(prefix: str, ex: Exception) -> str:
 
 
 logger = logging.getLogger(__name__)
+
+
+def _contents_from_messages(messages: list[ChatMessage]) -> list[types.Content]:
+    return [
+        types.Content(
+            role="user" if message.role == "user" else "model",
+            parts=[types.Part.from_text(text=mask_for_provider(message.content))],
+        )
+        for message in messages
+        if message.content and message.content.strip()
+    ]
 
 
 class GeminiLLMClient(LLMClientProtocol):
@@ -64,14 +76,7 @@ class GeminiLLMClient(LLMClientProtocol):
         messages: list[ChatMessage],
         response_schema: type[T],
     ) -> T:
-        gemini_contents = [
-            types.Content(
-                role="user" if m.role == "user" else "model",
-                parts=[types.Part.from_text(text=m.content)],
-            )
-            for m in messages
-            if m.content and m.content.strip()
-        ]
+        gemini_contents = _contents_from_messages(messages)
         try:
             response = await asyncio.wait_for(
                 self.client.aio.models.generate_content(
@@ -100,14 +105,7 @@ class GeminiLLMClient(LLMClientProtocol):
         messages: list[ChatMessage],
         response_schema: type[T],
     ) -> AsyncIterator[str]:
-        gemini_contents = [
-            types.Content(
-                role="user" if m.role == "user" else "model",
-                parts=[types.Part.from_text(text=m.content)],
-            )
-            for m in messages
-            if m.content and m.content.strip()
-        ]
+        gemini_contents = _contents_from_messages(messages)
 
         async def _stream() -> AsyncIterator[str]:
             try:
@@ -136,14 +134,7 @@ class GeminiLLMClient(LLMClientProtocol):
         tools: list[Any],
         tool_executor: Callable[[str, dict[str, Any]], Awaitable[Any]],
     ) -> tuple[list[Any] | None, list[Any] | None]:
-        gemini_contents = [
-            types.Content(
-                role="user" if m.role == "user" else "model",
-                parts=[types.Part.from_text(text=m.content)],
-            )
-            for m in messages
-            if m.content and m.content.strip()
-        ]
+        gemini_contents = _contents_from_messages(messages)
 
         try:
             first_turn = await asyncio.wait_for(
@@ -176,8 +167,8 @@ class GeminiLLMClient(LLMClientProtocol):
                 tool_res = await tool_executor(fc_name, fc_args)
                 result_payload = tool_res.model_dump(mode="json") if hasattr(tool_res, "model_dump") else tool_res
             except Exception as e:
-                logger.warning("Gemini tool execution failed: %s %s - %s", fc_name, fc_args, e)
-                tool_res = result_payload = {"error": str(e)}
+                logger.warning("Gemini tool execution failed name=%s type=%s", fc_name, type(e).__name__)
+                tool_res = result_payload = {"error": mask_for_provider(str(e))}
             part = types.Part.from_function_response(
                 name=fc_name,
                 response={"result": result_payload},

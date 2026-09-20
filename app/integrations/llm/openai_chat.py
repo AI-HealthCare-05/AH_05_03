@@ -30,9 +30,21 @@ from app.core import config
 from app.dtos.health_assistant import ChatMessage
 from app.exceptions import LlmProviderFailedError, LlmTimeoutError, LlmUnavailableError
 from app.integrations.llm.protocol import LLMClientProtocol
+from app.services.observability.privacy import mask_for_provider
 
 T = TypeVar("T", bound=BaseModel)
 logger = logging.getLogger(__name__)
+
+
+def _masked_user_messages(messages: list[ChatMessage]) -> list[dict[str, str]]:
+    return [
+        {
+            "role": "assistant" if message.role == "assistant" else "user",
+            "content": mask_for_provider(message.content),
+        }
+        for message in messages
+        if message.content and message.content.strip()
+    ]
 
 
 def _strictify(schema: dict[str, Any]) -> dict[str, Any]:
@@ -84,10 +96,7 @@ class OpenAIChatClient(LLMClientProtocol):
         response_schema: type[T],
     ) -> T:
         payload: list[dict[str, str]] = [{"role": "system", "content": system_instruction}]
-        payload += [
-            {"role": "assistant" if message.role == "assistant" else "user", "content": message.content}
-            for message in messages
-        ]
+        payload += _masked_user_messages(messages)
 
         return await self._generate_with_payload(payload, response_schema)
 
@@ -138,10 +147,7 @@ class OpenAIChatClient(LLMClientProtocol):
     ) -> AsyncIterator[str]:
         """같은 요청을 스트리밍으로. 조각은 원본 JSON 문자열이다."""
         payload: list[dict[str, str]] = [{"role": "system", "content": system_instruction}]
-        payload += [
-            {"role": "assistant" if message.role == "assistant" else "user", "content": message.content}
-            for message in messages
-        ]
+        payload += _masked_user_messages(messages)
         async for piece in self._stream_with_payload(payload, response_schema):
             yield piece
 
@@ -194,11 +200,7 @@ class OpenAIChatClient(LLMClientProtocol):
             for declaration in declarations
         ]
         payload: list[dict[str, Any]] = [{"role": "system", "content": system_instruction}]
-        payload.extend(
-            {"role": "assistant" if message.role == "assistant" else "user", "content": message.content}
-            for message in messages
-            if message.content and message.content.strip()
-        )
+        payload.extend(_masked_user_messages(messages))
         try:
             completion = await asyncio.wait_for(
                 self.client.chat.completions.create(
@@ -236,7 +238,7 @@ class OpenAIChatClient(LLMClientProtocol):
                 body = result.model_dump(mode="json") if hasattr(result, "model_dump") else result
             except Exception as ex:
                 logger.warning("OpenAI tool execution failed: %s (%s)", name, type(ex).__name__)
-                result = body = {"error": str(ex)}
+                result = body = {"error": mask_for_provider(str(ex))}
             return result, {"role": "tool", "tool_call_id": call.id, "content": json.dumps(body, ensure_ascii=False)}
 
         function_calls = cast(list[Any], calls)

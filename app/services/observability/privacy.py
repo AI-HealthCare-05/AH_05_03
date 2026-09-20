@@ -33,7 +33,7 @@ CHATBOT_ALLOWED_KEYS = frozenset(
         "measurement_count",
         "outcome",
         "exact_values_logged",
-        "langfuse_export",
+        "transcript_included",
     }
 )
 CHATBOT_OUTCOMES = frozenset({"non_streaming_success", "streaming_success"})
@@ -47,7 +47,7 @@ VISION_ALLOWED_KEYS = frozenset(
         "page_count",
         "outcome",
         "exact_values_logged",
-        "langfuse_export",
+        "transcript_included",
     }
 )
 VISION_OUTCOMES = frozenset({"vision_success", "vision_error"})
@@ -106,13 +106,15 @@ def _walk_strings(value: Any) -> list[str]:
 
 
 def mask_for_provider(text: str) -> str:
-    """모델 공급자 경로·예외 문자열용 마스킹. 관찰 allowlist와 별개다."""
+    """공급자에게 보내거나 예외 문자열을 남기기 전의 PII 치환.
+
+    문서 픽셀 마스킹(#210)이 아니다. 주민번호·전화·canary 이름만 지운다.
+    혈당 수치 원문은 대화 근거에 필요할 수 있어 여기서 지우지 않는다.
+    """
     redacted = _RESIDENT_ID.sub("[redacted_rid]", text)
     redacted = _PHONE.sub("[redacted_phone]", redacted)
     redacted = redacted.replace(CANARY_RESIDENT_ID, "[redacted_rid]")
     redacted = redacted.replace(CANARY_PATIENT_NAME, "[redacted_name]")
-    if CANARY_GLUCOSE_VALUE in redacted and ("mg/dL" in redacted or "glucose" in redacted.lower()):
-        redacted = redacted.replace(CANARY_GLUCOSE_VALUE, "[redacted_value]")
     return redacted
 
 
@@ -159,8 +161,8 @@ def assert_allowlisted_chatbot_metadata(payload: dict[str, Any]) -> None:
         raise ValueError(f"chatbot metadata keys must match allowlist extra={extra} missing={missing}")
     if payload["kind"] != "chatbot" or payload["outcome"] not in CHATBOT_OUTCOMES:
         raise ValueError("kind/outcome not allowed")
-    if payload["exact_values_logged"] is not False or payload["langfuse_export"] is not False:
-        raise ValueError("chatbot metadata cannot log exact values or include transcript export")
+    if payload["exact_values_logged"] is not False or payload["transcript_included"] is not False:
+        raise ValueError("chatbot metadata cannot log exact values or include transcript")
     _require_alias(payload["account"])
     _require_alias(payload["session"])
     model = payload["model"]
@@ -198,8 +200,8 @@ def assert_allowlisted_vision_metadata(payload: dict[str, Any]) -> None:
         raise ValueError(f"vision metadata keys must match allowlist extra={extra} missing={missing}")
     if payload["kind"] != "document_vision" or payload["outcome"] not in VISION_OUTCOMES:
         raise ValueError("kind/outcome not allowed")
-    if payload["exact_values_logged"] is not False or payload["langfuse_export"] is not False:
-        raise ValueError("vision metadata cannot log exact values or include transcript export")
+    if payload["exact_values_logged"] is not False or payload["transcript_included"] is not False:
+        raise ValueError("vision metadata cannot log exact values or include transcript")
     _require_alias(payload["account"])
     _require_alias(payload["job"])
     model = payload["model"]
