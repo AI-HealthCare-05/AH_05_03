@@ -137,7 +137,7 @@ def build_health_assistant_scope_instruction() -> str:
   - pregnancy_supplement_context: 임신·수유 중 영양제 문의에 필요한 현재 정보가 부족함
   - pregnancy_symptom_context: 앞선 임신 맥락에서 새 증상을 말했지만 주수·시작 시점·정도·동반 증상이 부족함
   - exercise_safety_context: 증상·질환이 있는 사용자의 운동 가능 여부 판단에 필요한 정보가 부족함
-  - medication_safety_context: 개인의 약 복용 가능 여부 판단에 필요한 정보가 부족함
+  - medication_safety_context: 개인의 약 복용 가능 여부("이 약 먹어도 돼?") 판단에 필요한 정보가 부족함. 처방약 중단·감량 가능 여부("약 끊어도 되지?", "약 줄여도 돼?")는 약 이름 몰라도 일반 위험을 설명할 수 있으므로 answer로 판정하세요.
   - personal_health_context: 위 종류에는 해당하지 않지만 개인별 건강 판단에 필요한 정보가 부족함
 - answer이면 clarification_kind=none입니다.
 - scope가 health가 아니면 response_mode=answer, clarification_kind=none입니다.
@@ -170,8 +170,14 @@ def build_health_assistant_scope_instruction() -> str:
 - '오늘 한강에서 러닝해도 돼?' → health, personalized_advice, [none], true, [outdoor], answer
 - '고혈압인데 라면 먹어도 돼?' → health, personalized_advice, [chronic_condition], true,
   [health_knowledge, food_nutrition]
-- '아스피린 먹어도 돼?' → health, personalized_advice, [medication], true, [medication]
+- '아스피린 먹어도 돼?' → health, personalized_advice, [medication], true, [medication],
+  clarify, clarification_kind=medication_safety_context
   (별도 질환 언급 없음 — health_knowledge 넣지 않음)
+- '혈압 괜찮게 나왔는데 이제 약 끊어도 되지?' → health, personalized_advice, [medication], true,
+  [health_knowledge], answer
+  (처방약 중단 위험은 약 이름 없이도 설명 가능 — clarify 금지)
+- '이제 약 안 먹어도 돼?' → health, personalized_advice, [medication], true,
+  [health_knowledge], answer
 - '당뇨 있는데 아스피린 먹어도 돼?' → health, personalized_advice,
   [chronic_condition, medication], true, [medication, health_knowledge]
 - '요즘 저녁마다 소주를 한 병씩 마시고 있어 걱정이야' → health, personalized_advice, [none], true,
