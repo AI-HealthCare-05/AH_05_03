@@ -230,16 +230,16 @@ TOOLS_BY_NAME = {spec.name: spec for spec in TOOL_SPECS}
 
 def declared_llm_tool_names() -> frozenset[str]:
     """코드에 있는 FunctionDeclaration 이름. 설계도에만 있는 이름은 여기 없다."""
-    names = {
+    names = [
         QUERY_HEALTH_RECORDS_DECLARATION.name,
         GET_ALCOHOL_CONSULTATION_SNAPSHOT_DECLARATION.name,
         MEDICATION_TOOL_DECLARATION.name,
         FOOD_NUTRITION_TOOL_DECLARATION.name,
         SEARCH_HEALTH_KNOWLEDGE_DECLARATION.name,
         OUTDOOR_CONDITIONS_TOOL_DECLARATION.name,
-    }
-    names.update(declaration.name for declaration in FACILITY_TOOL_DECLARATIONS)
-    return frozenset(names)
+        *(declaration.name for declaration in FACILITY_TOOL_DECLARATIONS),
+    ]
+    return frozenset(str(name) for name in names if name)
 
 
 def model_selectable_names() -> frozenset[str]:

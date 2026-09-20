@@ -147,29 +147,31 @@ def _project_outdoor(result: OutdoorConditionsResult) -> dict[str, Any]:
     return _pick(payload, spec.result_fields)
 
 
-_PROJECTORS = (
-    (HealthRecordQueryResult, lambda result: project_health_record_query_result(result).model_dump(mode="json")),
-    (
-        AlcoholConsultationSnapshot,
-        lambda result: _pick(
-            result.model_dump(mode="json"), TOOLS_BY_NAME["get_alcohol_consultation_snapshot"].result_fields
-        ),
-    ),
-    (FacilitySearchResult, _project_facility),
-    (MedicationSearchResult, _project_medication),
-    (FoodNutritionSearchResult, _project_food),
-    (HealthKnowledgeSearchResult, _project_knowledge),
-    (OutdoorConditionsResult, _project_outdoor),
-)
+def _project_known_dto(result: object) -> dict[str, Any] | None:
+    if isinstance(result, HealthRecordQueryResult):
+        return project_health_record_query_result(result).model_dump(mode="json")
+    if isinstance(result, AlcoholConsultationSnapshot):
+        return _pick(result.model_dump(mode="json"), TOOLS_BY_NAME["get_alcohol_consultation_snapshot"].result_fields)
+    if isinstance(result, FacilitySearchResult):
+        return _project_facility(result)
+    if isinstance(result, MedicationSearchResult):
+        return _project_medication(result)
+    if isinstance(result, FoodNutritionSearchResult):
+        return _project_food(result)
+    if isinstance(result, HealthKnowledgeSearchResult):
+        return _project_knowledge(result)
+    if isinstance(result, OutdoorConditionsResult):
+        return _project_outdoor(result)
+    return None
 
 
 def project_for_model(name: str, result: Any) -> Any:
     """모델에 넘길 도구 결과만 남긴다. API 응답 DTO는 그대로 둔다."""
     if result is None or (isinstance(result, dict) and result.get("error")):
         return result
-    for model_type, projector in _PROJECTORS:
-        if isinstance(result, model_type):
-            return projector(result)
+    projected = _project_known_dto(result)
+    if projected is not None:
+        return projected
     if hasattr(result, "model_dump"):
         dumped = result.model_dump(mode="json")
         spec = TOOLS_BY_NAME.get(name)
