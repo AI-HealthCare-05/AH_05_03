@@ -14,6 +14,7 @@ class FamilyInvitationCreateRequest(BaseRequestModel):
     household_id: uuid.UUID
     invitee_email: EmailStr
     target_profile_ref: str = Field(min_length=43, max_length=86, pattern=_PROFILE_REF_PATTERN)
+    target_profile_id: uuid.UUID | None = None
 
     @field_validator("invitee_email", mode="after")
     @classmethod
@@ -31,6 +32,7 @@ class FamilyInvitationData(BaseSerializerModel):
     inviter_account_id: uuid.UUID
     invitee_email: str
     target_profile_ref: str
+    target_profile_id: uuid.UUID | None = None
     status: InvitationStatus
     expires_at: datetime
     accepted_by_account_id: uuid.UUID | None

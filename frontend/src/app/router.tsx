@@ -16,7 +16,6 @@ import {
   DataManagementPage,
   HealthDataPage,
   LandingPage,
-  LandingV2Page,
   PainDiaryPage,
   UiPreviewPage,
   UiPreview1Page,
@@ -36,15 +35,16 @@ import {
   UiPreview15Page,
   UiPreview16Page,
   UiPreview17Page,
-  UiPreview18Page,
+  FamilyHomePage,
   HealthData3Page,
+  WallOverviewPage,
+  WallPairPage,
 } from "./lazyRoutes";
-import { LOCAL_HOME_IS_PREVIEW18 } from "./localHomeSwap";
 import { RootLayout } from "./RootLayout";
 
 export const router = createBrowserRouter([
   {
-    // **관문 밖에 있는 유일한 화면.** 로그인 관문은 `RootLayout` 이 `Outlet` 대신
+    // **관문 밖에 있는 화면.** 로그인 관문은 `RootLayout` 이 `Outlet` 대신
     // 그리는 것이라 주소가 없는데, 가입은 사람에게 링크로 건네야 해서 주소가
     // 필요하다. 밖에 둘 수 있는 조건은 하나 — 기기 안 건강기록을 읽지 않을 것.
     // `SignUpPage` 는 `useLocalDomain` 을 쓰지 않고, 로그인한 사람이 오면 스스로
@@ -72,21 +72,26 @@ export const router = createBrowserRouter([
     errorElement: <ErrorPage />,
   },
   {
-    // **관문 밖에 있는 셋째 화면 — 소개 페이지의 대안 디자인 시안(v2).**
-    // 자격은 `/landing` 과 한 글자도 다르지 않다: `features/landing-v2` 는
-    // `useLocalDomain` 도 `serverApiClient` 도 부르지 않고, 화면의 수치는 v1 과
-    // **같은** `features/landing/landingStory.ts` 의 예시 시나리오다
-    // (`features/landing-v2/LandingV2Page.test.tsx` 가 지킨다).
-    //
-    // 주소를 따로 둔 이유는 견주기 위해서다. 로그아웃 상태의 `/` 는 여전히
-    // `/landing`(v1)로 간다 — 어느 쪽을 정본으로 세울지는 디자인 결정이고,
-    // 그 결정 전에 기본 동작을 바꾸지 않는다.
+    // 예전 캡슐 시안 주소. 공개 소개는 `/landing` 한 벌만 둔다.
     path: "/landing-v2",
+    element: <Navigate to="/landing" replace />,
+    errorElement: <ErrorPage />,
+  },
+  {
+    // 공용 벽. 마스터 로그인 세션 없이 기기 토큰만 쓴다. 건강 수치·로컬 정본을 읽지 않는다.
+    path: "/wall/pair",
     element: (
-      // 이 라우트는 `RootLayout` 밖이라 그쪽의 Suspense 경계를 못 쓴다. 폴백이
-      // 없으면 지연 청크를 받는 동안 React 가 그대로 던진다.
       <Suspense fallback={<PageSkeleton />}>
-        <LandingV2Page />
+        <WallPairPage />
+      </Suspense>
+    ),
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: "/wall",
+    element: (
+      <Suspense fallback={<PageSkeleton />}>
+        <WallOverviewPage />
       </Suspense>
     ),
     errorElement: <ErrorPage />,
@@ -100,7 +105,7 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: LOCAL_HOME_IS_PREVIEW18 ? <UiPreview18Page /> : <HomePage />,
+        element: <FamilyHomePage />,
       },
       {
         // 랜딩의 「로그인」이 가리키는 주소. 로그아웃 상태에서 `/` 는 소개로 비키므로
@@ -258,7 +263,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "ui-preview18",
-        element: LOCAL_HOME_IS_PREVIEW18 ? <HomePage /> : <UiPreview18Page />,
+        element: <Navigate to="/" replace />,
       },
       // 레이아웃 안에서 잡는 404. 헤더와 내비게이션이 남아 있어야 사용자가
       // 막다른 길에 서지 않는다. 주소를 잘못 친 경우도 여기로 온다.

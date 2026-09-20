@@ -103,6 +103,7 @@ describe("AccountPage", () => {
     expect(screen.getByText("member@example.com", { selector: ".membership-identity small" })).toBeInTheDocument();
     expect(screen.getByText("로컬 프로필 미연결")).toBeInTheDocument();
     expect(screen.queryByText(/account-id/u)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "벽 기기 연결" })).toBeInTheDocument();
   });
 
   it("회원 탈퇴 전에 이메일 재확인을 요구하고, 로그인 화면에 로컬 데이터 보존 결과를 실어 보낸다", async () => {
@@ -579,6 +580,9 @@ function mockAccountReads() {
   vi.spyOn(serverApiClient, "getSubscription").mockResolvedValue(subscription);
   vi.spyOn(serverApiClient, "listHouseholds").mockResolvedValue([]);
   vi.spyOn(serverApiClient, "listHouseholdMemberships").mockResolvedValue([]);
+  vi.spyOn(serverApiClient, "listHouseholdDevices").mockResolvedValue([]);
+  vi.spyOn(serverApiClient, "listPinLockAlerts").mockResolvedValue([]);
+  vi.spyOn(serverApiClient, "listAuditEvents").mockResolvedValue([]);
   vi.spyOn(serverApiClient, "listInvitations").mockResolvedValue({ sent: [], received: [] });
   vi.spyOn(serverApiClient, "listProfileLinks").mockResolvedValue([]);
 }

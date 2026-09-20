@@ -20,8 +20,7 @@
  * 관문 밖에 있어도 되는 이유
  * --------------------------
  * 이 화면은 기기 안 건강기록을 읽지 않는다(`useLocalDomain` 을 쓰지 않는다).
- * 관문 밖에 둘 수 있는 화면의 조건이 그것이고, `router.test.tsx` 가 그 예외를
- * 이 하나로 못 박는다.
+ * 같은 조건의 다른 주소는 `router.test.tsx` 의 `OUTSIDE_THE_GATE` 가 지킨다.
  */
 
 import { type FormEvent, useState } from "react";
@@ -49,11 +48,17 @@ export function SignUpPage() {
     try {
       // 가입과 로그인을 한 번에 한다. 갈라 두면 가입 직후 다시 로그인 화면을 보게
       // 되는데, 방금 정한 비밀번호를 그 자리에서 또 치라는 뜻이 된다.
-      await signIn(String(form.get("email") ?? ""), String(form.get("password") ?? ""), {
-        signUpFirst: true,
-      });
+      await signIn(
+        String(form.get("email") ?? ""),
+        String(form.get("password") ?? ""),
+        {
+          signUpFirst: true,
+        },
+      );
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "가입하지 못했습니다.");
+      setError(
+        caught instanceof Error ? caught.message : "가입하지 못했습니다.",
+      );
     } finally {
       setWorking(false);
     }
@@ -72,52 +77,57 @@ export function SignUpPage() {
   }
 
   return (
-    <div className="signin-shell">
-      <div className="signin-panel">
-        <div className="signin-brand">
-          <img className="brand-mark" src="/ieobom-icon.png" alt="" aria-hidden="true" width={42} height={42} />
-          <div>
-            <strong>이어봄</strong>
-            <small>우리 가족 건강기록</small>
+    <div className="app-shell stitch-shell">
+      <div className="signin-shell">
+        <div className="signin-panel">
+          <div className="signin-brand">
+            <img
+              className="brand-mark"
+              src="/ieobom-icon.png"
+              alt=""
+              aria-hidden="true"
+              width={42}
+              height={42}
+            />
+            <div>
+              <strong>이어봄</strong>
+              <small>우리 가족 건강기록</small>
+            </div>
           </div>
-        </div>
 
-        <h1>이어봄 시작하기</h1>
-        <p className="signin-lead">
-          이메일과 비밀번호만 있으면 됩니다. 건강기록은 계정에 저장되고, 나와 가족
-          구성원만 열람합니다.
-        </p>
+          <h1>이어봄 시작하기</h1>
 
-        {error ? (
-          <p className="alert error-alert" role="alert">
-            {error}
-          </p>
-        ) : null}
+          {error ? (
+            <p className="alert error-alert" role="alert">
+              {error}
+            </p>
+          ) : null}
 
-        <AuthCard
-          mode="signup"
-          working={working}
-          invitationEmail={invited}
-          onSubmit={submit}
-          footer={
-            <>
-              이미 계정이 있으신가요?{" "}
-              {/* 돌아갈 곳이 없으면 `/signin` — 로그아웃 상태에서 `/` 는 소개로
+          <AuthCard
+            mode="signup"
+            working={working}
+            invitationEmail={invited}
+            onSubmit={submit}
+            footer={
+              <>
+                이미 계정이 있으신가요?{" "}
+                {/* 돌아갈 곳이 없으면 `/signin` — 로그아웃 상태에서 `/` 는 소개로
                   비키므로 로그인 폼이 안 뜬다. 원래 가려던 주소가 있으면 거기로
                   돌려보내고, 거기서 관문이 다시 뜬다. */}
-              <Link to={from ?? "/signin"}>로그인</Link>
-            </>
-          }
-        />
+                <Link to={from ?? "/signin"}>로그인</Link>
+              </>
+            }
+          />
 
-        {/* 세 줄 전부 ADR-011 이전의 약속이었다. 지금은 건강기록도 서버 정본이므로
+          {/* 세 줄 전부 ADR-011 이전의 약속이었다. 지금은 건강기록도 서버 정본이므로
             "서버에는 계정만" 은 틀리고, 대신 실제로 성립하는 것을 적는다 — 어디에
             저장되는지, 누가 볼 수 있는지, 원본 서류는 어떻게 되는지. */}
-        <ul className="signin-notes">
-          <li>건강기록·프로필·판정 결과는 로그인한 계정에 저장됩니다.</li>
-          <li>검진표 원본은 보관하지 않고, 읽어 들이는 동안에만 씁니다.</li>
-          <li>같은 가정 구성원 외에는 열람할 수 없습니다.</li>
-        </ul>
+          <ul className="signin-notes">
+            <li>건강기록·프로필·판정 결과는 로그인한 계정에 저장됩니다.</li>
+            <li>검진표 원본은 보관하지 않고, 읽어 들이는 동안에만 씁니다.</li>
+            <li>같은 가정 구성원 외에는 열람할 수 없습니다.</li>
+          </ul>
+        </div>
       </div>
     </div>
   );

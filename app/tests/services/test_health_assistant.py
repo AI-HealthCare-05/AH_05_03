@@ -16,6 +16,7 @@ from app.dtos.health_assistant import (
     ProfileContext,
 )
 from app.dtos.health_knowledge import HealthKnowledgeItem, HealthKnowledgeSearchResult
+from app.dtos.health_record_query import PersonalHealthRecordCategory
 from app.dtos.health_records import HealthRecordPrefillData, PrefilledFieldData
 from app.dtos.outdoor_conditions import AirQualityConditions, OutdoorConditionsResult, WeatherConditions
 from app.models.households import HouseholdStatus
@@ -1408,9 +1409,6 @@ async def test_health_records_evidence_is_loaded_from_boundary_decision_for_foll
     record_service.load_personal_health_evidence.assert_awaited_once()  # type: ignore[attr-defined]
     call_kwargs = record_service.load_personal_health_evidence.call_args.kwargs  # type: ignore[union-attr]
     assert call_kwargs.get("categories") == ["lab_result"]
-
-
-from app.dtos.health_record_query import PersonalHealthRecordCategory
 
 
 def _health_records_decision(

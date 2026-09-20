@@ -29,16 +29,55 @@ class ProfileUpdateRequest(BaseRequestModel):
     status: ProfileStatus | None = Field(default=None)
 
 
+class HouseholdUnshareRequest(BaseRequestModel):
+    password: str | None = None
+
+
+class ProfileDeletionPreviewData(BaseSerializerModel):
+    profile_id: uuid.UUID
+    ownership_type: str
+    lifecycle_status: str
+    record_count: int
+    membership_unchanged_if_hidden: bool = True
+    recommended_action: Literal["purge_empty", "trash", "forbidden", "minor_review"]
+    backup_hint: str
+    purge_after: datetime | None = None
+
+
+class ProfileDeletionRequestData(BaseSerializerModel):
+    profile_id: uuid.UUID
+    lifecycle_status: str
+    purged: bool
+    purge_after: datetime | None = None
+
+
+class ProfilePurgeJobData(BaseSerializerModel):
+    purged_count: int
+    skipped_count: int
+
+
 class ProfileData(BaseSerializerModel):
     id: uuid.UUID
     household_id: uuid.UUID
     created_by_account_id: uuid.UUID
+    claimed_account_id: uuid.UUID | None = None
     display_name: str
     relationship: str
     birth_date: str | None = None
     gender: Gender | None = None
     account_email: str | None = None
     status: str
+    ownership_type: str
+    lifecycle_status: str
+    member_role: str
+    purge_after: datetime | None = None
+    purged_at: datetime | None = None
+    purge_hold_reason: str | None = None
+    legal_guardian_status: str | None = None
+    minor_deletion_status: str | None = None
+    privacy_self_determined_at: datetime | None = None
+    adult_transition_pending_at: datetime | None = None
+    adult_transitioned_at: datetime | None = None
     row_version: int
     created_at: datetime
     updated_at: datetime

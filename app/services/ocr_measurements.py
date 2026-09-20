@@ -54,6 +54,7 @@ SI 단위 값이 단위 없이 들어와도 **②가 잡는다** — 공복혈�
 
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 from dataclasses import asdict, dataclass
@@ -254,7 +255,7 @@ class Measurement:
 
     field: str
     label: str
-    value: float
+    value: float | None
     unit: str
     #: 원문 4열. 사용자가 화면에서 원본과 대조할 수 있어야 한다.
     source: list[str]
@@ -274,10 +275,20 @@ class ExtractionResult:
     def to_payload(self) -> dict[str, Any]:
         return {
             "values": self.values,
-            "review": [asdict(m) for m in self.review],
-            "unused": [asdict(m) for m in self.unused],
+            "review": [_measurement_payload(row) for row in self.review],
+            "unused": [_measurement_payload(row) for row in self.unused],
             "unmatched": self.unmatched,
         }
+
+
+def _measurement_payload(row: Measurement) -> dict[str, Any]:
+    payload = asdict(row)
+    value = payload["value"]
+    # JSON 은 NaN 을 못 담는다. 워커가 그대로 실으면 조회 쪽에서 null 이 되고,
+    # 예전 DTO 는 float 만 받아 결과 조회가 500 으로 죽었다.
+    if isinstance(value, float) and math.isnan(value):
+        payload["value"] = None
+    return payload
 
 
 # --------------------------------------------------------------------------
@@ -489,7 +500,7 @@ def _unused_row(name: str, label: str, raw_value: str, raw_unit: str, row: list[
     return "unused", Measurement(
         field=name,
         label=label,
-        value=value if value is not None else float("nan"),
+        value=value,
         unit=raw_unit,
         source=list(row),
         reason="모델이 쓰지 않는 검사입니다.",
@@ -554,7 +565,7 @@ def _measure(
     """관문 셋(값·단위·참고치·범위)을 태운다. `("value" | "review", 결과)`."""
     value, reason = _read_value(raw_value)
     if value is None:
-        return "review", Measurement(target, label, float("nan"), raw_unit, list(row), reason or "")
+        return "review", Measurement(target, label, None, raw_unit, list(row), reason or "")
 
     value, unit, reason = _scale_to_canonical_unit(target, value, raw_unit)
     reason = reason or _reference_conflict(target, raw_reference) or bounds_conflict(target, value)
@@ -690,7 +701,7 @@ def extract(tables: list[dict[str, Any]] | None) -> ExtractionResult:
     _resolve_duplicates(duplicated, accepted, review)
 
     return ExtractionResult(
-        values={name: row.value for name, row in accepted.items()},
+        values={name: row.value for name, row in accepted.items() if row.value is not None},
         review=review,
         unused=unused,
         unmatched=unmatched,

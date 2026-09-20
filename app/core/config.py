@@ -2,10 +2,11 @@ import os
 import uuid
 import zoneinfo
 from dataclasses import field
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.core.utils.enums import StrEnum
@@ -76,6 +77,22 @@ class Config(BaseSettings):
     # access 토큰 denylist 조회에만 적용되는 비상 스위치.
     # 회전·등록·무효화는 이 값과 무관하게 항상 fail-closed다.
     AUTH_FAIL_OPEN_ON_REDIS_ERROR: bool = False
+
+    # 개발·스테이징 break-glass 전용. 기본 꺼짐. 프로덕션 계열 환경에서는 켜면 기동이 실패한다.
+    # 키는 Secret Manager → 환경 변수로만 주입한다. 저장소·로그·감사에 원문을 두지 않는다.
+    OPS_RECOVERY_ENABLED: bool = False
+    OPS_CIVIL_MAJORITY_RECOVERY_KEY: str = ""
+    # 회전 중 이전 키. 새 키를 KEY에 넣은 뒤 이 칸에 옛 값을 둔다. 만료 시각이 없으면 이전 키는 거절한다.
+    OPS_CIVIL_MAJORITY_RECOVERY_KEY_PREVIOUS: str = ""
+    OPS_CIVIL_MAJORITY_RECOVERY_KEY_PREVIOUS_EXPIRES_AT: datetime | None = None
+    # 감사에 남기는 키 세대 이름. 비밀 원문이 아니다.
+    OPS_CIVIL_MAJORITY_RECOVERY_KEY_ID: str = "v1"
+    OPS_RECOVERY_RATE_LIMIT: int = 5
+    OPS_RECOVERY_RATE_WINDOW_SECONDS: int = 3600
+    # 비어 있으면 X-Forwarded-For 를 무시하고 소켓 peer 만 본다.
+    OPS_RECOVERY_TRUSTED_PROXY_IPS: str = ""
+    AUDIT_EVENT_RETENTION_DAYS: int = 365
+    PIN_LOCK_ALERT_COOLDOWN_SECONDS: int = 900
 
     # --- family invitations -----------------------------------------
     FAMILY_INVITATION_EXPIRE_DAYS: int = 7
@@ -166,6 +183,17 @@ class Config(BaseSettings):
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
+
+    # --- 관찰 (#204). 기본 끔. 켜면 metadata_only HTTP ingest만 한다. SDK 없음.
+    LANGFUSE_ENABLED: bool = False
+    LANGFUSE_PUBLIC_KEY: str | None = None
+    LANGFUSE_SECRET_KEY: str | None = None
+    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+    # 정확한 수치를 관찰에 남기려면 합성 데이터 전용이어야 한다. 프로덕션에서는 기동 실패.
+    SYNTHETIC_DATA_ONLY: bool = False
+    OBSERVABILITY_EXACT_VALUES: bool = False
+    # JWT SECRET_KEY 와 분리한다. LANGFUSE_ENABLED 이면 필수.
+    OBSERVABILITY_HMAC_SECRET: str | None = None
 
     # --- Gemini OCR development bridge -----------------------------
     # 개발·시연에서만 명시적으로 켜는 외부 문서 인식 브리지다.
@@ -461,6 +489,64 @@ class Config(BaseSettings):
     REFRESH_COOKIE_PATH: str = "/"
     REFRESH_COOKIE_SECURE: bool = True
     REFRESH_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
+
+    @field_validator("ENV", mode="before")
+    @classmethod
+    def normalize_env(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        key = value.strip().lower()
+        if key in {"prod", "production", "prd", "live"}:
+            return Env.PROD
+        if key in {"dev", "development", "staging", "stage"}:
+            return Env.DEV
+        if key in {"local", "test"}:
+            return Env.LOCAL
+        return value
+
+    @field_validator("OPS_CIVIL_MAJORITY_RECOVERY_KEY_PREVIOUS_EXPIRES_AT", mode="before")
+    @classmethod
+    def empty_previous_expiry(cls, value: object) -> object:
+        if value == "":
+            return None
+        return value
+
+    @model_validator(mode="after")
+    def reject_ops_recovery_in_production(self) -> "Config":
+        if self.ENV is Env.PROD and self.OPS_RECOVERY_ENABLED:
+            raise ValueError(
+                "프로덕션 계열 환경에서는 OPS_RECOVERY_ENABLED 를 켤 수 없습니다. "
+                "성년 전환 복구는 운영자 계정·MFA·전용 capability가 준비되기 전에 활성화하지 않습니다."
+            )
+        if self.ENV is Env.PROD:
+            self.API_DOCS_ENABLED = False
+        return self
+
+    @model_validator(mode="after")
+    def validate_observability_secrets(self) -> "Config":
+        hmac_secret = (self.OBSERVABILITY_HMAC_SECRET or "").strip()
+        if self.LANGFUSE_ENABLED and len(hmac_secret) < 32:
+            raise ValueError(
+                "LANGFUSE_ENABLED 이면 OBSERVABILITY_HMAC_SECRET 을 32자 이상으로 따로 둬야 합니다. "
+                "SECRET_KEY 를 재사용하지 않습니다."
+            )
+        if self.LANGFUSE_ENABLED:
+            public = (self.LANGFUSE_PUBLIC_KEY or "").strip()
+            secret = (self.LANGFUSE_SECRET_KEY or "").strip()
+            if not public or not secret:
+                raise ValueError("LANGFUSE_ENABLED 이면 LANGFUSE_PUBLIC_KEY 와 LANGFUSE_SECRET_KEY 가 필요합니다.")
+            self.LANGFUSE_PUBLIC_KEY = public
+            self.LANGFUSE_SECRET_KEY = secret
+        if hmac_secret:
+            self.OBSERVABILITY_HMAC_SECRET = hmac_secret
+        if self.OBSERVABILITY_EXACT_VALUES:
+            if self.ENV is Env.PROD:
+                raise ValueError(
+                    "프로덕션 계열(ENV=prod/production/prd/live)에서는 OBSERVABILITY_EXACT_VALUES 를 켤 수 없습니다."
+                )
+            if not self.SYNTHETIC_DATA_ONLY:
+                raise ValueError("정확한 수치 관찰은 SYNTHETIC_DATA_ONLY=true 인 합성 데이터 환경에서만 허용합니다.")
+        return self
 
     @model_validator(mode="after")
     def validate_browser_security(self) -> "Config":

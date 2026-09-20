@@ -220,6 +220,10 @@
   background: var(--up15-periwinkle);
 }
 
+.up15-account-menu {
+  position: relative;
+}
+
 .up15-user-pill {
   display: flex;
   align-items: center;
@@ -233,10 +237,52 @@
   text-decoration: none;
   color: inherit;
   cursor: pointer;
+  font: inherit;
 }
 
+button.up15-user-pill:hover,
 a.up15-user-pill:hover {
   border-color: var(--up15-periwinkle);
+}
+
+.up15-account-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 40;
+  min-width: 100%;
+  padding: 6px;
+  background: var(--up15-paper-white);
+  border: 1px solid var(--up15-ash);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(28, 28, 28, 0.08);
+}
+
+.up15-account-menu-item {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  width: 100%;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--up15-aubergine);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.up15-account-menu-item:hover,
+.up15-account-menu-item:focus-visible {
+  background: var(--up15-ghost-lavender);
+}
+
+.up15-account-menu-signout {
+  color: var(--up15-aubergine);
 }
 
 .up15-avatar {
@@ -443,6 +489,25 @@ a.up15-user-pill:hover {
   gap: 12px;
 }
 
+.up17-member-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.up17-member-head-link {
+  background: none;
+  border: 0;
+  color: var(--up15-aubergine);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+}
+
 .up17-member-cell {
   width: 114px;
   height: 128px;
@@ -457,8 +522,52 @@ a.up15-user-pill:hover {
   justify-content: center;
   text-align: center;
   position: relative;
-  cursor: pointer;
   transition: all 0.18s ease;
+}
+
+.up17-member-select {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.up17-member-cell-name {
+  font-size: 13px;
+  color: var(--up15-aubergine);
+  margin-top: 2px;
+}
+
+.up17-member-manage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--up15-fog);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+}
+
+.up17-member-manage:hover,
+.up17-member-manage:focus-visible {
+  color: var(--up15-aubergine);
 }
 
 .up17-member-cell:hover {
@@ -512,6 +621,16 @@ a.up15-user-pill:hover {
 .up17-member-add-btn:hover {
   background: rgba(244, 242, 244, 0.6);
   border-color: var(--up15-aubergine);
+}
+
+.up17-member-add-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.up17-member-add-btn:disabled:hover {
+  background: transparent;
+  border-color: var(--up15-ash);
 }
 
 .up15-member-grid {
@@ -1157,11 +1276,13 @@ a.up15-user-pill:hover {
    ========================================================================== */
 .channel-talk-popover.up15-assistant-scope {
   position: fixed;
-  bottom: 104px;
+  bottom: 120px;
   right: 28px;
-  width: min(440px, calc(100vw - 36px));
-  height: 680px;
-  max-height: calc(100vh - 120px);
+  width: var(--bomi-chat-width, min(440px, calc(100vw - 36px)));
+  height: var(--bomi-chat-height, min(680px, calc(100dvh - 64px - 120px)));
+  max-height: calc((100dvh - 64px - 120px) / var(--bomi-chat-scale, 1));
+  font-size: 14px;
+  zoom: var(--bomi-chat-scale, 1);
   background: var(--up15-paper-white);
   border: 1px solid var(--up15-ash);
   border-radius: 28px;
@@ -1180,9 +1301,10 @@ a.up15-user-pill:hover {
 
 /* 상단 맥락 바: Ghost Lavender 배경 + Aubergine 텍스트 */
 .channel-talk-popover.up15-assistant-scope .channel-talk-context-bar {
-  background: var(--up15-bone);
-  border-bottom: 1px solid var(--up15-ash);
-  color: var(--up15-fog);
+  background-color: #f4f2f4;
+  background: var(--up15-bone, var(--bomi-bone, #f4f2f4));
+  border-bottom: 1px solid var(--up15-ash, #e9e8ea);
+  color: var(--up15-fog, #86848d);
   font-size: 13px;
 }
 
@@ -1191,8 +1313,8 @@ a.up15-user-pill:hover {
 }
 
 .channel-talk-popover.up15-assistant-scope .channel-talk-context-tag {
-  background: var(--up15-ghost-lavender);
-  color: var(--up15-aubergine);
+  background: var(--up15-ghost-lavender, #e2dffe);
+  color: var(--up15-aubergine, #3c315b);
   font-weight: 500;
   border-radius: 100px;
   padding: 3px 10px;
@@ -1203,8 +1325,9 @@ a.up15-user-pill:hover {
 
 /* 챗봇 헤더 */
 .channel-talk-popover.up15-assistant-scope .assistant-header {
-  background: var(--up15-paper-white);
-  border-bottom: 1px solid var(--up15-ash);
+  background-color: #fdfcfe;
+  background: var(--up15-paper-white, #fdfcfe);
+  border-bottom: 1px solid var(--up15-ash, #e9e8ea);
   padding: 14px 18px;
 }
 
@@ -1258,7 +1381,8 @@ a.up15-user-pill:hover {
 
 /* 대화 세션 목록 패널 */
 .channel-talk-popover.up15-assistant-scope .chat-session-list {
-  background: var(--up15-paper-white);
+  background-color: #fdfcfe;
+  background: var(--up15-paper-white, #fdfcfe);
 }
 
 .channel-talk-popover.up15-assistant-scope .chat-session-select-btn:hover,
@@ -1286,8 +1410,8 @@ a.up15-user-pill:hover {
 }
 
 .channel-talk-popover.up15-assistant-scope .msg-avatar {
-  background: var(--up15-ghost-lavender);
-  border-color: var(--up15-ash);
+  background: transparent;
+  border: none;
 }
 
 /* 액션 초안 카드 및 통증/기록 저장 버튼 */
@@ -2769,6 +2893,197 @@ a.up15-user-pill:hover {
 .up18-vital-tooltip p {
   margin: 8px 0 0;
   color: var(--up15-buttercream);
+}
+
+/* 가족 홈 프로필 대화상자: 공용 Modal은 예전 파란 크롬을 쓴다. Stitch 토큰으로 덮는다. */
+.up15-root .modal-backdrop:has(.up17-modal) {
+  background: rgba(28, 28, 28, 0.32);
+  backdrop-filter: blur(10px);
+}
+
+.up15-root .up17-modal.modal-panel {
+  width: min(480px, 100%);
+  padding: 24px;
+  border: 1px solid var(--up15-ash);
+  border-radius: 32px;
+  background: var(--up15-paper-white);
+  box-shadow: none;
+  color: var(--up15-obsidian);
+  font-family: inherit;
+  font-weight: 350;
+  letter-spacing: -0.025em;
+}
+
+.up15-root .up17-modal .modal-heading {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.up15-root .up17-modal .section-kicker {
+  margin: 0 0 8px;
+  color: var(--up15-periwinkle);
+  font-size: var(--up15-type-caption);
+  font-weight: 400;
+  letter-spacing: -0.025em;
+  text-transform: none;
+}
+
+.up15-root .up17-modal .modal-heading h2 {
+  color: var(--up15-aubergine);
+  font-size: var(--up15-type-title);
+  font-weight: 300;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.up15-root .up17-modal .modal-close {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--up15-ash);
+  border-radius: 100px;
+  color: var(--up15-aubergine);
+  background: var(--up15-paper-white);
+  font-size: 22px;
+  font-weight: 300;
+}
+
+.up15-root .up17-modal .product-form,
+.up15-root .up17-modal .profile-confirmation,
+.up15-root .up17-modal .hidden-profiles-content {
+  margin-top: 16px;
+}
+
+.up15-root .up17-modal .form-notice {
+  border-radius: 16px;
+  padding: 12px 16px;
+  color: var(--up15-fog);
+  background: var(--up15-ghost-lavender);
+  font-size: var(--up15-type-caption);
+  font-weight: 400;
+}
+
+.up15-root .up17-modal .product-form label,
+.up15-root .up17-modal .birth-date-field legend {
+  color: var(--up15-aubergine);
+  font-size: var(--up15-type-label);
+  font-weight: 400;
+}
+
+.up15-root .up17-modal .product-form input,
+.up15-root .up17-modal .product-form select,
+.up15-root .up17-modal .product-form .birth-date-input,
+.up15-root .up17-modal .product-form .birth-date-input input {
+  min-height: 44px;
+  border: 1px solid var(--up15-ash);
+  border-radius: 100px;
+  color: var(--up15-obsidian);
+  background: var(--up15-paper-white);
+  font-size: var(--up15-type-label);
+  font-weight: 400;
+}
+
+.up15-root .up17-modal .product-form .birth-date-input {
+  padding: 0 12px;
+  overflow: hidden;
+}
+
+.up15-root .up17-modal .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.up15-root .up17-modal .primary-button,
+.up15-root .up17-modal .secondary-button,
+.up15-root .up17-modal .danger-button {
+  min-height: 44px;
+  border-radius: 100px;
+  padding: 10px 20px;
+  font-size: var(--up15-type-label);
+  font-weight: 400;
+  transform: none;
+}
+
+.up15-root .up17-modal .primary-button {
+  border: 0;
+  color: var(--up15-aubergine);
+  background: var(--up15-ghost-lavender);
+  box-shadow: 0 0 24px rgba(171, 159, 242, 0.45), 0 0 8px rgba(226, 223, 254, 0.85);
+}
+
+.up15-root .up17-modal .primary-button:hover:not(:disabled) {
+  transform: none;
+  box-shadow: 0 0 24px rgba(171, 159, 242, 0.45), 0 0 8px rgba(226, 223, 254, 0.85);
+}
+
+.up15-root .up17-modal .secondary-button {
+  border: 1px solid var(--up15-ash);
+  color: var(--up15-aubergine);
+  background: var(--up15-paper-white);
+}
+
+.up15-root .up17-modal .danger-button {
+  border: 0;
+  color: #93000a;
+  background: var(--up15-blush-mist);
+}
+
+.up15-root .up17-modal .danger-button:disabled {
+  color: var(--up15-fog);
+  background: var(--up15-bone);
+}
+
+.up15-root .up17-modal .up17-pin-reveal {
+  margin: 8px 0 20px;
+  letter-spacing: 0.28em;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 350;
+  color: var(--up15-aubergine);
+}
+
+.up17-member-pin-mark {
+  margin-top: 2px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--up15-fog);
+}
+
+.up15-root .up17-modal .profile-lifecycle-zone {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--up15-ash);
+}
+
+.up15-root .up17-modal .profile-lifecycle-zone h3 {
+  margin: 0 0 8px;
+  color: var(--up15-aubergine);
+  font-size: var(--up15-type-subhead);
+  font-weight: 300;
+}
+
+.up15-root .up17-modal .profile-lifecycle-zone p {
+  margin: 0 0 16px;
+  color: var(--up15-fog);
+  font-size: var(--up15-type-caption);
+}
+
+.up15-root .up17-modal .profile-lifecycle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.up15-root .up17-modal .hidden-profile-row {
+  border: 1px solid var(--up15-ash);
+  border-radius: 24px;
+  background: var(--up15-paper-white);
+}
+
+.up15-root .up17-modal .alert.error-alert {
+  border-radius: 16px;
+  color: #93000a;
+  background: var(--up15-blush-mist);
 }
 
 @media (max-width: 1512px) {

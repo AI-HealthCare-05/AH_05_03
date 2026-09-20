@@ -12,6 +12,7 @@
  */
 
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { HealthAssistantDrawer } from "./HealthAssistantDrawer";
@@ -147,6 +148,36 @@ describe("서류 확정 저장과 대화 기록", () => {
     // 사용자 줄이 세션 제목이 된다(`chat_session_service.add_message`). 파일명이 보여야
     // 목록에서 어떤 서류로 만든 대화인지 알 수 있다.
     expect(createMessage.mock.calls[0][2]).toContain("검진표.png");
+  });
+
+  it("여러 장을 올리면 원본을 1 / 2, 2 / 2 로 넘긴다", async () => {
+    vi.spyOn(clientModule, "createChatSession").mockResolvedValue({ id: "session-1", title: null } as never);
+    vi.spyOn(clientModule, "createChatMessage").mockResolvedValue({ id: "msg-1" } as never);
+    vi.spyOn(clientModule, "listChatSessions").mockResolvedValue([]);
+
+    render(
+      <HealthAssistantDrawer
+        profile={profile}
+        runtime={runtime}
+        isOpen={true}
+        onClose={vi.fn()}
+        onRecordSaved={vi.fn()}
+      />,
+    );
+
+    const user = userEvent.setup();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    await user.upload(input, [
+      new File(["a"], "앞장.png", { type: "image/png" }),
+      new File(["b"], "뒷장.png", { type: "image/png" }),
+    ]);
+
+    expect(await screen.findByText("1 / 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "이전 장" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "다음 장" }));
+    expect(await screen.findByText("2 / 2")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /뒷장\.png/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다음 장" })).toBeDisabled();
   });
 
   it("서버 모드에서는 수치만 저장하고 원본을 보관했다고 안내하지 않는다", async () => {

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, type FormEvent, type ChangeEvent } from "react";
+import { createPortal } from "react-dom";
 import type { FamilyProfile, HealthRecord } from "../../shared/local/domainContracts";
 import type { LocalDomainRuntime } from "../../shared/local/localDomainRuntime";
 // PR 은 전용 `DevServerOcrAdapter` 를 썼는데, project 에는 같은 응답을 큐·스트리밍으로
@@ -244,6 +245,12 @@ async function getCurrentLocationForOutdoorQuestion(): Promise<OutdoorLocationAt
   });
 }
 
+type OcrPreviewPage = {
+  url: string;
+  name: string;
+  mime: string;
+};
+
 interface HealthAssistantDrawerProps {
   profile?: FamilyProfile;
   runtime?: LocalDomainRuntime;
@@ -322,7 +329,10 @@ export function HealthAssistantDrawer({
   const [ocrReviewItems, setOcrReviewItems] = useState<OcrReviewItem[]>([]);
   const [ocrModalError, setOcrModalError] = useState<string>();
   const [ocrImageFile, setOcrImageFile] = useState<File | null>(null);
+  const [ocrImageFiles, setOcrImageFiles] = useState<File[]>([]);
   const [ocrImagePreviewUrl, setOcrImagePreviewUrl] = useState<string | null>(null);
+  const [ocrPreviewPages, setOcrPreviewPages] = useState<OcrPreviewPage[]>([]);
+  const ocrPreviewPagesRef = useRef<OcrPreviewPage[]>([]);
   /**
    * 인식기가 준 **판정 칸 이름 → 값** 맵.
    *
@@ -642,6 +652,7 @@ export function HealthAssistantDrawer({
     function handleOutsideClick(e: MouseEvent) {
       const target = e.target as Node;
       if ((target as Element | null)?.closest?.(".channel-talk-launcher")) return;
+      if ((target as Element | null)?.closest?.(".channel-talk-popover")) return;
       if (popoverContainerRef.current && !popoverContainerRef.current.contains(target)) {
         (onMinimize ?? handleAnimatedClose)();
       }
@@ -666,24 +677,34 @@ export function HealthAssistantDrawer({
 
   if (!isOpen || !profile) return null;
 
-  // 이미지 파일 선택 핸들러 (+ 버튼 클릭 시 OCR 모달 즉시 실행)
+  // 서류 선택 핸들러. 같은 검사의 여러 장은 순서를 유지한 하나의 묶음으로 읽는다.
   async function handleImageSelect(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
+    const file = files[0];
+    event.target.value = "";
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      setError("이미지 파일(JPG, PNG, WEBP)만 업로드할 수 있습니다.");
+    if (files.some((candidate) => !candidate.type.startsWith("image/") && candidate.type !== "application/pdf")) {
+      setError("이미지(JPG, PNG, WEBP) 또는 PDF 서류만 업로드할 수 있습니다.");
       return;
     }
 
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
-    const previewUrl = URL.createObjectURL(file);
+    for (const page of ocrPreviewPagesRef.current) URL.revokeObjectURL(page.url);
+    const pages = files.map((item) => ({
+      url: URL.createObjectURL(item),
+      name: item.name,
+      mime: item.type,
+    }));
+    ocrPreviewPagesRef.current = pages;
+    const previewUrl = pages[0]?.url ?? null;
     setSelectedImage(file);
     setImagePreview(previewUrl);
+    setOcrPreviewPages(pages);
     setError(undefined);
 
     // 모달을 열고 서류 분석 시작
     setOcrImageFile(file);
+    setOcrImageFiles(files);
     setOcrImagePreviewUrl(previewUrl);
     setOcrModalOpen(true);
     setOcrModalWorking(true);
@@ -693,7 +714,7 @@ export function HealthAssistantDrawer({
 
     try {
       const ocrAdapter = new GeminiOcrAdapter();
-      const ocrResult = await ocrAdapter.recognize(file, file.name);
+      const ocrResult = await ocrAdapter.recognize(files, file.name);
       const items = extractReviewItems(ocrResult.tables);
       setOcrValues(ocrResult.measurements?.values ?? {});
       const structuredText = reviewItemsToText(items);
@@ -721,9 +742,13 @@ export function HealthAssistantDrawer({
   }
 
   function clearSelectedImage() {
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    for (const page of ocrPreviewPagesRef.current) URL.revokeObjectURL(page.url);
+    ocrPreviewPagesRef.current = [];
+    setOcrPreviewPages([]);
     setSelectedImage(null);
     setImagePreview(null);
+    setOcrImagePreviewUrl(null);
+    setOcrImageFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -767,19 +792,22 @@ export function HealthAssistantDrawer({
 
   // 모달에서 서류 확정 저장 핸들러
   async function handleConfirmOcrModalSave(draft: LabResultDraft, items: OcrReviewItem[]) {
-    if (!runtime || !profile || !ocrImageFile) return;
+    const filesToSave = ocrImageFiles.length > 0 ? ocrImageFiles : ocrImageFile ? [ocrImageFile] : [];
+    if (!runtime || !profile || filesToSave.length === 0) return;
     setOcrModalWorking(true);
     try {
       let primaryDocumentId: string | undefined;
       if (runtime.documents) {
-        const savedDoc = await runtime.documents.save({
-          householdId: PRIMARY_HOUSEHOLD_ID,
-          profileId: profile.id,
-          file: ocrImageFile,
-          fileName: ocrImageFile.name,
-        });
-        if (!savedDoc.ok) throw new Error(savedDoc.error.message);
-        primaryDocumentId = savedDoc.value.id;
+        for (const file of filesToSave) {
+          const savedDoc = await runtime.documents.save({
+            householdId: PRIMARY_HOUSEHOLD_ID,
+            profileId: profile.id,
+            file,
+            fileName: file.name,
+          });
+          if (!savedDoc.ok) throw new Error(savedDoc.error.message);
+          primaryDocumentId ??= savedDoc.value.id;
+        }
       }
 
       const finalNote = [
@@ -816,9 +844,9 @@ export function HealthAssistantDrawer({
       const userMsg: ExtendedChatMessage = {
         id: messageId("user"),
         role: "user",
-        content: `검사 서류(${ocrImageFile.name})를 업로드하여 기록했습니다.`,
+        content: `검사 서류(${filesToSave.map((item) => item.name).join(", ")})를 업로드하여 기록했습니다.`,
         imageBlobUrl: ocrImagePreviewUrl ?? undefined,
-        imageFile: ocrImageFile,
+        imageFile: filesToSave[0],
       };
 
       const assistantMsg: ExtendedChatMessage = {
@@ -829,7 +857,7 @@ export function HealthAssistantDrawer({
           : `${draft.recorded_at}에 실시된 ${draft.screening_name || "건강검진"} 수치가 건강기록에 저장되었습니다. 원본 이미지는 보관되지 않습니다.`,
         attachedDocuments: primaryDocumentId ? [{
           id: primaryDocumentId,
-          fileName: ocrImageFile.name,
+          fileName: filesToSave.map((item) => item.name).join(", "),
         }] : undefined,
       };
 
@@ -2415,8 +2443,16 @@ export function HealthAssistantDrawer({
             <div className="assistant-selected-image-bar">
               <img src={imagePreview} alt="선택된 이미지 미리보기" className="image-thumb" />
               <div className="image-info">
-                <strong>{selectedImage.name}</strong>
-                <small>{(selectedImage.size / 1024 / 1024).toFixed(2)} MB</small>
+                <strong>
+                  {ocrImageFiles.length > 1
+                    ? `${selectedImage.name} 외 ${ocrImageFiles.length - 1}장`
+                    : selectedImage.name}
+                </strong>
+                <small>
+                  {ocrImageFiles.length > 1
+                    ? `${ocrImageFiles.length}장 · ${(ocrImageFiles.reduce((sum, item) => sum + item.size, 0) / 1024 / 1024).toFixed(2)} MB`
+                    : `${(selectedImage.size / 1024 / 1024).toFixed(2)} MB`}
+                </small>
               </div>
               <button
                 type="button"
@@ -2443,7 +2479,8 @@ export function HealthAssistantDrawer({
             <input
               type="file"
               ref={fileInputRef}
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              multiple
               style={{ display: "none" }}
               onChange={handleImageSelect}
             />
@@ -2522,8 +2559,8 @@ export function HealthAssistantDrawer({
           <OcrReviewModal
             key={`${ocrImagePreviewUrl}:${ocrReviewDraft ? "draft" : "empty"}`}
             profileName={profile.displayName}
-            imageUrl={ocrImagePreviewUrl}
-            fileName={ocrImageFile?.name ?? "검진 서류"}
+            pages={ocrPreviewPages}
+            fileName={ocrImageFiles.length > 1 ? `${ocrImageFiles[0]?.name} 외 ${ocrImageFiles.length - 1}장` : (ocrImageFile?.name ?? "검진 서류")}
             draft={ocrReviewDraft}
             items={ocrReviewItems}
             error={ocrModalError}
@@ -2566,8 +2603,8 @@ export function HealthAssistantDrawer({
         <OcrReviewModal
           key={`${ocrImagePreviewUrl}:${ocrReviewDraft ? "draft" : "empty"}`}
           profileName={profile.displayName}
-          imageUrl={ocrImagePreviewUrl}
-          fileName={ocrImageFile?.name ?? "검진 서류"}
+          pages={ocrPreviewPages}
+          fileName={ocrImageFiles.length > 1 ? `${ocrImageFiles[0]?.name} 외 ${ocrImageFiles.length - 1}장` : (ocrImageFile?.name ?? "검진 서류")}
           draft={ocrReviewDraft}
           items={ocrReviewItems}
           error={ocrModalError}
@@ -2589,7 +2626,7 @@ export function HealthAssistantDrawer({
 // -------------------------------------------------------------
 function OcrReviewModal({
   profileName,
-  imageUrl,
+  pages,
   fileName,
   draft,
   items,
@@ -2600,7 +2637,7 @@ function OcrReviewModal({
   onRetry,
 }: {
   profileName: string;
-  imageUrl: string;
+  pages: OcrPreviewPage[];
   fileName: string;
   draft: LabResultDraft | null;
   items: OcrReviewItem[];
@@ -2619,8 +2656,27 @@ function OcrReviewModal({
   // 다시 맞추지 않는다** — 그 동기화 effect 가 렌더 연쇄를 만들었다. 대신 호출부가
   // 인식 결과마다 `key` 를 바꿔 새로 마운트시키므로 초기값이 항상 최신이다.
   const [reviewItems, setReviewItems] = useState<OcrReviewItem[]>(items);
+  const [pageIndex, setPageIndex] = useState(0);
+  const total = pages.length;
+  const current = pages[Math.min(pageIndex, Math.max(0, total - 1))];
 
-  return (
+  useEffect(() => {
+    if (total < 2) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setPageIndex((index) => Math.max(0, index - 1));
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setPageIndex((index) => Math.min(total - 1, index + 1));
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [total]);
+
+  return createPortal(
     <div className="modal-backdrop ocr-split-modal-backdrop" role="presentation" onMouseDown={onClose}>
       <section className="modal-panel ocr-split-modal" role="dialog" aria-modal="true" onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-heading">
@@ -2639,10 +2695,43 @@ function OcrReviewModal({
           {/* 왼쪽: 원본 서류 이미지 미리보기 */}
           <div className="ocr-split-left">
             <div className="ocr-preview-header">
-              <strong>원본 서류 ({fileName})</strong>
+              <strong>원본 서류 ({current?.name ?? fileName})</strong>
+              {total > 1 ? (
+                <span className="ocr-preview-page-count" aria-live="polite">
+                  {Math.min(pageIndex, total - 1) + 1} / {total}
+                </span>
+              ) : null}
             </div>
-            <div className="ocr-preview-image-scroll">
-              <img src={imageUrl} alt={fileName} />
+            <div className="ocr-preview-stage">
+              {total > 1 ? (
+                <button
+                  type="button"
+                  className="ocr-preview-nav"
+                  aria-label="이전 장"
+                  disabled={pageIndex <= 0}
+                  onClick={() => setPageIndex((index) => Math.max(0, index - 1))}
+                >
+                  ‹
+                </button>
+              ) : null}
+              <div className="ocr-preview-image-scroll">
+                {current?.mime === "application/pdf" ? (
+                  <iframe title={current.name} src={current.url} />
+                ) : current ? (
+                  <img src={current.url} alt={`${current.name}${total > 1 ? ` (${pageIndex + 1} / ${total})` : ""}`} />
+                ) : null}
+              </div>
+              {total > 1 ? (
+                <button
+                  type="button"
+                  className="ocr-preview-nav"
+                  aria-label="다음 장"
+                  disabled={pageIndex >= total - 1}
+                  onClick={() => setPageIndex((index) => Math.min(total - 1, index + 1))}
+                >
+                  ›
+                </button>
+              ) : null}
             </div>
           </div>
 
@@ -2700,34 +2789,50 @@ function OcrReviewModal({
                     <div><strong>검사 항목 확인</strong><small>항목·결과·단위·판정을 원본과 비교해 수정하세요.</small></div>
                     {reviewItems.map((item, index) => (
                       <div className="ocr-structured-item" key={`${item.testName}-${index}`}>
-                        <input aria-label={`${index + 1}번째 검사항목`} value={item.testName} onChange={(event) => setReviewItems(reviewItems.map((current, currentIndex) => currentIndex === index ? { ...current, testName: event.currentTarget.value } : current))} />
-                        <input aria-label={`${index + 1}번째 결과값`} value={item.value} onChange={(event) => setReviewItems(reviewItems.map((current, currentIndex) => currentIndex === index ? { ...current, value: event.currentTarget.value } : current))} />
-                        <input aria-label={`${index + 1}번째 단위`} value={item.unit} onChange={(event) => setReviewItems(reviewItems.map((current, currentIndex) => currentIndex === index ? { ...current, unit: event.currentTarget.value } : current))} />
-                        <input aria-label={`${index + 1}번째 판정`} value={item.judgment} onChange={(event) => setReviewItems(reviewItems.map((current, currentIndex) => currentIndex === index ? { ...current, judgment: event.currentTarget.value } : current))} />
+                        <label className="ocr-item-field">
+                          <span>항목</span>
+                          <input aria-label={`${index + 1}번째 검사항목`} value={item.testName} onChange={(event) => setReviewItems(reviewItems.map((current, currentIndex) => currentIndex === index ? { ...current, testName: event.currentTarget.value } : current))} />
+                        </label>
+                        <label className="ocr-item-field">
+                          <span>결과</span>
+                          <input aria-label={`${index + 1}번째 결과값`} value={item.value} onChange={(event) => setReviewItems(reviewItems.map((current, currentIndex) => currentIndex === index ? { ...current, value: event.currentTarget.value } : current))} />
+                        </label>
+                        <label className="ocr-item-field">
+                          <span>단위</span>
+                          <input aria-label={`${index + 1}번째 단위`} value={item.unit} onChange={(event) => setReviewItems(reviewItems.map((current, currentIndex) => currentIndex === index ? { ...current, unit: event.currentTarget.value } : current))} />
+                        </label>
+                        <label className="ocr-item-field">
+                          <span>판정</span>
+                          <input aria-label={`${index + 1}번째 판정`} value={item.judgment} onChange={(event) => setReviewItems(reviewItems.map((current, currentIndex) => currentIndex === index ? { ...current, judgment: event.currentTarget.value } : current))} />
+                        </label>
                       </div>
                     ))}
                   </div>
                 ) : null}
 
-                <label>
-                  전체 검사 항목 및 수치 (혈액, 계측, 요검사, 노인기능평가 등)
-                  <textarea
-                    rows={6}
-                    value={itemsSummary}
-                    onChange={(e) => setItemsSummary(e.target.value)}
-                    placeholder="검사 수치 및 판정 내용"
-                  />
-                </label>
-
-                <label>
-                  검진 핵심 요약
-                  <textarea
-                    rows={2}
-                    value={summary}
-                    onChange={(e) => setSummary(e.target.value)}
-                    placeholder="종합 소견 및 요약"
-                  />
-                </label>
+                <details className="ocr-raw-details">
+                  <summary>원문 텍스트 · 필요하면 수정</summary>
+                  <div className="ocr-raw-fields">
+                    <label>
+                      전체 검사 항목 및 수치 (혈액, 계측, 요검사, 노인기능평가 등)
+                      <textarea
+                        rows={5}
+                        value={itemsSummary}
+                        onChange={(e) => setItemsSummary(e.target.value)}
+                        placeholder="검사 수치 및 판정 내용"
+                      />
+                    </label>
+                    <label>
+                      검진 핵심 요약
+                      <textarea
+                        rows={2}
+                        value={summary}
+                        onChange={(e) => setSummary(e.target.value)}
+                        placeholder="종합 소견 및 요약"
+                      />
+                    </label>
+                  </div>
+                </details>
               </div>
             )}
           </div>
@@ -2749,11 +2854,12 @@ function OcrReviewModal({
               summary,
             }, reviewItems)}
           >
-            {working ? "저장 중…" : "수정 내용 확정 · 건강기록 저장"}
+            {working && !draft ? "분석 중…" : working ? "저장 중…" : "수정 내용 확정 · 건강기록 저장"}
           </button>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -3081,6 +3187,50 @@ function MedicationConfirmationCard({
   );
 }
 
+function PainIntensityField({
+  intensity,
+  onChange,
+}: {
+  intensity: number | null;
+  onChange: (value: number) => void;
+}) {
+  const shown = intensity ?? 5;
+  const percent = (shown / 10) * 100;
+  return (
+    <label className="pain-intensity-field">
+      <span className="pain-intensity-label-row">
+        <span>통증 강도</span>
+        <span className="pain-intensity-pill">{intensity == null ? "미선택" : `${intensity}점`}</span>
+      </span>
+      <span className="pain-intensity-control">
+        <span className="pain-intensity-hint">좌우로 밀어 강도를 고르세요</span>
+        <input
+          type="range"
+          className="pain-intensity-slider"
+          min={0}
+          max={10}
+          step={1}
+          aria-label="통증 강도"
+          aria-valuemin={0}
+          aria-valuemax={10}
+          aria-valuenow={shown}
+          aria-valuetext={intensity == null ? "아직 선택하지 않음" : `${intensity}점`}
+          value={shown}
+          style={{ ["--pain-pct" as string]: `${percent}%` }}
+          onChange={(event) => onChange(Number(event.currentTarget.value))}
+          onPointerDown={() => {
+            if (intensity == null) onChange(5);
+          }}
+        />
+        <span className="pain-intensity-ends" aria-hidden="true">
+          <span>0 약함</span>
+          <span>10 심함</span>
+        </span>
+      </span>
+    </label>
+  );
+}
+
 function PainConfirmationCard({
   draft,
   saved,
@@ -3119,36 +3269,15 @@ function PainConfirmationCard({
             placeholder="오른쪽 무릎, 허리, 어깨 등"
           />
         </label>
-        <div className="input-row">
-          <label>
-            통증 강도 {intensity == null ? "(선택 필요)" : `(${intensity}/10)`}
-            <div className="pain-intensity-slider-wrap">
-              <input
-                type="range"
-                min="0"
-                max="10"
-                step="1"
-                aria-label="통증 강도"
-                value={intensity ?? 5}
-                onChange={(e) => setIntensity(Number(e.target.value))}
-                onClick={(e) => {
-                  if (intensity == null) {
-                    setIntensity(Number((e.target as HTMLInputElement).value));
-                  }
-                }}
-              />
-              <span className="pain-intensity-val">{intensity ?? "-"}</span>
-            </div>
-          </label>
-          <label>
-            통증 양상
-            <input
-              value={sensation}
-              onChange={(e) => setSensation(e.target.value)}
-              placeholder="욱신거림, 찌르는 듯함 등"
-            />
-          </label>
-        </div>
+        <PainIntensityField intensity={intensity} onChange={setIntensity} />
+        <label>
+          통증 양상
+          <input
+            value={sensation}
+            onChange={(e) => setSensation(e.target.value)}
+            placeholder="욱신거림, 찌르는 듯함 등"
+          />
+        </label>
         {note && (
           <label>
             메모
@@ -3630,7 +3759,7 @@ export function HealthMetricsTrendCard({
             <polyline
               points={secLinePoints}
               fill="none"
-              stroke={currentSeries.secondaryColor || "#3b82f6"}
+              stroke={currentSeries.secondaryColor || "#4a87f2"}
               strokeWidth="2"
               strokeDasharray="4 2"
               strokeLinecap="round"
@@ -3654,8 +3783,8 @@ export function HealthMetricsTrendCard({
                 {/* 보조 데이터 점 */}
                 {typeof p.secondaryValue === "number" && (
                   <>
-                    <circle cx={cx} cy={getY(p.secondaryValue)} r="3.5" fill="#ffffff" stroke={currentSeries.secondaryColor || "#3b82f6"} strokeWidth="2" />
-                    <text x={cx} y={getY(p.secondaryValue) + 12} textAnchor="middle" fontSize="9" fontWeight="bold" fill={currentSeries.secondaryColor || "#3b82f6"}>
+                    <circle cx={cx} cy={getY(p.secondaryValue)} r="3.5" fill="#ffffff" stroke={currentSeries.secondaryColor || "#4a87f2"} strokeWidth="2" />
+                    <text x={cx} y={getY(p.secondaryValue) + 12} textAnchor="middle" fontSize="9" fontWeight="bold" fill={currentSeries.secondaryColor || "#4a87f2"}>
                       {p.secondaryValue}
                     </text>
                   </>
@@ -3680,7 +3809,7 @@ export function HealthMetricsTrendCard({
           </span>
           {hasSecondary && (
             <span className="legend-item">
-              <span className="legend-dot" style={{ backgroundColor: currentSeries.secondaryColor || "#3b82f6" }} />
+              <span className="legend-dot" style={{ backgroundColor: currentSeries.secondaryColor || "#4a87f2" }} />
               {currentSeries.secondaryName || "보조 수치"}
             </span>
           )}
@@ -3932,17 +4061,17 @@ function PainDiaryToolCard({
   if (saved) {
     return (
       <div className="draft-confirm-card is-saved pain-tool-card">
-        <span className="saved-badge">✨ 통증 다이어리에 안전하게 저장되었습니다.</span>
+        <span className="saved-badge">통증 다이어리에 저장했습니다</span>
         <p>
-          <strong>{bodyArea}</strong> ({diaryDate}): {intensity == null ? "강도 미입력" : `강도 ${intensity}/10`} {sensation ? `(${sensation})` : ""}
+          <strong>{bodyArea}</strong> ({diaryDate}): {intensity == null ? "강도 미입력" : `강도 ${intensity}점`} {sensation ? `(${sensation})` : ""}
         </p>
         <p className="tool-saved-diary">{formattedDiary}</p>
         <button
           type="button"
-          className="button button-outline view-diary-btn"
+          className="view-diary-btn"
           onClick={() => onNavigateToDiary(diaryDate)}
         >
-          통증 다이어리 캘린더에서 확인하기
+          통증 다이어리에서 확인
         </button>
       </div>
     );
@@ -3951,16 +4080,13 @@ function PainDiaryToolCard({
   return (
     <div className="draft-confirm-card pain-tool-card">
       <div className="card-header">
-        <div className="tool-badge-row">
-          <span className="tool-calling-badge">[Tool Calling] format_pain_diary</span>
-          <span className="tool-name">AI 맞춤법 교정 &amp; 구조화</span>
-        </div>
-        <small>맞춤법을 교정하고 정리한 일기입니다. 확인 후 저장해 주세요.</small>
+        <strong>통증 일기 정리</strong>
+        <small>맞춤법을 교정하고 정리한 일기입니다. 통증 강도 선택 후 저장해 주세요.</small>
       </div>
 
       <div className="card-inputs">
         <label>
-          정제된 통증 다이어리 본문
+          일기 본문
           <textarea
             className="formatted-diary-textarea"
             rows={4}
@@ -3969,6 +4095,17 @@ function PainDiaryToolCard({
             placeholder="맞춤법이 교정된 통증 일기 본문"
           />
         </label>
+
+        <label>
+          통증 부위
+          <input
+            value={bodyArea}
+            onChange={(e) => setBodyArea(e.target.value)}
+            placeholder="팔꿈치, 왼쪽 고관절 등"
+          />
+        </label>
+
+        <PainIntensityField intensity={intensity} onChange={setIntensity} />
 
         <div className="pain-tool-grid">
           <label>
@@ -3980,34 +4117,6 @@ function PainDiaryToolCard({
             />
           </label>
           <label>
-            통증 강도 {intensity == null ? "(선택 필요)" : `(${intensity}/10)`}
-            <div className="pain-intensity-slider-wrap">
-              <input
-                type="range"
-                min="0"
-                max="10"
-                step="1"
-                aria-label="통증 강도"
-                value={intensity ?? 5}
-                onChange={(e) => setIntensity(Number(e.target.value))}
-                onClick={(e) => {
-                  if (intensity == null) {
-                    setIntensity(Number((e.target as HTMLInputElement).value));
-                  }
-                }}
-              />
-              <span className="pain-intensity-val">{intensity ?? "-"}</span>
-            </div>
-          </label>
-          <label className="grid-full-col">
-            통증 부위
-            <input
-              value={bodyArea}
-              onChange={(e) => setBodyArea(e.target.value)}
-              placeholder="팔꿈치, 왼쪽 고관절 등"
-            />
-          </label>
-          <label>
             통증 양상
             <input
               value={sensation}
@@ -4015,7 +4124,7 @@ function PainDiaryToolCard({
               placeholder="욱신거림, 이물감 등"
             />
           </label>
-          <label>
+          <label className="grid-full-col">
             악화 요인
             <input
               value={aggravatingFactors}
@@ -4043,7 +4152,7 @@ function PainDiaryToolCard({
           })
         }
       >
-        📝 통증 다이어리에 저장하기
+        통증 다이어리에 저장하기
       </button>
     </div>
   );

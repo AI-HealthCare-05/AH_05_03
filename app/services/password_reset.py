@@ -18,6 +18,7 @@ from app.exceptions import AccountClosedError, AccountNotFoundError, TokenInvali
 from app.models.service_accounts import ServiceAccountStatus
 from app.repositories.service_account_repository import ServiceAccountRepository
 from app.services.auth import get_account_repository
+from app.services.profile_access import actor_household_id, record_audit
 from app.services.token_store import TokenStore
 
 PASSWORD_RESET_TOKEN_PREFIX = "ieobom:pwd_reset:"
@@ -109,6 +110,15 @@ class PasswordResetService:
 
         new_password_hash = await hash_password_async(new_password)
         account.password_hash = new_password_hash
+        await record_audit(
+            self.session,
+            actor_account_id=account.id,
+            household_id=await actor_household_id(self.session, account.id),
+            event_type="auth.password_reset_completed",
+            target_ref=str(account.id),
+            target_type="service_account",
+            event_metadata={},
+        )
         await self.session.commit()
 
         # 기존 발급된 모든 세션/리프레시 토큰 폐기 (보안)

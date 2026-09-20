@@ -45,6 +45,7 @@ export interface MockServerState {
 export async function setupE2eServerMocks(
   page: Page,
   initialState?: Partial<MockServerState>,
+  options?: { resetStorage?: boolean },
 ): Promise<MockServerState> {
   const state: MockServerState = {
     households: initialState?.households ?? [
@@ -55,15 +56,17 @@ export async function setupE2eServerMocks(
     painRecords: initialState?.painRecords ?? [],
   };
 
-  await page.addInitScript(() => {
-    try {
-      window.localStorage?.clear();
-      window.sessionStorage?.clear();
-      window.indexedDB?.deleteDatabase("ieobom-local");
-    } catch {
-      // ignore
-    }
-  });
+  if (options?.resetStorage !== false) {
+    await page.addInitScript(() => {
+      try {
+        window.localStorage?.clear();
+        window.sessionStorage?.clear();
+        window.indexedDB?.deleteDatabase("ieobom-local");
+      } catch {
+        // ignore
+      }
+    });
+  }
 
   // 0. Fallback for unhandled /api/v1/* requests (lowest priority since registered first in Playwright)
   await page.route(
@@ -246,6 +249,52 @@ export async function setupE2eServerMocks(
       }
 
       if (method === "POST") {
+        if (url.pathname === "/api/v1/profiles/sync") {
+          const body = JSON.parse(route.request().postData() || "{}");
+          const incoming = Array.isArray(body.profiles) ? body.profiles : [];
+          const now = new Date().toISOString();
+          for (const item of incoming) {
+            const newProfile = {
+              id: item.id || `profile-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              household_id: item.household_id || state.households[0]?.id || "e2e-household-1",
+              created_by_account_id: "e2e-account",
+              display_name: item.display_name || "",
+              relationship: item.relationship || "본인",
+              gender: item.gender || "male",
+              birth_date: item.birth_date || null,
+              status: "active" as const,
+              created_at: now,
+              updated_at: now,
+              row_version: 1,
+            };
+            state.profiles.push(newProfile);
+          }
+          return route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ success: true, data: { items: state.profiles } }),
+          });
+        }
+
+        if (url.pathname !== "/api/v1/profiles") {
+          if (url.pathname.endsWith("/pin-credentials")) {
+            const match = url.pathname.match(/\/api\/v1\/profiles\/([^/?]+)\/pin-credentials$/);
+            return route.fulfill({
+              status: 201,
+              contentType: "application/json",
+              body: JSON.stringify({
+                success: true,
+                data: {
+                  profile_id: match?.[1] ?? "unknown",
+                  temporary_pin: "482910",
+                  must_change: true,
+                },
+              }),
+            });
+          }
+          return route.fallback();
+        }
+
         const body = JSON.parse(route.request().postData() || "{}");
         const now = new Date().toISOString();
         const newProfile = {
@@ -263,7 +312,7 @@ export async function setupE2eServerMocks(
         };
         state.profiles.push(newProfile);
         return route.fulfill({
-          status: 200,
+          status: 201,
           contentType: "application/json",
           body: JSON.stringify({ success: true, data: newProfile }),
         });

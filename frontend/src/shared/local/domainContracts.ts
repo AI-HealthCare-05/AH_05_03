@@ -34,6 +34,10 @@ export interface FamilyProfile {
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
   version: number;
+  ownershipType?: string;
+  adultTransitionedAt?: string | null;
+  adultTransitionPendingAt?: string | null;
+  privacySelfDeterminedAt?: string | null;
 }
 
 export interface FamilyHistory {

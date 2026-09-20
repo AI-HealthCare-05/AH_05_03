@@ -97,7 +97,7 @@ async def test_gpt_does_not_execute_unoffered_tool() -> None:
     _, results = await client.generate_structured_response_with_tools("시스템", MESSAGES, Answer, TOOLS, executor)
 
     executor.assert_not_awaited()
-    assert results == [{"error": "허용되지 않은 도구입니다."}]
+    assert results == [{"error": "TOOL_NOT_REGISTERED", "message": "요청한 기능을 지금은 사용할 수 없습니다."}]
 
 
 @pytest.mark.asyncio

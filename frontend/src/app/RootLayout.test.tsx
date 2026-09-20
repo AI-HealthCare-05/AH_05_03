@@ -13,17 +13,30 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { AuthContext, type AuthContextValue, type AuthStatus } from "./authContext";
+import {
+  AuthContext,
+  type AuthContextValue,
+  type AuthStatus,
+} from "./authContext";
 import { RootLayout } from "./RootLayout";
 
 // 스타일시트 원문. `import ... from "../styles.css?raw"` 로는 못 읽는다 — vitest 가
 // CSS 임포트를 빈 문자열로 갈아 끼워서 조용히 0바이트가 온다(실측). 파일에서 직접
 // 읽되 경로는 `import.meta.dirname` 기준이라 실행 위치와 무관하다.
-const styleSheet = readFileSync(resolve(import.meta.dirname, "../styles.css"), "utf8");
+const styleSheet = readFileSync(
+  resolve(import.meta.dirname, "../styles.css"),
+  "utf8",
+);
 
 afterEach(cleanup);
 
@@ -56,7 +69,9 @@ describe("RootLayout 로그인 관문", () => {
     renderAt("checking");
 
     expect(screen.getByText("불러오는 중…")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "로그인" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "로그인" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("판정 화면 내용")).not.toBeInTheDocument();
   });
 
@@ -64,15 +79,25 @@ describe("RootLayout 로그인 관문", () => {
     renderAt("signed-out");
 
     expect(screen.getByRole("button", { name: "로그인" })).toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "주 메뉴" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("navigation", { name: "주 메뉴" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("판정 화면 내용")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /봄이/u }),
+    ).not.toBeInTheDocument();
+    expect(
+      document.querySelector(".app-shell.stitch-shell > .signin-shell"),
+    ).toBeInTheDocument();
   });
 
   it("로그아웃 상태에서 첫 주소는 소개로 비키고, /signin 에서만 로그인 폼이 뜬다", () => {
     renderAt("signed-out", "/");
 
     expect(screen.getByText("소개 페이지")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "로그인" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "로그인" }),
+    ).not.toBeInTheDocument();
 
     cleanup();
     renderAt("signed-out", "/signin");
@@ -87,15 +112,21 @@ describe("RootLayout 로그인 관문", () => {
     renderAt("signed-in", "/signin");
 
     expect(screen.getByText("홈 화면")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "로그인" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "로그인" }),
+    ).not.toBeInTheDocument();
   });
 
   it("로그인하면 원래 가려던 주소의 화면이 그대로 뜬다", () => {
     renderAt("signed-in");
 
     expect(screen.getByText("판정 화면 내용")).toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: "주 메뉴" })).toBeInTheDocument();
-    expect(document.querySelector(".app-shell.stitch-shell")).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "주 메뉴" }),
+    ).toBeInTheDocument();
+    expect(
+      document.querySelector(".app-shell.stitch-shell"),
+    ).toBeInTheDocument();
   });
 
   it("Stitch 제품 메뉴에 네 제품 탭이 있고, 계정은 상단 계정 칩으로 연결된다", () => {
@@ -109,14 +140,18 @@ describe("RootLayout 로그인 관문", () => {
     expect(navigation).not.toHaveTextContent("챌린지");
     expect(navigation).not.toHaveTextContent("계정");
 
-    const accountLink = screen.getByRole("link", { name: /계정 관리/u });
+    const trigger = screen.getByRole("button", { name: /계정 메뉴/u });
+    fireEvent.click(trigger);
+    const accountLink = screen.getByRole("menuitem", { name: "가족 접근" });
     expect(accountLink).toHaveAttribute("href", "/account");
   });
 
   it("메뉴 항목은 전부 앱 안 라우트다 — 죽은 바깥 링크를 두지 않는다", () => {
     renderAt("signed-in");
 
-    const links = within(screen.getByRole("navigation", { name: "주 메뉴" })).getAllByRole("link");
+    const links = within(
+      screen.getByRole("navigation", { name: "주 메뉴" }),
+    ).getAllByRole("link");
     expect(links.length).toBeGreaterThan(0);
     // `/api/demo`(예측 데모)가 여기 있었다. FastAPI 가 직접 내던 화면이라 앱 밖
     // 앵커였고, `/assessment` 로 합치면서 라우터와 함께 지웠다. 메뉴에 앱 밖 링크를
@@ -148,20 +183,35 @@ describe("RootLayout 로그인 관문", () => {
    * 규칙이 제 몸을 갖고 있는지를 원문에서 확인한다.
    */
   it("기본 메뉴 링크 규칙이 자기 선언 블록을 갖고 있다", () => {
-    const blocks = [...styleSheet.matchAll(/\.primary-navigation a\s*\{([^}]*)\}/gu)].map(
-      (match) => match[1],
-    );
+    const blocks = [
+      ...styleSheet.matchAll(/\.primary-navigation a\s*\{([^}]*)\}/gu),
+    ].map((match) => match[1]);
 
     expect(blocks.length).toBeGreaterThan(0);
-    expect(blocks.some((body) => /padding:/u.test(body) && /border-radius:/u.test(body))).toBe(true);
+    expect(
+      blocks.some(
+        (body) => /padding:/u.test(body) && /border-radius:/u.test(body),
+      ),
+    ).toBe(true);
   });
 
   it("로그인 상태여도 비밀번호 재설정 해시(#reset_token)가 있으면 재설정 관문(SignInPage)을 우선 띄운다", () => {
-    window.history.replaceState(null, "", "/assessment#reset_token=test-tok&email=fabxoe.se%40gmail.com");
-    renderAt("signed-in", "/assessment#reset_token=test-tok&email=fabxoe.se%40gmail.com");
+    window.history.replaceState(
+      null,
+      "",
+      "/assessment#reset_token=test-tok&email=fabxoe.se%40gmail.com",
+    );
+    renderAt(
+      "signed-in",
+      "/assessment#reset_token=test-tok&email=fabxoe.se%40gmail.com",
+    );
 
-    expect(screen.getByRole("heading", { name: "새 비밀번호 설정", level: 1 })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "새 비밀번호 설정", level: 1 }),
+    ).toBeInTheDocument();
     expect(screen.queryByText("판정 화면 내용")).not.toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "주 메뉴" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("navigation", { name: "주 메뉴" }),
+    ).not.toBeInTheDocument();
   });
 });

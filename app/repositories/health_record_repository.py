@@ -122,6 +122,16 @@ class HealthRecordRepository:
         await self.session.flush()
         return record
 
+    async def count_active(self, profile_id: uuid.UUID) -> int:
+        return int(
+            await self.session.scalar(
+                select(func.count())
+                .select_from(HealthRecord)
+                .where(HealthRecord.profile_id == profile_id, HealthRecord.status != "deleted")
+            )
+            or 0
+        )
+
     async def soft_delete(self, record: HealthRecord) -> HealthRecord:
         record.status = "deleted"
         await self.session.flush()

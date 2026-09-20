@@ -607,7 +607,7 @@ export function extractMetricsFromRecords(records: HealthRecord[]): MetricSeries
       name: "혈압 (수축기/이완기)",
       unit: "mmHg",
       color: "#10b981",
-      secondaryColor: "#3b82f6",
+      secondaryColor: "#4a87f2",
       secondaryName: "이완기",
       normalRange: { max: 120, label: "정상 수축기: 120 이하" },
       points: bpPoints,

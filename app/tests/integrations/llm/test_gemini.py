@@ -111,4 +111,4 @@ async def test_gemini_client_tools_execute_exactly_once_and_handle_errors(monkey
 
     assert execution_counts["tool_1"] == 1
     assert execution_counts["tool_error"] == 1
-    assert tool_results == [{"ok": True}, {"error": "Test error"}]
+    assert tool_results == [{"ok": True}, {"error": "TOOL_EXECUTION_FAILED"}]

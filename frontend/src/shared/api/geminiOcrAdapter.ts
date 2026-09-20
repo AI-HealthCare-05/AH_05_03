@@ -17,7 +17,7 @@ import { ServerApiError, serverApiClient } from "./serverApiClient";
 export interface OcrMeasurementRow {
   field: string;
   label: string;
-  value: number;
+  value: number | null;
   unit: string;
   source: string[];
   reason: string | null;
@@ -146,9 +146,14 @@ async function compressImage(file: Blob, maxWidth = 1600, quality = 0.8): Promis
 }
 
 export class GeminiOcrAdapter {
-  async recognize(file: Blob, fileName: string, options: RecognizeOptions = {}): Promise<GeminiOcrResult> {
-    const compressedFile = await compressImage(file);
-    const accepted = await serverApiClient.enqueueDocumentJob<JobAccepted>(compressedFile, fileName);
+  async recognize(file: Blob | Blob[], fileName?: string, options: RecognizeOptions = {}): Promise<GeminiOcrResult> {
+    const parts = Array.isArray(file) ? file : [file];
+    if (parts.length === 0) throw new Error("인식할 파일을 첨부해 주세요.");
+    const compressedFiles = await Promise.all(parts.map((part) => compressImage(part)));
+    const accepted = await serverApiClient.enqueueDocumentJob<JobAccepted>(
+      compressedFiles,
+      parts.length === 1 ? fileName : undefined,
+    );
 
     if (options.onProgress) {
       const streamed = await this.stream(accepted.job_id, options);

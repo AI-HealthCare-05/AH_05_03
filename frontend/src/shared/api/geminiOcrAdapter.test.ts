@@ -59,4 +59,27 @@ describe("GeminiOcrAdapter", () => {
       errorCode: "OCR_JOB_NOT_FOUND",
     });
   });
+
+  it("여러 장은 files 필드로 한 작업에 실는다", async () => {
+    const enqueue = vi.spyOn(serverApiClient, "enqueueDocumentJob").mockResolvedValue({
+      job_id: "job-batch",
+      status: "queued",
+      poll_after_ms: 1,
+    });
+    vi.spyOn(serverApiClient, "readDocumentJob").mockResolvedValue({
+      job_id: "job-batch",
+      status: "succeeded",
+      attempts: 1,
+      error: null,
+      result: RESULT,
+    });
+
+    const pages = [
+      new File(["one"], "page-1.png", { type: "image/png" }),
+      new File(["two"], "page-2.png", { type: "image/png" }),
+    ];
+    await expect(new GeminiOcrAdapter().recognize(pages, "page-1.png")).resolves.toEqual(RESULT);
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue.mock.calls[0][0]).toHaveLength(2);
+  });
 });

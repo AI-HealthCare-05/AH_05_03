@@ -82,14 +82,17 @@ export const UiPreview16Page = lazy(() =>
 export const UiPreview17Page = lazy(() =>
   import("../features/ui-preview/variants/UiPreview17Page").then((m) => ({ default: m.UiPreview17Page })),
 );
-export const UiPreview18Page = lazy(() =>
-  import("../features/ui-preview/variants/UiPreview18Page").then((m) => ({ default: m.UiPreview18Page })),
+export const FamilyHomePage = lazy(() =>
+  import("../features/home/FamilyHomePage").then((m) => ({ default: m.FamilyHomePage })),
 );
 export const HealthData3Page = lazy(() =>
   import("../features/health-data/HealthData3Page").then((m) => ({ default: m.HealthData3Page })),
 );
 export const AccountPage = lazy(() =>
   import("../features/account/AccountPage").then((m) => ({ default: m.AccountPage })),
+);
+export const PainDiaryPage = lazy(() =>
+  import("../features/pain-diary/PainDiaryPage").then((m) => ({ default: m.PainDiaryPage })),
 );
 /**
  * 공개 랜딩페이지. 로그인한 사람은 평생 한 번도 열지 않는 화면이라 앱 번들과
@@ -98,14 +101,9 @@ export const AccountPage = lazy(() =>
 export const LandingPage = lazy(() =>
   import("../features/landing/LandingPage").then((m) => ({ default: m.LandingPage })),
 );
-/**
- * 랜딩 v2(대안 디자인 시안). v1 과 청크가 갈려야 한다 — 두 랜딩의 CSS 를 한
- * 청크에 뭉치면 `/landing` 을 여는 사람이 쓰지 않는 디자인 시스템 한 벌을 같이
- * 받는다(`landingV2.css` 만 2,400줄이다).
- */
-export const LandingV2Page = lazy(() =>
-  import("../features/landing-v2/LandingV2Page").then((m) => ({ default: m.LandingV2Page })),
+export const WallPairPage = lazy(() =>
+  import("../features/home/WallPairPage").then((m) => ({ default: m.WallPairPage })),
 );
-export const PainDiaryPage = lazy(() =>
-  import("../features/pain-diary/PainDiaryPage").then((m) => ({ default: m.PainDiaryPage })),
+export const WallOverviewPage = lazy(() =>
+  import("../features/home/WallOverviewPage").then((m) => ({ default: m.WallOverviewPage })),
 );
