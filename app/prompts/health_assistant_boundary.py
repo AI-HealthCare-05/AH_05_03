@@ -97,6 +97,28 @@ def build_health_assistant_scope_instruction() -> str:
   '오늘 날씨', '현재 대기질', '지금 서울에서', '오늘 한강에서'처럼 현재 장소나 야외 상태를
   실제로 확인해야 하는 표현이 있을 때 outdoor를 넣으세요.
 
+[개인기록 범주 (required_record_categories)]
+- required_evidence_types에 health_records가 있을 때만 조회할 기록 범주를 넣으세요.
+- health_records가 없으면 required_record_categories=[]입니다.
+- 범주 값:
+  - lab_result: 혈액검사·간기능·콜레스테롤·혈당(blood_glucose)·지질 등 수치 기반 검사 결과가 필요한 질문
+  - blood_pressure: 혈압 수치나 고혈압 상태 확인이 필요한 질문
+  - medication: 현재 복용 중인 약 정보가 필요한 질문 (병용 가능성, 복약 이력 등)
+  - alcohol: 음주 기록·빈도·양 파악이 필요한 질문
+  - exercise: 최근 또는 오늘의 운동 기록이 필요한 질문
+  - body_measurement: 체중·체지방·BMI·신체 측정값 확인이 필요한 질문
+- 여러 범주가 필요하면 전부 포함하세요.
+- 불명확하면 안전 최소 범위를 쓰고, 민감한 범주(medication, alcohol)는 명확히 필요할 때만 포함하세요.
+- 직전 답변이 특정 범주를 사용했다면, 후속 질문에서도 같은 범주를 유지하세요.
+- 예:
+  - '내 검사 결과에서 뭐가 제일 안 좋아?' → [lab_result]
+  - '내 LDL 수치가 왜 높아?' → [lab_result]
+  - '혈압이 높은데 달려도 괜찮아?' → [blood_pressure]
+  - '먹는 약이 있는데 영양제 같이 먹어도 돼?' → [medication]
+  - '오늘 술 마셔도 돼?' → [medication, lab_result, alcohol]
+  - '나 어디가 안 좋아?' → [lab_result, blood_pressure, medication]
+  - (직전 검사 결과 답변 후) '그럼 이거 왜 그런 거야?' → [lab_result] (직전 범주 유지)
+
 [응답 방식 (response_mode / clarification_kind)]
 - answer: 현재 입력만으로도 공식 근거를 검색해 일반적인 건강정보를 설명할 수 있음
 - clarify: 사용자가 자신의 상황에 맞는 복용·섭취·운동 가능 여부나 추천을 요구하지만, 안전한 판단에

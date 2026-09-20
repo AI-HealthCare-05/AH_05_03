@@ -318,47 +318,6 @@ class HealthAssistantService:
         """Boundary가 개인기록을 요구하면 표현이나 주제와 무관하게 프로필을 요구한다."""
         return bool(request.messages) and "health_records" in decision.required_evidence_types
 
-    async def _fetch_personal_record_snapshot(
-        self,
-        *,
-        account: ServiceAccount | None,
-        profile_context: ProfileContext | None,
-    ) -> HealthRecordPrefillData | None:
-        """인증된 프로필 기록을 기존 정규화 관문으로 압축한다."""
-        if account is None or profile_context is None or self.health_record_service is None:
-            return None
-        profile_id = self._parse_profile_id(profile_context.profile_id)
-        if profile_id is None:
-            return None
-        try:
-            return await self.health_record_service.build_prefill(account, profile_id)
-        except Exception as ex:
-            logger.warning("개인 건강기록 요약 조회 실패: %s", type(ex).__name__)
-            return None
-
-    async def _fetch_consultation_snapshot(
-        self,
-        *,
-        account: ServiceAccount | None,
-        profile_context: ProfileContext | None,
-    ) -> PersonalHealthSnapshot:
-        """복약·간기능·혈압 등 개인화 상담에 필요한 건강기록 스냅샷을 조회한다."""
-        snapshot: PersonalHealthSnapshot | None = None
-        if account is not None and profile_context is not None and self.health_record_service is not None:
-            profile_id = self._parse_profile_id(profile_context.profile_id)
-            if profile_id is not None:
-                try:
-                    snapshot = await self.health_record_service.get_personal_health_snapshot(account, profile_id)
-                except Exception as ex:
-                    logger.warning("개인 건강기록 스냅샷 조회 실패: %s", ex)
-
-        if snapshot is None:
-            snapshot = PersonalHealthSnapshot(
-                message="현재 프로필에서 개인화 상담에 활용할 최근 기록을 찾지 못했습니다.",
-                missing_sections=["blood_pressure", "liver_tests", "recent_medications"],
-            )
-        return snapshot
-
     async def _fetch_health_knowledge(self, query: str) -> HealthKnowledgeSearchResult | None:
         """KDCA 포털 검색. 1차가 비면 주제어로 축약 후 한 번 더 시도한다."""
         started = time.perf_counter()
@@ -375,7 +334,7 @@ class HealthAssistantService:
         )
         return knowledge if knowledge.items else None
 
-    async def _load_authoritative_evidence(
+    async def _load_authoritative_evidence(  # noqa: C901
         self,
         request: HealthAssistantChatRequest,
         decision: HealthAssistantScopeDecision,
@@ -410,33 +369,38 @@ class HealthAssistantService:
         knowledge_lines: list[str] = []
 
         if "health_records" in required:
+            categories: list[str] = list(decision.required_record_categories)
             record_started = time.perf_counter()
-            record_snapshot = await self._fetch_personal_record_snapshot(
-                account=account,
-                profile_context=profile_context,
+            prefill: HealthRecordPrefillData | None = None
+            consultation_snapshot = PersonalHealthSnapshot(
+                message="현재 프로필에서 개인화 상담에 활용할 최근 기록을 찾지 못했습니다.",
+                missing_sections=["blood_pressure", "liver_tests", "recent_medications"],
+                retrieval_status="unavailable",
             )
-            if record_snapshot is not None:
-                results.append(record_snapshot)
-                public_items = [item.model_dump(exclude={"record_id"}) for item in record_snapshot.items]
+            if account is not None and profile_context is not None and self.health_record_service is not None:
+                profile_id = self._parse_profile_id(profile_context.profile_id)
+                if profile_id is not None:
+                    try:
+                        prefill, consultation_snapshot = await self.health_record_service.load_personal_health_evidence(
+                            account, profile_id, categories=categories
+                        )
+                    except Exception as ex:
+                        logger.warning("개인 건강기록 조회 실패: %s", type(ex).__name__)
+            if prefill is not None:
+                results.append(prefill)
+                public_items = [item.model_dump(exclude={"record_id"}) for item in prefill.items]
                 snapshot_lines = [
                     "[인증된 개인 건강기록 수치]",
-                    f"조회한 기록 수: {record_snapshot.scanned}",
+                    f"조회한 기록 수: {prefill.scanned}",
                     f"최신 수치: {public_items}",
                 ]
             logger.debug(
-                "[CHAT_TRACE] health_record executed=true type=canonical_prefill found=%s duration_ms=%.1f",
-                bool(record_snapshot and record_snapshot.items),
+                "[CHAT_TRACE] health_record executed=true type=combined found=%s duration_ms=%.1f",
+                bool(prefill and prefill.items),
                 (time.perf_counter() - record_started) * 1000,
             )
-
-            consultation_snapshot = await self._fetch_consultation_snapshot(
-                account=account,
-                profile_context=profile_context,
-            )
             results.append(consultation_snapshot)
-            snapshot_lines.extend(
-                ["[개인 건강기록 맥락]", consultation_snapshot.model_dump_json(exclude_none=True, exclude={"topic"})]
-            )
+            snapshot_lines.extend(["[개인 건강기록 맥락]", consultation_snapshot.model_dump_json(exclude_none=True)])
 
         if "health_knowledge" in required:
             knowledge = await self._fetch_health_knowledge(query)

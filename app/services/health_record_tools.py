@@ -6,16 +6,11 @@ from typing import Any
 from google.genai import types
 from pydantic import ValidationError
 
-from app.dtos.health_record_query import (
-    HealthRecordQueryArguments,
-    HealthRecordQueryResult,
-    PersonalHealthSnapshot,
-)
+from app.dtos.health_record_query import HealthRecordQueryArguments, HealthRecordQueryResult
 from app.models.service_accounts import ServiceAccount
 from app.services.health_records import HealthRecordService
 
 QUERY_HEALTH_RECORDS_TOOL_NAME = "query_health_records"
-GET_ALCOHOL_CONSULTATION_SNAPSHOT_TOOL_NAME = "get_personal_health_snapshot"
 
 QUERY_HEALTH_RECORDS_DECLARATION = types.FunctionDeclaration(
     name=QUERY_HEALTH_RECORDS_TOOL_NAME,
@@ -74,22 +69,9 @@ QUERY_HEALTH_RECORDS_DECLARATION = types.FunctionDeclaration(
     },
 )
 
-GET_ALCOHOL_CONSULTATION_SNAPSHOT_DECLARATION = types.FunctionDeclaration(
-    name=GET_ALCOHOL_CONSULTATION_SNAPSHOT_TOOL_NAME,
-    description=(
-        "현재 대화 대상 사용자의 음주 상담에 필요한 최근 혈압, 간기능 검사, 오늘 운동, "
-        "최근 복약과 음주 기록을 인증된 PostgreSQL에서 조회합니다. 계정 ID와 프로필 ID는 인자로 받지 않습니다."
-    ),
-    parameters_json_schema={"type": "object", "properties": {}, "additionalProperties": False},
-)
-
 
 def get_health_record_tools() -> list[types.Tool]:
     return [types.Tool(function_declarations=[QUERY_HEALTH_RECORDS_DECLARATION])]
-
-
-def get_alcohol_consultation_tools() -> list[types.Tool]:
-    return [types.Tool(function_declarations=[GET_ALCOHOL_CONSULTATION_SNAPSHOT_DECLARATION])]
 
 
 async def execute_health_record_tool(
@@ -107,15 +89,3 @@ async def execute_health_record_tool(
     except ValidationError as ex:
         raise ValueError("건강기록 조회 조건이 허용 범위를 벗어났습니다.") from ex
     return await record_service.query_numeric_summary(account, profile_id, query)
-
-
-async def execute_alcohol_consultation_tool(
-    name: str,
-    *,
-    account: ServiceAccount,
-    profile_id: uuid.UUID,
-    record_service: HealthRecordService,
-) -> PersonalHealthSnapshot | None:
-    if name != GET_ALCOHOL_CONSULTATION_SNAPSHOT_TOOL_NAME:
-        return None
-    return await record_service.get_personal_health_snapshot(account, profile_id)

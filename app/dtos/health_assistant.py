@@ -1,11 +1,11 @@
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.dtos.food_nutrition import FoodNutritionSearchResult
 from app.dtos.health_knowledge import HealthKnowledgeSearchResult
-from app.dtos.health_record_query import HealthRecordQueryResult, PersonalHealthSnapshot
+from app.dtos.health_record_query import HealthRecordQueryResult, PersonalHealthRecordCategory, PersonalHealthSnapshot
 from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.medication import MedicationSearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
@@ -276,6 +276,18 @@ class HealthAssistantScopeDecision(BaseModel):
         default=None,
         description="도구 검색 및 메인 LLM 답변 품질을 극대화하기 위해 풍부하게 재구성된 쿼리",
     )
+    required_record_categories: list[PersonalHealthRecordCategory] = Field(
+        default_factory=list,
+        description="health_records가 required_evidence_types에 있을 때 조회할 개인기록 범주. health_records가 없으면 빈 목록.",
+    )
+
+    @model_validator(mode="after")
+    def _categories_require_health_records(self) -> "HealthAssistantScopeDecision":
+        if self.required_record_categories and "health_records" not in self.required_evidence_types:
+            raise ValueError(
+                "required_record_categories는 required_evidence_types에 health_records가 있을 때만 설정 가능합니다."
+            )
+        return self
 
 
 class HealthAssistantChatRequest(BaseModel):
@@ -352,7 +364,7 @@ class HealthAssistantResponse(HealthAssistantLlmResponse):
     )
     personal_health_snapshot: PersonalHealthSnapshot | None = Field(
         default=None,
-        description="음주 상담을 위해 인증된 PostgreSQL에서 조회한 개인 건강기록 스냅샷",
+        description="인증된 PostgreSQL에서 조회한 개인 건강기록 스냅샷",
     )
     health_knowledge_search_result: HealthKnowledgeSearchResult | None = Field(
         default=None,

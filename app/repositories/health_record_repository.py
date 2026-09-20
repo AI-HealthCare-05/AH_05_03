@@ -38,7 +38,7 @@ class HealthRecordRepository:
             query = query.where(HealthRecord.status != "deleted")
         if record_type:
             query = query.where(HealthRecord.record_type == record_type)
-        query = query.order_by(HealthRecord.recorded_at.desc()).limit(limit).offset(offset)
+        query = query.order_by(HealthRecord.recorded_at.desc(), HealthRecord.id.desc()).limit(limit).offset(offset)
         result = await self.session.scalars(query)
         return list(result)
 
