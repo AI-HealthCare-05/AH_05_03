@@ -6,10 +6,7 @@ from typing import Any, Literal
 from app.dtos.health_record_query import HealthRecordQueryResult
 from app.services.food_nutrition_tools import FOOD_NUTRITION_TOOL_DECLARATION
 from app.services.health_knowledge_tools import SEARCH_HEALTH_KNOWLEDGE_DECLARATION
-from app.services.health_record_tools import (
-    GET_ALCOHOL_CONSULTATION_SNAPSHOT_DECLARATION,
-    QUERY_HEALTH_RECORDS_DECLARATION,
-)
+from app.services.health_record_tools import QUERY_HEALTH_RECORDS_DECLARATION
 from app.services.medical_facility_tools import FACILITY_TOOL_DECLARATIONS
 from app.services.medication_tools import MEDICATION_TOOL_DECLARATION
 from app.services.outdoor_conditions_tools import OUTDOOR_CONDITIONS_TOOL_DECLARATION
@@ -90,30 +87,6 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         enabled=True,
         input_fields=_schema_fields(QUERY_HEALTH_RECORDS_DECLARATION),
         result_fields=QUERY_HEALTH_RECORDS_RESULT_FIELDS,
-        item_fields=frozenset(),
-        forbidden_result_fields=QUERY_HEALTH_RECORDS_FORBIDDEN_RESULT_FIELDS,
-        limits=_LOW,
-        source_module="app.services.health_record_tools",
-    ),
-    ToolSpec(
-        name="get_alcohol_consultation_snapshot",
-        access="read",
-        risk="high",
-        exposure="server_prefetch",
-        enabled=True,
-        input_fields=_schema_fields(GET_ALCOHOL_CONSULTATION_SNAPSHOT_DECLARATION),
-        result_fields=frozenset(
-            {
-                "topic",
-                "blood_pressure",
-                "liver_tests",
-                "today_activities",
-                "recent_medications",
-                "recent_alcohol_records",
-                "missing_sections",
-                "message",
-            }
-        ),
         item_fields=frozenset(),
         forbidden_result_fields=QUERY_HEALTH_RECORDS_FORBIDDEN_RESULT_FIELDS,
         limits=_LOW,
@@ -232,7 +205,6 @@ def declared_llm_tool_names() -> frozenset[str]:
     """코드에 있는 FunctionDeclaration 이름. 설계도에만 있는 이름은 여기 없다."""
     names = [
         QUERY_HEALTH_RECORDS_DECLARATION.name,
-        GET_ALCOHOL_CONSULTATION_SNAPSHOT_DECLARATION.name,
         MEDICATION_TOOL_DECLARATION.name,
         FOOD_NUTRITION_TOOL_DECLARATION.name,
         SEARCH_HEALTH_KNOWLEDGE_DECLARATION.name,

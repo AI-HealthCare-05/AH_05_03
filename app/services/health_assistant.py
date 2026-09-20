@@ -1,12 +1,13 @@
 import logging
 import re
+import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
-import httpx
-
+from app.core import config
+from app.core.config import Env
 from app.dtos.health_assistant import (
     HealthAssistantChatRequest,
     HealthAssistantLlmResponse,
@@ -15,7 +16,9 @@ from app.dtos.health_assistant import (
     ProfileContext,
     UserLocation,
 )
-from app.dtos.health_record_query import AlcoholConsultationSnapshot
+from app.dtos.health_knowledge import HealthKnowledgeSearchResult
+from app.dtos.health_record_query import PersonalHealthSnapshot
+from app.dtos.health_records import HealthRecordPrefillData
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
 from app.exceptions import LlmProviderFailedError
 from app.integrations.llm.chain import shared_chat_client, shared_classifier_client
@@ -46,7 +49,7 @@ from app.services.health_assistant_boundary import (
     HealthAssistantBoundaryService,
 )
 from app.services.health_assistant_safety import HealthAssistantSafetyService
-from app.services.health_knowledge_catalog import HealthKnowledgeClientProtocol, is_alcohol_topic
+from app.services.health_knowledge_catalog import HealthKnowledgeClientProtocol
 from app.services.health_knowledge_query import normalize_knowledge_query
 from app.services.health_record_tools import (
     QUERY_HEALTH_RECORDS_TOOL_NAME,
@@ -333,41 +336,26 @@ class HealthAssistantService:
         request: HealthAssistantChatRequest,
         decision: HealthAssistantScopeDecision,
     ) -> bool:
-        """개인 건강기록 스냅샷 조회 전에 프로필 선택을 요구할지 판단한다.
+        """Boundary가 개인기록을 요구하면 표현이나 주제와 무관하게 프로필을 요구한다."""
+        return bool(request.messages) and "health_records" in decision.required_evidence_types
 
-        바운더리(fast-path 또는 LLM 판정기)가 이미 health_records 근거가
-        필요하다고 판단했고, 그 주제가 음주(현재 유일하게 개인기록 스냅샷이
-        구현된 주제)일 때만 프로필이 필요하다."""
-        if "health_records" not in decision.required_evidence_types:
-            return False
-        if not request.messages:
-            return False
-        return is_alcohol_topic(request.messages[-1].content)
+    async def _fetch_health_knowledge(self, query: str) -> HealthKnowledgeSearchResult | None:
+        """KDCA 포털 검색. 1차가 비면 주제어로 축약 후 한 번 더 시도한다."""
+        started = time.perf_counter()
+        knowledge = await self.health_knowledge_client.search(query)
+        if not knowledge.items:
+            # 포털은 문장이 아니라 주제어에 매칭된다 — 1차가 비었을 때만 축약 쿼리로 재시도
+            fallback_query = normalize_knowledge_query(query)
+            if fallback_query and fallback_query != query:
+                knowledge = await self.health_knowledge_client.search(fallback_query)
+        logger.debug(
+            "[CHAT_TRACE] kdca_retrieval duration_ms=%.1f item_count=%d",
+            (time.perf_counter() - started) * 1000,
+            len(knowledge.items),
+        )
+        return knowledge if knowledge.items else None
 
-    async def _fetch_alcohol_snapshot(
-        self,
-        *,
-        account: ServiceAccount | None,
-        profile_context: ProfileContext | None,
-    ) -> AlcoholConsultationSnapshot:
-        """음주 상담용 개인 건강기록 스냅샷을 조회한다. 조회 실패·데이터 없음도 정직하게 반환한다."""
-        snapshot: AlcoholConsultationSnapshot | None = None
-        if account is not None and profile_context is not None and self.health_record_service is not None:
-            profile_id = self._parse_profile_id(profile_context.profile_id)
-            if profile_id is not None:
-                try:
-                    snapshot = await self.health_record_service.get_alcohol_consultation_snapshot(account, profile_id)
-                except Exception as ex:
-                    logger.warning("음주 상담 스냅샷 조회 실패: %s", ex)
-
-        if snapshot is None:
-            snapshot = AlcoholConsultationSnapshot(
-                message="현재 프로필에서 음주 상담에 활용할 최근 기록을 찾지 못했습니다.",
-                missing_sections=["blood_pressure", "liver_tests", "recent_medications"],
-            )
-        return snapshot
-
-    async def _load_authoritative_evidence(
+    async def _load_authoritative_evidence(  # noqa: C901
         self,
         request: HealthAssistantChatRequest,
         decision: HealthAssistantScopeDecision,
@@ -397,32 +385,47 @@ class HealthAssistantService:
         # 식이요법 안내" 같은)가 포털 제목과 더 가깝게 맞는다 — 원문 그대로 검색하면
         # 관련 없는 문서가 걸리기 쉽다.
         query = request.enriched_query or request.messages[-1].content
-        raw_query = request.messages[-1].content
         results: list[Any] = []
         snapshot_lines: list[str] = []
         knowledge_lines: list[str] = []
 
-        # 개인 건강기록 스냅샷은 아직 음주 주제만 구현돼 있다. 다른 주제의 개인기록
-        # 스냅샷이 생기면 여기에 분기를 추가하면 된다.
-        if "health_records" in required and is_alcohol_topic(raw_query):
-            snapshot = await self._fetch_alcohol_snapshot(account=account, profile_context=profile_context)
-            results.append(snapshot)
-            snapshot_lines = ["[개인 건강기록 스냅샷]", snapshot.model_dump_json(exclude_none=True)]
+        if "health_records" in required:
+            categories: list[str] = list(decision.required_record_categories)
+            record_started = time.perf_counter()
+            prefill: HealthRecordPrefillData | None = None
+            consultation_snapshot = PersonalHealthSnapshot(
+                message="현재 프로필에서 개인화 상담에 활용할 최근 기록을 찾지 못했습니다.",
+                missing_sections=["blood_pressure", "liver_tests", "recent_medications"],
+                retrieval_status="unavailable",
+            )
+            if account is not None and profile_context is not None and self.health_record_service is not None:
+                profile_id = self._parse_profile_id(profile_context.profile_id)
+                if profile_id is not None:
+                    try:
+                        prefill, consultation_snapshot = await self.health_record_service.load_personal_health_evidence(
+                            account, profile_id, categories=categories
+                        )
+                    except Exception as ex:
+                        logger.warning("개인 건강기록 조회 실패: %s", type(ex).__name__)
+            if prefill is not None:
+                results.append(prefill)
+                public_items = [item.model_dump(exclude={"record_id"}) for item in prefill.items]
+                snapshot_lines = [
+                    "[인증된 개인 건강기록 수치]",
+                    f"조회한 기록 수: {prefill.scanned}",
+                    f"최신 수치: {public_items}",
+                ]
+            logger.debug(
+                "[CHAT_TRACE] health_record executed=true type=combined found=%s duration_ms=%.1f",
+                bool(prefill and prefill.items),
+                (time.perf_counter() - record_started) * 1000,
+            )
+            results.append(consultation_snapshot)
+            snapshot_lines.extend(["[개인 건강기록 맥락]", consultation_snapshot.model_dump_json(exclude_none=True)])
 
         if "health_knowledge" in required:
-            knowledge = await self.health_knowledge_client.search(query)
-            if not knowledge.items:
-                # 포털은 문장이 아니라 주제어에 매칭된다 — "임신 중인데 달리기 해도 돼?"
-                # 도 "임신 중 달리기 안전성" 도 0건이지만 "임신 운동" 은 3건이다
-                # (2026-09-16 실측). 1차가 비었을 때만 주제어로 줄여 한 번 더 본다.
-                fallback_query = normalize_knowledge_query(query)
-                if fallback_query and fallback_query != query:
-                    knowledge = await self.health_knowledge_client.search(fallback_query)
-            # 카탈로그/포털에 아직 없는 주제는 items가 빈 채로 돌아온다. 그걸 그대로
-            # results에 넣으면 "근거를 하나도 못 채웠다"는 사전 차단 게이트가 빈 결과도
-            # "뭔가 채워졌다"고 착각해서, 실제로는 근거가 없는데도 메인 LLM 호출까지
-            # 새어나간다. 빈 결과는 근거가 아니므로 넣지 않는다.
-            if knowledge.items:
+            knowledge = await self._fetch_health_knowledge(query)
+            if knowledge is not None:
                 results.append(knowledge)
                 knowledge_lines.append("[질병관리청 국가건강정보포털 근거]")
                 for item in knowledge.items:
@@ -565,12 +568,17 @@ class HealthAssistantService:
         return False
 
     async def _resolve_request_location(
-        self, request: HealthAssistantChatRequest, needs_outdoor: bool, client_ip: str | None = None
+        self, request: HealthAssistantChatRequest, needs_outdoor: bool
     ) -> UserLocation | None:
-        """동의된 좌표를 우선하고, 야외 질문의 사용자 장소명만 보조적으로 좌표화한다. 둘 다 없으면 IP 기반으로 추정한다."""
+        """야외 질문에만 브라우저 좌표나 사용자가 말한 장소를 사용한다."""
         loc = request.location
         if loc is not None:
             return loc
+
+        # 위치는 프로필 속성이 아니다. 일반 후속 대화에서 IP를 거주지처럼 주입하면
+        # 모델이 존재하지 않는 프로필 위치 설정을 만들어낸다.
+        if not needs_outdoor:
+            return None
 
         recent_user_messages = [message for message in request.messages[-3:] if message.role == "user"]
         for message in reversed(recent_user_messages):
@@ -583,36 +591,11 @@ class HealthAssistantService:
                     address=f"{sido}특별시" if sido == "서울" else sido,
                 )
 
-        if needs_outdoor:
-            for message in reversed(recent_user_messages):
-                resolved_place = await self.outdoor_conditions_client.resolve_location(message.content)
-                if resolved_place:
-                    lat, lon, address = resolved_place
-                    return UserLocation(latitude=lat, longitude=lon, address=address)
-
-        return await self._resolve_location_by_ip(client_ip)
-
-    @staticmethod
-    async def _resolve_location_by_ip(client_ip: str | None) -> UserLocation | None:
-        """좌표도 장소명도 없을 때의 마지막 폴백. 실패하면 조용히 None — 위치는 있으면 좋은 것이지 필수가 아니다."""
-        if not client_ip:
-            return None
-        if client_ip in ("127.0.0.1", "::1", "localhost", "testclient"):
-            # 로컬 개발용 폴백 (서울)
-            return UserLocation(latitude=37.5665, longitude=126.9780, address="서울특별시")
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                resp = await client.get(f"http://ip-api.com/json/{client_ip}?lang=ko")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if data.get("status") == "success":
-                        return UserLocation(
-                            latitude=data["lat"],
-                            longitude=data["lon"],
-                            address=data.get("city", data.get("regionName", "알 수 없는 지역")),
-                        )
-        except Exception:
-            logger.debug("IP 기반 위치 추정 실패", exc_info=True)
+        for message in reversed(recent_user_messages):
+            resolved_place = await self.outdoor_conditions_client.resolve_location(message.content)
+            if resolved_place:
+                lat, lon, address = resolved_place
+                return UserLocation(latitude=lat, longitude=lon, address=address)
 
         return None
 
@@ -700,8 +683,8 @@ class HealthAssistantService:
             if bad_air:
                 unsafe_reasons.append("미세먼지 나쁨")
             lines.append(
-                "대기질: "
-                f"{air.region_name} {air.station_name or '측정소'}, "
+                "대기질(현재 위치 인근 공공 측정소이며 사용자 거주지를 의미하지 않음): "
+                f"권역 {air.region_name}, 측정소 {air.station_name or '확인 불가'}, "
                 f"PM10 {air.pm10 if air.pm10 is not None else '확인 불가'}㎍/㎥({air.pm10_grade or '등급 확인 불가'}), "
                 f"PM2.5 {air.pm25 if air.pm25 is not None else '확인 불가'}㎍/㎥({air.pm25_grade or '등급 확인 불가'})"
             )
@@ -948,13 +931,21 @@ class HealthAssistantService:
         if name == QUERY_HEALTH_RECORDS_TOOL_NAME:
             if account is None or profile_id is None or self.health_record_service is None:
                 raise ValueError("건강기록 조회에 필요한 인증 프로필 정보가 없습니다.")
-            return await execute_health_record_tool(
+            record_started = time.perf_counter()
+            result = await execute_health_record_tool(
                 name,
                 args,
                 account=account,
                 profile_id=profile_id,
                 record_service=self.health_record_service,
             )
+            logger.debug(
+                "[CHAT_TRACE] health_record executed=true type=%s found=%s duration_ms=%.1f",
+                args.get("record_type"),
+                getattr(result, "empty_reason", None) is None,
+                (time.perf_counter() - record_started) * 1000,
+            )
+            return result
         if name == "search_medication_info":
             return await execute_medication_tool(name, args, self.medication_client)
         return await execute_facility_tool(name, args, self.facility_client)
@@ -992,7 +983,7 @@ class HealthAssistantService:
             return
         from app.dtos.food_nutrition import FoodNutritionSearchResult
         from app.dtos.health_knowledge import HealthKnowledgeSearchResult
-        from app.dtos.health_record_query import AlcoholConsultationSnapshot, HealthRecordQueryResult
+        from app.dtos.health_record_query import HealthRecordQueryResult, PersonalHealthSnapshot
         from app.dtos.medication import MedicationSearchResult
 
         if isinstance(tool_result, FoodNutritionSearchResult):
@@ -1000,8 +991,8 @@ class HealthAssistantService:
                 response.food_nutrition_search_result = tool_result
         elif isinstance(tool_result, HealthKnowledgeSearchResult):
             response.health_knowledge_search_result = tool_result
-        elif isinstance(tool_result, AlcoholConsultationSnapshot):
-            response.alcohol_consultation_snapshot = tool_result
+        elif isinstance(tool_result, PersonalHealthSnapshot):
+            response.personal_health_snapshot = tool_result
         elif isinstance(tool_result, HealthRecordQueryResult):
             response.intent = "query_records"
             response.health_record_query_result = tool_result
@@ -1103,13 +1094,20 @@ class HealthAssistantService:
         self,
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None,
-        client_ip: str | None,
     ) -> HealthAssistantResponse | _PreparedExecution:
+        if config.ENV != Env.PROD and request.messages:
+            logger.debug("[CHAT_TRACE] input question=%r", request.messages[-1].content)
+
         safety_check = self.safety_service.check_input_safety(request.messages)
         if safety_check:
             return safety_check
 
+        boundary_started = time.perf_counter()
         boundary = await self.boundary_service.check_request(self.classifier_llm_client, request)
+        logger.debug(
+            "[CHAT_TRACE] boundary duration_ms=%.1f",
+            (time.perf_counter() - boundary_started) * 1000,
+        )
         if boundary.response:
             return boundary.response
         assert boundary.request is not None
@@ -1126,11 +1124,13 @@ class HealthAssistantService:
         ):
             return self._profile_required_response()
 
-        account_id = account.id if account else None
-        profile_context = await self._enrich_context(
-            request.profile_context,
-            account_id=account_id,
-            request=request,
+        # 개인 건강정보의 정본은 인증된 서버 기록이다. 프론트의 표현별 선택기가 만든
+        # 요약문을 답변 근거로 사용하지 않고, Boundary가 health_records를 요구한 경우
+        # 아래 `_load_authoritative_evidence`가 같은 프로필을 서버에서 직접 조회한다.
+        profile_context = (
+            request.profile_context.model_copy(update={"recent_records_summary": None})
+            if request.profile_context is not None
+            else None
         )
         preloaded_results, authoritative_evidence_context = await self._load_authoritative_evidence(
             request,
@@ -1139,7 +1139,7 @@ class HealthAssistantService:
             profile_context=profile_context,
         )
         needs_outdoor = "outdoor" in boundary.decision.required_evidence_types
-        loc = await self._resolve_request_location(request, needs_outdoor, client_ip)
+        loc = await self._resolve_request_location(request, needs_outdoor)
         medical_required = bool(set(boundary.decision.required_evidence_types) & _MEDICAL_EVIDENCE_TYPES)
         if needs_outdoor and loc is None and not medical_required:
             return self._outdoor_location_required_response()
@@ -1208,9 +1208,9 @@ class HealthAssistantService:
         self,
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None = None,
-        client_ip: str | None = None,
     ) -> HealthAssistantResponse:
-        prepared = await self._prepare_execution(request, account, client_ip)
+        total_started = time.perf_counter()
+        prepared = await self._prepare_execution(request, account)
         if isinstance(prepared, HealthAssistantResponse):
             return prepared
 
@@ -1259,21 +1259,18 @@ class HealthAssistantService:
         if prepared.outdoor_conditions and not response.outdoor_conditions:
             response.outdoor_conditions = prepared.outdoor_conditions
         validated_response = self.safety_service.validate_response(response)
-        grounded = self.boundary_service.enforce_grounding(
+        final_response = self.boundary_service.enforce_grounding(
             prepared.decision,
             validated_response,
             tool_result=tool_result,
             outdoor_conditions=prepared.outdoor_conditions,
             messages=request.messages,
         )
-        self._observe_assistant_turn(
-            request=request,
-            account=account,
-            offered_tools=prepared.tools,
-            called_tool_names=called_tool_names,
-            outcome="non_streaming_success",
+        logger.debug(
+            "[CHAT_TRACE] total duration_ms=%.1f",
+            (time.perf_counter() - total_started) * 1000,
         )
-        return grounded
+        return final_response
 
     async def _get_stream_generator(
         self,
@@ -1304,9 +1301,9 @@ class HealthAssistantService:
         self,
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None = None,
-        client_ip: str | None = None,
     ) -> AsyncIterator[tuple[str, Any]]:
-        prepared = await self._prepare_execution(request, account, client_ip)
+        total_started = time.perf_counter()
+        prepared = await self._prepare_execution(request, account)
         if isinstance(prepared, HealthAssistantResponse):
             yield "delta", {"text": prepared.assistant_message}
             yield "result", prepared.model_dump(mode="json")
@@ -1450,12 +1447,9 @@ class HealthAssistantService:
         )
         # 생성 중인 문장을 먼저 전송하면 최종 safety/grounding이 차단해도
         # 이미 사용자에게 노출된다. 검증된 문장만 delta로 내보낸다.
-        self._observe_assistant_turn(
-            request=request,
-            account=account,
-            offered_tools=prepared.tools,
-            called_tool_names=called_tool_names,
-            outcome="streaming_success",
+        logger.debug(
+            "[CHAT_TRACE] total duration_ms=%.1f",
+            (time.perf_counter() - total_started) * 1000,
         )
         yield "delta", {"text": validated.assistant_message}
         yield "result", validated.model_dump(mode="json")

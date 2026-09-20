@@ -4,7 +4,7 @@ from typing import Any
 
 from app.dtos.food_nutrition import FoodNutritionSearchResult
 from app.dtos.health_knowledge import HealthKnowledgeSearchResult
-from app.dtos.health_record_query import AlcoholConsultationSnapshot, HealthRecordQueryResult
+from app.dtos.health_record_query import HealthRecordQueryResult
 from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.medication import MedicationSearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
@@ -150,8 +150,6 @@ def _project_outdoor(result: OutdoorConditionsResult) -> dict[str, Any]:
 def _project_known_dto(result: object) -> dict[str, Any] | None:
     if isinstance(result, HealthRecordQueryResult):
         return project_health_record_query_result(result).model_dump(mode="json")
-    if isinstance(result, AlcoholConsultationSnapshot):
-        return _pick(result.model_dump(mode="json"), TOOLS_BY_NAME["get_alcohol_consultation_snapshot"].result_fields)
     if isinstance(result, FacilitySearchResult):
         return _project_facility(result)
     if isinstance(result, MedicationSearchResult):

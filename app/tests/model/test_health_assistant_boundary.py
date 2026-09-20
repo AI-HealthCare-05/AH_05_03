@@ -14,7 +14,7 @@ from app.dtos.health_assistant import (
     HealthAssistantScopeDecision,
 )
 from app.dtos.health_knowledge import HealthKnowledgeItem, HealthKnowledgeSearchResult
-from app.dtos.health_record_query import AlcoholConsultationSnapshot
+from app.dtos.health_record_query import PersonalHealthSnapshot
 from app.dtos.medical_facility import FacilityItem, FacilitySearchResult
 from app.dtos.medication import DrugInfo, MedicationSearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult, WeatherConditions
@@ -128,8 +128,9 @@ def test_hard_rule_filter_profanity_blocked() -> None:
     assert "비속어" in reason
 
 
-def test_hard_rule_filter_meaningless_blocked() -> None:
-    pass
+@pytest.mark.parametrize("message", ["ㅇ", "ㅇㅇ", "ㄱㄱ", "ㄴㄴ", "ㅋㅋㅋㅋ", "ㅠㅠ", "웅", "알려줘"])
+def test_hard_rule_filter_allows_conversational_expressions(message: str) -> None:
+    assert hard_rule_filter(message) == (True, None)
 
 
 @pytest.mark.asyncio
@@ -345,18 +346,26 @@ async def test_pregnancy_symptom_followup_asks_for_context_without_calling_llm()
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("question", ["임신 중인데 엽산 먹어도 돼?", "임신 중 아스피린 먹어도 돼?"])
-async def test_pregnancy_medication_safety_question_asks_for_context_without_calling_llm(question: str) -> None:
+async def test_pregnancy_medication_safety_question_blocks_without_evidence(question: str) -> None:
+    """임신 중 복약 질문은 LLM이 pregnancy+medication 판정을 내리고 증거 없으면 차단된다.
+
+    이전 is_pregnancy_medication_question fast-path는 제거됨 — LLM이 처리한다.
+    """
     client = ScopeOnlyClient(
-        HealthAssistantScopeDecision(request_kind="information", clinical_contexts=["none"], scope="out_of_scope")
+        HealthAssistantScopeDecision(
+            scope="health",
+            request_kind="personalized_advice",
+            clinical_contexts=["pregnancy", "medication"],
+            requires_authoritative_evidence=True,
+            required_evidence_types=["medication"],
+        )
     )
     service = HealthAssistantService(llm_client=client)
 
     response = await service.respond(HealthAssistantChatRequest(messages=[ChatMessage(role="user", content=question)]))
 
-    assert response.assistant_message == (
-        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_supplement_context']}"
-    )
-    assert client.calls == 0
+    assert response.assistant_message == PREGNANCY_MEDICATION_EVIDENCE_MESSAGE
+    assert client.calls >= 1  # LLM 판정기가 호출됨
 
 
 @pytest.mark.asyncio
@@ -1318,7 +1327,7 @@ def test_symptom_clearance_is_blocked_when_only_health_records_are_grounded() ->
     assert not _grounding_verdict(
         question="무릎이 아픈데 산책해도 돼?",
         required=["health_records"],
-        tool_result=AlcoholConsultationSnapshot(message="기록 조회"),
+        tool_result=PersonalHealthSnapshot(message="기록 조회"),
         outdoor=None,
     )
 
@@ -1381,7 +1390,6 @@ def test_nutrition_lookup_with_chronic_condition_context_is_not_blocked() -> Non
         ("무릎이 아픈데 근처 정형외과 어디야?", "information", ["symptom"]),
         ("오늘 날씨 어때?", "information", ["none"]),
         ("안녕", "information", ["none"]),
-        ("나 오늘 술 먹어도 돼?", "personalized_advice", ["none"]),
     ],
 )
 def test_fast_path_states_request_kind_and_clinical_contexts(
@@ -1647,3 +1655,93 @@ def test_non_advice_conversation_is_not_dragged_into_grounding(question: str, in
     )
 
     assert result.assistant_message == answer
+
+
+# =========================================================================
+# 주제 무관 일반화 — 특정 키워드 없이 Boundary 판정으로 동작함을 확인 (Task 3/6)
+# =========================================================================
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "나 오늘 술 마셔도 돼?",
+        "임신 중에 엽산 먹어도 돼?",
+        "임신했는데 아스피린 복용 가능해?",
+    ],
+)
+def test_topic_specific_queries_fall_through_to_llm_classifier(question: str) -> None:
+    """음주/임신 복약 쿼리는 전용 fast-path 없이 LLM 판정기로 넘어간다.
+
+    삭제된 is_alcohol_topic fast-path와 is_pregnancy_medication_question fast-path가
+    없으므로 _fast_path_decision이 None을 반환해야 한다.
+    """
+    boundary = HealthAssistantBoundaryService()
+    assert boundary._fast_path_decision([ChatMessage(role="user", content=question)]) is None
+
+
+def test_enforce_grounding_blocks_pregnancy_symptom_via_decision_contexts_not_message_keywords() -> None:
+    """enforce_grounding은 messages 키워드 재스캔 없이 decision.clinical_contexts로 판정한다."""
+    boundary = HealthAssistantBoundaryService()
+
+    decision = HealthAssistantScopeDecision(
+        scope="health",
+        request_kind="personalized_advice",
+        clinical_contexts=["pregnancy", "symptom"],
+        requires_authoritative_evidence=True,
+        required_evidence_types=[],
+    )
+    response = HealthAssistantResponse(intent="health_advice", assistant_message="임신 중 복통 조언입니다.")
+
+    result = boundary.enforce_grounding(
+        decision,
+        response,
+        tool_result=None,
+        outdoor_conditions=None,
+        messages=[ChatMessage(role="user", content="배가 아파")],  # 임신 키워드 없는 메시지
+    )
+
+    assert result.assistant_message == PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE
+
+
+def test_enforce_grounding_blocks_pregnancy_medication_via_decision_contexts() -> None:
+    """pregnancy + medication 맥락은 decision.clinical_contexts로 차단된다."""
+    boundary = HealthAssistantBoundaryService()
+
+    decision = HealthAssistantScopeDecision(
+        scope="health",
+        request_kind="personalized_advice",
+        clinical_contexts=["pregnancy", "medication"],
+        requires_authoritative_evidence=True,
+        required_evidence_types=[],
+    )
+    response = HealthAssistantResponse(intent="health_advice", assistant_message="복약 조언입니다.")
+
+    result = boundary.enforce_grounding(
+        decision,
+        response,
+        tool_result=None,
+        outdoor_conditions=None,
+        messages=[ChatMessage(role="user", content="이거 먹어도 돼?")],  # 임신 키워드 없는 메시지
+    )
+
+    assert result.assistant_message == PREGNANCY_MEDICATION_EVIDENCE_MESSAGE
+
+
+def test_pregnancy_symptom_fast_path_uses_sentinel_contexts() -> None:
+    """임신 맥락 후 새 증상(수치 없음)은 sentinel 기반으로 clarify fast-path를 탄다."""
+    boundary = HealthAssistantBoundaryService()
+
+    messages = [
+        ChatMessage(role="user", content="나 임신 중이야"),
+        ChatMessage(role="assistant", content="임신 중이시군요. 궁금한 점이 있으시면 말씀해 주세요."),
+        ChatMessage(role="user", content="배가 아파"),  # _PAIN_WORDS 포함, 수치 없음
+    ]
+
+    decision = boundary._fast_path_decision(messages)
+
+    assert decision is not None
+    assert decision.response_mode == "clarify"
+    assert decision.clarification_kind == "pregnancy_symptom_context"
+    assert "pregnancy" in decision.clinical_contexts
+    assert "symptom" in decision.clinical_contexts

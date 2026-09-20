@@ -790,34 +790,9 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     });
   });
 
-  it("저장된 최근 복약 기록이 있을 때 음주 질문 시 프로필 컨텍스트에 기록 요약이 전달된다", async () => {
-    const runtimeWithMed = {
-      healthRecords: {
-        create: mockCreateRecord,
-        query: vi.fn().mockResolvedValue({
-          ok: true,
-          value: [
-            {
-              id: "med-1",
-              profileId: "profile-1",
-              recordType: "medication",
-              recordedAt: "2026-08-31T08:30:00Z",
-              source: "manual",
-              payload: {
-                type: "medication",
-                medicationName: "타이레놀",
-                dosage: "1알",
-              },
-            },
-          ],
-        }),
-      },
-      documents: {
-        readById: mockReadDocById,
-        save: mockSaveDoc,
-      },
-    } as unknown as LocalDomainRuntime;
-
+  it("음주 질문 시 클라이언트가 로컬 기록 요약을 만들지 않고 프로필 컨텍스트만 전달한다", async () => {
+    // 서버 Boundary가 health_records를 판정하면 서버가 직접 PostgreSQL을 조회한다.
+    // 프런트는 recent_records_summary를 만들거나 보내지 않는다.
     const spySend = vi.spyOn(clientModule, "streamHealthAssistantMessage").mockResolvedValueOnce({
       intent: "health_advice",
       assistant_message: "최근 복약 기록에 타이레놀 복용 내역이 있습니다. 타이레놀은 간 손상 위험이 있어 음주를 피하셔야 합니다.",
@@ -829,7 +804,7 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     render(
       <HealthAssistantDrawer
         profile={mockProfile}
-        runtime={runtimeWithMed}
+        runtime={mockRuntime}
         isOpen={true}
         onClose={mockOnClose}
         onRecordSaved={mockOnRecordSaved}
@@ -846,7 +821,6 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
         expect.any(Function),
         expect.objectContaining({
           profile_name: "홍길동",
-          recent_records_summary: expect.stringContaining("타이레놀"),
         }),
         undefined,
         undefined,
@@ -854,6 +828,10 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
         expect.any(Function),
       );
     });
+
+    // recent_records_summary는 전송되지 않는다
+    const profileCtx = spySend.mock.calls[0][2] as unknown as Record<string, unknown>;
+    expect(profileCtx).not.toHaveProperty("recent_records_summary");
 
     await waitFor(() => {
       expect(screen.getByText(/최근 복약 기록에 타이레놀 복용 내역이 있습니다/)).toBeInTheDocument();
@@ -1091,7 +1069,6 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
         expect.any(Function),
         expect.objectContaining({
           profile_id: "profile-1",
-          recent_records_summary: undefined,
         }),
         undefined,
         undefined,
@@ -1151,7 +1128,6 @@ describe("HealthAssistantDrawer (봄이 AI 챗봇)", () => {
     expect(spySend.mock.calls[0][2]).toEqual(
       expect.objectContaining({
         profile_id: "profile-1",
-        recent_records_summary: undefined,
       }),
     );
     expect(mockQueryRecords).not.toHaveBeenCalled();

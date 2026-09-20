@@ -20,7 +20,7 @@
 
 ## 공개 랜딩페이지 (`/landing`)
 
-로그인 관문 밖에 있는 소개 화면이다. 구조·재사용 범위·스크롤 구현은 [docs/52 공개 랜딩페이지](../docs/52_landing_page.md)에 있다.
+로그인 관문 밖에 있는 소개 화면이다. 구현은 `src/features/landing/`에 둔다.
 
 - 코드: `src/features/landing/` — 연꽃 마크(`/ieobom-icon.png`)와 히어로 차트.
 - 건강기록 계층(`useLocalDomain`·`serverApiClient`·`shared/local`)을 **import 하지 않는다.** 화면의 수치는 `landingStory.ts` 의 예시 시나리오 하나뿐이고, 이 경계는 `LandingPage.test.tsx` 가 지킨다.
@@ -28,7 +28,7 @@
 
 공개 소개는 `/landing` 한 벌이다. 예전 `/landing-v2` 는 `/landing` 으로 보낸다.
 
----
+같은 이야기를 **다른 디자인 시스템 한 벌**로 구현한 비교용 화면이며 `src/features/landing-v2/`에 둔다.
 
 ## 공용 벽 (`/wall`, `/wall/pair`)
 

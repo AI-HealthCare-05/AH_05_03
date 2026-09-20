@@ -126,7 +126,7 @@ class FallbackChatClient(LLMClientProtocol):
                     messages=messages,
                     response_schema=response_schema,
                 )
-                self.last_success_entry = entry
+                logger.debug("[CHAT_TRACE] llm_provider used=%s", entry)
                 return result
             except Exception as error:  # noqa: BLE001 - 어떤 실패든 다음 공급자로 넘긴다
                 last = error

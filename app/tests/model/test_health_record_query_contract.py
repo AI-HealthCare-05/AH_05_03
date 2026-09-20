@@ -124,6 +124,18 @@ def test_recent_records_are_only_prefetched_for_relevant_health_questions() -> N
     )
 
 
+def test_boundary_health_records_decision_requires_profile_without_topic_keywords() -> None:
+    """개인기록 필요 여부는 현재 문장의 단어가 아니라 Boundary의 의미 판정을 따른다."""
+    decision = HealthAssistantScopeDecision(
+        scope="health",
+        request_kind="personalized_advice",
+        requires_authoritative_evidence=True,
+        required_evidence_types=["health_records"],
+    )
+
+    assert HealthAssistantService._needs_personal_record_evidence(_request("그럼 왜 그런 거야?"), decision)
+
+
 def test_profile_id_is_not_inserted_into_llm_system_instruction() -> None:
     profile_id = uuid.uuid4()
     private_summary = "최근 혈압은 141/90mmHg입니다."

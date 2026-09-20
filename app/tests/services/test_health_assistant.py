@@ -16,6 +16,8 @@ from app.dtos.health_assistant import (
     ProfileContext,
 )
 from app.dtos.health_knowledge import HealthKnowledgeItem, HealthKnowledgeSearchResult
+from app.dtos.health_record_query import PersonalHealthRecordCategory
+from app.dtos.health_records import HealthRecordPrefillData, PrefilledFieldData
 from app.dtos.outdoor_conditions import AirQualityConditions, OutdoorConditionsResult, WeatherConditions
 from app.models.households import HouseholdStatus
 from app.models.service_accounts import ServiceAccount
@@ -243,6 +245,7 @@ async def test_health_assistant_loads_outdoor_tool_result_for_outdoor_question()
     assert response.outdoor_conditions.weather.temperature_c == 23.4
     assert "기온 23.4℃" in llm_client.system_instruction
     assert "PM2.5 11㎍/㎥(보통)" in llm_client.system_instruction
+    assert "공공 측정소이며 사용자 거주지를 의미하지 않음" in llm_client.system_instruction
 
 
 @pytest.mark.asyncio
@@ -259,6 +262,19 @@ async def test_weather_question_without_location_asks_for_location() -> None:
     assert "현재 위치 권한" in response.assistant_message
     assert "서울 날씨" in response.assistant_message
     assert response.missing_fields == ["user_location"]
+
+
+@pytest.mark.asyncio
+async def test_non_outdoor_request_does_not_infer_location() -> None:
+    service = HealthAssistantService(
+        llm_client=CapturingLLMClient(),
+        outdoor_conditions_client=OutdoorConditionsStub(),
+    )
+    request = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="관악구에 안 사는데 나?")])
+
+    location = await service._resolve_request_location(request, needs_outdoor=False)
+
+    assert location is None
 
 
 @pytest.mark.asyncio
@@ -653,10 +669,10 @@ async def test_health_assistant_service_links_alcohol_question_with_recent_medic
     mock_client = MockLLMClient(fake_json)
 
     class FakeHealthRecordService:
-        async def get_alcohol_consultation_snapshot(self, account: Any, profile_id: uuid.UUID) -> Any:
-            from app.dtos.health_record_query import AlcoholConsultationSnapshot, ConsultationMedication
+        async def get_personal_health_snapshot(self, account: Any, profile_id: uuid.UUID) -> Any:
+            from app.dtos.health_record_query import ConsultationMedication, PersonalHealthSnapshot
 
-            return AlcoholConsultationSnapshot(
+            return PersonalHealthSnapshot(
                 recent_medications=[
                     ConsultationMedication(
                         name="타이레놀",
@@ -1324,6 +1340,180 @@ async def test_enrich_context_enriches_records_on_health_symptom() -> None:
     assert enriched.recent_records_summary is not None
     assert "무릎 뻐근함" in enriched.recent_records_summary
     mock_record_repo.list_by_profile.assert_called_once_with(profile_id, limit=5)
+
+
+@pytest.mark.asyncio
+async def test_health_records_evidence_is_loaded_from_boundary_decision_for_followup() -> None:
+    """`그럼 왜?` 같은 후속도 Boundary가 개인기록 필요로 판정하면 기록을 다시 제공한다."""
+    from unittest.mock import AsyncMock
+
+    profile_id = uuid.uuid4()
+    account = ServiceAccount(id=uuid.uuid4(), email="records@example.com", password_hash="hash")
+    from app.dtos.health_record_query import PersonalHealthSnapshot as _Snapshot
+
+    record_service = AsyncMock()
+    _prefill = HealthRecordPrefillData(
+        scanned=3,
+        items=[
+            PrefilledFieldData(
+                field="ldl_c",
+                value=168,
+                measured_at="2026-09-18T09:00:00+09:00",
+                record_type="lab_result",
+                record_id=str(uuid.uuid4()),
+            ),
+            PrefilledFieldData(
+                field="hdl_c",
+                value=38,
+                measured_at="2026-09-18T09:00:00+09:00",
+                record_type="lab_result",
+                record_id=str(uuid.uuid4()),
+            ),
+        ],
+    )
+    _snapshot = _Snapshot(message="최근 기록을 확인했습니다.")
+    record_service.load_personal_health_evidence = AsyncMock(return_value=(_prefill, _snapshot))
+    service = HealthAssistantService(
+        health_record_service=cast(HealthRecordService, record_service),
+    )
+    context = ProfileContext(profile_name="본인", profile_id=str(profile_id))
+    request = HealthAssistantChatRequest(
+        messages=[
+            ChatMessage(role="user", content="내 검사 결과에서 뭐가 제일 안 좋아?"),
+            ChatMessage(role="assistant", content="LDL과 HDL을 먼저 살펴볼게요."),
+            ChatMessage(role="user", content="그럼 왜 그런 거야?"),
+        ],
+        profile_context=context,
+    )
+    decision = HealthAssistantScopeDecision(
+        scope="health",
+        request_kind="personalized_advice",
+        requires_authoritative_evidence=True,
+        required_evidence_types=["health_records"],
+        required_record_categories=["lab_result"],
+    )
+
+    results, evidence_context = await service._load_authoritative_evidence(
+        request,
+        decision,
+        account=account,
+        profile_context=context,
+    )
+
+    assert results
+    assert service.boundary_service.has_required_evidence(decision, results, None, messages=request.messages)
+    assert evidence_context is not None
+    assert "ldl_c" in evidence_context
+    assert "168" in evidence_context
+    assert "record_id" not in evidence_context
+    record_service.load_personal_health_evidence.assert_awaited_once()  # type: ignore[attr-defined]
+    call_kwargs = record_service.load_personal_health_evidence.call_args.kwargs  # type: ignore[union-attr]
+    assert call_kwargs.get("categories") == ["lab_result"]
+
+
+def _health_records_decision(
+    categories: list[PersonalHealthRecordCategory] | None = None,
+) -> HealthAssistantScopeDecision:
+    return HealthAssistantScopeDecision(
+        scope="health",
+        request_kind="personalized_advice",
+        requires_authoritative_evidence=True,
+        required_evidence_types=["health_records"],
+        required_record_categories=categories or ["blood_pressure"],
+    )
+
+
+def _account_and_context() -> tuple[ServiceAccount, ProfileContext]:
+    profile_id = uuid.uuid4()
+    account = ServiceAccount(id=uuid.uuid4(), email="test@example.com", password_hash="hash")
+    context = ProfileContext(profile_name="본인", profile_id=str(profile_id))
+    return account, context
+
+
+@pytest.mark.asyncio
+async def test_record_retrieval_exception_does_not_fail_request_and_produces_unavailable_snapshot() -> None:
+    """load_personal_health_evidence 예외 시 요청 전체가 실패하지 않고
+    retrieval_status='unavailable'인 폴백 스냅샷이 results에 포함된다."""
+    from unittest.mock import AsyncMock
+
+    from app.dtos.health_record_query import PersonalHealthSnapshot as _Snapshot
+
+    record_service = AsyncMock()
+    record_service.load_personal_health_evidence = AsyncMock(side_effect=RuntimeError("DB timeout"))
+    service = HealthAssistantService(health_record_service=cast(HealthRecordService, record_service))
+    account, context = _account_and_context()
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="내 혈압 어때?")],
+        profile_context=context,
+    )
+
+    results, evidence_context = await service._load_authoritative_evidence(
+        request, _health_records_decision(), account=account, profile_context=context
+    )
+
+    snapshots = [r for r in results if isinstance(r, _Snapshot)]
+    assert len(snapshots) == 1
+    assert snapshots[0].retrieval_status == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_unavailable_is_distinct_from_empty() -> None:
+    """retrieval_status='unavailable'(예외)과 'empty'(기록 없음)는 구별된다."""
+    from unittest.mock import AsyncMock
+
+    from app.dtos.health_record_query import PersonalHealthSnapshot as _Snapshot
+
+    account, context = _account_and_context()
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="혈압 기록 있어?")],
+        profile_context=context,
+    )
+
+    # 예외 경로 → unavailable
+    svc_fail = HealthAssistantService(health_record_service=cast(HealthRecordService, AsyncMock()))
+    svc_fail.health_record_service.load_personal_health_evidence = AsyncMock(  # type: ignore[union-attr, method-assign]
+        side_effect=Exception("auth failed")
+    )
+    results_fail, _ = await svc_fail._load_authoritative_evidence(
+        request, _health_records_decision(), account=account, profile_context=context
+    )
+
+    # 성공 경로 (기록 없음) → empty
+    empty_snapshot = _Snapshot(message="기록 없음", retrieval_status="empty")
+    svc_ok = HealthAssistantService(health_record_service=cast(HealthRecordService, AsyncMock()))
+    svc_ok.health_record_service.load_personal_health_evidence = AsyncMock(  # type: ignore[union-attr, method-assign]
+        return_value=(None, empty_snapshot)
+    )
+    results_ok, _ = await svc_ok._load_authoritative_evidence(
+        request, _health_records_decision(), account=account, profile_context=context
+    )
+
+    fail_snap = next(r for r in results_fail if isinstance(r, _Snapshot))
+    ok_snap = next(r for r in results_ok if isinstance(r, _Snapshot))
+    assert fail_snap.retrieval_status == "unavailable"
+    assert ok_snap.retrieval_status == "empty"
+
+
+@pytest.mark.asyncio
+async def test_unavailable_retrieval_status_reaches_evidence_context() -> None:
+    """예외 발생 시 retrieval_status='unavailable'이 LLM에 전달되는 evidence context에 포함된다."""
+    from unittest.mock import AsyncMock
+
+    record_service = AsyncMock()
+    record_service.load_personal_health_evidence = AsyncMock(side_effect=RuntimeError("timeout"))
+    service = HealthAssistantService(health_record_service=cast(HealthRecordService, record_service))
+    account, context = _account_and_context()
+    request = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="내 혈당 기록 알려줘")],
+        profile_context=context,
+    )
+
+    _, evidence_context = await service._load_authoritative_evidence(
+        request, _health_records_decision(["lab_result"]), account=account, profile_context=context
+    )
+
+    assert evidence_context is not None
+    assert "unavailable" in evidence_context
 
 
 @pytest.mark.asyncio

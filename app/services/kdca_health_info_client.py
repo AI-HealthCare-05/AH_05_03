@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app.core import config
+from app.core.config import Env
 from app.dtos.health_knowledge import HealthKnowledgeItem, HealthKnowledgeSearchResult
 from app.services.health_knowledge_catalog import HealthKnowledgeCatalogClient
 
@@ -191,17 +192,21 @@ class KdcaHealthInfoClient:
         token = config.KDCA_HEALTH_INFO_API_KEY
         if not token:
             logger.debug("KDCA_HEALTH_INFO_API_KEY 미설정 — 수작업 카탈로그로 대체")
+            logger.debug("[CHAT_TRACE] kdca executed=false fallback_used=true reason=no_token")
             return await self._fallback.search(query)
 
         try:
             items = await self._search_live(token, query)
             if not items:
                 logger.debug("질병관리청 API 결과 없음 — 수작업 카탈로그 폴백")
+                logger.debug("[CHAT_TRACE] kdca fallback_used=true reason=no_live_results")
                 return await self._fallback.search(query)
         except Exception as ex:
             logger.warning("질병관리청 건강정보 API 호출 실패(%s) — 수작업 카탈로그로 대체", type(ex).__name__)
+            logger.debug("[CHAT_TRACE] kdca fallback_used=true reason=exception")
             return await self._fallback.search(query)
 
+        logger.debug("[CHAT_TRACE] kdca fallback_used=false item_count=%d", len(items))
         return HealthKnowledgeSearchResult(
             query=query,
             items=items,
@@ -214,9 +219,18 @@ class KdcaHealthInfoClient:
         )
 
     async def _search_live(self, token: str, query: str) -> list[HealthKnowledgeItem]:
+        candidates = _candidate_keywords(query)
+        # candidates[0]은 사용자 원문 질문이다. 원문·원문 유래 검색어는 개발 환경에서만
+        # 남기고, production DEBUG에서는 개수 등 안전한 메타데이터만 남긴다.
+        if config.ENV != Env.PROD:
+            logger.debug("[CHAT_TRACE] kdca candidates=%s", candidates)
+        else:
+            logger.debug("[CHAT_TRACE] kdca candidate_count=%d", len(candidates))
         async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
             list_items: list[tuple[str, str]] = []
-            for keyword in _candidate_keywords(query):
+            matched_keyword: str | None = None
+            matched_index: int | None = None
+            for index, keyword in enumerate(candidates):
                 list_resp = await client.post(
                     _LIST_URL,
                     data={"TOKEN": token, "srchWrd": keyword, "lclasSn": "", "pageIndex": "1"},
@@ -227,20 +241,44 @@ class KdcaHealthInfoClient:
                 # ("당뇨에 좋은 음식" → "당뇨병 급성 합병증"). 관련 없는 결과는 근거로
                 # 인정하지 않고, 이번 검색어가 전부 걸러지면 다음 후보 검색어로 넘어간다.
                 relevant_items = [(sn, title) for sn, title in raw_items if _is_relevant(title, query)]
+                # candidate별 단계 계측(개수만. 원문 유래 keyword는 위 candidates 로그로 이미
+                # local/dev에서만 남으므로 여기선 순번+개수만). 필터는 위에서 한 번만 돈다.
+                logger.debug(
+                    "[CHAT_TRACE] kdca cand index=%d list_parsed=%d relevant_pass=%d relevant_drop=%d",
+                    index,
+                    len(raw_items),
+                    len(relevant_items),
+                    len(raw_items) - len(relevant_items),
+                )
                 if relevant_items:
                     list_items = relevant_items[:_MAX_ITEMS]
+                    matched_keyword, matched_index = keyword, index
                     break
+            # matched_keyword는 candidates 중 하나라 원문일 수 있다 — 개발 환경에서만.
+            # matched_index(순번)는 안전한 메타데이터라 항상 남긴다.
+            if config.ENV != Env.PROD:
+                logger.debug(
+                    "[CHAT_TRACE] kdca matched_keyword=%s matched_index=%s",
+                    matched_keyword,
+                    matched_index,
+                )
+            else:
+                logger.debug("[CHAT_TRACE] kdca matched_index=%s", matched_index)
 
             items: list[HealthKnowledgeItem] = []
+            view_http_error = 0
+            view_empty_summary = 0
             for cntnts_sn, title in list_items:
                 try:
                     view_resp = await client.post(_VIEW_URL, data={"TOKEN": token, "cntnts_sn": cntnts_sn})
                     view_resp.raise_for_status()
                 except httpx.HTTPError:
                     logger.warning("질병관리청 건강정보 상세 조회 실패 (cntnts_sn=%s)", cntnts_sn)
+                    view_http_error += 1
                     continue
                 summary = _extract_summary(view_resp.text)
                 if not summary:
+                    view_empty_summary += 1
                     continue
                 items.append(
                     HealthKnowledgeItem(
@@ -250,4 +288,13 @@ class KdcaHealthInfoClient:
                         topics=[query],
                     )
                 )
+            # 상세(view) 단계 탈락 분기별 개수.
+            logger.debug(
+                "[CHAT_TRACE] kdca view attempted=%d http_error=%d empty_summary=%d final=%d",
+                len(list_items),
+                view_http_error,
+                view_empty_summary,
+                len(items),
+            )
+            logger.debug("[CHAT_TRACE] kdca titles=%s", [item.title for item in items])
             return items

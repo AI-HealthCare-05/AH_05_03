@@ -15,7 +15,6 @@ from app.core.db.session import SessionDep
 from app.core.redis.client import get_redis_optional
 from app.dtos.anatomy_event import AnatomyEvent
 from app.dtos.health_record_query import (
-    AlcoholConsultationSnapshot,
     ConsultationActivity,
     ConsultationBloodPressure,
     ConsultationLabValue,
@@ -24,6 +23,7 @@ from app.dtos.health_record_query import (
     HealthRecordQueryMatch,
     HealthRecordQueryPeriod,
     HealthRecordQueryResult,
+    PersonalHealthSnapshot,
 )
 from app.dtos.health_records import (
     HealthRecordCreateRequest,
@@ -52,6 +52,16 @@ from app.services.ocr_measurements import extract as extract_ocr_measurements
 from app.services.profile_access import build_context, require_record_access
 
 _SEOUL = ZoneInfo("Asia/Seoul")
+
+CATEGORY_TO_RECORD_TYPES: dict[str, list[str]] = {
+    "blood_pressure": ["blood_pressure"],
+    "lab_result": ["lab_result", "health_screening", "blood_glucose"],
+    "medication": ["medication"],
+    "alcohol": ["alcohol", "drinking"],
+    "exercise": ["exercise", "walking"],
+    "body_measurement": ["body_measurement"],
+}
+_ALL_RECORD_CATEGORIES = frozenset(CATEGORY_TO_RECORD_TYPES)
 
 
 @dataclass(frozen=True)
@@ -218,16 +228,25 @@ class HealthRecordService:
         account: ServiceAccount,
         profile_id: uuid.UUID,
         limit: int = 200,
+        *,
+        record_types: list[str] | None = None,
     ) -> HealthRecordPrefillData:
         """남긴 기록으로 판정 폼 값을 만든다. 판단은 `record_prefill` 한 곳에 있다.
 
-        `limit` 을 넉넉히 두는 이유는 **칸마다 가장 최근 것**을 골라야 하기 때문이다.
-        스무 개만 읽으면 최근 스무 개가 전부 혈압일 때 체중이 영영 안 잡힌다.
-        기록은 프로필 단위이고 소유권 검사는 아래 한 줄이 한다.
+        `record_types` 를 지정하면 해당 종류만 DB에서 조회한다(타입별 limit=20).
+        미지정이면 전체 기록 `limit` 개를 한 번에 조회한다(판정 폼용 기본 경로).
         """
         await self._verify_profile_access(profile_id, account)
 
-        records = await self.record_repo.list_by_profile(profile_id=profile_id, limit=limit, offset=0)
+        if record_types is not None:
+            all_records: list[HealthRecord] = []
+            for rt in record_types:
+                all_records.extend(
+                    await self.record_repo.list_by_profile(profile_id=profile_id, record_type=rt, limit=20, offset=0)
+                )
+            records = all_records
+        else:
+            records = await self.record_repo.list_by_profile(profile_id=profile_id, limit=limit, offset=0)
         rows = [
             {
                 "id": str(record.id),
@@ -338,14 +357,26 @@ class HealthRecordService:
             message=message,
         )
 
-    async def get_alcohol_consultation_snapshot(
+    async def _fetch_records_by_categories(
+        self, profile_id: uuid.UUID, active: frozenset[str]
+    ) -> dict[str, list[HealthRecord]]:
+        types_to_query = dict.fromkeys(rt for cat in sorted(active) for rt in CATEGORY_TO_RECORD_TYPES.get(cat, []))
+        result: dict[str, list[HealthRecord]] = {}
+        for record_type in types_to_query:
+            result[record_type] = await self.record_repo.list_by_profile(
+                profile_id=profile_id, record_type=record_type, limit=20
+            )
+        return result
+
+    async def get_personal_health_snapshot(
         self,
         account: ServiceAccount,
         profile_id: uuid.UUID,
         *,
+        categories: list[str] | None = None,
         now: datetime | None = None,
-    ) -> AlcoholConsultationSnapshot:
-        """음주 상담에 필요한 최근 사실만 인증된 프로필 범위에서 조회한다."""
+    ) -> PersonalHealthSnapshot:
+        """개인화 상담에 필요한 최근 사실만 인증된 프로필 범위에서 조회한다."""
 
         await self._verify_profile_access(profile_id, account)
         current = now or datetime.now(_SEOUL)
@@ -353,41 +384,41 @@ class HealthRecordService:
             raise ValueError("상담 기준 시각에는 시간대가 필요합니다.")
         current_seoul = current.astimezone(_SEOUL)
 
-        by_type: dict[str, list[HealthRecord]] = {}
-        for record_type in (
-            "blood_pressure",
-            "lab_result",
-            "health_screening",
-            "exercise",
-            "walking",
-            "medication",
-            "alcohol",
-            "drinking",
-        ):
-            by_type[record_type] = await self.record_repo.list_by_profile(
-                profile_id=profile_id,
-                record_type=record_type,
-                limit=20,
-            )
+        active = frozenset(categories) if categories is not None else _ALL_RECORD_CATEGORIES
+        by_type = await self._fetch_records_by_categories(profile_id, active)
 
-        blood_pressure = self._latest_blood_pressure(by_type["blood_pressure"])
-        liver_tests = self._latest_liver_tests(by_type["lab_result"] + by_type["health_screening"])
-        today_activities = self._today_activities(by_type["exercise"] + by_type["walking"], current_seoul.date())
+        blood_pressure = self._latest_blood_pressure(by_type["blood_pressure"]) if "blood_pressure" in active else None
+        liver_tests = (
+            self._latest_liver_tests(by_type.get("lab_result", []) + by_type.get("health_screening", []))
+            if "lab_result" in active
+            else []
+        )
+        today_activities = (
+            self._today_activities(by_type.get("exercise", []) + by_type.get("walking", []), current_seoul.date())
+            if "exercise" in active
+            else []
+        )
         recent_cutoff = current_seoul - timedelta(days=30)
-        recent_medications = self._recent_medications(by_type["medication"], recent_cutoff)
+        recent_medications = (
+            self._recent_medications(by_type.get("medication", []), recent_cutoff) if "medication" in active else []
+        )
         alcohol_cutoff = current_seoul - timedelta(days=90)
-        recent_alcohol_records = sum(
-            1
-            for record in by_type["alcohol"] + by_type["drinking"]
-            if self._as_seoul(record.recorded_at) >= alcohol_cutoff
+        recent_alcohol_records = (
+            sum(
+                1
+                for record in by_type.get("alcohol", []) + by_type.get("drinking", [])
+                if self._as_seoul(record.recorded_at) >= alcohol_cutoff
+            )
+            if "alcohol" in active
+            else None
         )
 
         missing_sections: list[str] = []
-        if blood_pressure is None:
+        if "blood_pressure" in active and blood_pressure is None:
             missing_sections.append("blood_pressure")
-        if not liver_tests:
+        if "lab_result" in active and not liver_tests:
             missing_sections.append("liver_tests")
-        if not recent_medications:
+        if "medication" in active and not recent_medications:
             missing_sections.append("recent_medications")
 
         facts = []
@@ -402,9 +433,9 @@ class HealthRecordService:
         message = (
             f"현재 프로필에서 {', '.join(facts)} 기록을 확인했습니다."
             if facts
-            else "현재 프로필에서 음주 상담에 활용할 최근 기록을 찾지 못했습니다."
+            else "현재 프로필에서 개인화 상담에 활용할 최근 기록을 찾지 못했습니다."
         )
-        return AlcoholConsultationSnapshot(
+        return PersonalHealthSnapshot(
             blood_pressure=blood_pressure,
             liver_tests=liver_tests,
             today_activities=today_activities,
@@ -412,6 +443,133 @@ class HealthRecordService:
             recent_alcohol_records=recent_alcohol_records,
             missing_sections=missing_sections,
             message=message,
+        )
+
+    async def load_personal_health_evidence(  # noqa: C901
+        self,
+        account: ServiceAccount,
+        profile_id: uuid.UUID,
+        *,
+        categories: list[str],
+        now: datetime | None = None,
+    ) -> tuple[HealthRecordPrefillData | None, PersonalHealthSnapshot]:
+        """권한 확인 1회 + 범주별 DB 조회 1회, prefill과 snapshot을 함께 반환한다.
+
+        C2: build_prefill + get_personal_health_snapshot의 이중 auth/쿼리를 통합.
+        """
+        if not categories:
+            return None, PersonalHealthSnapshot(
+                message="현재 프로필에서 개인화 상담에 활용할 최근 기록을 찾지 못했습니다.",
+                missing_sections=[],
+                retrieval_status="empty",
+            )
+
+        await self._verify_profile_access(profile_id, account)
+        current = now or datetime.now(_SEOUL)
+        if current.tzinfo is None:
+            raise ValueError("상담 기준 시각에는 시간대가 필요합니다.")
+        current_seoul = current.astimezone(_SEOUL)
+
+        active = frozenset(categories)
+        by_type = await self._fetch_records_by_categories(profile_id, active)
+
+        # M2: 음주 90일 카운트는 limit=20으로 부족 — 별도 limit=180 조회로 덮어씀
+        if "alcohol" in active:
+            for atype in CATEGORY_TO_RECORD_TYPES.get("alcohol", []):
+                by_type[atype] = await self.record_repo.list_by_profile(
+                    profile_id=profile_id, record_type=atype, limit=180
+                )
+
+        all_records: list[HealthRecord] = [r for recs in by_type.values() for r in recs]
+        rows = [
+            {
+                "id": str(r.id),
+                "record_type": r.record_type,
+                "recorded_at": r.recorded_at.isoformat(),
+                "payload": r.payload,
+            }
+            for r in all_records
+        ]
+        values = record_prefill.build(rows)
+        prefill: HealthRecordPrefillData | None = (
+            HealthRecordPrefillData(
+                items=[
+                    PrefilledFieldData(
+                        field=item.field,
+                        value=item.value,
+                        measured_at=item.measured_at,
+                        record_type=item.record_type,
+                        record_id=item.record_id,
+                    )
+                    for item in values
+                ],
+                scanned=len(rows),
+            )
+            if values
+            else None
+        )
+
+        blood_pressure = (
+            self._latest_blood_pressure(by_type.get("blood_pressure", [])) if "blood_pressure" in active else None
+        )
+        liver_tests = (
+            self._latest_liver_tests(by_type.get("lab_result", []) + by_type.get("health_screening", []))
+            if "lab_result" in active
+            else []
+        )
+        today_activities = (
+            self._today_activities(by_type.get("exercise", []) + by_type.get("walking", []), current_seoul.date())
+            if "exercise" in active
+            else []
+        )
+        recent_cutoff = current_seoul - timedelta(days=30)
+        recent_medications = (
+            self._recent_medications(by_type.get("medication", []), recent_cutoff) if "medication" in active else []
+        )
+        alcohol_cutoff = current_seoul - timedelta(days=90)
+        recent_alcohol_records = (
+            sum(
+                1
+                for record in by_type.get("alcohol", []) + by_type.get("drinking", [])
+                if self._as_seoul(record.recorded_at) >= alcohol_cutoff
+            )
+            if "alcohol" in active
+            else None
+        )
+
+        missing_sections: list[str] = []
+        if "blood_pressure" in active and blood_pressure is None:
+            missing_sections.append("blood_pressure")
+        if "lab_result" in active and not liver_tests:
+            missing_sections.append("liver_tests")
+        if "medication" in active and not recent_medications:
+            missing_sections.append("recent_medications")
+
+        facts = []
+        if blood_pressure:
+            facts.append("최근 혈압")
+        if liver_tests:
+            facts.append("최근 간기능 검사")
+        if today_activities:
+            facts.append("오늘 운동")
+        if recent_medications:
+            facts.append("최근 복약")
+
+        retrieval_status: Literal["ok", "empty", "unavailable"] = "ok" if all_records else "empty"
+        message = (
+            f"현재 프로필에서 {', '.join(facts)} 기록을 확인했습니다."
+            if facts
+            else "현재 프로필에서 개인화 상담에 활용할 최근 기록을 찾지 못했습니다."
+        )
+        return prefill, PersonalHealthSnapshot(
+            blood_pressure=blood_pressure,
+            liver_tests=liver_tests,
+            today_activities=today_activities,
+            recent_medications=recent_medications,
+            recent_alcohol_records=recent_alcohol_records,
+            missing_sections=missing_sections,
+            message=message,
+            retrieval_status=retrieval_status,
         )
 
     @staticmethod

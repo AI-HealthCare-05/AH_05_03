@@ -56,3 +56,9 @@ modeling/artifacts/models_ensemble/
 .cursor/hooks.json
 .gemini/
 *.tsbuildinfo
+
+# Codex/AI tool artifacts
+deliverables/
+.codex-build/
+.codex-finalizer/
+.serena/

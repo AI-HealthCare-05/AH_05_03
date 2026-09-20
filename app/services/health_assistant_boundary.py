@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import re
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -14,7 +16,8 @@ from app.dtos.health_assistant import (
     HealthIntent,
 )
 from app.dtos.health_knowledge import HealthKnowledgeSearchResult
-from app.dtos.health_record_query import AlcoholConsultationSnapshot, HealthRecordQueryResult
+from app.dtos.health_record_query import HealthRecordQueryResult, PersonalHealthSnapshot
+from app.dtos.health_records import HealthRecordPrefillData
 from app.dtos.medical_facility import FacilitySearchResult
 from app.dtos.medication import MedicationSearchResult
 from app.dtos.outdoor_conditions import OutdoorConditionsResult
@@ -25,9 +28,10 @@ from app.services.facility_topic import (
     FACILITY_SEARCH_KEYWORDS,
     is_facility_location_followup,
 )
-from app.services.health_knowledge_catalog import is_alcohol_topic
 from app.services.health_knowledge_query import mentions_activity
 from app.services.medication_topic import mentions_medication
+
+logger = logging.getLogger(__name__)
 
 HEALTH_ONLY_MESSAGE = (
     "저는 건강 관리를 돕는 건강비서예요. 질병, 증상, 식단, 운동, 의약품, 검사, "
@@ -98,7 +102,22 @@ _PROMPT_ATTACK_KEYWORDS = (
 #: 빠지지만, 한국어 종결어미와 허가 구문은 닫힌 문법 집합이라 그렇게 늘어나지 않는다.
 #: 통증 진술 단어. 통증 기록 패스트패스와 야외 규칙의 예외가 **같은 목록**을 본다.
 #: 두 벌로 두면 한쪽만 늘어나고 다른 쪽이 조용히 뚫린다.
-_PAIN_WORDS = ("아파", "아픈", "통증", "쑤셔", "저려", "결려", "뻐근", "시큰", "찌릿")
+_PAIN_WORDS = (
+    "아파",
+    "아픈",
+    "통증",
+    "쑤셔",
+    "저려",
+    "결려",
+    "뻐근",
+    "시큰",
+    "찌릿",
+    "당기",
+    "당겨",
+    "뭉치",
+    "어지",
+    "구토",
+)
 #: "몸에 조건이 걸린 상태". 이런 사람의 "이거 해도 되나" 는 날씨 질문이 아니라
 #: 개인 안전 판단이다. 상태 이름은 닫힌 집합이라 조언 표현처럼 무한히 늘지 않는다.
 _CHRONIC_CONDITION_WORDS = ("고혈압", "당뇨", "심장", "신장", "천식", "협심증", "관절염")
@@ -304,59 +323,8 @@ def _is_pure_statement(text: str) -> bool:
     return not any(tail.endswith(end) for end in _QUESTION_ENDINGS)
 
 
-def is_pregnancy_symptom_context(messages: list[ChatMessage]) -> bool:
-    """현재 질문이 앞선 임신 맥락에 이어진 증상 호소인지 확인한다."""
-    latest_user = next((message.content for message in reversed(messages) if message.role == "user"), "")
-    compact = latest_user.replace(" ", "")
-    pregnancy_was_mentioned = any(
-        message.role == "user" and any(word in message.content for word in ("임신", "임산부", "산모"))
-        for message in messages
-    )
-    has_symptom = any(
-        word in compact for word in ("아파", "아픈", "통증", "당기", "당겨", "뭉치", "출혈", "어지", "구토")
-    )
-    return pregnancy_was_mentioned and has_symptom
-
-
-def is_pregnancy_medication_question(messages: list[ChatMessage]) -> bool:
-    """임신 맥락에서 개인의 약·영양제 복용 가능 여부를 묻는지 확인한다."""
-    latest_user = next((message.content for message in reversed(messages) if message.role == "user"), "")
-    compact = latest_user.replace(" ", "")
-    pregnancy_was_mentioned = any(
-        message.role == "user" and any(word in message.content for word in ("임신", "임산부", "산모"))
-        for message in messages
-    )
-    mentions_supplement = any(
-        word in compact for word in ("영양제", "엽산", "철분", "칼슘", "비타민", "오메가", "유산균", "마그네슘")
-    )
-    asks_to_take = any(
-        phrase in compact for phrase in ("먹어도돼", "먹어도되", "복용해도", "복용할까", "먹을까", "시작해도", "추천")
-    )
-    return pregnancy_was_mentioned and asks_to_take and (mentions_supplement or mentions_medication(latest_user))
-
-
-def is_pregnancy_medication_followup(messages: list[ChatMessage]) -> bool:
-    """안전 확인 질문 뒤에 이어진 임신 중 약·영양제 답변인지 확인한다."""
-    pregnancy_was_mentioned = any(
-        message.role == "user" and any(word in message.content for word in ("임신", "임산부", "산모"))
-        for message in messages
-    )
-    previous_assistant = next(
-        (message.content for message in reversed(messages[:-1]) if message.role == "assistant"), ""
-    )
-    return pregnancy_was_mentioned and previous_assistant in {
-        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['pregnancy_supplement_context']}",
-        f"{CLARIFICATION_PREFIX} {CLARIFICATION_QUESTIONS['medication_safety_context']}",
-    }
-
-
 def hard_rule_filter(user_input: str) -> tuple[bool, str | None]:
-    """1. 하드 규칙 필터 (정규식 및 하드 룰).
-
-    - 악성 비속어/욕설 차단
-    - 너무 짧거나 의미 없는 입력 차단 (공백 제외 길이 < 2 또는 자모음 나열)
-    - 프롬프트 인젝션 패턴 차단
-    """
+    """비속어·지침 우회는 차단하고, 자모를 포함한 대화 표현의 의미는 후속 판정에 맡긴다."""
     compact = user_input.replace(" ", "")
     # 프롬프트 공격/인젝션 차단
     if any(k in user_input or k.replace(" ", "") in compact for k in _PROMPT_ATTACK_KEYWORDS):
@@ -569,7 +537,7 @@ class HealthAssistantBoundaryService:
             and _is_pure_statement(last_msg)
             and not asks_pain_advice
             and not has_urgent_symptom
-            and not is_pregnancy_symptom_context(messages)
+            and not (detect_explicit_protected_contexts(messages) - {"symptom", "none"})
         ):
             return HealthAssistantScopeDecision(
                 scope="health",
@@ -628,52 +596,6 @@ class HealthAssistantBoundaryService:
             )
 
         # 4. 명확한 단일/복합 도구 질의
-        # 음주 상담 질의
-        # NOTE: 주제 키워드는 health_knowledge_catalog.is_alcohol_topic() 하나로 모아뒀다.
-        # 이 목록을 health_assistant.py가 따로 복사해 갖고 있으면, 한쪽만 고쳤을 때
-        # 판정과 근거 로딩이 어긋날 위험이 있다.
-        has_alcohol = is_alcohol_topic(compact)
-        has_alcohol_intent = any(
-            k in compact
-            for k in (
-                "마셔",
-                "먹어",
-                "될까",
-                "되나",
-                "돼",
-                "되려나",
-                "해도",
-                "괜찮",
-                "가능",
-                "어때",
-                "마실",
-                "먹을",
-                "금주",
-                "절주",
-            )
-        )
-        if has_alcohol and has_alcohol_intent:
-            return HealthAssistantScopeDecision(
-                scope="health",
-                request_kind="personalized_advice",
-                clinical_contexts=_fast_path_contexts(messages),
-                requires_authoritative_evidence=True,
-                required_evidence_types=["health_knowledge", "health_records"],
-            )
-
-        # 임신 중 개인 복용 가능 여부는 검색 결과가 없을 때 곧바로 거절하지 않는다.
-        # 먼저 주수·목적·처방 여부를 고정 질문으로 확인해 모델의 임의 판단을 막는다.
-        if is_pregnancy_medication_question(messages):
-            return HealthAssistantScopeDecision(
-                scope="health",
-                request_kind="personalized_advice",
-                clinical_contexts=["pregnancy", "medication"],
-                requires_authoritative_evidence=True,
-                required_evidence_types=["health_knowledge"],
-                response_mode="clarify",
-                clarification_kind="pregnancy_supplement_context",
-            )
-
         # 의약품 / 식품 / 시설
         # 식약처 의약품 / DUR 질의
         # NOTE: 의약품 여부 판정은 medication_topic.mentions_medication() 하나로 모아뒀다.
@@ -724,12 +646,15 @@ class HealthAssistantBoundaryService:
                 required_evidence_types=["facility"],
             )
 
-        # 임신 맥락에서 새 증상만 짧게 말한 경우에는 지식 검색 실패 문구부터
-        # 보여주지 않고, 판단에 필요한 상황을 서버의 고정 질문으로 먼저 확인한다.
+        # 임상 맥락이 있는 사용자가 새 증상을 짧게 말한 경우, 판단에 필요한 상황을
+        # 서버의 고정 질문으로 먼저 확인한다. 특정 주제 키워드가 아니라 Boundary sentinel이
+        # 인식한 protected context가 있을 때만 발동한다.
         has_context_details = bool(re.search(r"\d+\s*(?:주|점|분|시간|일)", last_msg)) or any(
             word in compact for word in ("부터", "동안", "출혈", "분비물", "발열", "어지", "심해")
         )
-        if is_pregnancy_symptom_context(messages) and not has_context_details:
+        _all_protected = detect_explicit_protected_contexts(messages)
+        _latest_protected = detect_explicit_protected_contexts([ChatMessage(role="user", content=last_msg)])
+        if "pregnancy" in _all_protected and "symptom" in _latest_protected and not has_context_details:
             return HealthAssistantScopeDecision(
                 scope="health",
                 request_kind="personalized_advice",
@@ -809,14 +734,28 @@ class HealthAssistantBoundaryService:
         """패스트패스로 확정하거나, 애매하면 판정 모델에 맡긴다. 실패하면 None."""
         decision = self._fast_path_decision(request.messages)
         if decision is not None:
+            logger.debug("[CHAT_TRACE] boundary fast_path=true classifier_llm_call=false")
             return decision
+        logger.debug("[CHAT_TRACE] boundary fast_path=false classifier_llm_call=true")
+        started = time.perf_counter()
         try:
             return await llm_client.generate_structured_response(
                 system_instruction=build_health_assistant_scope_instruction(),
                 messages=request.messages,
                 response_schema=HealthAssistantScopeDecision,
             )
-        except Exception:
+        except Exception as ex:
+            # None 반환 경로 진단용. 반환값·예외 처리 동작은 그대로 두고 실패 종류만 남긴다.
+            # (예외 클래스·근본 원인 클래스·상태코드·primary provider·소요시간만. 메시지·원문 제외)
+            cause = ex.__cause__
+            logger.debug(
+                "[CHAT_TRACE] classifier_returned_none exc=%s cause=%s code=%s primary=%s duration_ms=%.1f",
+                type(ex).__name__,
+                type(cause).__name__ if cause is not None else None,
+                getattr(cause, "code", None),
+                getattr(llm_client, "primary", None),
+                (time.perf_counter() - started) * 1000,
+            )
             return None
 
     async def check_request(
@@ -826,7 +765,7 @@ class HealthAssistantBoundaryService:
     ) -> HealthAssistantBoundaryResult:
         latest_user_message = self._latest_user_message(request.messages)
 
-        # Step 1: 하드 규칙 필터 (비속어, 길이, 인젝션) — 0.001초, LLM 호출 없음
+        # Step 1: 하드 규칙 필터 (비속어, 인젝션) — 0.001초, LLM 호출 없음
         passed, _reason = hard_rule_filter(latest_user_message)
         if not passed:
             return HealthAssistantBoundaryResult(
@@ -863,6 +802,12 @@ class HealthAssistantBoundaryService:
             )
 
         decision = self._validate_and_normalize_decision(request.messages, decision)
+        logger.debug(
+            "[CHAT_TRACE] boundary scope=%s required_evidence=%s response_mode=%s",
+            decision.scope,
+            decision.required_evidence_types,
+            decision.response_mode,
+        )
 
         if decision.scope == "service_usage":
             return HealthAssistantBoundaryResult(
@@ -974,21 +919,27 @@ class HealthAssistantBoundaryService:
             notice = "응급 상황이 의심되면 즉시 119에 연락하거나 가까운 응급실을 방문하세요."
             return self._fixed_response(notice, intent="health_advice").model_copy(update={"emergency_notice": notice})
 
-        # [알잘딱깔센] 획일적 무근거 차단 폐지.
-        # 일반 질문은 LLM의 지능적 판단(히스토리 교차 검증)을 존중하여 통과시키고,
-        # 법적/의학적 치명도가 매우 높은 특정 고위험군(임신 중 약물/증상)만 최후의 보루로 차단한다.
-        # 단, 해당 위험군이라도 실제 승인된 근거(has_evidence)가 있다면 통과시킨다.
+        # 일반 질문은 LLM의 판단을 존중하여 통과시키고, 근거 없이 개인 안전을 확정해야 하는
+        # 고위험 조합(임신+증상, 임신+복약, 조건+활동허가)만 최후의 보루로 차단한다.
+        # Boundary가 이미 clinical_contexts를 정규화했으므로 여기서는 decision을 신뢰한다.
         has_evidence = self.has_required_evidence(
             decision, tool_result, outdoor_conditions, response.intent, messages=messages
         )
+        logger.debug("[CHAT_TRACE] grounding has_evidence=%s", has_evidence)
         if has_evidence:
             return response
 
-        if messages and is_pregnancy_symptom_context(messages):
+        # decision.clinical_contexts는 _validate_and_normalize_decision이 원문 sentinel과
+        # LLM 판정을 합산한 결과다. 안전 보루이므로 messages sentinel도 함께 합산한다.
+        contexts = (set(decision.clinical_contexts) - {"none"}) | detect_explicit_protected_contexts(messages or [])
+        if "pregnancy" in contexts and "symptom" in contexts:
+            logger.debug("[CHAT_TRACE] grounding blocked=true reason=pregnancy_symptom")
             return self._fixed_response(PREGNANCY_SYMPTOM_EVIDENCE_MESSAGE, intent="health_advice")
-        if messages and (is_pregnancy_medication_question(messages) or is_pregnancy_medication_followup(messages)):
+        if "pregnancy" in contexts and "medication" in contexts:
+            logger.debug("[CHAT_TRACE] grounding blocked=true reason=pregnancy_medication")
             return self._fixed_response(PREGNANCY_MEDICATION_EVIDENCE_MESSAGE, intent="health_advice")
         if messages and _asks_activity_clearance(messages):
+            logger.debug("[CHAT_TRACE] grounding blocked=true reason=activity_clearance")
             return self._clarification_response("exercise_safety_context")
 
         # 그 외의 모든 경우, KDCA 근거가 없더라도 LLM의 답변을 신뢰하여 반환한다.
@@ -1076,7 +1027,7 @@ class HealthAssistantBoundaryService:
                 available.add("medication")
         if isinstance(tool_result, FacilitySearchResult):
             available.add("facility")
-        if isinstance(tool_result, (HealthRecordQueryResult, AlcoholConsultationSnapshot)):
+        if isinstance(tool_result, (HealthRecordQueryResult, PersonalHealthSnapshot, HealthRecordPrefillData)):
             available.add("health_records")
         return available
 

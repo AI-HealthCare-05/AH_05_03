@@ -6,7 +6,7 @@ import pytest
 from app.core import config
 from app.dtos.health_assistant import ChatMessage, HealthAssistantResponse
 from app.dtos.health_knowledge import HealthKnowledgeItem, HealthKnowledgeSearchResult
-from app.dtos.health_record_query import AlcoholConsultationSnapshot
+from app.dtos.health_record_query import PersonalHealthSnapshot
 from app.services.health_assistant_boundary import HealthAssistantBoundaryService
 from app.services.health_knowledge_catalog import HealthKnowledgeCatalogClient, is_alcohol_topic
 from app.services.kdca_health_info_client import KdcaHealthInfoClient, _candidate_keywords, _is_relevant
@@ -24,13 +24,17 @@ async def test_catalog_returns_only_curated_kdca_alcohol_sources() -> None:
     assert unrelated.items == []
 
 
-def test_alcohol_question_requires_personal_records_and_health_knowledge() -> None:
+def test_alcohol_question_falls_through_to_llm_classifier() -> None:
+    """음주 질문은 전용 fast-path 없이 LLM 판정기로 넘어간다.
+
+    삭제된 is_alcohol_topic fast-path가 없으므로 _fast_path_decision이 None을 반환한다.
+    LLM이 health_records/health_knowledge 근거를 판정한다.
+    """
     decision = HealthAssistantBoundaryService._fast_path_decision(
         [ChatMessage(role="user", content="나 오늘 술 마셔도 돼?")]
     )
 
-    assert decision is not None
-    assert decision.required_evidence_types == ["health_knowledge", "health_records"]
+    assert decision is None
 
 
 @pytest.mark.skip(reason="[알잘딱깔센] 무근거 차단 폐지 반영")
@@ -51,7 +55,7 @@ def test_grounding_accepts_alcohol_answer_only_when_both_evidence_types_exist() 
         retrieved_at=datetime.now(ZoneInfo("Asia/Seoul")),
         message="",
     )
-    snapshot = AlcoholConsultationSnapshot(message="기록 없음", missing_sections=["blood_pressure", "liver_tests"])
+    snapshot = PersonalHealthSnapshot(message="기록 없음", missing_sections=["blood_pressure", "liver_tests"])
     response = HealthAssistantResponse(intent="health_advice", assistant_message="오늘은 피하는 편이 안전합니다.")
 
     allowed = boundary.enforce_grounding(

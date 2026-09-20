@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from app.core import config
@@ -109,7 +109,6 @@ async def _inject_24h_memory(
     summary="통합 건강 어시스턴트(봄이) 자연어 대화 및 기록 초안 추출",
 )
 async def chat_with_assistant(
-    fastapi_req: Request,
     request: HealthAssistantChatRequest,
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
@@ -124,8 +123,7 @@ async def chat_with_assistant(
     )
     await _inject_24h_memory(request, account, chat_session_service)
 
-    client_ip = fastapi_req.client.host if fastapi_req.client else None
-    data = await service.respond(request, account=account, client_ip=client_ip)
+    data = await service.respond(request, account=account)
 
     if request.session_id is not None:
         await chat_session_service.add_message(
@@ -133,7 +131,7 @@ async def chat_with_assistant(
             session_id=request.session_id,
             role="assistant",
             content=data.assistant_message,
-            metadata=data.model_dump(),
+            metadata=data.model_dump(mode="json"),
         )
 
     return ApiResponse(data=data, message="건강 어시스턴트 응답을 처리했습니다.")
@@ -145,7 +143,6 @@ async def chat_with_assistant(
     summary="같은 대화를 SSE 로 흘린다 — 글자가 오는 대로 보여 주기 위해",
 )
 async def stream_chat_with_assistant(
-    fastapi_req: Request,
     request: HealthAssistantChatRequest,
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
@@ -174,12 +171,10 @@ async def stream_chat_with_assistant(
 
     await _inject_24h_memory(request, account, chat_session_service)
 
-    client_ip = fastapi_req.client.host if fastapi_req.client else None
-
     async def frames() -> AsyncIterator[str]:
         final_payload: dict[str, Any] | None = None
         try:
-            async for name, payload in service.stream(request, account=account, client_ip=client_ip):
+            async for name, payload in service.stream(request, account=account):
                 if name == "result" and isinstance(payload, dict):
                     final_payload = payload
                 body = json.dumps(payload, ensure_ascii=False)
@@ -187,6 +182,9 @@ async def stream_chat_with_assistant(
 
             if request.session_id is not None and final_payload is not None:
                 assistant_text = final_payload.get("assistant_message", "")
+                # 어시스턴트 답변은 한 번만 저장한다. 이전에는 아래 저장을 무조건 한 번,
+                # 비어 있지 않으면 또 한 번 — 총 두 번 저장해 대화를 다시 열면 같은 답변이
+                # 두 번 보였고, 그 중복이 다음 턴 LLM 이력에도 실렸다.
                 await chat_session_service.add_message(
                     account=account,
                     session_id=request.session_id,
@@ -194,14 +192,6 @@ async def stream_chat_with_assistant(
                     content=assistant_text,
                     metadata=final_payload,
                 )
-                if assistant_text and assistant_text.strip():
-                    await chat_session_service.add_message(
-                        account=account,
-                        session_id=request.session_id,
-                        role="assistant",
-                        content=assistant_text,
-                        metadata=final_payload,
-                    )
         except Exception as error:  # noqa: BLE001 - 이미 200 이라 프레임으로 알린다
             # 200 으로 열린 뒤에는 오류 봉투를 쓸 수 없다. 프런트가 읽을 수 있게
             # `error` 프레임으로 알리고 끊는다 — 조용히 끝나면 화면이 영영 기다린다.

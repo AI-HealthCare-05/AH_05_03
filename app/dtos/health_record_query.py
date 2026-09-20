@@ -80,12 +80,17 @@ class ConsultationMedication(BaseModel):
     dosage: str | None = None
 
 
-class AlcoholConsultationSnapshot(BaseModel):
-    topic: Literal["alcohol"] = "alcohol"
+PersonalHealthRecordCategory = Literal[
+    "lab_result", "blood_pressure", "medication", "alcohol", "exercise", "body_measurement"
+]
+
+
+class PersonalHealthSnapshot(BaseModel):
     blood_pressure: ConsultationBloodPressure | None = None
     liver_tests: list[ConsultationLabValue] = Field(default_factory=list)
     today_activities: list[ConsultationActivity] = Field(default_factory=list)
     recent_medications: list[ConsultationMedication] = Field(default_factory=list)
-    recent_alcohol_records: int = Field(default=0, ge=0)
+    recent_alcohol_records: int | None = Field(default=None, ge=0)
     missing_sections: list[str] = Field(default_factory=list)
     message: str
+    retrieval_status: Literal["ok", "empty", "unavailable"] = "ok"
