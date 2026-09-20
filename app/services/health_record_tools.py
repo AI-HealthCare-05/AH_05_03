@@ -1,7 +1,9 @@
 """장기 건강기록을 조건별로 집계하는 읽기 전용 LLM 도구."""
 
+from __future__ import annotations
+
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from google.genai import types
 from pydantic import ValidationError
@@ -13,6 +15,9 @@ from app.dtos.health_record_query import (
 )
 from app.models.service_accounts import ServiceAccount
 from app.services.health_records import HealthRecordService
+
+if TYPE_CHECKING:
+    from app.services.agent_tools.policy import ToolPolicyContext
 
 QUERY_HEALTH_RECORDS_TOOL_NAME = "query_health_records"
 GET_ALCOHOL_CONSULTATION_SNAPSHOT_TOOL_NAME = "get_alcohol_consultation_snapshot"
@@ -99,6 +104,7 @@ async def execute_health_record_tool(
     account: ServiceAccount,
     profile_id: uuid.UUID,
     record_service: HealthRecordService,
+    policy_ctx: ToolPolicyContext | None = None,
 ) -> HealthRecordQueryResult | None:
     if name != QUERY_HEALTH_RECORDS_TOOL_NAME:
         return None
@@ -106,8 +112,24 @@ async def execute_health_record_tool(
         query = HealthRecordQueryArguments.model_validate(args)
     except ValidationError as ex:
         raise ValueError("건강기록 조회 조건이 허용 범위를 벗어났습니다.") from ex
+    from app.services.agent_tools.policy import authorize_tool, constrain_query_arguments, filter_query_result
     from app.services.agent_tools.registry import project_health_record_query_result
 
+    if policy_ctx is not None:
+        query = constrain_query_arguments(query, policy_ctx)
+        authorize_tool(
+            name,
+            policy_ctx,
+            target_profile_id=profile_id,
+            requested_period_months=query.period.value,
+        )
+        result = await record_service.query_numeric_summary(account, profile_id, query)
+        return filter_query_result(
+            result,
+            policy_ctx,
+            target_profile_id=profile_id,
+            requested_period_months=query.period.value,
+        )
     return project_health_record_query_result(await record_service.query_numeric_summary(account, profile_id, query))
 
 

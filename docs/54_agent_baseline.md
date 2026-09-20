@@ -1,6 +1,6 @@
 # 이어봄 에이전트 도입 기준안
 
-- 상태: 구현 전 기준안 (2026-09-20)
+- 상태: 1–3단계 코드 있음 (Langfuse metadata-only, 도구 계약, 권한 게이트). 러너(#207)는 구현 전.
 - 결정: [ADR-0015](adr/0015-bounded-agent-on-policy-and-evidence.md)
 - 관련: [ADR-0014](adr/0014-document-vision-not-ocr.md), [ADR-0011](adr/0011-postgresql-health-data-and-server-ai.md), [ADR-0012](adr/0012-delegated-member-pin-not-vault-dek.md), [ADR-0013](adr/0013-privacy-self-determination-and-civil-majority.md), [00_terminology.md](00_terminology.md), [08_account_profile_policy.md](08_account_profile_policy.md), [55_tool_registry.md](55_tool_registry.md)
 

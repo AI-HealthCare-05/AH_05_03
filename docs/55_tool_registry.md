@@ -1,8 +1,9 @@
 # 이어봄 도구 목록 (현재 코드)
 
-- 상태: 2단계 계약. 권한 게이트(#206)와 러너(#207)는 아직 강제하지 않는다.
+- 상태: 2단계 계약 + 3단계 권한 게이트(#206). 러너(#207)는 아직 없다.
 - 정본: `app/services/agent_tools/registry.py`
 - 모델에 넘기는 결과: `app/services/agent_tools/project.py`
+- 권한: `app/services/agent_tools/policy.py` (`allowed_tools`, `authorize_tool`, 결과 필터)
 - 기준: [54_agent_baseline.md](54_agent_baseline.md), [ADR-0015](adr/0015-bounded-agent-on-policy-and-evidence.md)
 
 없는 도구를 이 표에 넣지 않는다. `search_hospital`, RapidOCR, 원본 서류 판독의 대화형 호출은 코드에 없다.
@@ -17,7 +18,9 @@
 
 한도(`max_calls_per_turn`, `timeout_ms`, `cost_class`)는 자리만 둔다. 값은 4단계에서 강제한다.
 
-차단 이유 코드: `TOOL_NOT_REGISTERED`, `TOOL_NOT_MODEL_SELECTABLE`, `TOOL_DISABLED`. 사용자 문구는 공통으로 「요청한 기능을 지금은 사용할 수 없습니다.」이다.
+차단 이유 코드: `TOOL_NOT_REGISTERED`, `TOOL_NOT_MODEL_SELECTABLE`, `TOOL_DISABLED`, `TOOL_NOT_AUTHORIZED`, `TOOL_SCOPE_DENIED`, `TOOL_SESSION_REVOKED`. 사용자 문구는 공통으로 「요청한 기능을 지금은 사용할 수 없습니다.」이다.
+
+`query_health_records`가 목록에 있어도 세션 프로필이 아닌 대상, 역할 한도를 넘는 기간, `latest_matches`처럼 좁혀야 하는 필드는 잘린다. `self_only`는 가구 기록을 못 읽고, `restricted`는 음주 스냅샷과 일자별 수치를 못 받으며, 성년 대기 프로필은 본인이 아닐 때 건강기록 도구가 닫힌다. PIN 행위자 변경·epoch 증가·세션 무효는 다음 호출을 `TOOL_SESSION_REVOKED`로 거절한다.
 
 | 이름 | access | risk | 노출 | 사용 | 모델 반환 필드 |
 |---|---|---|---|---|---|

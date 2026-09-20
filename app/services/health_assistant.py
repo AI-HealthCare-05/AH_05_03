@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import logging
 import re
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import httpx
 
@@ -69,6 +71,9 @@ from app.services.outdoor_conditions_client import (
     resolve_sido_coordinates,
 )
 from app.services.outdoor_conditions_tools import execute_outdoor_conditions_tool
+
+if TYPE_CHECKING:
+    from app.services.agent_tools.policy import ToolPolicyContext
 
 logger = logging.getLogger(__name__)
 
@@ -939,10 +944,15 @@ class HealthAssistantService:
         *,
         account: ServiceAccount | None = None,
         profile_id: uuid.UUID | None = None,
+        policy_ctx: ToolPolicyContext | None = None,
     ) -> Any:
+        from app.services.agent_tools.policy import authorize_tool
         from app.services.agent_tools.project import require_model_selectable
 
-        require_model_selectable(name)
+        if policy_ctx is not None:
+            authorize_tool(name, policy_ctx, target_profile_id=profile_id)
+        else:
+            require_model_selectable(name)
         if name == "search_food_nutrition":
             return await execute_food_nutrition_tool(name, args, self.food_nutrition_client)
         if name == QUERY_HEALTH_RECORDS_TOOL_NAME:
@@ -954,6 +964,7 @@ class HealthAssistantService:
                 account=account,
                 profile_id=profile_id,
                 record_service=self.health_record_service,
+                policy_ctx=policy_ctx,
             )
         if name == "search_medication_info":
             return await execute_medication_tool(name, args, self.medication_client)
