@@ -7323,27 +7323,12 @@ main:focus {
   border-radius: 50%;
 }
 
-/* 챗봇 통증 다이어리 툴콜링 카드 */
-.pain-tool-card {
-  border-left: 4px solid #06b6d4 !important;
-}
-
+/* 챗봇 통증 다이어리 확인 카드 — 강조 세로줄·임시 배지 색은 쓰지 않는다. */
 .tool-badge-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
-}
-
-.tool-calling-badge {
-  display: inline-block;
-  background: #ecfeff;
-  color: #0e7490;
-  border: 1px solid #a5f3fc;
-  border-radius: 6px;
-  padding: 2px 8px;
-  font-size: 0.72rem;
-  font-weight: 700;
 }
 
 .tool-name {
@@ -7352,18 +7337,10 @@ main:focus {
   color: var(--ink);
 }
 
-.formatted-diary-textarea {
-  background: #f0fdf4 !important;
-  border-color: #bbf7d0 !important;
-  color: #166534 !important;
-  line-height: 1.6;
-  font-weight: 500;
-}
-
 .tool-saved-diary {
   margin: 10px 0;
   padding: 10px 12px;
-  background: #f8fafc;
+  background: var(--bone, #f4f2f4);
   border-radius: 8px;
   font-size: 0.85rem;
   line-height: 1.55;
@@ -7376,15 +7353,15 @@ main:focus {
   font-size: 0.84rem;
   font-weight: 650;
   padding: 8px 14px;
-  border-radius: 8px;
-  color: var(--blue-600);
-  border: 1px solid var(--blue-300);
+  border-radius: 100px;
+  color: var(--blue-700, #3c315b);
+  border: 1px solid var(--line, #e9e8ea);
   background: white;
   cursor: pointer;
 }
 
 .view-diary-btn:hover {
-  background: #eff6ff;
+  background: var(--blue-50, #f4f2f4);
 }
 
 /* 날짜별 복수 기록 탭 */

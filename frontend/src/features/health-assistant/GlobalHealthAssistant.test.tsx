@@ -167,4 +167,27 @@ describe("GlobalHealthAssistant (채널톡 스타일 전역 연속형 건강 비
     const tooltip = screen.getByRole("status");
     expect(tooltip).toHaveTextContent(/통증 부위와 강도를 기록해보세요|3D 모델에서 부위를 짚어/);
   });
+
+  it("대화창에서 창 크기와 글자 크기를 키울 수 있다", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <LocalDomainContext.Provider value={mockDomainContext}>
+          <GlobalHealthAssistant />
+        </LocalDomainContext.Provider>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /건강 비서 봄이와 대화하기/i }));
+    const dialog = screen.getByRole("dialog", { name: "봄이 건강 비서" });
+    expect(dialog).toHaveAttribute("data-chat-size", "md");
+    expect(dialog).toHaveAttribute("data-chat-type", "md");
+
+    await user.click(screen.getByRole("button", { name: "창 크게" }));
+    expect(dialog).toHaveAttribute("data-chat-size", "lg");
+
+    await user.click(screen.getByRole("button", { name: "글자 크게" }));
+    expect(dialog).toHaveAttribute("data-chat-type", "lg");
+    expect(localStorage.getItem("ieobom:bomi-chat-display")).toContain("\"size\":\"lg\"");
+  });
 });

@@ -17,7 +17,7 @@ import { ServerApiError, serverApiClient } from "./serverApiClient";
 export interface OcrMeasurementRow {
   field: string;
   label: string;
-  value: number;
+  value: number | null;
   unit: string;
   source: string[];
   reason: string | null;

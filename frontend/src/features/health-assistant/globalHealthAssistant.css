@@ -1,5 +1,28 @@
 /* 채널톡 스타일 전역 연속형 건강 비서(봄이) 스타일 */
 
+.channel-talk-launcher,
+.channel-talk-popover,
+.channel-talk-context-bar {
+  --blue-800: #2d2446;
+  --blue-700: #3c315b;
+  --blue-600: #4a87f2;
+  --blue-500: #ab9ff2;
+  --blue-100: #e2dffe;
+  --blue-50: #f4f2f4;
+  --bomi-aubergine: #3c315b;
+  --bomi-paper: #fdfcfe;
+  --bomi-ash: #e9e8ea;
+  --up15-aubergine: #3c315b;
+  --up15-ghost-lavender: #e2dffe;
+  --up15-periwinkle: #ab9ff2;
+  --up15-cornflower-pop: #4a87f2;
+  --up15-paper-white: #fdfcfe;
+  --up15-obsidian: #1c1c1c;
+  --up15-fog: #86848d;
+  --up15-ash: #e9e8ea;
+  --up15-bone: #f4f2f4;
+}
+
 /* 1. 우측 하단 상시 플로팅 런처 버튼 */
 .channel-talk-launcher {
   position: fixed;
@@ -162,11 +185,14 @@
 /* 2. 채널톡 스타일 플로팅 메신저 팝오버 패널 */
 .channel-talk-popover {
   position: fixed;
-  bottom: 144px;
+  bottom: 120px;
   right: 24px;
-  width: 420px;
+  width: var(--bomi-chat-width, 420px);
   max-width: calc(100vw - 36px);
-  height: min(740px, calc(100vh - 120px));
+  height: var(--bomi-chat-height, min(740px, calc(100dvh - 64px - 120px)));
+  max-height: calc((100dvh - 64px - 120px) / var(--bomi-chat-scale, 1));
+  font-size: 14px;
+  zoom: var(--bomi-chat-scale, 1);
   background: #ffffff;
   border-radius: 24px;
   box-shadow: 0 16px 48px rgba(15, 23, 42, 0.22), 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -217,7 +243,7 @@
   border: none !important;
   box-shadow: none !important;
   transform: none !important;
-  background: #ffffff !important;
+  background: var(--bomi-paper, #fdfcfe) !important;
   display: flex !important;
   flex-direction: column !important;
   overflow: hidden !important;
@@ -262,12 +288,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px;
-  background: var(--blue-50, #f4f7ff);
-  border-bottom: 1px solid var(--line-soft, #e8edf5);
-  font-size: 13px;
+  gap: 8px;
+  padding: 8px 12px 8px 16px;
+  background-color: #fdfcfe;
+  background: var(--bomi-paper, #fdfcfe);
+  border-bottom: 1px solid var(--bomi-ash, #e9e8ea);
+  font-size: 12px;
   color: var(--muted, #5b687e);
   flex-shrink: 0;
+  isolation: isolate;
+  z-index: 1;
 }
 
 .channel-talk-context-tag {
@@ -280,8 +310,80 @@
   padding: 3px 9px;
   border-radius: 9999px;
   font-size: 11px;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.channel-talk-context-tag.is-quiet {
+  background: transparent;
+  color: var(--bomi-fog, #86848d);
+  padding-left: 0;
+}
+
+.channel-talk-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.channel-talk-display-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--bomi-ash, #e9e8ea);
+  border-radius: 999px;
+  background: var(--bomi-paper, #fdfcfe);
+}
+
+.channel-talk-display-cluster span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bomi-fog, #86848d);
+  padding: 0 2px;
+}
+
+.channel-talk-display-cluster button {
+  min-width: 28px;
+  min-height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bomi-aubergine, #3c315b);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.channel-talk-display-cluster button:hover:not(:disabled) {
+  background: var(--bomi-ghost, #e2dffe);
+}
+
+.channel-talk-display-cluster button:disabled {
+  color: var(--bomi-ash, #e9e8ea);
+  cursor: default;
+}
+
+.channel-talk-resize {
+  position: absolute;
+  left: 0;
+  top: 28px;
+  bottom: 28px;
+  width: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: ew-resize;
+  z-index: 3;
+}
+
+.channel-talk-resize:hover,
+.channel-talk-resize:focus-visible {
+  background: color-mix(in srgb, var(--bomi-periwinkle, #ab9ff2) 35%, transparent);
 }
 
 /* 모바일 화면 (768px 이하) 대응 */
@@ -314,5 +416,9 @@
     border: none;
     box-shadow: none;
     z-index: 1500;
+  }
+
+  .channel-talk-resize {
+    display: none;
   }
 }

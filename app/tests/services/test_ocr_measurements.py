@@ -4,6 +4,9 @@
 그 오독이 수치로 통과하면 사용자는 자기가 적지도 않은 숫자로 판정받는다.
 """
 
+import json
+
+from app.dtos.ocr import RawOcrData
 from app.services.ocr_measurements import extract
 
 
@@ -200,6 +203,14 @@ class TestPayload:
         assert payload["values"] == {"fasting_glucose": 113.0}
         assert payload["review"] == []
         assert set(payload) == {"values", "review", "unused", "unmatched"}
+
+    def test_unreadable_values_round_trip_through_the_job_api_schema(self) -> None:
+        payload = extract(table(["공복혈당", "해당없음", "mg/dL", ""])).to_payload()
+        encoded = json.dumps(payload)
+        parsed = json.loads(encoded)
+        result = RawOcrData(text="검진", tables=[], measurements=parsed)
+        assert result.measurements is not None
+        assert result.measurements.review[0].value is None
 
 
 class TestUnitlessSiValues:
