@@ -59,8 +59,7 @@ def _ctx(
         household_id=uuid.uuid4(),
         session_type=session_type,  # type: ignore[arg-type]
         actor_role=role,
-        capabilities=caps
-        or frozenset({ProfileCapability.VIEW_OWN_RECORDS, ProfileCapability.VIEW_PUBLIC_SUMMARY}),
+        capabilities=caps or frozenset({ProfileCapability.VIEW_OWN_RECORDS, ProfileCapability.VIEW_PUBLIC_SUMMARY}),
         minor_policy_state="none",
         pin_session_valid=pin_session_valid,
         actor_profile_id=profile_id if actor_profile_id is None else actor_profile_id,
@@ -114,7 +113,9 @@ class _QueryClient:
 
     async def generate_structured_response(self, *, response_schema: Any = None, **_kwargs: Any) -> Any:
         if response_schema is HealthAssistantLlmResponse:
-            return HealthAssistantLlmResponse(intent="query_records", assistant_message="지금은 건강기록을 조회할 수 없습니다.")
+            return HealthAssistantLlmResponse(
+                intent="query_records", assistant_message="지금은 건강기록을 조회할 수 없습니다."
+            )
         return HealthAssistantScopeDecision(
             request_kind="information",
             clinical_contexts=["none"],

@@ -16,6 +16,11 @@ _TOOL_OR_CODE_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _MODEL_RE = re.compile(r"^[A-Za-z0-9:._/-]{1,80}$")
 _RESIDENT_ID = re.compile(r"\d{6}[-\s]?\d{7}")
 _PHONE = re.compile(r"01[016789]-?\d{3,4}-?\d{4}")
+_UUID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+_ISO_TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
 ChatOutcome = Literal["non_streaming_success", "streaming_success"]
 VisionOutcome = Literal["vision_success", "vision_error"]
@@ -118,6 +123,15 @@ def mask_for_provider(text: str) -> str:
     return redacted
 
 
+def _is_structural_observability_token(blob: str) -> bool:
+    """Langfuse 봉투의 id·별칭·시각은 PII 정규식 대상이 아니다.
+
+    uuid4 `168c9016-4803-4207-...` 같은 값이 `016-4803-4207` 전화번호 패턴에
+    걸려 canary가 깨지는 일을 막는다. 주민번호·전화 원문 canary는 그대로 잡는다.
+    """
+    return bool(_ALIAS_RE.fullmatch(blob) or _UUID.fullmatch(blob) or _ISO_TIMESTAMP.match(blob))
+
+
 def contains_sensitive_canary(payload: Any) -> bool:
     """2차 방어. allowlist를 통과한 뒤에도 canary 문자열이 있으면 실패한다."""
     for blob in _walk_strings(payload):
@@ -125,6 +139,8 @@ def contains_sensitive_canary(payload: Any) -> bool:
             return True
         if CANARY_GLUCOSE_VALUE in blob and ("mg/dL" in blob or "glucose" in blob.lower()):
             return True
+        if _is_structural_observability_token(blob):
+            continue
         if _RESIDENT_ID.search(blob) or _PHONE.search(blob):
             return True
     return False
