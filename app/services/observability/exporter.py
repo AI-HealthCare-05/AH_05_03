@@ -18,6 +18,31 @@ from app.services.observability.privacy import (
 
 logger = logging.getLogger(__name__)
 
+_ingest_ok = 0
+_ingest_auth_failed = 0
+_ingest_client_error = 0
+_ingest_timeout = 0
+_ingest_other = 0
+
+
+def ingest_stats() -> dict[str, int]:
+    return {
+        "ok": _ingest_ok,
+        "auth_failed": _ingest_auth_failed,
+        "client_error": _ingest_client_error,
+        "timeout": _ingest_timeout,
+        "other": _ingest_other,
+    }
+
+
+def reset_ingest_stats() -> None:
+    global _ingest_ok, _ingest_auth_failed, _ingest_client_error, _ingest_timeout, _ingest_other
+    _ingest_ok = 0
+    _ingest_auth_failed = 0
+    _ingest_client_error = 0
+    _ingest_timeout = 0
+    _ingest_other = 0
+
 
 def build_ingestion_envelope(payload: dict[str, Any]) -> dict[str, Any]:
     """allowlist metadata만 batch에 넣는다. input/output 필드는 만들지 않는다."""
@@ -61,26 +86,82 @@ def _ingest_url() -> str:
     return f"{(config.LANGFUSE_HOST or 'https://cloud.langfuse.com').rstrip('/')}/api/public/ingestion"
 
 
-def _post_sync(envelope: dict[str, Any]) -> None:
-    with httpx.Client(timeout=2.0) as client:
-        client.post(_ingest_url(), json=envelope, headers={"Authorization": _basic_auth()})
+def _record_status_error(status_code: int) -> None:
+    global _ingest_auth_failed, _ingest_client_error, _ingest_other
+    if status_code in {401, 403}:
+        _ingest_auth_failed += 1
+        kind = "auth"
+    elif 400 <= status_code < 500:
+        _ingest_client_error += 1
+        kind = "client"
+    else:
+        _ingest_other += 1
+        kind = "server"
+    logger.warning("langfuse ingest failed kind=%s status=%s", kind, status_code)
 
 
-async def _post_async(envelope: dict[str, Any]) -> None:
+def _record_success() -> None:
+    global _ingest_ok
+    _ingest_ok += 1
+
+
+def _record_timeout() -> None:
+    global _ingest_timeout
+    _ingest_timeout += 1
+    logger.warning("langfuse ingest failed kind=timeout")
+
+
+def _record_other() -> None:
+    global _ingest_other
+    _ingest_other += 1
+    logger.warning("langfuse ingest failed kind=other")
+
+
+def _handle_response(response: httpx.Response) -> None:
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            await client.post(_ingest_url(), json=envelope, headers={"Authorization": _basic_auth()})
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        _record_status_error(exc.response.status_code)
+        return
+    _record_success()
+
+
+def post_ingestion(envelope: dict[str, Any], client: httpx.Client | None = None) -> None:
+    """테스트에서 client를 주입한다. 본문·키는 로그에 남기지 않는다."""
+    headers = {"Authorization": _basic_auth()}
+    try:
+        if client is None:
+            with httpx.Client(timeout=2.0) as owned:
+                _handle_response(owned.post(_ingest_url(), json=envelope, headers=headers))
+            return
+        _handle_response(client.post(_ingest_url(), json=envelope, headers=headers))
+    except httpx.TimeoutException:
+        _record_timeout()
     except Exception:
-        logger.debug("langfuse ingest skipped", exc_info=True)
+        _record_other()
+
+
+async def post_ingestion_async(envelope: dict[str, Any], client: httpx.AsyncClient | None = None) -> None:
+    headers = {"Authorization": _basic_auth()}
+    try:
+        if client is None:
+            async with httpx.AsyncClient(timeout=2.0) as owned:
+                _handle_response(await owned.post(_ingest_url(), json=envelope, headers=headers))
+            return
+        _handle_response(await client.post(_ingest_url(), json=envelope, headers=headers))
+    except httpx.TimeoutException:
+        _record_timeout()
+    except Exception:
+        _record_other()
 
 
 def dispatch_ingestion(envelope: dict[str, Any]) -> None:
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        _post_sync(envelope)
+        post_ingestion(envelope)
         return
-    loop.create_task(_post_async(envelope))
+    loop.create_task(post_ingestion_async(envelope))
 
 
 def export_allowlisted_metadata(payload: dict[str, Any]) -> None:
@@ -92,3 +173,4 @@ def export_allowlisted_metadata(payload: dict[str, Any]) -> None:
         dispatch_ingestion(envelope)
     except Exception:
         logger.debug("langfuse export skipped", exc_info=True)
+        _record_other()

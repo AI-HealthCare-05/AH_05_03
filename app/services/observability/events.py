@@ -34,8 +34,7 @@ def chatbot_metadata(
         "measurement_count": len(codes),
         "outcome": outcome,
         "exact_values_logged": False,
-        # False = 이 JSON에 프롬프트·응답 원문이 없다. HTTP ingest는 metadata만 싣는다.
-        "langfuse_export": False,
+        "transcript_included": False,
     }
     assert_allowlisted_chatbot_metadata(payload)
     return payload
@@ -57,7 +56,7 @@ def document_vision_metadata(
         "page_count": page_count,
         "outcome": outcome,
         "exact_values_logged": False,
-        "langfuse_export": False,
+        "transcript_included": False,
     }
     assert_allowlisted_vision_metadata(payload)
     return payload
