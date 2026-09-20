@@ -87,9 +87,9 @@ async def _inject_24h_memory(
         content=request.messages[-1].content,
     )
 
-    since_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+    since_7d = datetime.now(timezone.utc) - timedelta(days=7)
     db_msgs = await chat_session_service.list_messages(
-        account=account, session_id=request.session_id, limit=100, since=since_24h
+        account=account, session_id=request.session_id, limit=100, since=since_7d
     )
     if db_msgs:
         # DB 의 `role` 은 `String(20)` 이라 DTO 의 Literal 로 그냥 넘어가지 않는다.
