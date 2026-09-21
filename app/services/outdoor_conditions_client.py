@@ -34,7 +34,7 @@ _TIMEOUT_SECONDS = 5.0
 #: `apis.data.go.kr` 호스트라, **HTTP 클라이언트를 하나 쓰면** 한쪽이 끝날 때까지
 #: 대기질이 줄을 선다. 예전 2초 상한은 그 줄 서 있는 동안 먼저 만료됐다.
 #: 연결을 나누고, 대기질만 날씨와 같은 5초를 준다.
-_AIR_QUALITY_TIMEOUT_SECONDS = 5.0
+_AIR_QUALITY_TIMEOUT_SECONDS = 2.0
 _CACHE_SECONDS = 600.0
 #: 실패도 10분을 살면 그 좌표는 그동안 계속 대기질 없이 답한다 — API 가 1분 뒤
 #: 복구돼도 다시 묻지 않는다. 실패는 짧게만 기억해 곧 재시도한다.
