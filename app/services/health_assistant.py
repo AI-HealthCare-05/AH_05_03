@@ -6,6 +6,8 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
+import httpx
+
 from app.core import config
 from app.core.config import Env
 from app.dtos.health_assistant import (
@@ -30,6 +32,7 @@ from app.repositories.chat_session_repository import ChatSessionRepository
 from app.repositories.health_record_repository import HealthRecordRepository
 from app.repositories.household_repository import HouseholdRepository
 from app.repositories.profile_repository import ProfileRepository
+from app.services.client_ip import is_unusable_client_ip
 from app.services.facility_topic import (
     FACILITY_HISTORY_OR_ADVICE_KEYWORDS,
     FACILITY_KEYWORDS,
@@ -74,6 +77,8 @@ from app.services.outdoor_conditions_client import (
 from app.services.outdoor_conditions_tools import execute_outdoor_conditions_tool
 
 logger = logging.getLogger(__name__)
+
+_PLACE_HINT = re.compile(r"[가-힣A-Za-z0-9]{2,}(?:시|구|군|동|읍|면|역|숲|공원)")
 
 
 def _sanitize_obs_name(name: str) -> str:
@@ -568,15 +573,13 @@ class HealthAssistantService:
         return False
 
     async def _resolve_request_location(
-        self, request: HealthAssistantChatRequest, needs_outdoor: bool
+        self, request: HealthAssistantChatRequest, needs_outdoor: bool, client_ip: str | None = None
     ) -> UserLocation | None:
-        """야외 질문에만 브라우저 좌표나 사용자가 말한 장소를 사용한다."""
+        """GPS → 말한 장소 → 저장한 생활권 → IP. 야외 질문이 아니면 좌표를 넣지 않는다."""
         loc = request.location
         if loc is not None:
             return loc
 
-        # 위치는 프로필 속성이 아니다. 일반 후속 대화에서 IP를 거주지처럼 주입하면
-        # 모델이 존재하지 않는 프로필 위치 설정을 만들어낸다.
         if not needs_outdoor:
             return None
 
@@ -592,10 +595,53 @@ class HealthAssistantService:
                 )
 
         for message in reversed(recent_user_messages):
+            if not _PLACE_HINT.search(message.content.replace(" ", "")):
+                continue
             resolved_place = await self.outdoor_conditions_client.resolve_location(message.content)
             if resolved_place:
                 lat, lon, address = resolved_place
                 return UserLocation(latitude=lat, longitude=lon, address=address)
+
+        home = (request.home_region or "").strip()
+        if home:
+            sido_home = resolve_sido_coordinates(home)
+            if sido_home:
+                sido, lat, lon = sido_home
+                return UserLocation(
+                    latitude=lat,
+                    longitude=lon,
+                    address=f"{sido}특별시" if sido == "서울" else sido,
+                )
+            resolved_home = await self.outdoor_conditions_client.resolve_location(home)
+            if resolved_home:
+                lat, lon, address = resolved_home
+                return UserLocation(latitude=lat, longitude=lon, address=address)
+
+        return await self._resolve_location_by_ip(client_ip)
+
+    @staticmethod
+    async def _resolve_location_by_ip(client_ip: str | None) -> UserLocation | None:
+        """좌표·장소·생활권이 없을 때의 대략 위치. 사설 IP는 조회하지 않는다."""
+        if not client_ip:
+            return None
+        if client_ip in ("127.0.0.1", "::1", "localhost", "testclient"):
+            return UserLocation(latitude=37.5665, longitude=126.9780, address="서울특별시")
+        if is_unusable_client_ip(client_ip):
+            return None
+        try:
+            async with httpx.AsyncClient(timeout=2.0) as client:
+                resp = await client.get(f"http://ip-api.com/json/{client_ip}?lang=ko")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data.get("status") == "success":
+                        city = data.get("city") or data.get("regionName") or "추정 지역"
+                        return UserLocation(
+                            latitude=data["lat"],
+                            longitude=data["lon"],
+                            address=str(city),
+                        )
+        except Exception:
+            logger.debug("IP 기반 위치 추정 실패", exc_info=True)
 
         return None
 
@@ -1015,15 +1061,27 @@ class HealthAssistantService:
         )
 
     @staticmethod
-    def _outdoor_location_required_response() -> HealthAssistantResponse:
+    def _outdoor_location_required_response(home_region: str | None = None) -> HealthAssistantResponse:
+        area = (home_region or "").strip()
+        if area:
+            body = (
+                "현재 위치를 사용할까요?\n"
+                f"위치 권한 없이도 {area} 기준으로 안내할 수 있어요. 다른 지역이면 아래에서 골라 주세요."
+            )
+            replies = ["현재 위치 허용", f"{area} 기준으로 보기", "다른 지역 선택"]
+        else:
+            body = (
+                "현재 위치를 사용할까요?\n"
+                "허용하면 지금 계신 곳 기준으로 안내합니다. "
+                "권한이 없어도 생활 지역을 정하면 그 기준으로 볼 수 있어요."
+            )
+            replies = ["현재 위치 허용", "다른 지역 선택"]
         return HealthAssistantResponse(
             intent="health_advice",
-            assistant_message=(
-                "오늘 날씨와 대기질을 확인하려면 현재 위치 권한을 허용하거나 "
-                "지역명을 알려주세요. 예를 들어 '서울 날씨'처럼 말씀해 주세요."
-            ),
+            assistant_message=body,
             missing_fields=["user_location"],
             needs_confirmation=False,
+            suggested_quick_replies=replies,
         )
 
     @staticmethod
@@ -1094,6 +1152,7 @@ class HealthAssistantService:
         self,
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None,
+        client_ip: str | None = None,
     ) -> HealthAssistantResponse | _PreparedExecution:
         if config.ENV != Env.PROD and request.messages:
             logger.debug("[CHAT_TRACE] input question=%r", request.messages[-1].content)
@@ -1139,10 +1198,10 @@ class HealthAssistantService:
             profile_context=profile_context,
         )
         needs_outdoor = "outdoor" in boundary.decision.required_evidence_types
-        loc = await self._resolve_request_location(request, needs_outdoor)
+        loc = await self._resolve_request_location(request, needs_outdoor, client_ip)
         medical_required = bool(set(boundary.decision.required_evidence_types) & _MEDICAL_EVIDENCE_TYPES)
         if needs_outdoor and loc is None and not medical_required:
-            return self._outdoor_location_required_response()
+            return self._outdoor_location_required_response(request.home_region)
         outdoor_conditions = await self._load_outdoor_conditions(loc) if loc is not None else None
         system_instruction = build_system_instruction(
             profile_context,
@@ -1208,9 +1267,10 @@ class HealthAssistantService:
         self,
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None = None,
+        client_ip: str | None = None,
     ) -> HealthAssistantResponse:
         total_started = time.perf_counter()
-        prepared = await self._prepare_execution(request, account)
+        prepared = await self._prepare_execution(request, account, client_ip)
         if isinstance(prepared, HealthAssistantResponse):
             return prepared
 
@@ -1301,9 +1361,10 @@ class HealthAssistantService:
         self,
         request: HealthAssistantChatRequest,
         account: ServiceAccount | None = None,
+        client_ip: str | None = None,
     ) -> AsyncIterator[tuple[str, Any]]:
         total_started = time.perf_counter()
-        prepared = await self._prepare_execution(request, account)
+        prepared = await self._prepare_execution(request, account, client_ip)
         if isinstance(prepared, HealthAssistantResponse):
             yield "delta", {"text": prepared.assistant_message}
             yield "result", prepared.model_dump(mode="json")

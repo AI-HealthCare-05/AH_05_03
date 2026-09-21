@@ -377,6 +377,7 @@ export async function streamHealthAssistantMessage(
   userLocation?: UserLocation,
   onFacility?: (result: FacilitySearchResult) => void,
   onFoodNutrition?: (result: FoodNutritionSearchResult) => void,
+  homeRegion?: string,
 ): Promise<HealthAssistantResponse> {
   let final: HealthAssistantResponse | undefined;
   let failure: string | undefined;
@@ -387,6 +388,7 @@ export async function streamHealthAssistantMessage(
       session_id: sessionId,
       user_location: userLocation,
       current_location: userLocation,
+      home_region: homeRegion,
     },
     (event, data) => {
       if (event === "delta" && typeof data.text === "string") onDelta(data.text);

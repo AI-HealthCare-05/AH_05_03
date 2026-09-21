@@ -526,6 +526,55 @@ async def test_health_assistant_does_not_reuse_location_from_assistant_message()
 
 
 @pytest.mark.asyncio
+async def test_health_assistant_uses_saved_home_region_before_ip() -> None:
+    class HomeRegionStub:
+        async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
+            return OutdoorConditionsResult(latitude=latitude, longitude=longitude)
+
+        async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
+            if text != "하남시":
+                return None
+            return 37.5392, 127.2148, "경기도 하남시"
+
+    req = HealthAssistantChatRequest(
+        messages=[ChatMessage(role="user", content="지금 밖에 몇도야")],
+        home_region="하남시",
+    )
+    loc = await HealthAssistantService(outdoor_conditions_client=HomeRegionStub())._resolve_request_location(
+        req, needs_outdoor=True, client_ip="8.8.8.8"
+    )
+    assert loc is not None
+    assert loc.address == "경기도 하남시"
+
+
+def test_outdoor_location_prompt_offers_chips_not_typing() -> None:
+    response = HealthAssistantService._outdoor_location_required_response("하남시")
+    assert "지역명을 알려주세요" not in response.assistant_message
+    assert "현재 위치를 사용할까요" in response.assistant_message
+    assert response.suggested_quick_replies == [
+        "현재 위치 허용",
+        "하남시 기준으로 보기",
+        "다른 지역 선택",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_health_assistant_skips_private_ip_lookup() -> None:
+    class NoLocationStub:
+        async def get_outdoor_conditions(self, latitude: float, longitude: float) -> OutdoorConditionsResult:
+            return OutdoorConditionsResult(latitude=latitude, longitude=longitude)
+
+        async def resolve_location(self, text: str) -> tuple[float, float, str] | None:
+            return None
+
+    req = HealthAssistantChatRequest(messages=[ChatMessage(role="user", content="지금 미세먼지 어때")])
+    loc = await HealthAssistantService(outdoor_conditions_client=NoLocationStub())._resolve_request_location(
+        req, needs_outdoor=True, client_ip="172.18.0.4"
+    )
+    assert loc is None
+
+
+@pytest.mark.asyncio
 async def test_health_assistant_service_extracts_exercise_draft() -> None:
     fake_json = """{
         "intent": "record_exercise",

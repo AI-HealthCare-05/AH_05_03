@@ -30,6 +30,15 @@ import {
 } from "./healthAssistantClient";
 import { createAnatomyEvent, type AnatomyEvent } from "../home/anatomyEventContracts";
 import {
+  ALLOW_GPS_CHIP,
+  PICK_OTHER_REGION_CHIP,
+  QUICK_REGIONS,
+  isLocationChoiceChip,
+  parseAreaViewChip,
+  readHomeRegion,
+  writeHomeRegion,
+} from "./homeRegion";
+import {
   containsNewMedicationRecord,
   detectMetricKeyFromQuery,
   extractMetricsFromRecords,
@@ -233,12 +242,12 @@ async function getCurrentLocationForOutdoorQuestion(): Promise<OutdoorLocationAt
       (error) => resolve({
         error:
           error.code === error.PERMISSION_DENIED
-            ? "실시간 날씨와 대기질을 확인하려면 기기와 브라우저 설정에서 위치 서비스 권한을 허용해 주세요."
-            : "현재 위치를 확인하지 못했습니다. 지역명을 알려주시면 바로 확인해 드릴게요.",
+            ? "브라우저 위치 권한을 허용하면 지금 계신 곳 기준으로 안내할 수 있어요."
+            : "현재 위치를 아직 받지 못했어요. 저장된 생활 지역이나 접속 위치 기준으로 이어서 안내합니다.",
       }),
       {
         enableHighAccuracy: false,
-        timeout: awaitingPermission ? 25000 : 6000,
+        timeout: awaitingPermission ? 25000 : 15000,
         maximumAge: 5 * 60 * 1000,
       },
     );
@@ -291,6 +300,8 @@ export function HealthAssistantDrawer({
   const skipNextCacheWriteRef = useRef(false);
   const activeProfileIdRef = useRef<string | null>(profile?.id ?? null);
   const [input, setInput] = useState("");
+  const [showRegionPicker, setShowRegionPicker] = useState(false);
+  const lastOutdoorQuestionRef = useRef<string>("");
   const [chatSessions, setChatSessions] = useState<ChatSessionData[]>([]);
   const [showSessionList, setShowSessionList] = useState<boolean>(() => {
     if (!profile) return false;
@@ -886,19 +897,55 @@ export function HealthAssistantDrawer({
     }
   }
 
-  async function handleSend(contentToSend?: string) {
+  async function handleQuickReply(reply: string) {
+    if (!profile) return;
+    if (reply === PICK_OTHER_REGION_CHIP) {
+      setShowRegionPicker(true);
+      return;
+    }
+    if (reply === ALLOW_GPS_CHIP) {
+      const attempt = await getCurrentLocationForOutdoorQuestion();
+      const replay = lastOutdoorQuestionRef.current || "지금 날씨랑 대기질 알려줘";
+      await handleSend(replay, attempt.location);
+      return;
+    }
+    const area = parseAreaViewChip(reply);
+    if (area) {
+      writeHomeRegion(profile.id, area);
+      setShowRegionPicker(false);
+      const replay = lastOutdoorQuestionRef.current || `${area} 지금 날씨 대기질 알려줘`;
+      await handleSend(replay);
+      return;
+    }
+    if ((QUICK_REGIONS as readonly string[]).includes(reply)) {
+      writeHomeRegion(profile.id, reply);
+      setShowRegionPicker(false);
+      const replay = lastOutdoorQuestionRef.current || `${reply} 지금 날씨 대기질 알려줘`;
+      await handleSend(replay);
+      return;
+    }
+    await handleSend(reply);
+  }
+
+  async function handleSend(contentToSend?: string, forcedLocation?: UserLocation) {
     const textToSend = (contentToSend ?? input).trim();
     const currentImage = selectedImage;
     const currentImagePreview = imagePreview;
 
     if ((!textToSend && !currentImage) || loading || !profile) return;
 
+    if (needsOutdoorConditions(textToSend)) {
+      lastOutdoorQuestionRef.current = textToSend;
+    }
+
     // 위치 권한 요청은 전송 버튼을 누른 **직후** 시작한다. 건강기록 조회·OCR처럼
     // 다른 비동기 작업을 먼저 기다리면 일부 브라우저가 사용자 동작과의 연결을
     // 잃어 권한 팝업을 띄우지 않을 수 있다.
-    const outdoorLocationPromise = needsOutdoorConditions(textToSend)
-      ? getCurrentLocationForOutdoorQuestion()
-      : Promise.resolve({} as OutdoorLocationAttempt);
+    const outdoorLocationPromise = forcedLocation
+      ? Promise.resolve({ location: forcedLocation } as OutdoorLocationAttempt)
+      : needsOutdoorConditions(textToSend)
+        ? getCurrentLocationForOutdoorQuestion()
+        : Promise.resolve({} as OutdoorLocationAttempt);
 
     clearSelectedImage();
 
@@ -1091,6 +1138,8 @@ export function HealthAssistantDrawer({
         sessionId ?? undefined,
         finalLocation,
         applyFacilityResult,
+        undefined,
+        readHomeRegion(profile.id) ?? undefined,
       );
 
       if (streamedFacility && !res.facility_search_draft) {
@@ -2294,7 +2343,7 @@ export function HealthAssistantDrawer({
                           key={idx}
                           type="button"
                           className="chip-btn"
-                          onClick={() => void handleSend(reply)}
+                          onClick={() => void (isLocationChoiceChip(reply) ? handleQuickReply(reply) : handleSend(reply))}
                         >
                           {reply}
                         </button>
@@ -2304,6 +2353,20 @@ export function HealthAssistantDrawer({
               </div>
             </div>
           ))}
+          {showRegionPicker && (
+            <div className="quick-reply-chips">
+              {QUICK_REGIONS.map((region) => (
+                <button
+                  key={region}
+                  type="button"
+                  className="chip-btn"
+                  onClick={() => void handleQuickReply(region)}
+                >
+                  {region}
+                </button>
+              ))}
+            </div>
+          )}
 
           {error && <div className="assistant-error-alert">{error}</div>}
           <div ref={messagesEndRef} />

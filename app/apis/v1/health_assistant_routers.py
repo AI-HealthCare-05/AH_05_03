@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
 from app.core import config
@@ -31,6 +31,7 @@ from app.repositories.health_record_repository import HealthRecordRepository
 from app.repositories.household_repository import HouseholdRepository
 from app.repositories.profile_repository import ProfileRepository
 from app.services.chat_session_service import ChatSessionService
+from app.services.client_ip import client_ip_from_request
 from app.services.health_assistant import HealthAssistantService
 from app.services.health_records import HealthRecordService
 from app.services.rate_limit import RateLimiter
@@ -109,6 +110,7 @@ async def _inject_24h_memory(
     summary="통합 건강 어시스턴트(봄이) 자연어 대화 및 기록 초안 추출",
 )
 async def chat_with_assistant(
+    fastapi_req: Request,
     request: HealthAssistantChatRequest,
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
@@ -123,7 +125,8 @@ async def chat_with_assistant(
     )
     await _inject_24h_memory(request, account, chat_session_service)
 
-    data = await service.respond(request, account=account)
+    client_ip = client_ip_from_request(fastapi_req)
+    data = await service.respond(request, account=account, client_ip=client_ip)
 
     if request.session_id is not None:
         await chat_session_service.add_message(
@@ -143,6 +146,7 @@ async def chat_with_assistant(
     summary="같은 대화를 SSE 로 흘린다 — 글자가 오는 대로 보여 주기 위해",
 )
 async def stream_chat_with_assistant(
+    fastapi_req: Request,
     request: HealthAssistantChatRequest,
     account: Annotated[ServiceAccount, Depends(require_active_account)],
     limiter: Annotated[RateLimiter, Depends(get_rate_limiter)],
@@ -171,10 +175,12 @@ async def stream_chat_with_assistant(
 
     await _inject_24h_memory(request, account, chat_session_service)
 
+    client_ip = client_ip_from_request(fastapi_req)
+
     async def frames() -> AsyncIterator[str]:
         final_payload: dict[str, Any] | None = None
         try:
-            async for name, payload in service.stream(request, account=account):
+            async for name, payload in service.stream(request, account=account, client_ip=client_ip):
                 if name == "result" and isinstance(payload, dict):
                     final_payload = payload
                 body = json.dumps(payload, ensure_ascii=False)
