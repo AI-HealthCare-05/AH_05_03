@@ -30,10 +30,11 @@ class OutdoorConditionsClientProtocol(Protocol):
 
 
 _TIMEOUT_SECONDS = 5.0
-#: 대기질은 날씨와 달리 **없어도 답이 성립하는 보조 정보**다. 그런데 둘이 상한을
-#: 공유하는 바람에, 날씨가 0.3초에 도착해 있어도 대기질을 5초까지 기다렸다가 결국
-#: 빈손으로 넘어갔다 — 실측 6회 중 4회가 그랬다(2026-09-16). 보조 정보는 먼저 포기한다.
-_AIR_QUALITY_TIMEOUT_SECONDS = 2.0
+#: 대기질은 없어도 날씨 답은 가능하다. 다만 기상청과 AirKorea 가 같은
+#: `apis.data.go.kr` 호스트라, **HTTP 클라이언트를 하나 쓰면** 한쪽이 끝날 때까지
+#: 대기질이 줄을 선다. 예전 2초 상한은 그 줄 서 있는 동안 먼저 만료됐다.
+#: 연결을 나누고, 대기질만 날씨와 같은 5초를 준다.
+_AIR_QUALITY_TIMEOUT_SECONDS = 5.0
 _CACHE_SECONDS = 600.0
 #: 실패도 10분을 살면 그 좌표는 그동안 계속 대기질 없이 답한다 — API 가 1분 뒤
 #: 복구돼도 다시 묻지 않는다. 실패는 짧게만 기억해 곧 재시도한다.
@@ -225,11 +226,17 @@ class OutdoorConditionsClient:
         if cached and time.monotonic() - cached[0] < cached[1]:
             return cached[2].model_copy(deep=True)
 
-        client = self._get_client()
+        owned_clients: list[httpx.AsyncClient] = []
+        if self._http_client is None:
+            weather_client = httpx.AsyncClient(timeout=_TIMEOUT_SECONDS)
+            air_client = httpx.AsyncClient(timeout=_TIMEOUT_SECONDS)
+            owned_clients = [weather_client, air_client]
+        else:
+            weather_client = air_client = self._http_client
         try:
             (weather, weather_error), (air_quality, air_error) = await asyncio.gather(
-                self._fetch_weather(client, latitude, longitude),
-                self._fetch_air_quality_within_budget(client, latitude, longitude),
+                self._fetch_weather(weather_client, latitude, longitude),
+                self._fetch_air_quality_within_budget(air_client, latitude, longitude),
             )
             errors = [error for error in (weather_error, air_error) if error]
             result = OutdoorConditionsResult(
@@ -243,8 +250,8 @@ class OutdoorConditionsClient:
             self._cache[cache_key] = (time.monotonic(), ttl, result)
             return result
         finally:
-            if self._http_client is None:
-                await client.aclose()
+            for owned in owned_clients:
+                await owned.aclose()
 
     async def _fetch_weather(
         self,
