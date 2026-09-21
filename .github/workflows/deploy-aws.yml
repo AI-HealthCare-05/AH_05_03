@@ -110,7 +110,7 @@ jobs:
           cache-from: type=gha,scope=ieobom-ai
           cache-to: type=gha,mode=max,scope=ieobom-ai
 
-      - name: Copy EC2 compose (brill image CMD: alembic, not uv)
+      - name: Copy EC2 compose for alembic-based app image
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ vars.AWS_EC2_HOST || secrets.AWS_EC2_HOST }}
