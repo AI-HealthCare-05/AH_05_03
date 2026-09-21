@@ -1,0 +1,184 @@
+# AWS(ieobom.uk) 수동 배포.
+# Mac `deploy-dev-admin-mac` 은 그대로 둔다. 이 잡은 그 워크플로를 수정하지 않는다.
+#
+# **반드시 Mac `dev` 와 같은 커밋에서 실행한다.** Use workflow from branch `dev`
+# (또는 그 SHA가 가리키는 ref). 이미지 태그는 그 커밋 SHA 다.
+#
+# Actions → Deploy AWS → 브랜치 `dev` 선택 → confirm 체크 → Run
+#
+# secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, AWS_EC2_SSH_KEY
+# vars/secrets: AWS_EC2_HOST
+# Gemini·DB 비밀번호는 EC2 ~/project/.env 에 둔다.
+
+name: Deploy AWS
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "ieobom.uk 에 이 커밋(SHA)을 배포합니다"
+        type: boolean
+        required: true
+        default: false
+      deploy_app:
+        description: "FastAPI 이미지 (프론트 포함)"
+        type: boolean
+        default: true
+      deploy_worker:
+        description: "ai-worker 이미지"
+        type: boolean
+        default: true
+
+concurrency:
+  group: aws-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  require-confirm:
+    name: Confirm production
+    if: github.event.inputs.confirm != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm checkbox is required
+        run: |
+          echo "Run workflow 에서 confirm 을 체크해야 합니다."
+          exit 1
+
+  deploy:
+    name: Build SHA image, push Hub, replace EC2
+    if: github.event.inputs.confirm == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: aws-prod
+      url: https://ieobom.uk
+    env:
+      IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKER_REPOSITORY || 'ieobom' }}
+      APP_VERSION: ${{ github.sha }}
+      AI_WORKER_VERSION: ${{ github.sha }}
+      DEPLOY_APP: ${{ github.event.inputs.deploy_app }}
+      DEPLOY_WORKER: ${{ github.event.inputs.deploy_worker }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Require the same app tree as Mac dev
+        run: |
+          set -euo pipefail
+          if [ ! -d chronic_disease_engine ] || [ ! -f app/apis/v1/profile_routers.py ] || [ ! -f app/apis/spa.py ]; then
+            echo "이 커밋은 Mac dev 앱 트리가 아닙니다. Actions 에서 브랜치를 dev 로 고르고 다시 실행하세요."
+            echo "ref=${GITHUB_REF} sha=${GITHUB_SHA}"
+            exit 1
+          fi
+          echo "Deploying ${GITHUB_SHA} from ${GITHUB_REF}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push FastAPI (SPA included)
+        if: github.event.inputs.deploy_app == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: app/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ env.IMAGE }}:app-${{ github.sha }}
+          cache-from: type=gha,scope=ieobom-app
+          cache-to: type=gha,mode=max,scope=ieobom-app
+
+      - name: Build and push ai-worker
+        if: github.event.inputs.deploy_worker == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ai_worker/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ${{ env.IMAGE }}:ai-${{ github.sha }}
+          cache-from: type=gha,scope=ieobom-ai
+          cache-to: type=gha,mode=max,scope=ieobom-ai
+
+      - name: Copy EC2 compose (brill image CMD: alembic, not uv)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.AWS_EC2_HOST || secrets.AWS_EC2_HOST }}
+          username: ${{ vars.AWS_EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.AWS_EC2_SSH_KEY }}
+          source: infra/docker/docker-compose.aws-ec2.yml
+          target: /tmp/ieobom-deploy
+
+      - name: Replace containers on EC2
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ vars.AWS_EC2_HOST || secrets.AWS_EC2_HOST }}
+          username: ${{ vars.AWS_EC2_USER || 'ubuntu' }}
+          key: ${{ secrets.AWS_EC2_SSH_KEY }}
+          script_stop: true
+          command_timeout: 20m
+          envs: APP_VERSION,AI_WORKER_VERSION,DEPLOY_APP,DEPLOY_WORKER
+          script: |
+            set -euo pipefail
+            cd "$HOME/project"
+            test -f .env
+            cp /tmp/ieobom-deploy/infra/docker/docker-compose.aws-ec2.yml docker-compose.yml
+
+            python3 - <<'PY'
+            import os
+            import re
+            from pathlib import Path
+
+            path = Path(".env")
+            text = path.read_text()
+
+            def set_key(content: str, key: str, value: str) -> str:
+                line = f"{key}={value}"
+                pattern = re.compile(rf"^{re.escape(key)}=.*$", re.M)
+                if pattern.search(content):
+                    return pattern.sub(line, content, count=1)
+                return content.rstrip() + "\n" + line + "\n"
+
+            if os.environ.get("DEPLOY_APP") == "true":
+                text = set_key(text, "APP_VERSION", os.environ["APP_VERSION"])
+            if os.environ.get("DEPLOY_WORKER") == "true":
+                text = set_key(text, "AI_WORKER_VERSION", os.environ["AI_WORKER_VERSION"])
+            path.write_text(text)
+            PY
+
+            if [ "${DEPLOY_APP}" = "true" ]; then
+              docker compose pull fastapi
+              docker compose run --rm migrate
+              docker compose up -d --pull always --no-deps fastapi
+            fi
+            if [ "${DEPLOY_WORKER}" = "true" ]; then
+              docker compose pull ai-worker
+              docker compose up -d --pull always --no-deps ai-worker
+            fi
+            docker image prune -af
+
+      - name: Check ieobom.uk
+        if: github.event.inputs.deploy_app == 'true'
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5 6 7 8; do
+            code=$(curl -sS -o /tmp/healthz -w '%{http_code}' --max-time 20 https://ieobom.uk/healthz || true)
+            if [ "$code" = "200" ] && grep -qx 'ok' /tmp/healthz; then
+              echo "healthz ok sha=${GITHUB_SHA}"
+              exit 0
+            fi
+            echo "try $i: HTTP $code"
+            sleep 5
+          done
+          echo "healthz did not return 200"
+          exit 1
