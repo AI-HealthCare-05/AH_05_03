@@ -1,5 +1,5 @@
 # AWS EC2(ieobom.uk) 용. Mac `dev` compose 와 이미지를 나누지 않는다.
-# 이미지 태그는 git SHA (`APP_VERSION` / `AI_WORKER_VERSION`) 다.
+# 이미지 태그는 git SHA (`APP_VERSION` / `AI_WORKER_VERSION` / `ASSETS_VERSION`) 다.
 #
 # 이 파일은 워크플로가 EC2 `~/project/docker-compose.yml` 로 복사한다.
 # `modeling/` 번들은 EC2에 없으므로 마운트하지 않는다. 규칙 엔진은 이미지 안의
@@ -95,6 +95,20 @@ services:
       redis:
         condition: service_healthy
 
+  # Mac `dev` 의 anatomy-assets 와 같다. 큰 GLB 는 앱 이미지에 넣지 않는다.
+  anatomy-assets:
+    container_name: anatomy-assets
+    image: ${DOCKER_USER}/${DOCKER_REPOSITORY}:assets-${ASSETS_VERSION}
+    restart: always
+    networks:
+      - ws
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/vendor/vanatome/ATTRIBUTION.txt"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+
   nginx:
     container_name: nginx
     image: nginx:latest
@@ -112,6 +126,8 @@ services:
       - ws
     depends_on:
       fastapi:
+        condition: service_healthy
+      anatomy-assets:
         condition: service_healthy
 
   certbot:

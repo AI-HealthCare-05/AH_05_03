@@ -985,26 +985,30 @@ export function VanatomeBodyMap({
     };
   }, [atlasId, isTestEnvironment, onToothSelectRef, sceneAttempt]);
 
-  if (isTestEnvironment || loadError || webGlUnavailable) {
+  // 테스트(jsdom)만 구 도형 인체를 쓴다. 운영에서 자산이 없으면 이 폴백이
+  // "대충 만든 인형"으로 보여 실제 해부도와 같은 화면처럼 읽힌다.
+  if (isTestEnvironment) {
+    return <ProceduralBodyMap profileName={profileName} />;
+  }
+  if (loadError || webGlUnavailable) {
     return (
-      <div>
-        {loadError || webGlUnavailable ? (
-          <div className="body-map-load-notice" role="status">
-            <p>{loadError ?? "WebGL 연결이 끊어졌습니다."} 기본 인체 미리보기를 표시합니다.</p>
-            <button
-              className="secondary-button"
-              type="button"
-              onClick={() => {
-                setLoadError(undefined);
-                setWebGlUnavailable(false);
-                setSceneAttempt((attempt) => attempt + 1);
-              }}
-            >
-              3D 다시 시도
-            </button>
-          </div>
-        ) : null}
-        <ProceduralBodyMap profileName={profileName} />
+      <div className="body-map-load-notice" role="status">
+        <p>
+          {loadError ?? "WebGL 연결이 끊어졌습니다."}
+          {" "}
+          해부학 모델을 불러오지 못했습니다. 간이 미리보기로 바꾸지 않습니다.
+        </p>
+        <button
+          className="secondary-button"
+          type="button"
+          onClick={() => {
+            setLoadError(undefined);
+            setWebGlUnavailable(false);
+            setSceneAttempt((attempt) => attempt + 1);
+          }}
+        >
+          3D 다시 시도
+        </button>
       </div>
     );
   }
