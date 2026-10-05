@@ -9,7 +9,7 @@
 
 ## Project Status
 
--   **공식 프로젝트 기간**: 2026-08-10 \~ 2026-09-22 (데모데이)
+-   **공식 프로젝트 기간**: 2026-08-10 ~ 2026-09-22 (데모데이)
 -   부트캠프의 공식 팀 프로젝트 일정과 최종 발표는 종료되었습니다.
 -   현재 팀 단위 개발은 일시 정지된 상태입니다.
 -   이후 오성민이 기존 결과물을 기반으로 **모델 평가 · AI pipeline ·
@@ -34,7 +34,7 @@ Worker** 구조를 사용하며, 원본 이미지를 PostgreSQL에 저장하지 
 
 ## My Role & Contribution
 
-**오성민 --- Team Lead / PM · Full-stack · AI Service Integration · ML
+**오성민 — Team Lead / PM · Full-stack · AI Service Integration · ML
 Evaluation · LLM Query Pipeline**
 
 4명으로 시작한 팀 프로젝트에서 후반 개발과 최종 발표를 2명이
@@ -66,7 +66,7 @@ train/validation/test 분리**를 적용하고 표본 가중치 `_LLCPWT`를 학
 
 현재 baseline은 11개 질환에 대해 구축되어 있으며, 시험 데이터에서 모든
 질환의 AUROC가 0.5를 넘고 AUPRC가 해당 질환 유병률을 넘었습니다. 다만
-현재 천식 AUROC 0.643, 일부 희귀 질환 PPV 약 0.08\~0.18 등 제품 적용에
+현재 천식 AUROC 0.643, 일부 희귀 질환 PPV 약 0.08~0.18 등 제품 적용에
 충분하지 않은 결과도 그대로 기록하고 있습니다.
 
 따라서 현재 모델은 **기술 baseline으로는 채택하지만 사용자 대상 위험
