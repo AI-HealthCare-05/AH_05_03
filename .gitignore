@@ -24,3 +24,13 @@ frontend/dist/
 # 팀원마다 다르고 재설치 시 바뀌므로 각자 로컬에서만 생성해서 쓴다.
 docker/certs/*.crt
 !docker/certs/.gitkeep
+
+# Local backup
+README_bak.md
+
+# Frontend test artifacts
+frontend/playwright-report/
+frontend/test-results/
+
+# Local preview
+scratch_preview.html
